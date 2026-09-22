@@ -228,10 +228,6 @@ fn decode_snapshot_state(
         || !is_valid_biome_size_multiplier(stored.biome_size_multiplier)
         || stored.ticks_per_second != manifest.ticks_per_second
         || stored.spawn_creatures != manifest.spawn_creatures
-        || stored.spawn_caves != manifest.spawn_caves
-        || stored.spawn_rivers != manifest.spawn_rivers
-        || stored.spawn_lakes != manifest.spawn_lakes
-        || stored.spawn_oceans != manifest.spawn_oceans
         || stored.world_generation != manifest.world_generation
         || stored.ticks_per_second == 0
         || stored.day == 0

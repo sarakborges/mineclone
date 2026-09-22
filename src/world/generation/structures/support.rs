@@ -112,7 +112,7 @@ fn structure_support_context(
     let mut anchor_chunk = chunk_coord_from_world(IVec3::new(anchor.x, surface_y - 1, anchor.y));
     anchor_chunk.y = anchor_chunk.y.max(0);
     let region = context.region(generation_region_coord(anchor_chunk));
-    let anchored_caves = context.game_rules.spawn_caves().then(|| {
+    let anchored_caves = context.world_generation.spawn_caves().then(|| {
         anchored_cave_region(
             region.as_ref(),
             context.biome_field,
@@ -153,7 +153,7 @@ fn supported_surface_ground_y(
         .is_none();
     let mut surface_carvers = SurfaceCarverColumn::default();
     let surface_carver_cache = region.surface_carvers.as_ref();
-    if surface_carver_allowed && context.game_rules.spawn_caves() {
+    if surface_carver_allowed && context.world_generation.spawn_caves() {
         resolve_surface_carver_column(
             &mut surface_carvers,
             surface_carver_cache,
@@ -176,7 +176,7 @@ fn supported_surface_ground_y(
     }
     let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field)
         .with_volume_rules(
-            context.game_rules.spawn_caves(),
+            context.world_generation.spawn_caves(),
             context.world_generation.mode() == WorldGenerationMode::Normal,
         );
 

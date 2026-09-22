@@ -271,22 +271,18 @@ impl NewWorldConfig {
 
     pub(crate) fn set_spawn_caves(&mut self, spawn_caves: bool) {
         self.world_generation.set_spawn_caves(spawn_caves);
-        self.game_rules.set_spawn_caves(spawn_caves);
     }
 
     pub(crate) fn set_spawn_rivers(&mut self, spawn_rivers: bool) {
         self.world_generation.set_spawn_rivers(spawn_rivers);
-        self.game_rules.set_spawn_rivers(spawn_rivers);
     }
 
     pub(crate) fn set_spawn_lakes(&mut self, spawn_lakes: bool) {
         self.world_generation.set_spawn_lakes(spawn_lakes);
-        self.game_rules.set_spawn_lakes(spawn_lakes);
     }
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
         self.world_generation.set_spawn_oceans(spawn_oceans);
-        self.game_rules.set_spawn_oceans(spawn_oceans);
     }
 
     pub(crate) fn set_worldgen_hydrology(
@@ -297,12 +293,6 @@ impl NewWorldConfig {
         spawn_oceans: bool,
     ) {
         self.world_generation.set_hydrology_features(
-            spawn_caves,
-            spawn_rivers,
-            spawn_lakes,
-            spawn_oceans,
-        );
-        self.game_rules.set_worldgen_hydrology(
             spawn_caves,
             spawn_rivers,
             spawn_lakes,

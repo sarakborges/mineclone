@@ -29,7 +29,6 @@ use crate::{
         generation_region::{
             GenerationRegion, generation_region_coord, generation_region_world_bounds,
         },
-        game_rules::GameRules,
         hydrology::HydrologySurfaceSample,
         new_world::{WorldGenerationMode, WorldGenerationSettings},
         terrain::{chunk_y_bounds, surface_height, surface_height_from_sample},
@@ -65,7 +64,6 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) structures: &'a StructureRegistry,
     pub(crate) structure_sets: &'a StructureSetRegistry,
-    pub(crate) game_rules: GameRules,
     pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) biome_field: &'a BiomeField,
     pub(crate) feature_fields: &'a WorldFeatureFields,
@@ -77,9 +75,9 @@ impl ChunkGenerationContext<'_> {
             .region_with_hydrology(region_coord, |hydrology| {
                 hydrology.region_from_macro_terrain(
                     region_coord.xz(),
-                    self.game_rules.spawn_rivers(),
-                    self.game_rules.spawn_lakes(),
-                    self.game_rules.spawn_oceans(),
+                    self.world_generation.spawn_rivers(),
+                    self.world_generation.spawn_lakes(),
+                    self.world_generation.spawn_oceans(),
                     |position| {
                     let surface_position = position.floor().as_ivec2();
                     let surface = self
@@ -123,7 +121,7 @@ impl ChunkGenerationContext<'_> {
     }
 
     fn anchored_caves(&self, region: &GenerationRegion) -> Option<Arc<CaveConnectivityRegion>> {
-        if !self.game_rules.spawn_caves() {
+        if !self.world_generation.spawn_caves() {
             return None;
         }
         anchored_cave_region(
@@ -225,7 +223,7 @@ pub(crate) fn generate_chunk(
             biome_field: context.biome_field,
             biomes: context.biomes,
             dimension: context.dimension,
-            allow_caverns: context.game_rules.spawn_caves(),
+            allow_caverns: context.world_generation.spawn_caves(),
             allow_solid_volume,
         },
     );

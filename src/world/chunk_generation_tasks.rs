@@ -16,7 +16,6 @@ use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    game_rules::GameRules,
     generation::{ChunkGenerationContext, generate_chunk},
     new_world::WorldGenerationSettings,
     world_feature_fields::WorldFeatureFields,
@@ -31,7 +30,6 @@ struct GenerationSnapshot {
     biomes: BiomeRegistry,
     structures: StructureRegistry,
     structure_sets: StructureSetRegistry,
-    game_rules: GameRules,
     world_generation: WorldGenerationSettings,
     biome_field: BiomeField,
     feature_fields: WorldFeatureFields,
@@ -50,7 +48,6 @@ impl GenerationSnapshot {
             biomes: BiomeRegistry::clone(&content.biomes),
             structures: StructureRegistry::clone(&generation.structures),
             structure_sets: StructureSetRegistry::clone(&generation.structure_sets),
-            game_rules: *generation.game_rules,
             world_generation: *generation.world_generation,
             biome_field: content.biome_field.as_ref().clone(),
             feature_fields: if fresh_feature_caches {
@@ -69,7 +66,6 @@ impl GenerationSnapshot {
             biomes: &self.biomes,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
-            game_rules: self.game_rules,
             world_generation: self.world_generation,
             biome_field: &self.biome_field,
             feature_fields: &self.feature_fields,
@@ -95,8 +91,8 @@ impl ChunkGenerationTasks {
             return;
         }
 
-        let fresh_feature_caches = self.snapshot.is_some()
-            && (generation.game_rules.is_changed() || generation.world_generation.is_changed());
+        let fresh_feature_caches =
+            self.snapshot.is_some() && generation.world_generation.is_changed();
         self.revision = self.revision.wrapping_add(1).max(1);
         self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
             generation,
