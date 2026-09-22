@@ -163,6 +163,7 @@ fn toggle_camera_perspective(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn sync_perspective_cameras(
     perspective: Res<CameraPerspective>,
     world: Res<VoxelWorld>,
