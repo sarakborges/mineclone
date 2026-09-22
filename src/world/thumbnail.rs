@@ -11,7 +11,7 @@ use bevy::{
 
 use crate::{
     app::pause_state::PauseState,
-    hud::GameplayUiCamera,
+    player::camera::GameplayWorldCamera,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
 
@@ -31,24 +31,27 @@ pub(crate) enum WorldThumbnailCompletion {
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
     completion: WorldThumbnailCompletion,
-    ui_output_mode: CameraOutputMode,
+    suppressed_cameras: Vec<(Entity, CameraOutputMode)>,
 }
 
 pub(crate) fn begin_world_thumbnail_capture(
     commands: &mut Commands,
-    ui_camera: &mut Camera,
+    cameras: &mut Query<(Entity, &mut Camera), Without<GameplayWorldCamera>>,
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    let ui_output_mode = ui_camera.output_mode;
-    ui_camera.output_mode = CameraOutputMode::Skip;
+    let mut suppressed_cameras = Vec::new();
+    for (entity, mut camera) in cameras.iter_mut() {
+        suppressed_cameras.push((entity, camera.output_mode));
+        camera.output_mode = CameraOutputMode::Skip;
+    }
     commands
         .spawn((
             Screenshot::primary_window(),
             WorldThumbnailCapture {
                 world_id: world_id.to_owned(),
                 completion,
-                ui_output_mode,
+                suppressed_cameras,
             },
         ))
         .observe(finish_world_thumbnail_capture);
@@ -57,7 +60,7 @@ pub(crate) fn begin_world_thumbnail_capture(
 fn finish_world_thumbnail_capture(
     captured: On<ScreenshotCaptured>,
     captures: Query<&WorldThumbnailCapture>,
-    mut ui_cameras: Query<&mut Camera, With<GameplayUiCamera>>,
+    mut cameras: Query<&mut Camera, Without<GameplayWorldCamera>>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -65,8 +68,10 @@ fn finish_world_thumbnail_capture(
         return;
     };
 
-    if let Ok(mut camera) = ui_cameras.single_mut() {
-        camera.output_mode = capture.ui_output_mode;
+    for (entity, output_mode) in &capture.suppressed_cameras {
+        if let Ok(mut camera) = cameras.get_mut(*entity) {
+            camera.output_mode = *output_mode;
+        }
     }
 
     if let Err(error) = write_world_thumbnail(&capture.world_id, &captured.image) {
@@ -127,4 +132,18 @@ fn world_thumbnail_path(world_id: &str) -> io::Result<PathBuf> {
     Ok(Path::new(WORLDS_DIRECTORY)
         .join(world_id)
         .join(THUMBNAIL_FILE_NAME))
+}
+
+
+pub(crate) fn enforce_world_thumbnail_camera_isolation(
+    captures: Query<(), With<WorldThumbnailCapture>>,
+    mut cameras: Query<&mut Camera, Without<GameplayWorldCamera>>,
+) {
+    if captures.is_empty() {
+        return;
+    }
+
+    for mut camera in &mut cameras {
+        camera.output_mode = CameraOutputMode::Skip;
+    }
 }
