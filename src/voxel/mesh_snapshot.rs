@@ -234,6 +234,16 @@ impl ChunkMeshSnapshot {
     ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
         let local = position - self.chunk_origin;
         let chunk_size = CHUNK_SIZE as i32;
+        if local.x < -1
+            || local.y < -1
+            || local.z < -1
+            || local.x > chunk_size
+            || local.y > chunk_size
+            || local.z > chunk_size
+        {
+            return None;
+        }
+
         let offset = IVec3::new(
             local.x.div_euclid(chunk_size),
             local.y.div_euclid(chunk_size),
