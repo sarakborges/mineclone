@@ -11374,3 +11374,43 @@ CI funcional push `35792592400`: **verde**.
 Commit de versão: `6130a40b3149238d78fd763647379e96b8fb8741`.
 CI de versão push `35792687278`: **verde**.
 VERSION: `0.50.90`.
+
+## 2026-09-22 — Character Info preview com câmera/target estáveis
+
+O modal Character Info continuava podendo exibir target vazio mesmo com o
+renderer compartilhado. A causa arquitetural era a tentativa de fazer uma única
+câmera trocar de target/projeção entre portrait HUD e Character Info.
+
+A arquitetura foi ajustada sem duplicar o player GLB:
+- continua existindo **uma única scene/model** de preview do player;
+- o portrait HUD possui uma câmera offscreen estável apontando para seu target
+  128×128;
+- o modal Character Info possui uma câmera offscreen estável apontando para seu
+  target 384×512;
+- ambas observam a mesma scene/model na mesma render layer;
+- nenhuma câmera usa `Camera::is_active`; quando ociosa usa
+  `CameraOutputMode::Skip`, preservando a correção DX12;
+- Character Info mantém projeção ortográfica 3D com altura vertical fixa;
+- o drag do Character Info gira a câmera ao redor do modelo, em vez de rotacionar
+  o modelo compartilhado, então o portrait não é contaminado pela rotação;
+- enquanto `CharacterInfoState::Open`, a câmera do modal renderiza
+  continuamente. Isso elimina a dependência de uma janela curta de prewarm e
+  garante que o modelo apareça assim que scene/mesh/material estiverem
+  efetivamente prontos no render world;
+- ao fechar o modal, o target volta a ser preservado com
+  `CameraOutputMode::Skip`.
+
+Commits principais:
+- câmera/target dedicados dentro do renderer compartilhado:
+  `9b664295e27b45588d8e2b204f710ce417762819`;
+- render contínuo enquanto o Character Info está aberto:
+  `51f6d49aee0e94621e434fe53fb1ced62e754fd3`;
+- retenção correta do handle do target Character Info:
+  `668c96b3893f494a458b4dd8a3e9b12e2bdd276e`;
+- aliases das queries para satisfazer Clippy estrito:
+  `1732dfd428c3251f4fd707e927f4d2e86f41ef3d`.
+
+CI funcional push `35793433930`: **verde**.
+Commit de versão: `43571376b4a5f8b95a328ea1c6fb822d050b3f97`.
+CI de versão push `35793534498`: **verde**.
+VERSION: `0.50.91`.
