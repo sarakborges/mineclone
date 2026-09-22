@@ -15,6 +15,7 @@ use super::{
 };
 
 const MAX_CLOUDS: usize = 24;
+const CLOUD_PARTS: usize = 3;
 const CLOUD_SPAN: f32 = 180.0;
 const CLOUD_SPEED: f32 = 1.6;
 
@@ -23,6 +24,7 @@ pub(super) struct CloudPart {
     cloud_index: usize,
     base: Vec2,
     altitude_above_sea_level: f32,
+    offset: Vec3,
 }
 
 pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
@@ -33,26 +35,25 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
             hash_signed(seed.wrapping_mul(29).wrapping_add(11)) * CLOUD_SPAN * 0.5,
         );
         let altitude_above_sea_level = 34.0 + hash01(seed.wrapping_mul(37).wrapping_add(5)) * 14.0;
-        let width = 9.0 + hash01(seed.wrapping_mul(43).wrapping_add(7)) * 8.0;
-        let depth = 4.0 + hash01(seed.wrapping_mul(53).wrapping_add(13)) * 5.0;
 
-        // Previously each visible cloud contained three overlapping, alpha-blended
-        // cuboids. One cloud mesh avoids the extra transparent draw calls and
-        // overdraw now that clouds are correctly positioned above terrain.
-        commands.spawn((
-            Mesh3d(assets.mesh.clone()),
-            MeshMaterial3d(assets.material.clone()),
-            Transform::from_scale(Vec3::new(width, 0.7, depth)),
-            Visibility::Hidden,
-            NotShadowCaster,
-            NotShadowReceiver,
-            CloudPart {
-                cloud_index,
-                base,
-                altitude_above_sea_level,
-            },
-            DespawnOnExit(GameState::Gameplay),
-        ));
+        for part_index in 0..CLOUD_PARTS {
+            let (offset, scale) = cloud_part_shape(seed, part_index);
+            commands.spawn((
+                Mesh3d(assets.mesh.clone()),
+                MeshMaterial3d(assets.material.clone()),
+                Transform::from_scale(scale),
+                Visibility::Hidden,
+                NotShadowCaster,
+                NotShadowReceiver,
+                CloudPart {
+                    cloud_index,
+                    base,
+                    altitude_above_sea_level,
+                    offset,
+                },
+                DespawnOnExit(GameState::Gameplay),
+            ));
+        }
     }
 }
 
@@ -71,7 +72,7 @@ pub(super) fn sync_cloud_presentation(
 ) {
     let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
     let [red, green, blue] = visuals.cloud_color.to_srgb();
-    let color = Color::srgb(red, green, blue);
+    let color = Color::srgba(red, green, blue, 0.78);
 
     let color_changed = materials
         .get(&assets.material)
@@ -128,7 +129,7 @@ pub(super) fn update_cloud_positions(
             world_x,
             sea_level + cloud.altitude_above_sea_level,
             world_z,
-        );
+        ) + cloud.offset;
         if transform.translation != translation {
             transform.translation = translation;
         }
@@ -139,6 +140,23 @@ fn cloud_world_coordinate(base: f32, drift: f32, camera: f32) -> f32 {
     let world_position = base + drift;
     let nearest_tile = ((camera - world_position) / CLOUD_SPAN).round();
     world_position + nearest_tile * CLOUD_SPAN
+}
+
+fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
+    let width = 9.0 + hash01(seed.wrapping_mul(43).wrapping_add(7)) * 8.0;
+    let depth = 4.0 + hash01(seed.wrapping_mul(53).wrapping_add(13)) * 5.0;
+
+    match part_index {
+        0 => (Vec3::ZERO, Vec3::new(width, 0.7, depth)),
+        1 => (
+            Vec3::new(width * 0.28, 0.15, depth * 0.35),
+            Vec3::new(width * 0.55, 0.7, depth * 0.75),
+        ),
+        _ => (
+            Vec3::new(-width * 0.32, -0.05, -depth * 0.28),
+            Vec3::new(width * 0.42, 0.7, depth * 0.62),
+        ),
+    }
 }
 
 #[cfg(test)]
