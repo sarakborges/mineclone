@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    app::keybinds::Keybinds,
     voxel::world::VoxelWorld,
     world::{game_rules::GameRules, tick::WorldTickClock},
 };
@@ -10,6 +11,7 @@ pub(super) struct VerticalMovementContext<'w> {
     pub(super) game_rules: Res<'w, GameRules>,
     pub(super) world_ticks: Res<'w, WorldTickClock>,
     pub(super) keys: Res<'w, ButtonInput<KeyCode>>,
+    pub(super) keybinds: Res<'w, Keybinds>,
     pub(super) world: Res<'w, VoxelWorld>,
 }
 

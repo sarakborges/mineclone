@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    app::keybinds::{KeybindAction, Keybinds},
     player::{PlayerEntity, camera::GameplayCamera, game_mode::GameMode},
     voxel::world::VoxelWorld,
     world::{game_rules::GameRules, tick::WorldTickClock},
@@ -53,6 +54,7 @@ impl FlightState {
 
 pub(super) fn handle_flight_toggle(
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     world_ticks: Res<WorldTickClock>,
     game_mode: Single<&GameMode>,
     mut flight: Single<&mut FlightState>,
@@ -75,7 +77,7 @@ pub(super) fn handle_flight_toggle(
         return;
     }
 
-    if !keys.just_pressed(KeyCode::Space) {
+    if !keys.just_pressed(keybinds.key_code(KeybindAction::Jump)) {
         return;
     }
 
@@ -98,6 +100,7 @@ pub(super) fn move_flying(
     game_rules: Res<GameRules>,
     world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     world: Res<VoxelWorld>,
     player: Single<(&mut Transform, &GameplayCamera, &mut FlightState), With<PlayerEntity>>,
 ) {
@@ -140,10 +143,10 @@ pub(super) fn move_flying(
         Vec3::ZERO
     };
 
-    if keys.pressed(KeyCode::Space) {
+    if keys.pressed(keybinds.key_code(KeybindAction::Jump)) {
         target_velocity.y += fly_speed;
     }
-    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+    if keys.pressed(keybinds.key_code(KeybindAction::Descend)) {
         target_velocity.y -= fly_speed;
     }
 

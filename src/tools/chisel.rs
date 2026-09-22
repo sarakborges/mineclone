@@ -4,6 +4,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    app::keybinds::{KeybindAction, Keybinds},
     content::{block::BlockRegistry, builtin_ids::CHISEL_TOOL_ID},
     gameplay::availability::world_interaction_available,
     player::{
@@ -36,10 +37,11 @@ impl Plugin for ChiselPlugin {
 
 fn cycle_chisel_resolution(
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     hotbar: Res<PlayerHotbar>,
     mut resolution: ResMut<ChiselResolution>,
 ) {
-    if keys.just_pressed(KeyCode::KeyR)
+    if keys.just_pressed(keybinds.key_code(KeybindAction::ToolAction))
         && hotbar.item_at(hotbar.selected_slot()) == Some(CHISEL_TOOL_ID)
     {
         *resolution = resolution.next();

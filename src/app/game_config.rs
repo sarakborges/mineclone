@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    app::keybinds::Keybinds,
     hud::{HudSettings, TargetBlockPosition},
     localization::{ActiveLanguage, Language},
     world::render_distance::{DEFAULT_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings},
@@ -22,6 +23,7 @@ struct GameConfig {
     language: Language,
     graphics: GraphicsConfig,
     miscellaneous: MiscellaneousConfig,
+    keybinds: Keybinds,
 }
 
 impl GameConfig {
@@ -52,6 +54,7 @@ impl GameConfig {
         language: &ActiveLanguage,
         hud: &HudSettings,
         render_distance: &RenderDistanceSettings,
+        keybinds: &Keybinds,
     ) -> Self {
         Self {
             language: language.get(),
@@ -62,6 +65,7 @@ impl GameConfig {
                 display_tooltips: hud.display_tooltips(),
                 target_block_position: hud.target_block_position(),
             },
+            keybinds: *keybinds,
         }
     }
 
@@ -147,6 +151,7 @@ impl Plugin for GameConfigPlugin {
         app.insert_resource(active_language)
             .insert_resource(hud_settings)
             .insert_resource(render_distance)
+            .insert_resource(config.keybinds)
             .add_systems(Last, persist_game_config);
     }
 }
@@ -155,12 +160,17 @@ fn persist_game_config(
     language: Res<ActiveLanguage>,
     hud: Res<HudSettings>,
     render_distance: Res<RenderDistanceSettings>,
+    keybinds: Res<Keybinds>,
 ) {
-    if !language.is_changed() && !hud.is_changed() && !render_distance.is_changed() {
+    if !language.is_changed()
+        && !hud.is_changed()
+        && !render_distance.is_changed()
+        && !keybinds.is_changed()
+    {
         return;
     }
 
-    GameConfig::from_resources(&language, &hud, &render_distance).save();
+    GameConfig::from_resources(&language, &hud, &render_distance, &keybinds).save();
 }
 
 fn config_path() -> PathBuf {

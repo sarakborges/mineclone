@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    app::keybinds::KeybindAction,
     player::{PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::world::VoxelWorld,
 };
@@ -53,14 +54,15 @@ pub(super) fn swim_vertical(
         gravity.grounded = false;
     }
 
-    let target_velocity = if context.keys.pressed(KeyCode::Space) {
+    let target_velocity = if context.keys.pressed(context.keybinds.key_code(KeybindAction::Jump)) {
         if player_near_fluid_surface(transform.translation, &context.world) {
             JUMP_SPEED
         } else {
             SWIM_ASCEND_SPEED
         }
-    } else if context.keys.pressed(KeyCode::ShiftLeft)
-        || context.keys.pressed(KeyCode::ShiftRight)
+    } else if context
+        .keys
+        .pressed(context.keybinds.key_code(KeybindAction::Descend))
     {
         -SWIM_DESCEND_SPEED
     } else {

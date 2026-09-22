@@ -1,7 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, resource_systems::reset_resource},
+    app::{
+        game_state::GameState,
+        keybinds::{KeybindAction, Keybinds},
+        resource_systems::reset_resource,
+    },
     content::{block::BlockDefinition, block::BlockRegistry, block_orientation::BlockOrientation},
     gameplay::availability::world_interaction_available,
     player::hotbar::{PlayerHotbar, PlayerHotbarSet},
@@ -56,6 +60,7 @@ impl Plugin for PlacementOrientationPlugin {
 
 fn update_placement_orientation(
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
     mut placement: ResMut<PlacementOrientation>,
@@ -70,7 +75,7 @@ fn update_placement_orientation(
         });
     }
 
-    if !keys.just_pressed(KeyCode::KeyR) {
+    if !keys.just_pressed(keybinds.key_code(KeybindAction::ToolAction)) {
         return;
     }
 

@@ -14,7 +14,12 @@ use bevy::{
 };
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{
+        game_state::GameState,
+        keybinds::{KeybindAction, Keybinds},
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
     player::{camera::look::MouseLookInputState, inventory::InventoryState},
     tools::BrushPaletteState,
     world::warp::PendingWarp,
@@ -156,6 +161,7 @@ fn close_chat_on_pause(
 #[derive(SystemParam)]
 struct ChatInputContext<'w> {
     keys: Res<'w, ButtonInput<KeyCode>>,
+    keybinds: Res<'w, Keybinds>,
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
     inventory: Res<'w, State<InventoryState>>,
@@ -233,7 +239,7 @@ fn handle_chat_input(
     ]
     .iter()
     .any(|key| input.keys.pressed(*key));
-    if !can_open || !input.keys.just_pressed(KeyCode::KeyT) || has_command_modifier {
+    if !can_open || !input.keys.just_pressed(input.keybinds.key_code(KeybindAction::Chat)) || has_command_modifier {
         return;
     }
 

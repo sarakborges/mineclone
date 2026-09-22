@@ -1,6 +1,7 @@
 pub(crate) mod crash_log;
 pub(crate) mod game_config;
 pub(crate) mod game_state;
+pub(crate) mod keybinds;
 pub(crate) mod pause_state;
 pub(crate) mod resource_systems;
 pub(crate) mod runtime_paths;

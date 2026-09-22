@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{
+        keybinds::{KeybindAction, Keybinds},
         game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
         state_systems::reset_next_state,
     },
@@ -71,6 +72,7 @@ impl Plugin for PlayerInventoryPlugin {
 
 fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     inventory_state: Res<State<InventoryState>>,
     chat: Res<ChatState>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
@@ -79,11 +81,11 @@ fn toggle_inventory(
         return;
     }
     match inventory_state.get() {
-        InventoryState::Closed if keys.just_pressed(KeyCode::KeyE) => {
+        InventoryState::Closed if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) => {
             next_inventory_state.set(InventoryState::Open);
         }
         InventoryState::Open
-            if keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::Escape) =>
+            if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) || keys.just_pressed(KeyCode::Escape) =>
         {
             next_inventory_state.set(InventoryState::Closed);
         }

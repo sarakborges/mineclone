@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::{
+    app::keybinds::{KeybindAction, Keybinds},
     player::{
         hotbar::PlayerHotbar,
         inventory::{InventoryCursor, InventoryState},
@@ -39,10 +40,11 @@ pub(super) fn handle_search_focus(
 
 pub(super) fn handle_inventory_close_shortcut(
     keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     creative_view: Res<CreativeInventoryView>,
     mut next_inventory: ResMut<NextState<InventoryState>>,
 ) {
-    if keys.just_pressed(KeyCode::KeyE) && !creative_view.search_focused() {
+    if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) && !creative_view.search_focused() {
         next_inventory.set(InventoryState::Closed);
     }
 }

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    app::keybinds::KeybindAction,
     player::PlayerEntity,
     voxel::world::VoxelWorld,
 };
@@ -49,7 +50,7 @@ pub(super) fn apply_gravity(
     if gravity.grounded {
         if !has_ground_support(&transform, &context.world) {
             gravity.grounded = false;
-        } else if context.keys.just_pressed(KeyCode::Space) {
+        } else if context.keys.just_pressed(context.keybinds.key_code(KeybindAction::Jump)) {
             gravity.vertical_velocity = JUMP_SPEED;
             gravity.grounded = false;
         } else {
