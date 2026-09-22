@@ -18,7 +18,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell,
-        chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
+        chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkStructureMut},
         layer::LayerCell,
         texture_rotation::TextureRotation,
     },
@@ -116,41 +116,43 @@ pub(super) fn rasterize_structures(
     let chunk_horizontal_maximum =
         chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
 
-    for candidate in candidates.iter() {
-        let structure = context
-            .structures
-            .get(&candidate.structure_id)
-            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
-        let (minimum_offset, maximum_offset) =
-            structure.horizontal_bounds_for_rotation(candidate.rotation);
-        if !rectangles_overlap(
-            candidate.anchor + minimum_offset,
-            candidate.anchor + maximum_offset,
-            chunk_horizontal_minimum,
-            chunk_horizontal_maximum,
-        ) {
-            continue;
-        }
-        let minimum_y = candidate.origin_y + structure.min_y_offset();
-        let maximum_y = candidate.origin_y + structure.max_y_offset();
-        if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
-            continue;
-        }
+    chunk.edit_structure_content(|chunk| {
+        for candidate in candidates.iter() {
+            let structure = context
+                .structures
+                .get(&candidate.structure_id)
+                .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
+            let (minimum_offset, maximum_offset) =
+                structure.horizontal_bounds_for_rotation(candidate.rotation);
+            if !rectangles_overlap(
+                candidate.anchor + minimum_offset,
+                candidate.anchor + maximum_offset,
+                chunk_horizontal_minimum,
+                chunk_horizontal_maximum,
+            ) {
+                continue;
+            }
+            let minimum_y = candidate.origin_y + structure.min_y_offset();
+            let maximum_y = candidate.origin_y + structure.max_y_offset();
+            if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
+                continue;
+            }
 
-        rasterize_structure(
-            chunk,
-            &mut claimed,
-            &StructureRasterizationContext {
-                base_occupied: &base_occupied,
-                blocks: context.blocks,
-                chunk_origin,
-                world_seed: context.biome_field.seed(),
-            },
-            structure,
-            candidate.rotation,
-            IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
-        );
-    }
+            rasterize_structure(
+                chunk,
+                &mut claimed,
+                &StructureRasterizationContext {
+                    base_occupied: &base_occupied,
+                    blocks: context.blocks,
+                    chunk_origin,
+                    world_seed: context.biome_field.seed(),
+                },
+                structure,
+                candidate.rotation,
+                IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
+            );
+        }
+    });
 }
 
 pub(crate) fn structure_candidate_anchor(
@@ -798,7 +800,7 @@ fn rectangles_overlap(
 }
 
 fn rasterize_structure(
-    chunk: &mut VoxelChunk,
+    chunk: &mut VoxelChunkStructureMut<'_>,
     claimed: &mut [u64; STRUCTURE_OCCUPANCY_WORDS],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
@@ -840,11 +842,11 @@ fn rasterize_structure(
                 local_x,
                 local_y,
                 local_z,
-                Some(VoxelCell::oriented(
+                VoxelCell::oriented(
                     voxel.block_id,
                     texture_rotation,
                     rotation.rotate_orientation(voxel.orientation),
-                )),
+                ),
             );
             for (face, layer) in surface_layer_placements(
                 context.world_seed,
@@ -862,7 +864,7 @@ fn rasterize_structure(
                 );
             }
             if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
-                chunk.set_fluid(local_x, local_y, local_z, None);
+                chunk.clear_fluid(local_x, local_y, local_z);
             }
             bit_set(claimed, index);
             false
