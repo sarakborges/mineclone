@@ -50,6 +50,7 @@ pub(super) struct InventoryLayoutState<'a> {
     pub(super) hotbar: &'a PlayerHotbar,
     pub(super) cursor: &'a InventoryCursor,
     pub(super) creative_view: &'a super::state::CreativeInventoryView,
+    pub(super) player_view: &'a super::state::PlayerInventoryView,
     pub(super) scroll_state: &'a super::state::CreativeScrollState,
     pub(super) localization: &'a UiLocalization,
     pub(super) game_mode: GameMode,
@@ -85,7 +86,7 @@ pub(super) fn spawn_inventory_root(
             if state.game_mode.has_creative_inventory() {
                 spawn_creative_panel(root, state, items);
             }
-            spawn_player_inventory_panel(root, state.hotbar, items);
+            spawn_player_inventory_panel(root, state, items);
             spawn_item_tooltip(root);
 
             let Some(item_id) = state.cursor.item() else {
