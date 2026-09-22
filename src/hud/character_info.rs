@@ -34,6 +34,7 @@ struct CharacterPreviewImage(Option<Handle<Image>>);
 struct CharacterPreviewInteraction {
     dragging: bool,
     yaw: f32,
+    render_frames: u8,
 }
 
 #[derive(Component)]
@@ -63,11 +64,7 @@ impl Plugin for CharacterInfoHudPlugin {
             .add_systems(OnEnter(GameState::Gameplay), spawn_character_preview)
             .add_systems(
                 OnEnter(CharacterInfoState::Open),
-                (
-                    reset_character_preview,
-                    activate_character_preview_camera,
-                    spawn_character_info,
-                )
+                (reset_character_preview, spawn_character_info)
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
@@ -81,7 +78,9 @@ impl Plugin for CharacterInfoHudPlugin {
                     attach_character_preview_model,
                     rotate_character_preview
                         .run_if(in_state(CharacterInfoState::Open)),
+                    sync_character_preview_camera,
                 )
+                    .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
@@ -188,6 +187,8 @@ fn configure_character_preview_scene(
     mut commands: Commands,
     descendants: Query<&Children>,
     mut assets: CharacterPreviewSceneAssets,
+    state: Res<State<CharacterInfoState>>,
+    mut interaction: ResMut<CharacterPreviewInteraction>,
 ) {
     if assets.appearances.get(ready.entity).is_err() {
         return;
@@ -221,6 +222,10 @@ fn configure_character_preview_scene(
             .entity(descendant)
             .insert(MeshMaterial3d(material));
     }
+
+    if *state.get() == CharacterInfoState::Open {
+        interaction.render_frames = interaction.render_frames.max(2);
+    }
 }
 
 fn spawn_character_info(
@@ -252,54 +257,28 @@ fn spawn_character_info(
         ))
         .with_children(|root| {
             root.spawn((
-                Node {
+                surface::hud_container(Node {
                     width: px(460),
+                    padding: UiRect::all(px(18)),
+                    border: UiRect::all(px(1)),
                     flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Stretch,
+                    align_items: AlignItems::Center,
                     row_gap: px(16),
                     ..default()
-                },
+                }),
                 Pickable::IGNORE,
             ))
-            .with_children(|content| {
-                content
-                    .spawn((
-                        surface::hud_container(Node {
-                            width: percent(100),
-                            padding: UiRect::all(px(18)),
-                            border: UiRect::all(px(1)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        }),
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|header| {
-                        header.spawn((
-                            typography::hud_heading(PLAYER_DISPLAY_NAME),
-                            Pickable::IGNORE,
-                        ));
-                    });
-
-                content
-                    .spawn((
-                        Node {
-                            width: percent(100),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|row| {
-                        spawn_character_preview_card(row, image);
-                    });
+            .with_children(|card| {
+                card.spawn((
+                    typography::hud_heading(PLAYER_DISPLAY_NAME),
+                    Pickable::IGNORE,
+                ));
+                spawn_character_preview(card, image);
             });
         });
 }
 
-fn spawn_character_preview_card(
+fn spawn_character_preview(
     parent: &mut ChildSpawnerCommands,
     image: Handle<Image>,
 ) {
@@ -318,16 +297,8 @@ fn spawn_character_preview_card(
                 overflow: Overflow::clip(),
                 ..default()
             },
-            BackgroundColor(theme::FROSTED_SURFACE),
-            theme::frosted_surface_gradient(),
+            BackgroundColor(theme::SURFACE_INSET),
             BorderColor::all(theme::BORDER),
-            BoxShadow(vec![ShadowStyle {
-                color: Color::srgba(0.0, 0.0, 0.0, 0.38),
-                x_offset: px(0),
-                y_offset: px(8),
-                spread_radius: px(0),
-                blur_radius: px(18),
-            }]),
         ))
         .with_children(|frame| {
             frame.spawn((
@@ -346,17 +317,12 @@ fn reset_character_preview(
     mut interaction: ResMut<CharacterPreviewInteraction>,
     mut models: Query<&mut Transform, With<CharacterPreviewModel>>,
 ) {
-    *interaction = CharacterPreviewInteraction::default();
+    *interaction = CharacterPreviewInteraction {
+        render_frames: 2,
+        ..default()
+    };
     for mut transform in &mut models {
         transform.rotation = Quat::IDENTITY;
-    }
-}
-
-fn activate_character_preview_camera(
-    mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
-) {
-    for mut camera in &mut cameras {
-        camera.is_active = true;
     }
 }
 
@@ -365,6 +331,7 @@ fn deactivate_character_preview_camera(
     mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
 ) {
     interaction.dragging = false;
+    interaction.render_frames = 0;
     for mut camera in &mut cameras {
         camera.is_active = false;
     }
@@ -395,9 +362,24 @@ fn rotate_character_preview(
     }
 
     interaction.yaw += delta.x * CHARACTER_PREVIEW_DRAG_SENSITIVITY;
+    interaction.render_frames = interaction.render_frames.max(2);
     let rotation = Quat::from_rotation_y(interaction.yaw);
     for mut transform in &mut models {
         transform.rotation = rotation;
+    }
+}
+
+fn sync_character_preview_camera(
+    state: Res<State<CharacterInfoState>>,
+    mut interaction: ResMut<CharacterPreviewInteraction>,
+    mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
+) {
+    let active = *state.get() == CharacterInfoState::Open && interaction.render_frames > 0;
+    for mut camera in &mut cameras {
+        camera.is_active = active;
+    }
+    if active {
+        interaction.render_frames = interaction.render_frames.saturating_sub(1);
     }
 }
 
