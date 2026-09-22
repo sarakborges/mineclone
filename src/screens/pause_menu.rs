@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
@@ -138,19 +138,24 @@ fn spawn_pause_menu(
         });
 }
 
+#[derive(SystemParam)]
+struct PauseMenuContext<'w, 's> {
+    session: Res<'w, WorldSession>,
+    ui_cameras: Query<'w, 's, &'static mut Camera, With<GameplayUiCamera>>,
+    thumbnail_captures: Query<'w, 's, (), With<WorldThumbnailCapture>>,
+    settings_mode: ResMut<'w, SettingsScreenMode>,
+    feedback: Query<'w, 's, &'static mut Text, With<PauseSaveFeedback>>,
+    transition: ResMut<'w, ScreenTransition>,
+    app_exit: MessageWriter<'w, AppExit>,
+}
+
 fn handle_pause_menu_buttons(
     mut commands: Commands,
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
     snapshot: WorldSaveContext,
-    session: Res<WorldSession>,
-    mut ui_cameras: Query<&mut Camera, With<GameplayUiCamera>>,
-    thumbnail_captures: Query<(), With<WorldThumbnailCapture>>,
-    mut settings_mode: ResMut<SettingsScreenMode>,
-    mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
-    mut transition: ResMut<ScreenTransition>,
-    mut app_exit: MessageWriter<AppExit>,
+    mut context: PauseMenuContext,
 ) {
-    if transition.is_active() || !thumbnail_captures.is_empty() {
+    if context.transition.is_active() || !context.thumbnail_captures.is_empty() {
         return;
     }
     for (interaction, action) in &interactions {
@@ -159,20 +164,20 @@ fn handle_pause_menu_buttons(
         }
         match action {
             PauseMenuAction::Resume => {
-                transition.request(ScreenTransitionTarget::pause(PauseState::Running));
+                context.transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
             PauseMenuAction::WorldSettings => {
-                *settings_mode = SettingsScreenMode::World;
-                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+                *context.settings_mode = SettingsScreenMode::World;
+                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::GameSettings => {
-                *settings_mode = SettingsScreenMode::Game;
-                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+                *context.settings_mode = SettingsScreenMode::Game;
+                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
-                if let Err(error) = session.persist(&snapshot) {
+                if let Err(error) = context.session.persist(&snapshot) {
                     error!("World save failed; keeping current world loaded: {error}");
-                    if let Ok(mut label) = feedback.single_mut() {
+                    if let Ok(mut label) = context.feedback.single_mut() {
                         label.0 = format!("Save failed: {error}. World kept open.");
                     }
                     return;
@@ -182,27 +187,27 @@ fn handle_pause_menu_buttons(
                 } else {
                     WorldThumbnailCompletion::ExitGame
                 };
-                let Some(world_id) = session.id() else {
+                let Some(world_id) = context.session.id() else {
                     error!("World was saved without an active world session id");
                     if matches!(action, PauseMenuAction::LeaveWorld) {
-                        transition.request(
+                        context.transition.request(
                             ScreenTransitionTarget::game(GameState::StartingScreen)
                                 .with_pause(PauseState::Running),
                         );
                     } else {
-                        app_exit.write(AppExit::Success);
+                        context.app_exit.write(AppExit::Success);
                     }
                     return;
                 };
-                let Ok(mut ui_camera) = ui_cameras.single_mut() else {
+                let Ok(mut ui_camera) = context.ui_cameras.single_mut() else {
                     warn!("World saved, but gameplay UI camera is unavailable for thumbnail capture");
                     if matches!(action, PauseMenuAction::LeaveWorld) {
-                        transition.request(
+                        context.transition.request(
                             ScreenTransitionTarget::game(GameState::StartingScreen)
                                 .with_pause(PauseState::Running),
                         );
                     } else {
-                        app_exit.write(AppExit::Success);
+                        context.app_exit.write(AppExit::Success);
                     }
                     return;
                 };
