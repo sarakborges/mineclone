@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{RenderTarget, visibility::RenderLayers},
+    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
     ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
@@ -8,49 +8,114 @@ use bevy::{
 };
 
 use crate::{
-    app::game_state::GameState,
     content::player::PlayerDefinition,
     player::PLAYER_SKIN_TEXTURE_PATH,
 };
 
-const PLAYER_PORTRAIT_RENDER_LAYER: usize = 3;
+const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
+const PLAYER_PORTRAIT_SIZE: u32 = 128;
+const CHARACTER_PREVIEW_WIDTH: u32 = 384;
+const CHARACTER_PREVIEW_HEIGHT: u32 = 512;
 const PLAYER_PORTRAIT_CENTER_Y: f32 = 1.27;
 const PLAYER_PORTRAIT_CAMERA_DISTANCE: f32 = 1.52;
+const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.9;
+const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
+const PREVIEW_RENDER_FRAMES: u8 = 6;
+
+#[derive(Resource, Default)]
+pub(super) struct PlayerPreviewImages {
+    portrait: Option<Handle<Image>>,
+    character: Option<Handle<Image>>,
+}
+
+impl PlayerPreviewImages {
+    pub(super) fn portrait(&self) -> Option<Handle<Image>> {
+        self.portrait.clone()
+    }
+
+    pub(super) fn character(&self) -> Option<Handle<Image>> {
+        self.character.clone()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlayerPreviewKind {
+    Portrait,
+    Character,
+}
+
+#[derive(Resource, Default)]
+pub(super) struct PlayerPreviewRenderState {
+    pending: Option<PlayerPreviewKind>,
+    frames_remaining: u8,
+    character_yaw: f32,
+}
+
+impl PlayerPreviewRenderState {
+    pub(super) fn request_portrait(&mut self) {
+        self.pending = Some(PlayerPreviewKind::Portrait);
+        self.frames_remaining = PREVIEW_RENDER_FRAMES;
+    }
+
+    pub(super) fn request_character(&mut self) {
+        self.pending = Some(PlayerPreviewKind::Character);
+        self.frames_remaining = PREVIEW_RENDER_FRAMES;
+    }
+
+    pub(super) fn rotate_character(&mut self, delta_yaw: f32) {
+        self.character_yaw += delta_yaw;
+        self.request_character();
+    }
+}
 
 #[derive(Component)]
-pub(super) struct PlayerPortraitCamera;
+pub(super) struct PlayerPreviewCamera;
 
 #[derive(Component)]
-pub(super) struct PlayerPortraitModel {
+pub(super) struct PlayerPreviewModel {
     gltf: Handle<Gltf>,
     scene_attached: bool,
 }
 
 #[derive(Component)]
-struct PlayerPortraitAppearance;
+struct PlayerPreviewAppearance;
 
-pub(super) fn spawn_player_portrait(
-    commands: &mut Commands,
-    images: &mut Assets<Image>,
-    definition: &PlayerDefinition,
-    asset_server: &AssetServer,
-) -> Handle<Image> {
-    let image = images.add(Image::new_target_texture(
-        128,
-        128,
+pub(super) fn spawn_player_preview_renderer(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut preview_images: ResMut<PlayerPreviewImages>,
+    definition: Res<PlayerDefinition>,
+    asset_server: Res<AssetServer>,
+) {
+    if preview_images.portrait.is_some() || preview_images.character.is_some() {
+        return;
+    }
+
+    let portrait = images.add(Image::new_target_texture(
+        PLAYER_PORTRAIT_SIZE,
+        PLAYER_PORTRAIT_SIZE,
         TextureFormat::Rgba8UnormSrgb,
         None,
     ));
+    let character = images.add(Image::new_target_texture(
+        CHARACTER_PREVIEW_WIDTH,
+        CHARACTER_PREVIEW_HEIGHT,
+        TextureFormat::Rgba8UnormSrgb,
+        None,
+    ));
+    preview_images.portrait = Some(portrait.clone());
+    preview_images.character = Some(character);
 
     commands.spawn((
-        PlayerPortraitCamera,
+        PlayerPreviewCamera,
         Camera3d::default(),
         Camera {
             order: -2,
-            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        RenderTarget::Image(image.clone().into()),
+        RenderTarget::Image(portrait.into()),
         Transform::from_xyz(
             0.0,
             PLAYER_PORTRAIT_CENTER_Y,
@@ -60,43 +125,40 @@ pub(super) fn spawn_player_portrait(
             Vec3::new(0.0, PLAYER_PORTRAIT_CENTER_Y, 0.0),
             Vec3::Y,
         ),
-        RenderLayers::layer(PLAYER_PORTRAIT_RENDER_LAYER),
-        DespawnOnExit(GameState::Gameplay),
+        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
     ));
 
-    if let Some(model_path) = definition.model.as_ref() {
-        commands.spawn((
-            PlayerPortraitModel {
-                gltf: asset_server.load(model_path.clone()),
-                scene_attached: false,
-            },
-            Transform::default(),
-            Visibility::Inherited,
-            RenderLayers::layer(PLAYER_PORTRAIT_RENDER_LAYER),
-            DespawnOnExit(GameState::Gameplay),
-        ));
-    } else {
-        warn!("player definition has no model configured for the HUD portrait");
-    }
+    let Some(model_path) = definition.model.as_ref() else {
+        warn!("player definition has no model configured for shared HUD preview");
+        return;
+    };
 
-    image
+    commands.spawn((
+        PlayerPreviewModel {
+            gltf: asset_server.load(model_path.clone()),
+            scene_attached: false,
+        },
+        Transform::default(),
+        Visibility::Inherited,
+        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
+    ));
 }
 
-pub(super) fn attach_player_portrait_model(
+pub(super) fn attach_player_preview_model(
     mut commands: Commands,
-    mut portraits: Query<(Entity, &mut PlayerPortraitModel)>,
+    mut previews: Query<(Entity, &mut PlayerPreviewModel)>,
     gltfs: Res<Assets<Gltf>>,
 ) {
-    for (entity, mut portrait) in &mut portraits {
-        if portrait.scene_attached {
+    for (entity, mut preview) in &mut previews {
+        if preview.scene_attached {
             continue;
         }
-        let Some(gltf) = gltfs.get(&portrait.gltf) else {
+        let Some(gltf) = gltfs.get(&preview.gltf) else {
             continue;
         };
         let Some(scene) = gltf.default_scene.clone() else {
-            warn!("player HUD portrait model has no default glTF scene");
-            portrait.scene_attached = true;
+            warn!("shared player HUD preview model has no default scene");
+            preview.scene_attached = true;
             continue;
         };
 
@@ -105,17 +167,17 @@ pub(super) fn attach_player_portrait_model(
                 .spawn((
                     WorldAssetRoot(scene),
                     Transform::default(),
-                    PlayerPortraitAppearance,
+                    PlayerPreviewAppearance,
                 ))
-                .observe(configure_player_portrait_scene);
+                .observe(configure_player_preview_scene);
         });
-        portrait.scene_attached = true;
+        preview.scene_attached = true;
     }
 }
 
 #[derive(SystemParam)]
-struct PlayerPortraitSceneAssets<'w, 's> {
-    appearances: Query<'w, 's, (), With<PlayerPortraitAppearance>>,
+struct PlayerPreviewSceneAssets<'w, 's> {
+    appearances: Query<'w, 's, (), With<PlayerPreviewAppearance>>,
     mesh_entities: Query<'w, 's, &'static Mesh3d>,
     meshes: Res<'w, Assets<Mesh>>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
@@ -123,11 +185,12 @@ struct PlayerPortraitSceneAssets<'w, 's> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
-fn configure_player_portrait_scene(
+fn configure_player_preview_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
     descendants: Query<&Children>,
-    mut assets: PlayerPortraitSceneAssets,
+    mut assets: PlayerPreviewSceneAssets,
+    mut render_state: ResMut<PlayerPreviewRenderState>,
 ) {
     if assets.appearances.get(ready.entity).is_err() {
         return;
@@ -147,7 +210,7 @@ fn configure_player_portrait_scene(
                 continue;
             }
             commands.entity(descendant).insert((
-                RenderLayers::layer(PLAYER_PORTRAIT_RENDER_LAYER),
+                RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
                 NotShadowCaster,
                 NotShadowReceiver,
             ));
@@ -171,5 +234,68 @@ fn configure_player_portrait_scene(
         commands
             .entity(descendant)
             .insert(MeshMaterial3d(material));
+    }
+
+    render_state.request_portrait();
+}
+
+pub(super) fn render_player_preview(
+    images: Res<PlayerPreviewImages>,
+    mut render_state: ResMut<PlayerPreviewRenderState>,
+    mut cameras: Query<
+        (&mut Camera, &mut RenderTarget, &mut Transform),
+        With<PlayerPreviewCamera>,
+    >,
+    mut models: Query<&mut Transform, (With<PlayerPreviewModel>, Without<PlayerPreviewCamera>)>,
+) {
+    let Some(kind) = render_state.pending else {
+        for (mut camera, _, _) in &mut cameras {
+            camera.output_mode = CameraOutputMode::Skip;
+        }
+        return;
+    };
+
+    let (target, center_y, distance, rotation) = match kind {
+        PlayerPreviewKind::Portrait => {
+            let Some(target) = images.portrait() else {
+                return;
+            };
+            (
+                target,
+                PLAYER_PORTRAIT_CENTER_Y,
+                PLAYER_PORTRAIT_CAMERA_DISTANCE,
+                Quat::IDENTITY,
+            )
+        }
+        PlayerPreviewKind::Character => {
+            let Some(target) = images.character() else {
+                return;
+            };
+            (
+                target,
+                CHARACTER_PREVIEW_CENTER_Y,
+                CHARACTER_PREVIEW_CAMERA_DISTANCE,
+                Quat::from_rotation_y(render_state.character_yaw),
+            )
+        }
+    };
+
+    for mut model in &mut models {
+        model.rotation = rotation;
+    }
+
+    for (mut camera, mut render_target, mut transform) in &mut cameras {
+        *render_target = RenderTarget::Image(target.clone().into());
+        *transform = Transform::from_xyz(0.0, center_y, distance)
+            .looking_at(Vec3::new(0.0, center_y, 0.0), Vec3::Y);
+        camera.output_mode = CameraOutputMode::Write {
+            blend_state: None,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+        };
+    }
+
+    render_state.frames_remaining = render_state.frames_remaining.saturating_sub(1);
+    if render_state.frames_remaining == 0 {
+        render_state.pending = None;
     }
 }
