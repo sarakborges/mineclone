@@ -1,4 +1,7 @@
-use bevy::{platform::collections::HashSet, prelude::*};
+use bevy::prelude::*;
+
+#[cfg(test)]
+use bevy::platform::collections::HashSet;
 
 use crate::{
     player::camera::GameplayCamera,
@@ -16,7 +19,6 @@ const MIN_FOG_END_RADIUS_FRACTION: f32 = 0.80;
 
 #[derive(Default)]
 pub(super) struct FogDistanceState {
-    active_columns: HashSet<IVec2>,
     render_pool_revision: Option<u64>,
     render_distance_chunks: Option<i32>,
     player_horizontal: Option<Vec2>,
@@ -48,13 +50,6 @@ pub(super) fn update_fog_distance(
     let render_pool_revision = render_pool.membership_revision();
     let membership_changed = state.render_pool_revision != Some(render_pool_revision);
 
-    if membership_changed {
-        state.active_columns.clear();
-        state
-            .active_columns
-            .extend(render_pool.active_coords().map(|coord| coord.xz()));
-    }
-
     let render_distance_chunks = render_distance.chunks();
     let player_horizontal = player.translation.xz();
     let frontier_inputs_changed = membership_changed
@@ -75,7 +70,7 @@ pub(super) fn update_fog_distance(
     let guard_end = nearest_missing_column_distance(
         player.translation,
         render_distance_chunks,
-        &state.active_columns,
+        |column| render_pool.contains_column(column),
     )
     .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = minimum_fog_end(render_distance_chunks);
@@ -108,7 +103,7 @@ fn minimum_fog_end(render_distance_chunks: i32) -> f32 {
 fn nearest_missing_column_distance(
     player_position: Vec3,
     render_distance_chunks: i32,
-    active_columns: &HashSet<IVec2>,
+    mut column_is_active: impl FnMut(IVec2) -> bool,
 ) -> Option<f32> {
     let radius = render_distance_chunks.max(1);
     let center = chunk_coord_from_position(player_position).xz();
@@ -123,7 +118,7 @@ fn nearest_missing_column_distance(
             }
 
             let column = center + offset;
-            if active_columns.contains(&column) {
+            if column_is_active(column) {
                 continue;
             }
 
@@ -179,7 +174,11 @@ mod tests {
         let columns = filled_columns(radius);
 
         assert_eq!(
-            nearest_missing_column_distance(Vec3::new(8.0, 0.0, 8.0), radius, &columns),
+            nearest_missing_column_distance(
+                Vec3::new(8.0, 0.0, 8.0),
+                radius,
+                |column| columns.contains(&column),
+            ),
             None,
         );
     }
@@ -193,7 +192,7 @@ mod tests {
         let distance = nearest_missing_column_distance(
             Vec3::new(8.0, 0.0, 8.0),
             radius,
-            &columns,
+            |column| columns.contains(&column),
         )
         .expect("missing column should constrain the fog frontier");
 
