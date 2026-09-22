@@ -1365,6 +1365,23 @@ mod tests {
     }
 
     #[test]
+    fn local_content_accessors_match_checked_access() {
+        let mut chunk = VoxelChunk::empty();
+        let block = VoxelCell::new("stone", Default::default());
+        let fluid = FluidCell::source(0, 8);
+
+        chunk.set_block(3, 5, 7, Some(block));
+        chunk.set_fluid(3, 5, 7, Some(fluid));
+
+        assert_eq!(chunk.cell_at_local(3, 5, 7), chunk.cell_at(3, 5, 7));
+        assert_eq!(chunk.fluid_at_local(3, 5, 7), chunk.fluid_at(3, 5, 7));
+        assert_eq!(
+            chunk.content_at_local(3, 5, 7),
+            (Some(block), Some(fluid)),
+        );
+    }
+
+    #[test]
     fn local_sample_resolves_all_voxel_channels_once() {
         let mut chunk = VoxelChunk::empty();
         let cell = VoxelCell::new("stone", Default::default());
