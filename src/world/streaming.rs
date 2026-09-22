@@ -627,6 +627,15 @@ pub(super) fn stream_chunks(
             &rebuild_context,
         );
 
+        let cancelled_generation = {
+            let state = &work.state;
+            work.generation_tasks
+                .cancel_where(|coord| !state.keeps_loaded(coord))
+        };
+        for coord in cancelled_generation {
+            work.state.abandon_generation_wave_target(coord);
+        }
+
         let cancelled_meshes = {
             let state = &work.state;
             work.mesh_tasks
