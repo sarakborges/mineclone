@@ -308,6 +308,7 @@ pub struct TerrainMaterials {
 }
 
 impl TerrainMaterials {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_registry(
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
@@ -354,9 +355,9 @@ impl TerrainMaterials {
                 } else {
                     TerrainAlphaKey::Opaque
                 };
-                if !array_materials.contains_key(&alpha) {
-                    array_materials.insert(alpha, builder.array_material(alpha));
-                }
+                array_materials
+                    .entry(alpha)
+                    .or_insert_with(|| builder.array_material(alpha));
             }
         }
 
