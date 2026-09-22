@@ -126,6 +126,28 @@ CI de P6: **verde** nos runs push `35685459607` e PR `35685460994` para
 `5646727808c10d26037430c0e90201c209c3c5e7`. Testes Rust existentes continuam
 apenas compilados pelo Clippy `--all-targets`; nenhum `cargo test` foi executado.
 
+### P7 — tornar o total de mesh bytes O(1) no frame normal
+
+`enforce_chunk_mesh_residency_budget` consulta `ChunkRenderPool::mesh_bytes()`
+todo frame. Antes, essa chamada somava `mesh_bytes` de todas as allocations
+ativas, impondo trabalho O(chunks renderizados) mesmo sem pressão de memória.
+
+O pool agora mantém `total_mesh_bytes` incremental. O accounting é atualizado
+em todas as transições que alteram residency/tamanho: take, terrain/fluid
+patch, terrain/fluid replace, detach/append de cada família, insert e clear.
+Subtrações/somas usam `checked_*` para falhar imediatamente em inconsistência
+em vez de mascarar drift. Commit:
+`902fc74dce8b931556f5eaa21658d83f8b02ee0d`.
+
+A cada diagnóstico de 10s ainda é feita uma soma completa independente e um
+warning é emitido se o total incremental divergir; assim a verificação O(N)
+sai do hot path mas a reconciliação permanece observável. Commit:
+`07d9e99077b8fc2e3c8028f4472dc5809294ac44`.
+
+VERSION: `0.50.23`, commit
+`ddadfd52173c69825eb2e70aa1cb2e94bd889238`.
+CI de P7: aguardando. FPS/VRAM runtime continuam não medidos.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
