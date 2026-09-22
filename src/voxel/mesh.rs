@@ -126,7 +126,7 @@ where
     // meshing passes reuse these entries instead of re-reading storage and
     // searching the block registry for every face.
     meshlets.for_each_voxel(|x, y, z| {
-        let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
+        let Some(cell) = chunk.cell_ref_at(x as i32, y as i32, z as i32) else {
             return;
         };
         let block = block_lookup.get(cell.block_id);
@@ -145,7 +145,7 @@ where
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
 
-        if !MicroblockMask::is_modified(cell) {
+        if !MicroblockMask::is_modified(*cell) {
             let source_index = active_sources.len();
             debug_assert!(source_index < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
             active_sources.push(VoxelMeshSource {
@@ -166,14 +166,14 @@ where
             chunk,
             [x, y, z],
             world_voxel,
-            cell,
+            *cell,
             block,
             &mut tint_at,
         );
         let surface = MicroSurface {
             world,
             lighting_cache,
-            cell,
+            cell: *cell,
             block,
             world_voxel,
             local_voxel,
@@ -253,7 +253,7 @@ where
                     chunk,
                     [x, y, z],
                     world_voxel,
-                    cell,
+                    *cell,
                     block,
                     &mut tint_at,
                 );
@@ -264,7 +264,7 @@ where
                     let surface = MicroSurface {
                         world,
                         lighting_cache,
-                        cell,
+                        cell: *cell,
                         block,
                         world_voxel,
                         local_voxel,
@@ -378,7 +378,7 @@ where
 
 #[derive(Clone, Copy)]
 struct VoxelMeshSource<'a> {
-    cell: VoxelCell,
+    cell: &'a VoxelCell,
     block: &'a BlockDefinition,
     block_visual_index: usize,
 }
