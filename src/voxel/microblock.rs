@@ -119,10 +119,6 @@ impl MicroblockMask {
             .sum()
     }
 
-    pub(crate) fn occupied_fraction(self) -> f32 {
-        self.occupied_count() as f32 / (LAYERS * LAYERS * LAYERS) as f32
-    }
-
     pub(crate) fn light_dampening(self, full_dampening: u8) -> u8 {
         const MICROBLOCK_VOLUME: usize = LAYERS * LAYERS * LAYERS;
         ((usize::from(full_dampening) * self.occupied_count())
