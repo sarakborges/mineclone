@@ -228,6 +228,10 @@ fn emit_greedy_fluid_top_faces<W, F>(
     let mut mask = vec![None::<FluidGreedyTop>; CHUNK_SIZE * CHUNK_SIZE];
 
     for (y, active) in active_by_y.iter().enumerate() {
+        if active.is_empty() {
+            continue;
+        }
+
         for &(x, z, cell) in active {
             let x = usize::from(x);
             let z = usize::from(z);
