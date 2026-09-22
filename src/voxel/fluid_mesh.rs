@@ -892,6 +892,28 @@ mod tests {
     use crate::voxel::{cell::VoxelCell, microblock::ChiselResolution};
 
     #[test]
+    fn greedy_fluid_lighting_compacts_uniform_face_without_loss() {
+        let lighting = FaceLighting {
+            channels: [[0.6, 0.4]; 4],
+            block_srgb: [[0.2, 0.5, 0.8]; 4],
+            ambient_occlusion: [0.86; 4],
+        };
+
+        let compact = FluidGreedyLighting::from_uniform(lighting)
+            .expect("uniform fluid lighting should compact");
+
+        assert!(compact.expand() == lighting);
+        assert_eq!(
+            std::mem::size_of::<FluidGreedyLighting>(),
+            6 * std::mem::size_of::<f32>(),
+        );
+
+        let mut non_uniform = lighting;
+        non_uniform.channels[3][0] = 0.7;
+        assert!(FluidGreedyLighting::from_uniform(non_uniform).is_none());
+    }
+
+    #[test]
     fn fluid_top_planes_keep_voxels_in_their_y_ranges() {
         let mut chunk = VoxelChunk::empty();
         let fluid = FluidCell::source(0, 8);
