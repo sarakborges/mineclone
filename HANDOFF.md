@@ -958,6 +958,34 @@ VERSION: `0.50.63`, commit
 `ad16428ce1db0b58bf92b229e70309e052844bbd`.
 A primeira versão passou no push `35749238218`. O refinamento `73c0164` coincidiu com erros concorrentes do first-person viewmodel; o estado acumulado atual passou no push `35749600060` para `1b1b1d79900aaa4dd15376ba2f55b0257d83ac4a`. Nenhum `cargo test` foi adicionado/executado.
 
+### Hotfix — P35 superseded: desativar GPU frustum culling após flicker voltar
+
+QA runtime confirmou que o flicker voltou com o estado em que P35 havia
+restaurado `NoCpuCulling` para terrain/layers opacos e alpha-mask, mesmo com
+`OcclusionCulling` e o depth prepass experimental ainda desligados nas world
+cameras. Isso invalida a hipótese de que somente occlusion culling era
+responsável: o caminho de GPU instance/frustum culling dos chunks também é
+instável no backend/GPU atual.
+
+`NoCpuCulling` foi removido novamente de todo chunk geometry. Terrain,
+layers, alpha-blend e fluids ficam todos no frustum culling padrão do Bevy/CPU.
+As cameras continuam sem `OcclusionCulling` e sem o depth prepass experimental.
+P35 fica explicitamente **superseded**; GPU chunk culling não deve ser
+reintroduzido sem uma detecção/fallback de runtime e QA específica no hardware
+que apresentou flicker.
+
+Durante a estabilização, o P40 experimental de BFS denso de fluidos
+(`cd316b02d705478c3a1495565fe949f543b28c3c`) foi revertido antes de
+versionamento/CI para não misturar uma mudança não validada ao diagnóstico
+visual. Revert: `528173d9c3673403c407bf6640c36897c8774bf1`.
+
+Commit do hotfix de culling:
+`7ba9c935745958ac2732a7f2224f39839e015f63`.
+VERSION: `0.50.66`, commit
+`ae6f21dc1951d394e3f386ba0f8c0b000ae2a5b8`.
+CI do hotfix: aguardando. QA Windows é obrigatória; o critério principal é
+ausência completa de flicker de terrain/chunks durante movimento e streaming.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
