@@ -707,8 +707,8 @@ pub(super) fn sync_inventory_sort_tooltip(
         } else {
             Visibility::Inherited
         };
-        if *tooltip != next {
-            *tooltip = next;
+        if **tooltip != next {
+            **tooltip = next;
         }
     }
 }
