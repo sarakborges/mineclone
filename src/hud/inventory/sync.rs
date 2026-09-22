@@ -29,7 +29,8 @@ use super::{
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
         CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
         InventoryItemTooltip, InventoryItemTooltipHint, InventoryItemTooltipId,
-        InventoryItemTooltipStats, InventoryItemTooltipText, InventorySlot, InventoryTrashButton,
+        InventoryItemTooltipStats, InventoryItemTooltipStatsTitle, InventoryItemTooltipText,
+        InventorySlot, InventoryTrashButton,
     },
 };
 
@@ -124,12 +125,17 @@ pub(super) struct InventoryRebuildView<'w, 's> {
 pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     'w,
     's,
-    (&'static mut Node, &'static mut Visibility),
+    (
+        &'static mut Node,
+        &'static ComputedNode,
+        &'static mut Visibility,
+    ),
     (
         With<InventoryItemTooltip>,
         Without<InventoryItemTooltipText>,
         Without<InventoryItemTooltipId>,
         Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStatsTitle>,
         Without<InventoryItemTooltipStats>,
     ),
 >;
@@ -149,6 +155,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
             With<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
             Without<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipStatsTitle>,
             Without<InventoryItemTooltipStats>,
         ),
     >,
@@ -160,6 +167,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
             With<InventoryItemTooltipId>,
             Without<InventoryItemTooltipText>,
             Without<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipStatsTitle>,
             Without<InventoryItemTooltipStats>,
         ),
     >,
@@ -171,6 +179,19 @@ pub(super) struct InventoryTooltipView<'w, 's> {
             With<InventoryItemTooltipHint>,
             Without<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipStatsTitle>,
+            Without<InventoryItemTooltipStats>,
+        ),
+    >,
+    tooltip_stats_title: Single<
+        'w,
+        's,
+        (&'static mut Text, &'static mut Visibility),
+        (
+            With<InventoryItemTooltipStatsTitle>,
+            Without<InventoryItemTooltipText>,
+            Without<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipHint>,
             Without<InventoryItemTooltipStats>,
         ),
     >,
@@ -183,6 +204,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
             Without<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
             Without<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipStatsTitle>,
         ),
     >,
 }
@@ -375,8 +397,6 @@ pub(super) fn rebuild_inventory_when_changed(
 }
 
 const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
-const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
-const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 156.0;
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
@@ -391,9 +411,10 @@ pub(super) fn sync_inventory_item_tooltip(
         tooltip_text,
         tooltip_id,
         tooltip_hint,
+        tooltip_stats_title,
         tooltip_stats,
     } = view;
-    let (mut node, mut visibility) = tooltip.into_inner();
+    let (mut node, computed_node, mut visibility) = tooltip.into_inner();
 
     let hovered_item = inventory_slots
         .iter()
@@ -450,25 +471,40 @@ pub(super) fn sync_inventory_item_tooltip(
         *hint_visibility = Visibility::Hidden;
     }
 
+    let (mut stats_title_text, mut stats_title_visibility) = tooltip_stats_title.into_inner();
     let (mut stats_text, mut stats_visibility) = tooltip_stats.into_inner();
     if let Some(tool) = selected_tool.filter(|tool| tool.mining.is_mining_tool()) {
+        let next_stats_title = localization.text(language, "inventory.tool.stats");
+        if stats_title_text.0 != next_stats_title {
+            stats_title_text.0 = next_stats_title.to_owned();
+        }
+
         let next_stats = format!(
-            "{}\n{}: {:.1}x",
-            localization.text(language, "inventory.tool.stats"),
+            "{}: {:.1}x",
             localization.text(language, "inventory.tool.speed"),
             tool.mining.speed,
         );
         if stats_text.0 != next_stats {
             stats_text.0 = next_stats;
         }
+        if *stats_title_visibility != Visibility::Inherited {
+            *stats_title_visibility = Visibility::Inherited;
+        }
         if *stats_visibility != Visibility::Inherited {
             *stats_visibility = Visibility::Inherited;
         }
-    } else if *stats_visibility != Visibility::Hidden {
-        *stats_visibility = Visibility::Hidden;
+    } else {
+        if *stats_title_visibility != Visibility::Hidden {
+            *stats_title_visibility = Visibility::Hidden;
+        }
+        if *stats_visibility != Visibility::Hidden {
+            *stats_visibility = Visibility::Hidden;
+        }
     }
 
-    if cursor.x + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_MAX_WIDTH <= window.width() {
+    let tooltip_size = computed_node.size() * computed_node.inverse_scale_factor;
+
+    if cursor.x + ITEM_TOOLTIP_OFFSET + tooltip_size.x <= window.width() {
         node.left = px(cursor.x + ITEM_TOOLTIP_OFFSET);
         node.right = Val::Auto;
     } else {
@@ -476,7 +512,7 @@ pub(super) fn sync_inventory_item_tooltip(
         node.right = px((window.width() - cursor.x + ITEM_TOOLTIP_OFFSET).max(0.0));
     }
 
-    if cursor.y + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_EDGE_HEIGHT <= window.height() {
+    if cursor.y + ITEM_TOOLTIP_OFFSET + tooltip_size.y <= window.height() {
         node.top = px(cursor.y + ITEM_TOOLTIP_OFFSET);
         node.bottom = Val::Auto;
     } else {
