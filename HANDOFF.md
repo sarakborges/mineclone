@@ -82,7 +82,8 @@ fluido mantêm exatamente o mesmo caminho. Commit fluid:
 
 VERSION: `0.50.20`, commit
 `efd9223e5ae0409a53dc208d1f49e59b0d1ae808`.
-CI de P4: aguardando o run do SHA acumulado. Nenhum `cargo test` foi
+CI de P4: **verde** no SHA acumulado `efd9223e5ae0409a53dc208d1f49e59b0d1ae808`,
+runs push `35685268772` e PR `35685272818`. Nenhum `cargo test` foi
 adicionado/executado; QA Windows/FPS continua pendente.
 
 ### Ordem de execução definida
