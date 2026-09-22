@@ -268,15 +268,19 @@ fn notify_loaded_chunk_neighbors(
                     continue;
                 };
 
-                let geometry = boundary_faces_toward(offset, |face| {
-                    neighbor_chunk.boundary_has_content(face)
+                let new_content_border = boundary_faces_toward(-offset, |face| {
+                    chunk.boundary_has_content(face)
                 });
+                let geometry = new_content_border
+                    && boundary_faces_toward(offset, |face| {
+                        neighbor_chunk.boundary_has_content(face)
+                    });
                 let has_fluid_border = boundary_faces_toward(offset, |face| {
                     neighbor_chunk.boundary_has_fluid(face)
                 });
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
-                let fluid = has_fluid_border || new_cardinal_fluid;
+                let fluid = (has_fluid_border && new_content_border) || new_cardinal_fluid;
                 if geometry || fluid {
                     remesh_queue.enqueue_halo_change(
                         neighbor,
@@ -296,6 +300,31 @@ mod tests {
     use crate::voxel::{
         cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
     };
+
+    #[test]
+    fn empty_new_boundary_does_not_force_neighbor_geometry_or_fluid_refresh() {
+        let mut neighbor = VoxelChunk::empty();
+        neighbor.set_block(
+            0,
+            7,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+        neighbor.set_fluid(0, 8, 8, Some(crate::voxel::fluid::FluidCell::source(0, 8)));
+        let incoming = VoxelChunk::empty();
+        let offset = IVec3::X;
+
+        let new_content_border = boundary_faces_toward(-offset, |face| {
+            incoming.boundary_has_content(face)
+        });
+        let geometry = new_content_border
+            && boundary_faces_toward(offset, |face| neighbor.boundary_has_content(face));
+        let fluid = boundary_faces_toward(offset, |face| neighbor.boundary_has_fluid(face))
+            && new_content_border;
+
+        assert!(!geometry);
+        assert!(!fluid);
+    }
 
     #[test]
     fn diagonal_boundary_reconciliation_is_restricted_to_relevant_faces() {
