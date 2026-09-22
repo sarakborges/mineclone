@@ -1,8 +1,7 @@
 use bevy::{
     camera::{CameraOutputMode, Hdr},
-    core_pipeline::{prepass::DepthPrepass, tonemapping::Tonemapping},
+    core_pipeline::tonemapping::Tonemapping,
     prelude::*,
-    render::occlusion_culling::OcclusionCulling,
 };
 
 use crate::{
@@ -146,8 +145,6 @@ fn spawn_third_person_camera(mut commands: Commands) {
         Hdr,
         Tonemapping::None,
         Msaa::Off,
-        DepthPrepass,
-        OcclusionCulling,
         Transform::default(),
         DespawnOnExit(GameState::Gameplay),
     ));
