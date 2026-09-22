@@ -131,6 +131,7 @@ pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     ),
 >;
 
+#[allow(clippy::type_complexity)]
 #[derive(SystemParam)]
 pub(super) struct InventoryTooltipView<'w, 's> {
     window: Single<'w, 's, &'static Window>,
