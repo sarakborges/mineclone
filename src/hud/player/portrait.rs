@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{CameraOutputMode, RenderTarget, ScalingMode, visibility::RenderLayers},
+    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
     ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
@@ -16,36 +16,31 @@ use crate::{
 };
 
 const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
-const PLAYER_PORTRAIT_SIZE: u32 = 128;
-const CHARACTER_PREVIEW_WIDTH: u32 = 384;
-const CHARACTER_PREVIEW_HEIGHT: u32 = 512;
+const PLAYER_PREVIEW_SIZE: u32 = 128;
 const PLAYER_PORTRAIT_CENTER_Y: f32 = 1.27;
 const PLAYER_PORTRAIT_CAMERA_DISTANCE: f32 = 1.52;
 const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.9;
 const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
-const CHARACTER_PREVIEW_VIEWPORT_HEIGHT: f32 = 2.25;
 const PREVIEW_RENDER_FRAMES: u8 = 6;
 
 #[derive(Resource, Default)]
 pub(crate) struct PlayerPreviewImages {
-    portrait: Option<Handle<Image>>,
-    character: Option<Handle<Image>>,
+    image: Option<Handle<Image>>,
 }
 
 impl PlayerPreviewImages {
     pub(crate) fn portrait(&self) -> Option<Handle<Image>> {
-        self.portrait.clone()
+        self.image.clone()
     }
 
     pub(crate) fn character(&self) -> Option<Handle<Image>> {
-        self.character.clone()
+        self.image.clone()
     }
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct PlayerPreviewRenderState {
     portrait_frames: u8,
-    character_frames: u8,
     character_yaw: f32,
 }
 
@@ -54,22 +49,13 @@ impl PlayerPreviewRenderState {
         self.portrait_frames = self.portrait_frames.max(PREVIEW_RENDER_FRAMES);
     }
 
-    pub(crate) fn request_character(&mut self) {
-        self.character_frames = self.character_frames.max(PREVIEW_RENDER_FRAMES);
-    }
-
     pub(crate) fn rotate_character(&mut self, delta_yaw: f32) {
         self.character_yaw += delta_yaw;
-        self.request_character();
     }
 }
 
 #[derive(Component)]
-pub(super) struct PlayerPortraitPreviewCamera;
-
-#[derive(Component)]
-pub(super) struct CharacterInfoPreviewCamera;
-
+pub(super) struct PlayerPreviewCamera;
 
 #[derive(Component)]
 pub(super) struct PlayerPreviewModel {
@@ -87,27 +73,20 @@ pub(super) fn spawn_player_preview_renderer(
     definition: Res<PlayerDefinition>,
     asset_server: Res<AssetServer>,
 ) {
-    if preview_images.portrait.is_some() || preview_images.character.is_some() {
+    if preview_images.image.is_some() {
         return;
     }
 
-    let portrait = images.add(Image::new_target_texture(
-        PLAYER_PORTRAIT_SIZE,
-        PLAYER_PORTRAIT_SIZE,
+    let image = images.add(Image::new_target_texture(
+        PLAYER_PREVIEW_SIZE,
+        PLAYER_PREVIEW_SIZE,
         TextureFormat::Rgba8UnormSrgb,
         None,
     ));
-    let character = images.add(Image::new_target_texture(
-        CHARACTER_PREVIEW_WIDTH,
-        CHARACTER_PREVIEW_HEIGHT,
-        TextureFormat::Rgba8UnormSrgb,
-        None,
-    ));
-    preview_images.portrait = Some(portrait.clone());
-    preview_images.character = Some(character.clone());
+    preview_images.image = Some(image.clone());
 
     commands.spawn((
-        PlayerPortraitPreviewCamera,
+        PlayerPreviewCamera,
         Camera3d::default(),
         Camera {
             order: -2,
@@ -115,8 +94,7 @@ pub(super) fn spawn_player_preview_renderer(
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
-        Projection::Perspective(PerspectiveProjection::default()),
-        RenderTarget::Image(portrait.into()),
+        RenderTarget::Image(image.into()),
         Transform::from_xyz(
             0.0,
             PLAYER_PORTRAIT_CENTER_Y,
@@ -124,34 +102,6 @@ pub(super) fn spawn_player_preview_renderer(
         )
         .looking_at(
             Vec3::new(0.0, PLAYER_PORTRAIT_CENTER_Y, 0.0),
-            Vec3::Y,
-        ),
-        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
-    ));
-
-    commands.spawn((
-        CharacterInfoPreviewCamera,
-        Camera3d::default(),
-        Camera {
-            order: -3,
-            output_mode: CameraOutputMode::Skip,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
-            ..default()
-        },
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: CHARACTER_PREVIEW_VIEWPORT_HEIGHT,
-            },
-            ..OrthographicProjection::default_3d()
-        }),
-        RenderTarget::Image(character.into()),
-        Transform::from_xyz(
-            0.0,
-            CHARACTER_PREVIEW_CENTER_Y,
-            CHARACTER_PREVIEW_CAMERA_DISTANCE,
-        )
-        .looking_at(
-            Vec3::new(0.0, CHARACTER_PREVIEW_CENTER_Y, 0.0),
             Vec3::Y,
         ),
         RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
@@ -219,7 +169,6 @@ fn configure_player_preview_scene(
     mut commands: Commands,
     descendants: Query<&Children>,
     mut assets: PlayerPreviewSceneAssets,
-    character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
 ) {
     if assets.appearances.get(ready.entity).is_err() {
@@ -267,40 +216,36 @@ fn configure_player_preview_scene(
     }
 
     render_state.request_portrait();
-    if *character_info.get() == CharacterInfoState::Open {
-        render_state.request_character();
-    }
 }
-
-type PlayerPortraitPreviewCameraQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Camera,
-    (
-        With<PlayerPortraitPreviewCamera>,
-        Without<CharacterInfoPreviewCamera>,
-    ),
->;
-
-type CharacterInfoPreviewCameraQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Camera, &'static mut Transform),
-    (
-        With<CharacterInfoPreviewCamera>,
-        Without<PlayerPortraitPreviewCamera>,
-    ),
->;
 
 pub(super) fn render_player_preview(
     character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
-    mut portrait_cameras: PlayerPortraitPreviewCameraQuery,
-    mut character_cameras: CharacterInfoPreviewCameraQuery,
+    mut cameras: Query<(&mut Camera, &mut Transform), With<PlayerPreviewCamera>>,
 ) {
-    let portrait_should_render = render_state.portrait_frames > 0;
-    for mut camera in &mut portrait_cameras {
-        camera.output_mode = if portrait_should_render {
+    let character_open = *character_info.get() == CharacterInfoState::Open;
+    let should_render = character_open || render_state.portrait_frames > 0;
+
+    let (center_y, distance, yaw) = if character_open {
+        (
+            CHARACTER_PREVIEW_CENTER_Y,
+            CHARACTER_PREVIEW_CAMERA_DISTANCE,
+            render_state.character_yaw,
+        )
+    } else {
+        (
+            PLAYER_PORTRAIT_CENTER_Y,
+            PLAYER_PORTRAIT_CAMERA_DISTANCE,
+            0.0,
+        )
+    };
+
+    let center = Vec3::new(0.0, center_y, 0.0);
+    let offset = Quat::from_rotation_y(-yaw) * Vec3::Z * distance;
+
+    for (mut camera, mut transform) in &mut cameras {
+        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
+        camera.output_mode = if should_render {
             CameraOutputMode::Write {
                 blend_state: None,
                 clear_color: ClearColorConfig::Custom(Color::NONE),
@@ -308,28 +253,9 @@ pub(super) fn render_player_preview(
         } else {
             CameraOutputMode::Skip
         };
-    }
-    if portrait_should_render {
-        render_state.portrait_frames = render_state.portrait_frames.saturating_sub(1);
     }
 
-    let character_should_render =
-        *character_info.get() == CharacterInfoState::Open || render_state.character_frames > 0;
-    let center = Vec3::new(0.0, CHARACTER_PREVIEW_CENTER_Y, 0.0);
-    let yaw = render_state.character_yaw;
-    let offset = Quat::from_rotation_y(-yaw) * Vec3::Z * CHARACTER_PREVIEW_CAMERA_DISTANCE;
-    for (mut camera, mut transform) in &mut character_cameras {
-        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
-        camera.output_mode = if character_should_render {
-            CameraOutputMode::Write {
-                blend_state: None,
-                clear_color: ClearColorConfig::Custom(Color::NONE),
-            }
-        } else {
-            CameraOutputMode::Skip
-        };
-    }
-    if render_state.character_frames > 0 {
-        render_state.character_frames = render_state.character_frames.saturating_sub(1);
+    if !character_open && render_state.portrait_frames > 0 {
+        render_state.portrait_frames = render_state.portrait_frames.saturating_sub(1);
     }
 }
