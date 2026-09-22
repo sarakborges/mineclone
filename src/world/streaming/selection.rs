@@ -80,6 +80,9 @@ pub(super) fn rebuild_queue(
     if prune_caches {
         prune_surface_cache(&mut streaming.surface_ranges, center.xz(), retention_radius);
         let retention_radius_squared = retention_radius * retention_radius;
+        streaming.surface_support_minimums.retain(|coord, _| {
+            (*coord - center.xz()).length_squared() <= retention_radius_squared
+        });
         streaming.structure_top_chunks.retain(|coord, _| {
             (*coord - center.xz()).length_squared() <= retention_radius_squared
         });
@@ -95,6 +98,7 @@ pub(super) fn rebuild_queue(
         },
         context,
         &mut streaming.surface_ranges,
+        &mut streaming.surface_support_minimums,
         &mut streaming.structure_top_chunks,
     );
     if prune_caches {
@@ -342,6 +346,7 @@ fn rebuild_desired_chunk_coords(
     selection: DesiredChunkSelection,
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
+    surface_support_minimums: &mut HashMap<IVec2, i32>,
     structure_top_chunks: &mut HashMap<IVec2, i32>,
 ) {
     desired.clear();
@@ -425,20 +430,24 @@ fn rebuild_desired_chunk_coords(
                         &generation_context,
                     )
                 });
-            let mut surrounding_minimum = own_minimum;
-
-            for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
-                let neighbor = horizontal + neighbor_offset;
-                let (neighbor_minimum, _) = cached_surface_range(
-                    surface_ranges,
-                    neighbor,
-                    context.dimension,
-                    context.biomes,
-                    context.biome_field,
-                    context.feature_fields,
-                );
-                surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
-            }
+            let surrounding_minimum = *surface_support_minimums
+                .entry(horizontal)
+                .or_insert_with(|| {
+                    let mut minimum = own_minimum;
+                    for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
+                        let neighbor = horizontal + neighbor_offset;
+                        let (neighbor_minimum, _) = cached_surface_range(
+                            surface_ranges,
+                            neighbor,
+                            context.dimension,
+                            context.biomes,
+                            context.biome_field,
+                            context.feature_fields,
+                        );
+                        minimum = minimum.min(neighbor_minimum);
+                    }
+                    minimum
+                });
 
             let chunk_size = CHUNK_SIZE as i32;
             let near_player = horizontal_distance_squared <= local_radius * local_radius;
