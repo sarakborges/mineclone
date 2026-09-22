@@ -158,8 +158,8 @@ where
             debug_assert!(source_index < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
             active_sources.push(VoxelMeshSource {
                 cell,
-                block,
-                block_visual_index,
+                block_visual_index: u16::try_from(block_visual_index)
+                    .expect("chunk block visual index must fit in u16"),
             });
             active_visuals.push(None);
             let active = pack_active_voxel(x, y, z, source_index);
@@ -210,9 +210,9 @@ where
                 let source = active_sources[source_index];
                 let (u, v) = face_uv(face, x, y, z);
                 let cell = source.cell;
-                let block = source.block;
-
-                let block_visual = &block_visuals[source.block_visual_index];
+                let block_visual =
+                    &block_visuals[usize::from(source.block_visual_index)];
+                let block = block_visual.block;
                 let block_is_transparent = block_visual.is_transparent;
                 let local_voxel =
                     IVec3::new(x as i32, y as i32, z as i32);
@@ -320,10 +320,7 @@ where
                         pack_uniform_greedy_lighting(lighting)
                 {
                     greedy[u + v * CHUNK_SIZE] = Some(GreedyFace {
-                        block_visual_index: u16::try_from(
-                            source.block_visual_index,
-                        )
-                        .expect("chunk block visual index must fit in u16"),
+                        block_visual_index: source.block_visual_index,
                         material_face,
                         tint: pack_greedy_tint(tint),
                         lighting: packed_lighting,
@@ -389,8 +386,7 @@ where
 #[derive(Clone, Copy)]
 struct VoxelMeshSource<'a> {
     cell: &'a VoxelCell,
-    block: &'a BlockDefinition,
-    block_visual_index: usize,
+    block_visual_index: u16,
 }
 
 #[derive(Clone, Copy)]
