@@ -192,7 +192,13 @@ O diagnóstico de 10s recompõe as contagens por coluna e avisa em caso de drift
 `d2f027014f5b824e786924cccdece2329cd20c5d`.
 VERSION: `0.50.25`, commit
 `97de4b3e6fa39628af2a5b6117110f5522cc6da2`.
-CI de P9: aguardando.
+CI de P9: o commit intermediário `b412513a0ea6c421cd55c8c31d2cd724085d46d1`
+falhou nos runs push `35685985845` / PR `35685988803` por
+`dead_code`: os getters de coluna haviam sido introduzidos antes dos commits
+consumidores. O estado acumulado usa ambos em `ff7b6d55c2b602833ea321411939ccb0785d5a1d`
+e `d2f027014f5b824e786924cccdece2329cd20c5d`, e ficou **verde** no
+`0.50.25`, runs push `35686029168` e PR `35686032079` para
+`97de4b3e6fa39628af2a5b6117110f5522cc6da2`.
 
 ### Ordem de execução definida
 
