@@ -95,11 +95,7 @@ where
         );
     }
 
-    meshlets.for_each_voxel(|x, y, z| {
-        let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
-            return;
-        };
-
+    let mut emit_fluid_voxel = |x: usize, y: usize, z: usize, cell: FluidCell| {
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
         let neighbor_samples = BlockFace::ALL.map(|face| {
@@ -203,7 +199,23 @@ where
                 );
             }
         }
-    });
+    
+    };
+
+    let selected_voxels = meshlets.selected_voxel_count();
+    if chunk.fluid_count() * 2 < selected_voxels {
+        chunk.visit_fluid_voxels(|x, y, z, cell| {
+            if meshlets.contains_voxel(x, y, z) {
+                emit_fluid_voxel(x, y, z, cell);
+            }
+        });
+    } else {
+        meshlets.for_each_voxel(|x, y, z| {
+            if let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) {
+                emit_fluid_voxel(x, y, z, cell);
+            }
+        });
+    }
 
     let mut meshes = buffers
         .into_iter()
