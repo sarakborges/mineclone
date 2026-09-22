@@ -4,6 +4,7 @@ use std::{
 };
 
 use bevy::{
+    camera::CameraOutputMode,
     prelude::*,
     render::view::screenshot::{Screenshot, ScreenshotCaptured},
 };
@@ -30,6 +31,7 @@ pub(crate) enum WorldThumbnailCompletion {
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
     completion: WorldThumbnailCompletion,
+    ui_output_mode: CameraOutputMode,
 }
 
 pub(crate) fn begin_world_thumbnail_capture(
@@ -38,13 +40,15 @@ pub(crate) fn begin_world_thumbnail_capture(
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    ui_camera.is_active = false;
+    let ui_output_mode = ui_camera.output_mode;
+    ui_camera.output_mode = CameraOutputMode::Skip;
     commands
         .spawn((
             Screenshot::primary_window(),
             WorldThumbnailCapture {
                 world_id: world_id.to_owned(),
                 completion,
+                ui_output_mode,
             },
         ))
         .observe(finish_world_thumbnail_capture);
@@ -57,13 +61,13 @@ fn finish_world_thumbnail_capture(
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
-    if let Ok(mut camera) = ui_cameras.single_mut() {
-        camera.is_active = true;
-    }
-
     let Ok(capture) = captures.get(captured.entity) else {
         return;
     };
+
+    if let Ok(mut camera) = ui_cameras.single_mut() {
+        camera.output_mode = capture.ui_output_mode;
+    }
 
     if let Err(error) = write_world_thumbnail(&capture.world_id, &captured.image) {
         warn!(
