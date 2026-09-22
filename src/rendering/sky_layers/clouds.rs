@@ -71,7 +71,7 @@ pub(super) fn sync_cloud_presentation(
 ) {
     let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
     let [red, green, blue] = visuals.cloud_color.to_srgb();
-    let color = Color::srgba(red, green, blue, 0.78);
+    let color = Color::srgb(red, green, blue);
 
     let color_changed = materials
         .get(&assets.material)
