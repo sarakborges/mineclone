@@ -7,6 +7,51 @@ use super::{
     asset_path::is_safe_relative_asset_path, registry::DefinitionMap, tool_id::intern_tool_id,
 };
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolMiningDefinition {
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default = "default_mining_speed")]
+    pub speed: f32,
+}
+
+impl Default for ToolMiningDefinition {
+    fn default() -> Self {
+        Self {
+            tags: Vec::new(),
+            speed: default_mining_speed(),
+        }
+    }
+}
+
+impl ToolMiningDefinition {
+    fn validate(&self, tool_id: &str) {
+        assert!(
+            self.speed.is_finite() && self.speed > 0.0,
+            "tool {tool_id} mining speed must be finite and greater than zero"
+        );
+        for (index, tag) in self.tags.iter().enumerate() {
+            assert!(
+                !tag.trim().is_empty(),
+                "tool {tool_id} mining tags cannot contain empty values"
+            );
+            assert!(
+                !self.tags[..index].contains(tag),
+                "tool {tool_id} mining tags cannot contain duplicates"
+            );
+        }
+    }
+
+    pub fn has_tag(&self, tag: &str) -> bool {
+        self.tags.iter().any(|candidate| candidate == tag)
+    }
+}
+
+fn default_mining_speed() -> f32 {
+    1.0
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolDefinition {
@@ -16,6 +61,8 @@ pub struct ToolDefinition {
     pub icon: String,
     #[serde(default)]
     pub tint_icon: Option<String>,
+    #[serde(default)]
+    pub mining: ToolMiningDefinition,
 }
 
 #[derive(Resource, Default)]
@@ -32,6 +79,9 @@ impl ToolRegistry {
             .tint_icon
             .map(|path| path.trim().to_owned())
             .filter(|path| !path.is_empty());
+        for tag in &mut definition.mining.tags {
+            *tag = tag.trim().to_owned();
+        }
 
         assert!(!definition.id.is_empty(), "tool id cannot be empty");
         assert!(
@@ -57,6 +107,7 @@ impl ToolRegistry {
         definition
             .name
             .validate(&format!("tool {} name", definition.id));
+        definition.mining.validate(&definition.id);
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
@@ -91,6 +142,7 @@ mod tests {
             category: "tools".to_owned(),
             icon: String::new(),
             tint_icon: None,
+            mining: ToolMiningDefinition::default(),
         });
 
         let tool = registry

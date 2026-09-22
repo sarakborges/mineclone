@@ -40,6 +40,19 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 property
             );
         }
+        for tag in block
+            .mining
+            .required_tools
+            .iter()
+            .chain(block.mining.preferred_tools.iter())
+        {
+            assert!(
+                content.tools.iter().any(|tool| tool.mining.has_tag(tag)),
+                "block {} mining references unknown tool tag {}",
+                block.id,
+                tag
+            );
+        }
     }
 
     for layer in content.layers.iter() {

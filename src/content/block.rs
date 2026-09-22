@@ -10,7 +10,53 @@ use super::{
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
+pub const DEFAULT_BLOCK_BREAK_TICKS: u32 = 400;
 pub const FRAGMENTABLE_BLOCK_TAG: &str = "fragmentable";
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockMiningDefinition {
+    #[serde(default = "default_mining_hardness")]
+    pub hardness: f32,
+    #[serde(default)]
+    pub required_tools: Vec<String>,
+    #[serde(default)]
+    pub preferred_tools: Vec<String>,
+}
+
+impl Default for BlockMiningDefinition {
+    fn default() -> Self {
+        Self {
+            hardness: default_mining_hardness(),
+            required_tools: Vec::new(),
+            preferred_tools: Vec::new(),
+        }
+    }
+}
+
+impl BlockMiningDefinition {
+    fn validate(&self, block_id: &str) {
+        assert!(
+            self.hardness.is_finite() && self.hardness >= 0.0,
+            "block {block_id} mining hardness must be finite and non-negative"
+        );
+        validate_mining_tool_tags(block_id, "requiredTools", &self.required_tools);
+        validate_mining_tool_tags(block_id, "preferredTools", &self.preferred_tools);
+    }
+}
+
+fn validate_mining_tool_tags(block_id: &str, field: &str, tags: &[String]) {
+    for (index, tag) in tags.iter().enumerate() {
+        assert!(
+            !tag.trim().is_empty(),
+            "block {block_id} mining {field} cannot contain empty values"
+        );
+        assert!(
+            !tags[..index].contains(tag),
+            "block {block_id} mining {field} cannot contain duplicates"
+        );
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -126,6 +172,8 @@ pub struct BlockDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub category: String,
+    #[serde(default)]
+    pub mining: BlockMiningDefinition,
     /// Opt-in capabilities. Blocks without `fragmentable` cannot be sculpted.
     #[serde(default)]
     pub tags: Vec<String>,
@@ -205,6 +253,7 @@ impl BlockRegistry {
             definition.id
         );
         definition.name.validate(&format!("block {} name", definition.id));
+        definition.mining.validate(&definition.id);
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
             "block {} light emission must be between 0 and 15",
@@ -317,6 +366,10 @@ impl<'a> BlockLookup<'a> {
     }
 }
 
+fn default_mining_hardness() -> f32 {
+    1.0
+}
+
 fn default_light_dampening() -> u8 {
     MAX_LIGHT_DAMPENING
 }
@@ -343,6 +396,7 @@ mod tests {
             id: "asteria:test".to_owned(),
             name: localized_name(),
             category: "test".to_owned(),
+            mining: BlockMiningDefinition::default(),
             tags: Vec::new(),
             tint: BlockTint::None,
             textures: BlockTextures::default(),
