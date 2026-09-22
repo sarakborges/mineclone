@@ -325,7 +325,7 @@ fn configure_viewmodel_arm_scene(
         ));
 
         if let Ok(original) = assets.mesh_materials.get(descendant)
-            && let Some(mut material) = materials.get(original.id()).cloned()
+            && let Some(mut material) = assets.materials.get(original.id()).cloned()
         {
             material.unlit = true;
             material.metallic = 0.0;
@@ -449,7 +449,7 @@ pub(super) fn sync_held_block(
 
 fn item_visibility(block_id: Option<&'static str>) -> Visibility {
     if block_id.is_some() {
-        Visibility::Visible
+        Visibility::Inherited
     } else {
         Visibility::Hidden
     }
