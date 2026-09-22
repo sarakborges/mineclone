@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{input::mouse::MouseMotion, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -9,12 +9,19 @@ use crate::{
     ui::{surface, theme, typography},
 };
 
-use super::player::portrait::CharacterInfoPreviewViewport;
+use super::player::portrait::{CharacterInfoPreviewViewport, CharacterPreviewOrbit};
 
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
 const CHARACTER_PREVIEW_IMAGE_WIDTH: f32 = 216.0;
 const CHARACTER_PREVIEW_IMAGE_HEIGHT: f32 = 288.0;
+const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
+
+#[derive(Resource, Default)]
+struct CharacterPreviewInteraction {
+    dragging: bool,
+}
+
 #[derive(Component)]
 struct CharacterInfoRoot;
 
@@ -22,10 +29,22 @@ pub(super) struct CharacterInfoHudPlugin;
 
 impl Plugin for CharacterInfoHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(CharacterInfoState::Open),
-            spawn_character_info.run_if(in_state(GameState::Gameplay)),
-        );
+        app.init_resource::<CharacterPreviewInteraction>()
+            .init_resource::<CharacterPreviewOrbit>()
+            .add_systems(
+                OnEnter(CharacterInfoState::Open),
+                spawn_character_info.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnExit(CharacterInfoState::Open),
+                stop_character_preview_drag,
+            )
+            .add_systems(
+                Update,
+                rotate_character_preview
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(CharacterInfoState::Open)),
+            );
     }
 }
 
@@ -91,6 +110,7 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
         ))
         .with_children(|frame| {
             frame.spawn((
+                Button,
                 CharacterInfoPreviewViewport,
                 Node {
                     width: px(CHARACTER_PREVIEW_IMAGE_WIDTH),
@@ -100,4 +120,32 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
                 Pickable::IGNORE,
             ));
         });
+}
+
+fn rotate_character_preview(
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut motion: MessageReader<MouseMotion>,
+    interactions: Query<&Interaction, With<CharacterInfoPreviewViewport>>,
+    mut interaction: ResMut<CharacterPreviewInteraction>,
+    mut orbit: ResMut<CharacterPreviewOrbit>,
+) {
+    if mouse.just_pressed(MouseButton::Left)
+        && interactions
+            .iter()
+            .any(|state| *state == Interaction::Pressed)
+    {
+        interaction.dragging = true;
+    }
+    if mouse.just_released(MouseButton::Left) {
+        interaction.dragging = false;
+    }
+
+    let delta_x: f32 = motion.read().map(|event| event.delta.x).sum();
+    if interaction.dragging && delta_x != 0.0 {
+        orbit.rotate(delta_x * CHARACTER_PREVIEW_DRAG_SENSITIVITY);
+    }
+}
+
+fn stop_character_preview_drag(mut interaction: ResMut<CharacterPreviewInteraction>) {
+    interaction.dragging = false;
 }
