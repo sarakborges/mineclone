@@ -62,7 +62,9 @@ impl ChunkAsyncWorkLimiter {
     }
 
     pub(crate) fn try_acquire_remesh(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::Remesh)
+        let limit = self.limit();
+        let remesh_limit = if limit > 1 { limit - 1 } else { 1 };
+        self.try_acquire_with_limit(remesh_limit, ChunkAsyncStage::Remesh)
     }
 
     fn try_acquire_with_limit(
