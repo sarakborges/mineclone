@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 use serde::Deserialize;
 
@@ -13,6 +15,8 @@ pub struct PlayerDefinition {
     pub attack: String,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub animations: HashMap<String, String>,
 }
 
 fn default_player_health() -> f32 { 20.0 }
@@ -26,6 +30,12 @@ impl PlayerDefinition {
             assert!(
                 is_safe_relative_asset_path(model),
                 "player model path must be a safe relative asset path: {model}"
+            );
+        }
+        for (state, clip) in &self.animations {
+            assert!(
+                !state.trim().is_empty() && !clip.trim().is_empty(),
+                "player animation mappings must use non-empty state and clip names"
             );
         }
     }
