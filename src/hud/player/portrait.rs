@@ -26,17 +26,17 @@ const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 const PREVIEW_RENDER_FRAMES: u8 = 6;
 
 #[derive(Resource, Default)]
-pub(super) struct PlayerPreviewImages {
+pub(crate) struct PlayerPreviewImages {
     portrait: Option<Handle<Image>>,
     character: Option<Handle<Image>>,
 }
 
 impl PlayerPreviewImages {
-    pub(super) fn portrait(&self) -> Option<Handle<Image>> {
+    pub(crate) fn portrait(&self) -> Option<Handle<Image>> {
         self.portrait.clone()
     }
 
-    pub(super) fn character(&self) -> Option<Handle<Image>> {
+    pub(crate) fn character(&self) -> Option<Handle<Image>> {
         self.character.clone()
     }
 }
@@ -48,24 +48,24 @@ enum PlayerPreviewKind {
 }
 
 #[derive(Resource, Default)]
-pub(super) struct PlayerPreviewRenderState {
+pub(crate) struct PlayerPreviewRenderState {
     pending: Option<PlayerPreviewKind>,
     frames_remaining: u8,
     character_yaw: f32,
 }
 
 impl PlayerPreviewRenderState {
-    pub(super) fn request_portrait(&mut self) {
+    pub(crate) fn request_portrait(&mut self) {
         self.pending = Some(PlayerPreviewKind::Portrait);
         self.frames_remaining = PREVIEW_RENDER_FRAMES;
     }
 
-    pub(super) fn request_character(&mut self) {
+    pub(crate) fn request_character(&mut self) {
         self.pending = Some(PlayerPreviewKind::Character);
         self.frames_remaining = PREVIEW_RENDER_FRAMES;
     }
 
-    pub(super) fn rotate_character(&mut self, delta_yaw: f32) {
+    pub(crate) fn rotate_character(&mut self, delta_yaw: f32) {
         self.character_yaw += delta_yaw;
         self.request_character();
     }
