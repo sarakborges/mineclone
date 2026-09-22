@@ -22,6 +22,7 @@ use super::{
         apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
@@ -39,6 +40,7 @@ pub(super) fn process_chunk_remesh_queue(
     mut tasks: ResMut<ChunkRemeshTasks>,
     frame_budget: Res<WorldFrameWorkBudget>,
     async_work: Res<ChunkAsyncWorkLimiter>,
+    streaming: Res<ChunkStreamingState>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
 ) {
     tasks.sync_snapshot(&content);
@@ -65,6 +67,7 @@ pub(super) fn process_chunk_remesh_queue(
         &mut tasks,
         &mut deferred,
         &async_work,
+        streaming.center(),
         frame_budget.deadline(),
     );
 }
@@ -157,6 +160,7 @@ fn dispatch_remesh_tasks(
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>,
     async_work: &ChunkAsyncWorkLimiter,
+    center: Option<IVec3>,
     deadline: Instant,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
@@ -177,7 +181,7 @@ fn dispatch_remesh_tasks(
         }
 
         let Some((coord, kind, meshlets)) =
-            queue.pop_renderable_background(render_pool, allow_terrain, allow_fluid)
+            queue.pop_renderable_background(render_pool, center, allow_terrain, allow_fluid)
         else {
             break;
         };
