@@ -146,7 +146,8 @@ sai do hot path mas a reconciliação permanece observável. Commit:
 
 VERSION: `0.50.23`, commit
 `ddadfd52173c69825eb2e70aa1cb2e94bd889238`.
-CI de P7: aguardando. FPS/VRAM runtime continuam não medidos.
+CI de P7: **verde** nos runs push `35685683263` e PR `35685685856` para
+`ddadfd52173c69825eb2e70aa1cb2e94bd889238`. FPS/VRAM runtime continuam não medidos.
 
 ### Ordem de execução definida
 
