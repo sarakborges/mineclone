@@ -16,6 +16,7 @@ use super::player::portrait::{PlayerPreviewImages, PlayerPreviewRenderState};
 
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
+const CHARACTER_PREVIEW_ASPECT_RATIO: f32 = 384.0 / 512.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
 
 #[derive(Resource, Default)]
@@ -132,8 +133,9 @@ fn spawn_character_preview_viewport(
             frame.spawn((
                 ImageNode::new(image),
                 Node {
-                    width: percent(100),
                     height: percent(100),
+                    max_width: percent(100),
+                    aspect_ratio: Some(CHARACTER_PREVIEW_ASPECT_RATIO),
                     ..default()
                 },
                 Pickable::IGNORE,
