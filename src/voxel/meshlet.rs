@@ -277,7 +277,7 @@ impl MeshArrays {
             uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
             payloads: uint32(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
             colors: unorm8x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
-            indices: mesh.indices()?.iter().collect(),
+            indices: mesh.indices()?.iter().map(|index| index as u32).collect(),
         })
     }
 
@@ -378,6 +378,13 @@ impl MeshArrays {
             VertexAttributeValues::Unorm8x4(self.colors),
         )
         .with_inserted_indices(indices)
+    }
+}
+
+fn float32x3(values: &VertexAttributeValues) -> Option<&[[f32; 3]]> {
+    match values {
+        VertexAttributeValues::Float32x3(values) => Some(values),
+        _ => None,
     }
 }
 
