@@ -217,6 +217,11 @@ impl Plugin for WorldPlugin {
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, advance_deferred_mesh_asset_retirements)
+            .add_systems(
+                Last,
+                thumbnail::enforce_world_thumbnail_camera_isolation
+                    .run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
             .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(
