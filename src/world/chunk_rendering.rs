@@ -92,14 +92,6 @@ impl ChunkRenderContext<'_> {
     }
 }
 
-pub(crate) fn build_chunk_terrain_remeshes<W: VoxelRead + ?Sized>(
-    coord: IVec3,
-    chunk: &VoxelChunk,
-    context: &ChunkMeshBuildContext<'_, W>,
-) -> Vec<BuiltChunkMesh> {
-    spawn::build_chunk_terrain_render_meshes(coord, chunk, context)
-}
-
 pub(crate) fn build_chunk_terrain_meshlet_remeshes<W: VoxelRead + ?Sized>(
     coord: IVec3,
     chunk: &VoxelChunk,
@@ -107,14 +99,6 @@ pub(crate) fn build_chunk_terrain_meshlet_remeshes<W: VoxelRead + ?Sized>(
     meshlets: ChunkMeshletMask,
 ) -> Vec<BuiltChunkMesh> {
     spawn::build_chunk_terrain_render_meshlets(coord, chunk, context, meshlets)
-}
-
-pub(crate) fn build_chunk_fluid_remeshes<W: VoxelRead + ?Sized>(
-    coord: IVec3,
-    chunk: &VoxelChunk,
-    context: &ChunkMeshBuildContext<'_, W>,
-) -> Vec<ChunkFluidMesh> {
-    spawn::build_chunk_fluid_render_meshes(coord, chunk, context)
 }
 
 pub(crate) fn build_chunk_fluid_meshlet_remeshes<W: VoxelRead + ?Sized>(
