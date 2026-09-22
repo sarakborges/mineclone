@@ -10239,3 +10239,35 @@ HEAD funcional 645293d6ffe8baf19df4ac6c6dab2eef6dcea477:
 - Removed the now-unused global `PointLightShadowMap` override from the held-light plugin.
 - Root `VERSION` corrected from `0.50.18` to `0.50.19` for this functional block (`27a1caab45e2b1b2ae8ccb8a0cd5d4203ddf550b`).
 - Next priorities: validate CI, then inspect chunk mesh publication/allocation churn, remesh invalidation/coalescing, fluid remesh churn, and directional-shadow quality/cost in that order unless measurements indicate a stronger bottleneck.
+
+
+### Inventory HUD — busca, organização e focus-loss
+
+O hover de item do inventory agora calcula `width` e `height` explicitamente
+a partir dos `ComputedNode` dos textos renderizados, somando padding, border,
+gaps e a margem da seção Stats apenas quando ela está visível. A largura ainda
+é limitada a 280 px para textos longos; o posicionamento nas bordas usa essas
+mesmas dimensões calculadas.
+
+Perder foco da janela com `InventoryState::Open` não dispara mais auto-pause,
+portanto o inventário permanece aberto. O fechamento pela tecla configurada de
+inventory passou a ser tratado pela HUD para respeitar foco de campos de busca;
+`Esc` continua fechando o inventário normalmente.
+
+O cabeçalho do inventory ganhou uma busca própria à direita do título. Ela usa
+os primitives/tokens do design system de `text_input`, `surface`,
+`typography` e `theme`, não filtra nem reorganiza slots, e apenas destaca
+backpack/hotbar quando ID ou nome localizado contém a string pesquisada,
+case-insensitive. O estado/foco é independente da busca do creative inventory.
+
+À direita da busca foi adicionado um icon button pelo novo primitive
+`ui::button::icon_button`, herdando `AsteriaButtonVisual`,
+`ButtonVariant`, animação, cores e bordas do design system. O hover hint é
+localizado em EN/PT-BR/ES. O botão ordena apenas os 27 slots da backpack por ID
+crescente, preenchendo da esquerda para a direita e deixando slots vazios no
+fim; a hotbar não é alterada.
+
+Commit funcional validado: `44ebfbf4514c9b5431737cd205b278b4cef7def9`.
+CI de push `35742065006`: **verde** (localizações, Clippy e cargo check).
+VERSION: `0.50.51`, commit
+`7bf24f2e628f3d410f1f2efadaadcb13fa820f09`.
