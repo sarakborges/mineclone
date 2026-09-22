@@ -51,48 +51,10 @@ pub(crate) enum ChunkTerrainBatch {
     },
 }
 
-impl ChunkTerrainBatch {
-    pub(crate) fn casts_shadow(self) -> bool {
-        match self {
-            Self::Array { casts_shadow, .. } | Self::Legacy { casts_shadow, .. } => casts_shadow,
-        }
-    }
-}
-
 pub struct ChunkFaceMesh {
     pub(crate) batch: ChunkTerrainBatch,
     pub mesh: Mesh,
 }
-
-pub fn build_chunk_mesh<W, F>(
-    world: &W,
-    chunk_coord: IVec3,
-    chunk: &VoxelChunk,
-    blocks: &BlockRegistry,
-    texture_table: &TerrainTextureTable,
-    tint_at: F,
-) -> Vec<ChunkFaceMesh>
-where
-    W: VoxelRead + ?Sized,
-    F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
-{
-    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
-        world,
-        chunk_coord * CHUNK_SIZE as i32,
-        chunk,
-    );
-    build_chunk_meshlets(
-        world,
-        chunk_coord,
-        chunk,
-        blocks,
-        texture_table,
-        ChunkMeshletMask::ALL,
-        lighting_cache.as_ref(),
-        tint_at,
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_chunk_meshlets<W, F>(
     world: &W,
