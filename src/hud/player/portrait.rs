@@ -23,6 +23,7 @@ const PLAYER_PORTRAIT_CENTER_Y: f32 = 1.27;
 const PLAYER_PORTRAIT_CAMERA_DISTANCE: f32 = 1.52;
 const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.9;
 const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
+const CHARACTER_PREVIEW_VIEWPORT_HEIGHT: f32 = 2.25;
 const PREVIEW_RENDER_FRAMES: u8 = 6;
 
 #[derive(Resource, Default)]
@@ -263,7 +264,7 @@ pub(super) fn render_player_preview(
         return;
     };
 
-    let (target, center_y, distance, aspect_ratio, rotation) = match kind {
+    let (target, center_y, distance, projection, rotation) = match kind {
         PlayerPreviewKind::Portrait => {
             let Some(target) = images.portrait() else {
                 return;
@@ -272,7 +273,7 @@ pub(super) fn render_player_preview(
                 target,
                 PLAYER_PORTRAIT_CENTER_Y,
                 PLAYER_PORTRAIT_CAMERA_DISTANCE,
-                1.0,
+                Projection::Perspective(PerspectiveProjection::default()),
                 Quat::IDENTITY,
             )
         }
@@ -284,7 +285,12 @@ pub(super) fn render_player_preview(
                 target,
                 CHARACTER_PREVIEW_CENTER_Y,
                 CHARACTER_PREVIEW_CAMERA_DISTANCE,
-                CHARACTER_PREVIEW_WIDTH as f32 / CHARACTER_PREVIEW_HEIGHT as f32,
+                Projection::Orthographic(OrthographicProjection {
+                    scaling_mode: ScalingMode::FixedVertical {
+                        viewport_height: CHARACTER_PREVIEW_VIEWPORT_HEIGHT,
+                    },
+                    ..OrthographicProjection::default_3d()
+                }),
                 Quat::from_rotation_y(render_state.character_yaw),
             )
         }
@@ -298,9 +304,7 @@ pub(super) fn render_player_preview(
         *render_target = RenderTarget::Image(target.clone().into());
         *transform = Transform::from_xyz(0.0, center_y, distance)
             .looking_at(Vec3::new(0.0, center_y, 0.0), Vec3::Y);
-        if let Projection::Perspective(perspective) = &mut *projection {
-            perspective.aspect_ratio = aspect_ratio;
-        }
+        *projection = projection.clone();
         camera.output_mode = CameraOutputMode::Write {
             blend_state: None,
             clear_color: ClearColorConfig::Custom(Color::NONE),
