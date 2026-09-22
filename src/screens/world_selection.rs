@@ -39,10 +39,12 @@ impl Plugin for WorldSelectionPlugin {
                 OnEnter(GameState::WorldSelection),
                 (refresh_world_list, spawn_world_selection).chain(),
             )
+            .add_systems(OnExit(GameState::WorldSelection), abandon_world_load)
             .add_systems(
-                OnExit(GameState::WorldSelection),
-                (abandon_world_load, release_world_thumbnail_images).chain(),
+                OnEnter(GameState::StartingScreen),
+                release_world_thumbnail_images,
             )
+            .add_systems(OnEnter(GameState::Loading), release_world_thumbnail_images)
             .add_systems(
                 Update,
                 // Consume Back before a worker result. A completed load in the
