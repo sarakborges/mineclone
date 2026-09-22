@@ -11314,3 +11314,30 @@ cargo check).
 Commit de versão: `51ba1f828be7a36a7dbd32f25a4203cba244c42b`.
 CI de versão push `35780938926`: **verde**.
 VERSION: `0.50.88`.
+
+## 2026-09-22 — Corrigido aspect ratio do player preview compartilhado
+
+Após unificar portrait HUD e Character Info em uma única câmera offscreen, o
+Character Info passou a mostrar o modelo achatado.
+
+Causa:
+- o portrait usa target 128×128 (aspect 1:1);
+- o Character Info usa target 384×512 (aspect 3:4);
+- a mesma `PerspectiveProjection` estava sendo reutilizada entre os targets;
+- ao trocar para o target vertical, a projeção ainda podia manter
+  `aspect_ratio = 1.0`, deformando horizontalmente o modelo.
+
+Correção em `src/hud/player/portrait.rs`:
+- o renderer compartilhado agora inclui `Projection` na query da câmera;
+- ao renderizar portrait, define explicitamente `aspect_ratio = 1.0`;
+- ao renderizar Character Info, define explicitamente
+  `aspect_ratio = CHARACTER_PREVIEW_WIDTH / CHARACTER_PREVIEW_HEIGHT` (0.75);
+- target, framing e projeção passam a ser atualizados juntos no mesmo ciclo.
+
+Commit funcional:
+- `4d7af630f230d072f9afd00a8fe82cf40f6993b1`
+
+CI funcional push `35790899338`: **verde**.
+Commit de versão: `e76584fe4e1d51ac4be498e8cd685ae562fc8f40`.
+CI de versão push `35791035963`: **verde**.
+VERSION: `0.50.89`.
