@@ -448,8 +448,7 @@ lighting/fog.
 Shader: `63c6bbe626f176cd8c70cd41816dbb24338ae081`.
 VERSION: `0.50.37`, commit
 `df20c48d63ab250026ff437c9add9337faa777cb`.
-CI de P21: aguardando. Como P20, Clippy/check não validam WGSL em runtime; QA
-GPU continua obrigatória.
+CI de P21: **verde** nos runs push `35735605566` e PR `35735613924` para `df20c48d63ab250026ff437c9add9337faa777cb`. Como P20, Clippy/check não validam WGSL em runtime; QA GPU continua obrigatória.
 
 ### Ordem de execução definida
 
