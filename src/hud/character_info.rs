@@ -13,7 +13,8 @@ use super::player::portrait::PlayerPreviewImages;
 
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
-const CHARACTER_PREVIEW_IMAGE_SIZE: f32 = 216.0;
+const CHARACTER_PREVIEW_IMAGE_WIDTH: f32 = 216.0;
+const CHARACTER_PREVIEW_IMAGE_HEIGHT: f32 = 288.0;
 #[derive(Component)]
 struct CharacterInfoRoot;
 
@@ -102,8 +103,8 @@ fn spawn_character_preview_viewport(
             frame.spawn((
                 ImageNode::new(image),
                 Node {
-                    width: px(CHARACTER_PREVIEW_IMAGE_SIZE),
-                    height: px(CHARACTER_PREVIEW_IMAGE_SIZE),
+                    width: px(CHARACTER_PREVIEW_IMAGE_WIDTH),
+                    height: px(CHARACTER_PREVIEW_IMAGE_HEIGHT),
                     ..default()
                 },
                 Pickable::IGNORE,
