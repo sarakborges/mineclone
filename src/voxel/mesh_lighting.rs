@@ -101,11 +101,7 @@ impl ChunkLightingCache {
                         && y <= CHUNK_SIZE
                         && z <= CHUNK_SIZE
                     {
-                        chunk.sample_local(
-                            x as i32 - 1,
-                            y as i32 - 1,
-                            z as i32 - 1,
-                        )
+                        Some(chunk.sample_local_at(x - 1, y - 1, z - 1))
                     } else {
                         let world_position =
                             origin + IVec3::new(x as i32, y as i32, z as i32);
