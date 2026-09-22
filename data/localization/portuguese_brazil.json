@@ -114,6 +114,7 @@
   "language.portugueseBrazil": "Português (Brasil)",
   "language.spanish": "Espanhol",
   "inventory.searchPlaceholder": "Buscar itens...",
+  "inventory.sortBackpack": "Organizar mochila pelo ID do item",
   "inventory.everything": "Tudo",
   "hud.rotateBlock": "Pressione {toolAction} para girar o bloco",
   "hud.breakBlock": "Clique esquerdo para quebrar o bloco.",
