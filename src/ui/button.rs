@@ -46,6 +46,33 @@ type ButtonAnimationQuery<'w, 's> = Query<
     With<Button>,
 >;
 
+pub fn icon_button<A: Component>(
+    action: A,
+    size: f32,
+    variant: ButtonVariant,
+) -> impl Bundle {
+    let (background, border) = button_static_colors(variant);
+
+    (
+        Button,
+        action,
+        AsteriaButtonVisual::default(),
+        variant,
+        Node {
+            width: px(size),
+            height: px(size),
+            min_width: px(size),
+            min_height: px(size),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(px(2)),
+            ..default()
+        },
+        BackgroundColor(background),
+        BorderColor::all(border),
+    )
+}
+
 pub fn button<A: Component>(
     label: impl Into<String>,
     action: A,
