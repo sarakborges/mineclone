@@ -23,9 +23,6 @@ pub(crate) trait VoxelRead: Send + Sync {
         self.sample_at(world_position).is_some()
     }
 
-    fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
-        self.cell_at(world_position).map(|cell| cell.block_id)
-    }
 }
 
 impl VoxelRead for VoxelWorld {
