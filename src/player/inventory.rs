@@ -53,9 +53,7 @@ impl Plugin for PlayerInventoryPlugin {
                 Update,
                 toggle_inventory
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(BrushPaletteState::Closed))
-                    .run_if(in_state(CharacterInfoState::Closed)),
+                    .run_if(in_state(PauseState::Running)),
             )
             .add_systems(
                 OnExit(InventoryState::Open),
@@ -78,12 +76,16 @@ fn toggle_inventory(
     inventory_state: Res<State<InventoryState>>,
     chat: Res<ChatState>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
+    mut next_character_info: ResMut<NextState<CharacterInfoState>>,
+    mut next_brush_palette: ResMut<NextState<BrushPaletteState>>,
 ) {
     if chat.is_open() {
         return;
     }
     match inventory_state.get() {
         InventoryState::Closed if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) => {
+            next_character_info.set(CharacterInfoState::Closed);
+            next_brush_palette.set(BrushPaletteState::Closed);
             next_inventory_state.set(InventoryState::Open);
         }
         InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
