@@ -19,7 +19,7 @@ impl Plugin for PausePlugin {
                     .run_if(in_state(SettingsState::Closed))
                     .run_if(in_state(InventoryState::Closed))
                     .run_if(in_state(BrushPaletteState::Closed)),
-                pause_on_focus_lost,
+                pause_on_focus_lost.run_if(in_state(InventoryState::Closed)),
             )
                 .run_if(in_state(GameState::Gameplay)),
         );
