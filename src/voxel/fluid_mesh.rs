@@ -871,6 +871,24 @@ mod tests {
     use crate::voxel::{cell::VoxelCell, microblock::ChiselResolution};
 
     #[test]
+    fn fluid_top_planes_keep_voxels_in_their_y_ranges() {
+        let mut chunk = VoxelChunk::empty();
+        let fluid = FluidCell::source(0, 8);
+        chunk.set_fluid(4, 3, 5, Some(fluid));
+        chunk.set_fluid(2, 1, 7, Some(fluid));
+        chunk.set_fluid(6, 3, 1, Some(fluid));
+
+        let planes = FluidTopPlanes::collect(&chunk, ChunkMeshletMask::ALL);
+
+        assert_eq!(planes.plane(1).len(), 1);
+        assert_eq!(planes.plane(1)[0].x, 2);
+        assert_eq!(planes.plane(3).len(), 2);
+        assert_eq!(planes.plane(3)[0].x, 6);
+        assert_eq!(planes.plane(3)[1].x, 4);
+        assert!(planes.plane(2).is_empty());
+    }
+
+    #[test]
     fn partial_block_face_opening_exposes_fluid() {
         let cell = VoxelCell::new("stone", Default::default());
         for (face, position) in [
