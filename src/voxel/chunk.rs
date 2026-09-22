@@ -49,8 +49,12 @@ impl<T> Default for PaletteStorage<T> {
 
 impl<T: Copy + Eq> PaletteStorage<T> {
     fn get(&self, voxel_index: usize) -> Option<T> {
+        self.get_ref(voxel_index).copied()
+    }
+
+    fn get_ref(&self, voxel_index: usize) -> Option<&T> {
         let palette_index = self.indices[voxel_index];
-        (palette_index != 0).then(|| self.palette[palette_index as usize - 1])
+        (palette_index != 0).then(|| &self.palette[palette_index as usize - 1])
     }
 
     fn set(&mut self, voxel_index: usize, value: Option<T>) {
@@ -498,11 +502,16 @@ impl VoxelChunk {
     }
 
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
+        self.cell_ref_at(x, y, z).copied()
+    }
+
+    pub(crate) fn cell_ref_at(&self, x: i32, y: i32, z: i32) -> Option<&VoxelCell> {
         if !in_bounds(x, y, z) {
             return None;
         }
 
-        self.blocks.get(index(x as usize, y as usize, z as usize))
+        self.blocks
+            .get_ref(index(x as usize, y as usize, z as usize))
     }
 
     pub(crate) fn layers_at(&self, x: i32, y: i32, z: i32) -> &[AttachedLayer] {
