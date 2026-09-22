@@ -31,9 +31,6 @@ use crate::{
 };
 
 const HURT_HOLD_SECONDS: f32 = 0.38;
-const BREAK_HOLD_SECONDS: f32 = 0.24;
-const HIT_HOLD_SECONDS: f32 = 0.42;
-const PLACE_HOLD_SECONDS: f32 = 0.48;
 const MOVING_START_SPEED_SQUARED: f32 = 0.01;
 const MOVING_STOP_SPEED_SQUARED: f32 = 0.0025;
 const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
@@ -390,21 +387,7 @@ fn sync_player_model(
             let action_revision = viewmodel_animation.revision();
             if state.name != action || state.action_revision != action_revision {
                 state.action_revision = action_revision;
-                let hold_seconds = match action {
-                    "break" => BREAK_HOLD_SECONDS,
-                    "hit" => HIT_HOLD_SECONDS,
-                    "place" => PLACE_HOLD_SECONDS,
-                    _ => 0.0,
-                };
-
-                if state.name == action {
-                    // Repeated action pulses extend the current clip instead of
-                    // restarting it. Mining emits a new swing pulse every few
-                    // ticks, and restarting the same clip caused visible flicker.
-                    state.hold_seconds = state.hold_seconds.max(hold_seconds);
-                } else {
-                    state.trigger(action, hold_seconds);
-                }
+                state.trigger(action, 0.0);
             }
             continue;
         }
@@ -420,14 +403,14 @@ fn sync_player_model(
             } else {
                 "fall"
             }
-        } else if state.name == "walk" {
+        } else if matches!(state.name.as_str(), "walk" | "run") {
             if horizontal_speed_squared > MOVING_STOP_SPEED_SQUARED {
-                "walk"
+                if walking.is_running() { "run" } else { "walk" }
             } else {
                 "idle"
             }
         } else if horizontal_speed_squared > MOVING_START_SPEED_SQUARED {
-            "walk"
+            if walking.is_running() { "run" } else { "walk" }
         } else {
             "idle"
         };
@@ -465,7 +448,7 @@ fn sync_player_model_animations(
         let animation = transitions.play(&mut player, index, Duration::from_millis(80));
         if matches!(
             state.name.as_str(),
-            "idle" | "walk" | "run" | "fall" | "break"
+            "idle" | "walk" | "run" | "fall"
         ) {
             animation.repeat();
         } else {

@@ -8,14 +8,15 @@ use crate::{
     world::tick::WorldTickClock,
 };
 
-const BREAK_ANIMATION_DURATION_TICKS: u64 = 6;
-const PLACE_ANIMATION_DURATION_TICKS: u64 = 9;
+const BREAK_ANIMATION_DURATION_TICKS: u64 = 22;
+const HIT_ANIMATION_DURATION_TICKS: u64 = 17;
+const PLACE_ANIMATION_DURATION_TICKS: u64 = 19;
 pub(super) const ITEM_SWITCH_ANIMATION_DURATION_TICKS: u64 = 12;
 
 #[derive(Component)]
 pub(super) struct PlayerViewModel;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ViewModelAction {
     Break,
     Hit,
@@ -31,19 +32,24 @@ pub(crate) struct ViewModelAnimation {
 
 impl ViewModelAnimation {
     pub(crate) fn play_break(&mut self) {
-        self.action = Some(ViewModelAction::Break);
-        self.elapsed_ticks = 0;
-        self.revision = self.revision.wrapping_add(1);
+        self.play(ViewModelAction::Break);
     }
 
     pub(crate) fn play_hit(&mut self) {
-        self.action = Some(ViewModelAction::Hit);
-        self.elapsed_ticks = 0;
-        self.revision = self.revision.wrapping_add(1);
+        self.play(ViewModelAction::Hit);
     }
 
     pub(crate) fn play_place(&mut self) {
-        self.action = Some(ViewModelAction::Place);
+        self.play(ViewModelAction::Place);
+    }
+
+    fn play(&mut self, action: ViewModelAction) {
+        // Repeated input while the same clip is active must not restart it.
+        // The next press is accepted immediately after the animation finishes.
+        if self.action == Some(action) {
+            return;
+        }
+        self.action = Some(action);
         self.elapsed_ticks = 0;
         self.revision = self.revision.wrapping_add(1);
     }
@@ -134,7 +140,8 @@ pub(super) fn animate_viewmodel(
             .elapsed_ticks
             .saturating_add(world_ticks.ticks_this_frame() as u64);
         let duration_ticks = match action {
-            ViewModelAction::Break | ViewModelAction::Hit => BREAK_ANIMATION_DURATION_TICKS,
+            ViewModelAction::Break => BREAK_ANIMATION_DURATION_TICKS,
+            ViewModelAction::Hit => HIT_ANIMATION_DURATION_TICKS,
             ViewModelAction::Place => PLACE_ANIMATION_DURATION_TICKS,
         };
         let progress = (animation.elapsed_ticks as f32 / duration_ticks as f32).clamp(0.0, 1.0);

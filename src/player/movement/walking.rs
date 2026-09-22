@@ -8,7 +8,10 @@ use crate::{
 
 use super::{
     collision::{Axis, MoveAxisResult, move_axis},
-    config::{STEP_SMOOTH_SPEED, WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
+    config::{
+        DOUBLE_TAP_WINDOW_TICKS, RUN_SPEED_MULTIPLIER, STEP_SMOOTH_SPEED, WALK_ACCELERATION,
+        WALK_DECELERATION, WALK_SPEED,
+    },
     flight::FlightState,
     gravity::GravityState,
     smoothing::approach_velocity,
@@ -18,6 +21,8 @@ use super::{
 pub struct WalkingState {
     velocity: Vec3,
     step_target_y: Option<f32>,
+    running: bool,
+    run_deadline_tick: Option<u64>,
 }
 
 impl WalkingState {
@@ -25,9 +30,15 @@ impl WalkingState {
         self.velocity.x * self.velocity.x + self.velocity.z * self.velocity.z
     }
 
+    pub(crate) fn is_running(&self) -> bool {
+        self.running
+    }
+
     pub(crate) fn reset_motion(&mut self) {
         self.velocity = Vec3::ZERO;
         self.step_target_y = None;
+        self.running = false;
+        self.run_deadline_tick = None;
     }
 }
 
@@ -49,8 +60,12 @@ pub(super) fn walk(
         if walking.velocity != Vec3::ZERO {
             walking.velocity = Vec3::ZERO;
         }
+        walking.running = false;
+        walking.run_deadline_tick = None;
         return;
     }
+
+    update_run_state(&keys, &world_ticks, &mut walking);
 
     let delta_seconds = world_ticks.delta_seconds(&game_rules);
     if delta_seconds <= 0.0 {
@@ -89,8 +104,13 @@ pub(super) fn walk(
         input -= right;
     }
 
+    let move_speed = if walking.running {
+        WALK_SPEED * RUN_SPEED_MULTIPLIER
+    } else {
+        WALK_SPEED
+    };
     let target_velocity = if input.length_squared() > 0.0 {
-        input.normalize() * WALK_SPEED
+        input.normalize() * move_speed
     } else {
         Vec3::ZERO
     };
@@ -134,6 +154,39 @@ pub(super) fn walk(
         )
     {
         walking.velocity.z = 0.0;
+    }
+}
+
+fn update_run_state(
+    keys: &ButtonInput<KeyCode>,
+    world_ticks: &WorldTickClock,
+    walking: &mut WalkingState,
+) {
+    if !keys.pressed(KeyCode::KeyW) {
+        walking.running = false;
+    }
+
+    let current_tick = world_ticks.current_tick();
+    if walking
+        .run_deadline_tick
+        .is_some_and(|deadline| current_tick > deadline)
+    {
+        walking.run_deadline_tick = None;
+    }
+
+    if !keys.just_pressed(KeyCode::KeyW) {
+        return;
+    }
+
+    if walking
+        .run_deadline_tick
+        .is_some_and(|deadline| current_tick <= deadline)
+    {
+        walking.running = true;
+        walking.run_deadline_tick = None;
+    } else {
+        walking.run_deadline_tick =
+            Some(current_tick.saturating_add(DOUBLE_TAP_WINDOW_TICKS));
     }
 }
 

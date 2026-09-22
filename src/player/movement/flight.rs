@@ -10,8 +10,7 @@ use crate::{
 use super::{
     collision::{Axis, MoveAxisResult, move_axis},
     config::{
-        FLIGHT_TOGGLE_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED_MULTIPLIER,
-        WALK_SPEED,
+        DOUBLE_TAP_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED,
     },
     gravity::GravityState,
     smoothing::approach_velocity,
@@ -86,13 +85,15 @@ pub(super) fn handle_flight_toggle(
         .toggle_deadline_tick
         .is_some_and(|deadline| current_tick <= deadline)
     {
+        let was_active = flight.active;
+        let vertical_velocity = flight.velocity.y;
         flight.active = !flight.active;
         flight.toggle_deadline_tick = None;
         flight.velocity = Vec3::ZERO;
-        gravity.vertical_velocity = 0.0;
+        gravity.vertical_velocity = if was_active { vertical_velocity } else { 0.0 };
         gravity.grounded = false;
     } else {
-        flight.toggle_deadline_tick = Some(current_tick.saturating_add(FLIGHT_TOGGLE_WINDOW_TICKS));
+        flight.toggle_deadline_tick = Some(current_tick.saturating_add(DOUBLE_TAP_WINDOW_TICKS));
     }
 }
 
@@ -102,9 +103,12 @@ pub(super) fn move_flying(
     keys: Res<ButtonInput<KeyCode>>,
     keybinds: Res<Keybinds>,
     world: Res<VoxelWorld>,
-    player: Single<(&mut Transform, &GameplayCamera, &mut FlightState), With<PlayerEntity>>,
+    player: Single<
+        (&mut Transform, &GameplayCamera, &mut FlightState, &mut GravityState),
+        With<PlayerEntity>,
+    >,
 ) {
-    let (mut transform, camera, mut flight) = player.into_inner();
+    let (mut transform, camera, mut flight, mut gravity) = player.into_inner();
 
     if !flight.active {
         if flight.velocity != Vec3::ZERO {
@@ -118,7 +122,7 @@ pub(super) fn move_flying(
         return;
     }
 
-    let fly_speed = WALK_SPEED * FLY_SPEED_MULTIPLIER;
+    let fly_speed = FLY_SPEED;
     let yaw_rotation = Quat::from_rotation_y(camera.yaw);
     let forward = yaw_rotation * Vec3::NEG_Z;
     let right = yaw_rotation * Vec3::X;
@@ -194,18 +198,28 @@ pub(super) fn move_flying(
     {
         flight.velocity.z = 0.0;
     }
-    if velocity.y != 0.0
-        && matches!(
-            move_axis(
-                &mut transform,
-                &world,
-                velocity.y * delta_seconds,
-                Axis::Y,
-                None,
-            ),
+    if velocity.y != 0.0 {
+        let vertical_result = move_axis(
+            &mut transform,
+            &world,
+            velocity.y * delta_seconds,
+            Axis::Y,
+            None,
+        );
+        if matches!(
+            vertical_result,
             MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
-        )
-    {
-        flight.velocity.y = 0.0;
+        ) {
+            if velocity.y < 0.0 {
+                // Landing while flying exits flight immediately. Since the
+                // player actually reached support, gravity starts grounded.
+                flight.active = false;
+                flight.velocity = Vec3::ZERO;
+                gravity.vertical_velocity = 0.0;
+                gravity.grounded = true;
+            } else {
+                flight.velocity.y = 0.0;
+            }
+        }
     }
 }

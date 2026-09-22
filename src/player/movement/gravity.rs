@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     collision::{Axis, MoveAxisResult, move_axis, player_collides},
-    config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
+    config::{FLY_SPEED, GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
     vertical::VerticalMovementContext,
@@ -71,7 +71,7 @@ pub(super) fn apply_gravity(
         return;
     }
 
-    gravity.vertical_velocity += GRAVITY * delta_seconds;
+    gravity.vertical_velocity = (gravity.vertical_velocity + GRAVITY * delta_seconds).max(-FLY_SPEED);
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
     let hit_vertical_surface = move_axis(
         &mut transform,
