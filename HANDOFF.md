@@ -10800,3 +10800,25 @@ real, JSON chunk válido e BIN chunk de 4020 bytes.
 Commit funcional: `2728317720ed882fc22e2380b30266bad39afd6c`.
 CI push `35758969913`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.72`.
+
+
+## 2026-09-22 — Corrigida PNG corrompida da skin do player
+
+Após o player continuar invisível em primeira e terceira pessoa mesmo com o
+modelo convertido para GLB, a textura `assets/textures/entities/player.png`
+foi validada fora do runtime.
+
+O arquivo commitado tinha estrutura PNG aparentemente válida (64×64 RGBA,
+IHDR/IDAT/IEND), porém o stream de imagem falhava ao decodificar. O blob do
+repositório era `befcb62f4eb77aeaee2a083e86d172253dac2d93`.
+
+A skin adaptada válida montada localmente foi verificada com Pillow e substituiu
+o arquivo do repositório sem reencodificação intermediária. O novo blob é
+`fd39dac8f7c4b71f84cd7958a3e86d12569d4ad8`.
+
+Como primeira e terceira pessoa aplicam a mesma textura em runtime, a PNG
+corrompida explicava o desaparecimento simultâneo de ambos os modelos.
+
+Commit funcional: `d4b4f637c047a5d5a3811a09b7428002968da760`.
+CI push `35760110577`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.73`.
