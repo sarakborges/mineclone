@@ -206,12 +206,12 @@ fn fragment(
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
     var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
-    var array_overlay_index = 511u;
+    var array_overlay_index = 127u;
 
     if texture_array_enabled {
-        let base_index = material_code & 511u;
-        array_overlay_index = (material_code >> 9u) & 511u;
-        let flags = (material_code >> 18u) & 3u;
+        let base_index = material_code & 127u;
+        array_overlay_index = (material_code >> 7u) & 127u;
+        let flags = (material_code >> 14u) & 3u;
 
         texel = textureSample(
             terrain_texture_array,
@@ -220,7 +220,7 @@ fn fragment(
             i32(base_index),
         );
         base_tint_enabled = (flags & 1u) != 0u;
-        overlay_enabled = array_overlay_index != 511u;
+        overlay_enabled = array_overlay_index != 127u;
         overlay_tint_enabled = (flags & 2u) != 0u;
     } else {
         texel = textureSample(
