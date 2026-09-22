@@ -188,6 +188,8 @@ fn dispatch_remesh_tasks(
         else {
             break;
         };
+        let (kind, meshlets) =
+            queue.coalesce_terrain_work(coord, kind, meshlets);
 
         if tasks.contains(coord, kind) {
             deferred.push((coord, kind, meshlets));
