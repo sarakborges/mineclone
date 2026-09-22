@@ -274,7 +274,7 @@ VERSION: `0.50.28`, commit
 A CI inicial falhou no Clippy por um `use bevy::prelude::*` que ficou sem
 uso em `medium.rs` após a remoção do stub. Corrigido sem supressão em
 `568801cb91802f7185874a3349dd442e9f22689f`.
-CI final de P12: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI final de P12: **verde** nos runs push `35732329750` e PR `35732336961` para `568801cb91802f7185874a3349dd442e9f22689f`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
