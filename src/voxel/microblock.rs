@@ -112,7 +112,7 @@ impl MicroblockMask {
     /// Lighting is stored at macro resolution, so a carved cell cannot expose
     /// exact directional holes; occupancy-weighted attenuation preserves the
     /// useful distinction between full, partial, and empty geometry.
-    fn occupied_count(self) -> usize {
+    pub(crate) fn occupied_count(self) -> usize {
         self.layers
             .iter()
             .map(|layer| layer.count_ones() as usize)
