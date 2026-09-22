@@ -287,7 +287,7 @@ fn configure_loaded_player_scene(
 
     for descendant in descendants.iter_descendants(ready.entity) {
         if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
-            if let Some(material) = visuals.materials.get_mut(material_handle.id()) {
+            if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
                 material.unlit = true;
                 material.metallic = 0.0;
                 material.perceptual_roughness = 1.0;
@@ -537,12 +537,12 @@ fn spawn_third_person_held_block(
                         {
                             *material_asset = face_material;
                             apply_block_display_shading(
-                                material_asset,
+                                &mut material_asset,
                                 face,
                                 block_model.opacity(),
                             );
                             set_block_model_tint(
-                                material_asset,
+                                &mut material_asset,
                                 tint.unwrap_or(Color::WHITE),
                             );
                             visibility = Visibility::Inherited;
@@ -636,7 +636,7 @@ fn sync_third_person_held_block(
                     continue;
                 };
                 *material = face_material;
-                apply_block_display_shading(material, face.face, held.opacity());
+                apply_block_display_shading(&mut material, face.face, held.opacity());
                 if *layer_visibility != Visibility::Inherited {
                     *layer_visibility = Visibility::Inherited;
                 }
@@ -650,7 +650,7 @@ fn sync_third_person_held_block(
             if materials_changed || cache.tint != Some(tint) {
                 for (_, material_handle, _) in &mut faces {
                     if let Some(material) = materials.get_mut(&material_handle.0) {
-                        set_block_model_tint(material, tint);
+                        set_block_model_tint(&mut material, tint);
                     }
                 }
             }
