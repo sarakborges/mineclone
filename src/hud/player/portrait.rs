@@ -264,7 +264,7 @@ pub(super) fn render_player_preview(
         return;
     };
 
-    let (target, center_y, distance, projection, rotation) = match kind {
+    let (target, center_y, distance, next_projection, rotation) = match kind {
         PlayerPreviewKind::Portrait => {
             let Some(target) = images.portrait() else {
                 return;
@@ -304,7 +304,7 @@ pub(super) fn render_player_preview(
         *render_target = RenderTarget::Image(target.clone().into());
         *transform = Transform::from_xyz(0.0, center_y, distance)
             .looking_at(Vec3::new(0.0, center_y, 0.0), Vec3::Y);
-        *projection = projection.clone();
+        *projection = next_projection.clone();
         camera.output_mode = CameraOutputMode::Write {
             blend_state: None,
             clear_color: ClearColorConfig::Custom(Color::NONE),
