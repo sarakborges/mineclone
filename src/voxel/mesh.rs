@@ -81,13 +81,6 @@ where
     let mut block_visual_indices =
         SmallVec::<[((usize, usize), usize); 16]>::new();
     let mut block_visuals = Vec::<BlockMeshVisual>::new();
-    let plane_capacity = active_capacity.div_ceil(CHUNK_SIZE).max(4);
-    let mut active_by_x: [Vec<u32>; CHUNK_SIZE] =
-        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
-    let mut active_by_y: [Vec<u32>; CHUNK_SIZE] =
-        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
-    let mut active_by_z: [Vec<u32>; CHUNK_SIZE] =
-        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
 
     // Resolve selected chunk cells and definitions once. Sparse chunks iterate
     // only occupied palette positions; dense chunks keep the straight meshlet
@@ -120,12 +113,9 @@ where
                 cell: *cell,
                 block_visual_index: u16::try_from(block_visual_index)
                     .expect("chunk block visual index must fit in u16"),
+                local_position: pack_local_voxel(x, y, z),
             });
             active_visuals.push(None);
-            let active = pack_active_voxel(x, y, z, source_index);
-            active_by_x[x].push(active);
-            active_by_y[y].push(active);
-            active_by_z[z].push(active);
             return;
         }
 
@@ -167,6 +157,10 @@ where
         });
     }
 
+    let active_by_x = ActiveVoxelPlanes::from_sources(&active_sources, 0);
+    let active_by_y = ActiveVoxelPlanes::from_sources(&active_sources, 4);
+    let active_by_z = ActiveVoxelPlanes::from_sources(&active_sources, 8);
+
     // Normal voxels are processed face-by-face so compatible exposed faces can
     // be merged into large rectangles. Only occupied, non-sculpted voxels are
     // revisited here; sparse tree/foliage chunks no longer scan 4096 empty cells
@@ -174,9 +168,9 @@ where
     for face in BlockFace::ALL {
         for depth in 0..CHUNK_SIZE {
             let active_voxels = match face {
-                BlockFace::Right | BlockFace::Left => &active_by_x[depth],
-                BlockFace::Top | BlockFace::Bottom => &active_by_y[depth],
-                BlockFace::Front | BlockFace::Back => &active_by_z[depth],
+                BlockFace::Right | BlockFace::Left => active_by_x.plane(depth),
+                BlockFace::Top | BlockFace::Bottom => active_by_y.plane(depth),
+                BlockFace::Front | BlockFace::Back => active_by_z.plane(depth),
             };
             if active_voxels.is_empty() {
                 continue;
@@ -365,6 +359,41 @@ where
 struct VoxelMeshSource {
     cell: VoxelCell,
     block_visual_index: u16,
+    local_position: u16,
+}
+
+struct ActiveVoxelPlanes {
+    offsets: [usize; CHUNK_SIZE + 1],
+    voxels: Vec<u32>,
+}
+
+impl ActiveVoxelPlanes {
+    fn from_sources(sources: &[VoxelMeshSource], coordinate_shift: u32) -> Self {
+        let mut counts = [0_usize; CHUNK_SIZE];
+        for source in sources {
+            counts[packed_local_coordinate(source.local_position, coordinate_shift)] += 1;
+        }
+
+        let mut offsets = [0_usize; CHUNK_SIZE + 1];
+        for (index, count) in counts.into_iter().enumerate() {
+            offsets[index + 1] = offsets[index] + count;
+        }
+
+        let mut next = offsets;
+        let mut voxels = vec![0_u32; sources.len()];
+        for (source_index, source) in sources.iter().enumerate() {
+            let plane = packed_local_coordinate(source.local_position, coordinate_shift);
+            let destination = next[plane];
+            next[plane] += 1;
+            voxels[destination] = pack_active_voxel(source.local_position, source_index);
+        }
+
+        Self { offsets, voxels }
+    }
+
+    fn plane(&self, depth: usize) -> &[u32] {
+        &self.voxels[self.offsets[depth]..self.offsets[depth + 1]]
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -563,18 +592,18 @@ fn face_neighbor_cell<W: VoxelRead + ?Sized>(
     }
 }
 
-fn pack_active_voxel(
-    x: usize,
-    y: usize,
-    z: usize,
-    source_index: usize,
-) -> u32 {
+fn pack_local_voxel(x: usize, y: usize, z: usize) -> u16 {
     debug_assert!(x < 16 && y < 16 && z < 16);
+    x as u16 | ((y as u16) << 4) | ((z as u16) << 8)
+}
+
+fn packed_local_coordinate(local_position: u16, shift: u32) -> usize {
+    usize::from((local_position >> shift) & 0x0f)
+}
+
+fn pack_active_voxel(local_position: u16, source_index: usize) -> u32 {
     debug_assert!(source_index < 4096);
-    x as u32
-        | ((y as u32) << 4)
-        | ((z as u32) << 8)
-        | ((source_index as u32) << 12)
+    u32::from(local_position) | ((source_index as u32) << 12)
 }
 
 fn unpack_active_voxel(packed: u32) -> (usize, usize, usize, usize) {
