@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::{platform::collections::HashMap, prelude::*};
 
 #[cfg(test)]
@@ -13,6 +15,7 @@ use crate::{
     world::{
         chunk_remesh_tasks::ChunkRemeshTaskKind,
         chunk_rendering::ChunkRenderPool,
+        streaming::chunk_load_priority,
     },
 };
 
@@ -20,6 +23,55 @@ use crate::{
 struct RenderableScanKey {
     queue_revision: u64,
     pool_revision: u64,
+}
+
+#[derive(Default)]
+struct RenderablePriorityCache {
+    queue_revision: u64,
+    pool_revision: u64,
+    center: Option<IVec3>,
+    pending: VecDeque<IVec3>,
+}
+
+impl RenderablePriorityCache {
+    fn pop_nearest(
+        &mut self,
+        queue: &mut DeduplicatedQueue<IVec3>,
+        render_pool: &ChunkRenderPool,
+        center: IVec3,
+    ) -> Option<IVec3> {
+        let pool_revision = render_pool.membership_revision();
+        if self.queue_revision != queue.revision()
+            || self.pool_revision != pool_revision
+            || self.center != Some(center)
+        {
+            self.pending.clear();
+            let mut ordered = queue
+                .values_in_order()
+                .filter(|coord| render_pool.contains(*coord))
+                .collect::<Vec<_>>();
+            ordered.sort_unstable_by_key(|coord| {
+                chunk_load_priority(*coord, center, IVec2::ZERO)
+            });
+            self.pending.extend(ordered);
+            self.queue_revision = queue.revision();
+            self.pool_revision = pool_revision;
+            self.center = Some(center);
+        }
+
+        while let Some(coord) = self.pending.pop_front() {
+            if !queue.contains(coord) || !render_pool.contains(coord) {
+                continue;
+            }
+
+            let removed = queue.remove(coord);
+            debug_assert!(removed, "remesh priority cache must reference an active chunk");
+            self.queue_revision = queue.revision();
+            return Some(coord);
+        }
+
+        None
+    }
 }
 
 #[derive(Resource, Default)]
@@ -33,6 +85,9 @@ pub(crate) struct ChunkRemeshQueue {
     geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
     lighting_scan_miss: Option<RenderableScanKey>,
+    geometry_priority: RenderablePriorityCache,
+    fluid_priority: RenderablePriorityCache,
+    lighting_priority: RenderablePriorityCache,
     next_background_kind: usize,
 }
 
