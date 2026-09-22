@@ -494,6 +494,25 @@ VERSION: `0.50.39`, commit
 `5b018accaeb0794b5fd2af3f9bc33bf7d3b69eaa`.
 CI de P23: **verde** nos runs push `35736521216` e PR `35736527485` para `5b018accaeb0794b5fd2af3f9bc33bf7d3b69eaa`. Nenhum `cargo test` foi adicionado/executado.
 
+### P24 — calcular alturas de fluido sob demanda no passe geral
+
+O passe geral de fluid mesh calculava `fluid_face_heights` assim que qualquer
+face do voxel estava exposta. Essa rotina consulta 18 células de fluido para
+montar a vizinhança 3x3 em Y/Y+1, mesmo quando a única face emitida era
+`Bottom`, cuja geometria não usa as alturas da superfície.
+
+O cálculo agora é lazy por voxel: a primeira face top/lateral realmente emitida
+calcula as alturas uma única vez e as demais reutilizam o resultado. Se apenas
+a face inferior for emitida, as 18 consultas são eliminadas. O contrato ficou
+explícito em `fluid_face_needs_heights`; regressão verifica que Bottom é a
+única exceção e que seus vértices são independentes das alturas.
+
+Commits: lazy sampling `42f0922ffb13aecae86a781faec436b88c53e211`;
+regressão/contrato `34dcc20e76112ee244855c551fe149df1b88a23b`.
+VERSION: `0.50.40`, commit
+`ced792046825152f77449e8d0d8f60416329b0a8`.
+CI de P24: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
