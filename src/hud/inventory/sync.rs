@@ -125,11 +125,7 @@ pub(super) struct InventoryRebuildView<'w, 's> {
 pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     'w,
     's,
-    (
-        &'static mut Node,
-        &'static ComputedNode,
-        &'static mut Visibility,
-    ),
+    (&'static mut Node, &'static mut Visibility),
     (
         With<InventoryItemTooltip>,
         Without<InventoryItemTooltipText>,
@@ -150,7 +146,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_text: Single<
         'w,
         's,
-        &'static mut Text,
+        (&'static mut Text, &'static TextLayoutInfo),
         (
             With<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
@@ -162,7 +158,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_id: Single<
         'w,
         's,
-        &'static mut Text,
+        (&'static mut Text, &'static TextLayoutInfo),
         (
             With<InventoryItemTooltipId>,
             Without<InventoryItemTooltipText>,
@@ -174,7 +170,11 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_hint: Single<
         'w,
         's,
-        (&'static mut Text, &'static mut Visibility),
+        (
+            &'static mut Text,
+            &'static TextLayoutInfo,
+            &'static mut Visibility,
+        ),
         (
             With<InventoryItemTooltipHint>,
             Without<InventoryItemTooltipText>,
@@ -186,7 +186,11 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_stats_title: Single<
         'w,
         's,
-        (&'static mut Text, &'static mut Visibility),
+        (
+            &'static mut Text,
+            &'static TextLayoutInfo,
+            &'static mut Visibility,
+        ),
         (
             With<InventoryItemTooltipStatsTitle>,
             Without<InventoryItemTooltipText>,
@@ -198,7 +202,11 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_stats: Single<
         'w,
         's,
-        (&'static mut Text, &'static mut Visibility),
+        (
+            &'static mut Text,
+            &'static TextLayoutInfo,
+            &'static mut Visibility,
+        ),
         (
             With<InventoryItemTooltipStats>,
             Without<InventoryItemTooltipText>,
@@ -397,6 +405,19 @@ pub(super) fn rebuild_inventory_when_changed(
 }
 
 const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
+const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
+const ITEM_TOOLTIP_HORIZONTAL_INSET: f32 = 22.0;
+const ITEM_TOOLTIP_VERTICAL_INSET: f32 = 16.0;
+const ITEM_TOOLTIP_ROW_GAP: f32 = 2.0;
+const ITEM_TOOLTIP_STATS_MARGIN_TOP: f32 = 6.0;
+
+fn logical_text_size(layout: &TextLayoutInfo) -> Vec2 {
+    if layout.scale_factor > 0.0 {
+        layout.size / layout.scale_factor
+    } else {
+        layout.size
+    }
+}
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
@@ -414,7 +435,7 @@ pub(super) fn sync_inventory_item_tooltip(
         tooltip_stats_title,
         tooltip_stats,
     } = view;
-    let (mut node, computed_node, mut visibility) = tooltip.into_inner();
+    let (mut node, mut visibility) = tooltip.into_inner();
 
     let hovered_item = inventory_slots
         .iter()
@@ -444,13 +465,13 @@ pub(super) fn sync_inventory_item_tooltip(
         return;
     };
 
-    let mut text = tooltip_text.into_inner();
+    let (mut text, text_layout) = tooltip_text.into_inner();
     let name = content.item_name(item_id);
     if text.0 != name {
         text.0 = name.to_owned();
     }
 
-    let mut id_text = tooltip_id.into_inner();
+    let (mut id_text, id_layout) = tooltip_id.into_inner();
     if id_text.0 != item_id {
         id_text.0 = item_id.to_owned();
     }
@@ -458,7 +479,7 @@ pub(super) fn sync_inventory_item_tooltip(
     let language = content.language.get();
     let selected_tool = content.tools.get(item_id);
 
-    let (mut hint_text, mut hint_visibility) = tooltip_hint.into_inner();
+    let (mut hint_text, hint_layout, mut hint_visibility) = tooltip_hint.into_inner();
     if let Some(tool) = selected_tool {
         let next_hint = tool.hint.text(language);
         if hint_text.0 != next_hint {
@@ -471,8 +492,9 @@ pub(super) fn sync_inventory_item_tooltip(
         *hint_visibility = Visibility::Hidden;
     }
 
-    let (mut stats_title_text, mut stats_title_visibility) = tooltip_stats_title.into_inner();
-    let (mut stats_text, mut stats_visibility) = tooltip_stats.into_inner();
+    let (mut stats_title_text, stats_title_layout, mut stats_title_visibility) =
+        tooltip_stats_title.into_inner();
+    let (mut stats_text, stats_layout, mut stats_visibility) = tooltip_stats.into_inner();
     if let Some(tool) = selected_tool.filter(|tool| tool.mining.is_mining_tool()) {
         let next_stats_title = localization.text(language, "inventory.tool.stats");
         if stats_title_text.0 != next_stats_title {
@@ -502,7 +524,38 @@ pub(super) fn sync_inventory_item_tooltip(
         }
     }
 
-    let tooltip_size = computed_node.size() * computed_node.inverse_scale_factor;
+    let text_size = logical_text_size(text_layout);
+    let id_size = logical_text_size(id_layout);
+    let hint_size = logical_text_size(hint_layout);
+    let stats_title_size = logical_text_size(stats_title_layout);
+    let stats_size = logical_text_size(stats_layout);
+
+    let hint_visible = *hint_visibility != Visibility::Hidden;
+    let stats_title_visible = *stats_title_visibility != Visibility::Hidden;
+    let stats_visible = *stats_visibility != Visibility::Hidden;
+
+    let mut content_width = text_size.x.max(id_size.x);
+    let mut content_height = text_size.y + ITEM_TOOLTIP_ROW_GAP + id_size.y;
+    if hint_visible {
+        content_width = content_width.max(hint_size.x);
+        content_height += ITEM_TOOLTIP_ROW_GAP + hint_size.y;
+    }
+    if stats_title_visible {
+        content_width = content_width.max(stats_title_size.x);
+        content_height +=
+            ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_STATS_MARGIN_TOP + stats_title_size.y;
+    }
+    if stats_visible {
+        content_width = content_width.max(stats_size.x);
+        content_height += ITEM_TOOLTIP_ROW_GAP + stats_size.y;
+    }
+
+    let tooltip_size = Vec2::new(
+        (content_width + ITEM_TOOLTIP_HORIZONTAL_INSET).min(ITEM_TOOLTIP_MAX_WIDTH),
+        content_height + ITEM_TOOLTIP_VERTICAL_INSET,
+    );
+    node.width = px(tooltip_size.x.ceil());
+    node.height = px(tooltip_size.y.ceil());
 
     if cursor.x + ITEM_TOOLTIP_OFFSET + tooltip_size.x <= window.width() {
         node.left = px(cursor.x + ITEM_TOOLTIP_OFFSET);

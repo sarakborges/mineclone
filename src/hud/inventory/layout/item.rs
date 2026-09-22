@@ -27,6 +27,7 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             padding: UiRect::axes(px(10), px(7)),
             border: UiRect::all(px(1)),
             flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexStart,
             row_gap: px(2),
             ..default()
         }),
@@ -38,16 +39,28 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
         tooltip.spawn((
             InventoryItemTooltipText,
             typography::inventory_category(""),
+            Node {
+                max_width: px(258),
+                ..default()
+            },
             Pickable::IGNORE,
         ));
         tooltip.spawn((
             InventoryItemTooltipId,
             typography::caption(""),
+            Node {
+                max_width: px(258),
+                ..default()
+            },
             Pickable::IGNORE,
         ));
         tooltip.spawn((
             InventoryItemTooltipHint,
             typography::caption(""),
+            Node {
+                max_width: px(258),
+                ..default()
+            },
             Visibility::Hidden,
             Pickable::IGNORE,
         ));
@@ -55,6 +68,7 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             InventoryItemTooltipStatsTitle,
             typography::inventory_category(""),
             Node {
+                max_width: px(258),
                 margin: UiRect::top(px(6)),
                 ..default()
             },
@@ -64,6 +78,10 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
         tooltip.spawn((
             InventoryItemTooltipStats,
             typography::caption(""),
+            Node {
+                max_width: px(258),
+                ..default()
+            },
             Visibility::Hidden,
             Pickable::IGNORE,
         ));
