@@ -69,6 +69,7 @@
   "settings.keybind.jump": "Jump / Ascend",
   "settings.keybind.descend": "Descend",
   "settings.keybind.inventory": "Inventory",
+  "settings.keybind.characterInfo": "Character Info",
   "settings.keybind.chat": "Chat",
   "settings.keybind.toolAction": "Rotate / Tool Action",
   "settings.keybind.changePerspective": "Change Perspective",
