@@ -299,7 +299,7 @@ fn release_world_thumbnail_images(
     mut images: ResMut<Assets<Image>>,
 ) {
     for handle in state.thumbnail_images.drain(..) {
-        let _ = context.images.remove(&handle);
+        let _ = images.remove(&handle);
     }
 }
 
