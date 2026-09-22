@@ -10,14 +10,13 @@ use crate::{
     ui::{selectable, theme, typography},
 };
 
-use super::{HudSettings, TargetBlockPosition};
+use super::{
+    HudSettings, TargetBlockPosition,
+    player::portrait::PlayerHudPreviewViewport,
+};
 
 const AVATAR_SIZE: f32 = 64.0;
 const AVATAR_IMAGE_SIZE: f32 = 54.0;
-const PLAYER_AVATAR_IMAGE_WIDTH: f32 = 96.0;
-const PLAYER_AVATAR_IMAGE_HEIGHT: f32 = 128.0;
-const PLAYER_AVATAR_IMAGE_LEFT: f32 = -18.0;
-const PLAYER_AVATAR_IMAGE_TOP: f32 = -6.0;
 const INFO_WIDTH: f32 = 180.0;
 const HEALTH_BAR_HEIGHT: f32 = 22.0;
 const HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
@@ -50,7 +49,6 @@ pub(super) struct EntityCardHealthLabel(EntityCardSource);
 pub(super) fn spawn_entity_card(
     parent: &mut ChildSpawnerCommands,
     source: EntityCardSource,
-    portrait: Option<Handle<Image>>,
 ) {
     let (avatar_background, avatar_border) = selectable::static_colors(false);
     parent
@@ -86,33 +84,25 @@ pub(super) fn spawn_entity_card(
                 Pickable::IGNORE,
             ))
             .with_children(|avatar| {
-                if let Some(image) = portrait {
-                    let image_node = match source {
-                        EntityCardSource::LocalPlayer => Node {
-                            position_type: PositionType::Absolute,
-                            left: px(PLAYER_AVATAR_IMAGE_LEFT),
-                            top: px(PLAYER_AVATAR_IMAGE_TOP),
-                            width: px(PLAYER_AVATAR_IMAGE_WIDTH),
-                            height: px(PLAYER_AVATAR_IMAGE_HEIGHT),
-                            ..default()
-                        },
-                        EntityCardSource::Target => Node {
-                            width: px(AVATAR_IMAGE_SIZE),
-                            height: px(AVATAR_IMAGE_SIZE),
-                            ..default()
-                        },
-                    };
-                    avatar.spawn((
-                        ImageNode::new(image),
-                        image_node,
-                        Pickable::IGNORE,
-                    ));
-                } else {
-                    avatar.spawn((
-                        typography::hud_subheading("?"),
-                        TextLayout::justify(Justify::Center),
-                        Pickable::IGNORE,
-                    ));
+                match source {
+                    EntityCardSource::LocalPlayer => {
+                        avatar.spawn((
+                            PlayerHudPreviewViewport,
+                            Node {
+                                width: px(AVATAR_IMAGE_SIZE),
+                                height: px(AVATAR_IMAGE_SIZE),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ));
+                    }
+                    EntityCardSource::Target => {
+                        avatar.spawn((
+                            typography::hud_subheading("?"),
+                            TextLayout::justify(Justify::Center),
+                            Pickable::IGNORE,
+                        ));
+                    }
                 }
             });
 
