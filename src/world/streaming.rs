@@ -72,13 +72,6 @@ struct ReadyPriorityCache {
     pending: VecDeque<IVec3>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct MissingRenderPriorityCache {
-    selection_revision: u64,
-    render_pool_revision: u64,
-    priority: Option<ChunkLoadPriority>,
-}
-
 impl ReadyPriorityCache {
     fn sync(
         &mut self,
@@ -120,7 +113,6 @@ pub(super) struct ChunkStreamingState {
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
     ready_priority: ReadyPriorityCache,
-    missing_render_priority: Option<MissingRenderPriorityCache>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
@@ -160,38 +152,6 @@ impl ChunkStreamingState {
         };
         let (_, hide_radius) = chunk_visibility_radii(self.horizontal_radius);
         self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
-    }
-
-    pub(super) fn nearest_missing_render_priority(
-        &mut self,
-        render_pool: &ChunkRenderPool,
-    ) -> Option<ChunkLoadPriority> {
-        let center = self.center?;
-        let render_pool_revision = render_pool.membership_revision();
-        if let Some(cache) = self.missing_render_priority
-            && cache.selection_revision == self.selection_revision
-            && cache.render_pool_revision == render_pool_revision
-        {
-            return cache.priority;
-        }
-
-        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
-        let priority = self
-            .desired
-            .iter()
-            .copied()
-            .filter(|coord| !self.mesh_pressure_evicted.contains_key(coord))
-            .filter(|coord| !render_pool.contains(*coord))
-            .filter(|coord| chunk_is_inside_render_radius(center, *coord, show_radius))
-            .map(|coord| chunk_load_priority(coord, center, self.movement_direction))
-            .min();
-
-        self.missing_render_priority = Some(MissingRenderPriorityCache {
-            selection_revision: self.selection_revision,
-            render_pool_revision,
-            priority,
-        });
-        priority
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -403,14 +363,12 @@ impl ChunkStreamingState {
     pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3, bytes: usize) {
         self.ready.remove(coord);
         self.mesh_pressure_evicted.insert(coord, bytes);
-        self.missing_render_priority = None;
     }
 
     pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
         if self.mesh_pressure_evicted.remove(&coord).is_none() || !self.keeps_loaded(coord) {
             return false;
         }
-        self.missing_render_priority = None;
         self.mark_ready(coord);
         true
     }
@@ -437,8 +395,7 @@ impl ChunkStreamingState {
             desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
         });
         if self.mesh_pressure_evicted.len() != before {
-            self.missing_render_priority = None;
-        }
+            }
     }
 
     fn pop_ready(&mut self) -> Option<IVec3> {
@@ -504,7 +461,6 @@ impl ChunkStreamingState {
             .selection_revision
             .checked_add(1)
             .expect("chunk streaming selection revision exhausted");
-        self.missing_render_priority = None;
     }
 }
 
