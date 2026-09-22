@@ -75,6 +75,9 @@ pub(super) struct InventoryItemTooltipId;
 pub(super) struct InventoryItemTooltipHint;
 
 #[derive(Component)]
+pub(super) struct InventoryItemTooltipStatsTitle;
+
+#[derive(Component)]
 pub(super) struct InventoryItemTooltipStats;
 
 #[derive(Resource, Default)]
