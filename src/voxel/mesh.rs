@@ -460,7 +460,7 @@ where
     visual
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 struct GreedyFace {
     block_id: &'static str,
     material_face: BlockFace,
@@ -468,6 +468,18 @@ struct GreedyFace {
     lighting: FaceLighting,
     material_code: f32,
     uv_rotation: TextureRotation,
+}
+
+impl PartialEq for GreedyFace {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.block_id.as_ptr(), other.block_id.as_ptr())
+            && self.block_id.len() == other.block_id.len()
+            && self.material_face == other.material_face
+            && self.tint == other.tint
+            && self.lighting == other.lighting
+            && self.material_code == other.material_code
+            && self.uv_rotation == other.uv_rotation
+    }
 }
 
 fn canonical_greedy_tint(tint: [f32; 3]) -> [f32; 3] {
