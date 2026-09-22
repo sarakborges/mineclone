@@ -265,11 +265,13 @@ fn fragment(
             sun_visibility = directional_sun_visibility(in);
         }
 
-        dynamic_light = dynamic_point_lighting(
-            in,
-            surface_normal,
-            pbr_input.is_orthographic,
-        );
+        if terrain_global_lighting[0].y > 0.5 {
+            dynamic_light = dynamic_point_lighting(
+                in,
+                surface_normal,
+                pbr_input.is_orthographic,
+            );
+        }
     }
 #endif
 
