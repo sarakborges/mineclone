@@ -956,8 +956,7 @@ Commit inicial/regressão:
 `73c01641857fde857e5bb09905aeab9c379aa817`.
 VERSION: `0.50.63`, commit
 `ad16428ce1db0b58bf92b229e70309e052844bbd`.
-A primeira versão passou no push `35749238218`; CI do refinamento final:
-aguardando. Nenhum `cargo test` foi adicionado/executado.
+A primeira versão passou no push `35749238218`. O refinamento `73c0164` coincidiu com erros concorrentes do first-person viewmodel; o estado acumulado atual passou no push `35749600060` para `1b1b1d79900aaa4dd15376ba2f55b0257d83ac4a`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
