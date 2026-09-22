@@ -1,4 +1,4 @@
-use std::io;
+use std::{cmp::Ordering, io};
 
 use bevy::prelude::*;
 
@@ -71,6 +71,15 @@ impl PlayerHotbar {
             )
         });
         std::mem::replace(slot, item)
+    }
+
+    pub(crate) fn sort_backpack_by_id(&mut self) {
+        self.backpack.sort_by(|left, right| match (left, right) {
+            (Some(left), Some(right)) => left.cmp(right),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        });
     }
 
     pub(crate) fn saved_items(&self) -> Vec<Option<String>> {
