@@ -69,6 +69,7 @@
   "settings.keybind.jump": "Pular / Subir",
   "settings.keybind.descend": "Descer",
   "settings.keybind.inventory": "Inventário",
+  "settings.keybind.characterInfo": "Informações do Personagem",
   "settings.keybind.chat": "Chat",
   "settings.keybind.toolAction": "Rotacionar / Ação da Ferramenta",
   "settings.keybind.changePerspective": "Mudar Perspectiva",
