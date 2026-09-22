@@ -157,21 +157,44 @@ fn spawn_world_thumbnail(
     parent: &mut ChildSpawnerCommands,
     thumbnail: Option<Handle<Image>>,
 ) {
-    let node = Node {
-        width: px(256),
-        height: px(144),
-        flex_shrink: 0.0,
-        ..default()
-    };
-    if let Some(image) = thumbnail {
-        parent.spawn((ImageNode::new(image), node, Pickable::IGNORE));
-    } else {
-        parent.spawn((
-            node,
-            BackgroundColor(theme::SURFACE_INSET),
+    parent
+        .spawn((
+            Node {
+                width: px(256),
+                height: px(144),
+                flex_shrink: 0.0,
+                padding: UiRect::all(px(2)),
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BackgroundColor(theme::FROSTED_SURFACE),
+            theme::frosted_surface_gradient(),
+            BorderColor::all(theme::BORDER),
+            BoxShadow(vec![ShadowStyle {
+                color: Color::srgba(0.0, 0.0, 0.0, 0.38),
+                x_offset: px(0),
+                y_offset: px(8),
+                spread_radius: px(0),
+                blur_radius: px(18),
+            }]),
             Pickable::IGNORE,
-        ));
-    }
+        ))
+        .with_children(|frame| {
+            let content = Node {
+                width: percent(100),
+                height: percent(100),
+                ..default()
+            };
+            if let Some(image) = thumbnail {
+                frame.spawn((ImageNode::new(image), content, Pickable::IGNORE));
+            } else {
+                frame.spawn((
+                    content,
+                    BackgroundColor(theme::SURFACE_INSET),
+                    Pickable::IGNORE,
+                ));
+            }
+        });
 }
 
 fn metadata_row() -> Node {
