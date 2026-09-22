@@ -137,8 +137,14 @@ fn toggle_camera_perspective(
 fn sync_perspective_camera(
     perspective: Res<CameraPerspective>,
     world: Res<VoxelWorld>,
-    player: Single<(&Transform, &GameplayCamera), With<crate::player::PlayerEntity>>,
-    camera: Single<&mut Transform, With<GameplayWorldCamera>>,
+    player: Single<
+        (&Transform, &GameplayCamera),
+        (With<crate::player::PlayerEntity>, Without<GameplayWorldCamera>),
+    >,
+    camera: Single<
+        &mut Transform,
+        (With<GameplayWorldCamera>, Without<crate::player::PlayerEntity>),
+    >,
 ) {
     let (player_transform, gameplay_camera) = *player;
     let mut camera_transform = camera.into_inner();
