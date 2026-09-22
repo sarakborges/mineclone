@@ -111,7 +111,7 @@ where
                 )
             }
         });
-        let exposed = std::array::from_fn(|index| {
+        let exposed: [bool; 6] = std::array::from_fn(|index| {
             let face = BlockFace::ALL[index];
             if (greedy_top && face == BlockFace::Top)
                 || (face == BlockFace::Bottom && world_voxel.y <= 0)
