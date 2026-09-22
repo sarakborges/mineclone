@@ -112,7 +112,7 @@ impl ChunkAsyncWorkLimiter {
 
     pub(crate) fn limit(&self) -> usize {
         let base = self.base_limit();
-        let minimum = base.min(2);
+        let minimum = adaptive_limit_floor(base);
         let adaptive = self.adaptive_limit.load(Ordering::Acquire);
         if adaptive == 0 {
             base
@@ -127,8 +127,10 @@ impl ChunkAsyncWorkLimiter {
 
     fn set_adaptive_limit(&self, limit: usize) {
         let base = self.base_limit();
-        self.adaptive_limit
-            .store(limit.clamp(base.min(2), base), Ordering::Release);
+        self.adaptive_limit.store(
+            limit.clamp(adaptive_limit_floor(base), base),
+            Ordering::Release,
+        );
     }
 
     pub(crate) fn take_diagnostics(&self) -> ChunkAsyncWorkDiagnostics {
@@ -160,10 +162,18 @@ impl ChunkAsyncStageMetrics {
     }
 }
 
-const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 50.0;
-const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 58.0;
+const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 45.0;
+const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 55.0;
 const ASYNC_SLOW_FRAMES: u16 = 4;
-const ASYNC_RECOVERY_FRAMES: u16 = 120;
+const ASYNC_RECOVERY_FRAMES: u16 = 60;
+
+fn adaptive_limit_floor(base: usize) -> usize {
+    if base <= 2 {
+        return base.max(1);
+    }
+
+    base.div_ceil(2).max(2)
+}
 
 #[derive(Default)]
 pub(crate) struct ChunkAsyncAdaptationState {
@@ -189,7 +199,7 @@ pub(crate) fn tune_chunk_async_work(
     if frame_seconds > ASYNC_SLOW_FRAME_SECONDS {
         state.recovery_frames = 0;
         state.slow_frames = state.slow_frames.saturating_add(1);
-        if state.slow_frames >= ASYNC_SLOW_FRAMES && current > base.min(2) {
+        if state.slow_frames >= ASYNC_SLOW_FRAMES && current > adaptive_limit_floor(base) {
             limiter.set_adaptive_limit(current - 1);
             state.slow_frames = 0;
         }
@@ -230,5 +240,20 @@ impl Drop for ChunkAsyncWorkPermit {
 
         let previous = self.in_flight.fetch_sub(1, Ordering::AcqRel);
         debug_assert!(previous > 0, "chunk async work limiter cannot underflow");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::adaptive_limit_floor;
+
+    #[test]
+    fn adaptive_floor_preserves_half_of_chunk_throughput_on_wide_pools() {
+        assert_eq!(adaptive_limit_floor(1), 1);
+        assert_eq!(adaptive_limit_floor(2), 2);
+        assert_eq!(adaptive_limit_floor(3), 2);
+        assert_eq!(adaptive_limit_floor(4), 2);
+        assert_eq!(adaptive_limit_floor(6), 3);
+        assert_eq!(adaptive_limit_floor(12), 6);
     }
 }
