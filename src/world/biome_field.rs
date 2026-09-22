@@ -355,7 +355,7 @@ impl BiomeField {
             .clear();
     }
 
-    pub(super) const fn surface_biome_is_enabled(&self, index: usize) -> bool {
+    pub(super) fn surface_biome_is_enabled(&self, index: usize) -> bool {
         self.spawn_oceans || Some(index) != self.ocean_surface_index
     }
 
