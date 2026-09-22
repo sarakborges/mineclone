@@ -299,7 +299,7 @@ Commits: resultado do seed
 `c9cf84b15703615e981d7421d716ff663439ae6b`.
 VERSION: `0.50.29`, commit
 `b8b8b94cf901d4ad7e802fe8c9b3becc3627c614`.
-CI de P13: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P13: **verde** nos runs push `35732619224` e PR `35732623902` para `b8b8b94cf901d4ad7e802fe8c9b3becc3627c614`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
