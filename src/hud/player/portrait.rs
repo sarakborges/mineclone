@@ -9,7 +9,10 @@ use bevy::{
 
 use crate::{
     content::player::PlayerDefinition,
-    player::PLAYER_SKIN_TEXTURE_PATH,
+    player::{
+        PLAYER_SKIN_TEXTURE_PATH,
+        character_info::CharacterInfoState,
+    },
 };
 
 const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
@@ -190,6 +193,7 @@ fn configure_player_preview_scene(
     mut commands: Commands,
     descendants: Query<&Children>,
     mut assets: PlayerPreviewSceneAssets,
+    character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
 ) {
     if assets.appearances.get(ready.entity).is_err() {
@@ -236,7 +240,11 @@ fn configure_player_preview_scene(
             .insert(MeshMaterial3d(material));
     }
 
-    render_state.request_portrait();
+    if *character_info.get() == CharacterInfoState::Open {
+        render_state.request_character();
+    } else {
+        render_state.request_portrait();
+    }
 }
 
 pub(super) fn render_player_preview(
