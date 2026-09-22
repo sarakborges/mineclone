@@ -120,8 +120,8 @@ impl TicksPerSecondEditor<'_> {
 
         match rule {
             BooleanGameRuleToggle::SpawnCreatures => {
-                self.game_rules
-                    .set_spawn_creatures(!self.game_rules.spawn_creatures())
+                let spawn_creatures = !self.game_rules.spawn_creatures();
+                self.game_rules.set_spawn_creatures(spawn_creatures);
             }
         }
         self.save.save_game_rules(*self.game_rules);
