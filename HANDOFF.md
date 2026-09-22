@@ -10777,3 +10777,26 @@ Commits:
 
 CI final push `35758240813`: **verde** (localizações, Clippy rigoroso e cargo
 check). VERSION: `0.50.71`.
+
+
+## 2026-09-22 — Player model moved to GLB
+
+O player continuava sem aparecer em primeira e terceira pessoa mesmo após
+remover a URI externa da skin. A estrutura JSON do `player.gltf` foi auditada
+(bufferViews/accessors/animations/meshes) e estava internamente consistente.
+
+Para eliminar o último diferencial em relação ao pipeline do slime, o player
+foi convertido para GLB binário:
+- novo asset: `assets/models/entities/player/player.glb`;
+- `data/entities/player.json` agora aponta para
+  `models/entities/player/player.glb`;
+- o BIN embutido do antigo GLTF foi movido para o chunk BIN do GLB;
+- a skin continua sendo aplicada em runtime via
+  `textures/entities/player.png`.
+
+O GLB final foi verificado: magic `glTF`, versão 2, tamanho declarado igual ao
+real, JSON chunk válido e BIN chunk de 4020 bytes.
+
+Commit funcional: `2728317720ed882fc22e2380b30266bad39afd6c`.
+CI push `35758969913`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.72`.
