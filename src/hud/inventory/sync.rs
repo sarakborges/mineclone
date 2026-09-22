@@ -672,7 +672,6 @@ pub(super) fn style_inventory_slots(
     >,
 ) {
     let selection_changed = hotbar.is_changed() || player_view.is_changed();
-    let selected_index = HOTBAR_INVENTORY_OFFSET + hotbar.selected_slot();
     let query = player_view.search_query().trim().to_lowercase();
 
     for (interaction, slot, background, border) in &mut slots {
@@ -686,10 +685,7 @@ pub(super) fn style_inventory_slots(
                     || content.item_name(item_id).to_lowercase().contains(&query)
             });
         selectable::apply_colors(
-            selectable::colors(
-                *interaction,
-                slot.index == selected_index || search_match,
-            ),
+            selectable::colors(*interaction, search_match),
             background,
             border,
         );
