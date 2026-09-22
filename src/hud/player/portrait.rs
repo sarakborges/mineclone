@@ -1,159 +1,185 @@
-use std::collections::HashSet;
-
 use bevy::{
-    camera::{RenderTarget, visibility::RenderLayers},
-    light::{NotShadowCaster, NotShadowReceiver},
+    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     prelude::*,
-    render::render_resource::TextureFormat,
+    render::render_resource::BlendState,
+    window::PrimaryWindow,
 };
 
 use crate::{
-    app::game_state::GameState,
-    player::model::{PlayerModelPreviewSource, PlayerModelRoot},
-    rendering::block_model_material::BlockModelMaterial,
+    app::{
+        game_state::GameState,
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
+    player::{
+        character_info::CharacterInfoState,
+        model::{PLAYER_MODEL_PREVIEW_RENDER_LAYER, PlayerModelRoot},
+    },
+    rendering::camera_stack::UI_CAMERA_ORDER,
 };
 
-const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
-const PLAYER_PREVIEW_WIDTH: u32 = 384;
-const PLAYER_PREVIEW_HEIGHT: u32 = 512;
-const PLAYER_PREVIEW_CENTER_Y: f32 = 0.9;
-const PLAYER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
-
-#[derive(Resource, Default)]
-pub(crate) struct PlayerPreviewImages {
-    image: Option<Handle<Image>>,
-}
-
-impl PlayerPreviewImages {
-    pub(crate) fn portrait(&self) -> Option<Handle<Image>> {
-        self.image.clone()
-    }
-}
+const HUD_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 1;
+const CHARACTER_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 2;
+const HUD_PREVIEW_CENTER_Y: f32 = 1.30;
+const HUD_PREVIEW_CAMERA_DISTANCE: f32 = 1.55;
+const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.90;
+const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 
 #[derive(Component)]
-struct PlayerPreviewProxy {
-    source: Entity,
-}
+struct PlayerHudPreviewCamera;
 
-pub(super) fn spawn_player_preview_renderer(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    mut preview_images: ResMut<PlayerPreviewImages>,
-) {
-    if preview_images.image.is_some() {
-        return;
-    }
+#[derive(Component)]
+struct CharacterInfoPreviewCamera;
 
-    let image = images.add(Image::new_target_texture(
-        PLAYER_PREVIEW_WIDTH,
-        PLAYER_PREVIEW_HEIGHT,
-        TextureFormat::Rgba8UnormSrgb,
-        None,
-    ));
-    preview_images.image = Some(image.clone());
+#[derive(Component)]
+pub(crate) struct PlayerHudPreviewViewport;
 
+#[derive(Component)]
+pub(crate) struct CharacterInfoPreviewViewport;
+
+pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
     commands.spawn((
+        PlayerHudPreviewCamera,
         Camera3d::default(),
         Camera {
-            order: -2,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
+            order: HUD_PREVIEW_CAMERA_ORDER,
+            output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::None,
             ..default()
         },
-        RenderTarget::Image(image.into()),
-        Projection::Perspective(PerspectiveProjection {
-            aspect_ratio: PLAYER_PREVIEW_WIDTH as f32 / PLAYER_PREVIEW_HEIGHT as f32,
+        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+        DespawnOnExit(GameState::Gameplay),
+    ));
+
+    commands.spawn((
+        CharacterInfoPreviewCamera,
+        Camera3d::default(),
+        Camera {
+            order: CHARACTER_PREVIEW_CAMERA_ORDER,
+            output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::None,
             ..default()
-        }),
-        Transform::from_xyz(
-            0.0,
-            PLAYER_PREVIEW_CENTER_Y,
-            PLAYER_PREVIEW_CAMERA_DISTANCE,
-        )
-        .looking_at(Vec3::new(0.0, PLAYER_PREVIEW_CENTER_Y, 0.0), Vec3::Y),
-        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
+        },
+        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+        DespawnOnExit(GameState::Gameplay),
     ));
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn sync_player_preview_proxies(
-    mut commands: Commands,
-    roots: Query<&GlobalTransform, With<PlayerModelRoot>>,
-    sources: Query<(&GlobalTransform, &Visibility), With<PlayerModelPreviewSource>>,
-    standard_sources: Query<
-        (Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>, &GlobalTransform, &Visibility),
-        With<PlayerModelPreviewSource>,
+pub(super) fn sync_player_preview_cameras(
+    window: Single<&Window, With<PrimaryWindow>>,
+    model: Query<&GlobalTransform, With<PlayerModelRoot>>,
+    hud_viewport: Query<
+        (&ComputedNode, &UiGlobalTransform),
+        With<PlayerHudPreviewViewport>,
     >,
-    block_sources: Query<
-        (
-            Entity,
-            &Mesh3d,
-            &MeshMaterial3d<BlockModelMaterial>,
-            &GlobalTransform,
-            &Visibility,
-        ),
-        With<PlayerModelPreviewSource>,
+    character_viewport: Query<
+        (&ComputedNode, &UiGlobalTransform),
+        With<CharacterInfoPreviewViewport>,
     >,
-    mut proxies: Query<(Entity, &PlayerPreviewProxy, &mut Transform, &mut Visibility)>,
+    pause: Res<State<PauseState>>,
+    settings: Res<State<SettingsState>>,
+    character_info: Res<State<CharacterInfoState>>,
+    mut hud_camera: Query<
+        (&mut Camera, &mut Transform),
+        (With<PlayerHudPreviewCamera>, Without<CharacterInfoPreviewCamera>),
+    >,
+    mut character_camera: Query<
+        (&mut Camera, &mut Transform),
+        (With<CharacterInfoPreviewCamera>, Without<PlayerHudPreviewCamera>),
+    >,
 ) {
-    let Some(root) = roots.iter().next() else {
-        for (entity, _, _, _) in &mut proxies {
-            commands.entity(entity).despawn();
-        }
+    let Some(model_transform) = model.iter().next() else {
+        skip_cameras(&mut hud_camera);
+        skip_cameras(&mut character_camera);
         return;
     };
 
-    let mut represented = HashSet::new();
-    for (entity, proxy, mut transform, mut visibility) in &mut proxies {
-        let Ok((source_transform, source_visibility)) = sources.get(proxy.source) else {
-            commands.entity(entity).despawn();
-            continue;
+    let hud_visible =
+        *pause.get() == PauseState::Running && *settings.get() == SettingsState::Closed;
+    let hud_rect = hud_visible
+        .then(|| hud_viewport.iter().next())
+        .flatten()
+        .and_then(|(node, transform)| viewport_from_ui(node, transform, &window));
+    sync_camera(
+        &mut hud_camera,
+        hud_rect,
+        model_transform,
+        HUD_PREVIEW_CENTER_Y,
+        HUD_PREVIEW_CAMERA_DISTANCE,
+    );
+
+    let character_rect = (*character_info.get() == CharacterInfoState::Open)
+        .then(|| character_viewport.iter().next())
+        .flatten()
+        .and_then(|(node, transform)| viewport_from_ui(node, transform, &window));
+    sync_camera(
+        &mut character_camera,
+        character_rect,
+        model_transform,
+        CHARACTER_PREVIEW_CENTER_Y,
+        CHARACTER_PREVIEW_CAMERA_DISTANCE,
+    );
+}
+
+fn sync_camera<F: QueryFilter>(
+    cameras: &mut Query<(&mut Camera, &mut Transform), F>,
+    viewport: Option<Viewport>,
+    model: &GlobalTransform,
+    center_y: f32,
+    distance: f32,
+) {
+    let Some(viewport) = viewport else {
+        skip_cameras(cameras);
+        return;
+    };
+
+    let center = model.translation() + Vec3::Y * center_y;
+    let offset = model.rotation() * Vec3::Z * distance;
+    for (mut camera, mut transform) in cameras.iter_mut() {
+        camera.viewport = Some(viewport.clone());
+        camera.output_mode = CameraOutputMode::Write {
+            blend_state: Some(BlendState::ALPHA_BLENDING),
+            clear_color: ClearColorConfig::None,
         };
-
-        represented.insert(proxy.source);
-        *transform = source_transform.reparented_to(root);
-        *visibility = preview_visibility(*source_visibility);
-    }
-
-    for (source, mesh, material, source_transform, source_visibility) in &standard_sources {
-        if represented.contains(&source) {
-            continue;
-        }
-        commands.spawn((
-            PlayerPreviewProxy { source },
-            Mesh3d(mesh.0.clone()),
-            MeshMaterial3d(material.0.clone()),
-            source_transform.reparented_to(root),
-            preview_visibility(*source_visibility),
-            RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
-            NotShadowCaster,
-            NotShadowReceiver,
-            DespawnOnExit(GameState::Gameplay),
-        ));
-        represented.insert(source);
-    }
-
-    for (source, mesh, material, source_transform, source_visibility) in &block_sources {
-        if represented.contains(&source) {
-            continue;
-        }
-        commands.spawn((
-            PlayerPreviewProxy { source },
-            Mesh3d(mesh.0.clone()),
-            MeshMaterial3d(material.0.clone()),
-            source_transform.reparented_to(root),
-            preview_visibility(*source_visibility),
-            RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
-            NotShadowCaster,
-            NotShadowReceiver,
-            DespawnOnExit(GameState::Gameplay),
-        ));
-        represented.insert(source);
+        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
     }
 }
 
-const fn preview_visibility(source: Visibility) -> Visibility {
-    match source {
-        Visibility::Hidden => Visibility::Hidden,
-        Visibility::Inherited | Visibility::Visible => Visibility::Visible,
+fn skip_cameras<F: QueryFilter>(cameras: &mut Query<(&mut Camera, &mut Transform), F>) {
+    for (mut camera, _) in cameras.iter_mut() {
+        camera.output_mode = CameraOutputMode::Skip;
+        camera.viewport = None;
     }
+}
+
+fn viewport_from_ui(
+    node: &ComputedNode,
+    transform: &UiGlobalTransform,
+    window: &Window,
+) -> Option<Viewport> {
+    if node.is_empty() {
+        return None;
+    }
+
+    let half_size = node.size() * 0.5;
+    let window_size = UVec2::new(window.physical_width(), window.physical_height());
+    let min = (transform.translation - half_size)
+        .round()
+        .max(Vec2::ZERO)
+        .min(window_size.as_vec2());
+    let max = (transform.translation + half_size)
+        .round()
+        .max(Vec2::ZERO)
+        .min(window_size.as_vec2());
+    let physical_size = (max - min).as_uvec2();
+    if physical_size.x == 0 || physical_size.y == 0 {
+        return None;
+    }
+
+    Some(Viewport {
+        physical_position: min.as_uvec2(),
+        physical_size,
+        ..default()
+    })
 }
