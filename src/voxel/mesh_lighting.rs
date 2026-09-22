@@ -74,7 +74,11 @@ impl ChunkLightingCache {
         chunk_origin: IVec3,
         chunk: &VoxelChunk,
     ) -> Option<Self> {
-        const MIN_CONTENT_VOXELS: usize = 96;
+        // Building the dense 18³ lighting cache costs 5,832 samples up
+        // front. It pays off for terrain/ocean chunks with many exposed faces,
+        // but is wasted on sparse tree/structure chunks. Keep sparse geometry
+        // on direct snapshot reads instead.
+        const MIN_CONTENT_VOXELS: usize = 512;
         (chunk.block_count() + chunk.fluid_count() >= MIN_CONTENT_VOXELS)
             .then(|| Self::capture_with_center(world, chunk_origin, chunk))
     }
