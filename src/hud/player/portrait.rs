@@ -32,10 +32,6 @@ impl PlayerPreviewImages {
     pub(crate) fn portrait(&self) -> Option<Handle<Image>> {
         self.image.clone()
     }
-
-    pub(crate) fn character(&self) -> Option<Handle<Image>> {
-        self.image.clone()
-    }
 }
 
 #[derive(Resource, Default)]
