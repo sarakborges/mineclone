@@ -16,8 +16,8 @@ use biome_size_multiplier_section::{
 };
 use hud_section::{
     TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside,
-    handle_display_tooltips_toggle, handle_target_block_position_dropdown_button,
-    handle_target_block_position_options, sync_display_tooltips_toggle,
+    handle_hide_hints_toggle, handle_hint_toggles, handle_target_block_position_dropdown_button,
+    handle_target_block_position_options, sync_hide_hints_toggle, sync_hint_toggles,
     sync_target_block_position_dropdown, sync_target_block_position_options,
 };
 use languages_section::{
@@ -158,7 +158,8 @@ impl Plugin for SettingsScreenPlugin {
                         handle_ticks_keyboard.run_if(has_ticks_input),
                         handle_language_dropdown_button,
                         handle_language_options,
-                        handle_display_tooltips_toggle,
+                        handle_hide_hints_toggle,
+                        handle_hint_toggles,
                         handle_target_block_position_dropdown_button,
                         handle_target_block_position_options,
                     )
@@ -175,7 +176,8 @@ impl Plugin for SettingsScreenPlugin {
                     sync_game_mode_buttons,
                     sync_keybinds_section,
                     sync_language_dropdown,
-                    sync_display_tooltips_toggle,
+                    sync_hide_hints_toggle,
+                    sync_hint_toggles,
                     sync_target_block_position_dropdown,
                     sync_target_block_position_options,
                     sync_spawn_biome_dropdown_state.run_if(in_state(GameState::NewWorld)),

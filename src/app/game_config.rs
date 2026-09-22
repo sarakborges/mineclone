@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app::keybinds::Keybinds,
-    hud::{HudSettings, TargetBlockPosition},
+    hud::HudSettings,
     localization::{ActiveLanguage, Language},
     world::render_distance::{DEFAULT_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings},
 };
@@ -61,10 +61,7 @@ impl GameConfig {
             graphics: GraphicsConfig {
                 render_distance_chunks: render_distance.chunks(),
             },
-            miscellaneous: MiscellaneousConfig {
-                display_tooltips: hud.display_tooltips(),
-                target_block_position: hud.target_block_position(),
-            },
+            miscellaneous: MiscellaneousConfig { hud: *hud },
             keybinds: *keybinds,
         }
     }
@@ -119,15 +116,13 @@ impl Default for GraphicsConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 struct MiscellaneousConfig {
-    display_tooltips: bool,
-    target_block_position: TargetBlockPosition,
+    hud: HudSettings,
 }
 
 impl Default for MiscellaneousConfig {
     fn default() -> Self {
         Self {
-            display_tooltips: true,
-            target_block_position: TargetBlockPosition::default(),
+            hud: HudSettings::default(),
         }
     }
 }
@@ -141,9 +136,7 @@ impl Plugin for GameConfigPlugin {
         let mut active_language = ActiveLanguage::default();
         active_language.set(config.language);
 
-        let mut hud_settings = HudSettings::default();
-        hud_settings.set_display_tooltips(config.miscellaneous.display_tooltips);
-        hud_settings.set_target_block_position(config.miscellaneous.target_block_position);
+        let hud_settings = config.miscellaneous.hud;
 
         let mut render_distance = RenderDistanceSettings::default();
         render_distance.set_chunks(config.graphics.render_distance_chunks);

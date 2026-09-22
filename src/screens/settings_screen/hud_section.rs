@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 
 use crate::{
-    hud::{HudSettings, TargetBlockPosition},
+    hud::{HintKind, HudSettings, TargetBlockPosition},
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
         dropdown::{self, DropdownState, PanelAnchor},
         selectable, toggle, typography,
     },
 };
-
 
 const DROPDOWN_WIDTH: f32 = 240.0;
 
@@ -17,10 +16,16 @@ pub(super) type TargetBlockPositionDropdownState =
     DropdownState<TargetBlockPositionDropdownKind>;
 
 #[derive(Component)]
-pub(super) struct DisplayTooltipsToggle;
+pub(super) struct HideHintsToggle;
 
 #[derive(Component)]
-pub(super) struct DisplayTooltipsToggleThumb;
+pub(super) struct HideHintsToggleThumb;
+
+#[derive(Component, Clone, Copy)]
+pub(super) struct HintToggle(HintKind);
+
+#[derive(Component, Clone, Copy)]
+pub(super) struct HintToggleThumb(HintKind);
 
 #[derive(Component)]
 pub(super) struct TargetBlockPositionDropdownButton;
@@ -51,36 +56,60 @@ pub(super) fn hud_section(
             ..default()
         },
         children![
-            display_tooltips_setting(settings.display_tooltips(), localization, language),
-            target_block_position_setting(
-                settings.target_block_position(),
-                localization,
-                language,
+            hide_hints_setting(settings.hide_hints(), localization, language),
+            target_block_position_setting(settings.target_block_position(), localization, language),
+            hint_setting(HintKind::OpenInventory, settings, localization, language),
+            hint_setting(HintKind::CloseInventory, settings, localization, language),
+            hint_setting(HintKind::RotateBlock, settings, localization, language),
+            hint_setting(HintKind::BreakBlock, settings, localization, language),
+            hint_setting(HintKind::BreakOrPlaceBlock, settings, localization, language),
+            hint_setting(HintKind::BrushPaint, settings, localization, language),
+            hint_setting(HintKind::BrushClear, settings, localization, language),
+            hint_setting(HintKind::Chisel, settings, localization, language),
+            hint_setting(HintKind::Shears, settings, localization, language),
+            hint_setting(HintKind::StructureTool, settings, localization, language),
+        ],
+    )
+}
+
+fn hide_hints_setting(hide_hints: bool, localization: &UiLocalization, language: Language) -> impl Bundle {
+    (
+        setting_row(),
+        children![
+            setting_copy(
+                localization.text(language, "settings.hideHints"),
+                localization.text(language, "settings.hideHints.description"),
+            ),
+            (
+                Button,
+                HideHintsToggle,
+                toggle::control(hide_hints),
+                children![(HideHintsToggleThumb, toggle::thumb(hide_hints))],
             ),
         ],
     )
 }
 
-fn display_tooltips_setting(
-    display_tooltips: bool,
+fn hint_setting(
+    kind: HintKind,
+    settings: &HudSettings,
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
+    let enabled = settings.hint_preference(kind);
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::SpaceBetween,
-            column_gap: px(18),
-            ..default()
-        },
+        setting_row(),
         children![
             setting_copy(
-                localization.text(language, "settings.displayTooltips"),
-                localization.text(language, "settings.displayTooltips.description"),
+                localization.text(language, kind.localization_key()),
+                localization.text(language, "settings.hint.description"),
             ),
-            display_tooltips_toggle(display_tooltips),
+            (
+                Button,
+                HintToggle(kind),
+                toggle::control(enabled),
+                children![(HintToggleThumb(kind), toggle::thumb(enabled))],
+            ),
         ],
     )
 }
@@ -91,14 +120,7 @@ fn target_block_position_setting(
     language: Language,
 ) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::SpaceBetween,
-            column_gap: px(18),
-            ..default()
-        },
+        setting_row(),
         children![
             setting_copy(
                 localization.text(language, "settings.targetBlockPosition"),
@@ -107,6 +129,17 @@ fn target_block_position_setting(
             target_position_dropdown(position, localization, language),
         ],
     )
+}
+
+fn setting_row() -> Node {
+    Node {
+        width: percent(100),
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        justify_content: JustifyContent::SpaceBetween,
+        column_gap: px(18),
+        ..default()
+    }
 }
 
 fn setting_copy(title: impl Into<String>, description: impl Into<String>) -> impl Bundle {
@@ -122,15 +155,6 @@ fn setting_copy(title: impl Into<String>, description: impl Into<String>) -> imp
             typography::setting_title(title),
             typography::caption(description),
         ],
-    )
-}
-
-fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
-    (
-        Button,
-        DisplayTooltipsToggle,
-        toggle::control(enabled),
-        children![(DisplayTooltipsToggleThumb, toggle::thumb(enabled))],
     )
 }
 
@@ -161,24 +185,9 @@ fn target_position_dropdown(
                 dropdown::panel_surface::<TargetBlockPositionDropdownKind>(),
                 GlobalZIndex(620),
                 children![
-                    target_position_option(
-                        TargetBlockPosition::Center,
-                        selected,
-                        localization,
-                        language,
-                    ),
-                    target_position_option(
-                        TargetBlockPosition::TopRight,
-                        selected,
-                        localization,
-                        language,
-                    ),
-                    target_position_option(
-                        TargetBlockPosition::Hidden,
-                        selected,
-                        localization,
-                        language,
-                    ),
+                    target_position_option(TargetBlockPosition::Center, selected, localization, language),
+                    target_position_option(TargetBlockPosition::TopRight, selected, localization, language),
+                    target_position_option(TargetBlockPosition::Hidden, selected, localization, language),
                 ],
             ),
         ],
@@ -220,39 +229,38 @@ fn target_position_label(
         .to_owned()
 }
 
-pub(super) fn handle_display_tooltips_toggle(
-    interactions: Query<&Interaction, (Changed<Interaction>, With<DisplayTooltipsToggle>)>,
+pub(super) fn handle_hide_hints_toggle(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<HideHintsToggle>)>,
     mut settings: ResMut<HudSettings>,
 ) {
-    if interactions
-        .iter()
-        .any(|interaction| *interaction == Interaction::Pressed)
-    {
-        let enabled = settings.display_tooltips();
-        settings.set_display_tooltips(!enabled);
+    if interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        settings.set_hide_hints(!settings.hide_hints());
+    }
+}
+
+pub(super) fn handle_hint_toggles(
+    interactions: Query<(&Interaction, &HintToggle), Changed<Interaction>>,
+    mut settings: ResMut<HudSettings>,
+) {
+    for (interaction, hint) in &interactions {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        settings.set_hint_preference(hint.0, !settings.hint_preference(hint.0));
     }
 }
 
 pub(super) fn handle_target_block_position_dropdown_button(
-    interactions: Query<
-        &Interaction,
-        (Changed<Interaction>, With<TargetBlockPositionDropdownButton>),
-    >,
+    interactions: Query<&Interaction, (Changed<Interaction>, With<TargetBlockPositionDropdownButton>)>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
-    if interactions
-        .iter()
-        .any(|interaction| *interaction == Interaction::Pressed)
-    {
+    if interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
         state.toggle();
     }
 }
 
 pub(super) fn handle_target_block_position_options(
-    interactions: Query<
-        (&Interaction, &TargetBlockPositionOption),
-        Changed<Interaction>,
-    >,
+    interactions: Query<(&Interaction, &TargetBlockPositionOption), Changed<Interaction>>,
     mut settings: ResMut<HudSettings>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
@@ -260,7 +268,6 @@ pub(super) fn handle_target_block_position_options(
         if *interaction != Interaction::Pressed {
             continue;
         }
-
         if settings.target_block_position() != option.0 {
             settings.set_target_block_position(option.0);
         }
@@ -271,10 +278,7 @@ pub(super) fn handle_target_block_position_options(
 
 pub(super) fn close_target_block_position_dropdown_outside(
     mouse: Res<ButtonInput<MouseButton>>,
-    inside: Query<
-        &Interaction,
-        With<dropdown::DropdownInside<TargetBlockPositionDropdownKind>>,
-    >,
+    inside: Query<&Interaction, With<dropdown::DropdownInside<TargetBlockPositionDropdownKind>>>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
     if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
@@ -282,37 +286,51 @@ pub(super) fn close_target_block_position_dropdown_outside(
     }
 }
 
-pub(super) fn sync_display_tooltips_toggle(
+pub(super) fn sync_hide_hints_toggle(
     settings: Res<HudSettings>,
-    mut toggles: Query<
-        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
-        With<DisplayTooltipsToggle>,
-    >,
-    mut thumbs: Query<&mut Node, With<DisplayTooltipsToggleThumb>>,
+    mut toggles: Query<(Ref<Interaction>, &mut BackgroundColor, &mut BorderColor), With<HideHintsToggle>>,
+    mut thumbs: Query<&mut Node, With<HideHintsToggleThumb>>,
 ) {
     let settings_changed = settings.is_changed();
-    let enabled = settings.display_tooltips();
-
+    let enabled = settings.hide_hints();
     for (interaction, background, border) in &mut toggles {
         if !settings_changed && !interaction.is_changed() {
             continue;
         }
+        selectable::apply_colors(toggle::colors(enabled, *interaction), background, border);
+    }
+    if settings_changed {
+        let next_left = px(toggle::thumb_left(enabled));
+        for mut thumb in &mut thumbs {
+            if thumb.left != next_left {
+                thumb.left = next_left;
+            }
+        }
+    }
+}
 
+pub(super) fn sync_hint_toggles(
+    settings: Res<HudSettings>,
+    mut toggles: Query<(&HintToggle, Ref<Interaction>, &mut BackgroundColor, &mut BorderColor)>,
+    mut thumbs: Query<(&HintToggleThumb, &mut Node)>,
+) {
+    let settings_changed = settings.is_changed();
+    for (hint, interaction, background, border) in &mut toggles {
+        if !settings_changed && !interaction.is_changed() {
+            continue;
+        }
         selectable::apply_colors(
-            toggle::colors(enabled, *interaction),
+            toggle::colors(settings.hint_preference(hint.0), *interaction),
             background,
             border,
         );
     }
-
-    if !settings_changed {
-        return;
-    }
-
-    let next_left = px(toggle::thumb_left(enabled));
-    for mut thumb in &mut thumbs {
-        if thumb.left != next_left {
-            thumb.left = next_left;
+    if settings_changed {
+        for (hint, mut node) in &mut thumbs {
+            let next_left = px(toggle::thumb_left(settings.hint_preference(hint.0)));
+            if node.left != next_left {
+                node.left = next_left;
+            }
         }
     }
 }
@@ -324,38 +342,25 @@ pub(super) fn sync_target_block_position_dropdown(
     language: Res<ActiveLanguage>,
     mut panels: Query<&mut Node, With<TargetBlockPositionDropdownPanel>>,
     mut selected_labels: Query<&mut Text, With<TargetBlockPositionDropdownLabel>>,
-    mut option_labels: Query<
-        (&TargetBlockPositionOptionLabel, &mut Text),
-        Without<TargetBlockPositionDropdownLabel>,
-    >,
+    mut option_labels: Query<(&TargetBlockPositionOptionLabel, &mut Text), Without<TargetBlockPositionDropdownLabel>>,
 ) {
     let localization_changed = localization.is_changed() || language.is_changed();
     if state.is_changed() {
-        let next_display = if state.is_open() {
-            Display::Flex
-        } else {
-            Display::None
-        };
+        let next_display = if state.is_open() { Display::Flex } else { Display::None };
         for mut panel in &mut panels {
             if panel.display != next_display {
                 panel.display = next_display;
             }
         }
     }
-
     if settings.is_changed() || localization_changed {
-        let next = target_position_label(
-            settings.target_block_position(),
-            &localization,
-            language.get(),
-        );
+        let next = target_position_label(settings.target_block_position(), &localization, language.get());
         for mut text in &mut selected_labels {
             if text.0 != next {
                 text.0 = next.clone();
             }
         }
     }
-
     if localization_changed {
         for (option, mut text) in &mut option_labels {
             let next = target_position_label(option.0, &localization, language.get());
@@ -369,24 +374,17 @@ pub(super) fn sync_target_block_position_dropdown(
 pub(super) fn sync_target_block_position_options(
     settings: Res<HudSettings>,
     changed_interactions: Query<(), (With<TargetBlockPositionOption>, Changed<Interaction>)>,
-    mut options: Query<(
-        &TargetBlockPositionOption,
-        &Interaction,
-        &mut BackgroundColor,
-        &mut BorderColor,
-    )>,
+    mut options: Query<(&TargetBlockPositionOption, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
 ) {
     if !settings.is_changed() && changed_interactions.is_empty() {
         return;
     }
-
+    let selected = settings.target_block_position();
     for (option, interaction, background, border) in &mut options {
-        let selected = option.0 == settings.target_block_position();
         selectable::apply_colors(
-            selectable::colors(*interaction, selected),
+            selectable::colors(option.0 == selected, *interaction),
             background,
             border,
         );
     }
 }
-
