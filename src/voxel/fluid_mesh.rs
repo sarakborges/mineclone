@@ -772,10 +772,10 @@ fn fluid_at_local_or_world<W: VoxelRead + ?Sized>(
         && local_position.y < CHUNK_SIZE as i32
         && local_position.z < CHUNK_SIZE as i32
     {
-        chunk.fluid_at(
-            local_position.x,
-            local_position.y,
-            local_position.z,
+        chunk.fluid_at_local(
+            local_position.x as usize,
+            local_position.y as usize,
+            local_position.z as usize,
         )
     } else {
         world.fluid_at(world_position)
@@ -826,9 +826,10 @@ fn fluid_neighbor_content<W: VoxelRead + ?Sized>(
         && local.y < CHUNK_SIZE as i32
         && local.z < CHUNK_SIZE as i32
     {
-        Some((
-            chunk.cell_at(local.x, local.y, local.z),
-            chunk.fluid_at(local.x, local.y, local.z),
+        Some(chunk.content_at_local(
+            local.x as usize,
+            local.y as usize,
+            local.z as usize,
         ))
     } else {
         world
