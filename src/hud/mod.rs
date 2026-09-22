@@ -1,5 +1,6 @@
 mod block_icon;
 pub(crate) mod chat;
+mod character_info;
 mod crosshair;
 mod entity_card;
 mod entity_targeting;
@@ -23,6 +24,7 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
 use chat::ChatHudPlugin;
+use character_info::CharacterInfoHudPlugin;
 use crosshair::CrosshairPlugin;
 use entity_targeting::EntityHudPlugin;
 use fps::FpsHudPlugin;
@@ -212,6 +214,7 @@ impl Plugin for HudPlugin {
             .add_plugins(UiMaterialPlugin::<BlockIconMaterial>::default())
             .add_plugins((
                 UnderwaterTintPlugin,
+                CharacterInfoHudPlugin,
                 CrosshairPlugin,
                 HotbarHudPlugin,
                 InventoryHudPlugin,
