@@ -407,7 +407,7 @@ pub(super) fn sync_inventory_item_tooltip(
             })
         });
 
-    let Some(item_id) = hovered_item.filter(|_| settings.display_tooltips()) else {
+    let Some(item_id) = hovered_item else {
         if *visibility != Visibility::Hidden {
             *visibility = Visibility::Hidden;
         }
