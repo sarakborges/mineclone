@@ -1,6 +1,15 @@
 {
   "id": "asteria:shears",
-  "name": { "english": "Shears", "portuguese_brazil": "Tesoura", "spanish": "Tijeras" },
+  "name": {
+    "english": "Shears",
+    "portuguese_brazil": "Tesoura",
+    "spanish": "Tijeras"
+  },
+  "hint": {
+    "english": "Removes surface layers from blocks.",
+    "portuguese_brazil": "Remove camadas superficiais dos blocos.",
+    "spanish": "Elimina capas superficiales de los bloques."
+  },
   "category": "tools",
   "icon": ""
 }

@@ -57,6 +57,7 @@ fn default_mining_speed() -> f32 {
 pub struct ToolDefinition {
     pub id: String,
     pub name: LocalizedText,
+    pub hint: LocalizedText,
     pub category: String,
     pub icon: String,
     #[serde(default)]
@@ -107,6 +108,9 @@ impl ToolRegistry {
         definition
             .name
             .validate(&format!("tool {} name", definition.id));
+        definition
+            .hint
+            .validate(&format!("tool {} hint", definition.id));
         definition.mining.validate(&definition.id);
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
@@ -139,6 +143,7 @@ mod tests {
         registry.insert(ToolDefinition {
             id: "asteria:test_shears".to_owned(),
             name: localized_name(),
+            hint: localized_name(),
             category: "tools".to_owned(),
             icon: String::new(),
             tint_icon: None,

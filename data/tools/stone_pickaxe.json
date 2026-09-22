@@ -1,0 +1,21 @@
+{
+  "id": "asteria:stone_pickaxe",
+  "name": {
+    "english": "Stone Pickaxe",
+    "portuguese_brazil": "Picareta de Pedra",
+    "spanish": "Pico de Piedra"
+  },
+  "hint": {
+    "english": "Mines stone and masonry blocks.",
+    "portuguese_brazil": "Minera blocos de pedra e alvenaria.",
+    "spanish": "Mina bloques de piedra y mampostería."
+  },
+  "category": "tools",
+  "icon": "",
+  "mining": {
+    "tags": [
+      "pickaxe"
+    ],
+    "speed": 1.5
+  }
+}

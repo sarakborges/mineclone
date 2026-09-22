@@ -1,0 +1,21 @@
+{
+  "id": "asteria:stone_shovel",
+  "name": {
+    "english": "Stone Shovel",
+    "portuguese_brazil": "Pá de Pedra",
+    "spanish": "Pala de Piedra"
+  },
+  "hint": {
+    "english": "Digs soil and loose natural blocks.",
+    "portuguese_brazil": "Escava solo e blocos naturais soltos.",
+    "spanish": "Excava suelo y bloques naturales sueltos."
+  },
+  "category": "tools",
+  "icon": "",
+  "mining": {
+    "tags": [
+      "shovel"
+    ],
+    "speed": 1.5
+  }
+}

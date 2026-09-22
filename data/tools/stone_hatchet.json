@@ -1,0 +1,21 @@
+{
+  "id": "asteria:stone_hatchet",
+  "name": {
+    "english": "Stone Hatchet",
+    "portuguese_brazil": "Machadinha de Pedra",
+    "spanish": "Hacha de Piedra"
+  },
+  "hint": {
+    "english": "Chops logs and wooden blocks.",
+    "portuguese_brazil": "Corta troncos e blocos de madeira.",
+    "spanish": "Corta troncos y bloques de madera."
+  },
+  "category": "tools",
+  "icon": "",
+  "mining": {
+    "tags": [
+      "hatchet"
+    ],
+    "speed": 1.5
+  }
+}
