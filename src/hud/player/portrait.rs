@@ -9,18 +9,13 @@ use bevy::{
 
 use crate::{
     content::player::PlayerDefinition,
-    player::{
-        PLAYER_SKIN_TEXTURE_PATH,
-        character_info::CharacterInfoState,
-    },
+    player::PLAYER_SKIN_TEXTURE_PATH,
 };
 
 const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
 const PLAYER_PREVIEW_SIZE: u32 = 128;
 const PLAYER_PORTRAIT_CENTER_Y: f32 = 1.27;
 const PLAYER_PORTRAIT_CAMERA_DISTANCE: f32 = 1.52;
-const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.9;
-const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 const PREVIEW_RENDER_FRAMES: u8 = 6;
 
 #[derive(Resource, Default)]
@@ -37,16 +32,11 @@ impl PlayerPreviewImages {
 #[derive(Resource, Default)]
 pub(crate) struct PlayerPreviewRenderState {
     portrait_frames: u8,
-    character_yaw: f32,
 }
 
 impl PlayerPreviewRenderState {
     pub(crate) fn request_portrait(&mut self) {
         self.portrait_frames = self.portrait_frames.max(PREVIEW_RENDER_FRAMES);
-    }
-
-    pub(crate) fn rotate_character(&mut self, delta_yaw: f32) {
-        self.character_yaw += delta_yaw;
     }
 }
 
@@ -215,32 +205,12 @@ fn configure_player_preview_scene(
 }
 
 pub(super) fn render_player_preview(
-    character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
-    mut cameras: Query<(&mut Camera, &mut Transform), With<PlayerPreviewCamera>>,
+    mut cameras: Query<&mut Camera, With<PlayerPreviewCamera>>,
 ) {
-    let character_open = *character_info.get() == CharacterInfoState::Open;
-    let should_render = character_open || render_state.portrait_frames > 0;
+    let should_render = render_state.portrait_frames > 0;
 
-    let (center_y, distance, yaw) = if character_open {
-        (
-            CHARACTER_PREVIEW_CENTER_Y,
-            CHARACTER_PREVIEW_CAMERA_DISTANCE,
-            render_state.character_yaw,
-        )
-    } else {
-        (
-            PLAYER_PORTRAIT_CENTER_Y,
-            PLAYER_PORTRAIT_CAMERA_DISTANCE,
-            0.0,
-        )
-    };
-
-    let center = Vec3::new(0.0, center_y, 0.0);
-    let offset = Quat::from_rotation_y(-yaw) * Vec3::Z * distance;
-
-    for (mut camera, mut transform) in &mut cameras {
-        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
+    for mut camera in &mut cameras {
         camera.output_mode = if should_render {
             CameraOutputMode::Write {
                 blend_state: None,
@@ -251,7 +221,7 @@ pub(super) fn render_player_preview(
         };
     }
 
-    if !character_open && render_state.portrait_frames > 0 {
+    if should_render {
         render_state.portrait_frames = render_state.portrait_frames.saturating_sub(1);
     }
 }
