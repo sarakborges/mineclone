@@ -142,6 +142,10 @@ impl ChunkStreamingState {
         self.movement_direction
     }
 
+    pub(super) fn selection_revision(&self) -> u64 {
+        self.selection_revision
+    }
+
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
     }
