@@ -595,6 +595,7 @@ pub(super) fn handle_seed_keyboard(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_new_world_footer(
     mut commands: Commands,
     game_state: Res<State<GameState>>,
@@ -696,6 +697,7 @@ pub(super) fn sync_world_generation_mode_buttons(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub(super) fn sync_world_generation_toggles(
     config: Res<NewWorldConfig>,
     mut structure_toggles: Query<
