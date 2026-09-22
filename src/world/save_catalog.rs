@@ -112,6 +112,10 @@ pub(crate) fn create_new_world(
     biome_size_multiplier: f32,
     ticks_per_second: u32,
     spawn_creatures: bool,
+    spawn_caves: bool,
+    spawn_rivers: bool,
+    spawn_lakes: bool,
+    spawn_oceans: bool,
     world_generation: WorldGenerationSettings,
 ) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() { return Err(io::Error::new(io::ErrorKind::InvalidInput, "World seed metadata must include a dimension and a positive tick rate")); }
@@ -131,7 +135,7 @@ pub(crate) fn create_new_world(
                 let manifest = WorldManifest {
                     format_version: SAVE_FORMAT_VERSION, id: candidate.clone(), seed, dimension_id: dimension_id.to_owned(),
                     worldgen_version: WorldgenVersion::current(), biome_size_multiplier, ticks_per_second, spawn_creatures,
-                    world_generation,
+                    spawn_caves, spawn_rivers, spawn_lakes, spawn_oceans, world_generation,
                     last_saved_unix_ms: created_at, generation: 0, snapshot_file: None,
                 };
                 if let Err(error) = publish_json(&directory, &manifest_name(0), &manifest) {
@@ -239,6 +243,10 @@ pub(crate) fn save_world_owned(
         biome_size_multiplier: snapshot.biome_size_multiplier,
         ticks_per_second: snapshot.ticks_per_second,
         spawn_creatures: snapshot.spawn_creatures,
+        spawn_caves: snapshot.spawn_caves,
+        spawn_rivers: snapshot.spawn_rivers,
+        spawn_lakes: snapshot.spawn_lakes,
+        spawn_oceans: snapshot.spawn_oceans,
         world_generation: snapshot.world_generation,
         last_saved_unix_ms: saved_at,
         generation: next,

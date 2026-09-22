@@ -15,6 +15,10 @@ use crate::world::{
 
 pub(super) const SAVE_FORMAT_VERSION: u32 = 4;
 
+const fn default_true() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WorldManifest {
@@ -26,6 +30,14 @@ pub(super) struct WorldManifest {
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_caves: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_rivers: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_lakes: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_oceans: bool,
     pub(super) world_generation: WorldGenerationSettings,
     pub(super) last_saved_unix_ms: u64,
     pub(super) generation: u64,
@@ -55,6 +67,10 @@ pub(crate) struct WorldSnapshot {
     pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
+    pub(crate) spawn_caves: bool,
+    pub(crate) spawn_rivers: bool,
+    pub(crate) spawn_lakes: bool,
+    pub(crate) spawn_oceans: bool,
     pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
@@ -79,6 +95,14 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_caves: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_rivers: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_lakes: bool,
+    #[serde(default = "default_true")]
+    pub(super) spawn_oceans: bool,
     pub(super) world_generation: WorldGenerationSettings,
     pub(super) player: Option<SavedPlayer>,
     pub(super) day: u64,
@@ -101,6 +125,10 @@ pub(super) struct DiskWorldSnapshot<'a> {
     biome_size_multiplier: f32,
     ticks_per_second: u32,
     spawn_creatures: bool,
+    spawn_caves: bool,
+    spawn_rivers: bool,
+    spawn_lakes: bool,
+    spawn_oceans: bool,
     world_generation: WorldGenerationSettings,
     player: &'a Option<SavedPlayer>,
     day: u64,
@@ -123,6 +151,10 @@ impl StoredWorldSnapshot {
             biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
+            spawn_caves: self.spawn_caves,
+            spawn_rivers: self.spawn_rivers,
+            spawn_lakes: self.spawn_lakes,
+            spawn_oceans: self.spawn_oceans,
             world_generation: self.world_generation,
             player: self.player,
             day: self.day,
@@ -144,6 +176,10 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
+    pub(crate) spawn_caves: bool,
+    pub(crate) spawn_rivers: bool,
+    pub(crate) spawn_lakes: bool,
+    pub(crate) spawn_oceans: bool,
     pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
@@ -169,6 +205,10 @@ impl WorldSnapshot {
             biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
+            spawn_caves: self.spawn_caves,
+            spawn_rivers: self.spawn_rivers,
+            spawn_lakes: self.spawn_lakes,
+            spawn_oceans: self.spawn_oceans,
             world_generation: self.world_generation,
             player: &self.player,
             day: self.day,
@@ -210,6 +250,10 @@ impl WorldSnapshot {
             biome_size_multiplier: source.biome_size_multiplier,
             ticks_per_second: source.ticks_per_second,
             spawn_creatures: source.spawn_creatures,
+            spawn_caves: source.spawn_caves,
+            spawn_rivers: source.spawn_rivers,
+            spawn_lakes: source.spawn_lakes,
+            spawn_oceans: source.spawn_oceans,
             world_generation: source.world_generation,
             player: source.player,
             day: source.day,
@@ -240,6 +284,10 @@ mod tests {
             biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
             ticks_per_second: 20,
             spawn_creatures: true,
+            spawn_caves: true,
+            spawn_rivers: true,
+            spawn_lakes: true,
+            spawn_oceans: true,
             world_generation: WorldGenerationSettings::default(),
             player: None,
             day: 1,

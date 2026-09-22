@@ -63,6 +63,10 @@ impl PreparedWorldActivation {
         let mut rules = GameRules::default();
         rules.set_ticks_per_second(snapshot.ticks_per_second);
         rules.set_spawn_creatures(snapshot.spawn_creatures);
+        rules.set_spawn_caves(snapshot.spawn_caves);
+        rules.set_spawn_rivers(snapshot.spawn_rivers);
+        rules.set_spawn_lakes(snapshot.spawn_lakes);
+        rules.set_spawn_oceans(snapshot.spawn_oceans);
 
         let mut save = InMemoryWorldSave::default();
         save.begin_new_world(

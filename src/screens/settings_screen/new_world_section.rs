@@ -389,6 +389,9 @@ pub(super) fn handle_world_generation_mode_buttons(
             && config.world_generation().mode() != button.0
         {
             config.set_world_generation_mode(button.0);
+            if button.0 == WorldGenerationMode::Flat {
+                config.set_worldgen_hydrology(false, false, false, false);
+            }
         }
     }
 }
@@ -526,6 +529,10 @@ pub(super) fn handle_new_world_footer(
         draft.config.biome_size_multiplier(),
         rules.ticks_per_second(),
         rules.spawn_creatures(),
+        rules.spawn_caves(),
+        rules.spawn_rivers(),
+        rules.spawn_lakes(),
+        rules.spawn_oceans(),
         draft.config.world_generation(),
     ) {
         Ok(created) => created,

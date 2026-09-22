@@ -402,7 +402,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                         SettingsSection::GameRules,
                                         game_rules_section(
                                             view.ticks_per_second,
-                                            view.new_world.game_rules().spawn_creatures(),
+                                            view.new_world.game_rules(),
                                             view.localization,
                                             view.language,
                                         ),
@@ -427,7 +427,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                         SettingsSection::GameRules,
                                         game_rules_section(
                                             view.game_rules.ticks_per_second(),
-                                            view.game_rules.spawn_creatures(),
+                                            *view.game_rules,
                                             view.localization,
                                             view.language,
                                         ),

@@ -33,11 +33,17 @@ pub(super) struct TicksPerSecondValueText;
 pub(super) struct TicksPerSecondInputKind;
 pub(super) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;
 
-#[derive(Component)]
-pub(super) struct SpawnCreaturesToggle;
+#[derive(Component, Clone, Copy)]
+pub(super) enum BooleanGameRuleToggle {
+    SpawnCreatures,
+    SpawnCaves,
+    SpawnRivers,
+    SpawnLakes,
+    SpawnOceans,
+}
 
-#[derive(Component)]
-pub(super) struct SpawnCreaturesToggleThumb;
+#[derive(Component, Clone, Copy)]
+pub(super) struct BooleanGameRuleToggleThumb(BooleanGameRuleToggle);
 
 #[derive(SystemParam)]
 pub(super) struct TicksPerSecondSettings<'w> {
@@ -48,18 +54,14 @@ pub(super) struct TicksPerSecondSettings<'w> {
 
 impl TicksPerSecondSettings<'_> {
     fn current(&self) -> u32 {
-        if *self.game_state.get() == GameState::NewWorld {
-            self.new_world.game_rules().ticks_per_second()
-        } else {
-            self.game_rules.ticks_per_second()
-        }
+        self.current_rules().ticks_per_second()
     }
 
-    fn spawn_creatures(&self) -> bool {
+    fn current_rules(&self) -> GameRules {
         if *self.game_state.get() == GameState::NewWorld {
-            self.new_world.game_rules().spawn_creatures()
+            self.new_world.game_rules()
         } else {
-            self.game_rules.spawn_creatures()
+            *self.game_rules
         }
     }
 
@@ -108,11 +110,55 @@ impl TicksPerSecondEditor<'_> {
 
         self.set(value);
     }
+
+    fn toggle_boolean_rule(&mut self, rule: BooleanGameRuleToggle) {
+        if *self.game_state.get() == GameState::NewWorld {
+            let current = self.new_world.game_rules();
+            match rule {
+                BooleanGameRuleToggle::SpawnCreatures => {
+                    self.new_world.set_spawn_creatures(!current.spawn_creatures())
+                }
+                BooleanGameRuleToggle::SpawnCaves => {
+                    self.new_world.set_spawn_caves(!current.spawn_caves())
+                }
+                BooleanGameRuleToggle::SpawnRivers => {
+                    self.new_world.set_spawn_rivers(!current.spawn_rivers())
+                }
+                BooleanGameRuleToggle::SpawnLakes => {
+                    self.new_world.set_spawn_lakes(!current.spawn_lakes())
+                }
+                BooleanGameRuleToggle::SpawnOceans => {
+                    self.new_world.set_spawn_oceans(!current.spawn_oceans())
+                }
+            }
+            return;
+        }
+
+        match rule {
+            BooleanGameRuleToggle::SpawnCreatures => {
+                self.game_rules
+                    .set_spawn_creatures(!self.game_rules.spawn_creatures())
+            }
+            BooleanGameRuleToggle::SpawnCaves => {
+                self.game_rules.set_spawn_caves(!self.game_rules.spawn_caves())
+            }
+            BooleanGameRuleToggle::SpawnRivers => {
+                self.game_rules.set_spawn_rivers(!self.game_rules.spawn_rivers())
+            }
+            BooleanGameRuleToggle::SpawnLakes => {
+                self.game_rules.set_spawn_lakes(!self.game_rules.spawn_lakes())
+            }
+            BooleanGameRuleToggle::SpawnOceans => {
+                self.game_rules.set_spawn_oceans(!self.game_rules.spawn_oceans())
+            }
+        }
+        self.save.save_game_rules(*self.game_rules);
+    }
 }
 
 pub(super) fn game_rules_section(
     ticks_per_second: u32,
-    spawn_creatures: bool,
+    rules: GameRules,
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
@@ -135,70 +181,6 @@ pub(super) fn game_rules_section(
                     ..default()
                 },
                 children![
-            (
-                Node {
-                    flex_grow: 1.0,
-                    min_width: px(0),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(6),
-                    ..default()
-                },
-                children![
-                    typography::setting_title(
-                        localization
-                            .text(language, "settings.ticksBySecond")
-                            .to_owned(),
-                    ),
-                    typography::caption(
-                        localization
-                            .text(language, "settings.ticksBySecond.description")
-                            .to_owned(),
-                    ),
-                ],
-            ),
-            (
-                Node {
-                    flex_shrink: 0.0,
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    column_gap: px(10),
-                    ..default()
-                },
-                children![
-                    button(
-                        "−",
-                        TicksPerSecondStep::Decrement,
-                        px(STEP_BUTTON_SIZE),
-                        COMPACT_CONTROL_HEIGHT,
-                        ButtonVariant::Normal,
-                    ),
-                    numeric_input_field(
-                        ticks_per_second.to_string(),
-                        TicksPerSecondInput,
-                        TicksPerSecondValueText,
-                        NumericInputSizing::Fixed(INPUT_WIDTH),
-                    ),
-                    button(
-                        "+",
-                        TicksPerSecondStep::Increment,
-                        px(STEP_BUTTON_SIZE),
-                        COMPACT_CONTROL_HEIGHT,
-                        ButtonVariant::Normal,
-                    ),
-                ],
-            ),
-                ],
-            ),
-            (
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                    column_gap: px(24),
-                    ..default()
-                },
-                children![
                     (
                         Node {
                             flex_grow: 1.0,
@@ -209,61 +191,181 @@ pub(super) fn game_rules_section(
                         },
                         children![
                             typography::setting_title(
-                                localization.text(language, "settings.spawnCreatures").to_owned()
+                                localization.text(language, "settings.ticksBySecond").to_owned(),
                             ),
                             typography::caption(
-                                localization.text(language, "settings.spawnCreatures.description").to_owned()
+                                localization
+                                    .text(language, "settings.ticksBySecond.description")
+                                    .to_owned(),
                             ),
                         ],
                     ),
                     (
-                        Button,
-                        SpawnCreaturesToggle,
-                        toggle::control(spawn_creatures),
-                        children![(SpawnCreaturesToggleThumb, toggle::thumb(spawn_creatures))],
+                        Node {
+                            flex_shrink: 0.0,
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(10),
+                            ..default()
+                        },
+                        children![
+                            button(
+                                "−",
+                                TicksPerSecondStep::Decrement,
+                                px(STEP_BUTTON_SIZE),
+                                COMPACT_CONTROL_HEIGHT,
+                                ButtonVariant::Normal,
+                            ),
+                            numeric_input_field(
+                                ticks_per_second.to_string(),
+                                TicksPerSecondInput,
+                                TicksPerSecondValueText,
+                                NumericInputSizing::Fixed(INPUT_WIDTH),
+                            ),
+                            button(
+                                "+",
+                                TicksPerSecondStep::Increment,
+                                px(STEP_BUTTON_SIZE),
+                                COMPACT_CONTROL_HEIGHT,
+                                ButtonVariant::Normal,
+                            ),
+                        ],
                     ),
                 ],
+            ),
+            boolean_rule_setting(
+                BooleanGameRuleToggle::SpawnCreatures,
+                rules.spawn_creatures(),
+                "settings.spawnCreatures",
+                "settings.spawnCreatures.description",
+                localization,
+                language,
+            ),
+            boolean_rule_setting(
+                BooleanGameRuleToggle::SpawnCaves,
+                rules.spawn_caves(),
+                "settings.spawnCaves",
+                "settings.spawnCaves.description",
+                localization,
+                language,
+            ),
+            boolean_rule_setting(
+                BooleanGameRuleToggle::SpawnRivers,
+                rules.spawn_rivers(),
+                "settings.spawnRivers",
+                "settings.spawnRivers.description",
+                localization,
+                language,
+            ),
+            boolean_rule_setting(
+                BooleanGameRuleToggle::SpawnLakes,
+                rules.spawn_lakes(),
+                "settings.spawnLakes",
+                "settings.spawnLakes.description",
+                localization,
+                language,
+            ),
+            boolean_rule_setting(
+                BooleanGameRuleToggle::SpawnOceans,
+                rules.spawn_oceans(),
+                "settings.spawnOceans",
+                "settings.spawnOceans.description",
+                localization,
+                language,
             ),
         ],
     )
 }
 
-pub(super) fn handle_spawn_creatures_toggle(
-    interactions: Query<&Interaction, (Changed<Interaction>, With<SpawnCreaturesToggle>)>,
+fn boolean_rule_setting(
+    rule: BooleanGameRuleToggle,
+    enabled: bool,
+    title_key: &str,
+    description_key: &str,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    (
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            column_gap: px(24),
+            ..default()
+        },
+        children![
+            (
+                Node {
+                    flex_grow: 1.0,
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(6),
+                    ..default()
+                },
+                children![
+                    typography::setting_title(localization.text(language, title_key).to_owned()),
+                    typography::caption(
+                        localization.text(language, description_key).to_owned(),
+                    ),
+                ],
+            ),
+            (
+                Button,
+                rule,
+                toggle::control(enabled),
+                children![(BooleanGameRuleToggleThumb(rule), toggle::thumb(enabled))],
+            ),
+        ],
+    )
+}
+
+pub(super) fn handle_boolean_game_rule_toggles(
+    interactions: Query<(&Interaction, &BooleanGameRuleToggle), Changed<Interaction>>,
     mut settings: TicksPerSecondEditor,
 ) {
-    if !interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
-        return;
-    }
-    let next = !settings.game_rules.spawn_creatures();
-    if *settings.game_state.get() == GameState::NewWorld {
-        settings.new_world.set_spawn_creatures(!settings.new_world.game_rules().spawn_creatures());
-    } else {
-        settings.game_rules.set_spawn_creatures(next);
-        settings.save.save_game_rules(*settings.game_rules);
+    for (interaction, rule) in &interactions {
+        if *interaction == Interaction::Pressed {
+            settings.toggle_boolean_rule(*rule);
+            break;
+        }
     }
 }
 
-pub(super) fn sync_spawn_creatures_toggle(
+pub(super) fn sync_boolean_game_rule_toggles(
     settings: TicksPerSecondSettings,
-    mut toggles: Query<(Ref<Interaction>, &mut BackgroundColor, &mut BorderColor), With<SpawnCreaturesToggle>>,
-    mut thumbs: Query<&mut Node, With<SpawnCreaturesToggleThumb>>,
+    mut toggles: Query<(
+        &BooleanGameRuleToggle,
+        Ref<Interaction>,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
+    mut thumbs: Query<(&BooleanGameRuleToggleThumb, &mut Node)>,
 ) {
     let changed = settings.inputs_changed();
-    let enabled = settings.spawn_creatures();
-    for (interaction, background, border) in &mut toggles {
+    let rules = settings.current_rules();
+
+    let enabled = |rule: BooleanGameRuleToggle| match rule {
+        BooleanGameRuleToggle::SpawnCreatures => rules.spawn_creatures(),
+        BooleanGameRuleToggle::SpawnCaves => rules.spawn_caves(),
+        BooleanGameRuleToggle::SpawnRivers => rules.spawn_rivers(),
+        BooleanGameRuleToggle::SpawnLakes => rules.spawn_lakes(),
+        BooleanGameRuleToggle::SpawnOceans => rules.spawn_oceans(),
+    };
+
+    for (rule, interaction, background, border) in &mut toggles {
         if !changed && !interaction.is_changed() {
             continue;
         }
-        selectable::apply_colors(toggle::colors(enabled, *interaction), background, border);
+        selectable::apply_colors(toggle::colors(enabled(*rule), *interaction), background, border);
     }
-    if !changed {
-        return;
-    }
-    let next_left = px(toggle::thumb_left(enabled));
-    for mut thumb in &mut thumbs {
-        if thumb.left != next_left {
-            thumb.left = next_left;
+
+    if changed {
+        for (thumb, mut node) in &mut thumbs {
+            let next_left = px(toggle::thumb_left(enabled(thumb.0)));
+            if node.left != next_left {
+                node.left = next_left;
+            }
         }
     }
 }
