@@ -11226,3 +11226,44 @@ cargo check).
 Commit de versão: `2a46a4661afc7962dda09dae07ca0f69eaaee1fb`.
 CI de versão push `35777457133`: **verde**.
 VERSION: `0.50.86`.
+
+## 2026-09-22 — Empty-mesh guard global + Character Info prewarm robusto
+
+Investigação adicional após o erro persistente
+`bevy_render::slab_allocator: Use-after-free: attempted to copy element data for an unallocated key`.
+
+Conclusões:
+- o arquivo fonte do player é `assets/models/entities/player/player.glb`;
+- o GLB foi inspecionado diretamente: possui 7 meshes e todos têm primitives
+  com 24 vértices / 36 índices; portanto o player.glb não contém mesh vazio;
+- `slime.glb` também foi inspecionado e não possui primitives vazios;
+- block model usa quads fixos de 4 vértices;
+- chunk terrain/fluid/layer usam `VoxelMeshBuffer::into_mesh()`, que retorna
+  `None` quando não existem posições, evitando inserir chunk mesh vazio;
+- o erro corresponde aos bugs upstream Bevy #24874/#25246: empty Mesh pode
+  chegar ao slab allocator e produzir essa mensagem de use-after-free.
+
+Correção:
+- `MeshAllocatorDiagnosticsPlugin` agora registra
+  `discard_empty_mesh_assets` em `Last`;
+- o sistema observa `AssetEvent<Mesh>` e remove qualquer asset recém
+  adicionado/modificado/carregado cujo vertex buffer tenha tamanho zero antes
+  da extração para o RenderApp;
+- isso cobre GLB, meshes auxiliares, chunks e qualquer produtor futuro, em vez
+  de tentar corrigir descendants depois de `WorldInstanceReady`.
+
+Character Info:
+- o preview anterior podia terminar os 2 frames de render antes de a scene
+  estar efetivamente pronta para aparecer no target;
+- ao receber `WorldInstanceReady`, agora agenda 16 frames de prewarm;
+- ao abrir Character Info, agenda um refresh curto sem recriar scene/model;
+- modelo, render target e câmera continuam persistentes.
+
+Commits funcionais:
+- global empty-mesh guard: `ad02924f6bb53d21704a14babb5cca46786822bc`;
+- preview prewarm/refresh: `9c1dbc66d04bfc4cbd830c997bb622c6c826bd05`.
+
+CI funcional push `35778651893`: **verde**.
+Commit de versão: `87abec745ceb22e581b05c3d455653ca4a5da74c`.
+CI de versão push `35779123708`: **verde**.
+VERSION: `0.50.87`.
