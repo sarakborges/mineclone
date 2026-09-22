@@ -5,7 +5,10 @@ use bevy::{
 
 use crate::ui::{text_input, theme};
 
-use super::state::{CreativeInventoryView, CreativeSearchBar, CreativeSearchText, SEARCH_HEIGHT};
+use super::state::{
+    CreativeInventoryView, CreativeSearchBar, CreativeSearchText, InventorySearchFrame,
+    InventorySearchText, PlayerInventoryView, SEARCH_HEIGHT,
+};
 
 #[derive(Component)]
 pub(super) struct CreativeSearchFrame;
@@ -116,6 +119,41 @@ pub(super) fn style_inventory_search_field(
         }
         if node.top != top {
             node.top = top;
+        }
+        if color.0 != theme::TEXT_MUTED {
+            color.0 = theme::TEXT_MUTED;
+        }
+    }
+}
+
+
+pub(super) fn style_player_inventory_search_field(
+    view: Res<PlayerInventoryView>,
+    mut frames: Query<
+        (&mut BackgroundColor, &mut BorderColor),
+        With<InventorySearchFrame>,
+    >,
+    mut placeholders: Query<(&mut Visibility, &mut TextColor), With<InventorySearchText>>,
+) {
+    let fill = BackgroundColor(text_input::INPUT_FILL);
+    let border = BorderColor::all(text_input::input_border(view.search_focused()));
+    for (mut background, mut current_border) in &mut frames {
+        if *background != fill {
+            *background = fill;
+        }
+        if *current_border != border {
+            *current_border = border;
+        }
+    }
+
+    let next_visibility = if view.search_query().is_empty() && !view.search_focused() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for (mut visibility, mut color) in &mut placeholders {
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
         }
         if color.0 != theme::TEXT_MUTED {
             color.0 = theme::TEXT_MUTED;
