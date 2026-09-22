@@ -188,15 +188,15 @@ pub(crate) fn patch_voxel_mesh(
         }));
     }
 
-    let existing = MeshArrays::from_mesh(existing)?;
+    let existing = MeshView::from_mesh(existing)?;
     let replacement = match replacement {
-        Some(mesh) => Some(MeshArrays::from_mesh(mesh)?),
+        Some(mesh) => Some(MeshView::from_mesh(mesh)?),
         None => None,
     };
-    let existing_dirty = existing.has_quad_in(dirty)?;
+    let existing_dirty = existing.has_quad_in(dirty);
     let replacement_dirty = replacement
         .as_ref()
-        .is_some_and(|replacement| replacement.has_quad_in(dirty).unwrap_or(true));
+        .is_some_and(|replacement| replacement.has_quad_in(dirty));
 
     if !existing_dirty && !replacement_dirty {
         return Some(VoxelMeshPatch::Unchanged);
@@ -221,75 +221,55 @@ pub(crate) fn patch_voxel_mesh(
     Some(VoxelMeshPatch::Changed(output.into_mesh()))
 }
 
-#[derive(Default)]
-struct MeshArrays {
-    positions: Vec<[f32; 3]>,
-    uvs: Vec<[f32; 2]>,
-    payloads: Vec<u32>,
-    colors: Vec<[u8; 4]>,
-    indices: Vec<u32>,
+/// Validated, borrowed inputs keep no-op patches allocation-free and avoid
+/// copying the complete source meshes before selecting the surviving quads.
+struct MeshView<'a> {
+    positions: &'a [[f32; 3]],
+    uvs: &'a [[f32; 2]],
+    payloads: &'a [u32],
+    colors: &'a [[u8; 4]],
+    indices: &'a Indices,
 }
 
-impl MeshArrays {
-    fn with_capacity(vertices: usize, indices: usize) -> Self {
-        Self {
-            positions: Vec::with_capacity(vertices),
-            uvs: Vec::with_capacity(vertices),
-            payloads: Vec::with_capacity(vertices),
-            colors: Vec::with_capacity(vertices),
-            indices: Vec::with_capacity(indices),
-        }
-    }
-
-    fn from_mesh(mesh: &Mesh) -> Option<Self> {
+impl<'a> MeshView<'a> {
+    fn from_mesh(mesh: &'a Mesh) -> Option<Self> {
         if !mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD) {
             return None;
         }
 
-        Some(Self {
-            positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?.to_vec(),
-            uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
-            payloads: uint32(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
-            colors: unorm8x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
-            indices: mesh.indices()?.iter().map(|index| index as u32).collect(),
-        })
-    }
-
-    fn has_quad_in(&self, dirty: ChunkMeshletMask) -> Option<bool> {
-        if !self.positions.len().is_multiple_of(4) || !self.indices.len().is_multiple_of(6) {
-            return None;
-        }
-        let quad_count = self.positions.len() / 4;
-        if self.indices.len() / 6 != quad_count
-            || self.uvs.len() != self.positions.len()
-            || self.payloads.len() != self.positions.len()
-            || self.colors.len() != self.positions.len()
+        let view = Self {
+            positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?,
+            uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?,
+            payloads: uint32(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?,
+            colors: unorm8x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?,
+            indices: mesh.indices()?,
+        };
+        let vertices = view.positions.len();
+        if !vertices.is_multiple_of(4)
+            || !view.indices.len().is_multiple_of(6)
+            || view.indices.len() / 6 != vertices / 4
+            || view.uvs.len() != vertices
+            || view.payloads.len() != vertices
+            || view.colors.len() != vertices
         {
             return None;
         }
+        Some(view)
+    }
 
-        Some((0..quad_count).any(|quad| {
-            dirty.contains_payload(self.payloads[quad * 4])
-        }))
+    fn has_quad_in(&self, dirty: ChunkMeshletMask) -> bool {
+        self.payloads
+            .chunks_exact(4)
+            .any(|quad| dirty.contains_payload(quad[0]))
     }
 
     fn append_filtered(
         &self,
-        output: &mut Self,
+        output: &mut MeshArrays,
         dirty: ChunkMeshletMask,
         keep_dirty: bool,
     ) -> Option<()> {
-        if !self.positions.len().is_multiple_of(4) || !self.indices.len().is_multiple_of(6) {
-            return None;
-        }
         let quad_count = self.positions.len() / 4;
-        if self.indices.len() / 6 != quad_count
-            || self.uvs.len() != self.positions.len()
-            || self.payloads.len() != self.positions.len()
-            || self.colors.len() != self.positions.len()
-        {
-            return None;
-        }
 
         for quad in 0..quad_count {
             let source_base = quad * 4;
@@ -313,7 +293,11 @@ impl MeshArrays {
                 .extend_from_slice(&self.colors[source_base..source_base + 4]);
 
             let source_index_base = quad * 6;
-            for &index in &self.indices[source_index_base..source_index_base + 6] {
+            for offset in 0..6 {
+                let index = match self.indices {
+                    Indices::U16(indices) => u32::from(indices[source_index_base + offset]),
+                    Indices::U32(indices) => indices[source_index_base + offset],
+                };
                 let relative = index.checked_sub(source_base as u32)?;
                 if relative >= 4 {
                     return None;
@@ -323,6 +307,34 @@ impl MeshArrays {
         }
 
         Some(())
+    }
+}
+
+#[derive(Default)]
+struct MeshArrays {
+    positions: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    payloads: Vec<u32>,
+    colors: Vec<[u8; 4]>,
+    indices: Vec<u32>,
+}
+
+impl MeshArrays {
+    fn with_capacity(vertices: usize, indices: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(vertices),
+            uvs: Vec::with_capacity(vertices),
+            payloads: Vec::with_capacity(vertices),
+            colors: Vec::with_capacity(vertices),
+            indices: Vec::with_capacity(indices),
+        }
+    }
+
+    fn from_mesh(mesh: &Mesh) -> Option<Self> {
+        let view = MeshView::from_mesh(mesh)?;
+        let mut arrays = Self::with_capacity(view.positions.len(), view.indices.len());
+        view.append_filtered(&mut arrays, ChunkMeshletMask::ALL, true)?;
+        Some(arrays)
     }
 
     fn into_mesh(self) -> Mesh {
@@ -380,5 +392,111 @@ fn unorm8x4(values: &VertexAttributeValues) -> Option<&[[u8; 4]]> {
     match values {
         VertexAttributeValues::Unorm8x4(values) => Some(values),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::quad::quad_triangle_indices;
+
+    fn quad_mesh(meshlets: &[u32], position_offset: f32, wide_indices: bool) -> Mesh {
+        let mut arrays = MeshArrays::with_capacity(meshlets.len() * 4, meshlets.len() * 6);
+        for (quad, &meshlet) in meshlets.iter().enumerate() {
+            let x = position_offset + quad as f32;
+            arrays.positions.extend([
+                [x, 0.0, 0.0], [x + 1.0, 0.0, 0.0],
+                [x + 1.0, 1.0, 0.0], [x, 1.0, 0.0],
+            ]);
+            arrays.uvs.extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+            arrays.payloads.extend([meshlet << 28; 4]);
+            arrays.colors.extend([[17, 39, 83, 255]; 4]);
+            arrays.indices.extend(quad_triangle_indices((quad * 4) as u32, true));
+        }
+        let mut mesh = arrays.into_mesh();
+        if wide_indices {
+            let indices = mesh.indices().unwrap().iter().map(|index| index as u32).collect();
+            mesh.insert_indices(Indices::U32(indices));
+        }
+        mesh
+    }
+
+    #[test]
+    fn partial_patch_preserves_other_meshlets_and_both_index_widths() {
+        for existing_wide in [false, true] {
+            for replacement_wide in [false, true] {
+                let existing = quad_mesh(&[0, 1], 0.0, existing_wide);
+                let replacement = quad_mesh(&[0, 2], 100.0, replacement_wide);
+                let VoxelMeshPatch::Changed(patched) = patch_voxel_mesh(
+                    &existing, Some(&replacement), ChunkMeshletMask(1),
+                ).unwrap() else {
+                    panic!("the selected meshlet must change");
+                };
+
+                let actual = MeshView::from_mesh(&patched).unwrap();
+                let original = MeshView::from_mesh(&existing).unwrap();
+                let updated = MeshView::from_mesh(&replacement).unwrap();
+                assert_eq!(&actual.positions[..4], &original.positions[4..]);
+                assert_eq!(&actual.positions[4..], &updated.positions[..4]);
+                assert_eq!(&actual.uvs[..4], &original.uvs[4..]);
+                assert_eq!(&actual.uvs[4..], &updated.uvs[..4]);
+                assert_eq!(&actual.colors[..4], &original.colors[4..]);
+                assert_eq!(&actual.colors[4..], &updated.colors[..4]);
+                assert_eq!(actual.payloads, &[1 << 28, 1 << 28, 1 << 28, 1 << 28, 0, 0, 0, 0]);
+                assert_eq!(
+                    actual.indices.iter().collect::<Vec<_>>(),
+                    vec![0, 1, 3, 1, 2, 3, 4, 5, 7, 5, 6, 7],
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unrelated_patch_is_unchanged_and_removal_can_empty_a_mesh() {
+        let existing = quad_mesh(&[0], 0.0, false);
+        assert!(matches!(
+            patch_voxel_mesh(&existing, None, ChunkMeshletMask(2)),
+            Some(VoxelMeshPatch::Unchanged),
+        ));
+        let VoxelMeshPatch::Changed(empty) =
+            patch_voxel_mesh(&existing, None, ChunkMeshletMask(1)).unwrap()
+        else {
+            panic!("removing the last quad must change the mesh");
+        };
+        assert_eq!(empty.count_vertices(), 0);
+        assert_eq!(empty.indices().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn patch_rejects_mismatched_attributes_and_indices_outside_a_quad() {
+        let mismatched = quad_mesh(&[1], 0.0, false)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; 3]);
+        assert!(patch_voxel_mesh(&mismatched, None, ChunkMeshletMask(1)).is_none());
+
+        let invalid_indices = quad_mesh(&[1], 0.0, false)
+            .with_inserted_indices(Indices::U16(vec![0, 1, 4, 1, 2, 3]));
+        let replacement = quad_mesh(&[0], 10.0, false);
+        assert!(patch_voxel_mesh(
+            &invalid_indices, Some(&replacement), ChunkMeshletMask(1),
+        ).is_none());
+        assert!(patch_voxel_mesh(
+            &replacement, Some(&invalid_indices), ChunkMeshletMask::ALL,
+        ).is_none());
+    }
+
+    #[test]
+    fn growing_patch_promotes_indices_before_u16_overflow() {
+        let quad_count = (usize::from(u16::MAX) + 1) / 4;
+        let existing = quad_mesh(&vec![1; quad_count], 0.0, false);
+        let replacement = quad_mesh(&[0], 100.0, false);
+        assert!(matches!(existing.indices(), Some(Indices::U16(_))));
+        let VoxelMeshPatch::Changed(patched) = patch_voxel_mesh(
+            &existing, Some(&replacement), ChunkMeshletMask(1),
+        ).unwrap() else {
+            panic!("adding a meshlet must change the mesh");
+        };
+        assert!(matches!(patched.indices(), Some(Indices::U32(_))));
+        assert_eq!(patched.count_vertices(), (quad_count + 1) * 4);
+        assert_eq!(patched.indices().unwrap().iter().max(), Some(quad_count * 4 + 3));
     }
 }

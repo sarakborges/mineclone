@@ -44,7 +44,22 @@ luz obsoleta continuam em retry. Fluidos com conteúdo atual são publicados e
 reenfileirados para a iluminação final. Máscara e recuperação de patch falho
 continuam preservadas. Regressão Rust cobre mudanças repetidas de luz e
 rejeição quando o conteúdo finalmente muda. VERSION: `0.50.17`.
-CI de P2: aguardando publicação e conclusão.
+CI de P2: **verde**, commit `d633d8f0bf2207ac8eae6b0ff5741ec87f04a2e9`,
+run de push [35682198657](https://github.com/sarakborges/mineclone/actions/runs/35682198657).
+
+### P3 — patch parcial com entradas emprestadas
+
+`MeshView` valida o layout e lê slices dos assets existentes/replacements.
+A decisão `Unchanged` não aloca nem copia os arrays; um patch alterado copia
+só para a saída, eliminando até dez vetores temporários de entrada quando
+existem mesh antigo e replacement. Índices U16/U32 são lidos diretamente,
+rebased por quad e compactados na saída. O pool continua preparando todos
+os patches antes de publicar qualquer asset. Isso não elimina upload integral
+do mesh pelo Bevy. Regressões Rust cobrem atributos/meshlets preservados,
+winding e índices de ambas as larguras, remoção do último quad, layout/índices
+inválidos e promoção para U32 acima de 65.536 vértices.
+VERSION: `0.50.18`. `git diff --check`: PASS.
+CI de P3: aguardando publicação e conclusão.
 
 ### Ordem de execução definida
 
