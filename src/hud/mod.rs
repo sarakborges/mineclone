@@ -183,11 +183,6 @@ impl HudSettings {
         self.hints.set(kind, enabled);
     }
 
-    // Transitional compatibility for hint consumers updated in the next commit.
-    pub(crate) const fn display_tooltips(&self) -> bool {
-        !self.hide_hints
-    }
-
     pub(crate) const fn target_block_position(&self) -> TargetBlockPosition {
         self.target_block_position
     }

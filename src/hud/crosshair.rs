@@ -1,7 +1,12 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{
+        game_state::GameState,
+        keybinds::{KeybindAction, Keybinds},
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
     content::{
         block::BlockRegistry,
         builtin_ids::{
@@ -22,7 +27,7 @@ use crate::{
     voxel::microblock::ChiselResolution,
 };
 
-use super::HudSettings;
+use super::{HintKind, HudSettings};
 
 pub struct CrosshairPlugin;
 
@@ -85,6 +90,7 @@ struct ActionHintRuntime<'w> {
     targeted_creature: Res<'w, TargetedCreature>,
     brush_mode: Res<'w, BrushMode>,
     chisel_resolution: Res<'w, ChiselResolution>,
+    keybinds: Res<'w, Keybinds>,
 }
 
 #[derive(SystemParam)]
@@ -172,6 +178,7 @@ fn update_action_hint(
         && !runtime.targeted_creature.is_changed()
         && !runtime.brush_mode.is_changed()
         && !runtime.chisel_resolution.is_changed()
+        && !runtime.keybinds.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
         && !content.localization.is_changed()
@@ -183,33 +190,40 @@ fn update_action_hint(
     let language = content.language.get();
     let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
     let selected_block = selected_item.and_then(|id| content.blocks.get(id));
+    let tool_action = runtime.keybinds.label(KeybindAction::ToolAction);
 
-    let next_text = if !runtime.settings.display_tooltips() || runtime.targeted_creature.0.is_some() {
+    let next_text = if runtime.targeted_creature.0.is_some() {
         None
     } else if selected_item == Some(CHISEL_TOOL_ID) {
-        let precision_key = match *runtime.chisel_resolution {
-            ChiselResolution::Thick => "chisel.precision.thick",
-            ChiselResolution::Thin => "chisel.precision.thin",
-            ChiselResolution::ExtraThin => "chisel.precision.extraThin",
-        };
-        Some(
-            content
-                .localization
-                .text(language, "hud.chisel")
-                .replace(
-                    "{precision}",
-                    content.localization.text(language, precision_key),
-                ),
-        )
+        if !runtime.settings.hint_enabled(HintKind::Chisel) {
+            None
+        } else {
+            let precision_key = match *runtime.chisel_resolution {
+                ChiselResolution::Thick => "chisel.precision.thick",
+                ChiselResolution::Thin => "chisel.precision.thin",
+                ChiselResolution::ExtraThin => "chisel.precision.extraThin",
+            };
+            Some(
+                content
+                    .localization
+                    .text(language, "hud.chisel")
+                    .replace(
+                        "{precision}",
+                        content.localization.text(language, precision_key),
+                    )
+                    .replace("{toolAction}", tool_action),
+            )
+        }
     } else if selected_item == Some(SHEARS_TOOL_ID) {
-        Some(content.localization.text(language, "hud.shears").to_owned())
+        runtime
+            .settings
+            .hint_enabled(HintKind::Shears)
+            .then(|| content.localization.text(language, "hud.shears").to_owned())
     } else if selected_item == Some(STRUCTURE_TOOL_ID) {
-        Some(
-            content
-                .localization
-                .text(language, "hud.structureTool")
-                .to_owned(),
-        )
+        runtime
+            .settings
+            .hint_enabled(HintKind::StructureTool)
+            .then(|| content.localization.text(language, "hud.structureTool").to_owned())
     } else if let Some(hit) = runtime.targeted.0 {
         if selected_item == Some(BRUSH_TOOL_ID) {
             let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
@@ -218,52 +232,59 @@ fn update_action_hint(
                     .iter()
                     .any(|property| property == DYED_PROPERTY_ID)
             });
-            if can_dye {
-                Some(match runtime.brush_mode.dye_id() {
-                    None => content
-                        .localization
-                        .text(language, "hud.brushClear")
-                        .to_owned(),
-                    Some(dye_id) => {
-                        let color_name = content
-                            .secondary_properties
-                            .get(DYED_PROPERTY_ID, dye_id)
-                            .map_or(dye_id, |definition| definition.name.text(language));
-                        content
-                            .localization
-                            .text(language, "hud.brushPaint")
-                            .replace("{color}", color_name)
-                    }
-                })
-            } else {
-                // A brush has paint actions only; never fall back to Break/Place.
+            if !can_dye {
                 None
+            } else {
+                match runtime.brush_mode.dye_id() {
+                    None => runtime
+                        .settings
+                        .hint_enabled(HintKind::BrushClear)
+                        .then(|| content.localization.text(language, "hud.brushClear").to_owned()),
+                    Some(dye_id) => {
+                        if !runtime.settings.hint_enabled(HintKind::BrushPaint) {
+                            None
+                        } else {
+                            let color_name = content
+                                .secondary_properties
+                                .get(DYED_PROPERTY_ID, dye_id)
+                                .map_or(dye_id, |definition| definition.name.text(language));
+                            Some(
+                                content
+                                    .localization
+                                    .text(language, "hud.brushPaint")
+                                    .replace("{color}", color_name),
+                            )
+                        }
+                    }
+                }
             }
         } else if selected_block.is_some() {
-            Some(
-                content
-                    .localization
-                    .text(language, "hud.breakOrPlaceBlock")
-                    .to_owned(),
-            )
+            runtime
+                .settings
+                .hint_enabled(HintKind::BreakOrPlaceBlock)
+                .then(|| {
+                    content
+                        .localization
+                        .text(language, "hud.breakOrPlaceBlock")
+                        .to_owned()
+                })
         } else {
-            Some(
-                content
-                    .localization
-                    .text(language, "hud.breakBlock")
-                    .to_owned(),
-            )
+            runtime
+                .settings
+                .hint_enabled(HintKind::BreakBlock)
+                .then(|| content.localization.text(language, "hud.breakBlock").to_owned())
         }
     } else if selected_item == Some(BRUSH_TOOL_ID) {
         None
     } else {
         selected_block
             .filter(|block| block.is_rotatable())
+            .filter(|_| runtime.settings.hint_enabled(HintKind::RotateBlock))
             .map(|_| {
                 content
                     .localization
                     .text(language, "hud.rotateBlock")
-                    .to_owned()
+                    .replace("{toolAction}", tool_action)
             })
     };
 

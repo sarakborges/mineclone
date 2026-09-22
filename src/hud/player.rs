@@ -1,14 +1,19 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{
+        game_state::GameState,
+        keybinds::{KeybindAction, Keybinds},
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
     ui::typography,
 };
 
 use super::{
-    HudSettings,
+    HintKind, HudSettings,
     entity_card::{EntityCardSource, spawn_entity_card},
 };
 
@@ -37,13 +42,15 @@ struct InventoryHint;
 fn spawn_player_hud(
     mut commands: Commands,
     settings: Res<HudSettings>,
+    keybinds: Res<Keybinds>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     inventory_state: Res<State<InventoryState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
 ) {
-    let hint_visibility = if settings.display_tooltips() {
+    let hint_kind = inventory_hint_kind(*inventory_state.get());
+    let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
     } else {
         Visibility::Hidden
@@ -71,7 +78,11 @@ fn spawn_player_hud(
             spawn_entity_card(root, EntityCardSource::LocalPlayer, None);
             root.spawn((
                 InventoryHint,
-                typography::crosshair_hint(localization.text(language.get(), hint_key).to_owned()),
+                typography::crosshair_hint(
+                    localization
+                        .text(language.get(), hint_key)
+                        .replace("{inventory}", keybinds.label(KeybindAction::Inventory)),
+                ),
                 hint_visibility,
                 Pickable::IGNORE,
             ));
@@ -101,12 +112,14 @@ fn sync_player_hud_visibility(
 
 fn sync_inventory_hint(
     settings: Res<HudSettings>,
+    keybinds: Res<Keybinds>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     inventory_state: Res<State<InventoryState>>,
     hint: Single<(&mut Text, &mut Visibility), With<InventoryHint>>,
 ) {
     if !settings.is_changed()
+        && !keybinds.is_changed()
         && !localization.is_changed()
         && !language.is_changed()
         && !inventory_state.is_changed()
@@ -117,18 +130,25 @@ fn sync_inventory_hint(
     let (mut text, mut visibility) = hint.into_inner();
     let next_text = localization
         .text(language.get(), inventory_hint_key(*inventory_state.get()))
-        .to_owned();
+        .replace("{inventory}", keybinds.label(KeybindAction::Inventory));
     if text.0 != next_text {
         text.0 = next_text;
     }
 
-    let next_visibility = if settings.display_tooltips() {
+    let next_visibility = if settings.hint_enabled(inventory_hint_kind(*inventory_state.get())) {
         Visibility::Inherited
     } else {
         Visibility::Hidden
     };
     if *visibility != next_visibility {
         *visibility = next_visibility;
+    }
+}
+
+const fn inventory_hint_kind(state: InventoryState) -> HintKind {
+    match state {
+        InventoryState::Closed => HintKind::OpenInventory,
+        InventoryState::Open => HintKind::CloseInventory,
     }
 }
 
