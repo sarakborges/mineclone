@@ -273,7 +273,7 @@ where
                     chunk,
                     [x, y, z],
                     world_voxel,
-                    *cell,
+                    cell,
                     block,
                     &mut tint_at,
                 );
@@ -284,7 +284,7 @@ where
                     let surface = MicroSurface {
                         world,
                         lighting_cache,
-                        cell: *cell,
+                        cell,
                         block,
                         world_voxel,
                         local_voxel,
