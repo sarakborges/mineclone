@@ -10878,3 +10878,22 @@ anima o braço em primeira e terceira pessoa sem criar side effects de gameplay.
 Commit funcional: `281b9055be6f7955d160faf8ef2e6a45e30abc9e`.
 CI push `35761492316`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.75`.
+
+
+## 2026-09-22 — Mining base 5s + hardness 2 para stone_blocks
+
+O tempo-base de mineração em Survival foi reduzido de 400 para 200 ticks,
+equivalente a metade do tempo anterior (10s -> 5s para hardness 1 e speed 1x).
+
+Os blocos atualmente pertencentes à categoria `stone_blocks` receberam
+`mining.hardness = 2`:
+- `asteria:stone`;
+- `asteria:bassalt`.
+
+Com isso, blocos comuns sem override ficam em 5s a 1x, enquanto stone/bassalt
+exigem 10s a 1x antes dos multiplicadores de ferramenta. Required tools
+continuam sendo respeitadas normalmente.
+
+Commit funcional: `e5fa74cdf6368f99fe236b6a3d6aadbd209ca6f7`.
+CI push `35761909149`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.76`.
