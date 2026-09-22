@@ -273,6 +273,7 @@ fn configure_player_preview_scene(
 }
 
 pub(super) fn render_player_preview(
+    character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
     mut portrait_cameras: Query<
         &mut Camera,
@@ -298,7 +299,8 @@ pub(super) fn render_player_preview(
         render_state.portrait_frames = render_state.portrait_frames.saturating_sub(1);
     }
 
-    let character_should_render = render_state.character_frames > 0;
+    let character_should_render =
+        *character_info.get() == CharacterInfoState::Open || render_state.character_frames > 0;
     let center = Vec3::new(0.0, CHARACTER_PREVIEW_CENTER_Y, 0.0);
     let yaw = render_state.character_yaw;
     let offset = Quat::from_rotation_y(-yaw) * Vec3::Z * CHARACTER_PREVIEW_CAMERA_DISTANCE;
@@ -313,7 +315,7 @@ pub(super) fn render_player_preview(
             CameraOutputMode::Skip
         };
     }
-    if character_should_render {
+    if render_state.character_frames > 0 {
         render_state.character_frames = render_state.character_frames.saturating_sub(1);
     }
 }
