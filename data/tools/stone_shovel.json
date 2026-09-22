@@ -13,9 +13,7 @@
   "category": "tools",
   "icon": "",
   "mining": {
-    "tags": [
-      "shovel"
-    ],
+    "category": "shovel",
     "speed": 1.5
   }
 }

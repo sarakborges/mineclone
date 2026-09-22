@@ -13,9 +13,7 @@
   "category": "tools",
   "icon": "",
   "mining": {
-    "tags": [
-      "pickaxe"
-    ],
+    "category": "pickaxe",
     "speed": 1.5
   }
 }

@@ -13,9 +13,7 @@
   "category": "tools",
   "icon": "",
   "mining": {
-    "tags": [
-      "hatchet"
-    ],
+    "category": "hatchet",
     "speed": 1.5
   }
 }

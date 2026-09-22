@@ -36,6 +36,7 @@ pub(crate) mod structure;
 pub(crate) mod structure_rules;
 pub(crate) mod structure_set;
 pub(crate) mod tool;
+pub(crate) mod tool_category;
 pub(crate) mod tool_id;
 mod validation;
 

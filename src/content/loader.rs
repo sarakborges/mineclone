@@ -21,6 +21,7 @@ use super::{
     structure::{StructureDefinition, StructureRegistry},
     structure_set::{StructureSetDefinition, StructureSetRegistry},
     tool::{ToolDefinition, ToolRegistry},
+    tool_category::{ToolCategoryDefinition, ToolCategoryRegistry},
     validation::validate_content,
 };
 
@@ -41,6 +42,7 @@ pub(crate) struct LoadedContent {
     pub structures: StructureRegistry,
     pub structure_sets: StructureSetRegistry,
     pub tools: ToolRegistry,
+    pub tool_categories: ToolCategoryRegistry,
 }
 
 impl LoadedContent {
@@ -60,6 +62,7 @@ impl LoadedContent {
         commands.insert_resource(self.structures);
         commands.insert_resource(self.structure_sets);
         commands.insert_resource(self.tools);
+        commands.insert_resource(self.tool_categories);
     }
 }
 
@@ -136,6 +139,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content
             .creatures
             .insert(read_json_definition::<CreatureDefinition>(path));
+    } else if path_has_component(path, "tool_categories") {
+        content
+            .tool_categories
+            .insert(read_json_definition::<ToolCategoryDefinition>(path));
     } else if path_has_component(path, "tools") {
         content
             .tools

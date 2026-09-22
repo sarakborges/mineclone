@@ -11,7 +11,7 @@ use super::{
 #[serde(rename_all = "camelCase")]
 pub struct ToolMiningDefinition {
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub category: Option<String>,
     #[serde(default = "default_mining_speed")]
     pub speed: f32,
 }
@@ -19,7 +19,7 @@ pub struct ToolMiningDefinition {
 impl Default for ToolMiningDefinition {
     fn default() -> Self {
         Self {
-            tags: Vec::new(),
+            category: None,
             speed: default_mining_speed(),
         }
     }
@@ -31,20 +31,24 @@ impl ToolMiningDefinition {
             self.speed.is_finite() && self.speed > 0.0,
             "tool {tool_id} mining speed must be finite and greater than zero"
         );
-        for (index, tag) in self.tags.iter().enumerate() {
+        if let Some(category) = self.category.as_deref() {
             assert!(
-                !tag.trim().is_empty(),
-                "tool {tool_id} mining tags cannot contain empty values"
-            );
-            assert!(
-                !self.tags[..index].contains(tag),
-                "tool {tool_id} mining tags cannot contain duplicates"
+                !category.trim().is_empty(),
+                "tool {tool_id} mining category cannot be empty"
             );
         }
     }
 
-    pub fn has_tag(&self, tag: &str) -> bool {
-        self.tags.iter().any(|candidate| candidate == tag)
+    pub fn category(&self) -> Option<&str> {
+        self.category.as_deref()
+    }
+
+    pub fn is_mining_tool(&self) -> bool {
+        self.category.is_some()
+    }
+
+    pub fn matches_category(&self, category: &str) -> bool {
+        self.category.as_deref() == Some(category)
     }
 }
 
@@ -80,9 +84,11 @@ impl ToolRegistry {
             .tint_icon
             .map(|path| path.trim().to_owned())
             .filter(|path| !path.is_empty());
-        for tag in &mut definition.mining.tags {
-            *tag = tag.trim().to_owned();
-        }
+        definition.mining.category = definition
+            .mining
+            .category
+            .map(|category| category.trim().to_owned())
+            .filter(|category| !category.is_empty());
 
         assert!(!definition.id.is_empty(), "tool id cannot be empty");
         assert!(

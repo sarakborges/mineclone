@@ -40,17 +40,26 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 property
             );
         }
-        for tag in block
+        for category in block
             .mining
             .required_tools
             .iter()
             .chain(block.mining.preferred_tools.iter())
         {
             assert!(
-                content.tools.iter().any(|tool| tool.mining.has_tag(tag)),
-                "block {} mining references unknown tool tag {}",
+                content.tool_categories.get(category).is_some(),
+                "block {} mining references unknown tool category {}",
                 block.id,
-                tag
+                category
+            );
+            assert!(
+                content
+                    .tools
+                    .iter()
+                    .any(|tool| tool.mining.matches_category(category)),
+                "block {} mining references tool category {} with no matching tool",
+                block.id,
+                category
             );
         }
     }
@@ -91,6 +100,14 @@ pub(super) fn validate_content(content: &LoadedContent) {
             tool.id,
             tool.category
         );
+        if let Some(category) = tool.mining.category() {
+            assert!(
+                content.tool_categories.get(category).is_some(),
+                "tool {} references missing tool category {}",
+                tool.id,
+                category
+            );
+        }
     }
 
     for structure in content.structures.iter() {
