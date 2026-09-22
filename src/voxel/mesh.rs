@@ -118,9 +118,13 @@ where
     let mut block_visual_indices =
         SmallVec::<[((usize, usize), usize); 16]>::new();
     let mut block_visuals = Vec::<BlockMeshVisual>::new();
-    let mut active_by_x: [Vec<u32>; CHUNK_SIZE] = std::array::from_fn(|_| Vec::new());
-    let mut active_by_y: [Vec<u32>; CHUNK_SIZE] = std::array::from_fn(|_| Vec::new());
-    let mut active_by_z: [Vec<u32>; CHUNK_SIZE] = std::array::from_fn(|_| Vec::new());
+    let plane_capacity = active_capacity.div_ceil(CHUNK_SIZE).max(4);
+    let mut active_by_x: [Vec<u32>; CHUNK_SIZE] =
+        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
+    let mut active_by_y: [Vec<u32>; CHUNK_SIZE] =
+        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
+    let mut active_by_z: [Vec<u32>; CHUNK_SIZE] =
+        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
 
     // Resolve selected chunk cells and definitions once. The six directional
     // meshing passes reuse these entries instead of re-reading storage and
