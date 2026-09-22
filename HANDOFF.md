@@ -590,6 +590,37 @@ VERSION: `0.50.44`, commit
 `623e219dd22ec59aeba15ab5a1ac80c711c3c2e4`.
 CI de P28: **verde** nos runs push `35738441748` e PR `35738447185` para `623e219dd22ec59aeba15ab5a1ac80c711c3c2e4`. Nenhum `cargo test` foi adicionado/executado.
 
+### P29 — prioridade espacial cached para backlog de remesh
+
+As filas de geometry/lighting/fluid remesh eram deduplicadas e tinham promoção
+front/back, mas o dispatcher escolhia o primeiro chunk renderizável na ordem
+lógica da fila. Sob backlog, um chunk distante podia consumir os slots antes
+de trabalho visual mais próximo do streaming center.
+
+O remesh agora reutiliza `chunk_load_priority`, a mesma ordenação espacial do
+streaming. Cada categoria mantém um `RenderablePriorityCache` keyed por
+revision lógica da fila, membership revision do render pool e streaming center.
+A lista é ordenada somente quando um desses inputs muda; pops subsequentes
+reutilizam a ordem e apenas avançam/removem entradas. Mudança de membership
+reconstrói a cache, portanto chunks antes não renderizáveis voltam a ser
+considerados. Sem streaming center, o fallback FIFO + scan-miss anterior é
+mantido.
+
+A fairness entre categorias não mudou: `next_background_kind` ainda alterna
+fluid/lighting/geometry. A regressão garante que distância espacial vence idade
+FIFO dentro de uma categoria.
+
+Commits: center exposto
+`464054765582390e3f39a8663d26f107fc281a69`; cache
+`1e7a3611980a548af839ea325b90c08619af486d`; nearest dispatch
+`e0a08339ca4d0babd6fec3f356a8e9ff1d6c8378`; integração no scheduler
+`bfdf89a73fd48ec899fb0463512e9a477b5ea038`; regressões/fallback
+`f0af20761525630d38192e77a4a6fb366b772d6c`,
+`fd5f83667c0e0d2a383cfe10d088b936a11c890b`.
+VERSION: `0.50.45`, commit
+`b14db1e116f176def99fa1ba1e4329be60955956`.
+CI de P29: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
