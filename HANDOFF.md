@@ -929,7 +929,7 @@ Commit funcional/regressão:
 `6945732a0b43ab463715cd1e627d8486c0dee792`.
 VERSION: `0.50.61`, commit
 `cb1da07f87a300cd95dbc6cb3bb0977be15fef25`.
-CI de P38: aguardando.
+CI de P38: o commit funcional `cb1da07f87a300cd95dbc6cb3bb0977be15fef25` falhou por erros concorrentes do player model, não pelo streaming (`default` ausente e `horizontal_speed_squared` morto). O estado acumulado atual passou nos runs push `35748663144` e PR `35748670294` para `7b16d88e8854f0107d64307307d38dcb2610529c`.
 
 ### Ordem de execução definida
 
