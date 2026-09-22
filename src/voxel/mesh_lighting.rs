@@ -46,11 +46,20 @@ impl CachedLightingSample {
         self.occupied_count != UNLOADED_OCCUPANCY
     }
 
-    fn occupied_fraction(self) -> f32 {
-        if !self.is_loaded() {
-            return 0.0;
+    fn occupied_units(self) -> u16 {
+        if self.is_loaded() {
+            self.occupied_count
+        } else {
+            0
         }
-        self.occupied_count as f32 / MICROBLOCK_VOLUME as f32
+    }
+
+    fn open_units(self) -> u16 {
+        if self.is_loaded() {
+            MICROBLOCK_VOLUME - self.occupied_count
+        } else {
+            0
+        }
     }
 }
 
@@ -252,13 +261,18 @@ fn face_lighting_from_samples(
         let side_a_sample = side_a_samples[side_a_index];
         let side_b_sample = side_b_samples[side_b_index];
         let corner_sample = corner_samples[side_a_index][side_b_index];
-        let side_a_occlusion = side_a_sample.occupied_fraction();
-        let side_b_occlusion = side_b_sample.occupied_fraction();
-        let corner_occlusion = corner_sample.occupied_fraction();
-        let occlusion = if side_a_occlusion >= 1.0 && side_b_occlusion >= 1.0 {
+        let side_a_occupied = side_a_sample.occupied_units();
+        let side_b_occupied = side_b_sample.occupied_units();
+        let corner_occupied = corner_sample.occupied_units();
+        let occlusion = if side_a_occupied == MICROBLOCK_VOLUME
+            && side_b_occupied == MICROBLOCK_VOLUME
+        {
             3.0
         } else {
-            (side_a_occlusion + side_b_occlusion + corner_occlusion).min(3.0)
+            (u32::from(side_a_occupied)
+                + u32::from(side_b_occupied)
+                + u32::from(corner_occupied)) as f32
+                / MICROBLOCK_VOLUME as f32
         };
         let (sky_level, sampled_block_srgb) = average_cached_shader_light_levels([
             base_sample,
@@ -309,8 +323,8 @@ fn average_cached_shader_light_levels(
         if !sample.is_loaded() {
             continue;
         }
-        let weight = 1.0 - sample.occupied_fraction();
-        if weight <= f32::EPSILON {
+        let weight = sample.open_units() as f32;
+        if weight == 0.0 {
             continue;
         }
 
