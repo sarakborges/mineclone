@@ -30,6 +30,7 @@ use crate::{
         hydrology::HydrologyWaterKind,
         terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
+        WorldGenerationSettings,
     },
 };
 
@@ -66,6 +67,7 @@ struct LocateSnapshot {
     structure_sets: StructureSetRegistry,
     biome_field: BiomeField,
     feature_fields: WorldFeatureFields,
+    world_generation: WorldGenerationSettings,
 }
 
 impl LocateSnapshot {
@@ -77,6 +79,7 @@ impl LocateSnapshot {
             biomes: &self.biomes,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
+            world_generation: self.world_generation,
             biome_field: &self.biome_field,
             feature_fields: &self.feature_fields,
         }
@@ -92,6 +95,7 @@ pub(super) struct ChatLocateContext<'w> {
     structure_sets: Res<'w, StructureSetRegistry>,
     biome_field: Res<'w, BiomeField>,
     feature_fields: Res<'w, WorldFeatureFields>,
+    world_generation: Res<'w, WorldGenerationSettings>,
     dimension: CurrentDimensionContext<'w>,
     language: Res<'w, ActiveLanguage>,
     pending: ResMut<'w, PendingLocate>,
@@ -260,6 +264,7 @@ impl ChatLocateContext<'_> {
             structure_sets: self.structure_sets.as_ref().clone(),
             biome_field: self.biome_field.as_ref().clone(),
             feature_fields: self.feature_fields.as_ref().clone(),
+            world_generation: *self.world_generation,
         };
         let response = format!("Locating {name}...");
         self.pending.task = Some(AsyncComputeTaskPool::get().spawn(async move {
