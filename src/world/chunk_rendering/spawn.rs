@@ -1,6 +1,6 @@
 use bevy::{
     camera::visibility::NoCpuCulling,
-    light::NotShadowCaster,
+    light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
 
@@ -618,6 +618,7 @@ fn spawn_fluid_mesh(
             Visibility::Hidden,
             NoCpuCulling,
             NotShadowCaster,
+            NotShadowReceiver,
             DespawnOnExit(GameState::Gameplay),
         ))
         .id();
