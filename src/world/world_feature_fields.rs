@@ -192,7 +192,12 @@ mod tests {
         let fields = test_fields();
         let coord = IVec3::new(2, 0, -1);
         let first = fields.region_with_hydrology(coord, |hydrology| {
-            hydrology.region_from_macro_terrain(IVec2::new(coord.x, coord.z), |_| {
+            hydrology.region_from_macro_terrain(
+                IVec2::new(coord.x, coord.z),
+                true,
+                true,
+                true,
+                |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,
@@ -300,7 +305,12 @@ mod tests {
         fields.cave_region(near_region, |_| Some(CaveConnectivityRegion::default()));
         fields.cave_region(far_region, |_| Some(CaveConnectivityRegion::default()));
         fields.region_with_hydrology(near_region, |hydrology| {
-            hydrology.region_from_macro_terrain(near_region.xz(), |_| {
+            hydrology.region_from_macro_terrain(
+                near_region.xz(),
+                true,
+                true,
+                true,
+                |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,
@@ -309,7 +319,12 @@ mod tests {
             })
         });
         fields.region_with_hydrology(far_region, |hydrology| {
-            hydrology.region_from_macro_terrain(far_region.xz(), |_| {
+            hydrology.region_from_macro_terrain(
+                far_region.xz(),
+                true,
+                true,
+                true,
+                |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,

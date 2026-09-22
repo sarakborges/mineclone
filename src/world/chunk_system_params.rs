@@ -15,6 +15,7 @@ use super::{
     biome_field::BiomeField,
     chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials},
     current_context::CurrentDimensionContext,
+    game_rules::GameRules,
     new_world::WorldGenerationSettings,
     world_feature_fields::WorldFeatureFields,
 };
@@ -92,6 +93,7 @@ pub(crate) struct ChunkGeneration<'w> {
     pub(crate) dimension: CurrentDimensionContext<'w>,
     pub(crate) structures: Res<'w, StructureRegistry>,
     pub(crate) structure_sets: Res<'w, StructureSetRegistry>,
+    pub(crate) game_rules: Res<'w, GameRules>,
     pub(crate) world_generation: Res<'w, WorldGenerationSettings>,
     pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
@@ -107,6 +109,7 @@ impl ChunkGeneration<'_> {
         self.dimension.inputs_changed()
             || self.structures.is_changed()
             || self.structure_sets.is_changed()
+            || self.game_rules.is_changed()
             || self.world_generation.is_changed()
             || self.feature_fields.is_changed()
     }

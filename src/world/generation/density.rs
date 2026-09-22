@@ -79,6 +79,8 @@ pub(super) struct DensityPassContext<'a> {
     pub(super) biome_field: &'a BiomeField,
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) dimension: &'a DimensionDefinition,
+    pub(super) allow_caverns: bool,
+    pub(super) allow_solid_volume: bool,
 }
 
 pub(super) fn sample_density_field(
@@ -86,7 +88,8 @@ pub(super) fn sample_density_field(
     columns: &[GenerationColumnSample],
     pass: &DensityPassContext<'_>,
 ) -> DensityField {
-    let context = DensitySampleContext::new(pass.region, pass.anchored_caves, pass.biome_field);
+    let context = DensitySampleContext::new(pass.region, pass.anchored_caves, pass.biome_field)
+        .with_volume_rules(pass.allow_caverns, pass.allow_solid_volume);
     let mut field = DensityField {
         values: vec![0.0; CHUNK_VOLUME],
         volume: vec![PackedVolumeBiomeSelection::NONE; CHUNK_VOLUME],
@@ -130,15 +133,17 @@ pub(super) fn sample_density_field(
             // Resolve carvers first. Water protection is only needed if a voxel
             // is actually carved: a water_near scan on every column duplicated
             // expensive lake/river/ocean sampling even in carver-free terrain.
-            resolve_surface_carver_column(
-                &mut surface_carvers,
-                surface_carver_cache,
-                horizontal,
-                column.surface_height as f32,
-                column.identity_surface_index,
-                &column.surface_influences,
-                &surface_carver_context,
-            );
+            if pass.allow_caverns {
+                resolve_surface_carver_column(
+                    &mut surface_carvers,
+                    surface_carver_cache,
+                    horizontal,
+                    column.surface_height as f32,
+                    column.identity_surface_index,
+                    &column.surface_influences,
+                    &surface_carver_context,
+                );
+            }
             let mut nearby_water = None;
 
             for (local_y, hydrology_delta) in hydrology_deltas.iter().copied().enumerate() {

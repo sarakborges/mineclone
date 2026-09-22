@@ -52,6 +52,9 @@ impl HydrologyField {
     pub fn region_from_macro_terrain(
         &self,
         coord: IVec2,
+        spawn_rivers: bool,
+        spawn_lakes: bool,
+        spawn_oceans: bool,
         mut sample: impl FnMut(Vec2) -> HydrologySurfaceSample,
     ) -> HydrologyRegion {
         let mut macro_samples = Vec::with_capacity(MACRO_SAMPLE_GRID * MACRO_SAMPLE_GRID);
@@ -67,12 +70,13 @@ impl HydrologyField {
             }
         }
 
-        let ocean_threshold = ocean_continentalness_threshold(self.ocean_weight);
+        let drainage_ocean_weight = self.ocean_weight;
+        let ocean_threshold = ocean_continentalness_threshold(drainage_ocean_weight);
         let mut drainage = DrainageNetwork::new(
             self.seed,
             ocean_threshold,
             self.sea_level as f32,
-            self.ocean_weight,
+            drainage_ocean_weight,
             &mut sample,
         );
         let rivers = build_river_system(
@@ -80,8 +84,9 @@ impl HydrologyField {
             self.seed,
             self.sea_level as f32,
             &self.settings.water_fluid,
-            self.settings.river_weight,
-            self.settings.lake_weight,
+            if spawn_rivers { self.settings.river_weight } else { 0.0 },
+            if spawn_lakes { self.settings.lake_weight } else { 0.0 },
+            spawn_lakes,
             &mut drainage,
         );
 
@@ -93,7 +98,7 @@ impl HydrologyField {
             water_bodies: rivers.water_bodies,
             sea_level: self.sea_level as f32,
             settings: self.settings.clone(),
-            ocean_weight: self.ocean_weight,
+            ocean_weight: if spawn_oceans { self.ocean_weight } else { 0.0 },
             macro_samples,
         }
     }

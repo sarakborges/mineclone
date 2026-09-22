@@ -37,6 +37,7 @@ pub(super) fn build_river_system<F>(
     water_fluid: &str,
     river_weight: f32,
     lake_weight: f32,
+    spawn_lakes: bool,
     network: &mut DrainageNetwork<'_, F>,
 ) -> RiverSystem
 where
@@ -61,7 +62,8 @@ where
     let mut confluence_water_levels = HashMap::new();
 
     for (&cell, &incoming_rivers) in &confluences {
-        if incoming_rivers < CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS
+        if !spawn_lakes
+            || incoming_rivers < CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS
             || selection.lakes.contains_key(&cell)
         {
             continue;
@@ -116,11 +118,15 @@ where
                 .springs
                 .contains(&cell)
                 .then(|| mountain_spring_body(cell, source, seed, sea_level, water_fluid));
-            let lake = selection
-                .lakes
-                .get(&cell)
-                .filter(|_| connected_lakes.contains(&cell))
-                .cloned();
+            let lake = spawn_lakes
+                .then(|| {
+                    selection
+                        .lakes
+                        .get(&cell)
+                        .filter(|_| connected_lakes.contains(&cell))
+                        .cloned()
+                })
+                .flatten();
 
             if let Some(body) = spring
                 .or(lake)
@@ -190,7 +196,9 @@ where
                 |position| network.surface_sample_at(position),
             );
 
-            if let Some(pool) = waterfall
+            if let Some(pool) = spawn_lakes
+                .then(|| waterfall)
+                .flatten()
                 .and_then(|waterfall| plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid))
                 .filter(|body| water_body_intersects_region(coord, body))
             {

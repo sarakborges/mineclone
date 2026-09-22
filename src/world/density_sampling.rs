@@ -26,6 +26,8 @@ pub(crate) struct DensitySampleContext<'a> {
     region: &'a GenerationRegion,
     anchored_caves: Option<&'a CaveConnectivityRegion>,
     biome_field: &'a BiomeField,
+    allow_caverns: bool,
+    allow_solid_volume: bool,
 }
 
 impl<'a> DensitySampleContext<'a> {
@@ -38,7 +40,19 @@ impl<'a> DensitySampleContext<'a> {
             region,
             anchored_caves,
             biome_field,
+            allow_caverns: true,
+            allow_solid_volume: true,
         }
+    }
+
+    pub(crate) fn with_volume_rules(
+        mut self,
+        allow_caverns: bool,
+        allow_solid_volume: bool,
+    ) -> Self {
+        self.allow_caverns = allow_caverns;
+        self.allow_solid_volume = allow_solid_volume;
+        self
     }
 }
 
@@ -104,6 +118,8 @@ pub(crate) fn sample_density_with_hydrology(
         volume,
         context.biome_field,
         cavern_depth_strength,
+        context.allow_caverns,
+        context.allow_solid_volume,
     );
 
     enforce_hydrology_water_volume(

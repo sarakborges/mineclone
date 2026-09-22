@@ -21,6 +21,7 @@ use super::{
 use crate::world::{
     WorldGenerationMode, WorldLoadMode,
     biome_field::BiomeField,
+    game_rules::GameRules,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     generation::authored_surface_fluid_id_for_position,
     generation_region::generation_region_coord,
@@ -160,6 +161,7 @@ pub(in crate::world) fn begin_world_loading(
             &biome_field,
             &feature_fields,
             forced_spawn_biome.is_some(),
+            &config.game_rules,
         )
     };
     let initial_center = if world_generation.mode() == WorldGenerationMode::Void
@@ -295,6 +297,7 @@ fn find_initial_spawn_column(
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
     restrict_to_forced_region: bool,
+    game_rules: &GameRules,
 ) -> IVec2 {
     find_map_square_rings(
         DEFAULT_SPAWN_COLUMN,
@@ -306,7 +309,14 @@ fn find_initial_spawn_column(
                 return None;
             }
 
-            (!spawn_column_has_surface_fluid(candidate, dimension, biomes, biome_field, feature_fields))
+            (!spawn_column_has_surface_fluid(
+                candidate,
+                dimension,
+                biomes,
+                biome_field,
+                feature_fields,
+                game_rules,
+            ))
                 .then_some(candidate)
         },
     )
@@ -327,6 +337,7 @@ fn spawn_column_has_surface_fluid(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
+    game_rules: &GameRules,
 ) -> bool {
     if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
         return true;
@@ -339,7 +350,12 @@ fn spawn_column_has_surface_fluid(
     );
     let region_coord = generation_region_coord(chunk_coord);
     let region = feature_fields.region_with_hydrology(region_coord, |hydrology| {
-        hydrology.region_from_macro_terrain(region_coord.xz(), |position| {
+        hydrology.region_from_macro_terrain(
+            region_coord.xz(),
+            game_rules.spawn_rivers(),
+            game_rules.spawn_lakes(),
+            game_rules.spawn_oceans(),
+            |position| {
             let surface_position = position.floor().as_ivec2();
             let surface = biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
             let elevation = surface_height_from_sample(
@@ -358,7 +374,8 @@ fn spawn_column_has_surface_fluid(
                 continentalness,
                 biome_hydrology: primary.hydrology.rules(),
             }
-        })
+        },
+        )
     });
     let position = column.as_vec2() + Vec2::splat(0.5);
     let surface_height = surface_height(column, dimension, biomes, biome_field) as f32;

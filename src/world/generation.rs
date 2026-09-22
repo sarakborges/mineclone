@@ -29,6 +29,7 @@ use crate::{
         generation_region::{
             GenerationRegion, generation_region_coord, generation_region_world_bounds,
         },
+        game_rules::GameRules,
         hydrology::HydrologySurfaceSample,
         new_world::{WorldGenerationMode, WorldGenerationSettings},
         terrain::{chunk_y_bounds, surface_height, surface_height_from_sample},
@@ -37,7 +38,9 @@ use crate::{
 };
 
 pub(crate) use self::{
-    columns::{GenerationColumnSample, sample_generation_columns},
+    columns::{
+        GenerationColumnSample, sample_flat_generation_columns, sample_generation_columns,
+    },
     fluids::authored_surface_fluid_id_for_position,
 };
 pub(crate) use self::structures::{
@@ -62,6 +65,7 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) structures: &'a StructureRegistry,
     pub(crate) structure_sets: &'a StructureSetRegistry,
+    pub(crate) game_rules: GameRules,
     pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) biome_field: &'a BiomeField,
     pub(crate) feature_fields: &'a WorldFeatureFields,
@@ -71,17 +75,27 @@ impl ChunkGenerationContext<'_> {
     pub(crate) fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
         self.feature_fields
             .region_with_hydrology(region_coord, |hydrology| {
-                hydrology.region_from_macro_terrain(region_coord.xz(), |position| {
+                hydrology.region_from_macro_terrain(
+                    region_coord.xz(),
+                    self.game_rules.spawn_rivers(),
+                    self.game_rules.spawn_lakes(),
+                    self.game_rules.spawn_oceans(),
+                    |position| {
                     let surface_position = position.floor().as_ivec2();
                     let surface = self
                         .biome_field
                         .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
-                    let elevation = surface_height_from_sample(
-                        surface_position,
-                        self.dimension,
-                        self.biome_field,
-                        &surface,
-                    ) as f32;
+                    let elevation = match self.world_generation.mode() {
+                        WorldGenerationMode::Flat => flat_surface_height(self.dimension) as f32,
+                        WorldGenerationMode::Normal | WorldGenerationMode::Void => {
+                            surface_height_from_sample(
+                                surface_position,
+                                self.dimension,
+                                self.biome_field,
+                                &surface,
+                            ) as f32
+                        }
+                    };
                     let raw_continentalness =
                         self.biome_field.climate_at(position).continentalness;
                     let ocean_id = self.dimension.hydrology.ocean_biome.as_deref();
@@ -103,11 +117,15 @@ impl ChunkGenerationContext<'_> {
                         continentalness,
                         biome_hydrology,
                     }
-                })
+                },
+                )
             })
     }
 
     fn anchored_caves(&self, region: &GenerationRegion) -> Option<Arc<CaveConnectivityRegion>> {
+        if !self.game_rules.spawn_caves() {
+            return None;
+        }
         anchored_cave_region(
             region,
             self.biome_field,
@@ -126,18 +144,23 @@ pub(crate) fn generate_chunk(
         return VoxelChunk::empty();
     }
 
-    match context.world_generation.mode() {
-        WorldGenerationMode::Void => return generate_void_chunk(chunk_coord, context),
-        WorldGenerationMode::Flat => return generate_flat_chunk(chunk_coord, context),
-        WorldGenerationMode::Normal => {}
+    if context.world_generation.mode() == WorldGenerationMode::Void {
+        return generate_void_chunk(chunk_coord, context);
     }
 
     let horizontal_chunk = chunk_coord.xz();
     let structure_top_chunk =
         maximum_structure_top_chunk_for_horizontal_chunk(horizontal_chunk, context);
-    let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
+    let maximum_surface_chunk_y = match context.world_generation.mode() {
+        WorldGenerationMode::Normal => chunk_y_bounds(context.dimension, context.biomes).1,
+        WorldGenerationMode::Flat => {
+            (flat_surface_height(context.dimension) - 1).div_euclid(CHUNK_SIZE as i32)
+        }
+        WorldGenerationMode::Void => unreachable!(),
+    };
+    let allow_solid_volume = context.world_generation.mode() == WorldGenerationMode::Normal;
     if chunk_coord.y > maximum_surface_chunk_y.max(structure_top_chunk)
-        && !context.biomes.has_volume_density_modifiers()
+        && (!allow_solid_volume || !context.biomes.has_volume_density_modifiers())
     {
         return VoxelChunk::empty();
     }
@@ -145,13 +168,19 @@ pub(crate) fn generate_chunk(
     let chunk_origin = chunk_origin(chunk_coord);
     let columns = context
         .feature_fields
-        .generation_columns(horizontal_chunk, || {
-            sample_generation_columns(
+        .generation_columns(horizontal_chunk, || match context.world_generation.mode() {
+            WorldGenerationMode::Normal => sample_generation_columns(
                 horizontal_chunk,
                 context.dimension,
                 context.biomes,
                 context.biome_field,
-            )
+            ),
+            WorldGenerationMode::Flat => sample_flat_generation_columns(
+                horizontal_chunk,
+                flat_surface_height(context.dimension),
+                context.biome_field,
+            ),
+            WorldGenerationMode::Void => unreachable!(),
         });
     let local_surface_chunk = columns
         .iter()
@@ -167,7 +196,7 @@ pub(crate) fn generate_chunk(
     // biome transitions and structures reaching in from neighboring columns.
     if chunk_coord.y
         > local_surface_chunk.max(structure_top_chunk) + LOCAL_EMPTY_HEADROOM_CHUNKS
-        && !context.biomes.has_volume_solid_density_modifiers()
+        && (!allow_solid_volume || !context.biomes.has_volume_solid_density_modifiers())
     {
         return VoxelChunk::empty();
     }
@@ -196,6 +225,8 @@ pub(crate) fn generate_chunk(
             biome_field: context.biome_field,
             biomes: context.biomes,
             dimension: context.dimension,
+            allow_caverns: context.game_rules.spawn_caves(),
+            allow_solid_volume,
         },
     );
     let mut chunk = VoxelChunk::empty();
@@ -273,71 +304,6 @@ fn generate_void_chunk(
     chunk.edit_initial_blocks(|blocks| {
         blocks.set_block(8, 0, 8, VoxelCell::new(block_id, rotation));
     });
-    chunk
-}
-
-fn generate_flat_chunk(
-    chunk_coord: IVec3,
-    context: &ChunkGenerationContext<'_>,
-) -> VoxelChunk {
-    let surface_height = flat_surface_height(context.dimension);
-    let surface_chunk = (surface_height - 1).div_euclid(CHUNK_SIZE as i32);
-    let structure_top = maximum_structure_top_chunk_for_horizontal_chunk(chunk_coord.xz(), context);
-    if chunk_coord.y > surface_chunk.max(structure_top) {
-        return VoxelChunk::empty();
-    }
-
-    let origin = chunk_origin(chunk_coord);
-    let mut chunk = VoxelChunk::empty();
-    if origin.y < surface_height {
-        chunk.edit_initial_blocks(|blocks| {
-            for local_z in 0..CHUNK_SIZE {
-                for local_x in 0..CHUNK_SIZE {
-                    let world_x = origin.x + local_x as i32;
-                    let world_z = origin.z + local_z as i32;
-                    let surface = context
-                        .biome_field
-                        .sample_surface(Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5));
-                    let biome = context
-                        .biomes
-                        .get(surface.primary_id)
-                        .unwrap_or_else(|| panic!("missing flat-world biome: {}", surface.primary_id));
-
-                    for local_y in 0..CHUNK_SIZE {
-                        let world_y = origin.y + local_y as i32;
-                        if world_y >= surface_height {
-                            continue;
-                        }
-                        let depth = (surface_height - world_y - 1) as u32;
-                        let block_id = biome
-                            .surface_block_at_depth(depth)
-                            .unwrap_or_else(|| panic!(
-                                "flat-world biome {} has no surface material at depth {depth}",
-                                biome.id
-                            ));
-                        let block_id = intern_block_id(block_id);
-                        let block = context
-                            .blocks
-                            .get(block_id)
-                            .unwrap_or_else(|| panic!("missing flat-world block: {block_id}"));
-                        let world_position = IVec3::new(world_x, world_y, world_z);
-                        let rotation =
-                            TextureRotation::for_position(world_position, block.rotate_texture.any());
-                        blocks.set_block(
-                            local_x,
-                            local_y,
-                            local_z,
-                            VoxelCell::new(block_id, rotation),
-                        );
-                    }
-                }
-            }
-        });
-    }
-
-    if context.world_generation.spawn_structures() {
-        rasterize_structures(&mut chunk, origin, context);
-    }
     chunk
 }
 

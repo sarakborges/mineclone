@@ -19,6 +19,8 @@ pub(super) fn volume_biome_density_delta(
     volume: Option<VolumeBiomeSelection>,
     biome_field: &BiomeField,
     cave_depth_strength: f32,
+    allow_caverns: bool,
+    allow_solids: bool,
 ) -> f32 {
     let Some(selection) = volume else {
         return 0.0;
@@ -33,6 +35,8 @@ pub(super) fn volume_biome_density_delta(
         position,
         seed,
         cave_depth_strength,
+        allow_caverns,
+        allow_solids,
     ) * selection.strength
 }
 
@@ -42,6 +46,8 @@ fn density_modifier_delta(
     position: Vec3,
     seed: u64,
     cave_depth_strength: f32,
+    allow_caverns: bool,
+    allow_solids: bool,
 ) -> f32 {
     match modifier {
         BiomeDensityModifier::Cavern {
@@ -49,7 +55,7 @@ fn density_modifier_delta(
             noise_scale,
             openness,
         } => {
-            if cave_depth_strength <= 0.0 {
+            if !allow_caverns || cave_depth_strength <= 0.0 {
                 return 0.0;
             }
 
@@ -62,6 +68,9 @@ fn density_modifier_delta(
             noise_scale,
             coverage,
         } => {
+            if !allow_solids {
+                return 0.0;
+            }
             let noise = value_noise_3d(position * noise_scale, seed) * 0.5 + 0.5;
             let mask = coverage_mask(noise, coverage);
             fill_strength * mask
@@ -103,6 +112,8 @@ mod tests {
             position,
             7,
             1.0,
+            true,
+            true,
         );
         let solid = density_modifier_delta(
             BiomeDensityModifier::Solid {
@@ -114,6 +125,8 @@ mod tests {
             position,
             7,
             1.0,
+            true,
+            true,
         );
 
         assert!(current_density + cavern < 0.0);
@@ -138,6 +151,8 @@ mod tests {
                 CAVERN_MINIMUM_SURFACE_DEPTH,
                 CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
             ),
+            true,
+            true,
         );
 
         assert_eq!(cavern, 0.0);
