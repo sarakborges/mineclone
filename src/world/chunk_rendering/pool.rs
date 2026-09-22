@@ -1,4 +1,8 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    camera::primitives::Aabb,
+    platform::collections::HashMap,
+    prelude::*,
+};
 
 use crate::{
     content::fluid::FluidId,
@@ -106,6 +110,15 @@ impl ChunkRenderPool {
         self.active
             .get(&coord)
             .map_or(0, |allocation| allocation.mesh_bytes)
+    }
+
+    pub(super) fn invalidate_bounds(&self, commands: &mut Commands, coord: IVec3) {
+        let Some(allocation) = self.active.get(&coord) else {
+            return;
+        };
+        for entity in &allocation.entities {
+            commands.entity(*entity).remove::<Aabb>();
+        }
     }
 
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
