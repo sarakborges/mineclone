@@ -9567,3 +9567,11 @@ HEAD funcional 645293d6ffe8baf19df4ac6c6dab2eef6dcea477:
 3. teleportar para o resultado e confirmar que a World Tree realmente gera naquele candidate;
 4. testar seed/posição em que nenhuma World Tree válida exista dentro do cap e confirmar mensagem explícita de falha;
 5. confirmar que /locate não cria chunks nem altera o save.
+
+
+## 2026-09-22 — Rendering/performance pass: held dynamic-light shadows
+
+- Started a prioritized rendering/meshing/remeshing/fluid/shadow performance pass on `develop`.
+- First confirmed hotspot removed: the camera-attached held `PointLight` no longer enables omnidirectional shadow maps. Voxel terrain already receives the held-light contribution through `TerrainLightingBuffer`; retaining Bevy point-light shadows duplicated expensive continuously-changing shadow work. The point light remains for non-terrain receivers, with `shadow_maps_enabled: false`.
+- Removed the now-unused global `PointLightShadowMap` override from the held-light plugin.
+- Next priorities: validate CI, then inspect chunk mesh publication/allocation churn, remesh invalidation/coalescing, fluid remesh churn, and directional-shadow quality/cost in that order unless measurements indicate a stronger bottleneck.
