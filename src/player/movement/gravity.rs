@@ -30,6 +30,14 @@ impl Default for GravityState {
 }
 
 impl GravityState {
+    pub(crate) fn grounded(&self) -> bool {
+        self.grounded
+    }
+
+    pub(crate) fn vertical_velocity(&self) -> f32 {
+        self.vertical_velocity
+    }
+
     pub(crate) fn reset_motion(&mut self) {
         self.vertical_velocity = 0.0;
         self.grounded = true;

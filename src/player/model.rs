@@ -1,212 +1,353 @@
-use bevy::prelude::*;
+use std::{collections::HashMap, time::Duration};
+
+use bevy::{
+    animation::RepeatAnimation,
+    prelude::*,
+    world_serialization::WorldInstanceReady,
+};
 
 use crate::{
     app::game_state::GameState,
+    content::player::PlayerDefinition,
+    entity::EntityHealth,
     player::{
-        PLAYER_EYE_HEIGHT,
+        PLAYER_EYE_HEIGHT, PlayerEntity,
         camera::{CameraPerspective, GameplayCamera},
+        movement::{gravity::GravityState, walking::WalkingState},
+        viewmodel::ViewModelAnimation,
     },
 };
 
-const MODEL_PIXEL: f32 = 0.9 / 16.0;
-const HEAD_SIZE: Vec3 = Vec3::new(8.0, 8.0, 8.0);
-const TORSO_SIZE: Vec3 = Vec3::new(8.0, 12.0, 4.0);
-const ARM_SIZE: Vec3 = Vec3::new(4.0, 12.0, 4.0);
-const LEG_SIZE: Vec3 = Vec3::new(4.0, 12.0, 4.0);
+const HURT_HOLD_SECONDS: f32 = 0.38;
+const MOVING_SPEED_SQUARED: f32 = 0.01;
 
 #[derive(Component)]
 struct PlayerModelRoot;
 
 #[derive(Component)]
+struct PlayerModel(Handle<Gltf>);
+
+#[derive(Component)]
+struct PlayerModelVisualAttached;
+
+#[derive(Component)]
 struct PlayerModelHead;
 
-type PlayerModelRootQuery<'w, 's> = Single<
-    'w,
-    's,
-    (&'static mut Transform, &'static mut Visibility),
-    (With<PlayerModelRoot>, Without<GameplayCamera>),
->;
+#[derive(Component)]
+struct PlayerModelAppearance {
+    graph: Option<Handle<AnimationGraph>>,
+    nodes: HashMap<String, AnimationNodeIndex>,
+}
 
-type PlayerModelHeadQuery<'w, 's> = Single<
-    'w,
-    's,
-    &'static mut Transform,
-    (
-        With<PlayerModelHead>,
-        Without<PlayerModelRoot>,
-        Without<GameplayCamera>,
-    ),
->;
+#[derive(Component)]
+struct PlayerModelAnimationLink {
+    nodes: HashMap<String, AnimationNodeIndex>,
+    current_state: String,
+    current_revision: u64,
+}
 
-#[derive(Resource)]
-struct PlayerModelAssets {
-    head: Handle<Mesh>,
-    torso: Handle<Mesh>,
-    arm: Handle<Mesh>,
-    leg: Handle<Mesh>,
-    skin: Handle<StandardMaterial>,
-    shirt: Handle<StandardMaterial>,
-    pants: Handle<StandardMaterial>,
+#[derive(Component)]
+struct PlayerModelAnimationState {
+    name: String,
+    revision: u64,
+    action_revision: u64,
+    hold_seconds: f32,
+    last_health: Option<f32>,
+}
+
+impl Default for PlayerModelAnimationState {
+    fn default() -> Self {
+        Self {
+            name: "idle".to_owned(),
+            revision: 0,
+            action_revision: 0,
+            hold_seconds: 0.0,
+            last_health: None,
+        }
+    }
+}
+
+impl PlayerModelAnimationState {
+    fn set(&mut self, name: &str) {
+        if self.name == name {
+            return;
+        }
+        self.name = name.to_owned();
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    fn trigger(&mut self, name: &str, hold_seconds: f32) {
+        self.name = name.to_owned();
+        self.revision = self.revision.wrapping_add(1);
+        self.hold_seconds = hold_seconds;
+    }
 }
 
 pub(crate) struct PlayerModelPlugin;
 
 impl Plugin for PlayerModelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_player_model_assets)
-            .add_systems(OnEnter(GameState::Gameplay), spawn_player_model)
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_player_model)
             .add_systems(
                 Update,
-                sync_player_model.run_if(in_state(GameState::Gameplay)),
+                (
+                    attach_loaded_player_model,
+                    sync_player_model,
+                    sync_player_model_animations,
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
 
-fn setup_player_model_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let scaled = |size: Vec3| size * MODEL_PIXEL;
-    commands.insert_resource(PlayerModelAssets {
-        head: meshes.add(Cuboid::new(
-            scaled(HEAD_SIZE).x,
-            scaled(HEAD_SIZE).y,
-            scaled(HEAD_SIZE).z,
-        )),
-        torso: meshes.add(Cuboid::new(
-            scaled(TORSO_SIZE).x,
-            scaled(TORSO_SIZE).y,
-            scaled(TORSO_SIZE).z,
-        )),
-        arm: meshes.add(Cuboid::new(
-            scaled(ARM_SIZE).x,
-            scaled(ARM_SIZE).y,
-            scaled(ARM_SIZE).z,
-        )),
-        leg: meshes.add(Cuboid::new(
-            scaled(LEG_SIZE).x,
-            scaled(LEG_SIZE).y,
-            scaled(LEG_SIZE).z,
-        )),
-        skin: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.72, 0.50, 0.38),
-            perceptual_roughness: 1.0,
-            ..default()
-        }),
-        shirt: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.08, 0.52, 0.55),
-            perceptual_roughness: 1.0,
-            ..default()
-        }),
-        pants: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.18, 0.22, 0.52),
-            perceptual_roughness: 1.0,
-            ..default()
-        }),
-    });
-}
-
 fn spawn_player_model(
     mut commands: Commands,
-    assets: Res<PlayerModelAssets>,
+    definition: Res<PlayerDefinition>,
+    asset_server: Res<AssetServer>,
 ) {
-    let pixel = MODEL_PIXEL;
-    let leg_height = LEG_SIZE.y * pixel;
-    let torso_height = TORSO_SIZE.y * pixel;
-    let head_height = HEAD_SIZE.y * pixel;
-    let torso_width = TORSO_SIZE.x * pixel;
-    let arm_width = ARM_SIZE.x * pixel;
-    let leg_width = LEG_SIZE.x * pixel;
+    let Some(model_path) = definition.model.as_ref() else {
+        warn!("player definition has no model configured");
+        return;
+    };
 
-    commands
-        .spawn((
-            Name::new("Player Model"),
-            PlayerModelRoot,
-            Transform::default(),
-            Visibility::Hidden,
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn((
-                Mesh3d(assets.leg.clone()),
-                MeshMaterial3d(assets.pants.clone()),
-                Transform::from_translation(Vec3::new(
-                    -leg_width * 0.5,
-                    leg_height * 0.5,
-                    0.0,
-                )),
-            ));
-            root.spawn((
-                Mesh3d(assets.leg.clone()),
-                MeshMaterial3d(assets.pants.clone()),
-                Transform::from_translation(Vec3::new(
-                    leg_width * 0.5,
-                    leg_height * 0.5,
-                    0.0,
-                )),
-            ));
-            root.spawn((
-                Mesh3d(assets.torso.clone()),
-                MeshMaterial3d(assets.shirt.clone()),
-                Transform::from_translation(Vec3::new(
-                    0.0,
-                    leg_height + torso_height * 0.5,
-                    0.0,
-                )),
-            ));
-            root.spawn((
-                Mesh3d(assets.arm.clone()),
-                MeshMaterial3d(assets.skin.clone()),
-                Transform::from_translation(Vec3::new(
-                    -(torso_width * 0.5 + arm_width * 0.5),
-                    leg_height + torso_height * 0.5,
-                    0.0,
-                )),
-            ));
-            root.spawn((
-                Mesh3d(assets.arm.clone()),
-                MeshMaterial3d(assets.skin.clone()),
-                Transform::from_translation(Vec3::new(
-                    torso_width * 0.5 + arm_width * 0.5,
-                    leg_height + torso_height * 0.5,
-                    0.0,
-                )),
-            ));
-            root.spawn((
-                PlayerModelHead,
-                Mesh3d(assets.head.clone()),
-                MeshMaterial3d(assets.skin.clone()),
-                Transform::from_translation(Vec3::new(
-                    0.0,
-                    leg_height + torso_height + head_height * 0.5,
-                    0.0,
-                )),
-            ));
+    commands.spawn((
+        Name::new("Player Model"),
+        PlayerModelRoot,
+        PlayerModel(asset_server.load::<Gltf>(model_path.clone())),
+        PlayerModelAnimationState::default(),
+        Transform::default(),
+        Visibility::Hidden,
+        DespawnOnExit(GameState::Gameplay),
+    ));
+}
+
+fn attach_loaded_player_model(
+    mut commands: Commands,
+    roots: Query<(Entity, &PlayerModel), Without<PlayerModelVisualAttached>>,
+    definition: Res<PlayerDefinition>,
+    gltfs: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+) {
+    for (root, model) in &roots {
+        let Some(gltf) = gltfs.get(&model.0) else {
+            continue;
+        };
+        let Some(scene) = gltf.default_scene.clone() else {
+            warn!("player model has no default scene");
+            commands.entity(root).insert(PlayerModelVisualAttached);
+            continue;
+        };
+
+        let mut mapped: Vec<_> = definition.animations.iter().collect();
+        mapped.sort_by(|a, b| a.0.cmp(b.0));
+        let mut states = Vec::new();
+        let mut clips = Vec::new();
+        for (state, clip_name) in mapped {
+            if let Some(clip) = gltf.named_animations.get(clip_name.as_str()) {
+                states.push(state.clone());
+                clips.push(clip.clone());
+            } else {
+                warn!("player model missing animation {clip_name} ({state})");
+            }
+        }
+
+        let (graph, nodes) = if clips.is_empty() {
+            (None, HashMap::new())
+        } else {
+            let (graph, indexes) = AnimationGraph::from_clips(clips);
+            (
+                Some(graphs.add(graph)),
+                states.into_iter().zip(indexes).collect(),
+            )
+        };
+
+        commands.entity(root).insert(PlayerModelVisualAttached);
+        commands.entity(root).with_children(|parent| {
+            parent
+                .spawn((
+                    WorldAssetRoot(scene),
+                    Transform::default(),
+                    PlayerModelAppearance { graph, nodes },
+                ))
+                .observe(configure_loaded_player_scene);
         });
+    }
+}
+
+fn configure_loaded_player_scene(
+    ready: On<WorldInstanceReady>,
+    mut commands: Commands,
+    descendants: Query<&Children>,
+    names: Query<&Name>,
+    appearances: Query<&PlayerModelAppearance>,
+    mut players: Query<(Entity, &mut AnimationPlayer)>,
+) {
+    let Ok(appearance) = appearances.get(ready.entity) else {
+        return;
+    };
+
+    for descendant in descendants.iter_descendants(ready.entity) {
+        if names
+            .get(descendant)
+            .is_ok_and(|name| name.as_str() == "HeadPivot")
+        {
+            commands.entity(descendant).insert(PlayerModelHead);
+        }
+
+        let Ok((player_entity, mut player)) = players.get_mut(descendant) else {
+            continue;
+        };
+        let Some(graph) = &appearance.graph else {
+            continue;
+        };
+
+        let mut transitions = AnimationTransitions::new();
+        if let Some(index) = appearance.nodes.get("idle").copied() {
+            transitions
+                .play(&mut player, index, Duration::ZERO)
+                .repeat();
+        }
+        commands.entity(player_entity).insert((
+            AnimationGraphHandle(graph.clone()),
+            transitions,
+            PlayerModelAnimationLink {
+                nodes: appearance.nodes.clone(),
+                current_state: "idle".to_owned(),
+                current_revision: 0,
+            },
+        ));
+    }
 }
 
 fn sync_player_model(
+    time: Res<Time>,
     perspective: Res<CameraPerspective>,
-    player: Single<(&Transform, &GameplayCamera)>,
-    mut model: PlayerModelRootQuery,
-    mut head: PlayerModelHeadQuery,
+    viewmodel_animation: Res<ViewModelAnimation>,
+    player: Single<
+        (
+            &Transform,
+            &GameplayCamera,
+            &WalkingState,
+            &GravityState,
+            &EntityHealth,
+        ),
+        With<PlayerEntity>,
+    >,
+    mut models: Query<
+        (
+            &mut Transform,
+            &mut Visibility,
+            &mut PlayerModelAnimationState,
+        ),
+        (With<PlayerModelRoot>, Without<GameplayCamera>),
+    >,
+    mut heads: Query<
+        &mut Transform,
+        (
+            With<PlayerModelHead>,
+            Without<PlayerModelRoot>,
+            Without<GameplayCamera>,
+        ),
+    >,
 ) {
-    let (player_transform, camera) = *player;
-    let (model_transform, visibility) = &mut *model;
+    let (player_transform, camera, walking, gravity, health) = *player;
 
-    let next_visibility = if perspective.is_third_person() {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
-    };
-    if **visibility != next_visibility {
-        **visibility = next_visibility;
+    for (mut model_transform, mut visibility, mut state) in &mut models {
+        let next_visibility = if perspective.is_third_person() {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
+
+        model_transform.translation =
+            player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+        model_transform.rotation = Quat::from_rotation_y(camera.yaw);
+
+        state.hold_seconds = (state.hold_seconds - time.delta_secs()).max(0.0);
+
+        let current_health = health.current();
+        let hurt = state
+            .last_health
+            .is_some_and(|previous| current_health < previous);
+        state.last_health = Some(current_health);
+
+        if health.is_dead() {
+            if state.name != "death" {
+                state.trigger("death", 0.0);
+            }
+            continue;
+        }
+        if hurt {
+            state.trigger("hurt", HURT_HOLD_SECONDS);
+            continue;
+        }
+        if state.hold_seconds > 0.0 {
+            continue;
+        }
+
+        if let Some(action) = viewmodel_animation.action_name() {
+            let action_revision = viewmodel_animation.revision();
+            if state.name != action || state.action_revision != action_revision {
+                state.action_revision = action_revision;
+                state.trigger(action, 0.0);
+            }
+            continue;
+        }
+
+        let locomotion = if !gravity.grounded() {
+            if gravity.vertical_velocity() > 0.05 {
+                "jump"
+            } else {
+                "fall"
+            }
+        } else if walking.horizontal_speed_squared() > MOVING_SPEED_SQUARED {
+            "walk"
+        } else {
+            "idle"
+        };
+        state.set(locomotion);
     }
 
-    model_transform.translation =
-        player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    model_transform.rotation = Quat::from_rotation_y(camera.yaw);
+    for mut head in &mut heads {
+        head.rotation = Quat::from_rotation_x(camera.pitch);
+    }
+}
 
-    head.rotation = Quat::from_rotation_x(camera.pitch);
+fn sync_player_model_animations(
+    states: Query<&PlayerModelAnimationState, With<PlayerModelRoot>>,
+    mut players: Query<(
+        &mut AnimationPlayer,
+        &mut AnimationTransitions,
+        &mut PlayerModelAnimationLink,
+    )>,
+) {
+    let Some(state) = states.iter().next() else {
+        return;
+    };
+
+    for (mut player, mut transitions, mut link) in &mut players {
+        if link.current_state == state.name && link.current_revision == state.revision {
+            continue;
+        }
+        let Some(index) = link.nodes.get(&state.name).copied() else {
+            continue;
+        };
+
+        let animation = transitions.play(&mut player, index, Duration::from_millis(80));
+        if matches!(
+            state.name.as_str(),
+            "idle" | "walk" | "run" | "fall" | "break"
+        ) {
+            animation.repeat();
+        } else {
+            animation.set_repeat(RepeatAnimation::Count(1));
+        }
+
+        link.current_state.clone_from(&state.name);
+        link.current_revision = state.revision;
+    }
 }

@@ -18,6 +18,7 @@ pub(super) struct PlayerViewModel;
 #[derive(Clone, Copy)]
 enum ViewModelAction {
     Break,
+    Hit,
     Place,
 }
 
@@ -25,17 +26,39 @@ enum ViewModelAction {
 pub(crate) struct ViewModelAnimation {
     action: Option<ViewModelAction>,
     elapsed_ticks: u64,
+    revision: u64,
 }
 
 impl ViewModelAnimation {
     pub(crate) fn play_break(&mut self) {
         self.action = Some(ViewModelAction::Break);
         self.elapsed_ticks = 0;
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    pub(crate) fn play_hit(&mut self) {
+        self.action = Some(ViewModelAction::Hit);
+        self.elapsed_ticks = 0;
+        self.revision = self.revision.wrapping_add(1);
     }
 
     pub(crate) fn play_place(&mut self) {
         self.action = Some(ViewModelAction::Place);
         self.elapsed_ticks = 0;
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    pub(crate) fn action_name(&self) -> Option<&'static str> {
+        match self.action {
+            Some(ViewModelAction::Break) => Some("break"),
+            Some(ViewModelAction::Hit) => Some("hit"),
+            Some(ViewModelAction::Place) => Some("place"),
+            None => None,
+        }
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
     }
 }
 
@@ -111,7 +134,7 @@ pub(super) fn animate_viewmodel(
             .elapsed_ticks
             .saturating_add(world_ticks.ticks_this_frame() as u64);
         let duration_ticks = match action {
-            ViewModelAction::Break => BREAK_ANIMATION_DURATION_TICKS,
+            ViewModelAction::Break | ViewModelAction::Hit => BREAK_ANIMATION_DURATION_TICKS,
             ViewModelAction::Place => PLACE_ANIMATION_DURATION_TICKS,
         };
         let progress = (animation.elapsed_ticks as f32 / duration_ticks as f32).clamp(0.0, 1.0);
@@ -150,6 +173,11 @@ pub(super) fn animate_viewmodel(
                     animated.translation += Vec3::new(-0.03, 0.01, -0.14) * wave;
                     animated.rotation *=
                         Quat::from_euler(EulerRot::XYZ, -0.18 * wave, 0.05 * wave, -0.08 * wave);
+                }
+                ViewModelAction::Hit => {
+                    animated.translation += Vec3::new(-0.05, -0.02, -0.18) * wave;
+                    animated.rotation *=
+                        Quat::from_euler(EulerRot::XYZ, -0.30 * wave, 0.10 * wave, -0.14 * wave);
                 }
                 ViewModelAction::Place => {
                     animated.translation += Vec3::new(-0.06, -0.10, -0.06) * wave;
