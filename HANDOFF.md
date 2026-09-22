@@ -588,7 +588,7 @@ layers `aa13f2530025939f5e92b180a44c338420ff483f`;
 regressão `36e26227c98674492de4f136b9dfe5fa8af777fa`.
 VERSION: `0.50.44`, commit
 `623e219dd22ec59aeba15ab5a1ac80c711c3c2e4`.
-CI de P28: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P28: **verde** nos runs push `35738441748` e PR `35738447185` para `623e219dd22ec59aeba15ab5a1ac80c711c3c2e4`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
