@@ -15,9 +15,8 @@ use crate::{
     },
     creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
-    hud::GameplayUiCamera,
     player::{
-        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
+        camera::{GameplayCamera, GameplayWorldCamera}, game_mode::GameMode, hotbar::PlayerHotbar,
         movement::flight::FlightState, player_id::PlayerId,
     },
     voxel::world::VoxelWorld,
@@ -263,7 +262,10 @@ pub(crate) fn save_on_gameplay_window_close(
     mut close_requests: MessageReader<WindowCloseRequested>,
     session: Res<WorldSession>,
     snapshot: WorldSaveContext,
-    mut ui_cameras: Query<&mut Camera, With<GameplayUiCamera>>,
+    mut non_world_cameras: Query<
+        (Entity, &mut Camera),
+        Without<GameplayWorldCamera>,
+    >,
     thumbnail_captures: Query<(), With<WorldThumbnailCapture>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -284,14 +286,9 @@ pub(crate) fn save_on_gameplay_window_close(
         app_exit.write(AppExit::Success);
         return;
     };
-    let Ok(mut ui_camera) = ui_cameras.single_mut() else {
-        warn!("World saved, but gameplay UI camera is unavailable for thumbnail capture");
-        app_exit.write(AppExit::Success);
-        return;
-    };
     begin_world_thumbnail_capture(
         &mut commands,
-        &mut ui_camera,
+        &mut non_world_cameras,
         world_id,
         WorldThumbnailCompletion::ExitGame,
     );
