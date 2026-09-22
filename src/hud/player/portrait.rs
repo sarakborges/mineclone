@@ -42,28 +42,20 @@ impl PlayerPreviewImages {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PlayerPreviewKind {
-    Portrait,
-    Character,
-}
-
 #[derive(Resource, Default)]
 pub(crate) struct PlayerPreviewRenderState {
-    pending: Option<PlayerPreviewKind>,
-    frames_remaining: u8,
+    portrait_frames: u8,
+    character_frames: u8,
     character_yaw: f32,
 }
 
 impl PlayerPreviewRenderState {
     pub(crate) fn request_portrait(&mut self) {
-        self.pending = Some(PlayerPreviewKind::Portrait);
-        self.frames_remaining = PREVIEW_RENDER_FRAMES;
+        self.portrait_frames = self.portrait_frames.max(PREVIEW_RENDER_FRAMES);
     }
 
     pub(crate) fn request_character(&mut self) {
-        self.pending = Some(PlayerPreviewKind::Character);
-        self.frames_remaining = PREVIEW_RENDER_FRAMES;
+        self.character_frames = self.character_frames.max(PREVIEW_RENDER_FRAMES);
     }
 
     pub(crate) fn rotate_character(&mut self, delta_yaw: f32) {
@@ -73,7 +65,11 @@ impl PlayerPreviewRenderState {
 }
 
 #[derive(Component)]
-pub(super) struct PlayerPreviewCamera;
+pub(super) struct PlayerPortraitPreviewCamera;
+
+#[derive(Component)]
+pub(super) struct CharacterInfoPreviewCamera;
+
 
 #[derive(Component)]
 pub(super) struct PlayerPreviewModel {
@@ -111,7 +107,7 @@ pub(super) fn spawn_player_preview_renderer(
     preview_images.character = Some(character);
 
     commands.spawn((
-        PlayerPreviewCamera,
+        PlayerPortraitPreviewCamera,
         Camera3d::default(),
         Camera {
             order: -2,
@@ -119,6 +115,7 @@ pub(super) fn spawn_player_preview_renderer(
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
+        Projection::Perspective(PerspectiveProjection::default()),
         RenderTarget::Image(portrait.into()),
         Transform::from_xyz(
             0.0,
@@ -127,6 +124,34 @@ pub(super) fn spawn_player_preview_renderer(
         )
         .looking_at(
             Vec3::new(0.0, PLAYER_PORTRAIT_CENTER_Y, 0.0),
+            Vec3::Y,
+        ),
+        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
+    ));
+
+    commands.spawn((
+        CharacterInfoPreviewCamera,
+        Camera3d::default(),
+        Camera {
+            order: -3,
+            output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::FixedVertical {
+                viewport_height: CHARACTER_PREVIEW_VIEWPORT_HEIGHT,
+            },
+            ..OrthographicProjection::default_3d()
+        }),
+        RenderTarget::Image(character.into()),
+        Transform::from_xyz(
+            0.0,
+            CHARACTER_PREVIEW_CENTER_Y,
+            CHARACTER_PREVIEW_CAMERA_DISTANCE,
+        )
+        .looking_at(
+            Vec3::new(0.0, CHARACTER_PREVIEW_CENTER_Y, 0.0),
             Vec3::Y,
         ),
         RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
@@ -241,78 +266,54 @@ fn configure_player_preview_scene(
             .insert(MeshMaterial3d(material));
     }
 
+    render_state.request_portrait();
     if *character_info.get() == CharacterInfoState::Open {
         render_state.request_character();
-    } else {
-        render_state.request_portrait();
     }
 }
 
 pub(super) fn render_player_preview(
-    images: Res<PlayerPreviewImages>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
-    mut cameras: Query<
-        (&mut Camera, &mut RenderTarget, &mut Transform, &mut Projection),
-        With<PlayerPreviewCamera>,
+    mut portrait_cameras: Query<
+        &mut Camera,
+        (With<PlayerPortraitPreviewCamera>, Without<CharacterInfoPreviewCamera>),
     >,
-    mut models: Query<&mut Transform, (With<PlayerPreviewModel>, Without<PlayerPreviewCamera>)>,
+    mut character_cameras: Query<
+        (&mut Camera, &mut Transform),
+        (With<CharacterInfoPreviewCamera>, Without<PlayerPortraitPreviewCamera>),
+    >,
 ) {
-    let Some(kind) = render_state.pending else {
-        for (mut camera, _, _, _) in &mut cameras {
-            camera.output_mode = CameraOutputMode::Skip;
-        }
-        return;
-    };
-
-    let (target, center_y, distance, next_projection, rotation) = match kind {
-        PlayerPreviewKind::Portrait => {
-            let Some(target) = images.portrait() else {
-                return;
-            };
-            (
-                target,
-                PLAYER_PORTRAIT_CENTER_Y,
-                PLAYER_PORTRAIT_CAMERA_DISTANCE,
-                Projection::Perspective(PerspectiveProjection::default()),
-                Quat::IDENTITY,
-            )
-        }
-        PlayerPreviewKind::Character => {
-            let Some(target) = images.character() else {
-                return;
-            };
-            (
-                target,
-                CHARACTER_PREVIEW_CENTER_Y,
-                CHARACTER_PREVIEW_CAMERA_DISTANCE,
-                Projection::Orthographic(OrthographicProjection {
-                    scaling_mode: ScalingMode::FixedVertical {
-                        viewport_height: CHARACTER_PREVIEW_VIEWPORT_HEIGHT,
-                    },
-                    ..OrthographicProjection::default_3d()
-                }),
-                Quat::from_rotation_y(render_state.character_yaw),
-            )
-        }
-    };
-
-    for mut model in &mut models {
-        model.rotation = rotation;
-    }
-
-    for (mut camera, mut render_target, mut transform, mut projection) in &mut cameras {
-        *render_target = RenderTarget::Image(target.clone().into());
-        *transform = Transform::from_xyz(0.0, center_y, distance)
-            .looking_at(Vec3::new(0.0, center_y, 0.0), Vec3::Y);
-        *projection = next_projection.clone();
-        camera.output_mode = CameraOutputMode::Write {
-            blend_state: None,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
+    let portrait_should_render = render_state.portrait_frames > 0;
+    for mut camera in &mut portrait_cameras {
+        camera.output_mode = if portrait_should_render {
+            CameraOutputMode::Write {
+                blend_state: None,
+                clear_color: ClearColorConfig::Custom(Color::NONE),
+            }
+        } else {
+            CameraOutputMode::Skip
         };
     }
+    if portrait_should_render {
+        render_state.portrait_frames = render_state.portrait_frames.saturating_sub(1);
+    }
 
-    render_state.frames_remaining = render_state.frames_remaining.saturating_sub(1);
-    if render_state.frames_remaining == 0 {
-        render_state.pending = None;
+    let character_should_render = render_state.character_frames > 0;
+    let center = Vec3::new(0.0, CHARACTER_PREVIEW_CENTER_Y, 0.0);
+    let yaw = render_state.character_yaw;
+    let offset = Quat::from_rotation_y(-yaw) * Vec3::Z * CHARACTER_PREVIEW_CAMERA_DISTANCE;
+    for (mut camera, mut transform) in &mut character_cameras {
+        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
+        camera.output_mode = if character_should_render {
+            CameraOutputMode::Write {
+                blend_state: None,
+                clear_color: ClearColorConfig::Custom(Color::NONE),
+            }
+        } else {
+            CameraOutputMode::Skip
+        };
+    }
+    if character_should_render {
+        render_state.character_frames = render_state.character_frames.saturating_sub(1);
     }
 }
