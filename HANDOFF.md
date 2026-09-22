@@ -492,7 +492,7 @@ Commits: cache `271383de4d364bffc8b2fc48258a5c89a8fef44e`;
 regressão `0477a4e3437988ab4ab08ecaeec00ea7b7a1e61f`.
 VERSION: `0.50.39`, commit
 `5b018accaeb0794b5fd2af3f9bc33bf7d3b69eaa`.
-CI de P23: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P23: **verde** nos runs push `35736521216` e PR `35736527485` para `5b018accaeb0794b5fd2af3f9bc33bf7d3b69eaa`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
