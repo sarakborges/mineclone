@@ -273,12 +273,12 @@ fn spawn_character_info(
                     typography::hud_heading(PLAYER_DISPLAY_NAME),
                     Pickable::IGNORE,
                 ));
-                spawn_character_preview(card, image);
+                spawn_character_preview_viewport(card, image);
             });
         });
 }
 
-fn spawn_character_preview(
+fn spawn_character_preview_viewport(
     parent: &mut ChildSpawnerCommands,
     image: Handle<Image>,
 ) {
