@@ -212,13 +212,12 @@ fn hotbar_visibility(pause: PauseState, settings: SettingsState) -> Visibility {
 fn sync_hotbar_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
-    inventory: Res<State<InventoryState>>,
     mut root: Single<&mut Visibility, With<HotbarHudRoot>>,
 ) {
-    if !pause.is_changed() && !settings.is_changed() && !inventory.is_changed() {
+    if !pause.is_changed() && !settings.is_changed() {
         return;
     }
-    let next = hotbar_visibility(*pause.get(), *settings.get(), *inventory.get());
+    let next = hotbar_visibility(*pause.get(), *settings.get());
     if **root != next {
         **root = next;
     }
