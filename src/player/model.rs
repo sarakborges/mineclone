@@ -533,7 +533,7 @@ fn spawn_third_person_held_block(
                                 &definitions.asset_server,
                                 block_model.opacity(),
                             )
-                            && let Some(material_asset) = materials.get_mut(&material)
+                            && let Some(mut material_asset) = materials.get_mut(&material)
                         {
                             *material_asset = face_material;
                             apply_block_display_shading(
@@ -620,7 +620,7 @@ fn sync_third_person_held_block(
         let materials_changed = block_changed || definitions_changed;
         if materials_changed {
             for (face, material_handle, mut layer_visibility) in &mut faces {
-                let Some(material) = materials.get_mut(&material_handle.0) else {
+                let Some(mut material) = materials.get_mut(&material_handle.0) else {
                     continue;
                 };
                 let Some(face_material) = block_face_material_data(
@@ -649,7 +649,7 @@ fn sync_third_person_held_block(
                 .unwrap_or(Color::WHITE);
             if materials_changed || cache.tint != Some(tint) {
                 for (_, material_handle, _) in &mut faces {
-                    if let Some(material) = materials.get_mut(&material_handle.0) {
+                    if let Some(mut material) = materials.get_mut(&material_handle.0) {
                         set_block_model_tint(&mut material, tint);
                     }
                 }
