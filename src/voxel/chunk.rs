@@ -602,6 +602,44 @@ impl VoxelChunk {
         self.fluids.get(index(x as usize, y as usize, z as usize))
     }
 
+    pub(crate) fn visit_content_voxels(
+        &self,
+        mut visit: impl FnMut(
+            usize,
+            usize,
+            usize,
+            Option<VoxelCell>,
+            Option<FluidCell>,
+        ),
+    ) {
+        for (word_index, (&block_word, &fluid_word)) in self
+            .blocks
+            .occupied
+            .iter()
+            .zip(self.fluids.occupied.iter())
+            .enumerate()
+        {
+            let mut remaining = block_word | fluid_word;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as usize;
+                let voxel_index = word_index * u64::BITS as usize + bit;
+                if voxel_index >= CHUNK_VOLUME {
+                    break;
+                }
+
+                let (x, y, z) = coordinates(voxel_index);
+                visit(
+                    x,
+                    y,
+                    z,
+                    self.blocks.get(voxel_index),
+                    self.fluids.get(voxel_index),
+                );
+                remaining &= remaining - 1;
+            }
+        }
+    }
+
     pub(crate) fn visit_fluid_voxels(
         &self,
         mut visit: impl FnMut(usize, usize, usize, FluidCell),
