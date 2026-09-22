@@ -8,7 +8,6 @@ use crate::voxel::{
     cell::VoxelCell,
     fluid::FluidCell,
     light::{BlockLight, VoxelLight},
-    world::VoxelWorld,
 };
 
 const DYED_PROPERTY_ID: &str = "dyed";
@@ -87,15 +86,6 @@ pub(super) fn fluid_emission_for_cell(
 fn scale_emission(full_emission: u8, level: u8) -> u8 {
     (u16::from(full_emission) * u16::from(level))
         .div_ceil(u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
-}
-
-pub(super) fn light_transmission(
-    _world: &VoxelWorld,
-    _blocks: &BlockRegistry,
-    _secondary_properties: &SecondaryPropertyRegistry,
-    _position: IVec3,
-) -> f32 {
-    1.0
 }
 
 fn block_dampening(cell: Option<VoxelCell>, blocks: &BlockRegistry) -> u8 {
