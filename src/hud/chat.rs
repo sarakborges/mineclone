@@ -20,7 +20,10 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    player::{camera::look::MouseLookInputState, inventory::InventoryState},
+    player::{
+        PLAYER_DISPLAY_NAME, camera::look::MouseLookInputState,
+        character_info::CharacterInfoState, inventory::InventoryState,
+    },
     tools::BrushPaletteState,
     world::warp::PendingWarp,
     ui::text_input::editable_value,
@@ -35,7 +38,6 @@ use visual::{
     sync_chat_visibility,
 };
 
-const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
 const HISTORY_CAPACITY: usize = 64;
 const CHAT_TIMEOUT_SECS: f32 = 10.0;
 const MAX_INPUT_CHARS: usize = 256;
@@ -165,6 +167,7 @@ struct ChatInputContext<'w> {
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
     inventory: Res<'w, State<InventoryState>>,
+    character_info: Res<'w, State<CharacterInfoState>>,
     brush_palette: Res<'w, State<BrushPaletteState>>,
     focus: ResMut<'w, InputFocus>,
     autocomplete: ResMut<'w, ChatAutocomplete>,
@@ -228,6 +231,7 @@ fn handle_chat_input(
     let can_open = *input.pause.get() == PauseState::Running
         && *input.settings.get() == SettingsState::Closed
         && *input.inventory.get() == InventoryState::Closed
+        && *input.character_info.get() == CharacterInfoState::Closed
         && *input.brush_palette.get() == BrushPaletteState::Closed;
     let has_command_modifier = [
         KeyCode::ControlLeft,
