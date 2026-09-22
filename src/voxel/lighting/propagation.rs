@@ -16,8 +16,7 @@ use crate::voxel::{
 use super::{
     context::LightingContext,
     medium::{
-        block_emission_for_cell, fluid_emission_for_cell, light_transmission,
-        medium_dampening_for_cells,
+        block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells,
     },
     queue::{LightingLane, LightingQueue},
 };
@@ -235,13 +234,6 @@ fn desired_light(
     let (cell, fluid) = medium;
     let dampening = medium_dampening_for_cells(cell, fluid, registries.blocks, registries.fluids);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
-    let attenuation = dampening.max(1);
-    let transmission = light_transmission(
-        world,
-        registries.blocks,
-        registries.secondary_properties,
-        position,
-    );
     let emitted = mix_strongest_block_lights([
         block_emission_for_cell(cell, registries.blocks, registries.secondary_properties),
         fluid_emission_for_cell(fluid, registries.fluids),
@@ -251,6 +243,7 @@ fn desired_light(
         return VoxelLight::new_hsi(0, emitted);
     }
 
+    let attenuation = dampening.max(1);
     let neighbor_lights = cardinal_neighbor_lights(world, position, chunk, local_position);
     let sky = context
         .direct_sky_light(
@@ -260,10 +253,7 @@ fn desired_light(
             registries.secondary_properties,
             position,
         )
-        .max(filtered_level(
-            propagated_neighbor_sky(&neighbor_lights, attenuation),
-            transmission,
-        ));
+        .max(propagated_neighbor_sky(&neighbor_lights, attenuation));
     let block = mix_strongest_block_lights([
         emitted,
         propagated_neighbor_block(&neighbor_lights, attenuation),
@@ -381,12 +371,6 @@ fn nearest_hue(vector_x: i32, vector_y: i32) -> u8 {
     }
 
     best_hue
-}
-
-fn filtered_level(level: u8, factor: f32) -> u8 {
-    (level as f32 * factor.clamp(0.0, 1.0))
-        .round()
-        .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
 }
 
 #[cfg(test)]
