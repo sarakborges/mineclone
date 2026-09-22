@@ -9,7 +9,7 @@ use crate::{
     ui::{surface, theme, typography},
 };
 
-use super::player::portrait::PlayerPreviewImages;
+use super::player::portrait::CharacterInfoPreviewViewport;
 
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
@@ -29,14 +29,7 @@ impl Plugin for CharacterInfoHudPlugin {
     }
 }
 
-fn spawn_character_info(
-    mut commands: Commands,
-    preview_images: Res<PlayerPreviewImages>,
-) {
-    let Some(image) = preview_images.portrait() else {
-        warn!("Character Info opened without the shared player preview target");
-        return;
-    };
+fn spawn_character_info(mut commands: Commands) {
 
     commands
         .spawn((
@@ -70,7 +63,7 @@ fn spawn_character_info(
                 Pickable::IGNORE,
             ))
             .with_children(|card| {
-                spawn_character_preview_viewport(card, image);
+                spawn_character_preview_viewport(card);
                 card.spawn((
                     typography::hud_heading(PLAYER_DISPLAY_NAME),
                     Pickable::IGNORE,
@@ -79,10 +72,7 @@ fn spawn_character_info(
         });
 }
 
-fn spawn_character_preview_viewport(
-    parent: &mut ChildSpawnerCommands,
-    image: Handle<Image>,
-) {
+fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
     parent
         .spawn((
             Node {
@@ -101,7 +91,7 @@ fn spawn_character_preview_viewport(
         ))
         .with_children(|frame| {
             frame.spawn((
-                ImageNode::new(image),
+                CharacterInfoPreviewViewport,
                 Node {
                     width: px(CHARACTER_PREVIEW_IMAGE_WIDTH),
                     height: px(CHARACTER_PREVIEW_IMAGE_HEIGHT),
