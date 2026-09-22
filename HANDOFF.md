@@ -853,6 +853,26 @@ VERSION: `0.50.57`, commit
 `14b4d6d799d3d634508aa217930017b863d710ba`.
 CI: **verde** nos runs push `35746285093` e PR `35746293942`.
 
+### P35 — restaurar GPU frustum culling sem OcclusionCulling
+
+O hotfix inicial de flicker removeu `NoCpuCulling` dos chunks antes de a
+causa global ser isolada. QA posterior confirmou que o flicker desapareceu
+quando `OcclusionCulling` + seu `DepthPrepass` foram desligados nas world
+cameras. Manter também todo terrain no CPU frustum culling passou a impor custo
+por-frame desnecessário.
+
+`NoCpuCulling` foi restaurado somente para terrain/layers opaque ou
+alpha-mask. Geometry alpha-blend e fluids continuam no CPU. As world cameras
+continuam sem `OcclusionCulling` e sem o depth prepass experimental, portanto
+o estágio responsável pelo flicker permanece desligado.
+
+Commit funcional:
+`d771e5718ef28f951a5a65de950bbd0ac22bb505`.
+VERSION: `0.50.58`, commit
+`c5600da52ec4531687ecdd2ab809040b28122ebf`.
+CI de P35: aguardando. QA Windows deve confirmar simultaneamente ausência de
+flicker e melhora de frame pacing durante streaming.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
