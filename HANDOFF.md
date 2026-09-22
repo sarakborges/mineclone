@@ -624,7 +624,7 @@ no Clippy `too_many_arguments` após adicionar o streaming center ao helper
 de dispatch. Corrigido sem supressão agrupando inputs imutáveis em
 `RemeshDispatchContext`, commit
 `b5ae6a2810b57ed4d69d5619ea712871d4541187`.
-CI final de P29: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI final de P29: **verde** nos runs push `35739481254` e PR `35739489869` para `b5ae6a2810b57ed4d69d5619ea712871d4541187`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
