@@ -114,6 +114,7 @@
   "language.portugueseBrazil": "Brazilian Portuguese",
   "language.spanish": "Spanish",
   "inventory.searchPlaceholder": "Search items...",
+  "inventory.sortBackpack": "Sort backpack by item ID",
   "inventory.everything": "Everything",
   "hud.rotateBlock": "Press {toolAction} to rotate block",
   "hud.breakBlock": "Left click to break block.",
