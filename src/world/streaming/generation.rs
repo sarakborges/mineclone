@@ -21,6 +21,7 @@ use crate::{
 use super::{ChunkStreamingQueues, ChunkStreamingWork, seed_loaded_chunk_lighting};
 
 const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
+const MAX_CRITICAL_GENERATION_WAVE_TARGETS: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
@@ -328,6 +329,23 @@ pub(super) fn dispatch_generation_tasks(
     }
 }
 
+fn generation_wave_target_limit(state: &super::ChunkStreamingState) -> usize {
+    let Some(center) = state.center else {
+        return MAX_GENERATION_TASKS_IN_FLIGHT;
+    };
+
+    let has_critical_pending = state
+        .pending
+        .values()
+        .any(|coord| super::is_critical_streaming_coord(coord, center));
+
+    if has_critical_pending {
+        MAX_CRITICAL_GENERATION_WAVE_TARGETS.min(MAX_GENERATION_TASKS_IN_FLIGHT)
+    } else {
+        MAX_GENERATION_TASKS_IN_FLIGHT
+    }
+}
+
 fn select_generation_wave(
     content: &ChunkContent<'_>,
     render_pool: &ChunkRenderPool,
@@ -336,7 +354,8 @@ fn select_generation_wave(
     current_tick: u64,
     budget: &mut FrameWorkBudget,
 ) {
-    while work.state.generation_wave_targets.len() < MAX_GENERATION_TASKS_IN_FLIGHT {
+    let target_limit = generation_wave_target_limit(&work.state);
+    while work.state.generation_wave_targets.len() < target_limit {
         if budget.exhausted() {
             break;
         }
@@ -367,5 +386,32 @@ fn select_generation_wave(
 
         work.state.start_generation_wave_target(coord);
         budget.record(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn critical_generation_frontier_uses_smaller_publication_waves() {
+        let center = IVec3::new(10, 2, -4);
+        let mut state = super::super::ChunkStreamingState {
+            center: Some(center),
+            ..default()
+        };
+        state.pending.enqueue(center + IVec3::X);
+
+        assert_eq!(
+            generation_wave_target_limit(&state),
+            MAX_CRITICAL_GENERATION_WAVE_TARGETS,
+        );
+
+        state.pending.clear();
+        state.pending.enqueue(center + IVec3::new(4, 0, 0));
+        assert_eq!(
+            generation_wave_target_limit(&state),
+            MAX_GENERATION_TASKS_IN_FLIGHT,
+        );
     }
 }
