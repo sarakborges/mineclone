@@ -1,5 +1,3 @@
-use bevy::prelude::*;
-
 use crate::content::{
     block::BlockRegistry, color::Hsi, fluid::FluidRegistry,
     secondary_property::SecondaryPropertyRegistry,
