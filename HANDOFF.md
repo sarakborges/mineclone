@@ -931,6 +931,31 @@ VERSION: `0.50.61`, commit
 `cb1da07f87a300cd95dbc6cb3bb0977be15fef25`.
 CI de P38: o commit funcional `cb1da07f87a300cd95dbc6cb3bb0977be15fef25` falhou por erros concorrentes do player model, não pelo streaming (`default` ausente e `horizontal_speed_squared` morto). O estado acumulado atual passou nos runs push `35748663144` e PR `35748670294` para `7b16d88e8854f0107d64307307d38dcb2610529c`.
 
+### P39 — publicar chunks secos antes do fluid settling da wave
+
+A generation wave ainda mantinha todo chunk recém-gerado em
+`staged_generated_chunks` até o fixed-point de fluidos da wave inteira.
+Isso incluía chunks sem nenhum fluido, que não precisam participar como
+generated ownership do settling e acabavam sofrendo a mesma latência/burst dos
+chunks molhados.
+
+O collector agora classifica o output antes do insert. Chunks com fluido
+continuam staged e passam pelo `GeneratedFluidSettling` exatamente como antes.
+Chunks secos são inseridos, recebem seed de lighting, entram em `ready` e
+completam seu generation-wave target imediatamente.
+
+Isso não fecha o chunk para futuras mudanças de fluido: chunks residentes e
+não persistentes já podem ser adotados pelo settling como `mutable_chunks`.
+Se fluido de um vizinho staged invadir um chunk seco já publicado, a mudança é
+registrada em `changed_existing_positions` e segue pelo reconciliation/remesh
+existente.
+
+Commit funcional/regressão:
+`498a08f7b4d928baf9740a9a697c6e3fc0c1e1ff`.
+VERSION: `0.50.63`, commit
+`ad16428ce1db0b58bf92b229e70309e052844bbd`.
+CI de P39: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
