@@ -154,6 +154,10 @@ pub(super) fn log_render_asset_pressure(
         );
     }
 
+    if !assets.pool.diagnostic_active_columns_are_consistent() {
+        warn!("render asset pressure: incremental active render-column counts drifted");
+    }
+
     if mesh_overhead > MESH_ASSET_OVERHEAD_WARNING {
         warn!(
             "render asset pressure: mesh asset overhead is {mesh_overhead} above the chunk render pool"
