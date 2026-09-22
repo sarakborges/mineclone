@@ -354,7 +354,7 @@ preservando a ordem de enqueue. Regressão cobre as seis faces cardinais.
 Commit funcional: `ab0e699acc6d7cc1a6e71c773f00d75fad809522`.
 VERSION: `0.50.32`, commit
 `194d984f8c6b080d2dd74d159ffb4a7923c17801`.
-CI de P16: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P16: **verde** nos runs push `35733417379` e PR `35733424714` para `194d984f8c6b080d2dd74d159ffb4a7923c17801`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
