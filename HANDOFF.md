@@ -432,6 +432,25 @@ VERSION: `0.50.36`, commit
 `daa624500f25379aaa3f5b00694eb19ad592506c`.
 CI de P20: **verde** nos runs push `35735399997` e PR `35735406354` para `daa624500f25379aaa3f5b00694eb19ad592506c`. Clippy/check não executam o WGSL em runtime; QA GPU de foliage/alpha mask/alpha-to-coverage continua obrigatória.
 
+### P21 — adiar construção de PbrInput até depois do alpha discard
+
+Mesmo após P20, `pbr_input_from_vertex_output(...)` ainda rodava antes do
+discard e calculava view vector, normal preparada/normalizada, flags de mesh e
+outros campos para fragments que poderiam morrer pelo alpha mask.
+
+A fonte Bevy 0.19.1 confirma que `alpha_discard` recebe um
+`StandardMaterial` e depende apenas de flags/alpha cutoff/alpha da cor. O
+shader agora chama `alpha_discard(pbr_bindings::material, ...)` diretamente
+após as texture samples e só constrói o `PbrInput` para fragments
+sobreviventes. Os mesmos campos de material continuam copiados antes de
+lighting/fog.
+
+Shader: `63c6bbe626f176cd8c70cd41816dbb24338ae081`.
+VERSION: `0.50.37`, commit
+`df20c48d63ab250026ff437c9add9337faa777cb`.
+CI de P21: aguardando. Como P20, Clippy/check não validam WGSL em runtime; QA
+GPU continua obrigatória.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
