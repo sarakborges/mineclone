@@ -302,24 +302,27 @@ fn preferred_horizontal_directions(
             let next_distance = distance + 1;
             for offset in HORIZONTAL_NEIGHBORS {
                 let next = position + offset;
-                if !can_flow_horizontally_through(world, next, fluid_id) {
-                    continue;
-                }
 
-                match visited.get_mut(&next) {
-                    Some((known_distance, known_directions)) if *known_distance == next_distance => {
+                // A visited node was already proven traversable in this immutable
+                // search. Equal-distance revisits only need to propagate newly
+                // discovered first-step directions; longer revisits do no work.
+                if let Some((known_distance, known_directions)) = visited.get_mut(&next) {
+                    if *known_distance == next_distance {
                         let merged = *known_directions | direction_mask;
                         if merged != *known_directions {
                             *known_directions = merged;
                             queue.push((next, next_distance));
                         }
                     }
-                    Some(_) => {}
-                    None => {
-                        visited.insert(next, (next_distance, direction_mask));
-                        queue.push((next, next_distance));
-                    }
+                    continue;
                 }
+
+                if !can_flow_horizontally_through(world, next, fluid_id) {
+                    continue;
+                }
+
+                visited.insert(next, (next_distance, direction_mask));
+                queue.push((next, next_distance));
             }
         }
 
