@@ -10860,3 +10860,21 @@ animação do braço sem distorcer a geometria.
 Commit funcional: `b6bd9d1cf43aca2cfc278b96e2f515a453fd212f`.
 CI push `35760732952`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.74`.
+
+
+## 2026-09-22 — Left click no ar também anima
+
+O clique esquerdo não depende mais de existir um target para disparar feedback
+visual.
+
+Quando o clique ocorre sem bloco ou criatura sob a mira:
+- mining tools disparam `play_break()`;
+- demais itens/mão vazia disparam `play_hit()`.
+
+A animação continua desacoplada do efeito no mundo: dano, mineração, edição e
+`ToolUse` ainda exigem seus próprios requisitos/targets. Assim clicar no ar
+anima o braço em primeira e terceira pessoa sem criar side effects de gameplay.
+
+Commit funcional: `281b9055be6f7955d160faf8ef2e6a45e30abc9e`.
+CI push `35761492316`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.75`.
