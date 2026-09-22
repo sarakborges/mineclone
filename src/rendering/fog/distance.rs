@@ -19,6 +19,8 @@ const MIN_FOG_END_RADIUS_FRACTION: f32 = 0.80;
 
 #[derive(Default)]
 pub(super) struct FogDistanceState {
+    missing_columns: Vec<IVec2>,
+    frontier_center: Option<IVec2>,
     render_pool_revision: Option<u64>,
     render_distance_chunks: Option<i32>,
     player_horizontal: Option<Vec2>,
@@ -48,31 +50,40 @@ pub(super) fn update_fog_distance(
 ) {
     let (camera_entity, player) = *player;
     let render_pool_revision = render_pool.membership_revision();
-    let membership_changed = state.render_pool_revision != Some(render_pool_revision);
-
     let render_distance_chunks = render_distance.chunks();
+    let frontier_center = chunk_coord_from_position(player.translation).xz();
     let player_horizontal = player.translation.xz();
-    let frontier_inputs_changed = membership_changed
-        || state.render_distance_chunks != Some(render_distance_chunks)
+    let missing_columns_changed =
+        state.render_pool_revision != Some(render_pool_revision)
+            || state.render_distance_chunks != Some(render_distance_chunks)
+            || state.frontier_center != Some(frontier_center);
+
+    if missing_columns_changed {
+        collect_missing_columns(
+            frontier_center,
+            render_distance_chunks,
+            |column| render_pool.contains_column(column),
+            &mut state.missing_columns,
+        );
+    }
+
+    let frontier_inputs_changed = missing_columns_changed
         || state.player_horizontal != Some(player_horizontal)
         || state.camera_entity != Some(camera_entity);
-
     if !frontier_inputs_changed {
         return;
     }
 
+    state.frontier_center = Some(frontier_center);
     state.render_pool_revision = Some(render_pool_revision);
     state.render_distance_chunks = Some(render_distance_chunks);
     state.player_horizontal = Some(player_horizontal);
     state.camera_entity = Some(camera_entity);
 
     let (_, target_end) = fog_distances(render_distance_chunks);
-    let guard_end = nearest_missing_column_distance(
-        player.translation,
-        render_distance_chunks,
-        |column| render_pool.contains_column(column),
-    )
-    .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
+    let guard_end =
+        nearest_missing_column_distance(player_horizontal, &state.missing_columns)
+            .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = minimum_fog_end(render_distance_chunks);
     let end = guard_end
         .map_or(target_end, |guard_end| guard_end.min(target_end))
@@ -100,15 +111,14 @@ fn minimum_fog_end(render_distance_chunks: i32) -> f32 {
         * MIN_FOG_END_RADIUS_FRACTION
 }
 
-fn nearest_missing_column_distance(
-    player_position: Vec3,
+fn collect_missing_columns(
+    center: IVec2,
     render_distance_chunks: i32,
     mut column_is_active: impl FnMut(IVec2) -> bool,
-) -> Option<f32> {
+    missing: &mut Vec<IVec2>,
+) {
+    missing.clear();
     let radius = render_distance_chunks.max(1);
-    let center = chunk_coord_from_position(player_position).xz();
-    let player = player_position.xz();
-    let mut nearest: Option<f32> = None;
 
     for z in -radius..=radius {
         for x in -radius..=radius {
@@ -118,16 +128,22 @@ fn nearest_missing_column_distance(
             }
 
             let column = center + offset;
-            if column_is_active(column) {
-                continue;
+            if !column_is_active(column) {
+                missing.push(column);
             }
-
-            let distance = horizontal_distance_to_chunk(player, column);
-            nearest = Some(nearest.map_or(distance, |current| current.min(distance)));
         }
     }
+}
 
-    nearest
+fn nearest_missing_column_distance(
+    player: Vec2,
+    missing_columns: &[IVec2],
+) -> Option<f32> {
+    missing_columns
+        .iter()
+        .copied()
+        .map(|column| horizontal_distance_to_chunk(player, column))
+        .reduce(f32::min)
 }
 
 fn horizontal_distance_to_chunk(player: Vec2, column: IVec2) -> f32 {
@@ -173,12 +189,16 @@ mod tests {
         let radius = 4;
         let columns = filled_columns(radius);
 
+        let mut missing = Vec::new();
+        collect_missing_columns(
+            IVec2::ZERO,
+            radius,
+            |column| columns.contains(&column),
+            &mut missing,
+        );
+
         assert_eq!(
-            nearest_missing_column_distance(
-                Vec3::new(8.0, 0.0, 8.0),
-                radius,
-                |column| columns.contains(&column),
-            ),
+            nearest_missing_column_distance(Vec2::new(8.0, 8.0), &missing),
             None,
         );
     }
@@ -189,10 +209,16 @@ mod tests {
         let mut columns = filled_columns(radius);
         columns.remove(&IVec2::new(3, 0));
 
-        let distance = nearest_missing_column_distance(
-            Vec3::new(8.0, 0.0, 8.0),
+        let mut missing = Vec::new();
+        collect_missing_columns(
+            IVec2::ZERO,
             radius,
             |column| columns.contains(&column),
+            &mut missing,
+        );
+        let distance = nearest_missing_column_distance(
+            Vec2::new(8.0, 8.0),
+            &missing,
         )
         .expect("missing column should constrain the fog frontier");
 
