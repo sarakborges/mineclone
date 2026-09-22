@@ -1,7 +1,7 @@
 {
   "health": 20.0,
   "attack": "asteria:punch",
-  "model": "models/entities/player/player.gltf",
+  "model": "models/entities/player/player.glb",
   "animations": {
     "idle": "Idle",
     "walk": "Walk",
