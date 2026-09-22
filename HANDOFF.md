@@ -10912,3 +10912,47 @@ Com o tempo-base atual de 5s a 1x:
 Commit funcional: `ba915836145e56565eeb687a365c682f41ac994b`.
 CI push `35762345224`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.77`.
+
+
+## 2026-09-22 — Action timing, run e transições de voo
+
+### Hit / break e flicker
+
+`ViewModelAnimation` agora ignora retriggers da mesma ação enquanto o clip atual
+ainda está ativo. Assim spam de left click no ar não reinicia `hit`/`break`
+no meio do movimento. O próximo clique é aceito imediatamente depois que o clip
+termina.
+
+As durações foram alinhadas aos clips do player GLB em 40 TPS:
+- break: 22 ticks (~0.55s);
+- hit: 17 ticks (~0.425s);
+- place: 19 ticks (~0.475s).
+
+O third-person deixou de aplicar hold extra para essas ações e `break` deixou
+de repetir indefinidamente no `AnimationPlayer`. Isso remove o caminho de
+restart/hold que ainda produzia flicker e atraso depois do fim visual do clip.
+
+### Run por double-W
+
+`WalkingState` ganhou estado de run:
+- double-tap em `W` dentro da mesma janela de 12 ticks usada pelo double-space
+  ativa run;
+- soltar `W` desativa run imediatamente;
+- run usa 1.5x a velocidade de caminhada;
+- o modelo third-person usa o clip `Run` enquanto o estado está ativo.
+
+A constante da janela foi generalizada para `DOUBLE_TAP_WINDOW_TICKS`.
+
+### Voo e queda
+
+As transições de voo foram refinadas:
+- ao descer voando e colidir com um bloco abaixo, o voo é cancelado e o player
+  fica grounded;
+- ao desligar voo manualmente no ar, a velocidade vertical atual do voo é
+  transferida para `GravityState` em vez de ser zerada;
+- a velocidade máxima de queda é limitada a `FLY_SPEED`, atualmente
+  `WALK_SPEED * FLY_SPEED_MULTIPLIER = 25 blocos/s`.
+
+Commit funcional: `da0f194e2b80253e555432f84aa7c893c4535f0b`.
+CI push `35763370536`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.78`.
