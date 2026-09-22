@@ -149,6 +149,26 @@ VERSION: `0.50.23`, commit
 CI de P7: **verde** nos runs push `35685683263` e PR `35685685856` para
 `ddadfd52173c69825eb2e70aa1cb2e94bd889238`. FPS/VRAM runtime continuam não medidos.
 
+### P8 — aposentar meshes distantes apenas quando a seleção muda
+
+`retire_distant_chunk_meshes` percorria todos os coords ativos a cada
+`Update`, embora `retains_render_mesh` dependa apenas da seleção atual
+(center, radii e conjuntos desired/retained). A revisão de seleção já é
+incrementada em toda reconstrução desse estado.
+
+Foi exposto o getter read-only de `selection_revision` e o sistema de
+aposentadoria guarda a última revisão examinada. Se não houve rebuild, o
+scan O(chunks ativos), o filtro e o sort são pulados integralmente. Chunks
+publicados depois de um rebuild continuam seguros porque initial-mesh
+publication já verifica `retains_render_mesh` contra o estado atual; pressão
+de residency remove allocations diretamente no owner correspondente.
+
+Streaming revision: `e91b8ddd9887c9dfa77e7426896b4ff29653da16`.
+Retirement gate: `a3a4dbb13dc5a79f89f66f14e2885fc802c9da35`.
+VERSION: `0.50.24`, commit
+`8390c1b12da1f0338b0016aee0b230b17bd2e868`.
+CI de P8: aguardando.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
