@@ -430,8 +430,7 @@ foi alterado.
 Shader: `41d7063bb4ba01cc17414146e8eddb570f28a053`.
 VERSION: `0.50.36`, commit
 `daa624500f25379aaa3f5b00694eb19ad592506c`.
-CI de P20: aguardando. Clippy/check não executam o WGSL em runtime; QA GPU de
-foliage/alpha mask/alpha-to-coverage continua obrigatória.
+CI de P20: **verde** nos runs push `35735399997` e PR `35735406354` para `daa624500f25379aaa3f5b00694eb19ad592506c`. Clippy/check não executam o WGSL em runtime; QA GPU de foliage/alpha mask/alpha-to-coverage continua obrigatória.
 
 ### Ordem de execução definida
 
