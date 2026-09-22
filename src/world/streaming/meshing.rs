@@ -44,6 +44,9 @@ pub(super) fn dispatch_initial_mesh_tasks(
         let Some(coord) = work.state.pop_ready() else {
             break;
         };
+        // Entries discarded or deferred below still cost a queue lookup and
+        // eligibility checks; count them even when no task is dispatched.
+        budget.record(1);
         if !work.state.keeps_loaded(coord) || renderer.pool.contains(coord) {
             continue;
         }
@@ -75,7 +78,6 @@ pub(super) fn dispatch_initial_mesh_tasks(
 
         if chunk_is_empty {
             integrate_empty_chunk(content, renderer, &work.world, &mut queues.remesh, coord);
-            budget.record(1);
             continue;
         }
 
@@ -90,7 +92,6 @@ pub(super) fn dispatch_initial_mesh_tasks(
             break;
         }
 
-        budget.record(1);
     }
 }
 

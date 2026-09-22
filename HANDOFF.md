@@ -19,7 +19,20 @@ O run de push [35680336531](https://github.com/sarakborges/mineclone/actions/run
 da base falha no Clippy: duas assinaturas complexas em `player/model.rs`.
 Foram introduzidos aliases privados de `Single` para root/head, preservando
 os filtros disjuntos e a mutabilidade, sem suprimir warnings. VERSION: `0.50.15`.
-CI deste bloco: aguardando publicação e conclusão.
+CI de P0: **verde**, commit `2b72d245d8fc1cc3c865be8b093808e4f493d113`,
+run de push [35681909986](https://github.com/sarakborges/mineclone/actions/runs/35681909986)
+(localizações, Clippy rigoroso e cargo check).
+
+### P1 — orçamento dos despachos
+
+Remesh contabiliza cada candidato retirado antes de verificar tarefa em voo,
+capturar snapshot ou tentar agendar. O teto é de quatro tentativas por frame;
+ao faltar capacidade compartilhada, preserva a tentativa e encerra o dispatch.
+Máscaras coalescidas são devolvidas em ordem de prioridade. Initial meshing
+também contabiliza descartes/deferimentos, preservando o teto de quatro
+candidatos e a preempção nearest-first. Geração já contabilizava esses casos.
+VERSION: `0.50.16`. Revisão do fluxo e `git diff --check`: PASS.
+CI de P1: aguardando publicação e conclusão.
 
 ### Ordem de execução definida
 

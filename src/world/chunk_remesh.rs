@@ -27,7 +27,7 @@ use super::{
 
 const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
-const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 4;
+const MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME: usize = 4;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 
 #[allow(clippy::too_many_arguments)]
@@ -169,7 +169,7 @@ fn dispatch_remesh_tasks(
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
         .with_global_deadline(deadline)
-        .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
+        .with_maximum_items(MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME);
     deferred.clear();
     let mut snapshots = HashMap::<(IVec3, ChunkMeshletMask), ChunkMeshSnapshot>::new();
 
@@ -189,6 +189,9 @@ fn dispatch_remesh_tasks(
         else {
             break;
         };
+        // Deferred and stale candidates also consume main-thread work. Charge
+        // the attempt before any early return can bypass the frame budget.
+        budget.record(1);
         let (kind, meshlets) =
             queue.coalesce_terrain_work(coord, kind, meshlets);
 
@@ -215,9 +218,10 @@ fn dispatch_remesh_tasks(
         };
         if !tasks.schedule(coord, kind, meshlets, snapshot, async_work) {
             deferred.push((coord, kind, meshlets));
-            continue;
+            // The per-kind and per-coordinate checks passed above, so shared
+            // executor capacity is exhausted. Preserve the remaining queue.
+            break;
         }
-        budget.record(1);
     }
 
     for (coord, kind, meshlets) in deferred.drain(..).rev() {
