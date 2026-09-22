@@ -146,7 +146,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_text: Single<
         'w,
         's,
-        (&'static mut Text, &'static TextLayoutInfo),
+        (&'static mut Text, &'static ComputedNode),
         (
             With<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
@@ -158,7 +158,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     tooltip_id: Single<
         'w,
         's,
-        (&'static mut Text, &'static TextLayoutInfo),
+        (&'static mut Text, &'static ComputedNode),
         (
             With<InventoryItemTooltipId>,
             Without<InventoryItemTooltipText>,
@@ -172,7 +172,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
         's,
         (
             &'static mut Text,
-            &'static TextLayoutInfo,
+            &'static ComputedNode,
             &'static mut Visibility,
         ),
         (
@@ -188,7 +188,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
         's,
         (
             &'static mut Text,
-            &'static TextLayoutInfo,
+            &'static ComputedNode,
             &'static mut Visibility,
         ),
         (
@@ -204,7 +204,7 @@ pub(super) struct InventoryTooltipView<'w, 's> {
         's,
         (
             &'static mut Text,
-            &'static TextLayoutInfo,
+            &'static ComputedNode,
             &'static mut Visibility,
         ),
         (
@@ -411,12 +411,8 @@ const ITEM_TOOLTIP_VERTICAL_INSET: f32 = 16.0;
 const ITEM_TOOLTIP_ROW_GAP: f32 = 2.0;
 const ITEM_TOOLTIP_STATS_MARGIN_TOP: f32 = 6.0;
 
-fn logical_text_size(layout: &TextLayoutInfo) -> Vec2 {
-    if layout.scale_factor > 0.0 {
-        layout.size / layout.scale_factor
-    } else {
-        layout.size
-    }
+fn logical_text_size(node: &ComputedNode) -> Vec2 {
+    node.size() * node.inverse_scale_factor
 }
 
 pub(super) fn sync_inventory_item_tooltip(
