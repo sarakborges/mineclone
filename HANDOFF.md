@@ -11010,3 +11010,16 @@ Commit de versão: `b3078787cda30c41310c69f1a7981b48c83d21fd`.
 CI final push `35770201357`: **verde** (localizações, Clippy rigoroso e
 cargo check).
 VERSION: `0.50.79`.
+
+## 2026-09-22 — Moldura da thumbnail de mundo
+
+A thumbnail da world selection foi alinhada visualmente aos cards de save:
+- borda de 2 px usando `theme::BORDER`;
+- padding interno de 2 px entre a borda e a imagem;
+- mesmo `FROSTED_SURFACE`, gradient e box shadow do card;
+- fallback sem imagem continua usando `SURFACE_INSET` dentro da mesma moldura.
+
+Commit funcional: `407d649ef18a20dc1d0eaa76ea26c2c5c1ae5ac1`.
+CI funcional push `35770737554`: **verde** (localizações, Clippy rigoroso e cargo check).
+Commit de versão: `2fd9b0e8ffdeb4021d2e23bc1dd1e2e4834a45bb`.
+VERSION: `0.50.80`.
