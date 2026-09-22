@@ -279,7 +279,7 @@ impl MeshArrays {
         dirty: ChunkMeshletMask,
         keep_dirty: bool,
     ) -> Option<()> {
-        if self.positions.len() % 4 != 0 || self.indices.len() % 6 != 0 {
+        if !self.positions.len().is_multiple_of(4) || !self.indices.len().is_multiple_of(6) {
             return None;
         }
         let quad_count = self.positions.len() / 4;
