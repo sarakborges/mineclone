@@ -472,6 +472,28 @@ VERSION: `0.50.38`, commit
 `075cd121162cf754a01e47627187cbd986d1cb99`.
 CI de P22: **verde** nos runs push `35736022365` e PR `35736028540` para `075cd121162cf754a01e47627187cbd986d1cb99`. Nenhum `cargo test` foi adicionado/executado.
 
+### P23 — cache por plano para alturas de fluid top densos
+
+`fluid_face_heights` consulta 18 células de fluido (3x3 no Y corrente e
+3x3 em Y+1) para cada top exposto. Em lagos/oceanos, tops adjacentes repetiam
+quase todas essas leituras.
+
+O greedy top agora coleta primeiro os tops realmente expostos de cada plano Y,
+preservando a ordem e reaproveitando o `top_sample` já lido. Com pelo menos
+64 tops expostos, captura uma grade 18x18 para Y e Y+1 uma única vez (648
+consultas) e calcula as mesmas quatro alturas de canto a partir dessa cache.
+Abaixo do threshold, mantém o sampling direto existente. O limiar é
+conservador: 64 tops exigiam no mínimo 1.152 consultas no caminho antigo.
+
+A fórmula `fluid_corner_height` não mudou. A regressão compara bit-a-bit as
+quatro alturas da cache contra o sampling direto, incluindo borda de chunk.
+
+Commits: cache `271383de4d364bffc8b2fc48258a5c89a8fef44e`;
+regressão `0477a4e3437988ab4ab08ecaeec00ea7b7a1e61f`.
+VERSION: `0.50.39`, commit
+`5b018accaeb0794b5fd2af3f9bc33bf7d3b69eaa`.
+CI de P23: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
