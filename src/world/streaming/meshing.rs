@@ -3,11 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{
-        mesh_snapshot::ChunkMeshSnapshot,
-        meshlet::ChunkMeshletMask,
-        world::VoxelWorld,
-    },
+    voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld},
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
