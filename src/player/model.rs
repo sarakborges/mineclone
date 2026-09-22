@@ -20,6 +20,24 @@ struct PlayerModelRoot;
 #[derive(Component)]
 struct PlayerModelHead;
 
+type PlayerModelRootQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Visibility),
+    (With<PlayerModelRoot>, Without<GameplayCamera>),
+>;
+
+type PlayerModelHeadQuery<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Transform,
+    (
+        With<PlayerModelHead>,
+        Without<PlayerModelRoot>,
+        Without<GameplayCamera>,
+    ),
+>;
+
 #[derive(Resource)]
 struct PlayerModelAssets {
     head: Handle<Mesh>,
@@ -171,18 +189,8 @@ fn spawn_player_model(
 fn sync_player_model(
     perspective: Res<CameraPerspective>,
     player: Single<(&Transform, &GameplayCamera)>,
-    mut model: Single<
-        (&mut Transform, &mut Visibility),
-        (With<PlayerModelRoot>, Without<GameplayCamera>),
-    >,
-    mut head: Single<
-        &mut Transform,
-        (
-            With<PlayerModelHead>,
-            Without<PlayerModelRoot>,
-            Without<GameplayCamera>,
-        ),
-    >,
+    mut model: PlayerModelRootQuery,
+    mut head: PlayerModelHeadQuery,
 ) {
     let (player_transform, camera) = *player;
     let (model_transform, visibility) = &mut *model;

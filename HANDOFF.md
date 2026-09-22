@@ -1,4 +1,48 @@
 # HANDOFF — Asteria / Mineclone
+## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
+
+Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
+
+Pedido atual autoriza acompanhar/corrigir o CI. Preservam-se `ARCHITECTURE.md` e
+`ENGINEERING_PRACTICES.md`, commits pequenos, semver por bloco e a distância de
+renderização configurada. Não acrescentado/executado `cargo test`.
+
+Análise detalhada e roteiro: [auditoria de rendering/performance](docs/handoffs/render-performance-audit-2026-09-22.md).
+Foram inspecionados os owners de sombras/shaders, materiais/visibilidade,
+meshing terrain/fluid/layers, snapshots, patching, filas/budgets, iluminação,
+streaming e solver/scheduler/settling de fluidos. A fonte oficial Bevy v0.19.1
+foi consultada para contratos WGSL; não usar a branch main como substituta.
+
+### P0 — desbloquear a validação
+
+O run de push [35680336531](https://github.com/sarakborges/mineclone/actions/runs/35680336531)
+da base falha no Clippy: duas assinaturas complexas em `player/model.rs`.
+Foram introduzidos aliases privados de `Single` para root/head, preservando
+os filtros disjuntos e a mutabilidade, sem suprimir warnings. VERSION: `0.50.15`.
+CI deste bloco: aguardando publicação e conclusão.
+
+### Ordem de execução definida
+
+1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
+2. P2: publicar fluid geometry com conteúdo atual mesmo com luz defasada,
+   mantendo refresh pendente; terrain obsoleto continua rejeitado.
+3. P3: remover cópias de entrada do patch parcial de meshes, com leitura
+   emprestada e preparação atômica antes de alterar assets.
+4. P4: eliminar planos vazios no greedy terrain/fluid.
+5. P5: evitar shadow fetch solar quando sua contribuição é zero.
+6. Reavaliar initial-mesh dispatch e consultas redundantes do BFS de fluidos.
+
+### Limites de evidência
+
+Ambiente local sem Rust/Cargo; Git direto não respondeu. A conexão GitHub
+fornece fonte/publicação e Actions fornece compilação/lint. `git diff --check`
+local passou no primeiro bloco. Testes de regressão podem ser compilados por
+Clippy --all-targets; isso não significa execução. FPS/VRAM/QA Windows/WGSL
+em GPU não foram medidos. QA RD24/World Tree e cenários de luz/água permanecem
+descritos no relatório. O histórico abaixo permanece integral.
+
+---
+
 ## Checkpoint 182 — 2026-09-21/22: pós-overhaul — worldgen/controls + nova rodada de meshing/render [IN PROGRESS]
 
 ### Estado da branch / regra de validação
