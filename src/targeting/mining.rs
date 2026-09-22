@@ -80,7 +80,7 @@ fn advance_survival_mining(
     buttons: Res<ButtonInput<MouseButton>>,
     player: Single<&GameMode, With<GameplayCamera>>,
     hotbar: Res<PlayerHotbar>,
-    targeted: ResMut<TargetedBlock>,
+    mut targeted: ResMut<TargetedBlock>,
     blocks: Res<BlockRegistry>,
     tools: Res<ToolRegistry>,
     world_ticks: Res<WorldTickClock>,
