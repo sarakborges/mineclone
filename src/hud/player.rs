@@ -123,7 +123,6 @@ fn sync_player_hud_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
     mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
-    mut portrait_cameras: Query<&mut Camera, With<portrait::PlayerPortraitCamera>>,
 ) {
     let next = player_hud_visibility(*pause.get(), *settings.get());
     for mut visibility in &mut roots {
@@ -132,12 +131,6 @@ fn sync_player_hud_visibility(
         }
     }
 
-    let active = next == Visibility::Visible;
-    for mut camera in &mut portrait_cameras {
-        if camera.is_active != active {
-            camera.is_active = active;
-        }
-    }
 }
 
 fn sync_inventory_hint(
