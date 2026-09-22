@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, prelude::*, text::TextLayoutInfo};
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
@@ -30,7 +30,8 @@ use super::{
         CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
         InventoryItemTooltip, InventoryItemTooltipHint, InventoryItemTooltipId,
         InventoryItemTooltipStats, InventoryItemTooltipStatsTitle, InventoryItemTooltipText,
-        InventorySlot, InventoryTrashButton,
+        InventorySlot, InventorySortButton, InventorySortTooltip, InventoryTrashButton,
+        PlayerInventoryView,
     },
 };
 
@@ -85,6 +86,7 @@ pub(super) struct InventoryPanelState<'w, 's> {
     hotbar: Res<'w, PlayerHotbar>,
     cursor: Res<'w, InventoryCursor>,
     creative_view: Res<'w, CreativeInventoryView>,
+    player_view: Res<'w, PlayerInventoryView>,
     scroll_state: Res<'w, CreativeScrollState>,
     player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
 }
@@ -252,6 +254,7 @@ pub(super) fn spawn_inventory(
         hotbar: &state.hotbar,
         cursor: &state.cursor,
         creative_view: &state.creative_view,
+        player_view: &state.player_view,
         scroll_state: &state.scroll_state,
         localization: &localization,
         game_mode: *game_mode,
@@ -352,6 +355,7 @@ pub(super) fn rebuild_inventory_when_changed(
         hotbar: &inputs.panel.hotbar,
         cursor: &inputs.panel.cursor,
         creative_view: &inputs.panel.creative_view,
+        player_view: &inputs.panel.player_view,
         scroll_state: &inputs.panel.scroll_state,
         localization: &inputs.localization,
         game_mode: *game_mode,
@@ -652,7 +656,9 @@ pub(super) fn style_creative_slots(
 }
 
 pub(super) fn style_inventory_slots(
+    content: InventoryItemContent,
     hotbar: Res<PlayerHotbar>,
+    player_view: Res<PlayerInventoryView>,
     mut slots: Query<
         (
             Ref<Interaction>,
@@ -663,19 +669,47 @@ pub(super) fn style_inventory_slots(
         With<Button>,
     >,
 ) {
-    let selection_changed = hotbar.is_changed();
+    let selection_changed = hotbar.is_changed() || player_view.is_changed();
     let selected_index = HOTBAR_INVENTORY_OFFSET + hotbar.selected_slot();
+    let query = player_view.search_query().trim().to_lowercase();
 
     for (interaction, slot, background, border) in &mut slots {
         if !selection_changed && !interaction.is_changed() {
             continue;
         }
 
+        let search_match = !query.is_empty()
+            && slot.item.is_some_and(|item_id| {
+                item_id.to_lowercase().contains(&query)
+                    || content.item_name(item_id).to_lowercase().contains(&query)
+            });
         selectable::apply_colors(
-            selectable::colors(*interaction, slot.index == selected_index),
+            selectable::colors(
+                *interaction,
+                slot.index == selected_index || search_match,
+            ),
             background,
             border,
         );
+    }
+}
+
+pub(super) fn sync_inventory_sort_tooltip(
+    buttons: Query<&Interaction, (With<InventorySortButton>, Changed<Interaction>)>,
+    mut tooltip: Single<
+        &mut Visibility,
+        (With<InventorySortTooltip>, Without<InventorySortButton>),
+    >,
+) {
+    for interaction in &buttons {
+        let next = if *interaction == Interaction::None {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if *tooltip != next {
+            *tooltip = next;
+        }
     }
 }
 
