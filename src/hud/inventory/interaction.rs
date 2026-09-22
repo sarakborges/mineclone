@@ -19,7 +19,8 @@ use super::state::{
     CreativeCatalogScrollArea, CreativeCatalogScrollbar, CreativeCategoryButton,
     CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
     CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-    InventorySlot, InventoryTrashButton, SLOT_GAP, SLOT_SIZE,
+    InventorySearchBar, InventorySearchFrame, InventorySlot, InventorySortButton,
+    InventoryTrashButton, PlayerInventoryView, SLOT_GAP, SLOT_SIZE,
 };
 
 pub(super) fn handle_search_focus(
@@ -42,9 +43,13 @@ pub(super) fn handle_inventory_close_shortcut(
     keys: Res<ButtonInput<KeyCode>>,
     keybinds: Res<Keybinds>,
     creative_view: Res<CreativeInventoryView>,
+    player_view: Res<PlayerInventoryView>,
     mut next_inventory: ResMut<NextState<InventoryState>>,
 ) {
-    if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) && !creative_view.search_focused() {
+    if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory))
+        && !creative_view.search_focused()
+        && !player_view.search_focused()
+    {
         next_inventory.set(InventoryState::Closed);
     }
 }
@@ -84,6 +89,70 @@ pub(super) fn sync_search_focus(
         && focus.get() == Some(entity)
     {
         focus.clear();
+    }
+}
+
+pub(super) fn handle_player_search_focus(
+    frames: Query<&Interaction, (With<InventorySearchFrame>, Changed<Interaction>)>,
+    editor: Query<Entity, With<InventorySearchBar>>,
+    mut focus: ResMut<InputFocus>,
+    mut player_view: ResMut<PlayerInventoryView>,
+) {
+    if frames
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+        && let Ok(entity) = editor.single()
+    {
+        player_view.focus_search();
+        focus.set(entity, FocusCause::Pressed);
+    }
+}
+
+pub(super) fn handle_player_search_input(
+    editor: Query<(Entity, &EditableText), With<InventorySearchBar>>,
+    focus: Res<InputFocus>,
+    mut player_view: ResMut<PlayerInventoryView>,
+) {
+    let Ok((entity, editable)) = editor.single() else {
+        return;
+    };
+    let focused = focus.get() == Some(entity);
+    if focused && !player_view.search_focused() {
+        player_view.focus_search();
+    } else if !focused && player_view.search_focused() {
+        player_view.blur_search();
+    }
+
+    let next = editable_value(editable);
+    if next != player_view.search_query() {
+        player_view.set_search_query(next);
+    }
+}
+
+pub(super) fn sync_player_search_focus(
+    player_view: Res<PlayerInventoryView>,
+    mut focus: ResMut<InputFocus>,
+    editor: Query<Entity, With<InventorySearchBar>>,
+) {
+    if !player_view.search_focused()
+        && let Ok(entity) = editor.single()
+        && focus.get() == Some(entity)
+    {
+        focus.clear();
+    }
+}
+
+pub(super) fn handle_inventory_sort_clicks(
+    mut hotbar: ResMut<PlayerHotbar>,
+    mut player_view: ResMut<PlayerInventoryView>,
+    buttons: Query<&Interaction, (With<InventorySortButton>, Changed<Interaction>)>,
+) {
+    for interaction in &buttons {
+        if *interaction == Interaction::Pressed {
+            hotbar.sort_backpack_by_id();
+            player_view.blur_search();
+            break;
+        }
     }
 }
 
@@ -180,6 +249,7 @@ pub(super) fn handle_slot_clicks(
     mut hotbar: ResMut<PlayerHotbar>,
     mut cursor: ResMut<InventoryCursor>,
     mut creative_view: ResMut<CreativeInventoryView>,
+    mut player_view: ResMut<PlayerInventoryView>,
     slots: Query<(&Interaction, &InventorySlot), Changed<Interaction>>,
 ) {
     for (interaction, slot) in &slots {
@@ -189,6 +259,9 @@ pub(super) fn handle_slot_clicks(
 
         if creative_view.search_focused() {
             creative_view.blur_search();
+        }
+        if player_view.search_focused() {
+            player_view.blur_search();
         }
         cursor.click_slot(&mut hotbar, slot.index);
         break;
@@ -213,6 +286,8 @@ pub(super) struct InventoryControlInteractions<'w, 's> {
     creative_slots: Query<'w, 's, &'static Interaction, With<CreativeInventorySlot>>,
     inventory_slots: Query<'w, 's, &'static Interaction, With<InventorySlot>>,
     search_bars: Query<'w, 's, &'static Interaction, With<CreativeSearchBar>>,
+    player_search_frames: Query<'w, 's, &'static Interaction, With<InventorySearchFrame>>,
+    sort_buttons: Query<'w, 's, &'static Interaction, With<InventorySortButton>>,
     trash_buttons: Query<'w, 's, &'static Interaction, With<InventoryTrashButton>>,
     category_scrollbars: Query<'w, 's, &'static Interaction, With<CreativeCategoryScrollbar>>,
     catalog_scrollbars: Query<'w, 's, &'static Interaction, With<CreativeCatalogScrollbar>>,
@@ -225,6 +300,8 @@ impl InventoryControlInteractions<'_, '_> {
             .chain(self.creative_slots.iter())
             .chain(self.inventory_slots.iter())
             .chain(self.search_bars.iter())
+            .chain(self.player_search_frames.iter())
+            .chain(self.sort_buttons.iter())
             .chain(self.trash_buttons.iter())
             .chain(self.category_scrollbars.iter())
             .chain(self.catalog_scrollbars.iter())
