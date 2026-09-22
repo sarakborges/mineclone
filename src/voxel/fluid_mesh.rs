@@ -31,6 +31,14 @@ struct FluidFaceHeights {
     h01: f32,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct FluidGreedyTop {
+    fluid_id: FluidId,
+    tint: [f32; 3],
+    lighting: crate::voxel::mesh_lighting::FaceLighting,
+    height: f32,
+}
+
 pub fn build_fluid_meshes<W, F>(
     world: &W,
     chunk_coord: IVec3,
@@ -72,6 +80,16 @@ where
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
+    emit_greedy_fluid_top_faces(
+        world,
+        chunk,
+        chunk_origin,
+        meshlets,
+        lighting_cache,
+        &mut tint_at,
+        &mut buffers,
+    );
+
     meshlets.for_each_voxel(|x, y, z| {
         let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
             return;
@@ -80,17 +98,23 @@ where
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
         let neighbor_samples = BlockFace::ALL.map(|face| {
-            fluid_neighbor_content(
-                world,
-                chunk,
-                local_voxel,
-                world_voxel,
-                face,
-            )
+            if face == BlockFace::Top {
+                None
+            } else {
+                fluid_neighbor_content(
+                    world,
+                    chunk,
+                    local_voxel,
+                    world_voxel,
+                    face,
+                )
+            }
         });
         let exposed = std::array::from_fn(|index| {
             let face = BlockFace::ALL[index];
-            if face == BlockFace::Bottom && world_voxel.y <= 0 {
+            if face == BlockFace::Top
+                || (face == BlockFace::Bottom && world_voxel.y <= 0)
+            {
                 return false;
             }
             fluid_face_is_exposed(
@@ -186,6 +210,231 @@ where
         .collect::<Vec<_>>();
     meshes.sort_by_key(|mesh| mesh.fluid_id);
     meshes
+}
+
+fn emit_greedy_fluid_top_faces<W, F>(
+    world: &W,
+    chunk: &VoxelChunk,
+    chunk_origin: IVec3,
+    meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
+    tint_at: &mut F,
+    buffers: &mut SmallVec<[(FluidId, VoxelMeshBuffer); 2]>,
+) where
+    W: VoxelRead + ?Sized,
+    F: FnMut(IVec3, FluidId) -> [f32; 3],
+{
+    let mut mask = vec![None::<FluidGreedyTop>; CHUNK_SIZE * CHUNK_SIZE];
+
+    for y in 0..CHUNK_SIZE {
+        for z in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                if !meshlets.contains_voxel(x, y, z) {
+                    continue;
+                }
+                let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
+                    continue;
+                };
+
+                let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+                let world_voxel = chunk_origin + local_voxel;
+                let top_sample = fluid_neighbor_content(
+                    world,
+                    chunk,
+                    local_voxel,
+                    world_voxel,
+                    BlockFace::Top,
+                );
+                if !fluid_face_is_exposed(
+                    top_sample,
+                    cell.fluid_id,
+                    BlockFace::Top,
+                ) {
+                    continue;
+                }
+
+                let heights = fluid_face_heights(
+                    world,
+                    chunk,
+                    local_voxel,
+                    world_voxel,
+                    cell.fluid_id,
+                );
+                let source_block_srgb = surface_block_srgb_with_cache(
+                    lighting_cache,
+                    world_voxel,
+                    chunk.light_at(x as i32, y as i32, z as i32),
+                    false,
+                );
+                let lighting = face_lighting_with_cache(
+                    lighting_cache,
+                    world,
+                    world_voxel,
+                    BlockFace::Top,
+                    source_block_srgb,
+                );
+                let tint = tint_at(world_voxel, cell.fluid_id);
+                let source_mask = chunk
+                    .cell_at(x as i32, y as i32, z as i32)
+                    .filter(|block| MicroblockMask::is_modified(*block))
+                    .map(MicroblockMask::from_cell);
+                let neighbor_mask = top_sample
+                    .and_then(|(block, _)| block)
+                    .filter(|block| MicroblockMask::is_modified(*block))
+                    .map(MicroblockMask::from_cell);
+
+                if source_mask.is_some() || neighbor_mask.is_some() {
+                    emit_fluid_openings(
+                        fluid_buffer(buffers, cell.fluid_id),
+                        BlockFace::Top,
+                        x as f32,
+                        y as f32,
+                        z as f32,
+                        heights,
+                        source_mask,
+                        neighbor_mask,
+                        tint,
+                        lighting,
+                    );
+                    continue;
+                }
+
+                let Some(height) = flat_fluid_height(heights) else {
+                    push_lit_quad(
+                        fluid_buffer(buffers, cell.fluid_id),
+                        fluid_face_vertices(
+                            BlockFace::Top,
+                            x as f32,
+                            y as f32,
+                            z as f32,
+                            heights,
+                        ),
+                        BlockFace::Top.normal(),
+                        VOXEL_FACE_UVS,
+                        tint,
+                        lighting,
+                        0.0,
+                    );
+                    continue;
+                };
+
+                if !fluid_lighting_is_uniform(lighting) {
+                    push_lit_quad(
+                        fluid_buffer(buffers, cell.fluid_id),
+                        fluid_face_vertices(
+                            BlockFace::Top,
+                            x as f32,
+                            y as f32,
+                            z as f32,
+                            heights,
+                        ),
+                        BlockFace::Top.normal(),
+                        VOXEL_FACE_UVS,
+                        tint,
+                        lighting,
+                        0.0,
+                    );
+                    continue;
+                }
+
+                mask[x + z * CHUNK_SIZE] = Some(FluidGreedyTop {
+                    fluid_id: cell.fluid_id,
+                    tint,
+                    lighting,
+                    height,
+                });
+            }
+        }
+
+        emit_greedy_fluid_top_plane(y, &mut mask, buffers);
+        mask.fill(None);
+    }
+}
+
+fn emit_greedy_fluid_top_plane(
+    y: usize,
+    mask: &mut [Option<FluidGreedyTop>],
+    buffers: &mut SmallVec<[(FluidId, VoxelMeshBuffer); 2]>,
+) {
+    for z in 0..CHUNK_SIZE {
+        for x in 0..CHUNK_SIZE {
+            let index = x + z * CHUNK_SIZE;
+            let Some(candidate) = mask[index] else {
+                continue;
+            };
+
+            let x_limit =
+                ((x / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
+                    * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
+            let z_limit =
+                ((z / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
+                    * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
+
+            let mut width = 1;
+            while x + width < x_limit
+                && mask[x + width + z * CHUNK_SIZE] == Some(candidate)
+            {
+                width += 1;
+            }
+
+            let mut depth = 1;
+            while z + depth < z_limit
+                && (x..x + width).all(|column| {
+                    mask[column + (z + depth) * CHUNK_SIZE] == Some(candidate)
+                })
+            {
+                depth += 1;
+            }
+
+            for row in z..z + depth {
+                for column in x..x + width {
+                    mask[column + row * CHUNK_SIZE] = None;
+                }
+            }
+
+            let x0 = x as f32;
+            let x1 = (x + width) as f32;
+            let z0 = z as f32;
+            let z1 = (z + depth) as f32;
+            let surface_y = y as f32 + candidate.height;
+            push_lit_quad(
+                fluid_buffer(buffers, candidate.fluid_id),
+                [
+                    [x0, surface_y, z1],
+                    [x1, surface_y, z1],
+                    [x1, surface_y, z0],
+                    [x0, surface_y, z0],
+                ],
+                BlockFace::Top.normal(),
+                [
+                    [0.0, depth as f32],
+                    [width as f32, depth as f32],
+                    [width as f32, 0.0],
+                    [0.0, 0.0],
+                ],
+                candidate.tint,
+                candidate.lighting,
+                0.0,
+            );
+        }
+    }
+}
+
+fn flat_fluid_height(heights: FluidFaceHeights) -> Option<f32> {
+    (heights.h00.to_bits() == heights.h10.to_bits()
+        && heights.h00.to_bits() == heights.h11.to_bits()
+        && heights.h00.to_bits() == heights.h01.to_bits())
+        .then_some(heights.h00)
+}
+
+fn fluid_lighting_is_uniform(
+    lighting: crate::voxel::mesh_lighting::FaceLighting,
+) -> bool {
+    (1..4).all(|index| {
+        lighting.channels[index] == lighting.channels[0]
+            && lighting.block_srgb[index] == lighting.block_srgb[0]
+            && lighting.ambient_occlusion[index] == lighting.ambient_occlusion[0]
+    })
 }
 
 fn fluid_buffer(
