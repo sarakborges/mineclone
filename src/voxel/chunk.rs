@@ -546,6 +546,11 @@ impl VoxelChunk {
         self.cell_ref_at(x, y, z).copied()
     }
 
+    pub(crate) fn cell_at_local(&self, x: usize, y: usize, z: usize) -> Option<VoxelCell> {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        self.blocks.get(index(x, y, z))
+    }
+
     pub(crate) fn cell_ref_at(&self, x: i32, y: i32, z: i32) -> Option<&VoxelCell> {
         if !in_bounds(x, y, z) {
             return None;
@@ -599,7 +604,23 @@ impl VoxelChunk {
             return None;
         }
 
-        self.fluids.get(index(x as usize, y as usize, z as usize))
+        self.fluid_at_local(x as usize, y as usize, z as usize)
+    }
+
+    pub(crate) fn fluid_at_local(&self, x: usize, y: usize, z: usize) -> Option<FluidCell> {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        self.fluids.get(index(x, y, z))
+    }
+
+    pub(crate) fn content_at_local(
+        &self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> (Option<VoxelCell>, Option<FluidCell>) {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        let voxel_index = index(x, y, z);
+        (self.blocks.get(voxel_index), self.fluids.get(voxel_index))
     }
 
     pub(crate) fn visit_content_voxels(
