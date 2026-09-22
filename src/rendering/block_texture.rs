@@ -25,7 +25,7 @@ pub(crate) fn terrain_array_alpha_signature(
     }
 }
 
-pub(crate) const TERRAIN_TEXTURE_INDEX_BITS: u32 = 10;
+pub(crate) const TERRAIN_TEXTURE_INDEX_BITS: u32 = 8;
 pub(crate) const TERRAIN_TEXTURE_INDEX_MASK: u32 =
     (1 << TERRAIN_TEXTURE_INDEX_BITS) - 1;
 const TERRAIN_TEXTURE_NONE_INDEX: u32 = TERRAIN_TEXTURE_INDEX_MASK;
