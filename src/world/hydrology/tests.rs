@@ -54,8 +54,8 @@ fn water_body_strength_fades_to_zero_at_shoreline() {
 fn macro_terrain_generation_is_deterministic() {
     let field = field();
     let sample = |position: Vec2| surface(position.x + position.y, 0.5);
-    let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
-    let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
+    let first = field.region_from_macro_terrain(IVec2::ZERO, true, true, true, sample);
+    let second = field.region_from_macro_terrain(IVec2::ZERO, true, true, true, sample);
 
     assert_eq!(
         first.river_graph.edge_count(),
@@ -67,7 +67,7 @@ fn macro_terrain_generation_is_deterministic() {
 #[test]
 fn low_continentalness_produces_ocean_water_and_carving() {
     let field = field();
-    let region = field.region_from_macro_terrain(IVec2::ZERO, |_| surface(70.0, 0.1));
+    let region = field.region_from_macro_terrain(IVec2::ZERO, true, true, true, |_| surface(70.0, 0.1));
     let center = Vec2::splat(HYDROLOGY_REGION_SIZE * 0.5);
 
     let water = region.water_at(center).unwrap();
