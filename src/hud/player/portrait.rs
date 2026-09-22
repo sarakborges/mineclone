@@ -1,14 +1,19 @@
+use std::collections::HashSet;
+
 use bevy::{
-    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
+    camera::{RenderTarget, visibility::RenderLayers},
+    light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
     render::render_resource::TextureFormat,
 };
 
-use crate::player::model::{
-    PLAYER_MODEL_PREVIEW_RENDER_LAYER,
-    PlayerModelRoot,
+use crate::{
+    app::game_state::GameState,
+    player::model::{PlayerModelPreviewSource, PlayerModelRoot},
+    rendering::block_model_material::BlockModelMaterial,
 };
 
+const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
 const PLAYER_PREVIEW_WIDTH: u32 = 384;
 const PLAYER_PREVIEW_HEIGHT: u32 = 512;
 const PLAYER_PREVIEW_CENTER_Y: f32 = 0.9;
@@ -26,7 +31,9 @@ impl PlayerPreviewImages {
 }
 
 #[derive(Component)]
-pub(super) struct PlayerPreviewCamera;
+struct PlayerPreviewProxy {
+    source: Entity,
+}
 
 pub(super) fn spawn_player_preview_renderer(
     mut commands: Commands,
@@ -46,11 +53,9 @@ pub(super) fn spawn_player_preview_renderer(
     preview_images.image = Some(image.clone());
 
     commands.spawn((
-        PlayerPreviewCamera,
         Camera3d::default(),
         Camera {
             order: -2,
-            output_mode: CameraOutputMode::Skip,
             clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
@@ -59,32 +64,96 @@ pub(super) fn spawn_player_preview_renderer(
             aspect_ratio: PLAYER_PREVIEW_WIDTH as f32 / PLAYER_PREVIEW_HEIGHT as f32,
             ..default()
         }),
-        Transform::default(),
-        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+        Transform::from_xyz(
+            0.0,
+            PLAYER_PREVIEW_CENTER_Y,
+            PLAYER_PREVIEW_CAMERA_DISTANCE,
+        )
+        .looking_at(Vec3::new(0.0, PLAYER_PREVIEW_CENTER_Y, 0.0), Vec3::Y),
+        RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
     ));
 }
 
-pub(super) fn render_player_preview(
-    models: Query<&GlobalTransform, With<PlayerModelRoot>>,
-    mut cameras: Query<(&mut Camera, &mut Transform), With<PlayerPreviewCamera>>,
+#[allow(clippy::too_many_arguments)]
+pub(super) fn sync_player_preview_proxies(
+    mut commands: Commands,
+    roots: Query<&GlobalTransform, With<PlayerModelRoot>>,
+    sources: Query<(&GlobalTransform, &Visibility), With<PlayerModelPreviewSource>>,
+    standard_sources: Query<
+        (Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>, &GlobalTransform, &Visibility),
+        With<PlayerModelPreviewSource>,
+    >,
+    block_sources: Query<
+        (
+            Entity,
+            &Mesh3d,
+            &MeshMaterial3d<BlockModelMaterial>,
+            &GlobalTransform,
+            &Visibility,
+        ),
+        With<PlayerModelPreviewSource>,
+    >,
+    mut proxies: Query<(Entity, &PlayerPreviewProxy, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(model_transform) = models.iter().next() else {
-        for (mut camera, _) in &mut cameras {
-            camera.output_mode = CameraOutputMode::Skip;
+    let Some(root) = roots.iter().next() else {
+        for (entity, _, _, _) in &mut proxies {
+            commands.entity(entity).despawn();
         }
         return;
     };
 
-    let model_translation = model_transform.translation();
-    let model_rotation = model_transform.rotation();
-    let center = model_translation + Vec3::Y * PLAYER_PREVIEW_CENTER_Y;
-    let offset = model_rotation * Vec3::Z * PLAYER_PREVIEW_CAMERA_DISTANCE;
-
-    for (mut camera, mut transform) in &mut cameras {
-        *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
-        camera.output_mode = CameraOutputMode::Write {
-            blend_state: None,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
+    let mut represented = HashSet::new();
+    for (entity, proxy, mut transform, mut visibility) in &mut proxies {
+        let Ok((source_transform, source_visibility)) = sources.get(proxy.source) else {
+            commands.entity(entity).despawn();
+            continue;
         };
+
+        represented.insert(proxy.source);
+        *transform = source_transform.reparented_to(root);
+        *visibility = preview_visibility(*source_visibility);
+    }
+
+    for (source, mesh, material, source_transform, source_visibility) in &standard_sources {
+        if represented.contains(&source) {
+            continue;
+        }
+        commands.spawn((
+            PlayerPreviewProxy { source },
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(material.0.clone()),
+            source_transform.reparented_to(root),
+            preview_visibility(*source_visibility),
+            RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
+            NotShadowCaster,
+            NotShadowReceiver,
+            DespawnOnExit(GameState::Gameplay),
+        ));
+        represented.insert(source);
+    }
+
+    for (source, mesh, material, source_transform, source_visibility) in &block_sources {
+        if represented.contains(&source) {
+            continue;
+        }
+        commands.spawn((
+            PlayerPreviewProxy { source },
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(material.0.clone()),
+            source_transform.reparented_to(root),
+            preview_visibility(*source_visibility),
+            RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
+            NotShadowCaster,
+            NotShadowReceiver,
+            DespawnOnExit(GameState::Gameplay),
+        ));
+        represented.insert(source);
+    }
+}
+
+const fn preview_visibility(source: Visibility) -> Visibility {
+    match source {
+        Visibility::Hidden => Visibility::Hidden,
+        Visibility::Inherited | Visibility::Visible => Visibility::Visible,
     }
 }
