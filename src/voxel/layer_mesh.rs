@@ -89,8 +89,7 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
 {
-    let mut buffers =
-        SmallVec::<[(( &'static str, bool), VoxelMeshBuffer); 2]>::new();
+    let mut buffers = LayerMeshBuffers::new();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
