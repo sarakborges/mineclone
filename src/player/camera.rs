@@ -7,7 +7,7 @@ use crate::{
         pause_state::PauseState,
     },
     gameplay::availability::world_interaction_available,
-    player::inventory::InventoryState,
+    player::{character_info::CharacterInfoState, inventory::InventoryState},
     tools::BrushPaletteState,
     voxel::world::VoxelWorld,
 };
@@ -55,7 +55,15 @@ impl Plugin for PlayerCameraPlugin {
                 release_cursor.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
+                OnEnter(CharacterInfoState::Open),
+                release_cursor.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
                 OnEnter(InventoryState::Closed),
+                capture_cursor.run_if(world_interaction_available),
+            )
+            .add_systems(
+                OnEnter(CharacterInfoState::Closed),
                 capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
