@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use bevy::platform::collections::HashSet;
 
 use crate::{
-    player::camera::GameplayCamera,
+    player::{
+        PlayerEntity,
+        camera::GameplayWorldCamera,
+    },
     voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position},
     world::{
         chunk_rendering::ChunkRenderPool,
@@ -42,13 +45,15 @@ pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
 }
 
 pub(super) fn update_fog_distance(
-    player: Single<(Entity, &Transform), With<GameplayCamera>>,
+    player: Single<&Transform, With<PlayerEntity>>,
+    camera: Single<Entity, With<GameplayWorldCamera>>,
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
-    mut fogs: Query<&mut DistanceFog, With<GameplayCamera>>,
+    mut fogs: Query<&mut DistanceFog, With<GameplayWorldCamera>>,
     mut state: Local<FogDistanceState>,
 ) {
-    let (camera_entity, player) = *player;
+    let player = *player;
+    let camera_entity = *camera;
     let render_pool_revision = render_pool.membership_revision();
     let render_distance_chunks = render_distance.chunks();
     let frontier_center = chunk_coord_from_position(player.translation).xz();

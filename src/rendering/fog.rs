@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    player::camera::GameplayCamera,
+    player::camera::GameplayWorldCamera,
 };
 use attachment::attach_fog;
 use color::update_fog_color;
@@ -37,7 +37,7 @@ impl Plugin for FogPlugin {
 }
 
 fn camera_needs_fog(
-    cameras: Query<(), (With<GameplayCamera>, Without<DistanceFog>)>,
+    cameras: Query<(), (With<GameplayWorldCamera>, Without<DistanceFog>)>,
 ) -> bool {
     !cameras.is_empty()
 }

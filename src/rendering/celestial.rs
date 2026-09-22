@@ -7,7 +7,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::sky::CelestialBodyDefinition,
-    player::camera::GameplayCamera,
+    player::camera::GameplayWorldCamera,
     world::current_context::{DayNightContext, SkyContext},
 };
 
@@ -38,7 +38,7 @@ struct CelestialSpawnAssets<'w> {
 #[derive(SystemParam)]
 struct CelestialRuntimeScene<'w, 's> {
     day_night: DayNightContext<'w>,
-    camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayCamera>>,
+    camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayWorldCamera>>,
 }
 
 fn spawn_celestial_bodies(

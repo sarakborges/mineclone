@@ -1,8 +1,4 @@
-use bevy::{
-    camera::{CameraOutputMode, Hdr},
-    core_pipeline::tonemapping::Tonemapping,
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use crate::{
     app::{
@@ -12,7 +8,6 @@ use crate::{
     },
     gameplay::availability::world_interaction_available,
     player::inventory::InventoryState,
-    rendering::camera_stack::WORLD_CAMERA_ORDER,
     tools::BrushPaletteState,
     voxel::world::VoxelWorld,
 };
@@ -28,10 +23,7 @@ impl Plugin for PlayerCameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MouseLookInputState>()
             .init_resource::<CameraPerspective>()
-            .add_systems(
-                OnEnter(GameState::Gameplay),
-                (reset_camera_perspective, spawn_third_person_camera).chain(),
-            )
+            .add_systems(OnEnter(GameState::Gameplay), reset_camera_perspective)
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 capture_cursor.run_if(world_interaction_available),
@@ -74,7 +66,7 @@ impl Plugin for PlayerCameraPlugin {
                 (
                     toggle_camera_perspective.run_if(world_interaction_available),
                     drain_or_apply_mouse_look,
-                    sync_perspective_cameras,
+                    sync_perspective_camera,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -126,28 +118,10 @@ impl CameraPerspective {
 }
 
 #[derive(Component)]
-struct ThirdPersonCamera;
+pub(crate) struct GameplayWorldCamera;
 
 fn reset_camera_perspective(mut perspective: ResMut<CameraPerspective>) {
     *perspective = CameraPerspective::FirstPerson;
-}
-
-fn spawn_third_person_camera(mut commands: Commands) {
-    commands.spawn((
-        ThirdPersonCamera,
-        Camera3d::default(),
-        Camera {
-            is_active: false,
-            order: WORLD_CAMERA_ORDER,
-            output_mode: CameraOutputMode::Skip,
-            ..default()
-        },
-        Hdr,
-        Tonemapping::None,
-        Msaa::Off,
-        Transform::default(),
-        DespawnOnExit(GameState::Gameplay),
-    ));
 }
 
 fn toggle_camera_perspective(
@@ -160,33 +134,25 @@ fn toggle_camera_perspective(
     }
 }
 
-#[allow(clippy::type_complexity)]
-fn sync_perspective_cameras(
+fn sync_perspective_camera(
     perspective: Res<CameraPerspective>,
     world: Res<VoxelWorld>,
-    player: Single<(&Transform, &GameplayCamera)>,
-    mut first_person: Single<&mut Camera, (With<GameplayCamera>, Without<ThirdPersonCamera>)>,
-    mut third_person: Single<
-        (&mut Camera, &mut Transform),
-        (With<ThirdPersonCamera>, Without<GameplayCamera>),
-    >,
+    player: Single<(&Transform, &GameplayCamera), With<crate::player::PlayerEntity>>,
+    mut camera: Single<&mut Transform, With<GameplayWorldCamera>>,
 ) {
-    let third_person_active = perspective.is_third_person();
+    let (player_transform, gameplay_camera) = *player;
+    let mut camera_transform = camera.into_inner();
 
-    if first_person.is_active == third_person_active {
-        first_person.is_active = !third_person_active;
-    }
-
-    let (third_camera, third_transform) = &mut *third_person;
-    if third_camera.is_active != third_person_active {
-        third_camera.is_active = third_person_active;
-    }
-
-    if !third_person_active {
+    if !perspective.is_third_person() {
+        if camera_transform.translation != Vec3::ZERO {
+            camera_transform.translation = Vec3::ZERO;
+        }
+        if camera_transform.rotation != Quat::IDENTITY {
+            camera_transform.rotation = Quat::IDENTITY;
+        }
         return;
     }
 
-    let (player_transform, gameplay_camera) = *player;
     let rotation = gameplay_camera.rotation();
     let backward = rotation * Vec3::Z;
     let distance = unobstructed_camera_distance(
@@ -195,9 +161,13 @@ fn sync_perspective_cameras(
         backward,
         THIRD_PERSON_MAX_DISTANCE,
     );
-
-    third_transform.translation = player_transform.translation + backward * distance;
-    third_transform.rotation = rotation;
+    let local_translation = Vec3::Z * distance;
+    if camera_transform.translation != local_translation {
+        camera_transform.translation = local_translation;
+    }
+    if camera_transform.rotation != Quat::IDENTITY {
+        camera_transform.rotation = Quat::IDENTITY;
+    }
 }
 
 fn unobstructed_camera_distance(

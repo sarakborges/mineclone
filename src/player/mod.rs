@@ -21,7 +21,7 @@ use crate::{
     rendering::camera_stack::WORLD_CAMERA_ORDER,
     voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
 };
-use camera::GameplayCamera;
+use camera::{GameplayCamera, GameplayWorldCamera};
 use game_mode::GameMode;
 use movement::{
     flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
@@ -52,21 +52,10 @@ pub(crate) fn spawn_player_entity(
     commands
         .spawn((
             PlayerEntity,
-            Camera3d::default(),
-            Camera {
-                order: WORLD_CAMERA_ORDER,
-                output_mode: CameraOutputMode::Skip,
-                ..default()
-            },
-            Hdr,
-            Tonemapping::None,
-            Msaa::Off,
             transform,
             gameplay_camera,
             LOCAL_PLAYER_ID,
             game_mode,
-        ))
-        .insert((
             WalkingState::default(),
             FlightState::restored(saved_flying && game_mode.allows_flight()),
             GravityState::default(),
@@ -77,7 +66,22 @@ pub(crate) fn spawn_player_entity(
                 || EntityHealth::new(definition.health),
                 |health| EntityHealth::restored(definition.health, health),
             ),
-        ));
+        ))
+        .with_children(|player| {
+            player.spawn((
+                GameplayWorldCamera,
+                Camera3d::default(),
+                Camera {
+                    order: WORLD_CAMERA_ORDER,
+                    output_mode: CameraOutputMode::Skip,
+                    ..default()
+                },
+                Hdr,
+                Tonemapping::None,
+                Msaa::Off,
+                Transform::default(),
+            ));
+        });
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {

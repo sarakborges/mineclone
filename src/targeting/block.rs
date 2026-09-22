@@ -12,7 +12,7 @@ use crate::{
     creatures::CreatureInstance,
     entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
-    player::camera::GameplayCamera,
+    player::camera::GameplayWorldCamera,
     voxel::{raycast::{VoxelHit, raycast_voxels}, world::VoxelWorld},
 };
 
@@ -68,7 +68,7 @@ pub struct TargetedBlock(pub Option<VoxelHit>);
 pub(crate) struct TargetedCreature(pub Option<Entity>);
 
 fn update_targets(
-    camera: Single<&GlobalTransform, With<GameplayCamera>>,
+    camera: Single<&GlobalTransform, With<GameplayWorldCamera>>,
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
     creatures: Query<(Entity, &Transform, &CreatureCollider, &EntityHealth), With<CreatureInstance>>,

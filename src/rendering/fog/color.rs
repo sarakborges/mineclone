@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, rendering::environment::EnvironmentVisualState};
+use crate::{player::camera::GameplayWorldCamera, rendering::environment::EnvironmentVisualState};
 
 pub(super) fn update_fog_color(
     visuals: Res<EnvironmentVisualState>,
-    mut fogs: Query<&mut DistanceFog, With<GameplayCamera>>,
+    mut fogs: Query<&mut DistanceFog, With<GameplayWorldCamera>>,
 ) {
     if !visuals.is_changed() {
         return;
@@ -36,7 +36,7 @@ mod tests {
         app.add_systems(Update, update_fog_color);
         let camera = app
             .world_mut()
-            .spawn((GameplayCamera::default(), DistanceFog::default()))
+            .spawn((GameplayWorldCamera, DistanceFog::default()))
             .id();
 
         app.update();
