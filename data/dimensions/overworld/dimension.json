@@ -175,6 +175,24 @@
       }
     },
     {
+      "id": "asteria:overworld/floating_islands",
+      "weight": 0.35,
+      "size": {
+        "x": {
+          "min": 22,
+          "max": 48
+        },
+        "z": {
+          "min": 22,
+          "max": 48
+        },
+        "y": {
+          "min": 8,
+          "max": 16
+        }
+      }
+    },
+    {
       "id": "asteria:overworld/ocean",
       "weight": 1,
       "size": {
