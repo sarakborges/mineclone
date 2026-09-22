@@ -119,18 +119,31 @@ impl<T: Copy + Eq> PaletteStorage<T> {
         }
     }
 
-    fn visit_occupied_indices(&self, mut visit: impl FnMut(usize)) {
-        for (word_index, &word) in self.occupied.iter().enumerate() {
-            let mut remaining = word;
-            while remaining != 0 {
-                let bit = remaining.trailing_zeros() as usize;
-                let voxel_index = word_index * u64::BITS as usize + bit;
-                if voxel_index >= CHUNK_VOLUME {
-                    break;
+    fn occupied_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        let mut word_index = 0_usize;
+        let mut remaining = self.occupied[0];
+
+        std::iter::from_fn(move || loop {
+            while remaining == 0 {
+                word_index += 1;
+                if word_index >= self.occupied.len() {
+                    return None;
                 }
-                visit(voxel_index);
-                remaining &= remaining - 1;
+                remaining = self.occupied[word_index];
             }
+
+            let bit = remaining.trailing_zeros() as usize;
+            remaining &= remaining - 1;
+            let voxel_index = word_index * u64::BITS as usize + bit;
+            if voxel_index < CHUNK_VOLUME {
+                return Some(voxel_index);
+            }
+        })
+    }
+
+    fn visit_occupied_indices(&self, mut visit: impl FnMut(usize)) {
+        for voxel_index in self.occupied_indices() {
+            visit(voxel_index);
         }
     }
 }
@@ -540,6 +553,19 @@ impl VoxelChunk {
 
         self.blocks
             .get_ref(index(x as usize, y as usize, z as usize))
+    }
+
+    pub(crate) fn occupied_block_voxels(
+        &self,
+    ) -> impl Iterator<Item = (usize, usize, usize, &VoxelCell)> + '_ {
+        self.blocks.occupied_indices().map(|voxel_index| {
+            let cell = self
+                .blocks
+                .get_ref(voxel_index)
+                .expect("block occupancy metadata must point to a block voxel");
+            let (x, y, z) = coordinates(voxel_index);
+            (x, y, z, cell)
+        })
     }
 
     pub(crate) fn layers_at(&self, x: i32, y: i32, z: i32) -> &[AttachedLayer] {
