@@ -13,9 +13,10 @@ use crate::{
 };
 
 const PLAYER_PREVIEW_RENDER_LAYER: usize = 3;
-const PLAYER_PREVIEW_SIZE: u32 = 128;
-const PLAYER_PORTRAIT_CENTER_Y: f32 = 1.27;
-const PLAYER_PORTRAIT_CAMERA_DISTANCE: f32 = 1.52;
+const PLAYER_PREVIEW_WIDTH: u32 = 384;
+const PLAYER_PREVIEW_HEIGHT: u32 = 512;
+const PLAYER_PREVIEW_CENTER_Y: f32 = 0.9;
+const PLAYER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 const PREVIEW_RENDER_FRAMES: u8 = 6;
 
 #[derive(Resource, Default)]
@@ -64,8 +65,8 @@ pub(super) fn spawn_player_preview_renderer(
     }
 
     let image = images.add(Image::new_target_texture(
-        PLAYER_PREVIEW_SIZE,
-        PLAYER_PREVIEW_SIZE,
+        PLAYER_PREVIEW_WIDTH,
+        PLAYER_PREVIEW_HEIGHT,
         TextureFormat::Rgba8UnormSrgb,
         None,
     ));
@@ -81,13 +82,17 @@ pub(super) fn spawn_player_preview_renderer(
             ..default()
         },
         RenderTarget::Image(image.into()),
+        Projection::Perspective(PerspectiveProjection {
+            aspect_ratio: PLAYER_PREVIEW_WIDTH as f32 / PLAYER_PREVIEW_HEIGHT as f32,
+            ..default()
+        }),
         Transform::from_xyz(
             0.0,
-            PLAYER_PORTRAIT_CENTER_Y,
-            PLAYER_PORTRAIT_CAMERA_DISTANCE,
+            PLAYER_PREVIEW_CENTER_Y,
+            PLAYER_PREVIEW_CAMERA_DISTANCE,
         )
         .looking_at(
-            Vec3::new(0.0, PLAYER_PORTRAIT_CENTER_Y, 0.0),
+            Vec3::new(0.0, PLAYER_PREVIEW_CENTER_Y, 0.0),
             Vec3::Y,
         ),
         RenderLayers::layer(PLAYER_PREVIEW_RENDER_LAYER),
