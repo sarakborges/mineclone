@@ -1,5 +1,6 @@
 use bevy::{
     camera::{RenderTarget, visibility::RenderLayers},
+    ecs::system::SystemParam,
     input::mouse::MouseMotion,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
@@ -173,22 +174,27 @@ fn attach_character_preview_model(
     }
 }
 
+#[derive(SystemParam)]
+struct CharacterPreviewSceneAssets<'w, 's> {
+    appearances: Query<'w, 's, (), With<CharacterPreviewAppearance>>,
+    meshes: Query<'w, 's, (), With<Mesh3d>>,
+    mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
+    asset_server: Res<'w, AssetServer>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
 fn configure_character_preview_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
     descendants: Query<&Children>,
-    appearances: Query<(), With<CharacterPreviewAppearance>>,
-    meshes: Query<(), With<Mesh3d>>,
-    mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut assets: CharacterPreviewSceneAssets,
 ) {
-    if appearances.get(ready.entity).is_err() {
+    if assets.appearances.get(ready.entity).is_err() {
         return;
     }
 
     for descendant in descendants.iter_descendants(ready.entity) {
-        if meshes.contains(descendant) {
+        if assets.meshes.contains(descendant) {
             commands.entity(descendant).insert((
                 RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
                 NotShadowCaster,
@@ -196,21 +202,21 @@ fn configure_character_preview_scene(
             ));
         }
 
-        let Ok(original) = mesh_materials.get(descendant) else {
+        let Ok(original) = assets.mesh_materials.get(descendant) else {
             continue;
         };
-        let Some(mut material) = materials.get(original.id()).cloned() else {
+        let Some(mut material) = assets.materials.get(original.id()).cloned() else {
             continue;
         };
         material.base_color = Color::WHITE;
-        material.base_color_texture = Some(asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
+        material.base_color_texture = Some(assets.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
         material.unlit = true;
         material.metallic = 0.0;
         material.perceptual_roughness = 1.0;
         material.reflectance = 0.0;
         material.emissive = LinearRgba::BLACK;
         material.emissive_texture = None;
-        let material = materials.add(material);
+        let material = assets.materials.add(material);
         commands
             .entity(descendant)
             .insert(MeshMaterial3d(material));
