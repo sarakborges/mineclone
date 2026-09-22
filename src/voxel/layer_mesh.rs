@@ -75,6 +75,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_layer_meshlets<W, F>(
     world: &W,
     chunk_coord: IVec3,
