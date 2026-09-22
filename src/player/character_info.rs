@@ -19,11 +19,23 @@ pub(crate) enum CharacterInfoState {
     Open,
 }
 
+#[derive(Resource, Default)]
+pub(crate) struct CharacterInfoInputState {
+    escape_consumed: bool,
+}
+
+impl CharacterInfoInputState {
+    pub(crate) fn blocks_pause_escape(&self) -> bool {
+        self.escape_consumed
+    }
+}
+
 pub(crate) struct PlayerCharacterInfoPlugin;
 
 impl Plugin for PlayerCharacterInfoPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<CharacterInfoState>()
+            .init_resource::<CharacterInfoInputState>()
             .add_systems(
                 Update,
                 toggle_character_info
@@ -48,8 +60,12 @@ fn toggle_character_info(
     keybinds: Res<Keybinds>,
     state: Res<State<CharacterInfoState>>,
     chat: Res<ChatState>,
+    mut input_state: ResMut<CharacterInfoInputState>,
     mut next_state: ResMut<NextState<CharacterInfoState>>,
 ) {
+    if !keys.just_pressed(KeyCode::Escape) {
+        input_state.escape_consumed = false;
+    }
     if chat.is_open() {
         return;
     }
@@ -60,6 +76,9 @@ fn toggle_character_info(
             next_state.set(CharacterInfoState::Open);
         }
         CharacterInfoState::Open if toggle_pressed || keys.just_pressed(KeyCode::Escape) => {
+            if keys.just_pressed(KeyCode::Escape) {
+                input_state.escape_consumed = true;
+            }
             next_state.set(CharacterInfoState::Closed);
         }
         _ => {}
