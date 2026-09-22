@@ -269,14 +269,14 @@ where
 
         let tint = tint_at(world_voxel, cell.fluid_id);
         let mut heights = None::<FluidFaceHeights>;
+        let (source_block, _, source_light) = chunk.sample_local_at(x, y, z);
         let source_block_srgb = surface_block_srgb_with_cache(
             lighting_cache,
             world_voxel,
-            chunk.light_at(x as i32, y as i32, z as i32),
+            source_light,
             false,
         );
-        let source_mask = chunk
-            .cell_at(x as i32, y as i32, z as i32)
+        let source_mask = source_block
             .filter(|block| MicroblockMask::is_modified(*block))
             .map(MicroblockMask::from_cell);
         let fluid = fluid_buffer(&mut buffers, cell.fluid_id);
@@ -357,7 +357,7 @@ where
         });
     } else {
         meshlets.for_each_voxel(|x, y, z| {
-            if let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) {
+            if let Some(cell) = chunk.fluid_at_local(x, y, z) {
                 emit_fluid_voxel(x, y, z, cell);
             }
         });
@@ -442,10 +442,11 @@ fn emit_greedy_fluid_top_faces<W, F>(
                 },
                 |cache| cache.heights_at(x, z, cell.fluid_id),
             );
+            let (source_block, _, source_light) = chunk.sample_local_at(x, y, z);
             let source_block_srgb = surface_block_srgb_with_cache(
                 lighting_cache,
                 world_voxel,
-                chunk.light_at(x as i32, y as i32, z as i32),
+                source_light,
                 false,
             );
             let lighting = face_lighting_with_cache(
@@ -456,8 +457,7 @@ fn emit_greedy_fluid_top_faces<W, F>(
                 source_block_srgb,
             );
             let tint = tint_at(world_voxel, cell.fluid_id);
-            let source_mask = chunk
-                .cell_at(x as i32, y as i32, z as i32)
+            let source_mask = source_block
                 .filter(|block| MicroblockMask::is_modified(*block))
                 .map(MicroblockMask::from_cell);
             let neighbor_mask = top_sample
