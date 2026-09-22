@@ -27,7 +27,10 @@ impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<portrait::PlayerPreviewImages>()
             .add_systems(PostStartup, portrait::spawn_player_preview_renderer)
-            .add_systems(Update, portrait::render_player_preview)
+            .add_systems(
+                Update,
+                portrait::sync_player_preview_proxies.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
             .add_systems(
                 Update,
