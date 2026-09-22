@@ -777,8 +777,10 @@ deste diagnóstico (`6834c49f28e1670dd7687bc374b6afe448902b83`), mantendo
 
 VERSION: `0.50.53`, commit
 `d97232f74a3eb6e649d1c788e0f5e43cb2be9e57`.
-CI: aguardando. QA runtime visual continua obrigatória; prioridade atual é
-estabilidade visual antes de novas otimizações de shader/culling/publicação.
+CI: **verde** nos runs push `35743348577` e PR `35743356630` para
+`d97232f74a3eb6e649d1c788e0f5e43cb2be9e57`. QA runtime visual continua
+obrigatória; prioridade atual é estabilidade visual antes de novas otimizações
+de shader/culling/publicação.
 
 ### Ordem de execução definida
 
