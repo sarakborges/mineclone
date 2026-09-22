@@ -390,7 +390,7 @@ Commits: compactação `841f5f444891d00cdedaea567e4d22d4a6ee1786`;
 regressão `552be707485faad2ff525f2279665f4a520ed023`.
 VERSION: `0.50.34`, commit
 `7a9a6258c80e373b2694c310ef126eae406c2689`.
-CI de P18: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P18: **verde** nos runs push `35734080545` e PR `35734085263` para `7a9a6258c80e373b2694c310ef126eae406c2689`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
