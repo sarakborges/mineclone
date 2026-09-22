@@ -10741,3 +10741,39 @@ então esses builders já evitam publicar meshes vazios.
 Commit funcional: `5e4177553e4f5d666fe51f277d311377fd45e0a7`.
 CI push `35756372988`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.70`.
+
+
+## 2026-09-22 — Player model loading + slime full-face
+
+### Player model loading
+
+O `player.gltf` deixou de resolver a skin via URI relativa interna
+(`../../../textures/entities/player.png`). O asset do player agora segue o
+mesmo padrão já usado pelo slime: o GLTF contém somente geometria/material base
+e a textura é vinculada pelo runtime através de
+`PLAYER_SKIN_TEXTURE_PATH = "textures/entities/player.png"`.
+
+A textura é aplicada explicitamente tanto ao modelo third-person quanto à cópia
+do braço first-person. Isso evita que uma falha de resolução de URI dentro do
+GLTF impeça o modelo inteiro de carregar em ambas as perspectivas.
+
+Commit: `fac737af1d63b249867eb5dbd62c056f9735eba7`.
+CI push `35757678050`: **verde**.
+
+### Slime face
+
+O rosto do slime foi ampliado para ocupar toda a face frontal do shell:
+`0.96 × 0.90`, alinhado aos limites do corpo. O GLB atual usa um quad frontal
+em `x = ±0.48`, `y = 0.05..0.95`, com o pivot existente compensando para
+`-0.45..0.45` no espaço local do body.
+
+O gerador foi alinhado para usar um quad frontal full-face, evitando que uma
+regeneração futura restaure o rosto pequeno.
+
+Commits:
+- expansão inicial: `e15a6a69fdd4e454e524e3b97ef0d2f10bff9ed8`;
+- correção do posicionamento do quad: `7a74cde9b027e947bcdeac16feaa2a59c8b971d6`;
+- gerador alinhado: `0cfc6e1ce3ee120c3150cac6d77e8ac36400c992`.
+
+CI final push `35758240813`: **verde** (localizações, Clippy rigoroso e cargo
+check). VERSION: `0.50.71`.
