@@ -142,7 +142,11 @@ where
             *index
         } else {
             let index = block_visuals.len();
-            block_visuals.push(BlockMeshVisual::new(block, texture_table));
+            block_visuals.push(BlockMeshVisual::new(
+                cell.block_id,
+                block,
+                texture_table,
+            ));
             block_visual_indices.push((block_key, index));
             index
         };
@@ -306,24 +310,26 @@ where
                     cell.orientation,
                     texture_rotation,
                 );
-                let greedy_lighting =
-                    canonical_greedy_lighting(lighting);
-                let candidate = GreedyFace {
-                    block_id: cell.block_id,
-                    material_face,
-                    tint: canonical_greedy_tint(tint),
-                    lighting: greedy_lighting,
-                    material_code,
-                    uv_rotation,
-                };
-                let greedy_eligible =
-                    // Alpha-cutout is order-independent and safe to merge.
-                    // Only true alpha blending must keep independent quads.
-                    !block_visual.alpha_blend
-                    && lighting_is_uniform(greedy_lighting);
-
-                if greedy_eligible {
-                    greedy[u + v * CHUNK_SIZE] = Some(candidate);
+                // Alpha-cutout is order-independent and safe to merge.
+                // Only true alpha blending must keep independent quads. Greedy
+                // lighting is accepted only when all four quantized vertices
+                // are identical, so the large FaceLighting payload can be
+                // represented by one compact packed value in the plane mask.
+                if !block_visual.alpha_blend
+                    && let Some(packed_lighting) =
+                        pack_uniform_greedy_lighting(lighting)
+                {
+                    greedy[u + v * CHUNK_SIZE] = Some(GreedyFace {
+                        block_visual_index: u16::try_from(
+                            source.block_visual_index,
+                        )
+                        .expect("chunk block visual index must fit in u16"),
+                        material_face,
+                        tint: pack_greedy_tint(tint),
+                        lighting: packed_lighting,
+                        material_code: material_code as u32,
+                        uv_rotation,
+                    });
                     continue;
                 }
 
@@ -360,7 +366,7 @@ where
                 face,
                 depth,
                 &mut greedy,
-                &mut block_lookup,
+                &block_visuals,
                 &mut buffers,
             );
         }
@@ -394,15 +400,23 @@ struct BlockFaceMeshVisual {
     uses_texture_rotation: bool,
 }
 
-struct BlockMeshVisual {
+struct BlockMeshVisual<'a> {
+    block_id: &'static str,
+    block: &'a BlockDefinition,
     faces: BlockFaces<BlockFaceMeshVisual>,
     is_transparent: bool,
     alpha_blend: bool,
 }
 
-impl BlockMeshVisual {
-    fn new(block: &BlockDefinition, texture_table: &TerrainTextureTable) -> Self {
+impl<'a> BlockMeshVisual<'a> {
+    fn new(
+        block_id: &'static str,
+        block: &'a BlockDefinition,
+        texture_table: &TerrainTextureTable,
+    ) -> Self {
         Self {
+            block_id,
+            block,
             faces: BlockFaces::from_fn(|face| {
                 let material_face = block_face_material_face(face, block);
                 BlockFaceMeshVisual {
@@ -486,60 +500,71 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 struct GreedyFace {
-    block_id: &'static str,
+    block_visual_index: u16,
     material_face: BlockFace,
-    tint: [f32; 3],
-    lighting: FaceLighting,
-    material_code: f32,
+    tint: u32,
+    lighting: u64,
+    material_code: u32,
     uv_rotation: TextureRotation,
 }
 
-impl PartialEq for GreedyFace {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.block_id.as_ptr(), other.block_id.as_ptr())
-            && self.block_id.len() == other.block_id.len()
-            && self.material_face == other.material_face
-            && self.tint == other.tint
-            && self.lighting == other.lighting
-            && self.material_code == other.material_code
-            && self.uv_rotation == other.uv_rotation
-    }
+fn pack_greedy_tint(tint: [f32; 3]) -> u32 {
+    let tint = tint.map(|channel| quantize_to_u32(channel, 127));
+    tint[0] | (tint[1] << 7) | (tint[2] << 14)
 }
 
-fn canonical_greedy_tint(tint: [f32; 3]) -> [f32; 3] {
-    tint.map(|channel| quantize_unit(channel, 127.0))
+fn unpack_greedy_tint(packed: u32) -> [f32; 3] {
+    [
+        (packed & 127) as f32 / 127.0,
+        ((packed >> 7) & 127) as f32 / 127.0,
+        ((packed >> 14) & 127) as f32 / 127.0,
+    ]
 }
 
-fn canonical_greedy_lighting(mut lighting: FaceLighting) -> FaceLighting {
-    for index in 0..4 {
-        lighting.channels[index][0] =
-            quantize_unit(lighting.channels[index][0], 15.0);
-        // The second channel is replaced by material_code before upload.
-        lighting.channels[index][1] = 0.0;
-        lighting.block_srgb[index] = lighting.block_srgb[index]
-            .map(|channel| quantize_unit(channel, 255.0));
-        lighting.ambient_occlusion[index] =
-            quantize_unit(lighting.ambient_occlusion[index], 255.0);
-    }
-    lighting
-}
+fn pack_uniform_greedy_lighting(lighting: FaceLighting) -> Option<u64> {
+    let packed = std::array::from_fn::<u64, 4, _>(|index| {
+        let sky = quantize_to_u64(lighting.channels[index][0], 15);
+        let block = lighting.block_srgb[index]
+            .map(|channel| quantize_to_u64(channel, 255));
+        let ao = quantize_to_u64(lighting.ambient_occlusion[index], 255);
 
-fn quantize_unit(value: f32, steps: f32) -> f32 {
-    (value.clamp(0.0, 1.0) * steps).round() / steps
-}
+        sky
+            | (block[0] << 4)
+            | (block[1] << 12)
+            | (block[2] << 20)
+            | (ao << 28)
+    });
 
-fn lighting_is_uniform(lighting: FaceLighting) -> bool {
-    lighting.channels[1..]
+    packed[1..]
         .iter()
-        .all(|value| *value == lighting.channels[0])
-        && lighting.block_srgb[1..]
-            .iter()
-            .all(|value| *value == lighting.block_srgb[0])
-        && lighting.ambient_occlusion[1..]
-            .iter()
-            .all(|value| *value == lighting.ambient_occlusion[0])
+        .all(|candidate| *candidate == packed[0])
+        .then_some(packed[0])
+}
+
+fn unpack_greedy_lighting(packed: u64) -> FaceLighting {
+    let sky = (packed & 15) as f32 / 15.0;
+    let block = [
+        ((packed >> 4) & 255) as f32 / 255.0,
+        ((packed >> 12) & 255) as f32 / 255.0,
+        ((packed >> 20) & 255) as f32 / 255.0,
+    ];
+    let ao = ((packed >> 28) & 255) as f32 / 255.0;
+
+    FaceLighting {
+        channels: [[sky, 0.0]; 4],
+        block_srgb: [block; 4],
+        ambient_occlusion: [ao; 4],
+    }
+}
+
+fn quantize_to_u32(value: f32, steps: u32) -> u32 {
+    (value.clamp(0.0, 1.0) * steps as f32).round() as u32
+}
+
+fn quantize_to_u64(value: f32, steps: u64) -> u64 {
+    (value.clamp(0.0, 1.0) * steps as f32).round() as u64
 }
 
 fn face_neighbor_cell<W: VoxelRead + ?Sized>(
@@ -598,7 +623,7 @@ fn emit_greedy_plane<'a>(
     face: BlockFace,
     depth: usize,
     mask: &mut [Option<GreedyFace>; CHUNK_SIZE * CHUNK_SIZE],
-    block_lookup: &mut BlockLookup<'a>,
+    block_visuals: &[BlockMeshVisual<'a>],
     buffers: &mut MicroMeshBuffers<'a>,
 ) {
     for v in 0..CHUNK_SIZE {
@@ -633,20 +658,21 @@ fn emit_greedy_plane<'a>(
                 }
             }
 
-            let block = block_lookup.get(candidate.block_id);
+            let block_visual =
+                &block_visuals[usize::from(candidate.block_visual_index)];
             push_lit_quad(
                 material_buffer(
                     buffers,
-                    candidate.block_id,
-                    block,
+                    block_visual.block_id,
+                    block_visual.block,
                     candidate.material_face,
                 ),
                 greedy_vertices(face, depth, u, v, width, height),
                 face.normal(),
                 tiled_uvs(width, height, candidate.uv_rotation),
-                candidate.tint,
-                candidate.lighting,
-                candidate.material_code,
+                unpack_greedy_tint(candidate.tint),
+                unpack_greedy_lighting(candidate.lighting),
+                candidate.material_code as f32,
             );
         }
     }
