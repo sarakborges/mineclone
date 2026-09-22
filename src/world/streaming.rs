@@ -393,12 +393,14 @@ impl ChunkStreamingState {
     pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3, bytes: usize) {
         self.ready.remove(coord);
         self.mesh_pressure_evicted.insert(coord, bytes);
+        self.missing_render_priority = None;
     }
 
     pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
         if self.mesh_pressure_evicted.remove(&coord).is_none() || !self.keeps_loaded(coord) {
             return false;
         }
+        self.missing_render_priority = None;
         self.mark_ready(coord);
         true
     }
@@ -420,9 +422,13 @@ impl ChunkStreamingState {
         desired: &HashSet<IVec3>,
         center: IVec3,
     ) {
+        let before = self.mesh_pressure_evicted.len();
         self.mesh_pressure_evicted.retain(|coord, _| {
             desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
         });
+        if self.mesh_pressure_evicted.len() != before {
+            self.missing_render_priority = None;
+        }
     }
 
     fn pop_ready(&mut self) -> Option<IVec3> {
