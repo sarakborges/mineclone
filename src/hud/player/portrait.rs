@@ -272,17 +272,31 @@ fn configure_player_preview_scene(
     }
 }
 
+type PlayerPortraitPreviewCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Camera,
+    (
+        With<PlayerPortraitPreviewCamera>,
+        Without<CharacterInfoPreviewCamera>,
+    ),
+>;
+
+type CharacterInfoPreviewCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Camera, &'static mut Transform),
+    (
+        With<CharacterInfoPreviewCamera>,
+        Without<PlayerPortraitPreviewCamera>,
+    ),
+>;
+
 pub(super) fn render_player_preview(
     character_info: Res<State<CharacterInfoState>>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
-    mut portrait_cameras: Query<
-        &mut Camera,
-        (With<PlayerPortraitPreviewCamera>, Without<CharacterInfoPreviewCamera>),
-    >,
-    mut character_cameras: Query<
-        (&mut Camera, &mut Transform),
-        (With<CharacterInfoPreviewCamera>, Without<PlayerPortraitPreviewCamera>),
-    >,
+    mut portrait_cameras: PlayerPortraitPreviewCameraQuery,
+    mut character_cameras: CharacterInfoPreviewCameraQuery,
 ) {
     let portrait_should_render = render_state.portrait_frames > 0;
     for mut camera in &mut portrait_cameras {
