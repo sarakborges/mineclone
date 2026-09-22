@@ -113,18 +113,10 @@ impl Default for GraphicsConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct MiscellaneousConfig {
     hud: HudSettings,
-}
-
-impl Default for MiscellaneousConfig {
-    fn default() -> Self {
-        Self {
-            hud: HudSettings::default(),
-        }
-    }
 }
 
 pub(crate) struct GameConfigPlugin;
