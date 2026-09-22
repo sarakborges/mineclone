@@ -7,6 +7,7 @@ use super::{
     fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
+    microblock::{MICROBLOCK_EDGE, MicroblockMask},
     read::VoxelRead,
 };
 
@@ -19,12 +20,36 @@ const LIGHTING_CACHE_SIDE: usize = CHUNK_SIZE + 2;
 const LIGHTING_CACHE_VOLUME: usize =
     LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE;
 
-#[derive(Clone, Copy, Default)]
+const MICROBLOCK_VOLUME: u16 =
+    (MICROBLOCK_EDGE * MICROBLOCK_EDGE * MICROBLOCK_EDGE) as u16;
+const UNLOADED_OCCUPANCY: u16 = u16::MAX;
+
+#[derive(Clone, Copy)]
 struct CachedLightingSample {
     sky: u8,
     block_srgb: [u8; 3],
-    occupied_fraction: f32,
-    loaded: bool,
+    occupied_count: u16,
+}
+
+impl Default for CachedLightingSample {
+    fn default() -> Self {
+        Self {
+            sky: 0,
+            block_srgb: [0; 3],
+            occupied_count: UNLOADED_OCCUPANCY,
+        }
+    }
+}
+
+impl CachedLightingSample {
+    fn is_loaded(self) -> bool {
+        self.occupied_count != UNLOADED_OCCUPANCY
+    }
+
+    fn occupied_fraction(self) -> f32 {
+        debug_assert!(self.is_loaded());
+        self.occupied_count as f32 / MICROBLOCK_VOLUME as f32
+    }
 }
 
 pub(crate) struct ChunkLightingCache {
@@ -85,7 +110,7 @@ impl ChunkLightingCache {
             local.y as usize,
             local.z as usize,
         )];
-        sample.loaded.then_some(sample)
+        sample.is_loaded().then_some(sample)
     }
 }
 
@@ -102,15 +127,14 @@ fn cached_lighting_sample(sample: VoxelSample) -> CachedLightingSample {
     CachedLightingSample {
         sky: light.sky(),
         block_srgb: light.block_srgb_levels(),
-        occupied_fraction: cell.map_or(0.0, |cell| {
-            if crate::voxel::microblock::MicroblockMask::is_modified(cell) {
-                crate::voxel::microblock::MicroblockMask::from_cell(cell)
-                    .occupied_fraction()
+        occupied_count: cell.map_or(0, |cell| {
+            if MicroblockMask::is_modified(cell) {
+                u16::try_from(MicroblockMask::from_cell(cell).occupied_count())
+                    .expect("microblock occupancy must fit in u16")
             } else {
-                1.0
+                MICROBLOCK_VOLUME
             }
         }),
-        loaded: true,
     }
 }
 
@@ -205,9 +229,9 @@ fn face_lighting_from_samples(
         let side_a_sample = side_a_samples[side_a_index];
         let side_b_sample = side_b_samples[side_b_index];
         let corner_sample = corner_samples[side_a_index][side_b_index];
-        let side_a_occlusion = side_a_sample.occupied_fraction;
-        let side_b_occlusion = side_b_sample.occupied_fraction;
-        let corner_occlusion = corner_sample.occupied_fraction;
+        let side_a_occlusion = side_a_sample.occupied_fraction();
+        let side_b_occlusion = side_b_sample.occupied_fraction();
+        let corner_occlusion = corner_sample.occupied_fraction();
         let occlusion = if side_a_occlusion >= 1.0 && side_b_occlusion >= 1.0 {
             3.0
         } else {
@@ -240,12 +264,11 @@ fn provisional_top_sky_sample_cached(
     face: BlockFace,
     sample: CachedLightingSample,
 ) -> CachedLightingSample {
-    if face == BlockFace::Top && !sample.loaded {
+    if face == BlockFace::Top && !sample.is_loaded() {
         CachedLightingSample {
             sky: VoxelLight::MAX_LEVEL,
             block_srgb: [0; 3],
-            occupied_fraction: 0.0,
-            loaded: true,
+            occupied_count: 0,
         }
     } else {
         sample
@@ -260,10 +283,10 @@ fn average_cached_shader_light_levels(
     let mut weight_total = 0.0;
 
     for sample in samples {
-        if !sample.loaded {
+        if !sample.is_loaded() {
             continue;
         }
-        let weight = 1.0 - sample.occupied_fraction;
+        let weight = 1.0 - sample.occupied_fraction();
         if weight <= f32::EPSILON {
             continue;
         }
