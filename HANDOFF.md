@@ -10715,3 +10715,29 @@ transparente para `HairLayer`.
 Commit da skin: `b92b786cdf6643d083cd1b846e87cc2d976e219d`.
 CI push `35754313075`: **verde** (localizações, Clippy e cargo check).
 VERSION: `0.50.69`.
+
+
+## 2026-09-22 — Correção de render slab use-after-free sob pressão de VRAM
+
+Foi identificado um caminho inseguro em `chunk_unloading.rs`:
+`retire_chunk_render_allocation_immediately` removia os `Mesh` de
+`Assets<Mesh>` imediatamente enquanto os `despawn()` das entidades ainda
+eram deferred via `Commands`. Durante essa janela, entidades ainda vivas
+podiam referenciar meshes já liberados pelo allocator do renderer.
+
+Esse caminho era usado especificamente pelo eviction de pressão de VRAM e podia
+executar para vários chunks no mesmo frame, compatível com a rajada de logs
+`bevy_render::slab_allocator: Use-after-free: attempted to copy element data for an unallocated key`.
+
+A correção removeu completamente o retirement imediato. Evictions de pressão de
+VRAM agora usam `retire_chunk_render_allocation`, o mesmo caminho ordenado do
+resto do renderer: despawn e remoção do asset ficam enfileirados juntos na
+ordem correta.
+
+Também foi auditado o caminho de mesh vazio: terrain/fluid/layer passam por
+`VoxelMeshBuffer::into_mesh()`, que retorna `None` quando não há posições,
+então esses builders já evitam publicar meshes vazios.
+
+Commit funcional: `5e4177553e4f5d666fe51f277d311377fd45e0a7`.
+CI push `35756372988`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.70`.
