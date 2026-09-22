@@ -16,7 +16,9 @@ const LARGE_MESH_THRESHOLD_BYTES: u64 = 8 * MEBIBYTE;
 pub(super) struct MeshAllocatorDiagnosticsPlugin;
 
 impl Plugin for MeshAllocatorDiagnosticsPlugin {
-    fn build(&self, _app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        app.add_systems(Last, discard_empty_mesh_assets);
+    }
 
     fn finish(&self, app: &mut App) {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -60,4 +62,28 @@ fn log_mesh_allocator_pressure(
         settings.max_slab_size,
         settings.large_threshold,
     );
+}
+
+fn discard_empty_mesh_assets(
+    mut events: MessageReader<AssetEvent<Mesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for event in events.read() {
+        let id = match event {
+            AssetEvent::Added { id }
+            | AssetEvent::Modified { id }
+            | AssetEvent::LoadedWithDependencies { id } => *id,
+            AssetEvent::Removed { .. } | AssetEvent::Unused { .. } => continue,
+        };
+
+        let empty = meshes
+            .get(id)
+            .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0);
+        if !empty {
+            continue;
+        }
+
+        warn!("discarding empty mesh asset {id:?} before render extraction");
+        let _ = meshes.remove(id);
+    }
 }
