@@ -24,21 +24,11 @@ use super::{
     pool::{ChunkMeshKey, ChunkRenderAllocation, ChunkRenderPool},
 };
 
+#[derive(Default)]
 struct ColumnTintCache {
-    grass: Vec<Option<Color>>,
-    leaf: Vec<Option<Color>>,
-    foliage: Vec<Option<Color>>,
-}
-
-impl Default for ColumnTintCache {
-    fn default() -> Self {
-        let len = CHUNK_SIZE * CHUNK_SIZE;
-        Self {
-            grass: vec![None; len],
-            leaf: vec![None; len],
-            foliage: vec![None; len],
-        }
-    }
+    grass: Option<Vec<Option<Color>>>,
+    leaf: Option<Vec<Option<Color>>>,
+    foliage: Option<Vec<Option<Color>>>,
 }
 
 impl ColumnTintCache {
@@ -51,14 +41,15 @@ impl ColumnTintCache {
         let local_x = voxel.x.rem_euclid(CHUNK_SIZE as i32) as usize;
         let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
         let index = local_x + local_z * CHUNK_SIZE;
-        let slot = match tint {
+        let cache = match tint {
             BlockTint::None => return Color::WHITE,
-            BlockTint::Grass => &mut self.grass[index],
-            BlockTint::Leaf => &mut self.leaf[index],
-            BlockTint::Foliage => &mut self.foliage[index],
+            BlockTint::Grass => &mut self.grass,
+            BlockTint::Leaf => &mut self.leaf,
+            BlockTint::Foliage => &mut self.foliage,
         };
-
-        slot.get_or_insert_with(make).clone()
+        let cache = cache
+            .get_or_insert_with(|| vec![None; CHUNK_SIZE * CHUNK_SIZE]);
+        cache[index].get_or_insert_with(make).clone()
     }
 }
 
