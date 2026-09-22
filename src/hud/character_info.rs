@@ -23,8 +23,8 @@ const CHARACTER_PREVIEW_WIDTH: u32 = 384;
 const CHARACTER_PREVIEW_HEIGHT: u32 = 512;
 const CHARACTER_PREVIEW_CAMERA_Y: f32 = 0.9;
 const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
-const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 320.0;
-const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 426.0;
+const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
+const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
 
 #[derive(Resource, Default)]
@@ -61,7 +61,7 @@ impl Plugin for CharacterInfoHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CharacterPreviewImage>()
             .init_resource::<CharacterPreviewInteraction>()
-            .add_systems(OnEnter(GameState::Gameplay), spawn_character_preview)
+            .add_systems(PostStartup, spawn_character_preview)
             .add_systems(
                 OnEnter(CharacterInfoState::Open),
                 spawn_character_info.run_if(in_state(GameState::Gameplay)),
@@ -72,18 +72,13 @@ impl Plugin for CharacterInfoHudPlugin {
             )
             .add_systems(
                 Update,
-                (
-                    attach_character_preview_model,
-                    rotate_character_preview
-                        .run_if(in_state(CharacterInfoState::Open)),
-                    sync_character_preview_camera,
-                )
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
+                (attach_character_preview_model, sync_character_preview_camera).chain(),
             )
             .add_systems(
-                OnEnter(GameState::StartingScreen),
-                release_character_preview_image,
+                Update,
+                rotate_character_preview
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(CharacterInfoState::Open)),
             );
     }
 }
@@ -120,7 +115,6 @@ fn spawn_character_preview(
         )
         .looking_at(Vec3::new(0.0, CHARACTER_PREVIEW_CAMERA_Y, 0.0), Vec3::Y),
         RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
-        DespawnOnExit(GameState::Gameplay),
     ));
 
     let Some(model_path) = definition.model.as_ref() else {
@@ -136,7 +130,6 @@ fn spawn_character_preview(
         Transform::default(),
         Visibility::Inherited,
         RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
-        DespawnOnExit(GameState::Gameplay),
     ));
 }
 
@@ -174,7 +167,8 @@ fn attach_character_preview_model(
 #[derive(SystemParam)]
 struct CharacterPreviewSceneAssets<'w, 's> {
     appearances: Query<'w, 's, (), With<CharacterPreviewAppearance>>,
-    meshes: Query<'w, 's, (), With<Mesh3d>>,
+    mesh_entities: Query<'w, 's, &'static Mesh3d>,
+    meshes: Res<'w, Assets<Mesh>>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     asset_server: Res<'w, AssetServer>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -192,7 +186,18 @@ fn configure_character_preview_scene(
     }
 
     for descendant in descendants.iter_descendants(ready.entity) {
-        if assets.meshes.contains(descendant) {
+        if let Ok(mesh_handle) = assets.mesh_entities.get(descendant) {
+            if assets
+                .meshes
+                .get(mesh_handle.id())
+                .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0)
+            {
+                commands
+                    .entity(descendant)
+                    .remove::<Mesh3d>()
+                    .remove::<MeshMaterial3d<StandardMaterial>>();
+                continue;
+            }
             commands.entity(descendant).insert((
                 RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
                 NotShadowCaster,
@@ -256,19 +261,19 @@ fn spawn_character_info(
                     width: px(460),
                     padding: UiRect::all(px(18)),
                     border: UiRect::all(px(1)),
-                    flex_direction: FlexDirection::Column,
+                    flex_direction: FlexDirection::Row,
                     align_items: AlignItems::FlexStart,
-                    row_gap: px(16),
+                    column_gap: px(18),
                     ..default()
                 }),
                 Pickable::IGNORE,
             ))
             .with_children(|card| {
+                spawn_character_preview_viewport(card, image);
                 card.spawn((
                     typography::hud_heading(PLAYER_DISPLAY_NAME),
                     Pickable::IGNORE,
                 ));
-                spawn_character_preview_viewport(card, image);
             });
         });
 }
@@ -364,11 +369,3 @@ fn sync_character_preview_camera(
     }
 }
 
-fn release_character_preview_image(
-    mut images: ResMut<Assets<Image>>,
-    mut preview_image: ResMut<CharacterPreviewImage>,
-) {
-    if let Some(handle) = preview_image.0.take() {
-        let _ = images.remove(&handle);
-    }
-}
