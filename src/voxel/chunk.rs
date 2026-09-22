@@ -542,6 +542,27 @@ impl VoxelChunk {
             .is_some_and(|face| self.boundary_fluid_counts[face] > 0)
     }
 
+    pub(crate) fn dependency_boundary_has_content(&self, outward: IVec3) -> bool {
+        if boundary_face_index(outward).is_some() {
+            return self.boundary_has_content(outward);
+        }
+
+        dependency_boundary_region_has(outward, |x, y, z| {
+            let voxel_index = index(x, y, z);
+            self.blocks.get_ref(voxel_index).is_some() || self.fluids.get(voxel_index).is_some()
+        })
+    }
+
+    pub(crate) fn dependency_boundary_has_fluid(&self, outward: IVec3) -> bool {
+        if boundary_face_index(outward).is_some() {
+            return self.boundary_has_fluid(outward);
+        }
+
+        dependency_boundary_region_has(outward, |x, y, z| {
+            self.fluids.get(index(x, y, z)).is_some()
+        })
+    }
+
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
         self.cell_ref_at(x, y, z).copied()
     }
@@ -1232,6 +1253,40 @@ fn adjust_boundary_count(count: &mut u16, added: bool) {
             .checked_sub(1)
             .expect("chunk boundary occupancy count cannot underflow");
     }
+}
+
+fn dependency_boundary_region_has(
+    outward: IVec3,
+    mut has_content: impl FnMut(usize, usize, usize) -> bool,
+) -> bool {
+    debug_assert_ne!(outward, IVec3::ZERO);
+    debug_assert!(
+        [-1, 0, 1].contains(&outward.x)
+            && [-1, 0, 1].contains(&outward.y)
+            && [-1, 0, 1].contains(&outward.z)
+    );
+
+    let axis_range = |component: i32| match component {
+        -1 => (0, 1),
+        0 => (0, CHUNK_SIZE),
+        1 => (CHUNK_SIZE - 1, CHUNK_SIZE),
+        _ => unreachable!("dependency boundary offset must stay in -1..=1"),
+    };
+    let (x_start, x_end) = axis_range(outward.x);
+    let (y_start, y_end) = axis_range(outward.y);
+    let (z_start, z_end) = axis_range(outward.z);
+
+    for y in y_start..y_end {
+        for z in z_start..z_end {
+            for x in x_start..x_end {
+                if has_content(x, y, z) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn boundary_face_index(outward: IVec3) -> Option<usize> {
