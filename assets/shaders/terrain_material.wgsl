@@ -85,6 +85,14 @@ fn directional_sun_visibility(in: VertexOutput) -> f32 {
             continue;
         }
 
+        let incidence = max(
+            dot(surface_normal, normalize((*light).direction_to_light)),
+            0.0,
+        );
+        if incidence <= 0.0 {
+            return SUN_AMBIENT_SHARE;
+        }
+
         let shadow = shadows::fetch_directional_shadow(
             light_id,
             in.world_position,
@@ -92,11 +100,6 @@ fn directional_sun_visibility(in: VertexOutput) -> f32 {
             view_z,
             in.position.xy,
         );
-        let incidence = max(
-            dot(surface_normal, normalize((*light).direction_to_light)),
-            0.0,
-        );
-
         return mix(SUN_AMBIENT_SHARE, 1.0, shadow * incidence);
     }
 
