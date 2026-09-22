@@ -276,6 +276,31 @@ uso em `medium.rs` após a remoção do stub. Corrigido sem supressão em
 `568801cb91802f7185874a3349dd442e9f22689f`.
 CI final de P12: **verde** nos runs push `35732329750` e PR `35732336961` para `568801cb91802f7185874a3349dd442e9f22689f`. Nenhum `cargo test` foi adicionado/executado.
 
+### P13 — invalidar skylight inferior apenas quando a seção altera a luz
+
+O streaming chamava `enqueue_loaded_column_below` após todo seed de seção
+16³. Isso enfileirava todos os voxels de todas as seções residentes abaixo,
+mesmo quando a seção recém-carregada era vazia ou não reduzia nenhum canal
+de skylight.
+
+O seed top-down agora retorna `DirectLightingSeedResult`, incluindo
+`changes_direct_sky_below`. Esse bit é calculado durante a própria passada:
+quando a atenuação realmente reduz o nível de uma das 256 colunas, a seção
+pode alterar o resultado abaixo; caso contrário, a invalidação de coluna é
+pulada. Não foi adicionado scan extra.
+
+O comportamento de relaxação local permanece separado em
+`requires_relaxation`. Regressões compiláveis cobrem seção vazia, seção
+opaca não emissiva e seção opaca emissiva.
+
+Commits: resultado do seed
+`b59f063fe5319c0a6507bd4fdb54d90fd95d7f5d`; gate no streaming
+`5e5bae97bbf9bece644b3cdc10c3e123ded93853`; regressões
+`c9cf84b15703615e981d7421d716ff663439ae6b`.
+VERSION: `0.50.29`, commit
+`b8b8b94cf901d4ad7e802fe8c9b3becc3627c614`.
+CI de P13: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
