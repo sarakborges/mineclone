@@ -839,3 +839,51 @@ fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace)
         BlockFace::Back => rotations.back,
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_voxel_planes_preserve_source_order_inside_each_plane() {
+        let cell = VoxelCell::new("asteria:test", TextureRotation::default());
+        let sources = [
+            VoxelMeshSource {
+                cell,
+                block_visual_index: 0,
+                local_position: pack_local_voxel(2, 0, 0),
+            },
+            VoxelMeshSource {
+                cell,
+                block_visual_index: 0,
+                local_position: pack_local_voxel(1, 0, 0),
+            },
+            VoxelMeshSource {
+                cell,
+                block_visual_index: 0,
+                local_position: pack_local_voxel(2, 1, 0),
+            },
+            VoxelMeshSource {
+                cell,
+                block_visual_index: 0,
+                local_position: pack_local_voxel(1, 1, 0),
+            },
+        ];
+
+        let planes = ActiveVoxelPlanes::from_sources(&sources, 0);
+        let plane_one = planes
+            .plane(1)
+            .iter()
+            .map(|packed| unpack_active_voxel(*packed).3)
+            .collect::<Vec<_>>();
+        let plane_two = planes
+            .plane(2)
+            .iter()
+            .map(|packed| unpack_active_voxel(*packed).3)
+            .collect::<Vec<_>>();
+
+        assert_eq!(plane_one, vec![1, 3]);
+        assert_eq!(plane_two, vec![0, 2]);
+    }
+}
