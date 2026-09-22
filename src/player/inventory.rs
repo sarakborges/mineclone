@@ -7,6 +7,7 @@ use crate::{
         state_systems::reset_next_state,
     },
     hud::chat::ChatState,
+    player::character_info::CharacterInfoState,
     tools::BrushPaletteState,
 };
 
@@ -53,7 +54,8 @@ impl Plugin for PlayerInventoryPlugin {
                 toggle_inventory
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(in_state(BrushPaletteState::Closed))
+                    .run_if(in_state(CharacterInfoState::Closed)),
             )
             .add_systems(
                 OnExit(InventoryState::Open),
