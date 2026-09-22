@@ -138,6 +138,10 @@ pub(super) struct ChunkStreamingState {
 }
 
 impl ChunkStreamingState {
+    pub(super) fn center(&self) -> Option<IVec3> {
+        self.center
+    }
+
     pub(super) fn movement_direction(&self) -> IVec2 {
         self.movement_direction
     }
