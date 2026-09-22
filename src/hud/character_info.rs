@@ -64,9 +64,7 @@ impl Plugin for CharacterInfoHudPlugin {
             .add_systems(OnEnter(GameState::Gameplay), spawn_character_preview)
             .add_systems(
                 OnEnter(CharacterInfoState::Open),
-                (reset_character_preview, spawn_character_info)
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
+                spawn_character_info.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 OnExit(CharacterInfoState::Open),
@@ -187,7 +185,6 @@ fn configure_character_preview_scene(
     mut commands: Commands,
     descendants: Query<&Children>,
     mut assets: CharacterPreviewSceneAssets,
-    state: Res<State<CharacterInfoState>>,
     mut interaction: ResMut<CharacterPreviewInteraction>,
 ) {
     if assets.appearances.get(ready.entity).is_err() {
@@ -223,9 +220,7 @@ fn configure_character_preview_scene(
             .insert(MeshMaterial3d(material));
     }
 
-    if *state.get() == CharacterInfoState::Open {
-        interaction.render_frames = interaction.render_frames.max(2);
-    }
+    interaction.render_frames = interaction.render_frames.max(2);
 }
 
 fn spawn_character_info(
@@ -262,7 +257,7 @@ fn spawn_character_info(
                     padding: UiRect::all(px(18)),
                     border: UiRect::all(px(1)),
                     flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
+                    align_items: AlignItems::FlexStart,
                     row_gap: px(16),
                     ..default()
                 }),
@@ -313,19 +308,6 @@ fn spawn_character_preview_viewport(
         });
 }
 
-fn reset_character_preview(
-    mut interaction: ResMut<CharacterPreviewInteraction>,
-    mut models: Query<&mut Transform, With<CharacterPreviewModel>>,
-) {
-    *interaction = CharacterPreviewInteraction {
-        render_frames: 2,
-        ..default()
-    };
-    for mut transform in &mut models {
-        transform.rotation = Quat::IDENTITY;
-    }
-}
-
 fn deactivate_character_preview_camera(
     mut interaction: ResMut<CharacterPreviewInteraction>,
     mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
@@ -370,11 +352,10 @@ fn rotate_character_preview(
 }
 
 fn sync_character_preview_camera(
-    state: Res<State<CharacterInfoState>>,
     mut interaction: ResMut<CharacterPreviewInteraction>,
     mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
 ) {
-    let active = *state.get() == CharacterInfoState::Open && interaction.render_frames > 0;
+    let active = interaction.render_frames > 0;
     for mut camera in &mut cameras {
         camera.is_active = active;
     }
