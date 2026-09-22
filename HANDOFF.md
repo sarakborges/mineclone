@@ -644,7 +644,7 @@ Commits: batching `bdc509cb180e4d3ee1d6150acfb8cab1adca98e3`;
 regressão X/Y/Z `7ae7cb040ededb388a81057e711b3483d81bd843`.
 VERSION: `0.50.46`, commit
 `f3ffd75e423ffaccd221f5df1d73a6ef45776655`.
-CI de P30: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P30: **verde** nos runs push `35739834526` e PR `35739842265` para `f3ffd75e423ffaccd221f5df1d73a6ef45776655`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
