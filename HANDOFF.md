@@ -550,7 +550,7 @@ direto, inclusive borda de chunk.
 Commit funcional: `7f14bc0e248b2e3ae6250f346175c4b95f0b9a61`.
 VERSION: `0.50.42`, commit
 `fb8ef502249154519b20e48e1b107651df7f5ab5`.
-CI de P26: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P26: **verde** nos runs push `35737730900` e PR `35737737595` para `fb8ef502249154519b20e48e1b107651df7f5ab5`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
