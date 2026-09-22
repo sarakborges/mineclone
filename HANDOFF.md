@@ -104,6 +104,27 @@ CI de P5: **verde** nos runs push `35685358763` e PR `35685361581` para
 compilação/QA WGSL real continua pendente em runtime/GPU, portanto não há
 alegação de validação visual.
 
+### P6 — remover consultas redundantes do BFS de fluidos
+
+A reavaliação de initial meshing não encontrou trabalho adicional: o P1 já
+cobra cada candidato logo após `pop_ready()`, antes dos descartes/deferimentos,
+e preserva preempção/publicação nearest-first. Nenhuma mudança foi aplicada
+nesse caminho.
+
+No downhill BFS de fluidos, `visited` agora é consultado antes de
+`can_flow_horizontally_through`. Um nó já visitado foi validado como
+atravessável durante a mesma busca imutável; revisitas na mesma distância
+apenas propagam novos first-step direction bits, enquanto revisitas com outra
+distância continuam sem efeito como antes. Isso elimina `VoxelWorld::sample_at`
+redundante em ciclos/reconvergências sem mudar range, prioridade de queda,
+máscara de direções ou semântica de source/falling fluid.
+
+Solver: `1e20351a685b9623a76dac34717a3fcdbfe9f491`.
+VERSION: `0.50.22`, commit
+`5646727808c10d26037430c0e90201c209c3c5e7`.
+CI de P6: aguardando. Testes Rust existentes continuam apenas compilados pelo
+Clippy `--all-targets`; nenhum `cargo test` foi executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
