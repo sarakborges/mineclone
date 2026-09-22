@@ -138,7 +138,7 @@ fn sync_perspective_camera(
     perspective: Res<CameraPerspective>,
     world: Res<VoxelWorld>,
     player: Single<(&Transform, &GameplayCamera), With<crate::player::PlayerEntity>>,
-    mut camera: Single<&mut Transform, With<GameplayWorldCamera>>,
+    camera: Single<&mut Transform, With<GameplayWorldCamera>>,
 ) {
     let (player_transform, gameplay_camera) = *player;
     let mut camera_transform = camera.into_inner();
