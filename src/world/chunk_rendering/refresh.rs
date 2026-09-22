@@ -56,7 +56,12 @@ pub(crate) fn apply_built_chunk_geometry_meshlets(
         return true;
     }
 
-    render_pool.patch_terrain_mesh_assets(coord, meshes, &built_meshes, meshlets)
+    let patched =
+        render_pool.patch_terrain_mesh_assets(coord, meshes, &built_meshes, meshlets);
+    if patched {
+        render_pool.invalidate_bounds(commands, coord);
+    }
+    patched
 }
 
 pub(crate) fn apply_built_chunk_geometry_meshes(
@@ -88,6 +93,7 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
         &mut built_meshes,
         terrain_mesh_bytes,
     ) {
+        render_pool.invalidate_bounds(commands, coord);
         return;
     }
 
@@ -142,7 +148,12 @@ pub(crate) fn apply_built_chunk_fluid_meshlets(
         return true;
     }
 
-    render_pool.patch_fluid_mesh_assets(coord, meshes, &fluid_meshes, meshlets)
+    let patched =
+        render_pool.patch_fluid_mesh_assets(coord, meshes, &fluid_meshes, meshlets);
+    if patched {
+        render_pool.invalidate_bounds(commands, coord);
+    }
+    patched
 }
 
 pub(crate) fn apply_built_chunk_fluid_meshes(
@@ -168,6 +179,7 @@ pub(crate) fn apply_built_chunk_fluid_meshes(
         &mut fluid_meshes,
         fluid_mesh_bytes,
     ) {
+        render_pool.invalidate_bounds(commands, coord);
         return;
     }
 
