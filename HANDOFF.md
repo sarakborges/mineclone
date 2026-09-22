@@ -122,8 +122,9 @@ máscara de direções ou semântica de source/falling fluid.
 Solver: `1e20351a685b9623a76dac34717a3fcdbfe9f491`.
 VERSION: `0.50.22`, commit
 `5646727808c10d26037430c0e90201c209c3c5e7`.
-CI de P6: aguardando. Testes Rust existentes continuam apenas compilados pelo
-Clippy `--all-targets`; nenhum `cargo test` foi executado.
+CI de P6: **verde** nos runs push `35685459607` e PR `35685460994` para
+`5646727808c10d26037430c0e90201c209c3c5e7`. Testes Rust existentes continuam
+apenas compilados pelo Clippy `--all-targets`; nenhum `cargo test` foi executado.
 
 ### Ordem de execução definida
 
