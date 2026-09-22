@@ -1,4 +1,8 @@
-use bevy::{prelude::*, render::storage::ShaderBuffer};
+use bevy::{
+    light::PointLightShadowMap,
+    prelude::*,
+    render::storage::ShaderBuffer,
+};
 
 use crate::{
     app::game_state::GameState,
@@ -11,6 +15,7 @@ const MAX_HELD_LIGHT_INTENSITY: f32 = 90.0;
 const HELD_LIGHT_RANGE: f32 = 8.0;
 const HELD_LIGHT_RADIUS: f32 = 0.12;
 const HELD_LIGHT_OFFSET: Vec3 = Vec3::new(0.32, -0.24, -0.52);
+const POINT_LIGHT_SHADOW_MAP_SIZE: usize = 512;
 
 #[derive(Component)]
 struct HeldDynamicLight {
@@ -21,7 +26,10 @@ pub struct DynamicLightsPlugin;
 
 impl Plugin for DynamicLightsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.insert_resource(PointLightShadowMap {
+            size: POINT_LIGHT_SHADOW_MAP_SIZE,
+        })
+        .add_systems(
             Update,
             (spawn_held_dynamic_light, sync_held_dynamic_light)
                 .chain()
