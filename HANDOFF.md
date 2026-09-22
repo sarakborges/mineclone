@@ -532,7 +532,7 @@ cache denso `60970e6d6cf450bfc58b2c22c7ec6f6bb60615a0`;
 regressão `55894156aa57bba61d125071b6c4dd6bb9407667`.
 VERSION: `0.50.41`, commit
 `5c006f47099830e981d71195ca71894797f4cba0`.
-CI de P25: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P25: **verde** nos runs push `35737365933` e PR `35737372661` para `5c006f47099830e981d71195ca71894797f4cba0`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
