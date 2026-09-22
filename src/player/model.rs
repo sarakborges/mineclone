@@ -55,6 +55,28 @@ struct PlayerModelAnimationState {
     last_health: Option<f32>,
 }
 
+type PlayerModelRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut PlayerModelAnimationState,
+    ),
+    (With<PlayerModelRoot>, Without<GameplayCamera>),
+>;
+
+type PlayerModelHeadQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Transform,
+    (
+        With<PlayerModelHead>,
+        Without<PlayerModelRoot>,
+        Without<GameplayCamera>,
+    ),
+>;
+
 impl Default for PlayerModelAnimationState {
     fn default() -> Self {
         Self {
@@ -234,22 +256,8 @@ fn sync_player_model(
         ),
         With<PlayerEntity>,
     >,
-    mut models: Query<
-        (
-            &mut Transform,
-            &mut Visibility,
-            &mut PlayerModelAnimationState,
-        ),
-        (With<PlayerModelRoot>, Without<GameplayCamera>),
-    >,
-    mut heads: Query<
-        &mut Transform,
-        (
-            With<PlayerModelHead>,
-            Without<PlayerModelRoot>,
-            Without<GameplayCamera>,
-        ),
-    >,
+    mut models: PlayerModelRootQuery,
+    mut heads: PlayerModelHeadQuery,
 ) {
     let (player_transform, camera, walking, gravity, health) = *player;
 

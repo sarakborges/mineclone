@@ -398,7 +398,7 @@ mod tests {
         let center = IVec3::new(10, 2, -4);
         let mut state = super::super::ChunkStreamingState {
             center: Some(center),
-            ..default()
+            ..Default::default()
         };
         state.pending.enqueue(center + IVec3::X);
 

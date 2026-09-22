@@ -117,7 +117,7 @@ fn edit_targeted_block(
                     motion.apply_knockback(direction, effect.strength);
                 }
             }
-            viewmodel_animation.play_break();
+            viewmodel_animation.play_hit();
             animation.trigger(if dead { "death" } else { "hurt" });
             if dead {
                 commands.entity(entity).insert(CreatureDeathTimer(Timer::from_seconds(0.75, TimerMode::Once)));
