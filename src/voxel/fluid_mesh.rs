@@ -127,23 +127,42 @@ impl FluidHeightPlaneCache {
     }
 
     fn heights_at(&self, x: usize, z: usize, fluid_id: FluidId) -> FluidFaceHeights {
-        let mut current = [[None; 3]; 3];
-        let mut above = [[None; 3]; 3];
+        FluidFaceHeights {
+            h00: self.corner_height(x, z, fluid_id, 0, 0),
+            h10: self.corner_height(x, z, fluid_id, 2, 0),
+            h11: self.corner_height(x, z, fluid_id, 2, 2),
+            h01: self.corner_height(x, z, fluid_id, 0, 2),
+        }
+    }
 
-        for dz in 0..3 {
-            for dx in 0..3 {
-                let index = (x + dx) + (z + dz) * FLUID_HEIGHT_PLANE_SIDE;
-                current[dz][dx] = self.current[index];
-                above[dz][dx] = self.above[index];
+    fn corner_height(
+        &self,
+        x: usize,
+        z: usize,
+        fluid_id: FluidId,
+        x_offset: usize,
+        z_offset: usize,
+    ) -> f32 {
+        let positions = [(1, 1), (x_offset, 1), (1, z_offset), (x_offset, z_offset)];
+
+        if positions.iter().any(|&(dx, dz)| {
+            let index = (x + dx) + (z + dz) * FLUID_HEIGHT_PLANE_SIDE;
+            self.above[index].is_some_and(|cell| cell.fluid_id == fluid_id)
+        }) {
+            return 1.0;
+        }
+
+        let mut total = 0.0;
+        let mut count = 0.0;
+        for (dx, dz) in positions {
+            let index = (x + dx) + (z + dz) * FLUID_HEIGHT_PLANE_SIDE;
+            if let Some(cell) = self.current[index].filter(|cell| cell.fluid_id == fluid_id) {
+                total += cell.height();
+                count += 1.0;
             }
         }
 
-        FluidFaceHeights {
-            h00: fluid_corner_height(&current, &above, fluid_id, 0, 0),
-            h10: fluid_corner_height(&current, &above, fluid_id, 2, 0),
-            h11: fluid_corner_height(&current, &above, fluid_id, 2, 2),
-            h01: fluid_corner_height(&current, &above, fluid_id, 0, 2),
-        }
+        if count > 0.0 { total / count } else { 0.0 }
     }
 }
 
