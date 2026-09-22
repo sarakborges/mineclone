@@ -782,6 +782,32 @@ CI: **verde** nos runs push `35743348577` e PR `35743356630` para
 obrigatória; prioridade atual é estabilidade visual antes de novas otimizações
 de shader/culling/publicação.
 
+### Hotfix — desligar GPU occlusion culling global após flicker de terrain
+
+QA Windows esclareceu que o flicker não estava restrito às clouds: o terrain
+inteiro também aparecia/desaparecia. Isso invalida a hipótese de material/sort
+de cloud como causa-raiz e aponta para um estágio global do world camera.
+
+O commit histórico `525cc7ead5bbbbc4cddb77ab265c452ce27fdc26`
+habilitou `DepthPrepass` + `OcclusionCulling` juntos na câmera principal
+exclusivamente para GPU occlusion culling. O hotfix anterior de chunk culling
+removeu `NoCpuCulling` das entidades, mas deixou esse occlusion culling
+global ativo. Portanto o renderer ainda podia rejeitar geometry pelo caminho
+GPU mesmo com CPU frustum culling restaurado.
+
+As duas world cameras (primeira e terceira pessoa) agora voltam ao pipeline
+pré-`525cc7a`: sem `OcclusionCulling` e sem o `DepthPrepass` que havia
+sido introduzido junto apenas para suportar esse experimento. CPU frustum
+culling permanece ativo nos chunks; materials, meshes, visibility e cloud
+renderer não foram alterados neste hotfix.
+
+Commits: câmera principal
+`af0d64438d6dd122ad9b8531ac87e14543d59de9`; terceira pessoa
+`d52eaf80eb892e81d8baf978fe8c78c2561a234c`.
+VERSION: `0.50.55`, commit
+`08ed8682ff4a9b56c019e706b49ba84c484035ed`.
+CI: aguardando. QA runtime visual é obrigatória porque o CI não executa WGPU.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
