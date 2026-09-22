@@ -93,6 +93,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_chunk_meshlets<W, F>(
     world: &W,
     chunk_coord: IVec3,
@@ -450,6 +451,7 @@ struct CellVisual {
     block_srgb: [f32; 3],
 }
 
+#[allow(clippy::too_many_arguments)]
 fn visual_for_active_cell<F>(
     cache: &mut [Option<CellVisual>],
     index: usize,
