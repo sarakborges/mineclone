@@ -36,10 +36,6 @@ pub(super) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInput
 #[derive(Component, Clone, Copy)]
 pub(super) enum BooleanGameRuleToggle {
     SpawnCreatures,
-    SpawnCaves,
-    SpawnRivers,
-    SpawnLakes,
-    SpawnOceans,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -118,18 +114,6 @@ impl TicksPerSecondEditor<'_> {
                 BooleanGameRuleToggle::SpawnCreatures => {
                     self.new_world.set_spawn_creatures(!current.spawn_creatures())
                 }
-                BooleanGameRuleToggle::SpawnCaves => {
-                    self.new_world.set_spawn_caves(!current.spawn_caves())
-                }
-                BooleanGameRuleToggle::SpawnRivers => {
-                    self.new_world.set_spawn_rivers(!current.spawn_rivers())
-                }
-                BooleanGameRuleToggle::SpawnLakes => {
-                    self.new_world.set_spawn_lakes(!current.spawn_lakes())
-                }
-                BooleanGameRuleToggle::SpawnOceans => {
-                    self.new_world.set_spawn_oceans(!current.spawn_oceans())
-                }
             }
             return;
         }
@@ -138,18 +122,6 @@ impl TicksPerSecondEditor<'_> {
             BooleanGameRuleToggle::SpawnCreatures => {
                 self.game_rules
                     .set_spawn_creatures(!self.game_rules.spawn_creatures())
-            }
-            BooleanGameRuleToggle::SpawnCaves => {
-                self.game_rules.set_spawn_caves(!self.game_rules.spawn_caves())
-            }
-            BooleanGameRuleToggle::SpawnRivers => {
-                self.game_rules.set_spawn_rivers(!self.game_rules.spawn_rivers())
-            }
-            BooleanGameRuleToggle::SpawnLakes => {
-                self.game_rules.set_spawn_lakes(!self.game_rules.spawn_lakes())
-            }
-            BooleanGameRuleToggle::SpawnOceans => {
-                self.game_rules.set_spawn_oceans(!self.game_rules.spawn_oceans())
             }
         }
         self.save.save_game_rules(*self.game_rules);
@@ -241,38 +213,6 @@ pub(super) fn game_rules_section(
                 localization,
                 language,
             ),
-            boolean_rule_setting(
-                BooleanGameRuleToggle::SpawnCaves,
-                rules.spawn_caves(),
-                "settings.spawnCaves",
-                "settings.spawnCaves.description",
-                localization,
-                language,
-            ),
-            boolean_rule_setting(
-                BooleanGameRuleToggle::SpawnRivers,
-                rules.spawn_rivers(),
-                "settings.spawnRivers",
-                "settings.spawnRivers.description",
-                localization,
-                language,
-            ),
-            boolean_rule_setting(
-                BooleanGameRuleToggle::SpawnLakes,
-                rules.spawn_lakes(),
-                "settings.spawnLakes",
-                "settings.spawnLakes.description",
-                localization,
-                language,
-            ),
-            boolean_rule_setting(
-                BooleanGameRuleToggle::SpawnOceans,
-                rules.spawn_oceans(),
-                "settings.spawnOceans",
-                "settings.spawnOceans.description",
-                localization,
-                language,
-            ),
         ],
     )
 }
@@ -347,10 +287,6 @@ pub(super) fn sync_boolean_game_rule_toggles(
 
     let enabled = |rule: BooleanGameRuleToggle| match rule {
         BooleanGameRuleToggle::SpawnCreatures => rules.spawn_creatures(),
-        BooleanGameRuleToggle::SpawnCaves => rules.spawn_caves(),
-        BooleanGameRuleToggle::SpawnRivers => rules.spawn_rivers(),
-        BooleanGameRuleToggle::SpawnLakes => rules.spawn_lakes(),
-        BooleanGameRuleToggle::SpawnOceans => rules.spawn_oceans(),
     };
 
     for (rule, interaction, background, border) in &mut toggles {

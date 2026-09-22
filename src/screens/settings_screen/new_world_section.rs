@@ -13,6 +13,7 @@ use crate::{
         },
         selectable,
         settings as settings_layout,
+        theme,
         text_input::editable_value,
         toggle,
         transition::{ScreenTransition, ScreenTransitionTarget},
@@ -62,6 +63,17 @@ pub(super) struct SingleBiomeToggle;
 #[derive(Component)]
 pub(super) struct SingleBiomeToggleThumb;
 
+#[derive(Component, Clone, Copy)]
+pub(super) enum WorldGenerationFeatureToggle {
+    Caves,
+    Rivers,
+    Lakes,
+    Oceans,
+}
+
+#[derive(Component, Clone, Copy)]
+pub(super) struct WorldGenerationFeatureToggleThumb(WorldGenerationFeatureToggle);
+
 type NewWorldGeneralControlInteractions<'w, 's> = Query<
     'w,
     's,
@@ -74,6 +86,7 @@ type NewWorldGeneralControlInteractions<'w, 's> = Query<
             With<WorldGenerationModeButton>,
             With<SpawnStructuresToggle>,
             With<SingleBiomeToggle>,
+            With<WorldGenerationFeatureToggle>,
         )>,
     ),
 >;
@@ -162,6 +175,38 @@ pub(super) fn new_world_generation_section(
             world_generation_mode_setting(config, localization, language),
             spawn_structures_setting(config, localization, language),
             single_biome_setting(config, localization, language),
+            world_generation_feature_setting(
+                WorldGenerationFeatureToggle::Caves,
+                config,
+                "newWorld.spawnCaves",
+                "newWorld.spawnCaves.description",
+                localization,
+                language,
+            ),
+            world_generation_feature_setting(
+                WorldGenerationFeatureToggle::Rivers,
+                config,
+                "newWorld.spawnRivers",
+                "newWorld.spawnRivers.description",
+                localization,
+                language,
+            ),
+            world_generation_feature_setting(
+                WorldGenerationFeatureToggle::Lakes,
+                config,
+                "newWorld.spawnLakes",
+                "newWorld.spawnLakes.description",
+                localization,
+                language,
+            ),
+            world_generation_feature_setting(
+                WorldGenerationFeatureToggle::Oceans,
+                config,
+                "newWorld.spawnOceans",
+                "newWorld.spawnOceans.description",
+                localization,
+                language,
+            ),
             spawn_biome_setting(localization, language),
             biome_size_multiplier_setting(config, localization, language),
         ],
@@ -267,6 +312,57 @@ fn single_biome_setting(
                 SingleBiomeToggle,
                 toggle::control(enabled),
                 children![(SingleBiomeToggleThumb, toggle::thumb(enabled))],
+            ),
+        ],
+    )
+}
+
+fn world_generation_feature_setting(
+    feature: WorldGenerationFeatureToggle,
+    config: &NewWorldConfig,
+    title_key: &str,
+    description_key: &str,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    let settings = config.world_generation();
+    let enabled = match feature {
+        WorldGenerationFeatureToggle::Caves => settings.spawn_caves(),
+        WorldGenerationFeatureToggle::Rivers => settings.spawn_rivers(),
+        WorldGenerationFeatureToggle::Lakes => settings.spawn_lakes(),
+        WorldGenerationFeatureToggle::Oceans => settings.spawn_oceans(),
+    };
+    let disabled = settings.mode() == WorldGenerationMode::Void;
+    let (background, border) = if disabled {
+        (theme::SURFACE_INSET, theme::BORDER)
+    } else {
+        toggle::colors(enabled, Interaction::None)
+    };
+
+    (
+        worldgen_toggle_row(),
+        children![
+            worldgen_setting_copy(
+                localization.text(language, title_key),
+                localization.text(language, description_key),
+            ),
+            (
+                Button,
+                feature,
+                Node {
+                    width: px(toggle::WIDTH),
+                    height: px(toggle::HEIGHT),
+                    flex_shrink: 0.0,
+                    position_type: PositionType::Relative,
+                    border: UiRect::all(px(2)),
+                    ..default()
+                },
+                BackgroundColor(background),
+                BorderColor::all(border),
+                children![(
+                    WorldGenerationFeatureToggleThumb(feature),
+                    toggle::thumb(enabled),
+                )],
             ),
         ],
     )
@@ -389,10 +485,42 @@ pub(super) fn handle_world_generation_mode_buttons(
             && config.world_generation().mode() != button.0
         {
             config.set_world_generation_mode(button.0);
-            if button.0 == WorldGenerationMode::Flat {
-                config.set_worldgen_hydrology(false, false, false, false);
+            let enabled_by_default = button.0 == WorldGenerationMode::Normal;
+            config.set_worldgen_hydrology(
+                enabled_by_default,
+                enabled_by_default,
+                enabled_by_default,
+                enabled_by_default,
+            );
+        }
+    }
+}
+
+pub(super) fn handle_world_generation_feature_toggles(
+    interactions: Query<(&Interaction, &WorldGenerationFeatureToggle), Changed<Interaction>>,
+    mut config: ResMut<NewWorldConfig>,
+) {
+    if config.world_generation().mode() == WorldGenerationMode::Void {
+        return;
+    }
+
+    for (interaction, feature) in &interactions {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+
+        let settings = config.world_generation();
+        match feature {
+            WorldGenerationFeatureToggle::Caves => config.set_spawn_caves(!settings.spawn_caves()),
+            WorldGenerationFeatureToggle::Rivers => {
+                config.set_spawn_rivers(!settings.spawn_rivers())
+            }
+            WorldGenerationFeatureToggle::Lakes => config.set_spawn_lakes(!settings.spawn_lakes()),
+            WorldGenerationFeatureToggle::Oceans => {
+                config.set_spawn_oceans(!settings.spawn_oceans())
             }
         }
+        break;
     }
 }
 
@@ -621,6 +749,45 @@ pub(super) fn sync_world_generation_toggles(
         let single_left = px(toggle::thumb_left(single));
         for mut thumb in &mut single_thumbs {
             thumb.left = single_left;
+        }
+    }
+}
+
+pub(super) fn sync_world_generation_feature_toggles(
+    config: Res<NewWorldConfig>,
+    mut toggles: Query<(
+        &WorldGenerationFeatureToggle,
+        Ref<Interaction>,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
+    mut thumbs: Query<(&WorldGenerationFeatureToggleThumb, &mut Node)>,
+) {
+    let settings = config.world_generation();
+    let disabled = settings.mode() == WorldGenerationMode::Void;
+    let enabled = |feature: WorldGenerationFeatureToggle| match feature {
+        WorldGenerationFeatureToggle::Caves => settings.spawn_caves(),
+        WorldGenerationFeatureToggle::Rivers => settings.spawn_rivers(),
+        WorldGenerationFeatureToggle::Lakes => settings.spawn_lakes(),
+        WorldGenerationFeatureToggle::Oceans => settings.spawn_oceans(),
+    };
+
+    for (feature, interaction, mut background, mut border) in &mut toggles {
+        if !config.is_changed() && !interaction.is_changed() {
+            continue;
+        }
+        let (next_background, next_border) = if disabled {
+            (theme::SURFACE_INSET, theme::BORDER)
+        } else {
+            toggle::colors(enabled(*feature), *interaction)
+        };
+        background.0 = next_background;
+        *border = BorderColor::all(next_border);
+    }
+
+    if config.is_changed() {
+        for (thumb, mut node) in &mut thumbs {
+            node.left = px(toggle::thumb_left(enabled(thumb.0)));
         }
     }
 }

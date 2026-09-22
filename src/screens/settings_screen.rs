@@ -36,7 +36,8 @@ use new_world_section::{
     SeedInputState, handle_new_world_footer, handle_new_world_settings_control_focus,
     handle_random_seed, handle_seed_focus, handle_seed_keyboard,
     handle_single_biome_toggle, handle_spawn_structures_toggle,
-    handle_world_generation_mode_buttons, reset_new_world_settings, sync_seed_text,
+    handle_world_generation_feature_toggles, handle_world_generation_mode_buttons,
+    reset_new_world_settings, sync_seed_text, sync_world_generation_feature_toggles,
     sync_world_generation_mode_buttons, sync_world_generation_toggles,
 };
 use render_distance_logic::{
@@ -146,6 +147,8 @@ impl Plugin for SettingsScreenPlugin {
                         handle_world_generation_mode_buttons.run_if(in_state(GameState::NewWorld)),
                         handle_spawn_structures_toggle.run_if(in_state(GameState::NewWorld)),
                         handle_single_biome_toggle.run_if(in_state(GameState::NewWorld)),
+                        handle_world_generation_feature_toggles
+                            .run_if(in_state(GameState::NewWorld)),
                         handle_keybind_buttons,
                         handle_keybind_capture,
                     )
@@ -181,6 +184,8 @@ impl Plugin for SettingsScreenPlugin {
                     sync_game_mode_buttons,
                     sync_world_generation_mode_buttons.run_if(in_state(GameState::NewWorld)),
                     sync_world_generation_toggles.run_if(in_state(GameState::NewWorld)),
+                    sync_world_generation_feature_toggles
+                        .run_if(in_state(GameState::NewWorld)),
                     sync_keybinds_section,
                     sync_language_dropdown,
                     sync_hide_hints_toggle,
