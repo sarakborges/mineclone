@@ -450,6 +450,28 @@ VERSION: `0.50.37`, commit
 `df20c48d63ab250026ff437c9add9337faa777cb`.
 CI de P21: **verde** nos runs push `35735605566` e PR `35735613924` para `df20c48d63ab250026ff437c9add9337faa777cb`. Como P20, Clippy/check não validam WGSL em runtime; QA GPU continua obrigatória.
 
+### P22 — acessos locais sem revalidar bounds nos meshers
+
+Hot paths de terrain/fluid já validavam manualmente que o vizinho permanecia
+dentro do chunk e depois chamavam `cell_at`/`fluid_at`, repetindo o mesmo
+bounds check. O neighbor de fluidos ainda calculava o índice local duas vezes
+para buscar bloco e fluido separadamente.
+
+`VoxelChunk` agora expõe accessors internos locais com coordenadas `usize`
+e `debug_assert` de contrato: `cell_at_local`, `fluid_at_local` e
+`content_at_local`. Terrain usa o acesso direto para vizinhos internos;
+fluid heights evitam a segunda validação; fluid neighbor resolve bloco+fluido
+com um único índice. Caminhos que atravessam a borda continuam usando
+`VoxelRead`/world exatamente como antes.
+
+Commits: accessors `29deaef40bdaa1467d4a14eb8c230fd86b2749a7`;
+fluid mesher `60b7168523f2d7ed1786b746fb997232c662e92f`;
+terrain mesher `5530a8f8c7199a495285d4da5871c2762fd853f4`;
+regressão `abb27a862e101b3b7e9f141176dc9e6a3011f20a`.
+VERSION: `0.50.38`, commit
+`075cd121162cf754a01e47627187cbd986d1cb99`.
+CI de P22: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
