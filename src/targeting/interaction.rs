@@ -99,6 +99,20 @@ fn edit_targeted_block(
     let selected_slot = input.hotbar.selected_slot();
     let selected_item = input.hotbar.item_at(selected_slot);
 
+    // Left-clicking empty space still swings the player's arm. Mining tools use
+    // the break swing; everything else uses the generic hit swing. World edits
+    // and damage remain target-dependent below.
+    if left_pressed && input.creature_target.0.is_none() && input.targeted.0.is_none() {
+        let mining_tool = selected_item
+            .and_then(|item_id| definitions.tools.get(item_id))
+            .is_some_and(|tool| tool.mining.is_mining_tool());
+        if mining_tool {
+            viewmodel_animation.play_break();
+        } else {
+            viewmodel_animation.play_hit();
+        }
+    }
+
     if left_pressed && let Some(entity) = input.creature_target.0 {
         let Some(attack) = definitions.attacks.get(&definitions.player.attack) else {
             return;
