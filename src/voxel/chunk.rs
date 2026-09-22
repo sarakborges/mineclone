@@ -35,6 +35,7 @@ struct PaletteStorage<T> {
     palette: Vec<T>,
     usage: Vec<u16>,
     indices: Box<[u16]>,
+    occupied: Box<[u64; FLUID_FRONTIER_WORDS]>,
 }
 
 impl<T> Default for PaletteStorage<T> {
@@ -43,6 +44,7 @@ impl<T> Default for PaletteStorage<T> {
             palette: Vec::new(),
             usage: Vec::new(),
             indices: vec![0; CHUNK_VOLUME].into_boxed_slice(),
+            occupied: Box::new([0; FLUID_FRONTIER_WORDS]),
         }
     }
 }
@@ -103,7 +105,33 @@ impl<T: Copy + Eq> PaletteStorage<T> {
                 .checked_add(1)
                 .expect("chunk palette usage cannot overflow");
         }
-        self.indices[voxel_index] = next;
+        self.set_palette_index(voxel_index, next);
+    }
+
+    fn set_palette_index(&mut self, voxel_index: usize, palette_index: u16) {
+        self.indices[voxel_index] = palette_index;
+        let word = voxel_index / u64::BITS as usize;
+        let mask = 1_u64 << (voxel_index % u64::BITS as usize);
+        if palette_index == 0 {
+            self.occupied[word] &= !mask;
+        } else {
+            self.occupied[word] |= mask;
+        }
+    }
+
+    fn visit_occupied_indices(&self, mut visit: impl FnMut(usize)) {
+        for (word_index, &word) in self.occupied.iter().enumerate() {
+            let mut remaining = word;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as usize;
+                let voxel_index = word_index * u64::BITS as usize + bit;
+                if voxel_index >= CHUNK_VOLUME {
+                    break;
+                }
+                visit(voxel_index);
+                remaining &= remaining - 1;
+            }
+        }
     }
 }
 
@@ -186,7 +214,7 @@ impl VoxelChunkInitialBlocksMut<'_> {
             self.palette_indices.insert(block, palette_index);
             palette_index
         };
-        self.blocks.indices[voxel_index] = palette_index;
+        self.blocks.set_palette_index(voxel_index, palette_index);
         let usage = &mut self.blocks.usage[palette_index as usize - 1];
         *usage = usage
             .checked_add(1)
@@ -266,7 +294,7 @@ impl VoxelChunkStructureMut<'_> {
             }
         }
 
-        self.blocks.indices[voxel_index] = next;
+        self.blocks.set_palette_index(voxel_index, next);
         let usage = &mut self.blocks.usage[next as usize - 1];
         *usage = usage
             .checked_add(1)
@@ -311,7 +339,7 @@ impl VoxelChunkStructureMut<'_> {
         *usage = usage
             .checked_sub(1)
             .expect("structure fluid palette usage cannot underflow");
-        self.fluids.indices[voxel_index] = 0;
+        self.fluids.set_palette_index(voxel_index, 0);
         *self.fluid_count = self
             .fluid_count
             .checked_sub(1)
@@ -358,7 +386,7 @@ impl VoxelChunkInitialFluidsMut<'_> {
             self.palette_indices.insert(fluid, palette_index);
             palette_index
         };
-        self.fluids.indices[voxel_index] = palette_index;
+        self.fluids.set_palette_index(voxel_index, palette_index);
         let usage = &mut self.fluids.usage[palette_index as usize - 1];
         *usage = usage
             .checked_add(1)
@@ -537,6 +565,20 @@ impl VoxelChunk {
         }
 
         self.fluids.get(index(x as usize, y as usize, z as usize))
+    }
+
+    pub(crate) fn visit_fluid_voxels(
+        &self,
+        mut visit: impl FnMut(usize, usize, usize, FluidCell),
+    ) {
+        self.fluids.visit_occupied_indices(|voxel_index| {
+            let fluid = self
+                .fluids
+                .get(voxel_index)
+                .expect("fluid occupancy metadata must point to a fluid voxel");
+            let (x, y, z) = coordinates(voxel_index);
+            visit(x, y, z, fluid);
+        });
     }
 
     pub(crate) fn light_at(&self, x: i32, y: i32, z: i32) -> VoxelLight {
