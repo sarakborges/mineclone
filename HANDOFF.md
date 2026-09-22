@@ -552,6 +552,24 @@ VERSION: `0.50.42`, commit
 `fb8ef502249154519b20e48e1b107651df7f5ab5`.
 CI de P26: **verde** nos runs push `35737730900` e PR `35737737595` para `fb8ef502249154519b20e48e1b107651df7f5ab5`. Nenhum `cargo test` foi adicionado/executado.
 
+### P27 — consolidar sampling local dos voxels fonte de fluido
+
+Nos dois caminhos de fluid meshing, um voxel fonte já tinha coordenadas locais
+válidas mas buscava bloco e luz separadamente por accessors checked, calculando
+o mesmo índice mais de uma vez. O scan denso também chamava `fluid_at(i32)`
+apesar de iterar posições 0..15 garantidas pelo meshlet.
+
+O passe geral e o greedy top agora usam um único `sample_local_at(x,y,z)`
+para obter bloco fonte + luz; o scan denso usa `fluid_at_local`. O
+`FluidCell` fonte continua vindo do iterador/scan original e todas as regras
+de exposição, height, microblock clipping, tint e iluminação permanecem
+inalteradas.
+
+Commit funcional: `f6c092dc1f78cd232e520b7f2fb3f73c455d1970`.
+VERSION: `0.50.43`, commit
+`e6c024326e17851555d43ff4dc01d5d1f4455469`.
+CI de P27: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
