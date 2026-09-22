@@ -88,6 +88,15 @@ pub(super) struct ViewModelSpawnAssets<'w> {
 }
 
 #[derive(SystemParam)]
+struct ViewModelArmSceneAssets<'w, 's> {
+    names: Query<'w, 's, &'static Name>,
+    meshes: Query<'w, 's, &'static Mesh3d>,
+    mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
+    appearances: Query<'w, 's, &'static ViewModelArmAppearance>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+#[derive(SystemParam)]
 pub(super) struct HeldBlockView<'w, 's> {
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
     roots: HeldBlockRootQuery<'w, 's>,
@@ -276,20 +285,17 @@ fn configure_viewmodel_arm_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
     descendants: Query<&Children>,
-    names: Query<&Name>,
-    meshes: Query<&Mesh3d>,
-    mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
-    appearances: Query<&ViewModelArmAppearance>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut assets: ViewModelArmSceneAssets,
 ) {
-    let Ok(appearance) = appearances.get(ready.entity) else {
+    let Ok(appearance) = assets.appearances.get(ready.entity) else {
         return;
     };
 
     let Some(arm_root) = descendants
         .iter_descendants(ready.entity)
         .find(|entity| {
-            names
+            assets
+                .names
                 .get(*entity)
                 .is_ok_and(|name| name.as_str() == "RightArmPivot")
         })
@@ -302,7 +308,7 @@ fn configure_viewmodel_arm_scene(
     arm_entities.extend(descendants.iter_descendants(arm_root));
 
     for descendant in descendants.iter_descendants(ready.entity) {
-        if meshes.get(descendant).is_err() {
+        if assets.meshes.get(descendant).is_err() {
             continue;
         }
 
@@ -318,13 +324,13 @@ fn configure_viewmodel_arm_scene(
             NotShadowCaster,
         ));
 
-        if let Ok(original) = mesh_materials.get(descendant)
+        if let Ok(original) = assets.mesh_materials.get(descendant)
             && let Some(mut material) = materials.get(original.id()).cloned()
         {
             material.unlit = true;
             material.metallic = 0.0;
             material.perceptual_roughness = 1.0;
-            let material = materials.add(material);
+            let material = assets.materials.add(material);
             commands
                 .entity(descendant)
                 .insert(MeshMaterial3d(material));
