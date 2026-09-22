@@ -200,22 +200,31 @@ impl ChunkRemeshQueue {
         });
     }
 
+    pub(crate) fn enqueue_lighting_meshlet_change(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        world: &VoxelWorld,
+    ) {
+        let Some(chunk) = world.chunk(coord) else {
+            return;
+        };
+        if chunk.has_terrain_content() {
+            self.enqueue_lighting_meshlets(coord, meshlets, true);
+        }
+        if chunk.has_fluid() {
+            self.enqueue_fluid_meshlets(coord, meshlets, true);
+        }
+    }
+
     pub(crate) fn enqueue_lighting_voxel_change(
         &mut self,
         world_position: IVec3,
         world: &VoxelWorld,
     ) {
         visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
-            let Some(chunk) = world.chunk(coord) else {
-                return;
-            };
             let meshlets = ChunkMeshletMask::for_world_position(coord, world_position);
-            if chunk.has_terrain_content() {
-                self.enqueue_lighting_meshlets(coord, meshlets, true);
-            }
-            if chunk.has_fluid() {
-                self.enqueue_fluid_meshlets(coord, meshlets, true);
-            }
+            self.enqueue_lighting_meshlet_change(coord, meshlets, world);
         });
     }
 
