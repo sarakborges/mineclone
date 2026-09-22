@@ -66,10 +66,7 @@ impl Plugin for CharacterInfoHudPlugin {
                 OnEnter(CharacterInfoState::Open),
                 spawn_character_info.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(
-                OnExit(CharacterInfoState::Open),
-                deactivate_character_preview_camera,
-            )
+            .add_systems(OnExit(CharacterInfoState::Open), stop_character_preview_drag)
             .add_systems(
                 Update,
                 (attach_character_preview_model, sync_character_preview_camera).chain(),
@@ -103,8 +100,7 @@ fn spawn_character_preview(
         Camera3d::default(),
         Camera {
             order: -3,
-            is_active: false,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
+            clear_color: ClearColorConfig::None,
             ..default()
         },
         RenderTarget::Image(image.into()),
@@ -128,7 +124,7 @@ fn spawn_character_preview(
             scene_attached: false,
         },
         Transform::default(),
-        Visibility::Inherited,
+        Visibility::Hidden,
         RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
     ));
 }
@@ -313,15 +309,10 @@ fn spawn_character_preview_viewport(
         });
 }
 
-fn deactivate_character_preview_camera(
+fn stop_character_preview_drag(
     mut interaction: ResMut<CharacterPreviewInteraction>,
-    mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
 ) {
     interaction.dragging = false;
-    interaction.render_frames = 0;
-    for mut camera in &mut cameras {
-        camera.is_active = false;
-    }
 }
 
 fn rotate_character_preview(
@@ -359,12 +350,30 @@ fn rotate_character_preview(
 fn sync_character_preview_camera(
     mut interaction: ResMut<CharacterPreviewInteraction>,
     mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
+    mut models: Query<&mut Visibility, With<CharacterPreviewModel>>,
 ) {
-    let active = interaction.render_frames > 0;
+    let should_render = interaction.render_frames > 0;
+    let clear_color = if should_render {
+        ClearColorConfig::Custom(Color::NONE)
+    } else {
+        ClearColorConfig::None
+    };
+    let visibility = if should_render {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+
     for mut camera in &mut cameras {
-        camera.is_active = active;
+        camera.clear_color = clear_color;
     }
-    if active {
+    for mut model_visibility in &mut models {
+        if *model_visibility != visibility {
+            *model_visibility = visibility;
+        }
+    }
+
+    if should_render {
         interaction.render_frames = interaction.render_frames.saturating_sub(1);
     }
 }
