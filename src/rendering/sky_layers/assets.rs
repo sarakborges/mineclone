@@ -34,8 +34,12 @@ pub(super) fn setup_sky_layer_assets(
 
     let cloud_mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let cloud_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, 0.78),
-        alpha_mode: AlphaMode::Blend,
+        // Clouds are solid blocky geometry. Keeping them in the transparent
+        // phase made whole cuboids participate in distance sorting every frame,
+        // which can visibly reorder/popup as recycled tiles move around the
+        // camera. Opaque rendering is stable and avoids transparent overdraw.
+        base_color: Color::WHITE,
+        alpha_mode: AlphaMode::Opaque,
         unlit: true,
         fog_enabled: false,
         ..default()
