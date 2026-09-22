@@ -10657,3 +10657,31 @@ Commits:
 
 CI push `35752234821`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.67`.
+
+
+## 2026-09-22 — Skin 64×64 texturizada do player
+
+O player deixou de depender de `baseColorFactor` chapado por material e agora
+usa uma skin atlas real em `assets/textures/entities/player.png`.
+
+A textura é 64×64 no layout moderno de skin Minecraft e foi inicializada com
+as mesmas cores chapadas usadas anteriormente pelo GLTF:
+- skin;
+- shirt teal;
+- pants charcoal;
+- hair marrom, com transparência na overlay da cabeça.
+
+O `assets/models/entities/player/player.gltf` agora:
+- referencia `../../../textures/entities/player.png`;
+- possui `TEXCOORD_0` real;
+- usa meshes UV distintos para head, body, hair overlay, right/left arm e
+  right/left leg;
+- usa nearest filtering para preservar pixel art;
+- mantém alpha mask para permitir transparência na head overlay.
+
+Isso deixa a skin default editável diretamente no PNG sem precisar alterar o
+modelo 3D.
+
+Commit funcional: `f75142eef485db8b613392faf57c218a14cce7b0`.
+CI push `35753337348`: localizações, Clippy rigoroso e cargo check **verdes**.
+VERSION: `0.50.68`.
