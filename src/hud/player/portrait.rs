@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
+    camera::{CameraOutputMode, SubCameraView, Viewport, visibility::RenderLayers},
     ecs::query::QueryFilter,
     prelude::*,
     render::render_resource::BlendState,
@@ -21,10 +21,11 @@ use crate::{
 
 const HUD_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 1;
 const CHARACTER_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 2;
-const HUD_PREVIEW_CENTER_Y: f32 = 1.30;
-const HUD_PREVIEW_CAMERA_DISTANCE: f32 = 1.55;
-const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.90;
-const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
+const PLAYER_PREVIEW_CENTER_Y: f32 = 0.90;
+const PLAYER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
+const PLAYER_PREVIEW_REFERENCE_WIDTH: u32 = 216;
+const PLAYER_PREVIEW_REFERENCE_HEIGHT: u32 = 288;
+const HUD_PREVIEW_CROP_HEIGHT: u32 = 216;
 
 #[derive(Component)]
 pub(super) struct PlayerHudPreviewCamera;
@@ -37,6 +38,17 @@ pub(crate) struct PlayerHudPreviewViewport;
 
 #[derive(Component)]
 pub(crate) struct CharacterInfoPreviewViewport;
+
+#[derive(Resource, Default)]
+pub(crate) struct CharacterPreviewOrbit {
+    yaw: f32,
+}
+
+impl CharacterPreviewOrbit {
+    pub(crate) fn rotate(&mut self, delta_yaw: f32) {
+        self.yaw += delta_yaw;
+    }
+}
 
 type HudPreviewCameraQuery<'w, 's> = Query<
     'w,
@@ -66,6 +78,17 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
             order: HUD_PREVIEW_CAMERA_ORDER,
             output_mode: CameraOutputMode::Skip,
             clear_color: ClearColorConfig::None,
+            sub_camera_view: Some(SubCameraView {
+                full_size: UVec2::new(
+                    PLAYER_PREVIEW_REFERENCE_WIDTH,
+                    PLAYER_PREVIEW_REFERENCE_HEIGHT,
+                ),
+                offset: Vec2::ZERO,
+                size: UVec2::new(
+                    PLAYER_PREVIEW_REFERENCE_WIDTH,
+                    HUD_PREVIEW_CROP_HEIGHT,
+                ),
+            }),
             ..default()
         },
         RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
@@ -101,6 +124,7 @@ pub(super) fn sync_player_preview_cameras(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
     character_info: Res<State<CharacterInfoState>>,
+    orbit: Res<CharacterPreviewOrbit>,
     mut hud_camera: HudPreviewCameraQuery,
     mut character_camera: CharacterPreviewCameraQuery,
 ) {
@@ -120,8 +144,9 @@ pub(super) fn sync_player_preview_cameras(
         &mut hud_camera,
         hud_rect,
         model_transform,
-        HUD_PREVIEW_CENTER_Y,
-        HUD_PREVIEW_CAMERA_DISTANCE,
+        PLAYER_PREVIEW_CENTER_Y,
+        PLAYER_PREVIEW_CAMERA_DISTANCE,
+        0.0,
     );
 
     let character_rect = (*character_info.get() == CharacterInfoState::Open)
@@ -132,8 +157,9 @@ pub(super) fn sync_player_preview_cameras(
         &mut character_camera,
         character_rect,
         model_transform,
-        CHARACTER_PREVIEW_CENTER_Y,
-        CHARACTER_PREVIEW_CAMERA_DISTANCE,
+        PLAYER_PREVIEW_CENTER_Y,
+        PLAYER_PREVIEW_CAMERA_DISTANCE,
+        orbit.yaw,
     );
 }
 
@@ -143,6 +169,7 @@ fn sync_camera<F: QueryFilter>(
     model: &GlobalTransform,
     center_y: f32,
     distance: f32,
+    orbit_yaw: f32,
 ) {
     let Some(viewport) = viewport else {
         skip_cameras(cameras);
@@ -150,7 +177,8 @@ fn sync_camera<F: QueryFilter>(
     };
 
     let center = model.translation() + Vec3::Y * center_y;
-    let offset = model.rotation() * Vec3::Z * distance;
+    let orbit = Quat::from_rotation_y(-orbit_yaw);
+    let offset = model.rotation() * orbit * Vec3::Z * distance;
     for (mut camera, mut transform) in cameras.iter_mut() {
         camera.viewport = Some(viewport.clone());
         camera.output_mode = CameraOutputMode::Write {
