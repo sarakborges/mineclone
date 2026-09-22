@@ -28,8 +28,8 @@ use super::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
         CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
-        InventoryItemTooltip, InventoryItemTooltipId, InventoryItemTooltipText, InventorySlot,
-        InventoryTrashButton,
+        InventoryItemTooltip, InventoryItemTooltipHint, InventoryItemTooltipId,
+        InventoryItemTooltipStats, InventoryItemTooltipText, InventorySlot, InventoryTrashButton,
     },
 };
 
@@ -144,6 +144,8 @@ pub(super) struct InventoryTooltipView<'w, 's> {
         (
             With<InventoryItemTooltipText>,
             Without<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipStats>,
         ),
     >,
     tooltip_id: Single<
@@ -153,6 +155,30 @@ pub(super) struct InventoryTooltipView<'w, 's> {
         (
             With<InventoryItemTooltipId>,
             Without<InventoryItemTooltipText>,
+            Without<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipStats>,
+        ),
+    >,
+    tooltip_hint: Single<
+        'w,
+        's,
+        (&'static mut Text, &'static mut Visibility),
+        (
+            With<InventoryItemTooltipHint>,
+            Without<InventoryItemTooltipText>,
+            Without<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipStats>,
+        ),
+    >,
+    tooltip_stats: Single<
+        'w,
+        's,
+        (&'static mut Text, &'static mut Visibility),
+        (
+            With<InventoryItemTooltipStats>,
+            Without<InventoryItemTooltipText>,
+            Without<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipHint>,
         ),
     >,
 }
@@ -346,11 +372,12 @@ pub(super) fn rebuild_inventory_when_changed(
 
 const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
 const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
-const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 88.0;
+const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 156.0;
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
     settings: Res<HudSettings>,
+    localization: Res<UiLocalization>,
     view: InventoryTooltipView,
 ) {
     let InventoryTooltipView {
@@ -360,6 +387,8 @@ pub(super) fn sync_inventory_item_tooltip(
         tooltip,
         tooltip_text,
         tooltip_id,
+        tooltip_hint,
+        tooltip_stats,
     } = view;
     let (mut node, mut visibility) = tooltip.into_inner();
 
@@ -400,6 +429,40 @@ pub(super) fn sync_inventory_item_tooltip(
     let mut id_text = tooltip_id.into_inner();
     if id_text.0 != item_id {
         id_text.0 = item_id.to_owned();
+    }
+
+    let language = content.language.get();
+    let selected_tool = content.tools.get(item_id);
+
+    let (mut hint_text, mut hint_visibility) = tooltip_hint.into_inner();
+    if let Some(tool) = selected_tool {
+        let next_hint = tool.hint.text(language);
+        if hint_text.0 != next_hint {
+            hint_text.0 = next_hint.to_owned();
+        }
+        if *hint_visibility != Visibility::Inherited {
+            *hint_visibility = Visibility::Inherited;
+        }
+    } else if *hint_visibility != Visibility::Hidden {
+        *hint_visibility = Visibility::Hidden;
+    }
+
+    let (mut stats_text, mut stats_visibility) = tooltip_stats.into_inner();
+    if let Some(tool) = selected_tool.filter(|tool| !tool.mining.tags.is_empty()) {
+        let next_stats = format!(
+            "{}\n{}: {:.1}x",
+            localization.text(language, "inventory.tool.stats"),
+            localization.text(language, "inventory.tool.speed"),
+            tool.mining.speed,
+        );
+        if stats_text.0 != next_stats {
+            stats_text.0 = next_stats;
+        }
+        if *stats_visibility != Visibility::Inherited {
+            *stats_visibility = Visibility::Inherited;
+        }
+    } else if *stats_visibility != Visibility::Hidden {
+        *stats_visibility = Visibility::Hidden;
     }
 
     if cursor.x + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_MAX_WIDTH <= window.width() {

@@ -7,6 +7,7 @@ use crate::{
         builtin_ids::DYED_PROPERTY_ID,
         layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
     },
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
@@ -96,6 +97,7 @@ struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
     layers: Res<'w, LayerRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
+    tools: Res<'w, ToolRegistry>,
 }
 
 #[derive(SystemParam)]
@@ -297,6 +299,7 @@ fn update_target_hud(
     let definitions_changed = content.visual.inputs_changed()
         || content.layers.is_changed()
         || content.secondary_properties.is_changed()
+        || content.tools.is_changed()
         || state.language.is_changed();
 
     if cached.as_ref() == Some(&snapshot)
@@ -368,8 +371,30 @@ fn update_target_hud(
             layer_lines.join("\n")
         )
     };
+    let mining_text = block.map_or_else(String::new, |block| {
+        let mut lines = Vec::new();
+        if !block.mining.required_tools.is_empty() {
+            lines.push(format!(
+                "{}: {}",
+                state.localization.text(language, "hud.requiredTools"),
+                mining_tool_names(&block.mining.required_tools, &content.tools, language),
+            ));
+        }
+        if !block.mining.preferred_tools.is_empty() {
+            lines.push(format!(
+                "{}: {}",
+                state.localization.text(language, "hud.preferredTools"),
+                mining_tool_names(&block.mining.preferred_tools, &content.tools, language),
+            ));
+        }
+        if lines.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", lines.join("\n"))
+        }
+    });
     let next_text = format!(
-        "{block_name}{properties_text}{layers_text}\n{}: {light_level}\n{coordinates}",
+        "{block_name}{properties_text}{layers_text}{mining_text}\n{}: {light_level}\n{coordinates}",
         state.localization.text(language, "hud.light"),
     );
 
@@ -422,6 +447,28 @@ fn update_target_hud(
     *cached_icon = Some(icon_snapshot);
 }
 
+
+fn mining_tool_names(
+    tags: &[String],
+    tools: &ToolRegistry,
+    language: Language,
+) -> String {
+    let mut names = Vec::<String>::new();
+    for tag in tags {
+        let mut matched = false;
+        for tool in tools.iter().filter(|tool| tool.mining.has_tag(tag)) {
+            matched = true;
+            let name = tool.name.text(language).to_owned();
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        if !matched && !names.contains(tag) {
+            names.push(tag.clone());
+        }
+    }
+    names.join(", ")
+}
 
 fn layer_face_name<'a>(
     localization: &'a UiLocalization,

@@ -149,5 +149,9 @@
   "hud.layerFace.top": "Top",
   "hud.layerFace.bottom": "Bottom",
   "hud.layerFace.front": "Front",
-  "hud.layerFace.back": "Back"
+  "hud.layerFace.back": "Back",
+  "inventory.tool.stats": "Stats",
+  "inventory.tool.speed": "Speed",
+  "hud.requiredTools": "Required Tools",
+  "hud.preferredTools": "Preferred Tools"
 }

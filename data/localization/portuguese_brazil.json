@@ -149,5 +149,9 @@
   "hud.layerFace.top": "Superior",
   "hud.layerFace.bottom": "Inferior",
   "hud.layerFace.front": "Frente",
-  "hud.layerFace.back": "Trás"
+  "hud.layerFace.back": "Trás",
+  "inventory.tool.stats": "Atributos",
+  "inventory.tool.speed": "Velocidade",
+  "hud.requiredTools": "Ferramentas Necessárias",
+  "hud.preferredTools": "Ferramentas Preferidas"
 }
