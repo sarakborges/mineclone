@@ -170,6 +170,30 @@ VERSION: `0.50.24`, commit
 CI de P8: **verde** nos runs push `35685798181` e PR `35685802514` para
 `8390c1b12da1f0338b0016aee0b230b17bd2e868`.
 
+### P9 — ocupação XZ incremental para o frontier da fog
+
+A fog reconstruía um `HashSet<IVec2>` percorrendo todos os chunks ativos
+sempre que `ChunkRenderPool::membership_revision` mudava. Durante streaming,
+novos chunks alteram essa revisão com frequência, tornando o rebuild O(chunks
+ativos) parte do caminho crítico do frontier.
+
+`ChunkRenderPool` agora mantém `active_column_counts` incremental por XZ:
+insert novo incrementa, take decrementa/remove a coluna vazia e clear limpa o
+índice. Replacements/patches/detaches internos que não alteram membership do
+chunk não tocam no índice. Commit:
+`b412513a0ea6c421cd55c8c31d2cd724085d46d1`.
+
+A fog usa `contains_column` diretamente ao avaliar o frontier e não mantém
+mais uma cópia derivada de todos os coords ativos. Os testes do cálculo de
+distância continuam usando o mesmo helper via predicate. Commit:
+`ff7b6d55c2b602833ea321411939ccb0785d5a1d`.
+
+O diagnóstico de 10s recompõe as contagens por coluna e avisa em caso de drift:
+`d2f027014f5b824e786924cccdece2329cd20c5d`.
+VERSION: `0.50.25`, commit
+`97de4b3e6fa39628af2a5b6117110f5522cc6da2`.
+CI de P9: aguardando.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
