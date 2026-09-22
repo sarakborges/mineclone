@@ -5,7 +5,8 @@ use crate::app::{
 };
 use crate::localization::ActiveLanguage;
 use game_rules_section::{
-    TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard, handle_ticks_step_buttons,
+    TicksPerSecondInputState, handle_spawn_creatures_toggle, handle_ticks_input,
+    handle_ticks_keyboard, handle_ticks_step_buttons, sync_spawn_creatures_toggle,
     sync_ticks_per_second_text,
 };
 use biome_size_multiplier_section::{
@@ -138,6 +139,7 @@ impl Plugin for SettingsScreenPlugin {
                         .chain(),
                     (
                         handle_ticks_step_buttons,
+                        handle_spawn_creatures_toggle,
                         handle_ticks_input,
                         handle_new_world_footer,
                         handle_spawn_biome_search_keyboard.run_if(in_state(GameState::NewWorld)),
@@ -178,6 +180,7 @@ impl Plugin for SettingsScreenPlugin {
                     sync_biome_size_multiplier_slider_thumb
                         .run_if(in_state(GameState::NewWorld)),
                     sync_ticks_per_second_text,
+                    sync_spawn_creatures_toggle,
                     sync_render_distance_text,
                     sync_render_distance_input,
                     sync_render_distance_slider_thumb,

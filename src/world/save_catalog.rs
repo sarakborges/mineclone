@@ -104,7 +104,7 @@ fn open_directory(_directory: &Path) -> io::Result<()> {
     ))
 }
 
-pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32) -> io::Result<(String, WorldDirectoryLock)> {
+pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32, spawn_creatures: bool) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() { return Err(io::Error::new(io::ErrorKind::InvalidInput, "World seed metadata must include a dimension and a positive tick rate")); }
     if !is_valid_biome_size_multiplier(biome_size_multiplier) { return Err(io::Error::new(io::ErrorKind::InvalidInput, "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments")); }
     let created_at = now_unix_ms()?;
@@ -121,7 +121,7 @@ pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &s
                 };
                 let manifest = WorldManifest {
                     format_version: SAVE_FORMAT_VERSION, id: candidate.clone(), seed, dimension_id: dimension_id.to_owned(),
-                    worldgen_version: WorldgenVersion::current(), biome_size_multiplier, ticks_per_second,
+                    worldgen_version: WorldgenVersion::current(), biome_size_multiplier, ticks_per_second, spawn_creatures,
                     last_saved_unix_ms: created_at, generation: 0, snapshot_file: None,
                 };
                 if let Err(error) = publish_json(&directory, &manifest_name(0), &manifest) {
@@ -227,6 +227,7 @@ pub(crate) fn save_world_owned(
         worldgen_version: snapshot.worldgen_version,
         biome_size_multiplier: snapshot.biome_size_multiplier,
         ticks_per_second: snapshot.ticks_per_second,
+        spawn_creatures: snapshot.spawn_creatures,
         last_saved_unix_ms: saved_at,
         generation: next,
         snapshot_file: Some(snapshot_file.clone()),

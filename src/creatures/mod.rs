@@ -12,7 +12,11 @@ use crate::{
     content::{biome::BiomeRegistry, creature::CreatureRegistry},
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
-    world::{biome::CurrentBiome, dimension::{CurrentDimension, DimensionEntityCounts}},
+    world::{
+        biome::CurrentBiome,
+        dimension::{CurrentDimension, DimensionEntityCounts},
+        game_rules::GameRules,
+    },
     voxel::world::VoxelWorld,
 };
 
@@ -211,6 +215,7 @@ const NATURAL_SPAWN_MAX_DISTANCE: f32 = 32.0;
 #[allow(clippy::too_many_arguments)]
 fn natural_spawn_creatures(
     time: Res<Time>,
+    rules: Res<GameRules>,
     world: Res<VoxelWorld>,
     biome: Res<CurrentBiome>,
     definitions: Res<CreatureRegistry>,
@@ -225,6 +230,10 @@ fn natural_spawn_creatures(
     mut commands: Commands,
     mut state: Local<(f32, u32)>,
 ) {
+    if !rules.spawn_creatures() {
+        return;
+    }
+
     state.0 -= time.delta_secs();
     if state.0 > 0.0 {
         return;

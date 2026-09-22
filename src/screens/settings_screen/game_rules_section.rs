@@ -9,7 +9,7 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
-        typography,
+        selectable, toggle, typography,
     },
     world::{InMemoryWorldSave, NewWorldConfig, game_rules::GameRules},
 };
@@ -33,6 +33,12 @@ pub(super) struct TicksPerSecondValueText;
 pub(super) struct TicksPerSecondInputKind;
 pub(super) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;
 
+#[derive(Component)]
+pub(super) struct SpawnCreaturesToggle;
+
+#[derive(Component)]
+pub(super) struct SpawnCreaturesToggleThumb;
+
 #[derive(SystemParam)]
 pub(super) struct TicksPerSecondSettings<'w> {
     game_state: Res<'w, State<GameState>>,
@@ -46,6 +52,14 @@ impl TicksPerSecondSettings<'_> {
             self.new_world.game_rules().ticks_per_second()
         } else {
             self.game_rules.ticks_per_second()
+        }
+    }
+
+    fn spawn_creatures(&self) -> bool {
+        if *self.game_state.get() == GameState::NewWorld {
+            self.new_world.game_rules().spawn_creatures()
+        } else {
+            self.game_rules.spawn_creatures()
         }
     }
 
@@ -98,19 +112,29 @@ impl TicksPerSecondEditor<'_> {
 
 pub(super) fn game_rules_section(
     ticks_per_second: u32,
+    spawn_creatures: bool,
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
     (
         Node {
             width: percent(100),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::SpaceBetween,
-            column_gap: px(24),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(18),
             ..default()
         },
         children![
+            (
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    column_gap: px(24),
+                    ..default()
+                },
+                children![
             (
                 Node {
                     flex_grow: 1.0,
@@ -163,8 +187,85 @@ pub(super) fn game_rules_section(
                     ),
                 ],
             ),
+                ],
+            ),
+            (
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    column_gap: px(24),
+                    ..default()
+                },
+                children![
+                    (
+                        Node {
+                            flex_grow: 1.0,
+                            min_width: px(0),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(6),
+                            ..default()
+                        },
+                        children![
+                            typography::setting_title(
+                                localization.text(language, "settings.spawnCreatures").to_owned()
+                            ),
+                            typography::caption(
+                                localization.text(language, "settings.spawnCreatures.description").to_owned()
+                            ),
+                        ],
+                    ),
+                    (
+                        Button,
+                        SpawnCreaturesToggle,
+                        toggle::control(spawn_creatures),
+                        children![(SpawnCreaturesToggleThumb, toggle::thumb(spawn_creatures))],
+                    ),
+                ],
+            ),
         ],
     )
+}
+
+pub(super) fn handle_spawn_creatures_toggle(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<SpawnCreaturesToggle>)>,
+    mut settings: TicksPerSecondEditor,
+) {
+    if !interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        return;
+    }
+    let next = !settings.game_rules.spawn_creatures();
+    if *settings.game_state.get() == GameState::NewWorld {
+        settings.new_world.set_spawn_creatures(!settings.new_world.game_rules().spawn_creatures());
+    } else {
+        settings.game_rules.set_spawn_creatures(next);
+        settings.save.save_game_rules(*settings.game_rules);
+    }
+}
+
+pub(super) fn sync_spawn_creatures_toggle(
+    settings: TicksPerSecondSettings,
+    mut toggles: Query<(Ref<Interaction>, &mut BackgroundColor, &mut BorderColor), With<SpawnCreaturesToggle>>,
+    mut thumbs: Query<&mut Node, With<SpawnCreaturesToggleThumb>>,
+) {
+    let changed = settings.inputs_changed();
+    let enabled = settings.spawn_creatures();
+    for (interaction, background, border) in &mut toggles {
+        if !changed && !interaction.is_changed() {
+            continue;
+        }
+        selectable::apply_colors(toggle::colors(enabled, *interaction), background, border);
+    }
+    if !changed {
+        return;
+    }
+    let next_left = px(toggle::thumb_left(enabled));
+    for mut thumb in &mut thumbs {
+        if thumb.left != next_left {
+            thumb.left = next_left;
+        }
+    }
 }
 
 pub(super) fn handle_ticks_step_buttons(

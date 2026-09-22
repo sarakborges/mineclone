@@ -5,12 +5,14 @@ pub(crate) const DEFAULT_TICKS_PER_SECOND: u32 = 40;
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GameRules {
     ticks_per_second: u32,
+    spawn_creatures: bool,
 }
 
 impl Default for GameRules {
     fn default() -> Self {
         Self {
             ticks_per_second: DEFAULT_TICKS_PER_SECOND,
+            spawn_creatures: true,
         }
     }
 }
@@ -22,6 +24,14 @@ impl GameRules {
 
     pub(crate) fn tick_seconds(&self) -> f32 {
         1.0 / self.ticks_per_second as f32
+    }
+
+    pub(crate) fn spawn_creatures(&self) -> bool {
+        self.spawn_creatures
+    }
+
+    pub(crate) fn set_spawn_creatures(&mut self, spawn_creatures: bool) {
+        self.spawn_creatures = spawn_creatures;
     }
 
     pub(crate) fn set_ticks_per_second(&mut self, ticks_per_second: u32) {

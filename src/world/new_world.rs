@@ -149,6 +149,10 @@ impl NewWorldConfig {
         self.game_rules.set_ticks_per_second(ticks_per_second);
     }
 
+    pub(crate) fn set_spawn_creatures(&mut self, spawn_creatures: bool) {
+        self.game_rules.set_spawn_creatures(spawn_creatures);
+    }
+
     pub(crate) fn spawn_biome(&self) -> Option<&str> {
         self.spawn_biome.as_deref()
     }

@@ -54,6 +54,8 @@
   "settings.gameMode.survival": "Supervivencia",
   "settings.gameMode.creative": "Creativo",
   "settings.ticksBySecond": "Ticks por Segundo",
+  "settings.spawnCreatures": "Generar Criaturas",
+  "settings.spawnCreatures.description": "Permite que criaturas como slimes aparezcan de forma natural.",
   "settings.ticksBySecond.description": "Controla cuántos ticks de simulación avanza el mundo por segundo real.",
   "settings.renderDistance": "Distancia de Renderizado",
   "settings.renderDistance.description": "Controla hasta dónde se genera y renderiza el terreno alrededor del jugador.",

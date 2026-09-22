@@ -62,6 +62,7 @@ impl PreparedWorldActivation {
         let dimension_id = snapshot.dimension_id.clone();
         let mut rules = GameRules::default();
         rules.set_ticks_per_second(snapshot.ticks_per_second);
+        rules.set_spawn_creatures(snapshot.spawn_creatures);
 
         let mut save = InMemoryWorldSave::default();
         save.begin_new_world(
