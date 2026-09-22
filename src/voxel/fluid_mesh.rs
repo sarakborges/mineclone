@@ -41,6 +41,52 @@ struct FluidGreedyTop {
     height: f32,
 }
 
+#[derive(Clone, Copy)]
+struct FluidTopSource {
+    x: u8,
+    z: u8,
+    cell: FluidCell,
+}
+
+struct FluidTopPlanes {
+    offsets: [usize; CHUNK_SIZE + 1],
+    sources: Vec<FluidTopSource>,
+}
+
+impl FluidTopPlanes {
+    fn collect(chunk: &VoxelChunk, meshlets: ChunkMeshletMask) -> Self {
+        let active_capacity = chunk
+            .fluid_count()
+            .min(meshlets.selected_voxel_count());
+        let mut sources = Vec::with_capacity(active_capacity);
+        let mut counts = [0_usize; CHUNK_SIZE];
+
+        // Palette occupancy is indexed x + z * size + y * area, so occupied
+        // iteration is already stable and grouped by ascending Y.
+        chunk.visit_fluid_voxels(|x, y, z, cell| {
+            if meshlets.contains_voxel(x, y, z) {
+                counts[y] += 1;
+                sources.push(FluidTopSource {
+                    x: x as u8,
+                    z: z as u8,
+                    cell,
+                });
+            }
+        });
+
+        let mut offsets = [0_usize; CHUNK_SIZE + 1];
+        for (index, count) in counts.into_iter().enumerate() {
+            offsets[index + 1] = offsets[index] + count;
+        }
+
+        Self { offsets, sources }
+    }
+
+    fn plane(&self, y: usize) -> &[FluidTopSource] {
+        &self.sources[self.offsets[y]..self.offsets[y + 1]]
+    }
+}
+
 pub(crate) fn build_fluid_meshlets<W, F>(
     world: &W,
     chunk_coord: IVec3,
@@ -216,25 +262,19 @@ fn emit_greedy_fluid_top_faces<W, F>(
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, FluidId) -> [f32; 3],
 {
-    let plane_capacity = chunk.fluid_count().div_ceil(CHUNK_SIZE).max(4);
-    let mut active_by_y: [Vec<(u8, u8, FluidCell)>; CHUNK_SIZE] =
-        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
-    chunk.visit_fluid_voxels(|x, y, z, cell| {
-        if meshlets.contains_voxel(x, y, z) {
-            active_by_y[y].push((x as u8, z as u8, cell));
-        }
-    });
-
+    let active_by_y = FluidTopPlanes::collect(chunk, meshlets);
     let mut mask = vec![None::<FluidGreedyTop>; CHUNK_SIZE * CHUNK_SIZE];
 
-    for (y, active) in active_by_y.iter().enumerate() {
+    for y in 0..CHUNK_SIZE {
+        let active = active_by_y.plane(y);
         if active.is_empty() {
             continue;
         }
 
-        for &(x, z, cell) in active {
-            let x = usize::from(x);
-            let z = usize::from(z);
+        for source in active {
+            let x = usize::from(source.x);
+            let z = usize::from(source.z);
+            let cell = source.cell;
             let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
             let world_voxel = chunk_origin + local_voxel;
             let top_sample = fluid_neighbor_content(
