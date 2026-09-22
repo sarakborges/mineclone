@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{input_focus::InputFocus, prelude::*};
 
 use crate::{
     app::{
@@ -58,6 +58,7 @@ fn toggle_character_info(
     keybinds: Res<Keybinds>,
     state: Res<State<CharacterInfoState>>,
     chat: Res<ChatState>,
+    focus: Res<InputFocus>,
     mut input_state: ResMut<CharacterInfoInputState>,
     mut next_state: ResMut<NextState<CharacterInfoState>>,
     mut next_inventory: ResMut<NextState<InventoryState>>,
@@ -66,7 +67,7 @@ fn toggle_character_info(
     if !keys.just_pressed(KeyCode::Escape) {
         input_state.escape_consumed = false;
     }
-    if chat.is_open() {
+    if chat.is_open() || focus.get().is_some() {
         return;
     }
 
