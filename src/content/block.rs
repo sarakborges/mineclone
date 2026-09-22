@@ -10,7 +10,7 @@ use super::{
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
-pub const DEFAULT_BLOCK_BREAK_TICKS: u32 = 400;
+pub const DEFAULT_BLOCK_BREAK_TICKS: u32 = 200;
 pub const FRAGMENTABLE_BLOCK_TAG: &str = "fragmentable";
 
 #[derive(Clone, Debug, Deserialize)]

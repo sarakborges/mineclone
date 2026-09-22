@@ -20,7 +20,7 @@
   "lightDampening": 15,
   "castsShadow": true,
   "mining": {
-    "hardness": 1,
+    "hardness": 2,
     "requiredTools": [
       "pickaxe"
     ]
