@@ -127,15 +127,20 @@ fn refresh_world_list(
     }
 }
 
+#[derive(SystemParam)]
+struct WorldSelectionScanUi<'w, 's> {
+    list: Query<'w, 's, Entity, With<WorldListContainer>>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+    dimensions: Res<'w, DimensionRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    images: ResMut<'w, Assets<Image>>,
+}
+
 fn poll_world_scan(
     mut commands: Commands,
     mut state: ResMut<WorldSelectionState>,
-    list: Query<Entity, With<WorldListContainer>>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
-    dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
-    mut images: ResMut<Assets<Image>>,
+    mut context: WorldSelectionScanUi,
 ) {
     let Some(scan) = state.scan.as_ref() else {
         return;
@@ -148,7 +153,7 @@ fn poll_world_scan(
     match result {
         Ok(worlds) => {
             for handle in state.thumbnail_images.drain(..) {
-                let _ = images.remove(&handle);
+                let _ = context.images.remove(&handle);
             }
             state.worlds = worlds;
 
@@ -157,7 +162,7 @@ fn poll_world_scan(
                 let thumbnail = if world.compatible {
                     match load_world_thumbnail(&world.id) {
                         Ok(Some(image)) => {
-                            let handle = images.add(image);
+                            let handle = context.images.add(image);
                             state.thumbnail_images.push(handle.clone());
                             Some(handle)
                         }
@@ -173,16 +178,16 @@ fn poll_world_scan(
                 entries.push((world, thumbnail));
             }
 
-            for list_entity in &list {
+            for list_entity in &context.list {
                 commands.entity(list_entity).with_children(|parent| {
                     for (world, thumbnail) in &entries {
                         spawn_world_entry(
                             parent,
                             world,
-                            &localization,
-                            language.get(),
-                            &dimensions,
-                            &biomes,
+                            &context.localization,
+                            context.language.get(),
+                            &context.dimensions,
+                            &context.biomes,
                             thumbnail.clone(),
                         );
                     }
@@ -192,7 +197,7 @@ fn poll_world_scan(
         Err(error) => {
             state.error = format!(
                 "{}: {error}",
-                localization.text(language.get(), "worldSelection.scanError")
+                context.localization.text(context.language.get(), "worldSelection.scanError")
             );
         }
     }
@@ -294,7 +299,7 @@ fn release_world_thumbnail_images(
     mut images: ResMut<Assets<Image>>,
 ) {
     for handle in state.thumbnail_images.drain(..) {
-        let _ = images.remove(&handle);
+        let _ = context.images.remove(&handle);
     }
 }
 
