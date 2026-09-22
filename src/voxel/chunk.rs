@@ -568,6 +568,15 @@ impl VoxelChunk {
         })
     }
 
+    pub(crate) fn visit_block_voxels<'a>(
+        &'a self,
+        mut visit: impl FnMut(usize, usize, usize, &'a VoxelCell),
+    ) {
+        for (x, y, z, cell) in self.occupied_block_voxels() {
+            visit(x, y, z, cell);
+        }
+    }
+
     pub(crate) fn layers_at(&self, x: i32, y: i32, z: i32) -> &[AttachedLayer] {
         if !in_bounds(x, y, z) {
             return &[];
