@@ -45,6 +45,31 @@ pub(super) struct DetachedRenderAllocationParts {
     pub(super) meshes: Vec<Handle<Mesh>>,
 }
 
+const MESH_ASSET_RETIREMENT_FRAMES: u8 = 3;
+
+#[derive(Default)]
+struct DeferredMeshAssetRetirement {
+    frames_remaining: u8,
+    handles: Vec<Handle<Mesh>>,
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct DeferredMeshAssetRetirements {
+    batches: Vec<DeferredMeshAssetRetirement>,
+}
+
+impl DeferredMeshAssetRetirements {
+    fn enqueue(&mut self, handles: Vec<Handle<Mesh>>) {
+        if handles.is_empty() {
+            return;
+        }
+        self.batches.push(DeferredMeshAssetRetirement {
+            frames_remaining: MESH_ASSET_RETIREMENT_FRAMES,
+            handles,
+        });
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
@@ -516,19 +541,21 @@ impl ChunkRenderPool {
         }
     }
 
-    fn clear(&mut self, meshes: &mut Assets<Mesh>) {
+    fn clear(&mut self) -> Vec<Handle<Mesh>> {
         let had_active_allocations = !self.active.is_empty();
-        for (_, slot) in self.active.drain() {
-            for handle in slot.meshes {
-                let _ = meshes.remove(&handle);
-            }
-        }
+        let mesh_handles = self
+            .active
+            .drain()
+            .flat_map(|(_, slot)| slot.meshes)
+            .collect();
 
         self.active_column_counts.clear();
         self.total_mesh_bytes = 0;
         if had_active_allocations {
             self.bump_membership_revision();
         }
+
+        mesh_handles
     }
 
     fn add_active_column(&mut self, column: IVec2) {
@@ -608,10 +635,9 @@ pub(super) fn retire_render_allocation_parts(
     }
 
     commands.queue(move |world: &mut World| {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        for mesh_handle in mesh_handles {
-            let _ = meshes.remove(&mesh_handle);
-        }
+        world
+            .resource_mut::<DeferredMeshAssetRetirements>()
+            .enqueue(mesh_handles);
     });
 }
 
@@ -628,8 +654,38 @@ pub(crate) fn retire_chunk_render_allocation(
 }
 
 pub(crate) fn clear_chunk_render_pool(
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
     mut render_pool: ResMut<ChunkRenderPool>,
 ) {
-    render_pool.clear(&mut meshes);
+    let mesh_handles = render_pool.clear();
+    if mesh_handles.is_empty() {
+        return;
+    }
+    commands.queue(move |world: &mut World| {
+        world
+            .resource_mut::<DeferredMeshAssetRetirements>()
+            .enqueue(mesh_handles);
+    });
+}
+
+pub(crate) fn advance_deferred_mesh_asset_retirements(
+    mut retirements: ResMut<DeferredMeshAssetRetirements>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for batch in &mut retirements.batches {
+        batch.frames_remaining = batch.frames_remaining.saturating_sub(1);
+    }
+
+    let mut ready_handles = Vec::new();
+    retirements.batches.retain_mut(|batch| {
+        if batch.frames_remaining > 0 {
+            return true;
+        }
+        ready_handles.append(&mut batch.handles);
+        false
+    });
+
+    for handle in ready_handles {
+        let _ = meshes.remove(&handle);
+    }
 }

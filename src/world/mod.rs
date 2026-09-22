@@ -63,7 +63,8 @@ use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
 use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{
-    ChunkRenderPool, FluidMaterials, TerrainMaterials, clear_chunk_render_pool,
+    ChunkRenderPool, DeferredMeshAssetRetirements, FluidMaterials, TerrainMaterials,
+    advance_deferred_mesh_asset_retirements, clear_chunk_render_pool,
 };
 use chunk_unloading::{
     ChunkUnloadState, enforce_chunk_mesh_residency_budget, retire_distant_chunk_meshes,
@@ -121,6 +122,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkRemeshTasks>()
             .init_resource::<ChunkUnloadState>()
             .init_resource::<ChunkRenderPool>()
+            .init_resource::<DeferredMeshAssetRetirements>()
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
             .init_resource::<PendingFluidUpdates>()
@@ -213,6 +215,7 @@ impl Plugin for WorldPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
+            .add_systems(Last, advance_deferred_mesh_asset_retirements)
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
             .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(

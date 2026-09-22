@@ -21,7 +21,8 @@ use super::biome_field::BiomeField;
 
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
 pub(crate) use pool::{
-    ChunkRenderPool, clear_chunk_render_pool, retire_chunk_render_allocation,
+    ChunkRenderPool, DeferredMeshAssetRetirements, advance_deferred_mesh_asset_retirements,
+    clear_chunk_render_pool, retire_chunk_render_allocation,
 };
 pub(crate) use refresh::{
     apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets,
