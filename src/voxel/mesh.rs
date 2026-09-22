@@ -586,7 +586,7 @@ fn face_neighbor_cell<W: VoxelRead + ?Sized>(
         && local.y < CHUNK_SIZE as i32
         && local.z < CHUNK_SIZE as i32
     {
-        chunk.cell_at(local.x, local.y, local.z)
+        chunk.cell_at_local(local.x as usize, local.y as usize, local.z as usize)
     } else {
         world.cell_at(world_voxel + face.offset())
     }
