@@ -271,7 +271,10 @@ Commits: propagação `4950cedf3d23f5bea506fbb389f88fb25dd704ba`;
 cleanup `be01520cf0f017a270f9d3f4e060d31b24118d89`.
 VERSION: `0.50.28`, commit
 `76a319034f57983efcb929d696d28086186cf2fb`.
-CI de P12: aguardando. Nenhum `cargo test` foi adicionado/executado.
+A CI inicial falhou no Clippy por um `use bevy::prelude::*` que ficou sem
+uso em `medium.rs` após a remoção do stub. Corrigido sem supressão em
+`568801cb91802f7185874a3349dd442e9f22689f`.
+CI final de P12: aguardando. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
