@@ -181,8 +181,12 @@ fn fragment(
         terrain_material_extension.texture_array_enabled > 0.5;
 
     // Every voxel terrain material is unlit and the terrain shader samples
-    // its base/overlay textures itself. Delay PbrInput construction until after
-    // alpha discard so masked-out fragments avoid view/normal preparation too.
+    // its base/overlay textures itself. Avoid StandardMaterial's full PBR
+    // preparation and keep only the fields used by alpha discard and fog.
+    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
+    pbr_input.material.flags = pbr_bindings::material.flags;
+    pbr_input.material.base_color = pbr_bindings::material.base_color;
+    pbr_input.material.alpha_cutoff = pbr_bindings::material.alpha_cutoff;
 
     // Greedy terrain quads carry UVs larger than 1 so each merged voxel face
     // keeps the original per-block texture scale. The integer UV0.x region also
@@ -236,52 +240,6 @@ fn fragment(
         1.0,
     );
     let is_fluid = fluid_animation > 0.5;
-
-    // Resolve every texture sample before alpha discard so implicit texture
-    // derivatives stay well-defined. Alpha itself depends only on the base
-    // texel and material base alpha; overlay affects RGB only.
-    var base_rgb = texel.rgb;
-    if base_tint_enabled {
-        base_rgb = apply_layer_tint(texel.rgb, tint);
-    }
-
-    if overlay_enabled {
-        var overlay = vec4<f32>(1.0);
-        if texture_array_enabled {
-            overlay = textureSample(
-                terrain_texture_array,
-                terrain_texture_array_sampler,
-                tiled_uv,
-                i32(array_overlay_index),
-            );
-        } else {
-            overlay = textureSample(
-                terrain_overlay_texture,
-                terrain_overlay_sampler,
-                tiled_uv,
-            );
-        }
-        var overlay_rgb = overlay.rgb;
-        if overlay_tint_enabled {
-            overlay_rgb = apply_layer_tint(overlay.rgb, tint);
-        }
-        base_rgb = mix(base_rgb, overlay_rgb, overlay.a);
-    }
-
-    var material_color = vec4<f32>(
-        base_rgb * pbr_bindings::material.base_color.rgb,
-        texel.a * pbr_bindings::material.base_color.a,
-    );
-    material_color = alpha_discard(
-        pbr_bindings::material,
-        material_color,
-    );
-
-    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
-    pbr_input.material.flags = pbr_bindings::material.flags;
-    pbr_input.material.base_color = pbr_bindings::material.base_color;
-    pbr_input.material.alpha_cutoff = pbr_bindings::material.alpha_cutoff;
-
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_global_lighting[0].x;
 
     // Strength is shaped from the peak only, so boosting dim light never raises
@@ -334,6 +292,36 @@ fn fragment(
     let combined_hue = mix(vec3<f32>(1.0), block_hue, color_weight);
     let local_light = combined_hue * combined_intensity * ambient_occlusion;
 
+    var base_rgb = texel.rgb;
+    if base_tint_enabled {
+        base_rgb = apply_layer_tint(texel.rgb, tint);
+    }
+
+    if overlay_enabled {
+        var overlay = vec4<f32>(1.0);
+        if texture_array_enabled {
+            overlay = textureSample(
+                terrain_texture_array,
+                terrain_texture_array_sampler,
+                tiled_uv,
+                i32(array_overlay_index),
+            );
+        } else {
+            overlay = textureSample(
+                terrain_overlay_texture,
+                terrain_overlay_sampler,
+                tiled_uv,
+            );
+        }
+        var overlay_rgb = overlay.rgb;
+        if overlay_tint_enabled {
+            overlay_rgb = apply_layer_tint(overlay.rgb, tint);
+        }
+        base_rgb = mix(base_rgb, overlay_rgb, overlay.a);
+    }
+
+    var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
+
 #ifndef PREPASS_PIPELINE
     if is_fluid {
         let time = view_bindings::globals.time;
@@ -354,8 +342,8 @@ fn fragment(
         );
         let fluid_variation = moving_wave * 0.045;
 
-        material_color.rgb = clamp(
-            material_color.rgb * (1.0 + fluid_variation)
+        material_rgb = clamp(
+            material_rgb * (1.0 + fluid_variation)
                 + vec3<f32>(0.018, 0.028, 0.042) * ripple_ridge,
             vec3<f32>(0.0),
             vec3<f32>(1.0),
@@ -368,8 +356,12 @@ fn fragment(
     let lighting_multiplier =
         local_light + dynamic_light * (1.0 - block_hue_weight);
     pbr_input.material.base_color = vec4<f32>(
-        material_color.rgb * lighting_multiplier,
-        material_color.a,
+        material_rgb * lighting_multiplier,
+        texel.a * pbr_bindings::material.base_color.a,
+    );
+    pbr_input.material.base_color = alpha_discard(
+        pbr_input.material,
+        pbr_input.material.base_color,
     );
 
 #ifdef PREPASS_PIPELINE
