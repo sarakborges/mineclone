@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use super::{
     highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
-    mining::BlockMiningPlugin, placement_orientation::PlacementOrientationPlugin,
+    mining::BlockMiningPlugin, mining_visual::BlockMiningVisualPlugin,
+    placement_orientation::PlacementOrientationPlugin,
     placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
@@ -46,6 +47,7 @@ impl Plugin for BlockTargetingPlugin {
                 PlacementOrientationPlugin,
                 BlockInteractionPlugin,
                 BlockMiningPlugin,
+                BlockMiningVisualPlugin,
                 PlacementPreviewPlugin,
             ))
             .add_systems(
