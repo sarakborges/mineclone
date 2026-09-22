@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, OnceLock},
-};
+use std::sync::Arc;
 
 use bevy::prelude::*;
 
@@ -16,37 +13,7 @@ use super::{
     world::VoxelWorld,
 };
 
-const HALO: i32 = 1;
-const SNAPSHOT_SIDE: usize = CHUNK_SIZE + 2;
-const SNAPSHOT_FACE_AREA: usize = SNAPSHOT_SIDE * SNAPSHOT_SIDE;
-const INTERIOR_SHELL_LAYER: usize = SNAPSHOT_SIDE * 2 + CHUNK_SIZE * 2;
-const SHELL_VOLUME: usize = SNAPSHOT_FACE_AREA * 2 + INTERIOR_SHELL_LAYER * CHUNK_SIZE;
-
 type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
-
-#[derive(Clone, Copy, Default)]
-struct ShellSample {
-    block_index: u16,
-    fluid_index: u16,
-    light: VoxelLight,
-    loaded: bool,
-}
-
-struct ShellStorage {
-    samples: Box<[ShellSample]>,
-    block_palette: Vec<VoxelCell>,
-    fluid_palette: Vec<FluidCell>,
-}
-
-impl ShellStorage {
-    fn cell(&self, block_index: u16) -> Option<VoxelCell> {
-        (block_index != 0).then(|| self.block_palette[block_index as usize - 1])
-    }
-
-    fn fluid(&self, fluid_index: u16) -> Option<FluidCell> {
-        (fluid_index != 0).then(|| self.fluid_palette[fluid_index as usize - 1])
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkMeshDependencies {
@@ -159,7 +126,6 @@ pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
     neighbor_chunks: Arc<NeighborChunks>,
-    shell: Arc<OnceLock<Arc<ShellStorage>>>,
     dependencies: ChunkMeshDependencies,
 }
 
@@ -240,7 +206,6 @@ impl ChunkMeshSnapshot {
             chunk_origin,
             chunk,
             neighbor_chunks: Arc::new(neighbor_chunks),
-            shell: Arc::new(OnceLock::new()),
             dependencies: ChunkMeshDependencies {
                 center: coord,
                 content_revisions,
@@ -248,12 +213,6 @@ impl ChunkMeshSnapshot {
             }
             .for_meshlets(meshlets),
         })
-    }
-
-    pub(crate) fn materialize_shell(self) -> Self {
-        self.shell
-            .get_or_init(|| Arc::new(capture_shell(&self.neighbor_chunks)));
-        self
     }
 
     pub(crate) fn chunk(&self) -> &VoxelChunk {
@@ -269,40 +228,34 @@ impl ChunkMeshSnapshot {
         inside_chunk(local).then_some(local)
     }
 
-    fn snapshot_local(&self, position: IVec3) -> Option<IVec3> {
-        let snapshot_origin = self.chunk_origin - IVec3::splat(HALO);
-        let local = position - snapshot_origin;
-        if local.x < 0
-            || local.y < 0
-            || local.z < 0
-            || local.x >= SNAPSHOT_SIDE as i32
-            || local.y >= SNAPSHOT_SIDE as i32
-            || local.z >= SNAPSHOT_SIDE as i32
-        {
-            return None;
-        }
-        Some(local)
-    }
-
-    fn shell_index(&self, position: IVec3) -> Option<usize> {
-        let local = self.snapshot_local(position)?;
-        shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)
-    }
-
     fn neighbor_sample(
         &self,
         position: IVec3,
     ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
-        let local = self.snapshot_local(position)?;
-        shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)?;
-        let neighbor_chunks = self.neighbor_chunks.as_ref();
-        let (chunk_x, local_x) = shell_axis(local.x as usize);
-        let (chunk_y, local_y) = shell_axis(local.y as usize);
-        let (chunk_z, local_z) = shell_axis(local.z as usize);
-        neighbor_chunks[chunk_y][chunk_z][chunk_x]
-            .as_ref()?
-            .sample_local(local_x, local_y, local_z)
+        let local = position - self.chunk_origin;
+        let chunk_size = CHUNK_SIZE as i32;
+        let offset = IVec3::new(
+            local.x.div_euclid(chunk_size),
+            local.y.div_euclid(chunk_size),
+            local.z.div_euclid(chunk_size),
+        );
+        if offset.x.abs() > 1 || offset.y.abs() > 1 || offset.z.abs() > 1 {
+            return None;
+        }
+        if offset == IVec3::ZERO {
+            return self.chunk.sample_local(local.x, local.y, local.z);
+        }
+
+        let neighbor = self.neighbor_chunks[(offset.y + 1) as usize]
+            [(offset.z + 1) as usize][(offset.x + 1) as usize]
+            .as_ref()?;
+        neighbor.sample_local(
+            local.x.rem_euclid(chunk_size),
+            local.y.rem_euclid(chunk_size),
+            local.z.rem_euclid(chunk_size),
+        )
     }
+
 }
 
 impl VoxelRead for ChunkMeshSnapshot {
@@ -314,106 +267,7 @@ impl VoxelRead for ChunkMeshSnapshot {
             return self.chunk.sample_local(local.x, local.y, local.z);
         }
 
-        if let Some(shell) = self.shell.get() {
-            let sample = shell.samples[self.shell_index(world_position)?];
-            return sample.loaded.then_some((
-                shell.cell(sample.block_index),
-                shell.fluid(sample.fluid_index),
-                sample.light,
-            ));
-        }
-
         self.neighbor_sample(world_position)
-    }
-}
-
-fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
-    let last = SNAPSHOT_SIDE - 1;
-    let mut block_palette = Vec::<VoxelCell>::new();
-    let mut fluid_palette = Vec::<FluidCell>::new();
-    let mut block_indices = HashMap::<VoxelCell, u16>::new();
-    let mut fluid_indices = HashMap::<FluidCell, u16>::new();
-    let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
-        let (chunk_x, local_x) = shell_axis(x);
-        let (chunk_y, local_y) = shell_axis(y);
-        let (chunk_z, local_z) = shell_axis(z);
-        let Some(neighbor_chunk) = neighbor_chunks[chunk_y][chunk_z][chunk_x].as_ref() else {
-            return ShellSample::default();
-        };
-        let Some((cell, fluid, light)) = neighbor_chunk.sample_local(local_x, local_y, local_z)
-        else {
-            return ShellSample::default();
-        };
-
-        let block_index = cell.map_or(0, |cell| {
-            if let Some(&index) = block_indices.get(&cell) {
-                return index;
-            }
-            let index = u16::try_from(block_palette.len() + 1)
-                .expect("mesh shell block palette cannot exceed u16");
-            block_palette.push(cell);
-            block_indices.insert(cell, index);
-            index
-        });
-        let fluid_index = fluid.map_or(0, |fluid| {
-            if let Some(&index) = fluid_indices.get(&fluid) {
-                return index;
-            }
-            let index = u16::try_from(fluid_palette.len() + 1)
-                .expect("mesh shell fluid palette cannot exceed u16");
-            fluid_palette.push(fluid);
-            fluid_indices.insert(fluid, index);
-            index
-        });
-
-        ShellSample {
-            block_index,
-            fluid_index,
-            light,
-            loaded: true,
-        }
-    };
-    let mut samples = Vec::with_capacity(SHELL_VOLUME);
-
-    for z in 0..SNAPSHOT_SIDE {
-        for x in 0..SNAPSHOT_SIDE {
-            samples.push(capture_shell_voxel(x, 0, z));
-        }
-    }
-    for z in 0..SNAPSHOT_SIDE {
-        for x in 0..SNAPSHOT_SIDE {
-            samples.push(capture_shell_voxel(x, last, z));
-        }
-    }
-    for y in 1..last {
-        for x in 0..SNAPSHOT_SIDE {
-            samples.push(capture_shell_voxel(x, y, 0));
-        }
-        for x in 0..SNAPSHOT_SIDE {
-            samples.push(capture_shell_voxel(x, y, last));
-        }
-        for z in 1..last {
-            samples.push(capture_shell_voxel(0, y, z));
-            samples.push(capture_shell_voxel(last, y, z));
-        }
-    }
-    debug_assert_eq!(samples.len(), SHELL_VOLUME);
-    ShellStorage {
-        samples: samples.into_boxed_slice(),
-        block_palette,
-        fluid_palette,
-    }
-}
-
-fn shell_axis(coordinate: usize) -> (usize, i32) {
-    let last = SNAPSHOT_SIDE - 1;
-
-    if coordinate == 0 {
-        (0, CHUNK_SIZE as i32 - 1)
-    } else if coordinate == last {
-        (2, 0)
-    } else {
-        (1, coordinate as i32 - 1)
     }
 }
 
@@ -424,33 +278,6 @@ fn inside_chunk(local: IVec3) -> bool {
         && local.x < CHUNK_SIZE as i32
         && local.y < CHUNK_SIZE as i32
         && local.z < CHUNK_SIZE as i32
-}
-
-fn shell_index_from_snapshot_coords(x: usize, y: usize, z: usize) -> Option<usize> {
-    let last = SNAPSHOT_SIDE - 1;
-
-    if y == 0 {
-        return Some(x + z * SNAPSHOT_SIDE);
-    }
-    if y == last {
-        return Some(SNAPSHOT_FACE_AREA + x + z * SNAPSHOT_SIDE);
-    }
-
-    let layer = SNAPSHOT_FACE_AREA * 2 + (y - 1) * INTERIOR_SHELL_LAYER;
-    if z == 0 {
-        return Some(layer + x);
-    }
-    if z == last {
-        return Some(layer + SNAPSHOT_SIDE + x);
-    }
-    if x == 0 {
-        return Some(layer + SNAPSHOT_SIDE * 2 + (z - 1) * 2);
-    }
-    if x == last {
-        return Some(layer + SNAPSHOT_SIDE * 2 + (z - 1) * 2 + 1);
-    }
-
-    None
 }
 
 #[cfg(test)]
@@ -555,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn materialized_snapshot_preserves_captured_neighbor_state() {
+    fn snapshot_preserves_captured_neighbor_state() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
 
@@ -575,8 +402,6 @@ mod tests {
             IVec3::new(edge, 0, 0),
             Some(VoxelCell::new("asteria:after", TextureRotation::default())),
         );
-        let snapshot = snapshot.materialize_shell();
-
         assert_eq!(
             snapshot.block_id_at(IVec3::new(edge, 0, 0)),
             Some("asteria:before")
@@ -630,26 +455,5 @@ mod tests {
         assert!(snapshot.dependencies().is_current(&world));
     }
 
-    #[test]
-    fn compact_shell_index_covers_each_shell_voxel_once() {
-        let mut seen = vec![false; SHELL_VOLUME];
-        let mut count = 0;
 
-        for y in 0..SNAPSHOT_SIDE {
-            for z in 0..SNAPSHOT_SIDE {
-                for x in 0..SNAPSHOT_SIDE {
-                    let Some(index) = shell_index_from_snapshot_coords(x, y, z) else {
-                        continue;
-                    };
-                    assert!(index < SHELL_VOLUME);
-                    assert!(!seen[index]);
-                    seen[index] = true;
-                    count += 1;
-                }
-            }
-        }
-
-        assert_eq!(count, SHELL_VOLUME);
-        assert!(seen.into_iter().all(|value| value));
-    }
 }
