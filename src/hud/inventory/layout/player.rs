@@ -126,7 +126,7 @@ pub(super) fn spawn_player_inventory_panel(
                             spawn_slot(
                                 hotbar_row,
                                 HOTBAR_INVENTORY_OFFSET + hotbar_index,
-                                hotbar_index == hotbar.selected_slot(),
+                                false,
                                 hotbar,
                                 items,
                             );
