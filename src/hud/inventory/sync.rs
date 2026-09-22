@@ -409,11 +409,10 @@ pub(super) fn rebuild_inventory_when_changed(
 }
 
 const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
-const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
+const ITEM_TOOLTIP_MAX_WIDTH: f32 = 360.0;
 const ITEM_TOOLTIP_HORIZONTAL_INSET: f32 = 22.0;
 const ITEM_TOOLTIP_VERTICAL_INSET: f32 = 16.0;
 const ITEM_TOOLTIP_ROW_GAP: f32 = 2.0;
-const ITEM_TOOLTIP_HINT_MARGIN_TOP: f32 = 6.0;
 const ITEM_TOOLTIP_STATS_MARGIN_TOP: f32 = 6.0;
 
 fn logical_text_size(node: &ComputedNode) -> Vec2 {
@@ -539,8 +538,7 @@ pub(super) fn sync_inventory_item_tooltip(
     let mut content_height = text_size.y + ITEM_TOOLTIP_ROW_GAP + id_size.y;
     if hint_visible {
         content_width = content_width.max(hint_size.x);
-        content_height +=
-            ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_HINT_MARGIN_TOP + hint_size.y;
+        content_height += ITEM_TOOLTIP_ROW_GAP + hint_size.y;
     }
     if stats_title_visible {
         content_width = content_width.max(stats_title_size.x);
