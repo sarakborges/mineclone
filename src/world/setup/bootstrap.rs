@@ -101,6 +101,7 @@ pub(in crate::world) fn begin_world_loading(
         config.seed.0,
         biome_size_multiplier,
     );
+    biome_field.set_spawn_oceans(world_generation.spawn_oceans());
     if world_generation.single_biome() {
         let biome_id = forced_spawn_biome
             .as_deref()

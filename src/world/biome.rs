@@ -14,6 +14,7 @@ use self::identity::{
 use super::{
     biome_field::BiomeField,
     generation_region::{generation_region_coord, generation_region_world_bounds},
+    new_world::WorldGenerationSettings,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -63,6 +64,7 @@ pub fn track_current_biome(
     player: Single<&Transform, With<GameplayCamera>>,
     biome_field: Option<Res<BiomeField>>,
     feature_fields: Option<Res<WorldFeatureFields>>,
+    world_generation: Res<WorldGenerationSettings>,
     mut current_biome: ResMut<CurrentBiome>,
     mut next_biome: Local<CurrentBiome>,
     mut last_position: Local<Option<Vec3>>,
@@ -73,6 +75,7 @@ pub fn track_current_biome(
 
     let position = player.translation;
     let source_changed = biome_field.is_changed()
+        || world_generation.is_changed()
         || feature_fields
             .as_ref()
             .is_some_and(|fields| fields.is_changed());
@@ -98,10 +101,15 @@ pub fn track_current_biome(
             strength: selection.strength,
         })
     });
-    let hydrology = feature_fields.as_ref().map(|fields| {
-        let continentalness = biome_field.climate_at(horizontal).continentalness;
-        fields.hydrology_biome_overlay(continentalness)
-    });
+    let hydrology = world_generation
+        .spawn_oceans()
+        .then(|| {
+            feature_fields.as_ref().map(|fields| {
+                let continentalness = biome_field.climate_at(horizontal).continentalness;
+                fields.hydrology_biome_overlay(continentalness)
+            })
+        })
+        .flatten();
 
     let next = &mut *next_biome;
     replace_string(&mut next.surface_id, surface.primary_id);

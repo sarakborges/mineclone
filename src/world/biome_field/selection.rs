@@ -137,7 +137,10 @@ impl BiomeField {
         let mut weighted =
             SmallVec::<[WeightedCandidate; INLINE_WEIGHTED_BIOME_CANDIDATES]>::new();
         for (index, biome) in self.surface_biomes.iter().enumerate() {
-            if !predicate(biome) || biome.weight <= f32::EPSILON {
+            if !self.surface_biome_is_enabled(index)
+                || !predicate(biome)
+                || biome.weight <= f32::EPSILON
+            {
                 continue;
             }
 

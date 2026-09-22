@@ -87,6 +87,7 @@ pub struct BiomeField {
     forced_surface_biome: Option<ForcedSurfaceBiome>,
     single_surface_biome: Option<usize>,
     ocean_surface_index: Option<usize>,
+    spawn_oceans: bool,
     pub(super) ocean_weight: f32,
 }
 
@@ -320,6 +321,7 @@ impl BiomeField {
             forced_surface_biome: None,
             single_surface_biome: None,
             ocean_surface_index,
+            spawn_oceans: true,
             ocean_weight,
         }
     }
@@ -340,6 +342,21 @@ impl BiomeField {
             );
         }
         climate
+    }
+
+    pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
+        if self.spawn_oceans == spawn_oceans {
+            return;
+        }
+        self.spawn_oceans = spawn_oceans;
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
+
+    pub(super) const fn surface_biome_is_enabled(&self, index: usize) -> bool {
+        self.spawn_oceans || Some(index) != self.ocean_surface_index
     }
 
     pub(crate) fn set_single_surface_biome(&mut self, biome_id: &str) {
