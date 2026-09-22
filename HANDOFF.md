@@ -870,8 +870,26 @@ Commit funcional:
 `d771e5718ef28f951a5a65de950bbd0ac22bb505`.
 VERSION: `0.50.58`, commit
 `c5600da52ec4531687ecdd2ab809040b28122ebf`.
-CI de P35: aguardando. QA Windows deve confirmar simultaneamente ausência de
-flicker e melhora de frame pacing durante streaming.
+CI de P35: **verde** nos runs push `35747182683` e PR `35747192711` para `c5600da52ec4531687ecdd2ab809040b28122ebf`. QA Windows deve confirmar simultaneamente ausência de flicker e melhora de frame pacing durante streaming.
+
+### P36 — pular remesh de halo quando a nova borda continua vazia
+
+Ao publicar um chunk, o reconciliation loop analisava os 26 vizinhos. Para
+geometry, bastava o vizinho antigo ter conteúdo na borda para enfileirar
+remesh, mesmo quando a borda correspondente do chunk recém-publicado estava
+vazia. Como vizinho ausente já é tratado como ar, a transição ausência -> borda
+vazia não altera exposição e esse remesh era puro churn.
+
+Agora geometry só reconcilia quando **as duas bordas relevantes têm conteúdo**.
+Fluid border refresh também exige conteúdo novo quando o motivo é fluido já
+presente na borda do vizinho; o caso cardinal em que o novo chunk traz fluido
+continua conservador e permanece enfileirado.
+
+Commit funcional/regressão:
+`fbd0785571ed41b35cdb0d75b513c75519281ab9`.
+VERSION: `0.50.59`, commit
+`9dd6c2f4e7985465c752fd80da61df9fc7d240da`.
+CI de P36: aguardando.
 
 ### Ordem de execução definida
 
