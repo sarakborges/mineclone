@@ -626,6 +626,26 @@ de dispatch. Corrigido sem supressão agrupando inputs imutáveis em
 `b5ae6a2810b57ed4d69d5619ea712871d4541187`.
 CI final de P29: **verde** nos runs push `35739481254` e PR `35739489869` para `b5ae6a2810b57ed4d69d5619ea712871d4541187`. Nenhum `cargo test` foi adicionado/executado.
 
+### P30 — montar planos X/Y/Z do terrain em duas passadas
+
+Depois de coletar os voxels normais ativos, o terrain mesher chamava
+`ActiveVoxelPlanes::from_sources` três vezes. Cada eixo fazia uma passada de
+contagem e outra de preenchimento: seis passadas totais sobre
+`active_sources`, repetindo unpack de coordenadas e `pack_active_voxel`.
+
+`ActiveVoxelAxes::from_sources` agora conta X/Y/Z simultaneamente em uma
+passada, cria os três buffers contíguos, e em uma segunda passada calcula o
+packed source uma única vez e o distribui nos três eixos. A ordenação dentro de
+cada plano continua estável porque o preenchimento percorre `sources` na
+mesma ordem original. O greedy continua selecionando os mesmos planos por face
+e não cruza boundaries de meshlet.
+
+Commits: batching `bdc509cb180e4d3ee1d6150acfb8cab1adca98e3`;
+regressão X/Y/Z `7ae7cb040ededb388a81057e711b3483d81bd843`.
+VERSION: `0.50.46`, commit
+`f3ffd75e423ffaccd221f5df1d73a6ef45776655`.
+CI de P30: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
