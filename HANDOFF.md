@@ -10601,3 +10601,59 @@ mantém a câmera overlay ativa e esconde apenas o `PlayerViewModel`, corrigindo
 a tela preta sem reintroduzir o braço em terceira pessoa. CI push
 `35750321132`: localizações, Clippy e cargo check **verdes**. VERSION
 `0.50.65`.
+
+
+## 2026-09-22 — Correção de animações, held item e shading do player
+
+O player 3D recebeu uma revisão estrutural após QA em terceira/primeira pessoa.
+
+### Animações
+
+Os clips do `player.gltf` foram reauthorados com poses mais ortogonais ao
+estilo Minecraft: braços/pernas usam principalmente rotação em X e foram
+removidos twists Y/Z excessivos de walk/run/jump/fall/hit/place/break.
+
+O runtime agora:
+- restaura os transforms de repouso dos bones relevantes ao trocar de estado;
+- troca clips com transição zero para impedir mistura residual entre bones que
+  não são animados pelo próximo clip;
+- não reinicia continuamente o clip `break` enquanto o player permanece em
+  mining, eliminando o flicker causado pelo revision bump a cada swing;
+- mantém `hit` e `place` pelo tempo do clip antes de voltar à locomotion.
+
+### Braço de primeira pessoa
+
+O braço reutiliza a geometria real de `RightArmPivot`, mas o pivot do
+viewmodel foi corrigido: o modelo é invertido em Z-rotation de 180° em torno do
+ombro, fazendo o swing de break/place acontecer pelo ombro em vez de girar pelo
+ponto da mão.
+
+A cópia do glTF começa oculta e só é revelada depois que os outros meshes foram
+escondidos, evitando o flash de um frame do corpo inteiro durante o load.
+
+### Held item / terceira pessoa
+
+Filhos visíveis do viewmodel agora usam `Visibility::Inherited`, não
+`Visibility::Visible`. Isso impede bloco/Brush/Chisel da primeira pessoa de
+continuarem renderizando quando o root é escondido em terceira pessoa.
+
+Blocos selecionados agora também têm uma representação world-space própria em
+terceira pessoa, anexada diretamente ao `RightArmPivot`. O bloco acompanha a
+animação do braço e atualiza textura/layers/tint pela mesma infra de
+`BlockModel` usada pelo viewmodel.
+
+### Shading
+
+Os materiais do player third-person são normalizados para `unlit`, roughness
+1, metallic 0 e reflectance 0; os meshes também não lançam shadow. Isso remove
+o sombreado pesado/escuro que estava sendo aplicado ao modelo blocky.
+
+Commits:
+- integração funcional principal: `6a9aef33d8c685f4f247f69264996b0ba0790209`;
+- loader do braço refinado: `74a3f6f66d2e029e6cde80ecc28635269c766790`;
+- inheritance do held item: `92e3c47050b0c8b7049c06f4a616c40ca9558a85`;
+- ajustes de AssetMut: `68bf810749c99a0f31a8618b8b3dbd0609886a75`,
+  `06981f9cb0e640e3e19f5cc914348980b41fec4b`.
+
+CI push `35752234821`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.67`.
