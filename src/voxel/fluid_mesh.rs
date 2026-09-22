@@ -41,31 +41,6 @@ struct FluidGreedyTop {
     height: f32,
 }
 
-pub fn build_fluid_meshes<W, F>(
-    world: &W,
-    chunk_coord: IVec3,
-    chunk: &VoxelChunk,
-    tint_at: F,
-) -> Vec<ChunkFluidMesh>
-where
-    W: VoxelRead + ?Sized,
-    F: FnMut(IVec3, FluidId) -> [f32; 3],
-{
-    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
-        world,
-        chunk_coord * CHUNK_SIZE as i32,
-        chunk,
-    );
-    build_fluid_meshlets(
-        world,
-        chunk_coord,
-        chunk,
-        ChunkMeshletMask::ALL,
-        lighting_cache.as_ref(),
-        tint_at,
-    )
-}
-
 pub(crate) fn build_fluid_meshlets<W, F>(
     world: &W,
     chunk_coord: IVec3,
