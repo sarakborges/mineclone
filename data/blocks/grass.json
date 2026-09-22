@@ -1,31 +1,67 @@
 {
   "id": "asteria:grass",
-  "name": { "english": "Grass", "portuguese_brazil": "Grama", "spanish": "Césped" },
+  "name": {
+    "english": "Grass",
+    "portuguese_brazil": "Grama",
+    "spanish": "Césped"
+  },
   "category": "natural_blocks",
-  "tags": ["fragmentable"],
+  "tags": [
+    "fragmentable"
+  ],
   "tint": "grass",
   "textures": {
     "top": [
-      { "texture": "textures/blocks/grass/top.png", "dyable": true }
+      {
+        "texture": "textures/blocks/grass/top.png",
+        "dyable": true
+      }
     ],
     "bottom": [
-      { "texture": "textures/blocks/dirt.png", "dyable": false }
+      {
+        "texture": "textures/blocks/dirt.png",
+        "dyable": false
+      }
     ],
     "left": [
-      { "texture": "textures/blocks/grass/side.png", "dyable": false },
-      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+      {
+        "texture": "textures/blocks/grass/side.png",
+        "dyable": false
+      },
+      {
+        "texture": "textures/blocks/grass/side_overlay.png",
+        "dyable": true
+      }
     ],
     "right": [
-      { "texture": "textures/blocks/grass/side.png", "dyable": false },
-      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+      {
+        "texture": "textures/blocks/grass/side.png",
+        "dyable": false
+      },
+      {
+        "texture": "textures/blocks/grass/side_overlay.png",
+        "dyable": true
+      }
     ],
     "front": [
-      { "texture": "textures/blocks/grass/side.png", "dyable": false },
-      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+      {
+        "texture": "textures/blocks/grass/side.png",
+        "dyable": false
+      },
+      {
+        "texture": "textures/blocks/grass/side_overlay.png",
+        "dyable": true
+      }
     ],
     "back": [
-      { "texture": "textures/blocks/grass/side.png", "dyable": false },
-      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+      {
+        "texture": "textures/blocks/grass/side.png",
+        "dyable": false
+      },
+      {
+        "texture": "textures/blocks/grass/side_overlay.png",
+        "dyable": true
+      }
     ]
   },
   "rotateTexture": {
@@ -37,5 +73,11 @@
     "back": false
   },
   "lightDampening": 15,
-  "castsShadow": true
+  "castsShadow": true,
+  "mining": {
+    "hardness": 1,
+    "preferredTools": [
+      "shovel"
+    ]
+  }
 }
