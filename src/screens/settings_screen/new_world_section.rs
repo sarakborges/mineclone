@@ -106,7 +106,7 @@ pub(super) struct NewWorldDraft<'w, 's> {
     seed_input: Res<'w, SeedInputState>,
     ticks_input: Res<'w, TicksPerSecondInputState>,
     biome_size_input: Res<'w, BiomeSizeMultiplierInputState>,
-    spawn_biome_dropdown: Res<'w, SpawnBiomeDropdownState>,
+    spawn_biome_dropdown: ResMut<'w, SpawnBiomeDropdownState>,
     name_input: Query<'w, 's, (Entity, &'static EditableText), With<WorldNameInput>>,
     focus: ResMut<'w, InputFocus>,
     name_feedback: ResMut<'w, WorldNameFeedback>,
