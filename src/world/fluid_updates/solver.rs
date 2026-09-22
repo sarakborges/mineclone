@@ -13,8 +13,6 @@ use crate::{
 
 use crate::world::chunk_remesh::ChunkRemeshQueue;
 
-const MAX_DENSE_DOWNHILL_RADIUS: u16 = 32;
-
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct FluidSolverMetrics {
     pub(super) desired_evaluations: u64,
@@ -39,104 +37,9 @@ impl FluidSolverMetrics {
 }
 
 #[derive(Default)]
-struct FluidVisitedScratch {
-    dense_marks: Vec<u32>,
-    dense_distances: Vec<u16>,
-    dense_directions: Vec<u8>,
-    dense_generation: u32,
-    dense_origin: IVec3,
-    dense_radius: i32,
-    dense_side: usize,
-    sparse: HashMap<IVec3, (u16, u8)>,
-    use_dense: bool,
-}
-
-impl FluidVisitedScratch {
-    fn begin(&mut self, origin: IVec3, radius: u16) {
-        self.use_dense = radius <= MAX_DENSE_DOWNHILL_RADIUS;
-        if !self.use_dense {
-            self.sparse.clear();
-            self.sparse.insert(origin, (0, 0));
-            return;
-        }
-
-        let radius_usize = usize::from(radius);
-        self.dense_origin = origin;
-        self.dense_radius = i32::from(radius);
-        self.dense_side = radius_usize * 2 + 1;
-        let len = self.dense_side * self.dense_side;
-
-        self.dense_marks.resize(len, 0);
-        self.dense_distances.resize(len, 0);
-        self.dense_directions.resize(len, 0);
-
-        self.dense_generation = self.dense_generation.wrapping_add(1);
-        if self.dense_generation == 0 {
-            self.dense_marks.fill(0);
-            self.dense_generation = 1;
-        }
-
-        self.insert(origin, 0, 0);
-    }
-
-    fn get(&self, position: IVec3) -> Option<(u16, u8)> {
-        if !self.use_dense {
-            return self.sparse.get(&position).copied();
-        }
-
-        let index = self.dense_index(position);
-        (self.dense_marks[index] == self.dense_generation).then_some((
-            self.dense_distances[index],
-            self.dense_directions[index],
-        ))
-    }
-
-    fn insert(&mut self, position: IVec3, distance: u16, directions: u8) {
-        if !self.use_dense {
-            self.sparse.insert(position, (distance, directions));
-            return;
-        }
-
-        let index = self.dense_index(position);
-        self.dense_marks[index] = self.dense_generation;
-        self.dense_distances[index] = distance;
-        self.dense_directions[index] = directions;
-    }
-
-    fn set_directions(&mut self, position: IVec3, directions: u8) {
-        if !self.use_dense {
-            let (_, current) = self
-                .sparse
-                .get_mut(&position)
-                .expect("updated sparse fluid path node must be visited");
-            *current = directions;
-            return;
-        }
-
-        let index = self.dense_index(position);
-        debug_assert_eq!(self.dense_marks[index], self.dense_generation);
-        self.dense_directions[index] = directions;
-    }
-
-    fn dense_index(&self, position: IVec3) -> usize {
-        debug_assert!(self.use_dense);
-        debug_assert_eq!(position.y, self.dense_origin.y);
-
-        let dx = position.x - self.dense_origin.x;
-        let dz = position.z - self.dense_origin.z;
-        debug_assert!(dx.abs() <= self.dense_radius);
-        debug_assert!(dz.abs() <= self.dense_radius);
-
-        let x = (dx + self.dense_radius) as usize;
-        let z = (dz + self.dense_radius) as usize;
-        x + z * self.dense_side
-    }
-}
-
-#[derive(Default)]
 pub(in crate::world) struct FluidSolverScratch {
     queue: Vec<(IVec3, u16)>,
-    visited: FluidVisitedScratch,
+    visited: HashMap<IVec3, (u16, u8)>,
     metrics: FluidSolverMetrics,
 }
 
@@ -347,7 +250,8 @@ fn preferred_horizontal_directions(
         let queue = &mut scratch.queue;
         let visited = &mut scratch.visited;
         queue.clear();
-        visited.begin(origin, remaining_steps);
+        visited.clear();
+        visited.insert(origin, (0, 0));
 
         for (index, offset) in HORIZONTAL_NEIGHBORS.into_iter().enumerate() {
             let position = origin + offset;
@@ -356,7 +260,7 @@ fn preferred_horizontal_directions(
             }
 
             let direction = 1_u8 << index;
-            visited.insert(position, 1, direction);
+            visited.insert(position, (1, direction));
             queue.push((position, 1));
         }
 
@@ -373,8 +277,8 @@ fn preferred_horizontal_directions(
             }
 
             let direction_mask = visited
-                .get(position)
-                .map(|(_, directions)| directions)
+                .get(&position)
+                .map(|(_, directions)| *directions)
                 .expect("queued fluid path node must be visited");
 
             if can_fall_from(world, position, fluid_id) {
@@ -402,11 +306,11 @@ fn preferred_horizontal_directions(
                 // A visited node was already proven traversable in this immutable
                 // search. Equal-distance revisits only need to propagate newly
                 // discovered first-step directions; longer revisits do no work.
-                if let Some((known_distance, known_directions)) = visited.get(next) {
-                    if known_distance == next_distance {
-                        let merged = known_directions | direction_mask;
-                        if merged != known_directions {
-                            visited.set_directions(next, merged);
+                if let Some((known_distance, known_directions)) = visited.get_mut(&next) {
+                    if *known_distance == next_distance {
+                        let merged = *known_directions | direction_mask;
+                        if merged != *known_directions {
+                            *known_directions = merged;
                             queue.push((next, next_distance));
                         }
                     }
@@ -417,7 +321,7 @@ fn preferred_horizontal_directions(
                     continue;
                 }
 
-                visited.insert(next, next_distance, direction_mask);
+                visited.insert(next, (next_distance, direction_mask));
                 queue.push((next, next_distance));
             }
         }
