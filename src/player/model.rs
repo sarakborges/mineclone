@@ -171,8 +171,18 @@ fn spawn_player_model(
 fn sync_player_model(
     perspective: Res<CameraPerspective>,
     player: Single<(&Transform, &GameplayCamera)>,
-    mut model: Single<(&mut Transform, &mut Visibility), With<PlayerModelRoot>>,
-    mut head: Single<&mut Transform, (With<PlayerModelHead>, Without<PlayerModelRoot>)>,
+    mut model: Single<
+        (&mut Transform, &mut Visibility),
+        (With<PlayerModelRoot>, Without<GameplayCamera>),
+    >,
+    mut head: Single<
+        &mut Transform,
+        (
+            With<PlayerModelHead>,
+            Without<PlayerModelRoot>,
+            Without<GameplayCamera>,
+        ),
+    >,
 ) {
     let (player_transform, camera) = *player;
     let (model_transform, visibility) = &mut *model;
