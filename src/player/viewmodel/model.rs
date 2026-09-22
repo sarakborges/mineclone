@@ -39,10 +39,10 @@ pub(super) struct ViewModelArm;
 pub(super) struct ViewModelCamera;
 
 #[derive(Component)]
-struct ViewModelArmScene(Handle<Gltf>);
+pub(super) struct ViewModelArmScene(Handle<Gltf>);
 
 #[derive(Component)]
-struct ViewModelArmSceneAttached;
+pub(super) struct ViewModelArmSceneAttached;
 
 #[derive(Component)]
 struct ViewModelArmAppearance;
@@ -82,6 +82,8 @@ pub(super) struct ViewModelSelection<'w> {
 
 #[derive(SystemParam)]
 pub(super) struct ViewModelSpawnAssets<'w> {
+    player_definition: Res<'w, PlayerDefinition>,
+    asset_server: Res<'w, AssetServer>,
     block_meshes: Res<'w, BlockModelMeshes>,
     block_materials: ResMut<'w, BlockModelMaterials>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
@@ -106,14 +108,14 @@ pub(super) struct HeldBlockView<'w, 's> {
 pub(super) fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
-    player_definition: Res<PlayerDefinition>,
-    asset_server: Res<AssetServer>,
     definitions: BlockVisualContent,
     selection: ViewModelSelection,
     assets: ViewModelSpawnAssets,
     mut item_switch: ResMut<ViewModelItemSwitch>,
 ) {
     let ViewModelSpawnAssets {
+        player_definition,
+        asset_server,
         block_meshes,
         mut block_materials,
         mut materials,
