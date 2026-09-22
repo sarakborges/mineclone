@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use bevy::{
     ecs::system::SystemParam,
-    platform::collections::HashSet,
+    platform::collections::{HashMap, HashSet},
     prelude::*,
 };
 
 use crate::voxel::{
+    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
     lighting::{PendingLightingUpdates, process_pending_lighting},
+    meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
 
@@ -38,6 +40,7 @@ pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
     mut changed_chunks: Local<HashSet<IVec3>>,
     mut changed_positions: Local<HashSet<IVec3>>,
+    mut dirty_meshlets: Local<HashMap<IVec3, ChunkMeshletMask>>,
     mut runtime: DynamicLightingRuntime,
 ) {
     if runtime.lighting.is_empty() {
@@ -63,18 +66,36 @@ pub(super) fn process_dynamic_lighting(
         },
     );
 
+    dirty_meshlets.clear();
+    for position in changed_positions.drain() {
+        visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
+            if runtime.world.chunk(coord).is_none() {
+                return;
+            }
+
+            let meshlets = ChunkMeshletMask::for_world_position(coord, position);
+            let combined = dirty_meshlets
+                .get(&coord)
+                .copied()
+                .unwrap_or_default()
+                .union(meshlets);
+            dirty_meshlets.insert(coord, combined);
+        });
+    }
+
     runtime
         .remesh_tasks
-        .bump_lighting_revisions_for_positions(
-            &runtime.world,
-            changed_positions.iter().copied(),
+        .bump_lighting_revisions_for_meshlets(
+            dirty_meshlets
+                .iter()
+                .map(|(&coord, &meshlets)| (coord, meshlets)),
         );
     changed_chunks.clear();
 
-    for position in changed_positions.drain() {
+    for (coord, meshlets) in dirty_meshlets.drain() {
         runtime
             .remesh_queue
-            .enqueue_lighting_voxel_change(position, &runtime.world);
+            .enqueue_lighting_meshlet_change(coord, meshlets, &runtime.world);
     }
 
     if let Some((priority, background)) =
