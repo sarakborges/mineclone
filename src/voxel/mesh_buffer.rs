@@ -32,51 +32,12 @@ pub(crate) struct VoxelMeshQuad {
     pub(crate) flip_diagonal: bool,
 }
 
-enum VoxelMeshIndices {
-    U16(Vec<u16>),
-    U32(Vec<u32>),
-}
-
-impl VoxelMeshIndices {
-    fn with_capacity(capacity: usize) -> Self {
-        Self::U16(Vec::with_capacity(capacity))
-    }
-
-    fn extend(&mut self, indices: [u32; 6]) {
-        let fits_u16 = indices
-            .iter()
-            .all(|&index| index <= u32::from(u16::MAX));
-
-        match self {
-            Self::U16(narrow) if fits_u16 => {
-                narrow.extend(indices.map(|index| index as u16));
-            }
-            Self::U16(narrow) => {
-                let capacity = narrow.capacity().max(narrow.len() + indices.len());
-                let previous = std::mem::take(narrow);
-                let mut wide = Vec::with_capacity(capacity);
-                wide.extend(previous.into_iter().map(u32::from));
-                wide.extend(indices);
-                *self = Self::U32(wide);
-            }
-            Self::U32(wide) => wide.extend(indices),
-        }
-    }
-
-    fn into_indices(self) -> Indices {
-        match self {
-            Self::U16(indices) => Indices::U16(indices),
-            Self::U32(indices) => Indices::U32(indices),
-        }
-    }
-}
-
 pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     payloads: Vec<u32>,
     colors: Vec<[u8; 4]>,
-    indices: VoxelMeshIndices,
+    indices: Vec<u32>,
 }
 
 impl Default for VoxelMeshBuffer {
@@ -87,7 +48,7 @@ impl Default for VoxelMeshBuffer {
             uvs: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
             payloads: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
             colors: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
-            indices: VoxelMeshIndices::with_capacity(INITIAL_QUAD_CAPACITY * 6),
+            indices: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 6),
         }
     }
 }
@@ -121,7 +82,7 @@ impl VoxelMeshBuffer {
             return None;
         }
 
-        let indices = self.indices.into_indices();
+        let indices = compact_indices(self.positions.len(), self.indices);
 
         Some(
             Mesh::new(
@@ -230,38 +191,10 @@ fn axis_normal_code(normal: [f32; 3]) -> u32 {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn voxel_indices_stay_narrow_until_an_index_exceeds_u16() {
-        let mut indices = VoxelMeshIndices::with_capacity(12);
-        indices.extend([0, 1, 3, 1, 2, 3]);
-        indices.extend([
-            u32::from(u16::MAX) - 3,
-            u32::from(u16::MAX) - 2,
-            u32::from(u16::MAX),
-            u32::from(u16::MAX) - 2,
-            u32::from(u16::MAX) - 1,
-            u32::from(u16::MAX),
-        ]);
-
-        assert!(matches!(indices, VoxelMeshIndices::U16(_)));
-    }
-
-    #[test]
-    fn voxel_indices_promote_once_and_preserve_existing_values() {
-        let mut indices = VoxelMeshIndices::with_capacity(12);
-        indices.extend([0, 1, 3, 1, 2, 3]);
-        indices.extend([65_536, 65_537, 65_539, 65_537, 65_538, 65_539]);
-
-        let Indices::U32(values) = indices.into_indices() else {
-            panic!("indices above u16 must promote the buffer");
-        };
-        assert_eq!(
-            values,
-            vec![0, 1, 3, 1, 2, 3, 65_536, 65_537, 65_539, 65_537, 65_538, 65_539],
-        );
+fn compact_indices(vertex_count: usize, indices: Vec<u32>) -> Indices {
+    if vertex_count <= usize::from(u16::MAX) + 1 {
+        Indices::U16(indices.into_iter().map(|index| index as u16).collect())
+    } else {
+        Indices::U32(indices)
     }
 }
