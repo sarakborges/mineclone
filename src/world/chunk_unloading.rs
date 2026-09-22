@@ -16,7 +16,6 @@ use super::{
     chunk_rendering::{
         ChunkRenderPool, chunk_mesh_residency_high_bytes, chunk_mesh_residency_recovery_bytes,
         chunk_mesh_residency_target_bytes, retire_chunk_render_allocation,
-        retire_chunk_render_allocation_immediately,
     },
     chunk_system_params::ChunkRenderer,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
@@ -271,9 +270,11 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             continue;
         }
 
-        retire_chunk_render_allocation_immediately(
+        // Mesh retirement must stay deferred with the entity despawn. Removing
+        // the mesh asset immediately leaves a still-live Mesh3d component
+        // referencing a freed render-slab allocation until Commands flush.
+        retire_chunk_render_allocation(
             &mut renderer.commands,
-            &mut renderer.meshes,
             &mut renderer.pool,
             candidate.coord,
         );
