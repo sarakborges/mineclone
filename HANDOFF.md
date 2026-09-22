@@ -534,6 +534,24 @@ VERSION: `0.50.41`, commit
 `5c006f47099830e981d71195ca71894797f4cba0`.
 CI de P25: **verde** nos runs push `35737365933` e PR `35737372661` para `5c006f47099830e981d71195ca71894797f4cba0`. Nenhum `cargo test` foi adicionado/executado.
 
+### P26 — calcular cantos do fluid height cache sem matrizes temporárias
+
+O cache de alturas introduzido em P23 já evitava releituras do mundo, mas
+`heights_at` ainda copiava 18 `Option<FluidCell>` para duas matrizes 3x3
+temporárias a cada top antes de calcular os quatro cantos.
+
+O cálculo agora indexa diretamente as grades 18x18 `current`/`above`.
+Para cada canto, mantém exatamente a mesma sequência de quatro posições, o
+mesmo early return quando há fluido acima e a mesma ordem de soma/divisão do
+caminho anterior. Nenhuma regra de altura, merge ou exposição mudou. A
+regressão bit-a-bit de P23 continua cobrindo o resultado cached vs. sampling
+direto, inclusive borda de chunk.
+
+Commit funcional: `7f14bc0e248b2e3ae6250f346175c4b95f0b9a61`.
+VERSION: `0.50.42`, commit
+`fb8ef502249154519b20e48e1b107651df7f5ab5`.
+CI de P26: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
