@@ -192,6 +192,134 @@ impl VoxelChunkInitialBlocksMut<'_> {
     }
 }
 
+pub(crate) struct VoxelChunkStructureMut<'a> {
+    blocks: &'a mut BlockStorage,
+    fluids: &'a mut FluidStorage,
+    layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
+    block_palette_indices: HashMap<VoxelCell, u16>,
+    block_count: &'a mut usize,
+    fluid_count: &'a mut usize,
+    layer_count: &'a mut usize,
+    dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
+    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+}
+
+impl VoxelChunkStructureMut<'_> {
+    pub(crate) fn set_block(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        block: VoxelCell,
+    ) {
+        let voxel_index = index(x, y, z);
+        let previous = self.blocks.get(voxel_index);
+        if previous == Some(block) {
+            return;
+        }
+
+        let had_block = previous.is_some();
+        let had_content = had_block || self.fluids.get(voxel_index).is_some();
+
+        if previous.map(|cell| cell.block_id) != Some(block.block_id)
+            && let Some(removed) = self.layers.remove(&(voxel_index as u16))
+        {
+            *self.layer_count = self
+                .layer_count
+                .checked_sub(removed.len())
+                .expect("chunk layer count cannot underflow");
+        }
+
+        let next = if let Some(&palette_index) = self.block_palette_indices.get(&block) {
+            palette_index
+        } else {
+            let reusable = self.blocks.usage.iter().position(|&usage| usage == 0);
+            let palette_index = if let Some(index) = reusable {
+                self.blocks.palette[index] = block;
+                u16::try_from(index + 1)
+                    .expect("structure block palette index must fit u16")
+            } else {
+                self.blocks.palette.push(block);
+                self.blocks.usage.push(0);
+                u16::try_from(self.blocks.palette.len())
+                    .expect("structure block palette cannot exceed u16 index space")
+            };
+            self.block_palette_indices.insert(block, palette_index);
+            palette_index
+        };
+
+        let previous_index = self.blocks.indices[voxel_index];
+        if previous_index != 0 {
+            let usage = &mut self.blocks.usage[previous_index as usize - 1];
+            *usage = usage
+                .checked_sub(1)
+                .expect("structure block palette usage cannot underflow");
+            if *usage == 0
+                && let Some(previous) = previous
+            {
+                self.block_palette_indices.remove(&previous);
+            }
+        }
+
+        self.blocks.indices[voxel_index] = next;
+        let usage = &mut self.blocks.usage[next as usize - 1];
+        *usage = usage
+            .checked_add(1)
+            .expect("structure block palette usage cannot overflow");
+
+        if !had_block {
+            *self.block_count += 1;
+        }
+        if !had_content {
+            adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
+        }
+    }
+
+    pub(crate) fn add_layer(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        face: LayerFace,
+        layer: LayerCell,
+    ) -> bool {
+        add_layer_in_storage(
+            self.blocks,
+            self.layers,
+            self.layer_count,
+            x,
+            y,
+            z,
+            face,
+            layer,
+        )
+    }
+
+    pub(crate) fn clear_fluid(&mut self, x: usize, y: usize, z: usize) {
+        let voxel_index = index(x, y, z);
+        let previous_index = self.fluids.indices[voxel_index];
+        if previous_index == 0 {
+            return;
+        }
+
+        let usage = &mut self.fluids.usage[previous_index as usize - 1];
+        *usage = usage
+            .checked_sub(1)
+            .expect("structure fluid palette usage cannot underflow");
+        self.fluids.indices[voxel_index] = 0;
+        *self.fluid_count = self
+            .fluid_count
+            .checked_sub(1)
+            .expect("chunk fluid count cannot underflow");
+        adjust_boundary_counts(self.boundary_fluid_counts, x, y, z, false);
+        if self.blocks.get(voxel_index).is_none() {
+            adjust_boundary_counts(self.boundary_content_counts, x, y, z, false);
+        }
+        set_voxel_bit(self.dynamic_fluid_cells, voxel_index, false);
+    }
+}
+
 pub(crate) struct VoxelChunkInitialFluidsMut<'a> {
     blocks: &'a BlockStorage,
     fluids: &'a mut FluidStorage,
@@ -440,6 +568,57 @@ impl VoxelChunk {
             boundary_content_counts: &mut self.boundary_content_counts,
         };
         edit(&mut content)
+    }
+
+    pub(crate) fn edit_structure_content<R>(
+        &mut self,
+        edit: impl FnOnce(&mut VoxelChunkStructureMut<'_>) -> R,
+    ) -> R {
+        let blocks = Arc::make_mut(&mut self.blocks);
+        let fluids = Arc::make_mut(&mut self.fluids);
+        let layers = Arc::make_mut(&mut self.layers);
+        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
+        let block_palette_indices = blocks
+            .palette
+            .iter()
+            .copied()
+            .zip(blocks.usage.iter().copied())
+            .enumerate()
+            .filter_map(|(index, (cell, usage))| {
+                (usage > 0).then_some((
+                    cell,
+                    u16::try_from(index + 1)
+                        .expect("active block palette index must fit u16"),
+                ))
+            })
+            .collect();
+
+        let result = {
+            let mut content = VoxelChunkStructureMut {
+                blocks,
+                fluids,
+                layers,
+                block_palette_indices,
+                block_count: &mut self.block_count,
+                fluid_count: &mut self.fluid_count,
+                layer_count: &mut self.layer_count,
+                dynamic_fluid_cells,
+                boundary_content_counts: &mut self.boundary_content_counts,
+                boundary_fluid_counts: &mut self.boundary_fluid_counts,
+            };
+            edit(&mut content)
+        };
+
+        let sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        sources.fill(0);
+        if self.fluid_count > 0 {
+            rebuild_fluid_frontier_sources(
+                self.blocks.as_ref(),
+                self.fluids.as_ref(),
+                sources,
+            );
+        }
+        result
     }
 
     pub(crate) fn edit_initial_fluids<R>(
