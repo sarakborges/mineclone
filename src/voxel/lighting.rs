@@ -293,6 +293,7 @@ fn seed_chunk_direct_lighting(
     requires_relaxation
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn process_pending_lighting(
     world: &mut VoxelWorld,
     pending: &mut PendingLightingUpdates,
