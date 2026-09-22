@@ -113,7 +113,7 @@ where
     let active_capacity = chunk
         .block_count()
         .min(meshlets.selected_voxel_count());
-    let mut active_sources = Vec::<VoxelMeshSource<'_>>::with_capacity(active_capacity);
+    let mut active_sources = Vec::<VoxelMeshSource>::with_capacity(active_capacity);
     let mut active_visuals = Vec::<Option<CellVisual>>::with_capacity(active_capacity);
     let mut block_visual_indices =
         SmallVec::<[((usize, usize), usize); 16]>::new();
@@ -154,7 +154,7 @@ where
             let source_index = active_sources.len();
             debug_assert!(source_index < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
             active_sources.push(VoxelMeshSource {
-                cell,
+                cell: *cell,
                 block_visual_index: u16::try_from(block_visual_index)
                     .expect("chunk block visual index must fit in u16"),
             });
@@ -396,8 +396,8 @@ where
 }
 
 #[derive(Clone, Copy)]
-struct VoxelMeshSource<'a> {
-    cell: &'a VoxelCell,
+struct VoxelMeshSource {
+    cell: VoxelCell,
     block_visual_index: u16,
 }
 
