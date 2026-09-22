@@ -173,13 +173,16 @@ where
     // for each of the six face directions.
     for face in BlockFace::ALL {
         for depth in 0..CHUNK_SIZE {
-            let mut greedy = [None; CHUNK_SIZE * CHUNK_SIZE];
             let active_voxels = match face {
                 BlockFace::Right | BlockFace::Left => &active_by_x[depth],
                 BlockFace::Top | BlockFace::Bottom => &active_by_y[depth],
                 BlockFace::Front | BlockFace::Back => &active_by_z[depth],
             };
+            if active_voxels.is_empty() {
+                continue;
+            }
 
+            let mut greedy = [None; CHUNK_SIZE * CHUNK_SIZE];
             for &packed in active_voxels {
                 let (x, y, z, source_index) = unpack_active_voxel(packed);
                 let source = active_sources[source_index];
