@@ -10299,9 +10299,11 @@ HEAD funcional 645293d6ffe8baf19df4ac6c6dab2eef6dcea477:
 
 O hover de item do inventory agora calcula `width` e `height` explicitamente
 a partir dos `ComputedNode` dos textos renderizados, somando padding, border,
-gaps e a margem da seção Stats apenas quando ela está visível. A largura ainda
-é limitada a 280 px para textos longos; o posicionamento nas bordas usa essas
-mesmas dimensões calculadas.
+gaps e margens visíveis. O teto horizontal foi ampliado para 360 px (338 px
+úteis de conteúdo). A description/hint é medida sem soft-wrap para que o tooltip
+possa crescer horizontalmente antes de quebrar/encolher, e mantém 6 px de
+separação vertical após o ID. O posicionamento nas bordas usa essas mesmas
+dimensões calculadas.
 
 Perder foco da janela com `InventoryState::Open` não dispara mais auto-pause,
 portanto o inventário permanece aberto. O fechamento pela tecla configurada de
@@ -10325,3 +10327,8 @@ Commit funcional validado: `44ebfbf4514c9b5431737cd205b278b4cef7def9`.
 CI de push `35742065006`: **verde** (localizações, Clippy e cargo check).
 VERSION: `0.50.51`, commit
 `7bf24f2e628f3d410f1f2efadaadcb13fa820f09`.
+
+
+Follow-up do tooltip de inventory: correção de largura/description em
+`0228405fd85b2311127b5449d24351cc828f4c75`; VERSION `0.50.54`
+(`78208eea98404f913811d315b2abcb9a94a07406`).
