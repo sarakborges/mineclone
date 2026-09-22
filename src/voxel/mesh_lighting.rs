@@ -5,7 +5,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     fluid::FluidCell,
-    light::{BlockLight, VoxelLight},
+    light::VoxelLight,
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
     microblock::{MICROBLOCK_EDGE, MicroblockMask},
     read::VoxelRead,
@@ -123,31 +123,6 @@ impl ChunkLightingCache {
         }
     }
 
-    pub(crate) fn capture<W: VoxelRead + ?Sized>(
-        world: &W,
-        chunk_origin: IVec3,
-    ) -> Self {
-        let origin = chunk_origin - IVec3::ONE;
-        let mut samples = vec![CachedLightingSample::default(); LIGHTING_CACHE_VOLUME];
-
-        for y in 0..LIGHTING_CACHE_SIDE {
-            for z in 0..LIGHTING_CACHE_SIDE {
-                for x in 0..LIGHTING_CACHE_SIDE {
-                    let world_position =
-                        origin + IVec3::new(x as i32, y as i32, z as i32);
-                    let sample = world.sample_at(world_position);
-                    samples[lighting_cache_index(x, y, z)] =
-                        cached_lighting_sample(sample);
-                }
-            }
-        }
-
-        Self {
-            origin,
-            samples: samples.into_boxed_slice(),
-        }
-    }
-
     fn sample(&self, world_position: IVec3) -> Option<CachedLightingSample> {
         let local = world_position - self.origin;
         if local.x < 0
@@ -214,18 +189,6 @@ pub(super) fn surface_block_srgb_with_cache(
         )
         .map(|level| level as f32);
 
-    if neutralize_emissive_surface_light {
-        [max_component(block_srgb); 3]
-    } else {
-        block_srgb
-    }
-}
-
-pub(super) fn surface_block_srgb(
-    light: VoxelLight,
-    neutralize_emissive_surface_light: bool,
-) -> [f32; 3] {
-    let block_srgb = light.block_srgb_levels().map(|level| level as f32);
     if neutralize_emissive_surface_light {
         [max_component(block_srgb); 3]
     } else {
@@ -398,12 +361,13 @@ fn average_cached_shader_light_levels(
 // Absence is not measured darkness: sample the open sky until a real neighbor
 // arrives and the existing halo remesh replaces the provisional vertex data.
 // Do not brighten lateral faces or replace loaded cave measurements.
+#[cfg(test)]
 fn provisional_top_sky_sample(face: BlockFace, sample: VoxelSample) -> VoxelSample {
     if face == BlockFace::Top && sample.is_none() {
         Some((
             None,
             None,
-            VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, BlockLight::DARK),
+            VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, crate::voxel::light::BlockLight::DARK),
         ))
     } else {
         sample
@@ -469,6 +433,7 @@ fn sign_index(sign: i32) -> usize {
     if sign < 0 { 0 } else { 1 }
 }
 
+#[cfg(test)]
 fn sample_occlusion(sample: VoxelSample) -> f32 {
     sample.map_or(0.0, |(cell, _, _)| {
         cell.map_or(0.0, |cell| {
@@ -492,6 +457,7 @@ fn ao_brightness(occlusion: f32) -> f32 {
     AO_BRIGHTNESS[lower] * (1.0 - fraction) + AO_BRIGHTNESS[lower + 1] * fraction
 }
 
+#[cfg(test)]
 fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
@@ -528,6 +494,7 @@ fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
     }
 }
 
+#[cfg(test)]
 fn sample_open_fraction(cell: Option<VoxelCell>) -> f32 {
     cell.map_or(1.0, |cell| {
         if crate::voxel::microblock::MicroblockMask::is_modified(cell) {
