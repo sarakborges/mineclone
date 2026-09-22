@@ -46,14 +46,7 @@ impl RenderablePriorityCache {
             || self.center != Some(center)
         {
             self.pending.clear();
-            let mut ordered = queue
-                .values_in_order()
-                .filter(|coord| render_pool.contains(*coord))
-                .collect::<Vec<_>>();
-            ordered.sort_unstable_by_key(|coord| {
-                chunk_load_priority(*coord, center, IVec2::ZERO)
-            });
-            self.pending.extend(ordered);
+            self.pending.extend(remesh_priority_order(queue, center));
             self.queue_revision = queue.revision();
             self.pool_revision = pool_revision;
             self.center = Some(center);
@@ -486,6 +479,17 @@ impl ChunkRemeshQueue {
     }
 }
 
+fn remesh_priority_order(
+    queue: &DeduplicatedQueue<IVec3>,
+    center: IVec3,
+) -> Vec<IVec3> {
+    let mut ordered = queue.values_in_order().collect::<Vec<_>>();
+    ordered.sort_unstable_by_key(|coord| {
+        chunk_load_priority(*coord, center, IVec2::ZERO)
+    });
+    ordered
+}
+
 fn pop_renderable_from(
     queue: &mut DeduplicatedQueue<IVec3>,
     last_miss: &mut Option<RenderableScanKey>,
@@ -636,6 +640,23 @@ mod tests {
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.pop_fluid(), None);
         assert_eq!(queue.pop_lighting(), None);
+    }
+
+    #[test]
+    fn remesh_priority_orders_nearest_chunks_before_fifo_age() {
+        let center = IVec3::new(10, 2, -4);
+        let far = center + IVec3::new(8, 0, 0);
+        let vertical = center + IVec3::new(1, 5, 0);
+        let near = center + IVec3::X;
+        let mut pending = DeduplicatedQueue::default();
+        pending.enqueue(far);
+        pending.enqueue(vertical);
+        pending.enqueue(near);
+
+        assert_eq!(
+            remesh_priority_order(&pending, center),
+            vec![near, vertical, far],
+        );
     }
 
     #[test]
