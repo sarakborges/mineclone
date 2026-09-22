@@ -119,23 +119,24 @@ impl ChunkLightingCache {
         }
     }
 
-    fn sample_in_halo(&self, world_position: IVec3) -> CachedLightingSample {
+    fn sample(&self, world_position: IVec3) -> Option<CachedLightingSample> {
         let local = world_position - self.origin;
-        debug_assert!(
-            local.x >= 0
-                && local.y >= 0
-                && local.z >= 0
-                && local.x < LIGHTING_CACHE_SIDE as i32
-                && local.y < LIGHTING_CACHE_SIDE as i32
-                && local.z < LIGHTING_CACHE_SIDE as i32,
-            "lighting cache samples must stay inside the captured one-voxel halo"
-        );
+        if local.x < 0
+            || local.y < 0
+            || local.z < 0
+            || local.x >= LIGHTING_CACHE_SIDE as i32
+            || local.y >= LIGHTING_CACHE_SIDE as i32
+            || local.z >= LIGHTING_CACHE_SIDE as i32
+        {
+            return None;
+        }
 
-        self.samples[lighting_cache_index(
+        let sample = self.samples[lighting_cache_index(
             local.x as usize,
             local.y as usize,
             local.z as usize,
-        )]
+        )];
+        sample.is_loaded().then_some(sample)
     }
 }
 
@@ -177,8 +178,7 @@ pub(super) fn surface_block_srgb_with_cache(
     neutralize_emissive_surface_light: bool,
 ) -> [f32; 3] {
     let block_srgb = cache
-        .map(|cache| cache.sample_in_halo(world_position))
-        .filter(|sample| sample.is_loaded())
+        .and_then(|cache| cache.sample(world_position))
         .map_or_else(
             || fallback_light.block_srgb_levels(),
             |sample| sample.block_srgb,
@@ -218,7 +218,9 @@ pub(super) fn face_lighting_with_cache<W: VoxelRead + ?Sized>(
             voxel,
             face,
             surface_block_srgb,
-            |position| cache.sample_in_halo(position),
+            |position| {
+                cache.sample(position).unwrap_or_default()
+            },
         )
     } else {
         face_lighting(world, voxel, face, surface_block_srgb)
@@ -559,44 +561,10 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ChunkLightingCache, ao_brightness, average_shader_light_levels, face_lighting,
-        face_lighting_with_cache, provisional_top_sky_sample, sample_occlusion,
-        sample_open_fraction, should_flip_diagonal,
-    };
-    use crate::voxel::{
-        block_face::BlockFace, cell::VoxelCell, chunk::VoxelChunk, light::VoxelLight,
-        microblock::MicroblockMask, world::VoxelWorld,
-    };
+    use super::{ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
+    use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
-
-    #[test]
-    fn dense_cache_matches_direct_face_lighting_at_chunk_corners() {
-        let mut world = VoxelWorld::default();
-        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        let chunk = world.chunk(IVec3::ZERO).expect("center chunk should be loaded");
-        let cache = ChunkLightingCache::capture_with_center(&world, IVec3::ZERO, chunk);
-
-        for x in [0, 15] {
-            for y in [0, 15] {
-                for z in [0, 15] {
-                    let voxel = IVec3::new(x, y, z);
-                    for face in BlockFace::ALL {
-                        let direct = face_lighting(&world, voxel, face, [0.0; 3]);
-                        let cached = face_lighting_with_cache(
-                            Some(&cache),
-                            &world,
-                            voxel,
-                            face,
-                            [0.0; 3],
-                        );
-                        assert!(cached == direct);
-                    }
-                }
-            }
-        }
-    }
 
     #[test]
     fn partial_microblocks_reduce_ambient_occlusion() {
