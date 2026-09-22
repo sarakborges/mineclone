@@ -338,6 +338,24 @@ VERSION: `0.50.31`, commit
 `57eb0a3e9bcf45272309d61375d5d63eda5cc4fe`.
 CI de P15: **verde** nos runs push `35733197849` e PR `35733204324` para `57eb0a3e9bcf45272309d61375d5d63eda5cc4fe`. Nenhum `cargo test` foi adicionado/executado.
 
+### P16 — traversal sparse nas fronteiras de fluidos
+
+A reconciliação de seam entre chunks carregados varria 256 posições da face
+compartilhada sempre que o vizinho possuía qualquer fluido na borda. Para
+chunks com poucos voxels de fluido, quase todas essas consultas retornavam
+vazio.
+
+Quando `fluid_count <= 256`, o frontier agora itera o bitset de fluidos
+ocupados e filtra somente os voxels que pertencem à face compartilhada. Chunks
+mais densos mantêm o scan fixo de 256 posições, evitando regressão em oceanos.
+A ordem do bitset segue o mesmo índice linear usado pelos loops anteriores,
+preservando a ordem de enqueue. Regressão cobre as seis faces cardinais.
+
+Commit funcional: `ab0e699acc6d7cc1a6e71c773f00d75fad809522`.
+VERSION: `0.50.32`, commit
+`194d984f8c6b080d2dd74d159ffb4a7923c17801`.
+CI de P16: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
