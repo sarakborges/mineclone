@@ -3,6 +3,8 @@ use smallvec::SmallVec;
 
 use crate::{content::fluid::FluidId, voxel::cell::VoxelCell};
 
+const MIN_FLUID_CELLS_FOR_GREEDY_TOP: usize = 64;
+
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
@@ -80,15 +82,18 @@ where
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
-    emit_greedy_fluid_top_faces(
-        world,
-        chunk,
-        chunk_origin,
-        meshlets,
-        lighting_cache,
-        &mut tint_at,
-        &mut buffers,
-    );
+    let greedy_top = chunk.fluid_count() >= MIN_FLUID_CELLS_FOR_GREEDY_TOP;
+    if greedy_top {
+        emit_greedy_fluid_top_faces(
+            world,
+            chunk,
+            chunk_origin,
+            meshlets,
+            lighting_cache,
+            &mut tint_at,
+            &mut buffers,
+        );
+    }
 
     meshlets.for_each_voxel(|x, y, z| {
         let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
@@ -98,7 +103,7 @@ where
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
         let neighbor_samples = BlockFace::ALL.map(|face| {
-            if face == BlockFace::Top {
+            if greedy_top && face == BlockFace::Top {
                 None
             } else {
                 fluid_neighbor_content(
@@ -112,7 +117,7 @@ where
         });
         let exposed = std::array::from_fn(|index| {
             let face = BlockFace::ALL[index];
-            if face == BlockFace::Top
+            if (greedy_top && face == BlockFace::Top)
                 || (face == BlockFace::Bottom && world_voxel.y <= 0)
             {
                 return false;
