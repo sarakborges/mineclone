@@ -26,6 +26,8 @@ const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
+const CHARACTER_PREVIEW_PREWARM_FRAMES: u8 = 16;
+const CHARACTER_PREVIEW_OPEN_REFRESH_FRAMES: u8 = 4;
 
 #[derive(Resource, Default)]
 struct CharacterPreviewImage(Option<Handle<Image>>);
@@ -64,7 +66,9 @@ impl Plugin for CharacterInfoHudPlugin {
             .add_systems(PostStartup, spawn_character_preview)
             .add_systems(
                 OnEnter(CharacterInfoState::Open),
-                spawn_character_info.run_if(in_state(GameState::Gameplay)),
+                (refresh_character_preview, spawn_character_info)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(OnExit(CharacterInfoState::Open), stop_character_preview_drag)
             .add_systems(
@@ -221,7 +225,17 @@ fn configure_character_preview_scene(
             .insert(MeshMaterial3d(material));
     }
 
-    interaction.render_frames = interaction.render_frames.max(2);
+    interaction.render_frames = interaction
+        .render_frames
+        .max(CHARACTER_PREVIEW_PREWARM_FRAMES);
+}
+
+fn refresh_character_preview(
+    mut interaction: ResMut<CharacterPreviewInteraction>,
+) {
+    interaction.render_frames = interaction
+        .render_frames
+        .max(CHARACTER_PREVIEW_OPEN_REFRESH_FRAMES);
 }
 
 fn spawn_character_info(
@@ -340,7 +354,9 @@ fn rotate_character_preview(
     }
 
     interaction.yaw += delta.x * CHARACTER_PREVIEW_DRAG_SENSITIVITY;
-    interaction.render_frames = interaction.render_frames.max(2);
+    interaction.render_frames = interaction
+        .render_frames
+        .max(CHARACTER_PREVIEW_OPEN_REFRESH_FRAMES);
     let rotation = Quat::from_rotation_y(interaction.yaw);
     for mut transform in &mut models {
         transform.rotation = rotation;
