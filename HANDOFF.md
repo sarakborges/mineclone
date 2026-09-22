@@ -374,6 +374,24 @@ VERSION: `0.50.33`, commit
 `86f08d7265e7eba6ff40f72e255063e0654e7519`.
 CI de P17: **verde** nos runs push `35733790227` e PR `35733796650` para `86f08d7265e7eba6ff40f72e255063e0654e7519`. Nenhum `cargo test` foi adicionado/executado.
 
+### P18 — compactar buckets Y do greedy fluid top
+
+O greedy de topo dos fluidos criava 16 `Vec<(x,z,cell)>`, um por nível Y.
+Como `visit_fluid_voxels` percorre o bitset no índice linear
+`x + z * size + y * area`, os voxels selecionados já chegam agrupados por Y.
+
+`FluidTopPlanes` agora coleta todos os candidatos em um único buffer contíguo
+e mantém 17 offsets derivados das contagens por Y. Isso reduz os buckets heap
+de 16 para um, sem sort adicional e preservando a ordem local usada pelo
+caminho anterior. Regressão compilável cobre ranges vazios e múltiplos voxels
+no mesmo plano.
+
+Commits: compactação `841f5f444891d00cdedaea567e4d22d4a6ee1786`;
+regressão `552be707485faad2ff525f2279665f4a520ed023`.
+VERSION: `0.50.34`, commit
+`7a9a6258c80e373b2694c310ef126eae406c2689`.
+CI de P18: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
