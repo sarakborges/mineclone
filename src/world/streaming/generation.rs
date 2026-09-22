@@ -105,8 +105,11 @@ pub(super) fn collect_generated_chunks(
             continue;
         }
 
-        let requires_fluid_settling =
-            generated_chunk_requires_fluid_settling(&completed.output);
+        let requires_fluid_settling = generated_chunk_requires_fluid_settling(
+            &work.world,
+            completed.coord,
+            &completed.output,
+        );
         work.world.insert_chunk(completed.coord, completed.output);
         if requires_fluid_settling {
             work.state.stage_generated_chunk(completed.coord);
@@ -346,8 +349,33 @@ pub(super) fn dispatch_generation_tasks(
     }
 }
 
-fn generated_chunk_requires_fluid_settling(chunk: &VoxelChunk) -> bool {
-    chunk.has_fluid()
+fn generated_chunk_requires_fluid_settling(
+    world: &crate::voxel::world::VoxelWorld,
+    coord: IVec3,
+    chunk: &VoxelChunk,
+) -> bool {
+    if chunk.has_fluid() {
+        return true;
+    }
+
+    for y in -1..=1 {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let offset = IVec3::new(x, y, z);
+                if offset == IVec3::ZERO {
+                    continue;
+                }
+                if world
+                    .chunk(coord + offset)
+                    .is_some_and(VoxelChunk::has_fluid)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn generation_wave_target_limit(state: &super::ChunkStreamingState) -> usize {
@@ -416,13 +444,19 @@ mod tests {
     use crate::voxel::fluid::FluidCell;
 
     #[test]
-    fn dry_generated_chunks_do_not_wait_for_fluid_settling() {
+    fn dry_generated_chunks_skip_settling_only_without_fluid_neighbors() {
+        let coord = IVec3::new(3, 2, -4);
         let dry = VoxelChunk::empty();
-        assert!(!generated_chunk_requires_fluid_settling(&dry));
+        let mut world = crate::voxel::world::VoxelWorld::default();
+
+        assert!(!generated_chunk_requires_fluid_settling(&world, coord, &dry));
 
         let mut wet = VoxelChunk::empty();
         wet.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
-        assert!(generated_chunk_requires_fluid_settling(&wet));
+        assert!(generated_chunk_requires_fluid_settling(&world, coord, &wet));
+
+        world.insert_chunk(coord + IVec3::X, wet);
+        assert!(generated_chunk_requires_fluid_settling(&world, coord, &dry));
     }
 
     #[test]
