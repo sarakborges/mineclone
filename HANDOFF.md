@@ -10685,3 +10685,33 @@ modelo 3D.
 Commit funcional: `f75142eef485db8b613392faf57c218a14cce7b0`.
 CI push `35753337348`: localizações, Clippy rigoroso e cargo check **verdes**.
 VERSION: `0.50.68`.
+
+
+## 2026-09-22 — Head pitch, animation latch e skin fornecida
+
+Correções adicionais do player 3D após QA:
+
+- o pitch de `HeadPivot` foi invertido para acompanhar corretamente o eixo
+  vertical da câmera third-person;
+- ações third-person agora possuem latch próprio: pulsos repetidos de
+  `break` renovam o hold do estado atual sem reiniciar o clip;
+- `hit` e `place` também permanecem pelo tempo do clip antes de retornar
+  para locomotion;
+- walk/idle ganhou hysteresis entre velocidade de entrada e saída para evitar
+  troca de estado em torno de zero.
+
+Isso corrige o flicker causado pelo modelo alternar rapidamente
+`break -> walk/idle -> break` entre os pulsos de mining.
+
+Commit runtime: `f68902eaef4dc9915f5cfb82ef7bcaae6b6c41f5`.
+CI push `35754086694`: **verde**.
+
+A skin 64×64 enviada pela usuária foi adaptada para o UV já configurado em
+`assets/textures/entities/player.png`. Como o modelo atual possui outer layer
+física somente na cabeça, jacket/sleeves/pants overlay foram alpha-composited
+sobre as respectivas regiões base; a head overlay permanece separada e
+transparente para `HairLayer`.
+
+Commit da skin: `b92b786cdf6643d083cd1b846e87cc2d976e219d`.
+CI push `35754313075`: **verde** (localizações, Clippy e cargo check).
+VERSION: `0.50.69`.
