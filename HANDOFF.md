@@ -11341,3 +11341,36 @@ CI funcional push `35790899338`: **verde**.
 Commit de versão: `e76584fe4e1d51ac4be498e8cd685ae562fc8f40`.
 CI de versão push `35791035963`: **verde**.
 VERSION: `0.50.89`.
+
+## 2026-09-22 — Character Info modal: correção definitiva de proporção
+
+Escopo: exclusivamente o **modal Character Info** aberto pela tecla C. O portrait
+pequeno do HUD não foi redimensionado nem teve seu layout visual alterado.
+
+Após o ajuste anterior, o modelo ainda aparecia achatado no modal. Para remover
+a dependência de FOV/aspect da câmera perspectiva compartilhada:
+
+- o target vertical do Character Info continua 384×512;
+- quando o renderer compartilhado atende o Character Info, ele troca para
+  `Projection::Orthographic`;
+- a projeção usa `ScalingMode::FixedVertical` com viewport height fixa,
+  preservando a geometria do modelo sem distorção por aspect ratio;
+- ao voltar a renderizar o portrait HUD, o renderer restaura
+  `Projection::Perspective(PerspectiveProjection::default())`;
+- o `ImageNode` dentro do modal Character Info agora declara explicitamente
+  aspect ratio 384/512 (3:4), em vez de forçar simultaneamente width e height a
+  100%, evitando stretch na apresentação da textura.
+
+Commits funcionais:
+- projeção ortográfica do Character Info: `1657a54a0b4bc4da2914347d9273b0aadc182eeb`;
+- aspect ratio explícito no ImageNode do modal:
+  `c0521b21eac5efcab95cb066e416b6708f0589a2`;
+- limpeza do nome da variável de projeção:
+  `2bf7da22f07d711eec4d36f1dc9e42f3931dc97b`;
+- import de `ScalingMode`:
+  `02bb61239b5611a3c684001653e17647f88f2453`.
+
+CI funcional push `35792592400`: **verde**.
+Commit de versão: `6130a40b3149238d78fd763647379e96b8fb8741`.
+CI de versão push `35792687278`: **verde**.
+VERSION: `0.50.90`.
