@@ -25,13 +25,14 @@ pub struct PlayerHudPlugin;
 
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<portrait::PlayerPreviewImages>()
-            .add_systems(PostStartup, portrait::spawn_player_preview_renderer)
+        app.add_systems(
+                OnEnter(GameState::Gameplay),
+                (portrait::spawn_player_preview_cameras, spawn_player_hud).chain(),
+            )
             .add_systems(
                 Update,
-                portrait::sync_player_preview_proxies.run_if(in_state(GameState::Gameplay)),
+                portrait::sync_player_preview_cameras.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
             .add_systems(
                 Update,
                 (sync_player_hud_visibility, sync_inventory_hint)
@@ -58,9 +59,7 @@ fn spawn_player_hud(
     inventory_state: Res<State<InventoryState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
-    preview_images: Res<portrait::PlayerPreviewImages>,
 ) {
-    let portrait_image = preview_images.portrait();
     let hint_kind = inventory_hint_kind(*inventory_state.get());
     let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
@@ -87,11 +86,7 @@ fn spawn_player_hud(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_entity_card(
-                root,
-                EntityCardSource::LocalPlayer,
-                portrait_image.clone(),
-            );
+            spawn_entity_card(root, EntityCardSource::LocalPlayer);
             root.spawn((
                 InventoryHint,
                 typography::crosshair_hint(
