@@ -39,7 +39,7 @@ fn sky_light_factor_needs_sync(
 fn sync_sky_light_factor(
     visuals: Res<EnvironmentVisualState>,
     mut applied: ResMut<AppliedSkyLightFactor>,
-    terrain_lighting: Res<TerrainLightingBuffer>,
+    mut terrain_lighting: ResMut<TerrainLightingBuffer>,
     mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
 ) {
     let sky_light_factor = visuals.sky_light_factor.clamp(0.0, 1.0);
