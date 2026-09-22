@@ -11114,3 +11114,28 @@ Commit de versão: `f5c4cdd9bf091d04b99f509ef6a289544b572d61`.
 CI de versão push `35774360164`: **verde** (localizações, Clippy rigoroso e
 cargo check).
 VERSION: `0.50.83`.
+
+## 2026-09-22 — Pré-render do Character Info e alinhamento à esquerda
+
+O preview 3D do Character Info foi ajustado para evitar atraso perceptível ao
+abrir o menu:
+- o modelo/scene continuam persistentes durante a sessão de gameplay;
+- assim que a scene do preview termina de carregar/configurar, a câmera offscreen
+  renderiza alguns frames mesmo com Character Info fechado;
+- o resultado fica cacheado no render target;
+- abrir Character Info não reseta mais o modelo nem força um novo render;
+- novos renders só acontecem quando o modelo precisa atualizar, como durante o
+  drag horizontal;
+- a câmera offscreen volta a ser desativada assim que os frames pendentes acabam.
+
+Layout:
+- o conteúdo interno do card passou de centralizado para alinhado à esquerda;
+- título e preview agora compartilham o mesmo alinhamento visual.
+
+Commit funcional: `d5b106e232b133bd800b80e92e4e6f5b71893ea0`.
+CI funcional push `35775063674`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `17c3a2153253ebac6a018bb862ea288751c55692`.
+CI de versão push `35775163776`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+VERSION: `0.50.84`.
