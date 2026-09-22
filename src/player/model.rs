@@ -2,6 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use bevy::{
     animation::RepeatAnimation,
+    camera::visibility::RenderLayers,
     ecs::system::SystemParam,
     light::NotShadowCaster,
     prelude::*,
@@ -35,12 +36,13 @@ const HURT_HOLD_SECONDS: f32 = 0.38;
 const MOVING_START_SPEED_SQUARED: f32 = 0.01;
 const MOVING_STOP_SPEED_SQUARED: f32 = 0.0025;
 const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
+pub(crate) const PLAYER_MODEL_PREVIEW_RENDER_LAYER: usize = 3;
 
 #[derive(Component)]
 pub(crate) struct PlayerModelRoot;
 
 #[derive(Component)]
-pub(crate) struct PlayerModelPreviewSource;
+struct PlayerModelRenderable;
 
 #[derive(Component)]
 struct PlayerModel(Handle<Gltf>);
@@ -97,7 +99,6 @@ type PlayerModelRootQuery<'w, 's> = Query<
     's,
     (
         &'static mut Transform,
-        &'static mut Visibility,
         &'static mut PlayerModelAnimationState,
     ),
     (With<PlayerModelRoot>, Without<GameplayCamera>),
@@ -225,7 +226,7 @@ fn spawn_player_model(
         PlayerModel(asset_server.load::<Gltf>(model_path.clone())),
         PlayerModelAnimationState::default(),
         Transform::default(),
-        Visibility::Hidden,
+        Visibility::Visible,
         DespawnOnExit(GameState::Gameplay),
     ));
 }
@@ -311,9 +312,10 @@ fn configure_loaded_player_scene(
         }
 
         if visuals.mesh_entities.get(descendant).is_ok() {
-            commands
-                .entity(descendant)
-                .insert(PlayerModelPreviewSource);
+            commands.entity(descendant).insert((
+                PlayerModelRenderable,
+                RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+            ));
         }
 
         if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
@@ -382,19 +384,11 @@ fn sync_player_model(
     >,
     mut models: PlayerModelRootQuery,
     mut heads: PlayerModelHeadQuery,
+    mut renderables: Query<&mut RenderLayers, With<PlayerModelRenderable>>,
 ) {
     let (player_transform, camera, walking, gravity, health) = *player;
 
-    for (mut model_transform, mut visibility, mut state) in &mut models {
-        let next_visibility = if perspective.is_third_person() {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        if *visibility != next_visibility {
-            *visibility = next_visibility;
-        }
-
+    for (mut model_transform, mut state) in &mut models {
         model_transform.translation =
             player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         model_transform.rotation = Quat::from_rotation_y(camera.yaw + std::f32::consts::PI);
@@ -455,6 +449,16 @@ fn sync_player_model(
         head.rotation = Quat::from_rotation_x(-camera.pitch);
     }
 
+    let layers = if perspective.is_third_person() {
+        RenderLayers::from_layers(&[0, PLAYER_MODEL_PREVIEW_RENDER_LAYER])
+    } else {
+        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER)
+    };
+    for mut render_layers in &mut renderables {
+        if *render_layers != layers {
+            *render_layers = layers.clone();
+        }
+    }
 }
 
 fn sync_player_model_animations(
@@ -577,7 +581,8 @@ fn spawn_third_person_held_block(
                             MeshMaterial3d(material),
                             visibility,
                             NotShadowCaster,
-                            PlayerModelPreviewSource,
+                            PlayerModelRenderable,
+                            RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
                         ));
                     }
                 }
