@@ -160,6 +160,7 @@ pub struct VoxelChunk {
 
 pub(crate) struct VoxelChunkInitialBlocksMut<'a> {
     blocks: &'a mut BlockStorage,
+    palette_indices: HashMap<VoxelCell, u16>,
     block_count: &'a mut usize,
     boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
 }
@@ -171,7 +172,21 @@ impl VoxelChunkInitialBlocksMut<'_> {
             self.blocks.get(voxel_index).is_none(),
             "initial chunk material pass cannot overwrite a block"
         );
-        self.blocks.set(voxel_index, Some(block));
+        let palette_index = if let Some(&palette_index) = self.palette_indices.get(&block) {
+            palette_index
+        } else {
+            self.blocks.palette.push(block);
+            self.blocks.usage.push(0);
+            let palette_index = u16::try_from(self.blocks.palette.len())
+                .expect("initial block palette cannot exceed u16 index space");
+            self.palette_indices.insert(block, palette_index);
+            palette_index
+        };
+        self.blocks.indices[voxel_index] = palette_index;
+        let usage = &mut self.blocks.usage[palette_index as usize - 1];
+        *usage = usage
+            .checked_add(1)
+            .expect("initial block palette usage cannot overflow");
         *self.block_count += 1;
         adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
     }
@@ -367,6 +382,7 @@ impl VoxelChunk {
         let blocks = Arc::make_mut(&mut self.blocks);
         let mut content = VoxelChunkInitialBlocksMut {
             blocks,
+            palette_indices: HashMap::new(),
             block_count: &mut self.block_count,
             boundary_content_counts: &mut self.boundary_content_counts,
         };
