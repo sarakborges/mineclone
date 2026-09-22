@@ -336,7 +336,7 @@ Commits: traversal de conteúdo
 `7899f5361fb5027c3ad0d0159d0c3adfaed49f9d`.
 VERSION: `0.50.31`, commit
 `57eb0a3e9bcf45272309d61375d5d63eda5cc4fe`.
-CI de P15: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P15: **verde** nos runs push `35733197849` e PR `35733204324` para `57eb0a3e9bcf45272309d61375d5d63eda5cc4fe`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
