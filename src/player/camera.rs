@@ -14,6 +14,19 @@ use crate::{
 use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cursor};
 use look::{MouseLookInputState, drain_or_apply_mouse_look};
 
+type PlayerCameraAnchor<'w, 's> = Single<
+    'w,
+    's,
+    (&'static Transform, &'static GameplayCamera),
+    (With<crate::player::PlayerEntity>, Without<GameplayWorldCamera>),
+>;
+type WorldCameraTransform<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Transform,
+    (With<GameplayWorldCamera>, Without<crate::player::PlayerEntity>),
+>;
+
 mod cursor;
 pub(crate) mod look;
 
@@ -137,14 +150,8 @@ fn toggle_camera_perspective(
 fn sync_perspective_camera(
     perspective: Res<CameraPerspective>,
     world: Res<VoxelWorld>,
-    player: Single<
-        (&Transform, &GameplayCamera),
-        (With<crate::player::PlayerEntity>, Without<GameplayWorldCamera>),
-    >,
-    camera: Single<
-        &mut Transform,
-        (With<GameplayWorldCamera>, Without<crate::player::PlayerEntity>),
-    >,
+    player: PlayerCameraAnchor,
+    camera: WorldCameraTransform,
 ) {
     let (player_transform, gameplay_camera) = *player;
     let mut camera_transform = camera.into_inner();
