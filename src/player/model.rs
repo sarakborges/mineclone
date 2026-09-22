@@ -13,7 +13,7 @@ use crate::{
     content::player::PlayerDefinition,
     entity::EntityHealth,
     player::{
-        PLAYER_EYE_HEIGHT, PlayerEntity,
+        PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity,
         camera::{CameraPerspective, GameplayCamera},
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
@@ -124,6 +124,7 @@ type ThirdPersonHeldBlockRootQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 struct PlayerSceneVisuals<'w, 's> {
+    asset_server: Res<'w, AssetServer>,
     transforms: Query<'w, 's, &'static Transform>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -290,6 +291,9 @@ fn configure_loaded_player_scene(
     for descendant in descendants.iter_descendants(ready.entity) {
         if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
             if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
+                material.base_color = Color::WHITE;
+                material.base_color_texture =
+                    Some(visuals.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
                 material.unlit = true;
                 material.metallic = 0.0;
                 material.perceptual_roughness = 1.0;

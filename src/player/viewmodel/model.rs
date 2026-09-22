@@ -10,7 +10,11 @@ use bevy::{
 
 use crate::{
     content::player::PlayerDefinition,
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    player::{
+        PLAYER_SKIN_TEXTURE_PATH,
+        camera::GameplayCamera,
+        hotbar::PlayerHotbar,
+    },
     rendering::{
         block_model::{
             BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
@@ -89,6 +93,7 @@ pub(super) struct ViewModelSpawnAssets<'w> {
 
 #[derive(SystemParam)]
 struct ViewModelArmSceneAssets<'w, 's> {
+    asset_server: Res<'w, AssetServer>,
     names: Query<'w, 's, &'static Name>,
     meshes: Query<'w, 's, &'static Mesh3d>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
@@ -327,6 +332,9 @@ fn configure_viewmodel_arm_scene(
         if let Ok(original) = assets.mesh_materials.get(descendant)
             && let Some(mut material) = assets.materials.get(original.id()).cloned()
         {
+            material.base_color = Color::WHITE;
+            material.base_color_texture =
+                Some(assets.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
             material.unlit = true;
             material.metallic = 0.0;
             material.perceptual_roughness = 1.0;

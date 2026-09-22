@@ -31,6 +31,7 @@ use player_id::LOCAL_PLAYER_ID;
 pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
 pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
 pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
+pub(crate) const PLAYER_SKIN_TEXTURE_PATH: &str = "textures/entities/player.png";
 
 #[derive(Component, Default)]
 pub(crate) struct PlayerEntity;
