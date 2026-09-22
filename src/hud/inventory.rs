@@ -13,18 +13,23 @@ use crate::{
 
 use interaction::{
     handle_category_clicks, handle_creative_scroll, handle_creative_slot_clicks,
-    handle_empty_inventory_click, handle_inventory_close_shortcut, handle_inventory_trash_clicks,
-    handle_search_focus, handle_search_input, handle_slot_clicks,
-    remember_creative_scroll_positions, sync_search_focus,
+    handle_empty_inventory_click, handle_inventory_close_shortcut, handle_inventory_sort_clicks,
+    handle_inventory_trash_clicks, handle_player_search_focus, handle_player_search_input,
+    handle_search_focus, handle_search_input, handle_slot_clicks, remember_creative_scroll_positions,
+    sync_player_search_focus, sync_search_focus,
 };
 use search_style::{
     focus_inventory_search_frame, frame_inventory_search_field, style_inventory_search_field,
+    style_player_inventory_search_field,
 };
-use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState};
+use state::{
+    CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, PlayerInventoryView,
+};
 use sync::{
     rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
     style_inventory_slots, style_inventory_trash_button, style_search_bar,
     sync_inventory_cursor_icon, sync_inventory_item_tooltip, sync_inventory_slot_contents,
+    sync_inventory_sort_tooltip,
     update_cursor_icon_position,
 };
 
@@ -40,6 +45,7 @@ pub(super) struct InventoryHudPlugin;
 impl Plugin for InventoryHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CreativeInventoryView>()
+            .init_resource::<PlayerInventoryView>()
             .init_resource::<CreativeScrollState>()
             .init_resource::<CreativeInventoryUiDirty>()
             .configure_sets(
@@ -59,6 +65,7 @@ impl Plugin for InventoryHudPlugin {
                 OnExit(InventoryState::Open),
                 (
                     reset_resource::<CreativeInventoryView>,
+                    reset_resource::<PlayerInventoryView>,
                     reset_resource::<CreativeScrollState>,
                     reset_resource::<CreativeInventoryUiDirty>,
                 ),
@@ -69,15 +76,19 @@ impl Plugin for InventoryHudPlugin {
                     remember_creative_scroll_positions,
                     handle_search_focus,
                     focus_inventory_search_frame,
+                    handle_player_search_focus,
                     handle_inventory_close_shortcut,
                     handle_search_input,
+                    handle_player_search_input,
                     handle_category_clicks,
                     handle_creative_scroll,
                     handle_creative_slot_clicks,
                     handle_slot_clicks,
+                    handle_inventory_sort_clicks,
                     handle_inventory_trash_clicks,
                     handle_empty_inventory_click,
                     sync_search_focus,
+                    sync_player_search_focus,
                 )
                     .chain()
                     .in_set(InventoryHudSet::Input)
@@ -102,10 +113,12 @@ impl Plugin for InventoryHudPlugin {
                     style_search_bar,
                     frame_inventory_search_field,
                     style_inventory_search_field,
+                    style_player_inventory_search_field,
                     style_category_buttons,
                     style_creative_slots,
                     style_inventory_slots,
                     style_inventory_trash_button,
+                    sync_inventory_sort_tooltip,
                     update_cursor_icon_position,
                     sync_inventory_item_tooltip,
                 )
