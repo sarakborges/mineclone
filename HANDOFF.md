@@ -568,7 +568,7 @@ inalteradas.
 Commit funcional: `f6c092dc1f78cd232e520b7f2fb3f73c455d1970`.
 VERSION: `0.50.43`, commit
 `e6c024326e17851555d43ff4dc01d5d1f4455469`.
-CI de P27: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P27: **verde** nos runs push `35738074188` e PR `35738079264` para `e6c024326e17851555d43ff4dc01d5d1f4455469`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
