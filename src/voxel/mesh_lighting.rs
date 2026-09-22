@@ -31,42 +31,6 @@ struct CachedLightingSample {
     occupied_count: u16,
 }
 
-#[derive(Clone, Copy, Default)]
-struct CachedLightingContribution {
-    occupied_units: u16,
-    weight: f32,
-    weighted_sky: f32,
-    weighted_block_srgb: [f32; 3],
-}
-
-impl CachedLightingContribution {
-    fn from_sample(sample: CachedLightingSample) -> Self {
-        if !sample.is_loaded() {
-            return Self::default();
-        }
-
-        let occupied_units = sample.occupied_units();
-        let weight = sample.open_units() as f32;
-        if weight == 0.0 {
-            return Self {
-                occupied_units,
-                ..Self::default()
-            };
-        }
-
-        Self {
-            occupied_units,
-            weight,
-            weighted_sky: sample.sky as f32 * weight,
-            weighted_block_srgb: [
-                sample.block_srgb[0] as f32 * weight,
-                sample.block_srgb[1] as f32 * weight,
-                sample.block_srgb[2] as f32 * weight,
-            ],
-        }
-    }
-}
-
 impl Default for CachedLightingSample {
     fn default() -> Self {
         Self {
@@ -271,33 +235,23 @@ fn face_lighting_from_samples(
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let base_sample = CachedLightingContribution::from_sample(
-        provisional_top_sky_sample_cached(face, sample_at(base)),
-    );
+    let base_sample = provisional_top_sky_sample_cached(face, sample_at(base));
     let side_a_samples = [
-        CachedLightingContribution::from_sample(sample_at(base - tangent_a)),
-        CachedLightingContribution::from_sample(sample_at(base + tangent_a)),
+        sample_at(base - tangent_a),
+        sample_at(base + tangent_a),
     ];
     let side_b_samples = [
-        CachedLightingContribution::from_sample(sample_at(base - tangent_b)),
-        CachedLightingContribution::from_sample(sample_at(base + tangent_b)),
+        sample_at(base - tangent_b),
+        sample_at(base + tangent_b),
     ];
     let corner_samples = [
         [
-            CachedLightingContribution::from_sample(
-                sample_at(base - tangent_a - tangent_b),
-            ),
-            CachedLightingContribution::from_sample(
-                sample_at(base - tangent_a + tangent_b),
-            ),
+            sample_at(base - tangent_a - tangent_b),
+            sample_at(base - tangent_a + tangent_b),
         ],
         [
-            CachedLightingContribution::from_sample(
-                sample_at(base + tangent_a - tangent_b),
-            ),
-            CachedLightingContribution::from_sample(
-                sample_at(base + tangent_a + tangent_b),
-            ),
+            sample_at(base + tangent_a - tangent_b),
+            sample_at(base + tangent_a + tangent_b),
         ],
     ];
     let mut channels = [[0.0; 2]; 4];
@@ -310,9 +264,9 @@ fn face_lighting_from_samples(
         let side_a_sample = side_a_samples[side_a_index];
         let side_b_sample = side_b_samples[side_b_index];
         let corner_sample = corner_samples[side_a_index][side_b_index];
-        let side_a_occupied = side_a_sample.occupied_units;
-        let side_b_occupied = side_b_sample.occupied_units;
-        let corner_occupied = corner_sample.occupied_units;
+        let side_a_occupied = side_a_sample.occupied_units();
+        let side_b_occupied = side_b_sample.occupied_units();
+        let corner_occupied = corner_sample.occupied_units();
         let occlusion = if side_a_occupied == MICROBLOCK_VOLUME
             && side_b_occupied == MICROBLOCK_VOLUME
         {
@@ -323,13 +277,12 @@ fn face_lighting_from_samples(
                 + u32::from(corner_occupied)) as f32
                 / MICROBLOCK_VOLUME as f32
         };
-        let (sky_level, sampled_block_srgb) =
-            average_cached_shader_light_contributions([
-                base_sample,
-                side_a_sample,
-                side_b_sample,
-                corner_sample,
-            ]);
+        let (sky_level, sampled_block_srgb) = average_cached_shader_light_levels([
+            base_sample,
+            side_a_sample,
+            side_b_sample,
+            corner_sample,
+        ]);
         let sampled_block_srgb = component_max(sampled_block_srgb, surface_block_srgb);
 
         channels[index] = [
@@ -362,23 +315,28 @@ fn provisional_top_sky_sample_cached(
     }
 }
 
-fn average_cached_shader_light_contributions(
-    samples: [CachedLightingContribution; 4],
+fn average_cached_shader_light_levels(
+    samples: [CachedLightingSample; 4],
 ) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut weight_total = 0.0;
 
     for sample in samples {
-        if sample.weight == 0.0 {
+        if !sample.is_loaded() {
+            continue;
+        }
+        let weight = sample.open_units() as f32;
+        if weight == 0.0 {
             continue;
         }
 
-        sky_total += sample.weighted_sky;
-        block_total[0] += sample.weighted_block_srgb[0];
-        block_total[1] += sample.weighted_block_srgb[1];
-        block_total[2] += sample.weighted_block_srgb[2];
-        weight_total += sample.weight;
+        sky_total += sample.sky as f32 * weight;
+        let block = sample.block_srgb;
+        block_total[0] += block[0] as f32 * weight;
+        block_total[1] += block[1] as f32 * weight;
+        block_total[2] += block[2] as f32 * weight;
+        weight_total += weight;
     }
 
     if weight_total <= f32::EPSILON {
@@ -603,75 +561,10 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CachedLightingContribution, CachedLightingSample, UNLOADED_OCCUPANCY, ao_brightness,
-        average_cached_shader_light_contributions, average_shader_light_levels,
-        provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal,
-    };
+    use super::{ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
     use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
-
-    #[test]
-    fn cached_lighting_contributions_preserve_weighted_average() {
-        let samples = [
-            CachedLightingSample {
-                sky: 15,
-                block_srgb: [10, 2, 0],
-                occupied_count: 128,
-            },
-            CachedLightingSample {
-                sky: 4,
-                block_srgb: [1, 7, 3],
-                occupied_count: 320,
-            },
-            CachedLightingSample {
-                sky: 0,
-                block_srgb: [0, 0, 0],
-                occupied_count: 512,
-            },
-            CachedLightingSample {
-                sky: 0,
-                block_srgb: [0, 0, 0],
-                occupied_count: UNLOADED_OCCUPANCY,
-            },
-        ];
-
-        let mut sky_total = 0.0;
-        let mut block_total = [0.0; 3];
-        let mut weight_total = 0.0;
-        for sample in samples {
-            if !sample.is_loaded() {
-                continue;
-            }
-            let weight = sample.open_units() as f32;
-            if weight == 0.0 {
-                continue;
-            }
-            sky_total += sample.sky as f32 * weight;
-            block_total[0] += sample.block_srgb[0] as f32 * weight;
-            block_total[1] += sample.block_srgb[1] as f32 * weight;
-            block_total[2] += sample.block_srgb[2] as f32 * weight;
-            weight_total += weight;
-        }
-        let expected = (
-            sky_total / weight_total,
-            [
-                block_total[0] / weight_total,
-                block_total[1] / weight_total,
-                block_total[2] / weight_total,
-            ],
-        );
-
-        let actual = average_cached_shader_light_contributions(
-            samples.map(CachedLightingContribution::from_sample),
-        );
-
-        assert_eq!(actual.0.to_bits(), expected.0.to_bits());
-        for index in 0..3 {
-            assert_eq!(actual.1[index].to_bits(), expected.1[index].to_bits());
-        }
-    }
 
     #[test]
     fn partial_microblocks_reduce_ambient_occlusion() {
