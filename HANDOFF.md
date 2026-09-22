@@ -167,7 +167,8 @@ Streaming revision: `e91b8ddd9887c9dfa77e7426896b4ff29653da16`.
 Retirement gate: `a3a4dbb13dc5a79f89f66f14e2885fc802c9da35`.
 VERSION: `0.50.24`, commit
 `8390c1b12da1f0338b0016aee0b230b17bd2e868`.
-CI de P8: aguardando.
+CI de P8: **verde** nos runs push `35685798181` e PR `35685802514` para
+`8390c1b12da1f0338b0016aee0b230b17bd2e868`.
 
 ### Ordem de execução definida
 
