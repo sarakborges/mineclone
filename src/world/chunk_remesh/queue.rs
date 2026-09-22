@@ -646,15 +646,15 @@ mod tests {
         let second = IVec3::new(2, 1, 2);
         queue.enqueue_priority(first);
 
-        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        assert_eq!(queue.pop_renderable_geometry(&render_pool, None), None);
         let first_miss = queue.geometry_scan_miss;
         assert!(first_miss.is_some());
 
-        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        assert_eq!(queue.pop_renderable_geometry(&render_pool, None), None);
         assert_eq!(queue.geometry_scan_miss, first_miss);
 
         queue.enqueue_priority(second);
-        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        assert_eq!(queue.pop_renderable_geometry(&render_pool, None), None);
         assert_ne!(queue.geometry_scan_miss, first_miss);
     }
 
@@ -666,15 +666,15 @@ mod tests {
         let second = IVec3::new(2, 1, 2);
         queue.enqueue_lighting_priority(first);
 
-        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        assert_eq!(queue.pop_renderable_lighting(&render_pool, None), None);
         let first_miss = queue.lighting_scan_miss;
         assert!(first_miss.is_some());
 
-        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        assert_eq!(queue.pop_renderable_lighting(&render_pool, None), None);
         assert_eq!(queue.lighting_scan_miss, first_miss);
 
         queue.enqueue_lighting_priority(second);
-        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        assert_eq!(queue.pop_renderable_lighting(&render_pool, None), None);
         assert_ne!(queue.lighting_scan_miss, first_miss);
     }
 
@@ -686,15 +686,15 @@ mod tests {
         let second = IVec3::new(2, 1, 2);
         queue.enqueue_fluid_priority(first);
 
-        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        assert_eq!(queue.pop_renderable_fluid(&render_pool, None), None);
         let first_miss = queue.fluid_scan_miss;
         assert!(first_miss.is_some());
 
-        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        assert_eq!(queue.pop_renderable_fluid(&render_pool, None), None);
         assert_eq!(queue.fluid_scan_miss, first_miss);
 
         queue.enqueue_fluid_priority(second);
-        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        assert_eq!(queue.pop_renderable_fluid(&render_pool, None), None);
         assert_ne!(queue.fluid_scan_miss, first_miss);
     }
 }
