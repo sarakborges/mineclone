@@ -7,11 +7,13 @@ use crate::{content::fluid::FluidRegistry, creatures::SavedCreature};
 use super::invalid_data;
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
-    new_world::{WorldgenVersion, is_valid_biome_size_multiplier},
+    new_world::{
+        WorldGenerationSettings, WorldgenVersion, is_valid_biome_size_multiplier,
+    },
     world_names::validate_world_name,
 };
 
-pub(super) const SAVE_FORMAT_VERSION: u32 = 3;
+pub(super) const SAVE_FORMAT_VERSION: u32 = 4;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +26,7 @@ pub(super) struct WorldManifest {
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
+    pub(super) world_generation: WorldGenerationSettings,
     pub(super) last_saved_unix_ms: u64,
     pub(super) generation: u64,
     pub(super) snapshot_file: Option<String>,
@@ -52,6 +55,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
+    pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
@@ -75,6 +79,7 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
+    pub(super) world_generation: WorldGenerationSettings,
     pub(super) player: Option<SavedPlayer>,
     pub(super) day: u64,
     pub(super) tick_in_day: u64,
@@ -96,6 +101,7 @@ pub(super) struct DiskWorldSnapshot<'a> {
     biome_size_multiplier: f32,
     ticks_per_second: u32,
     spawn_creatures: bool,
+    world_generation: WorldGenerationSettings,
     player: &'a Option<SavedPlayer>,
     day: u64,
     tick_in_day: u64,
@@ -117,6 +123,7 @@ impl StoredWorldSnapshot {
             biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
+            world_generation: self.world_generation,
             player: self.player,
             day: self.day,
             tick_in_day: self.tick_in_day,
@@ -137,6 +144,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
+    pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
@@ -161,6 +169,7 @@ impl WorldSnapshot {
             biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
+            world_generation: self.world_generation,
             player: &self.player,
             day: self.day,
             tick_in_day: self.tick_in_day,
@@ -201,6 +210,7 @@ impl WorldSnapshot {
             biome_size_multiplier: source.biome_size_multiplier,
             ticks_per_second: source.ticks_per_second,
             spawn_creatures: source.spawn_creatures,
+            world_generation: source.world_generation,
             player: source.player,
             day: source.day,
             tick_in_day: source.tick_in_day,
@@ -230,6 +240,7 @@ mod tests {
             biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
             ticks_per_second: 20,
             spawn_creatures: true,
+            world_generation: WorldGenerationSettings::default(),
             player: None,
             day: 1,
             tick_in_day: 0,

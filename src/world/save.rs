@@ -4,7 +4,10 @@ use bevy::prelude::*;
 
 use crate::player::{game_mode::GameMode, player_id::PlayerId, save::PlayerSaveData};
 
-use super::{DEFAULT_BIOME_SIZE_MULTIPLIER, game_rules::GameRules, seed::WorldSeed};
+use super::{
+    DEFAULT_BIOME_SIZE_MULTIPLIER, WorldGenerationSettings, game_rules::GameRules,
+    seed::WorldSeed,
+};
 
 #[derive(Resource, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WorldLoadMode {
@@ -19,6 +22,7 @@ pub struct InMemoryWorldSave {
     dimension_id: Option<String>,
     spawn_biome: Option<String>,
     biome_size_multiplier: Option<f32>,
+    world_generation: WorldGenerationSettings,
     game_rules: GameRules,
     players: HashMap<PlayerId, PlayerSaveData>,
 }
@@ -39,6 +43,10 @@ impl InMemoryWorldSave {
     pub(crate) fn biome_size_multiplier(&self) -> f32 {
         self.biome_size_multiplier
             .unwrap_or(DEFAULT_BIOME_SIZE_MULTIPLIER)
+    }
+
+    pub(crate) const fn world_generation(&self) -> WorldGenerationSettings {
+        self.world_generation
     }
 
     pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
@@ -73,11 +81,13 @@ impl InMemoryWorldSave {
         game_rules: GameRules,
         spawn_biome: Option<&str>,
         biome_size_multiplier: f32,
+        world_generation: WorldGenerationSettings,
     ) {
         self.seed = Some(seed.0);
         self.dimension_id = Some(dimension_id.to_owned());
         self.spawn_biome = spawn_biome.map(str::to_owned);
         self.biome_size_multiplier = Some(biome_size_multiplier);
+        self.world_generation = world_generation;
         self.game_rules = game_rules;
         self.players.clear();
     }

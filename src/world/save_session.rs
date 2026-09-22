@@ -212,6 +212,7 @@ impl WorldSaveContext<'_, '_> {
             biome_size_multiplier: self.state.save.biome_size_multiplier(),
             ticks_per_second: self.state.rules.ticks_per_second(),
             spawn_creatures: self.state.rules.spawn_creatures(),
+            world_generation: self.state.save.world_generation(),
             player: Some(self.entities.saved_player()?),
             day: self.state.clock.day,
             tick_in_day: self.state.clock.tick_in_day(),

@@ -87,6 +87,10 @@ pub(in crate::world) fn begin_world_loading(
         WorldLoadMode::New => persistence.new_world_config.biome_size_multiplier(),
         WorldLoadMode::Load => persistence.save.biome_size_multiplier(),
     };
+    let world_generation = match *persistence.load_mode {
+        WorldLoadMode::New => persistence.new_world_config.world_generation(),
+        WorldLoadMode::Load => persistence.save.world_generation(),
+    };
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
@@ -189,6 +193,7 @@ pub(in crate::world) fn begin_world_loading(
                 *config.game_rules,
                 forced_spawn_biome.as_deref(),
                 biome_size_multiplier,
+                world_generation,
             );
         }
         WorldLoadMode::Load => {
@@ -204,6 +209,7 @@ pub(in crate::world) fn begin_world_loading(
         }
     }
 
+    commands.insert_resource(world_generation);
     commands.insert_resource(biome_field);
     commands.insert_resource(feature_fields);
     commands.insert_resource(terrain_lighting);

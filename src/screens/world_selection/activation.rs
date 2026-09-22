@@ -71,6 +71,7 @@ impl PreparedWorldActivation {
             rules,
             snapshot.spawn_biome.as_deref(),
             snapshot.biome_size_multiplier,
+            snapshot.world_generation,
         );
         if let Some(player) = snapshot.player {
             save.save_player_state_with_health(

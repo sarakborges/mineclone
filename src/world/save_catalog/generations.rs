@@ -228,6 +228,7 @@ fn decode_snapshot_state(
         || !is_valid_biome_size_multiplier(stored.biome_size_multiplier)
         || stored.ticks_per_second != manifest.ticks_per_second
         || stored.spawn_creatures != manifest.spawn_creatures
+        || stored.world_generation != manifest.world_generation
         || stored.ticks_per_second == 0
         || stored.day == 0
         || stored

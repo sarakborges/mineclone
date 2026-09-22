@@ -13,7 +13,7 @@ use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 /// generate differently for the same world seed/configuration. Saved worlds
 /// pin this value in their immutable generation-zero manifest so a newer game
 /// never silently mixes two world-generation algorithms in one world.
-pub(crate) const WORLDGEN_VERSION: u32 = 1;
+pub(crate) const WORLDGEN_VERSION: u32 = 2;
 
 /// Persisted deterministic-generator identity. The transparent representation
 /// keeps manifests/snapshots human-readable while making it harder for save
@@ -87,12 +87,66 @@ pub(crate) const MAX_BIOME_SIZE_MULTIPLIER: f32 =
 pub(crate) const DEFAULT_BIOME_SIZE_MULTIPLIER: f32 =
     DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum WorldGenerationMode {
+    #[default]
+    Normal,
+    Flat,
+    Void,
+}
+
+#[derive(Resource, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorldGenerationSettings {
+    mode: WorldGenerationMode,
+    spawn_structures: bool,
+    single_biome: bool,
+}
+
+impl Default for WorldGenerationSettings {
+    fn default() -> Self {
+        Self {
+            mode: WorldGenerationMode::Normal,
+            spawn_structures: true,
+            single_biome: false,
+        }
+    }
+}
+
+impl WorldGenerationSettings {
+    pub(crate) const fn mode(self) -> WorldGenerationMode {
+        self.mode
+    }
+
+    pub(crate) const fn spawn_structures(self) -> bool {
+        self.spawn_structures
+    }
+
+    pub(crate) const fn single_biome(self) -> bool {
+        self.single_biome
+    }
+
+    pub(crate) fn set_mode(&mut self, mode: WorldGenerationMode) {
+        self.mode = mode;
+    }
+
+    pub(crate) fn set_spawn_structures(&mut self, spawn_structures: bool) {
+        self.spawn_structures = spawn_structures;
+    }
+
+    pub(crate) fn set_single_biome(&mut self, single_biome: bool) {
+        self.single_biome = single_biome;
+    }
+}
+
 #[derive(Resource, Debug, Clone)]
 pub(crate) struct NewWorldConfig {
     name: String,
     seed: WorldSeed,
     game_mode: GameMode,
     game_rules: GameRules,
+    world_generation: WorldGenerationSettings,
     spawn_biome: Option<String>,
     biome_size_multiplier_tenths: u8,
 }
@@ -104,6 +158,7 @@ impl Default for NewWorldConfig {
             seed: WorldSeed::default(),
             game_mode: GameMode::default(),
             game_rules: GameRules::default(),
+            world_generation: WorldGenerationSettings::default(),
             spawn_biome: None,
             biome_size_multiplier_tenths: DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS,
         }
@@ -151,6 +206,22 @@ impl NewWorldConfig {
 
     pub(crate) fn set_spawn_creatures(&mut self, spawn_creatures: bool) {
         self.game_rules.set_spawn_creatures(spawn_creatures);
+    }
+
+    pub(crate) const fn world_generation(&self) -> WorldGenerationSettings {
+        self.world_generation
+    }
+
+    pub(crate) fn set_world_generation_mode(&mut self, mode: WorldGenerationMode) {
+        self.world_generation.set_mode(mode);
+    }
+
+    pub(crate) fn set_spawn_structures(&mut self, spawn_structures: bool) {
+        self.world_generation.set_spawn_structures(spawn_structures);
+    }
+
+    pub(crate) fn set_single_biome(&mut self, single_biome: bool) {
+        self.world_generation.set_single_biome(single_biome);
     }
 
     pub(crate) fn spawn_biome(&self) -> Option<&str> {

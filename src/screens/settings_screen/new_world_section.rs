@@ -324,6 +324,7 @@ pub(super) fn handle_new_world_footer(
         draft.config.biome_size_multiplier(),
         rules.ticks_per_second(),
         rules.spawn_creatures(),
+        draft.config.world_generation(),
     ) {
         Ok(created) => created,
         Err(error) => {

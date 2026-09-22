@@ -78,7 +78,8 @@ use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 pub(crate) use new_world::{
     DEFAULT_BIOME_SIZE_MULTIPLIER,
     MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
-    is_valid_biome_size_multiplier, snap_biome_size_multiplier,
+    WorldGenerationMode, WorldGenerationSettings, is_valid_biome_size_multiplier,
+    snap_biome_size_multiplier,
 };
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
@@ -109,6 +110,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<InMemoryWorldSave>()
             .init_resource::<WorldSession>()
             .init_resource::<NewWorldConfig>()
+            .init_resource::<WorldGenerationSettings>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
