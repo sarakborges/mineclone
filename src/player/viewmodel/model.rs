@@ -1,11 +1,15 @@
+use std::collections::HashSet;
+
 use bevy::{
     camera::{Hdr, visibility::RenderLayers},
     ecs::system::SystemParam,
     light::NotShadowCaster,
     prelude::*,
+    world_serialization::WorldInstanceReady,
 };
 
 use crate::{
+    content::player::PlayerDefinition,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -21,12 +25,27 @@ use crate::{
 
 use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.23, 0.60, 0.21);
+const MODEL_RIGHT_ARM_PIVOT_X: f32 = -0.3375;
+const MODEL_ARM_BASE_Y: f32 = 0.675;
+pub(super) const VIEW_MODEL_ARM_LENGTH: f32 = 0.675;
+pub(super) const VIEW_MODEL_ARM_GRIP_Y: f32 = 0.52;
 const HELD_BLOCK_SCALE: f32 = 0.18;
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
 
 #[derive(Component)]
 pub(super) struct ViewModelArm;
+
+#[derive(Component)]
+pub(super) struct ViewModelCamera;
+
+#[derive(Component)]
+struct ViewModelArmScene(Handle<Gltf>);
+
+#[derive(Component)]
+struct ViewModelArmSceneAttached;
+
+#[derive(Component)]
+struct ViewModelArmAppearance;
 
 #[derive(Component)]
 pub(super) struct HeldBlockRoot;
@@ -56,12 +75,6 @@ type HeldBlockRootQuery<'w, 's> = Query<
     ),
 >;
 
-#[derive(Resource)]
-pub(super) struct ViewModelArmAssets {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-}
-
 #[derive(SystemParam)]
 pub(super) struct ViewModelSelection<'w> {
     hotbar: Res<'w, PlayerHotbar>,
@@ -71,7 +84,6 @@ pub(super) struct ViewModelSelection<'w> {
 pub(super) struct ViewModelSpawnAssets<'w> {
     block_meshes: Res<'w, BlockModelMeshes>,
     block_materials: ResMut<'w, BlockModelMaterials>,
-    arm_assets: Res<'w, ViewModelArmAssets>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
 }
 
@@ -91,25 +103,11 @@ pub(super) struct HeldBlockView<'w, 's> {
     >,
 }
 
-pub(super) fn setup_viewmodel_arm_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    commands.insert_resource(ViewModelArmAssets {
-        mesh: meshes.add(Cuboid::new(ARM_SIZE.x, ARM_SIZE.y, ARM_SIZE.z)),
-        material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.72, 0.52, 0.40),
-            perceptual_roughness: 1.0,
-            unlit: true,
-            ..default()
-        }),
-    });
-}
-
 pub(super) fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
+    player_definition: Res<PlayerDefinition>,
+    asset_server: Res<AssetServer>,
     definitions: BlockVisualContent,
     selection: ViewModelSelection,
     assets: ViewModelSpawnAssets,
@@ -118,9 +116,15 @@ pub(super) fn spawn_viewmodel(
     let ViewModelSpawnAssets {
         block_meshes,
         mut block_materials,
-        arm_assets,
         mut materials,
     } = assets;
+    let player_model = player_definition
+        .model
+        .as_ref()
+        .map(|path| asset_server.load::<Gltf>(path.clone()));
+    if player_model.is_none() {
+        warn!("player definition has no model configured for the first-person arm");
+    }
 
     for (camera, camera_transform) in &cameras {
         let selected_slot = selection.hotbar.selected_slot();
@@ -141,6 +145,7 @@ pub(super) fn spawn_viewmodel(
 
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
+                ViewModelCamera,
                 Camera3d::default(),
                 Camera {
                     order: VIEW_MODEL_CAMERA_ORDER,
@@ -159,15 +164,14 @@ pub(super) fn spawn_viewmodel(
                     Visibility::Visible,
                 ))
                 .with_children(|viewmodel| {
-                    viewmodel.spawn((
-                        ViewModelArm,
-                        Mesh3d(arm_assets.mesh.clone()),
-                        MeshMaterial3d(arm_assets.material.clone()),
-                        Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
-                        Visibility::Visible,
-                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                        NotShadowCaster,
-                    ));
+                    if let Some(model) = player_model.clone() {
+                        viewmodel.spawn((
+                            Name::new("First Person Player Arm"),
+                            ViewModelArmScene(model),
+                            viewmodel_arm_scene_transform(),
+                            Visibility::Inherited,
+                        ));
+                    }
 
                     viewmodel
                         .spawn((
@@ -238,6 +242,89 @@ pub(super) fn spawn_viewmodel(
                         });
                 });
         });
+    }
+}
+
+pub(super) fn attach_viewmodel_arm_model(
+    mut commands: Commands,
+    sources: Query<(Entity, &ViewModelArmScene), Without<ViewModelArmSceneAttached>>,
+    gltfs: Res<Assets<Gltf>>,
+) {
+    for (source, model) in &sources {
+        let Some(gltf) = gltfs.get(&model.0) else {
+            continue;
+        };
+        let Some(scene) = gltf.default_scene.clone() else {
+            warn!("player model has no default scene for the first-person arm");
+            commands.entity(source).insert(ViewModelArmSceneAttached);
+            continue;
+        };
+
+        commands.entity(source).insert(ViewModelArmSceneAttached);
+        commands.entity(source).with_children(|parent| {
+            parent
+                .spawn((
+                    WorldAssetRoot(scene),
+                    Transform::default(),
+                    ViewModelArmAppearance,
+                ))
+                .observe(configure_viewmodel_arm_scene);
+        });
+    }
+}
+
+fn configure_viewmodel_arm_scene(
+    ready: On<WorldInstanceReady>,
+    mut commands: Commands,
+    descendants: Query<&Children>,
+    names: Query<&Name>,
+    meshes: Query<&Mesh3d>,
+    mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let Some(arm_root) = descendants
+        .iter_descendants(ready.entity)
+        .find(|entity| {
+            names
+                .get(*entity)
+                .is_ok_and(|name| name.as_str() == "RightArmPivot")
+        })
+    else {
+        warn!("player model is missing RightArmPivot for the first-person arm");
+        return;
+    };
+
+    let mut arm_entities = HashSet::from([arm_root]);
+    arm_entities.extend(descendants.iter_descendants(arm_root));
+
+    for descendant in descendants.iter_descendants(ready.entity) {
+        if meshes.get(descendant).is_err() {
+            continue;
+        }
+
+        if !arm_entities.contains(&descendant) {
+            commands.entity(descendant).insert(Visibility::Hidden);
+            continue;
+        }
+
+        commands.entity(descendant).insert((
+            ViewModelArm,
+            Visibility::Inherited,
+            RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+            NotShadowCaster,
+        ));
+
+        if let Ok(original) = mesh_materials.get(descendant)
+            && let Some(mut material) = materials.get(original.id()).cloned()
+        {
+            material.unlit = true;
+            material.metallic = 0.0;
+            material.perceptual_roughness = 1.0;
+            let material = materials.add(material);
+            commands
+                .entity(descendant)
+                .insert(MeshMaterial3d(material));
+        }
     }
 }
 
@@ -358,9 +445,17 @@ fn held_block_transform() -> Transform {
     // Presentation is independent of the placement orientation selected by R.
     // Keep the held cube upright in camera space without mutating its geometry.
     let viewmodel_rotation = base_viewmodel_transform().rotation;
-    Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
+    Transform::from_translation(Vec3::new(-0.02, VIEW_MODEL_ARM_LENGTH + 0.04, 0.20))
         .with_rotation(viewmodel_rotation.inverse())
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
+}
+
+fn viewmodel_arm_scene_transform() -> Transform {
+    Transform::from_translation(Vec3::new(
+        -MODEL_RIGHT_ARM_PIVOT_X,
+        -MODEL_ARM_BASE_Y,
+        0.0,
+    ))
 }
 
 #[cfg(test)]

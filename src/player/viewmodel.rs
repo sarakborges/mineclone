@@ -15,7 +15,9 @@ pub(crate) use animation::ViewModelAnimation;
 use animation::{PlayerViewModel, ViewModelItemSwitch, advance_item_switch, animate_viewmodel};
 use held_brush::{setup_held_brush_assets, spawn_held_brush, sync_held_brush};
 use held_chisel::{setup_held_chisel_assets, spawn_held_chisel, sync_held_chisel};
-use model::{setup_viewmodel_arm_assets, spawn_viewmodel, sync_held_block};
+use model::{
+    ViewModelCamera, attach_viewmodel_arm_model, spawn_viewmodel, sync_held_block,
+};
 
 pub struct PlayerViewModelPlugin;
 
@@ -23,7 +25,6 @@ impl Plugin for PlayerViewModelPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ViewModelAnimation>()
             .init_resource::<ViewModelItemSwitch>()
-            .add_systems(Startup, setup_viewmodel_arm_assets)
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 (
@@ -38,6 +39,7 @@ impl Plugin for PlayerViewModelPlugin {
                 Update,
                 (
                     spawn_viewmodel,
+                    attach_viewmodel_arm_model,
                     spawn_held_brush,
                     spawn_held_chisel,
                     advance_item_switch,
@@ -59,16 +61,23 @@ fn sync_viewmodel_visibility(
     perspective: Res<CameraPerspective>,
     pause: Res<State<PauseState>>,
     mut viewmodels: Query<&mut Visibility, With<PlayerViewModel>>,
+    mut cameras: Query<&mut Camera, With<ViewModelCamera>>,
 ) {
-    let next = if !perspective.is_third_person() && *pause.get() == PauseState::Running {
+    let active = !perspective.is_third_person() && *pause.get() == PauseState::Running;
+    let next_visibility = if active {
         Visibility::Visible
     } else {
         Visibility::Hidden
     };
 
     for mut visibility in &mut viewmodels {
-        if *visibility != next {
-            *visibility = next;
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
+    }
+    for mut camera in &mut cameras {
+        if camera.is_active != active {
+            camera.is_active = active;
         }
     }
 }

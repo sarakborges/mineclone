@@ -9,7 +9,10 @@ use crate::{
     player::hotbar::PlayerHotbar,
 };
 
-use super::animation::{PlayerViewModel, base_viewmodel_transform};
+use super::{
+    animation::{PlayerViewModel, base_viewmodel_transform},
+    model::VIEW_MODEL_ARM_GRIP_Y,
+};
 
 // Match the Brush viewmodel: same grip in the animated arm, material pass,
 // render layer and pivot-based positioning. The Chisel uses its hotbar icon.
@@ -66,7 +69,7 @@ pub(super) fn spawn_held_chisel(
         commands.entity(viewmodel).with_children(|hand| {
             hand.spawn((
                 HeldChiselRoot,
-                Transform::from_translation(Vec3::new(-0.08, 0.46, 0.21))
+                Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y, 0.21))
                     .with_rotation(rotation),
                 if selected { Visibility::Visible } else { Visibility::Hidden },
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),

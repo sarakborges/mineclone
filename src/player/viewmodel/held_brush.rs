@@ -14,7 +14,10 @@ use crate::{
     tools::BrushMode,
 };
 
-use super::animation::{PlayerViewModel, base_viewmodel_transform};
+use super::{
+    animation::{PlayerViewModel, base_viewmodel_transform},
+    model::VIEW_MODEL_ARM_GRIP_Y,
+};
 
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
 // The handle needs to remain large enough to reach into the player's hand.
@@ -116,9 +119,8 @@ pub(super) fn spawn_held_brush(
         commands.entity(viewmodel).with_children(|hand| {
             hand.spawn((
                 HeldBrushRoot,
-                // The arm extends from Y=0 to Y=0.60 in the hand's frame.
-                // Put the end of the brush handle inside it, not beside it.
-                Transform::from_translation(Vec3::new(-0.08, 0.46, 0.21))
+                // Keep the grip inside the actual 3D player arm used by the viewmodel.
+                Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y, 0.21))
                     .with_rotation(rotation),
                 if selected { Visibility::Visible } else { Visibility::Hidden },
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
