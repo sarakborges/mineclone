@@ -46,35 +46,6 @@ pub(crate) struct ChunkLayerMesh {
     pub(crate) casts_shadow: bool,
 }
 
-pub(crate) fn build_layer_meshes<W, F>(
-    world: &W,
-    chunk_coord: IVec3,
-    chunk: &VoxelChunk,
-    blocks: &BlockRegistry,
-    layers: &LayerRegistry,
-    tint_at: F,
-) -> Vec<ChunkLayerMesh>
-where
-    W: VoxelRead + ?Sized,
-    F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
-{
-    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
-        world,
-        chunk_coord * CHUNK_SIZE as i32,
-        chunk,
-    );
-    build_layer_meshlets(
-        world,
-        chunk_coord,
-        chunk,
-        blocks,
-        layers,
-        ChunkMeshletMask::ALL,
-        lighting_cache.as_ref(),
-        tint_at,
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_layer_meshlets<W, F>(
     world: &W,
