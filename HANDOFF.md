@@ -11139,3 +11139,52 @@ Commit de versão: `17c3a2153253ebac6a018bb862ea288751c55692`.
 CI de versão push `35775163776`: **verde** (localizações, Clippy rigoroso e
 cargo check).
 VERSION: `0.50.84`.
+
+## 2026-09-22 — Character Info: preview persistente, layout em colunas e guard de meshes vazios
+
+O Character Info recebeu uma revisão focada em estabilidade de render,
+latência de abertura e layout.
+
+Investigação do erro de renderer:
+- o erro `bevy_render::slab_allocator: Use-after-free: attempted to copy element
+  data for an unallocated key` corresponde a um bug conhecido do Bevy 0.19
+  quando um `Mesh` sem vértices chega ao `MeshAllocator`;
+- o fix upstream posterior adiciona exatamente um guard para não copiar meshes
+  com vertex buffer vazio;
+- como o projeto continua em Bevy 0.19.1, foi aplicado um workaround local:
+  scenes do player, portrait e Character Info detectam meshes com
+  `get_vertex_buffer_size() == 0` e removem `Mesh3d` /
+  `MeshMaterial3d<StandardMaterial>` desses descendants antes de chegarem ao
+  renderer.
+
+Latência do Character Info:
+- a causa principal da demora era a terceira instanciação do mesmo GLB do
+  player durante a entrada no gameplay;
+- o preview agora é criado em `PostStartup`, não em `OnEnter(Gameplay)`;
+- modelo, scene, câmera offscreen e render target ficam persistentes durante
+  toda a execução do app, inclusive entre mundos;
+- assim que a scene termina de carregar/configurar, o preview é pré-renderizado
+  ainda fora do gameplay;
+- abrir Character Info apenas mostra a textura já pronta;
+- novos renders continuam ocorrendo somente quando o modelo precisa atualizar,
+  como durante drag horizontal.
+
+Layout:
+- removida a antiga primeira linha de título;
+- o card agora usa duas colunas;
+- primeira coluna: preview do personagem;
+- segunda coluna: nome do jogador;
+- preview reduzido em 30%, de 320×426 para 224×298 px;
+- conteúdo permanece alinhado à esquerda.
+
+Commits funcionais:
+- Character Info persistente/layout/guard: `c34d6ed111cdb9d11350576920e93ab66a94bc57`;
+- portrait guard: `36db9943ce4ba7e977d23451e4fcc840ec10a3aa`;
+- player model guard: `df2aef6344d9a11be6cbb30dbcc7e79e90501646`.
+
+CI funcional push `35775883922`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `3bd4e50894b62136dab884289237368180be8673`.
+CI de versão push `35776025732`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+VERSION: `0.50.85`.
