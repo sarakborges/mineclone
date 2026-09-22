@@ -69,6 +69,7 @@ pub(super) fn log_render_asset_pressure(
     let (terrain_array_meshes, terrain_legacy_meshes, layer_meshes, fluid_meshes) =
         assets.pool.diagnostic_mesh_kind_counts();
     let pooled_mesh_bytes = assets.pool.mesh_bytes();
+    let recomputed_mesh_bytes = assets.pool.diagnostic_recomputed_mesh_bytes();
     let (
         stream_pending,
         stream_ready,
@@ -146,6 +147,12 @@ pub(super) fn log_render_asset_pressure(
     );
 
     *previous = Some(snapshot);
+
+    if pooled_mesh_bytes != recomputed_mesh_bytes {
+        warn!(
+            "render asset pressure: incremental mesh bytes drifted: tracked={pooled_mesh_bytes} recomputed={recomputed_mesh_bytes}"
+        );
+    }
 
     if mesh_overhead > MESH_ASSET_OVERHEAD_WARNING {
         warn!(
