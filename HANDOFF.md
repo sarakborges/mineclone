@@ -217,7 +217,8 @@ imutável sob esses inputs; somente a posição contínua do jogador muda.
 Commit: `79d92419604c5b5fa73ad0f55edb5f98e0317264`.
 VERSION: `0.50.26`, commit
 `6e269f52dbb66042328217fb94e50fccee8489b0`.
-CI de P10: aguardando.
+CI de P10: **verde** nos runs push `35686223977` e PR `35686227796` para
+`6e269f52dbb66042328217fb94e50fccee8489b0`.
 
 ### Ordem de execução definida
 
