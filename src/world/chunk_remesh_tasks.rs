@@ -195,6 +195,7 @@ impl ChunkRemeshTasks {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn bump_lighting_revisions_for_positions(
         &mut self,
         world: &VoxelWorld,
