@@ -59,7 +59,11 @@ do mesh pelo Bevy. Regressões Rust cobrem atributos/meshlets preservados,
 winding e índices de ambas as larguras, remoção do último quad, layout/índices
 inválidos e promoção para U32 acima de 65.536 vértices.
 VERSION: `0.50.18`. `git diff --check`: PASS.
-CI de P3: aguardando publicação e conclusão.
+CI inicial de P3: FAIL no run `35682445814`, commit
+`bbb28521c5e549394f48320dcb0f361c00ef2afa`, por
+`clippy::chunks_exact_to_as_chunks` (Rust 1.98.1). Corrigido com
+`as_chunks::<4>().0.iter()`, sem supressão. VERSION permanece `0.50.18`
+porque é a correção do mesmo bloco. CI da correção: aguardando conclusão.
 
 ### Ordem de execução definida
 

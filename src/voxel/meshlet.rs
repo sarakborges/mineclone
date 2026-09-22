@@ -259,7 +259,9 @@ impl<'a> MeshView<'a> {
 
     fn has_quad_in(&self, dirty: ChunkMeshletMask) -> bool {
         self.payloads
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|quad| dirty.contains_payload(quad[0]))
     }
 
