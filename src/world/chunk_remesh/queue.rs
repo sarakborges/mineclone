@@ -217,6 +217,7 @@ impl ChunkRemeshQueue {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn enqueue_lighting_voxel_change(
         &mut self,
         world_position: IVec3,
