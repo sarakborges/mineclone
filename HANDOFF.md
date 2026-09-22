@@ -252,7 +252,7 @@ falhou no Clippy porque o import de
 `visit_chunk_coords_whose_voxel_halo_contains` ficou exclusivo de um helper
 `#[cfg(test)]` mas continuou importado no build normal. Corrigido sem
 supressão em `9edda5eb59569a34ef9c62be4d0d5ee9b5b0afe7`.
-CI final de P11: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI final de P11: **verde** nos runs push `35731688269` e PR `35731694767` para `9edda5eb59569a34ef9c62be4d0d5ee9b5b0afe7`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
