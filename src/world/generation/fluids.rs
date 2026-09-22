@@ -152,9 +152,9 @@ pub(super) fn rasterize_fluid_pass(
         return;
     }
 
-    chunk.edit_fluids(|chunk| {
+    chunk.edit_initial_fluids(|chunk| {
         for ([x, y, z], fluid) in placements {
-            chunk.set_fluid(x as usize, y as usize, z as usize, Some(fluid));
+            chunk.set_fluid(x as usize, y as usize, z as usize, fluid);
         }
     });
 }
