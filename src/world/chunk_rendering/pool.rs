@@ -48,6 +48,7 @@ pub(super) struct DetachedRenderAllocationParts {
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
+    active_column_counts: HashMap<IVec2, usize>,
     total_mesh_bytes: usize,
     membership_revision: u64,
 }
@@ -55,6 +56,10 @@ pub struct ChunkRenderPool {
 impl ChunkRenderPool {
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
         self.active.contains_key(&coord)
+    }
+
+    pub(crate) fn contains_column(&self, column: IVec2) -> bool {
+        self.active_column_counts.contains_key(&column)
     }
 
     pub(crate) fn membership_revision(&self) -> u64 {
@@ -107,6 +112,17 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
 
+    pub(crate) fn diagnostic_active_columns_are_consistent(&self) -> bool {
+        let mut recomputed = HashMap::<IVec2, usize>::default();
+        for coord in self.active.keys() {
+            let count = recomputed.entry(coord.xz()).or_default();
+            *count = count
+                .checked_add(1)
+                .expect("diagnostic chunk column count cannot overflow");
+        }
+        recomputed == self.active_column_counts
+    }
+
     pub(crate) fn mesh_bytes_for(&self, coord: IVec3) -> usize {
         self.active
             .get(&coord)
@@ -120,6 +136,7 @@ impl ChunkRenderPool {
             slot.mesh_bytes,
             0,
         );
+        self.remove_active_column(coord.xz());
         self.bump_membership_revision();
         Some((slot.entities, slot.meshes))
     }
@@ -494,6 +511,7 @@ impl ChunkRenderPool {
             allocation_mesh_bytes,
         );
         if previous.is_none() {
+            self.add_active_column(coord.xz());
             self.bump_membership_revision();
         }
     }
@@ -506,9 +524,33 @@ impl ChunkRenderPool {
             }
         }
 
+        self.active_column_counts.clear();
         self.total_mesh_bytes = 0;
         if had_active_allocations {
             self.bump_membership_revision();
+        }
+    }
+
+    fn add_active_column(&mut self, column: IVec2) {
+        let count = self.active_column_counts.entry(column).or_default();
+        *count = count
+            .checked_add(1)
+            .expect("chunk render pool column occupancy cannot overflow");
+    }
+
+    fn remove_active_column(&mut self, column: IVec2) {
+        let remove = {
+            let count = self
+                .active_column_counts
+                .get_mut(&column)
+                .expect("active chunk must belong to an active render column");
+            *count = count
+                .checked_sub(1)
+                .expect("chunk render pool column occupancy cannot underflow");
+            *count == 0
+        };
+        if remove {
+            self.active_column_counts.remove(&column);
         }
     }
 
