@@ -10822,3 +10822,41 @@ corrompida explicava o desaparecimento simultâneo de ambos os modelos.
 Commit funcional: `d4b4f637c047a5d5a3811a09b7428002968da760`.
 CI push `35760110577`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.73`.
+
+
+## 2026-09-22 — Flicker do player e bloco third-person
+
+Dois bugs visuais foram corrigidos após o modelo/skin finalmente carregarem.
+
+### Flicker de animação
+
+O runtime do player estava restaurando manualmente os transforms dos bones para
+o rest pose imediatamente antes de iniciar cada novo clip. Como o sistema de
+animação do Bevy aplica o clip em outro estágio, isso criava um frame visível
+de rest pose entre estados.
+
+Esse reset manual foi removido. A troca entre clips agora fica exclusivamente
+sob responsabilidade de `AnimationTransitions`, com blend de 80 ms, seguindo
+o mesmo padrão estável já usado pelo pipeline do slime.
+
+O componente `PlayerModelRestTransform` e toda a restauração manual associada
+foram removidos.
+
+### Bloco na mão em terceira pessoa
+
+O held block third-person estava usando `BlockModel::display` +
+`display_face()`. Essa geometria é a projeção isométrica achatada usada para
+ícones/viewmodel, portanto ficava visualmente deformada quando anexada à mão no
+mundo 3D.
+
+O third-person agora usa:
+- `BlockModel::world(...)`;
+- as seis faces reais do cubo;
+- `BlockModelMeshes::world_face(face)`.
+
+O attachment continua sob `RightArmPivot`, então acompanha normalmente a
+animação do braço sem distorcer a geometria.
+
+Commit funcional: `b6bd9d1cf43aca2cfc278b96e2f515a453fd212f`.
+CI push `35760732952`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.74`.
