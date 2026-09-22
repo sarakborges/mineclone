@@ -83,7 +83,14 @@ pub(super) fn retire_distant_chunk_meshes(
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
     mut remesh_tasks: ResMut<ChunkRemeshTasks>,
     mut retired: Local<Vec<IVec3>>,
+    mut last_selection_revision: Local<Option<u64>>,
 ) {
+    let selection_revision = streaming.selection_revision();
+    if *last_selection_revision == Some(selection_revision) {
+        return;
+    }
+    *last_selection_revision = Some(selection_revision);
+
     retired.clear();
     retired.extend(
         renderer
