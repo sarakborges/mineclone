@@ -42,6 +42,10 @@ pub(crate) struct WorldSession {
 }
 
 impl WorldSession {
+    pub(crate) fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
     pub(crate) fn new(id: String) -> Self {
         Self {
             id: Some(id),
