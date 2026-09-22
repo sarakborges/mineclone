@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{input_focus::InputFocus, prelude::*};
 
 use crate::{
     app::{
@@ -75,11 +75,12 @@ fn toggle_inventory(
     keybinds: Res<Keybinds>,
     inventory_state: Res<State<InventoryState>>,
     chat: Res<ChatState>,
+    focus: Res<InputFocus>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
     mut next_character_info: ResMut<NextState<CharacterInfoState>>,
     mut next_brush_palette: ResMut<NextState<BrushPaletteState>>,
 ) {
-    if chat.is_open() {
+    if chat.is_open() || focus.get().is_some() {
         return;
     }
     match inventory_state.get() {
