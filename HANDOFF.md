@@ -247,7 +247,12 @@ cleanup/entry `c9d3ab4156d73c91d871f0865b72006a448b60a4`,
 `5d530f2b4fa02dd827cd3df280070a5ce259c5bf`.
 VERSION: `0.50.27`, commit
 `9d38f94fad521c67ccec0c6a76a777d9943048c9`.
-CI de P11: aguardando. Nenhum `cargo test` foi adicionado/executado.
+A CI intermediária no `5d530f2b4fa02dd827cd3df280070a5ce259c5bf`
+falhou no Clippy porque o import de
+`visit_chunk_coords_whose_voxel_halo_contains` ficou exclusivo de um helper
+`#[cfg(test)]` mas continuou importado no build normal. Corrigido sem
+supressão em `9edda5eb59569a34ef9c62be4d0d5ee9b5b0afe7`.
+CI final de P11: aguardando. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
