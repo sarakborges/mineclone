@@ -808,6 +808,35 @@ VERSION: `0.50.55`, commit
 `08ed8682ff4a9b56c019e706b49ba84c484035ed`.
 CI: **verde** nos runs push `35744168335` e PR `35744175702` para `08ed8682ff4a9b56c019e706b49ba84c484035ed`. QA runtime visual continua obrigatória porque o CI não executa WGPU.
 
+### P33 — remover head-of-line blocking entre generation e mesh publication
+
+O caminho de publicação de initial meshes aplicava duas barreiras ao mesmo tempo:
+1. selecionava o `ChunkMeshTask` pendente mais próximo e só publicava quando
+   esse task estivesse pronto;
+2. além disso, calculava o chunk desejado mais próximo ainda sem render mesh,
+   mesmo que ele ainda estivesse em generation/fluid settling, e bloqueava todo
+   mesh pronto mais distante.
+
+A segunda barreira criava head-of-line blocking entre estágios diferentes:
+um único chunk próximo ainda não renderizável podia congelar vários meshes já
+construídos, produzindo pausas seguidas de bursts visuais. Ela também mantinha
+um scan/cache de `desired` dependente de toda mudança de membership do render
+pool.
+
+O gate cruzado foi removido. Nearest-first continua **estrito dentro do estágio
+de mesh**: `best_coord_by_key` ainda escolhe o pending mesh mais próximo e
+`poll_ready_by_key` não permite publicar um pending mais distante enquanto
+esse candidato mais próximo ainda não estiver pronto. O que deixou de bloquear
+é apenas trabalho que ainda nem chegou ao estágio de mesh.
+
+Commits: remoção do cache global de missing render
+`b4731ed1613f1099d35a739529ceabd100e0acb3`; remoção da barreira cruzada
+na integração `2874b0f900952e4d2426172071c735a89ed74ec9`.
+VERSION: `0.50.56`, commit
+`1e7a119c7224bf5f474af193ad83205c1ec00748`.
+CI de P33: aguardando. QA Windows deve observar especificamente suavidade da
+expansão visual dos chunks e se nearest-first continua coerente.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
