@@ -10,7 +10,7 @@ use super::{
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
-        surface_block_srgb,
+        surface_block_srgb_with_cache,
     },
     meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask},
@@ -111,7 +111,9 @@ where
             world_voxel,
             cell.fluid_id,
         );
-        let source_block_srgb = surface_block_srgb(
+        let source_block_srgb = surface_block_srgb_with_cache(
+            lighting_cache,
+            world_voxel,
             chunk.light_at(x as i32, y as i32, z as i32),
             false,
         );
