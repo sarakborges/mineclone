@@ -398,6 +398,7 @@ fn rebuild_desired_chunk_coords(
         biomes: context.biomes,
         structures: context.structures,
         structure_sets: context.structure_sets,
+        world_generation: context.world_generation,
         biome_field: context.biome_field,
         feature_fields: context.feature_fields,
     };
