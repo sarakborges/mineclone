@@ -99,7 +99,6 @@ fn spawn_target_entity_hud(
         Camera3d::default(),
         Camera {
             order: -1,
-            is_active: false,
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
             ..default()
         },
