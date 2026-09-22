@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{RenderTarget, visibility::RenderLayers},
+    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
     ecs::system::SystemParam,
     input::mouse::MouseMotion,
     light::{NotShadowCaster, NotShadowReceiver},
@@ -104,7 +104,8 @@ fn spawn_character_preview(
         Camera3d::default(),
         Camera {
             order: -3,
-            clear_color: ClearColorConfig::None,
+            output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
         RenderTarget::Image(image.into()),
@@ -128,7 +129,7 @@ fn spawn_character_preview(
             scene_attached: false,
         },
         Transform::default(),
-        Visibility::Hidden,
+        Visibility::Inherited,
         RenderLayers::layer(CHARACTER_PREVIEW_RENDER_LAYER),
     ));
 }
@@ -366,27 +367,19 @@ fn rotate_character_preview(
 fn sync_character_preview_camera(
     mut interaction: ResMut<CharacterPreviewInteraction>,
     mut cameras: Query<&mut Camera, With<CharacterPreviewCamera>>,
-    mut models: Query<&mut Visibility, With<CharacterPreviewModel>>,
 ) {
     let should_render = interaction.render_frames > 0;
-    let clear_color = if should_render {
-        ClearColorConfig::Custom(Color::NONE)
+    let output_mode = if should_render {
+        CameraOutputMode::Write {
+            blend_state: None,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+        }
     } else {
-        ClearColorConfig::None
-    };
-    let visibility = if should_render {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
+        CameraOutputMode::Skip
     };
 
     for mut camera in &mut cameras {
-        camera.clear_color = clear_color;
-    }
-    for mut model_visibility in &mut models {
-        if *model_visibility != visibility {
-            *model_visibility = visibility;
-        }
+        camera.output_mode = output_mode;
     }
 
     if should_render {
