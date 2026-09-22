@@ -10,12 +10,8 @@ pub(crate) mod viewmodel;
 
 use bevy::{
     camera::{CameraOutputMode, Hdr},
-    core_pipeline::{
-        prepass::DepthPrepass,
-        tonemapping::Tonemapping,
-    },
+    core_pipeline::tonemapping::Tonemapping,
     prelude::*,
-    render::occlusion_culling::OcclusionCulling,
 };
 
 use crate::{
@@ -64,8 +60,6 @@ pub(crate) fn spawn_player_entity(
             Hdr,
             Tonemapping::None,
             Msaa::Off,
-            DepthPrepass,
-            OcclusionCulling,
             transform,
             gameplay_camera,
             LOCAL_PLAYER_ID,
