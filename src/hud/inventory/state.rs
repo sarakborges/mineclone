@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
-pub(super) const SLOT_SIZE: f32 = 44.0;
-pub(super) const ITEM_ICON_SIZE: f32 = 34.0;
+pub(super) const SLOT_SIZE: f32 = 40.0;
+pub(super) const ITEM_ICON_SIZE: f32 = 30.0;
 pub(super) const SLOT_GAP: f32 = 4.0;
 pub(super) const SECTION_GAP: f32 = 18.0;
 pub(super) const PANEL_GAP: f32 = 24.0;
 pub(super) const PANEL_PADDING: f32 = 18.0;
-pub(super) const SEARCH_HEIGHT: f32 = SLOT_SIZE;
+pub(super) const SEARCH_HEIGHT: f32 = 40.0;
 pub(super) const SEARCH_GAP: f32 = 14.0;
 pub(super) const PLAYER_SEARCH_WIDTH: f32 = 210.0;
 pub(super) const PLAYER_HEADER_GAP: f32 = 8.0;
