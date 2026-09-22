@@ -1,4 +1,4 @@
-mod portrait;
+pub(super) mod portrait;
 
 use bevy::prelude::*;
 
@@ -9,7 +9,6 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    content::player::PlayerDefinition,
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
     ui::typography,
@@ -26,14 +25,21 @@ pub struct PlayerHudPlugin;
 
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
+        app.init_resource::<portrait::PlayerPreviewImages>()
+            .init_resource::<portrait::PlayerPreviewRenderState>()
+            .add_systems(PostStartup, portrait::spawn_player_preview_renderer)
             .add_systems(
                 Update,
                 (
-                    portrait::attach_player_portrait_model,
-                    sync_player_hud_visibility,
-                    sync_inventory_hint,
+                    portrait::attach_player_preview_model,
+                    portrait::render_player_preview,
                 )
+                    .chain(),
+            )
+            .add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
+            .add_systems(
+                Update,
+                (sync_player_hud_visibility, sync_inventory_hint)
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             );
@@ -57,16 +63,11 @@ fn spawn_player_hud(
     inventory_state: Res<State<InventoryState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
-    mut images: ResMut<Assets<Image>>,
-    player_definition: Res<PlayerDefinition>,
-    asset_server: Res<AssetServer>,
+    preview_images: Res<portrait::PlayerPreviewImages>,
+    mut preview_render: ResMut<portrait::PlayerPreviewRenderState>,
 ) {
-    let portrait_image = portrait::spawn_player_portrait(
-        &mut commands,
-        &mut images,
-        &player_definition,
-        &asset_server,
-    );
+    let portrait_image = preview_images.portrait();
+    preview_render.request_portrait();
     let hint_kind = inventory_hint_kind(*inventory_state.get());
     let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
@@ -96,7 +97,7 @@ fn spawn_player_hud(
             spawn_entity_card(
                 root,
                 EntityCardSource::LocalPlayer,
-                Some(portrait_image.clone()),
+                portrait_image.clone(),
             );
             root.spawn((
                 InventoryHint,
