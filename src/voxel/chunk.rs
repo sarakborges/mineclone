@@ -1055,10 +1055,7 @@ fn rebuild_fluid_frontier_sources(
     fluids: &FluidStorage,
     sources: &mut [u64; FLUID_FRONTIER_WORDS],
 ) {
-    for voxel_index in 0..CHUNK_VOLUME {
-        if fluids.get(voxel_index).is_none() {
-            continue;
-        }
+    for voxel_index in fluids.occupied_indices() {
         let (x, y, z) = coordinates(voxel_index);
         refresh_fluid_frontier_source(
             blocks,
