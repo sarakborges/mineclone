@@ -99,8 +99,10 @@ foram modificados.
 Shader: `dcbfe6e2ee3212ef0b748eecdea778fe77f453ff`.
 VERSION: `0.50.21`, commit
 `0d1c74ac6815770e1a48e2b13159f3232c6d5de5`.
-CI de P5: aguardando. O workflow valida Rust; compilação/QA WGSL real continua
-pendente em runtime/GPU, portanto não há alegação de validação visual.
+CI de P5: **verde** nos runs push `35685358763` e PR `35685361581` para
+`0d1c74ac6815770e1a48e2b13159f3232c6d5de5`. O workflow valida Rust;
+compilação/QA WGSL real continua pendente em runtime/GPU, portanto não há
+alegação de validação visual.
 
 ### Ordem de execução definida
 
