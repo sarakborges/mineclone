@@ -705,7 +705,7 @@ fn seed_loaded_chunk_lighting(
         .is_empty();
     queues.fluid.reactivate_loaded_chunk(coord, current_tick);
     queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
-    let requires_lighting_relaxation = queues.lighting.seed_chunk_direct_lighting(
+    let lighting_seed = queues.lighting.seed_chunk_direct_lighting(
         &mut work.world,
         coord,
         content.blocks(),
@@ -744,17 +744,18 @@ fn seed_loaded_chunk_lighting(
 
     if chunk_is_empty {
         queues.lighting.enqueue_empty_chunk_relaxation(coord);
-    } else if requires_lighting_relaxation {
+    } else if lighting_seed.requires_relaxation {
         queues.lighting.enqueue_chunk_relaxation(coord);
     }
 
-    // Loading any 16³ section can change direct skylight for every resident
-    // section below it in the same x/z column. Minecraft's light engine tracks
-    // this through section/column status; Asteria explicitly invalidates the
-    // lower resident sections so they converge against the new occluder.
-    queues
-        .lighting
-        .enqueue_loaded_column_below(&work.world, coord);
+    // Only a section that actually attenuates the incoming direct skylight can
+    // invalidate resident sections below it. Empty/transparent sections leave
+    // the previous missing-section-as-air result unchanged.
+    if lighting_seed.changes_direct_sky_below {
+        queues
+            .lighting
+            .enqueue_loaded_column_below(&work.world, coord);
+    }
 }
 
 #[cfg(test)]
