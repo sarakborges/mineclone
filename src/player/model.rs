@@ -27,6 +27,7 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_visual_content::BlockVisualContent,
     },
+    targeting::block::BlockTargetingSet,
     voxel::block_face::BlockFace,
 };
 
@@ -197,6 +198,7 @@ impl Plugin for PlayerModelPlugin {
                     sync_third_person_held_block,
                 )
                     .chain()
+                    .after(BlockTargetingSet::Interaction)
                     .run_if(in_state(GameState::Gameplay)),
             );
     }
