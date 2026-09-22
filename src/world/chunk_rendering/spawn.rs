@@ -49,7 +49,7 @@ impl ColumnTintCache {
         };
         let cache = cache
             .get_or_insert_with(|| vec![None; CHUNK_SIZE * CHUNK_SIZE]);
-        cache[index].get_or_insert_with(make).clone()
+        *cache[index].get_or_insert_with(make)
     }
 }
 
