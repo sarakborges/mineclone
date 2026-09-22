@@ -70,13 +70,13 @@ pub(crate) fn spawn_player_entity(
             gameplay_camera,
             LOCAL_PLAYER_ID,
             game_mode,
+        ))
+        .insert((
             WalkingState::default(),
             FlightState::restored(saved_flying && game_mode.allows_flight()),
             GravityState::default(),
             SwimmingState::default(),
             DespawnOnExit(GameState::Gameplay),
-        ))
-        .insert((
             Name::new("Player"),
             saved_health.map_or_else(
                 || EntityHealth::new(definition.health),
