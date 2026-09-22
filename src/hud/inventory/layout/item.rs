@@ -23,7 +23,7 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             position_type: PositionType::Absolute,
             left: px(0),
             top: px(0),
-            max_width: px(280),
+            max_width: px(360),
             padding: UiRect::axes(px(10), px(7)),
             border: UiRect::all(px(1)),
             flex_direction: FlexDirection::Column,
@@ -58,8 +58,7 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             InventoryItemTooltipHint,
             typography::caption(""),
             Node {
-                max_width: px(258),
-                margin: UiRect::top(px(6)),
+                max_width: px(338),
                 ..default()
             },
             Visibility::Hidden,
