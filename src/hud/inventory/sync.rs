@@ -448,7 +448,7 @@ pub(super) fn sync_inventory_item_tooltip(
     }
 
     let (mut stats_text, mut stats_visibility) = tooltip_stats.into_inner();
-    if let Some(tool) = selected_tool.filter(|tool| !tool.mining.tags.is_empty()) {
+    if let Some(tool) = selected_tool.filter(|tool| tool.mining.is_mining_tool()) {
         let next_stats = format!(
             "{}\n{}: {:.1}x",
             localization.text(language, "inventory.tool.stats"),

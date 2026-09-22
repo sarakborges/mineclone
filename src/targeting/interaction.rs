@@ -131,7 +131,7 @@ fn edit_targeted_block(
             .tools
             .get(tool_id)
             .expect("selected tool must still exist in the tool registry");
-        let is_mining_tool = !tool.mining.tags.is_empty();
+        let is_mining_tool = tool.mining.is_mining_tool();
 
         if left_pressed && !is_mining_tool {
             tool_uses.write(ToolUse {

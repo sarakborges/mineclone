@@ -28,7 +28,7 @@ struct MiningTarget {
 }
 
 #[derive(Resource, Default)]
-struct BlockMiningState {
+pub(crate) struct BlockMiningState {
     target: Option<MiningTarget>,
     accumulated_work: f32,
     swing_ticks: u64,
@@ -43,6 +43,22 @@ impl BlockMiningState {
 
     fn reset(&mut self) {
         *self = Self::default();
+    }
+
+    pub(crate) fn progress_for(
+        &self,
+        voxel: IVec3,
+        block_id: &'static str,
+        required_work: f32,
+    ) -> Option<f32> {
+        let target = self.target?;
+        if target.voxel != voxel || target.block_id != block_id {
+            return None;
+        }
+        if required_work <= 0.0 {
+            return Some(1.0);
+        }
+        Some((self.accumulated_work / required_work).clamp(0.0, 1.0))
     }
 }
 
@@ -91,7 +107,7 @@ fn advance_survival_mining(
 
     // Tools without mining tags own their left-click action (brush, chisel, etc.)
     // and must not also mine the underlying block.
-    if selected_tool.is_some_and(|tool| tool.mining.tags.is_empty()) {
+    if selected_tool.is_some_and(|tool| !tool.mining.is_mining_tool()) {
         mining.reset();
         return;
     }
@@ -157,8 +173,8 @@ fn effective_mining_speed(
     Some(preferred_speed.unwrap_or(1.0))
 }
 
-fn tool_matches_any(tool: &ToolDefinition, accepted_tags: &[String]) -> bool {
-    accepted_tags
+fn tool_matches_any(tool: &ToolDefinition, accepted_categories: &[String]) -> bool {
+    accepted_categories
         .iter()
-        .any(|required| tool.mining.has_tag(required))
+        .any(|required| tool.mining.matches_category(required))
 }
