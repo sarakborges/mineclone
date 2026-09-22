@@ -127,7 +127,13 @@ fn edit_targeted_block(
     }
 
     if let Some(tool_id) = selected_item.filter(|item_id| definitions.tools.get(item_id).is_some()) {
-        if left_pressed {
+        let tool = definitions
+            .tools
+            .get(tool_id)
+            .expect("selected tool must still exist in the tool registry");
+        let is_mining_tool = !tool.mining.tags.is_empty();
+
+        if left_pressed && !is_mining_tool {
             tool_uses.write(ToolUse {
                 tool_id,
                 button: ToolUseButton::Left,
@@ -141,7 +147,9 @@ fn edit_targeted_block(
                 target: input.targeted.0,
             });
         }
-        return;
+        if right_pressed || (left_pressed && !is_mining_tool) {
+            return;
+        }
     }
 
     let Some(hit) = input.targeted.0 else {
@@ -162,6 +170,9 @@ fn edit_targeted_block(
     }
 
     let (edited, placed) = if left_pressed {
+        if matches!(game_mode, GameMode::Survival) {
+            return;
+        }
         (runtime.set_block(hit.voxel, None), false)
     } else {
         let Some(block_id) = selected_item else {

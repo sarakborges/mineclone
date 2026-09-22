@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use super::{
     highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
-    placement_orientation::PlacementOrientationPlugin, placement_preview::PlacementPreviewPlugin,
+    mining::BlockMiningPlugin, placement_orientation::PlacementOrientationPlugin,
+    placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
     app::game_state::GameState,
@@ -44,6 +45,7 @@ impl Plugin for BlockTargetingPlugin {
                 TargetHighlightPlugin,
                 PlacementOrientationPlugin,
                 BlockInteractionPlugin,
+                BlockMiningPlugin,
                 PlacementPreviewPlugin,
             ))
             .add_systems(

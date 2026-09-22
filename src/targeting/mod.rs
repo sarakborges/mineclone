@@ -1,6 +1,7 @@
 pub(crate) mod block;
 mod highlight;
 mod interaction;
+mod mining;
 mod placement;
 mod placement_orientation;
 mod placement_preview;
