@@ -4,8 +4,9 @@ mod pause;
 use bevy::prelude::*;
 
 use crate::player::{
-    camera::PlayerCameraPlugin, hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin,
-    model::PlayerModelPlugin, movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
+    camera::PlayerCameraPlugin, character_info::PlayerCharacterInfoPlugin,
+    hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin, model::PlayerModelPlugin,
+    movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
 };
 use pause::PausePlugin;
 
@@ -15,6 +16,7 @@ impl Plugin for GameplayPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             PlayerInventoryPlugin,
+            PlayerCharacterInfoPlugin,
             PausePlugin,
             PlayerHotbarPlugin,
             PlayerModelPlugin,
