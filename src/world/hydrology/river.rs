@@ -30,6 +30,7 @@ pub(super) struct RiverSystem {
     pub water_bodies: Vec<WaterBody>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_river_system<F>(
     coord: IVec2,
     seed: u64,
@@ -197,7 +198,7 @@ where
             );
 
             if let Some(pool) = spawn_lakes
-                .then(|| waterfall)
+                .then_some(waterfall)
                 .flatten()
                 .and_then(|waterfall| plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid))
                 .filter(|body| water_body_intersects_region(coord, body))
