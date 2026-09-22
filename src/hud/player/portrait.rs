@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
+    camera::{CameraOutputMode, RenderTarget, ScalingMode, visibility::RenderLayers},
     ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
