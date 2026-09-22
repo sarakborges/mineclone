@@ -10539,3 +10539,29 @@ Commits principais:
 
 CI funcional push `35748663144`: **verde** (localizações, Clippy e cargo
 check). VERSION: `0.50.62`.
+
+
+## 2026-09-22 — Braço 3D do player no viewmodel de primeira pessoa
+
+O braço hardcoded do viewmodel (`Cuboid` + material separado) foi removido.
+A primeira pessoa agora reutiliza o mesmo asset configurado em
+`data/entities/player.json` e instancia o `player.gltf`, mantendo visível
+apenas a subtree de `RightArmPivot`. Os demais meshes dessa cópia ficam
+ocultos.
+
+O braço de primeira pessoa:
+- usa a geometria e o material do modelo 3D real do player;
+- recebe uma cópia unlit do material para manter leitura consistente no render
+  layer dedicado do viewmodel;
+- continua herdando as animações de ação já aplicadas ao root do viewmodel;
+- teve o grip de bloco/Brush/Chisel reajustado ao comprimento real do braço.
+
+A câmera dedicada do viewmodel ganhou marker próprio e agora também tem
+`Camera::is_active = false` em terceira pessoa (e durante pause), além do root
+do viewmodel ficar oculto. Assim o braço/held item não aparece em terceira
+pessoa e o render pass vazio também deixa de rodar.
+
+Commit funcional: `5ef4ba3e03f29b948266287ad5e117c24fae0fac`.
+Correção de validação: `1b1b1d79900aaa4dd15376ba2f55b0257d83ac4a`.
+CI push `35749600060`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.64`.
