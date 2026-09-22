@@ -1,5 +1,4 @@
 use bevy::{
-    camera::visibility::NoCpuCulling,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
@@ -572,14 +571,6 @@ fn spawn_geometry_mesh(
             DespawnOnExit(GameState::Gameplay),
         ));
 
-        // Global OcclusionCulling stays disabled on world cameras. Opaque and
-        // alpha-mask chunk geometry can still skip CPU frustum culling and use
-        // Bevy's GPU instance culling path without re-enabling the unstable
-        // depth/occlusion experiment. Sorted alpha-blend geometry stays CPU-culled.
-        if geometry_uses_gpu_frustum_culling(key, context) {
-            entity_commands.insert(NoCpuCulling);
-        }
-
         if !casts_shadow || layer_index > 0 {
             entity_commands.insert(NotShadowCaster);
         }
@@ -588,30 +579,6 @@ fn spawn_geometry_mesh(
     }
 
     (entities, mesh_handle)
-}
-
-fn geometry_uses_gpu_frustum_culling(
-    key: ChunkMeshKey,
-    context: &ChunkRenderContext<'_>,
-) -> bool {
-    match key {
-        ChunkMeshKey::TerrainArray { alpha_blend, .. } => !alpha_blend,
-        ChunkMeshKey::TerrainLegacy { block_id, .. } => {
-            !context
-                .blocks
-                .get(block_id)
-                .unwrap_or_else(|| panic!("missing block definition for {block_id}"))
-                .alpha_blend
-        }
-        ChunkMeshKey::Layer { layer_id, .. } => {
-            !context
-                .layers
-                .get(layer_id)
-                .unwrap_or_else(|| panic!("missing layer definition for {layer_id}"))
-                .alpha_blend
-        }
-        ChunkMeshKey::Fluid(_) => false,
-    }
 }
 
 fn spawn_fluid_mesh(
