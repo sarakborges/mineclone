@@ -86,6 +86,22 @@ CI de P4: **verde** no SHA acumulado `efd9223e5ae0409a53dc208d1f49e59b0d1ae808`,
 runs push `35685268772` e PR `35685272818`. Nenhum `cargo test` foi
 adicionado/executado; QA Windows/FPS continua pendente.
 
+### P5 — evitar shadow fetch solar sem contribuição
+
+O shader de terrain agora calcula a incidência solar antes de consultar a
+shadow map. Quando a incidência é zero, retorna diretamente
+`SUN_AMBIENT_SHARE`, exatamente o valor que a expressão anterior
+`mix(SUN_AMBIENT_SHARE, 1.0, shadow * 0.0)` já produzia. Assim, superfícies
+viradas para longe do sol deixam de pagar seleção/amostragem de cascata sem
+alterar o resultado algébrico. Resolução, cascatas, distância e biases não
+foram modificados.
+
+Shader: `dcbfe6e2ee3212ef0b748eecdea778fe77f453ff`.
+VERSION: `0.50.21`, commit
+`0d1c74ac6815770e1a48e2b13159f3232c6d5de5`.
+CI de P5: aguardando. O workflow valida Rust; compilação/QA WGSL real continua
+pendente em runtime/GPU, portanto não há alegação de validação visual.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
