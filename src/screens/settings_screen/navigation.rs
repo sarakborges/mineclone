@@ -27,6 +27,7 @@ pub(super) enum SettingsSection {
     WorldGeneration,
     GameRules,
     Graphics,
+    Keybinds,
     Languages,
     Hud,
 }
@@ -38,6 +39,7 @@ impl SettingsSection {
             Self::WorldGeneration => "newWorld.section.worldGeneration",
             Self::GameRules => "settings.section.gameRules",
             Self::Graphics => "settings.section.graphics",
+            Self::Keybinds => "settings.section.keybinds",
             Self::Languages => "settings.section.languages",
             Self::Hud => "settings.section.hud",
         }

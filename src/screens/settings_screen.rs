@@ -25,6 +25,9 @@ use languages_section::{
     handle_language_options, sync_language_dropdown,
 };
 use layout::spawn_settings_screen;
+use keybinds_section::{
+    KeybindCaptureState, handle_keybind_buttons, handle_keybind_capture, sync_keybinds_section,
+};
 use navigation::{
     SettingsSectionSelection, apply_pending_section_scroll, handle_close_requests,
     handle_section_buttons, sync_section_ui,
@@ -54,6 +57,7 @@ use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 pub(crate) mod game_rules_section;
 mod biome_size_multiplier_section;
 mod hud_section;
+mod keybinds_section;
 mod languages_section;
 mod layout;
 mod navigation;
@@ -85,6 +89,7 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<WorldNameFeedback>()
             .init_resource::<TargetBlockPositionDropdownState>()
             .init_resource::<LanguageDropdownState>()
+            .init_resource::<KeybindCaptureState>()
             .configure_sets(
                 Update,
                 (SettingsScreenSet::Input, SettingsScreenSet::Sync)
@@ -98,6 +103,7 @@ impl Plugin for SettingsScreenPlugin {
                     reset_resource::<RenderDistanceInputState>,
                     reset_resource::<TargetBlockPositionDropdownState>,
                     reset_resource::<LanguageDropdownState>,
+                    reset_resource::<KeybindCaptureState>,
                     spawn_settings_screen,
                 )
                     .chain(),
@@ -135,6 +141,8 @@ impl Plugin for SettingsScreenPlugin {
                         focus_spawn_biome_search_frame.run_if(in_state(GameState::NewWorld)),
                         handle_spawn_biome_option_buttons.run_if(in_state(GameState::NewWorld)),
                         handle_game_mode_buttons,
+                        handle_keybind_buttons,
+                        handle_keybind_capture,
                     )
                         .chain(),
                     (
@@ -165,6 +173,7 @@ impl Plugin for SettingsScreenPlugin {
                     populate_spawn_biome_options,
                     sync_section_ui,
                     sync_game_mode_buttons,
+                    sync_keybinds_section,
                     sync_language_dropdown,
                     sync_display_tooltips_toggle,
                     sync_target_block_position_dropdown,

@@ -3,6 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*, ui_widgets::ScrollArea};
 use crate::{
     app::{
         game_state::GameState,
+        keybinds::Keybinds,
         settings_state::{SettingsScreenMode, SettingsState},
     },
     hud::HudSettings,
@@ -18,6 +19,7 @@ use crate::{
 
 use super::{
     game_rules_section::game_rules_section,
+    keybinds_section::keybinds_section,
     hud_section::hud_section,
     languages_section::languages_section,
     navigation::{
@@ -41,6 +43,7 @@ const SECTION_TITLE_CARD_GAP: f32 = 14.0;
 const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
     SettingsSection::Hud,
+    SettingsSection::Keybinds,
     SettingsSection::Languages,
 ];
 const WORLD_SECTIONS: &[SettingsSection] = &[
@@ -134,6 +137,7 @@ impl SettingsScreenWorldContext<'_, '_> {
 pub(super) struct SettingsScreenContent<'w> {
     render_distance: Res<'w, RenderDistanceSettings>,
     hud_settings: Res<'w, HudSettings>,
+    keybinds: Res<'w, Keybinds>,
     localization: Res<'w, UiLocalization>,
     active_language: Res<'w, ActiveLanguage>,
 }
@@ -144,6 +148,7 @@ struct SettingsContentView<'a> {
     game_rules: &'a GameRules,
     new_world: &'a NewWorldConfig,
     hud_settings: &'a HudSettings,
+    keybinds: &'a Keybinds,
     game_mode: GameMode,
     localization: &'a UiLocalization,
     language: Language,
@@ -234,6 +239,7 @@ pub(super) fn spawn_settings_screen(
                             game_rules: &world.game_rules,
                             new_world: &world.new_world,
                             hud_settings: &content.hud_settings,
+                            keybinds: &content.keybinds,
                             game_mode,
                             localization: &content.localization,
                             language,
@@ -434,6 +440,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                         panels,
                                         view.render_distance,
                                         view.hud_settings,
+                                        view.keybinds,
                                         view.localization,
                                         view.language,
                                     );
@@ -461,6 +468,7 @@ fn spawn_global_settings_sections(
     panels: &mut ChildSpawnerCommands,
     render_distance: &RenderDistanceSettings,
     hud_settings: &HudSettings,
+    keybinds: &Keybinds,
     localization: &UiLocalization,
     language: Language,
 ) {
@@ -475,6 +483,13 @@ fn spawn_global_settings_sections(
         panels,
         SettingsSection::Hud,
         hud_section(hud_settings, localization, language),
+        localization,
+        language,
+    );
+    spawn_settings_section(
+        panels,
+        SettingsSection::Keybinds,
+        keybinds_section(keybinds, localization, language),
         localization,
         language,
     );
