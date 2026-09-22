@@ -11414,3 +11414,53 @@ CI funcional push `35793433930`: **verde**.
 Commit de versão: `43571376b4a5f8b95a328ea1c6fb822d050b3f97`.
 CI de versão push `35793534498`: **verde**.
 VERSION: `0.50.91`.
+
+## 2026-09-22 — HUD/Character Info reutilizam o modelo third-person real
+
+A arquitetura de preview do player foi simplificada novamente após confirmar
+que o Character HUD já renderizava corretamente e que os problemas surgiram ao
+criar pipelines paralelos para o Character Info.
+
+Arquitetura final:
+- **não existe mais um segundo GLB/scene/model para preview**;
+- `src/player/model.rs` continua sendo o único lugar que carrega o GLB do
+  player e instancia o `PlayerModelRoot`;
+- os meshes do modelo third-person recebem uma render layer adicional,
+  `PLAYER_MODEL_PREVIEW_RENDER_LAYER`;
+- em third person, esses meshes pertencem às layers do mundo + preview;
+- em first person, eles saem apenas da layer do mundo, mas continuam disponíveis
+  para a câmera offscreen da UI;
+- o `PlayerModelRoot` permanece ativo/visível e a visibilidade para a câmera
+  principal passa a ser controlada por `RenderLayers`, não por esconder o
+  entity inteiro;
+- held blocks da mão third-person também entram na layer de preview, então a UI
+  usa a mesma representação visual/pose/item da terceira pessoa;
+- `src/hud/player/portrait.rs` agora cria somente:
+  - um target 384×512;
+  - uma câmera offscreen na layer de preview;
+  - nenhum GLB, scene, material ou modelo próprio;
+- a câmera offscreen segue o `GlobalTransform` do `PlayerModelRoot` real e
+  enquadra o corpo em world-space;
+- o Character Info mostra o frame 3:4 inteiro;
+- o Player HUD continua visível e usa a mesma imagem, ampliada e recortada dentro
+  do avatar com `Overflow::clip()`, produzindo o enquadramento waist-up sem
+  alterar câmera/modelo;
+- não há troca de target/projeção quando o modal abre;
+- não há `Camera::is_active` nesse pipeline.
+
+Commits principais:
+- shared full-body frame + crop no HUD:
+  `2a4aa80024d6b1e5fa96674bd2781a5a4047d2d4`,
+  `3ca52f74454f1e2dc81ea6703ef776278ef5a0a0`,
+  `26a289308ebde8fa00052045571cb5a8df97f282`;
+- modelo third-person exposto à layer de preview:
+  `197d6d1605d18bb536206310c24a5b855b3b3c44`;
+- renderer da UI convertido para câmera/target sobre o modelo real:
+  `b70e77af98c97b93569f470e330532ebce81c627`;
+- estado/modelo de preview duplicado removido:
+  `c55832ec84ce10ca63f732196121f4bdd19af481`.
+
+CI funcional push `35794729858`: **verde**.
+Commit de versão: `05b97f07279d8900bbd998cdd67792260739f468`.
+CI de versão push `35794838984`: **verde**.
+VERSION: `0.50.92`.
