@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
-    hud::GameplayUiCamera,
+    player::camera::GameplayWorldCamera,
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
@@ -141,7 +141,12 @@ fn spawn_pause_menu(
 #[derive(SystemParam)]
 struct PauseMenuContext<'w, 's> {
     session: Res<'w, WorldSession>,
-    ui_cameras: Query<'w, 's, &'static mut Camera, With<GameplayUiCamera>>,
+    non_world_cameras: Query<
+        'w,
+        's,
+        (Entity, &'static mut Camera),
+        Without<GameplayWorldCamera>,
+    >,
     thumbnail_captures: Query<'w, 's, (), With<WorldThumbnailCapture>>,
     settings_mode: ResMut<'w, SettingsScreenMode>,
     feedback: Query<'w, 's, &'static mut Text, With<PauseSaveFeedback>>,
@@ -199,21 +204,9 @@ fn handle_pause_menu_buttons(
                     }
                     return;
                 };
-                let Ok(mut ui_camera) = context.ui_cameras.single_mut() else {
-                    warn!("World saved, but gameplay UI camera is unavailable for thumbnail capture");
-                    if matches!(action, PauseMenuAction::LeaveWorld) {
-                        context.transition.request(
-                            ScreenTransitionTarget::game(GameState::StartingScreen)
-                                .with_pause(PauseState::Running),
-                        );
-                    } else {
-                        context.app_exit.write(AppExit::Success);
-                    }
-                    return;
-                };
                 begin_world_thumbnail_capture(
                     &mut commands,
-                    &mut ui_camera,
+                    &mut context.non_world_cameras,
                     world_id,
                     completion,
                 );
