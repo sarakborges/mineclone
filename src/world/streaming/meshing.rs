@@ -237,12 +237,6 @@ pub(super) fn collect_built_chunk_meshes(
     }
 }
 
-fn boundary_faces_toward(offset: IVec3, mut has_face: impl FnMut(IVec3) -> bool) -> bool {
-    (offset.x == 0 || has_face(IVec3::new(-offset.x, 0, 0)))
-        && (offset.y == 0 || has_face(IVec3::new(0, -offset.y, 0)))
-        && (offset.z == 0 || has_face(IVec3::new(0, 0, -offset.z)))
-}
-
 fn notify_loaded_chunk_neighbors(
     coord: IVec3,
     world: &VoxelWorld,
@@ -268,16 +262,12 @@ fn notify_loaded_chunk_neighbors(
                     continue;
                 };
 
-                let new_content_border = boundary_faces_toward(-offset, |face| {
-                    chunk.boundary_has_content(face)
-                });
+                let new_content_border =
+                    chunk.dependency_boundary_has_content(offset);
                 let geometry = new_content_border
-                    && boundary_faces_toward(offset, |face| {
-                        neighbor_chunk.boundary_has_content(face)
-                    });
-                let has_fluid_border = boundary_faces_toward(offset, |face| {
-                    neighbor_chunk.boundary_has_fluid(face)
-                });
+                    && neighbor_chunk.dependency_boundary_has_content(-offset);
+                let has_fluid_border =
+                    neighbor_chunk.dependency_boundary_has_fluid(-offset);
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
                 let fluid = (has_fluid_border && new_content_border) || new_cardinal_fluid;
@@ -314,12 +304,10 @@ mod tests {
         let incoming = VoxelChunk::empty();
         let offset = IVec3::X;
 
-        let new_content_border = boundary_faces_toward(-offset, |face| {
-            incoming.boundary_has_content(face)
-        });
+        let new_content_border = incoming.dependency_boundary_has_content(offset);
         let geometry = new_content_border
-            && boundary_faces_toward(offset, |face| neighbor.boundary_has_content(face));
-        let fluid = boundary_faces_toward(offset, |face| neighbor.boundary_has_fluid(face))
+            && neighbor.dependency_boundary_has_content(-offset);
+        let fluid = neighbor.dependency_boundary_has_fluid(-offset)
             && new_content_border;
 
         assert!(!geometry);
@@ -327,19 +315,31 @@ mod tests {
     }
 
     #[test]
-    fn diagonal_boundary_reconciliation_is_restricted_to_relevant_faces() {
+    fn diagonal_boundary_reconciliation_uses_the_actual_edge() {
         let mut chunk = VoxelChunk::empty();
         chunk.set_block(
-            0,
+            CHUNK_SIZE - 1,
             0,
             7,
             Some(VoxelCell::new("asteria:test", TextureRotation::default())),
         );
-        assert!(boundary_faces_toward(IVec3::new(1, 1, 0), |face| {
-            chunk.boundary_has_content(face)
-        }));
-        assert!(!boundary_faces_toward(IVec3::new(-1, 1, 0), |face| {
-            chunk.boundary_has_content(face)
-        }));
+        chunk.set_block(
+            0,
+            CHUNK_SIZE - 1,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+
+        assert!(chunk.boundary_has_content(IVec3::X));
+        assert!(chunk.boundary_has_content(IVec3::Y));
+        assert!(!chunk.dependency_boundary_has_content(IVec3::new(1, 1, 0)));
+
+        chunk.set_block(
+            CHUNK_SIZE - 1,
+            CHUNK_SIZE - 1,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+        assert!(chunk.dependency_boundary_has_content(IVec3::new(1, 1, 0)));
     }
 }
