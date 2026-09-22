@@ -728,6 +728,25 @@ CI: aguardando. QA runtime é obrigatória; se chunks voltarem a aparecer, GPU
 culling deve ser tratado como incompatível/instável até ser reintroduzido com
 detecção e fallback.
 
+### Hotfix — estabilizar cloud rendering sem transparência ordenada
+
+O flicker de nuvens foi isolado do problema de terrain: clouds usavam
+`AlphaMode::Blend` em cuboides sólidos sem textura alpha, fazendo-os entrar
+na fila transparente e depender de sort de distância enquanto os tiles são
+reciclados ao redor da câmera.
+
+Clouds agora usam `AlphaMode::Opaque` e cor RGB opaca. Densidade continua
+controlada pela quantidade de entidades visíveis; posição, velocidade, sea
+level, recycling, shadow flags e geometria não mudaram. Além de remover a
+instabilidade visual, isso elimina o overdraw/sort transparente desse layer.
+
+Commits: material `7533742ed85d8bfa182912be49e4eb8e6e54cdbf`;
+presentation `c407a0245c460ddfeb1d3cccb77af5210e86d72a`.
+VERSION: `0.50.52`, commit
+`752d9b8ddabf308c1c64dadbfb0f3efb5731f964`.
+CI: aguardando. QA runtime ainda é necessária para confirmar que o flicker
+sumiu no backend/GPU usado em Windows.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
