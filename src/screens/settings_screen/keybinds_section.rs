@@ -156,7 +156,7 @@ pub(super) fn sync_keybinds_section(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     buttons: Query<(&KeybindButton, &Children)>,
-    mut labels: Query<&mut Text>,
+    mut labels: Query<&mut Text, Without<KeybindError>>,
     mut errors: Query<(&mut Text, &mut Node), With<KeybindError>>,
 ) {
     if !keybinds.is_changed()
