@@ -47,7 +47,9 @@ impl CachedLightingSample {
     }
 
     fn occupied_fraction(self) -> f32 {
-        debug_assert!(self.is_loaded());
+        if !self.is_loaded() {
+            return 0.0;
+        }
         self.occupied_count as f32 / MICROBLOCK_VOLUME as f32
     }
 }
