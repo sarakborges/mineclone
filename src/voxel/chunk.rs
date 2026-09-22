@@ -192,6 +192,59 @@ impl VoxelChunkInitialBlocksMut<'_> {
     }
 }
 
+pub(crate) struct VoxelChunkInitialFluidsMut<'a> {
+    blocks: &'a BlockStorage,
+    fluids: &'a mut FluidStorage,
+    palette_indices: HashMap<FluidCell, u16>,
+    fluid_count: &'a mut usize,
+    dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
+    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+}
+
+impl VoxelChunkInitialFluidsMut<'_> {
+    pub(crate) fn set_fluid(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        fluid: FluidCell,
+    ) {
+        let voxel_index = index(x, y, z);
+        debug_assert!(
+            self.fluids.get(voxel_index).is_none(),
+            "initial chunk fluid pass cannot overwrite fluid"
+        );
+
+        let palette_index = if let Some(&palette_index) = self.palette_indices.get(&fluid) {
+            palette_index
+        } else {
+            self.fluids.palette.push(fluid);
+            self.fluids.usage.push(0);
+            let palette_index = u16::try_from(self.fluids.palette.len())
+                .expect("initial fluid palette cannot exceed u16 index space");
+            self.palette_indices.insert(fluid, palette_index);
+            palette_index
+        };
+        self.fluids.indices[voxel_index] = palette_index;
+        let usage = &mut self.fluids.usage[palette_index as usize - 1];
+        *usage = usage
+            .checked_add(1)
+            .expect("initial fluid palette usage cannot overflow");
+
+        *self.fluid_count += 1;
+        adjust_boundary_counts(self.boundary_fluid_counts, x, y, z, true);
+        if self.blocks.get(voxel_index).is_none() {
+            adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
+        }
+        set_voxel_bit(
+            self.dynamic_fluid_cells,
+            voxel_index,
+            !fluid.is_source(),
+        );
+    }
+}
+
 pub(crate) struct VoxelChunkFluidsMut<'a> {
     blocks: &'a BlockStorage,
     fluids: &'a mut FluidStorage,
@@ -387,6 +440,37 @@ impl VoxelChunk {
             boundary_content_counts: &mut self.boundary_content_counts,
         };
         edit(&mut content)
+    }
+
+    pub(crate) fn edit_initial_fluids<R>(
+        &mut self,
+        edit: impl FnOnce(&mut VoxelChunkInitialFluidsMut<'_>) -> R,
+    ) -> R {
+        debug_assert_eq!(self.fluid_count, 0);
+
+        let fluids = Arc::make_mut(&mut self.fluids);
+        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
+        let result = {
+            let mut content = VoxelChunkInitialFluidsMut {
+                blocks: self.blocks.as_ref(),
+                fluids,
+                palette_indices: HashMap::new(),
+                fluid_count: &mut self.fluid_count,
+                dynamic_fluid_cells,
+                boundary_content_counts: &mut self.boundary_content_counts,
+                boundary_fluid_counts: &mut self.boundary_fluid_counts,
+            };
+            edit(&mut content)
+        };
+
+        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        fluid_frontier_sources.fill(0);
+        rebuild_fluid_frontier_sources(
+            self.blocks.as_ref(),
+            self.fluids.as_ref(),
+            fluid_frontier_sources,
+        );
+        result
     }
 
     pub(crate) fn edit_fluids<R>(
@@ -698,6 +782,25 @@ fn set_voxel_bit(bits: &mut [u64; FLUID_FRONTIER_WORDS], voxel_index: usize, val
         bits[word] |= mask;
     } else {
         bits[word] &= !mask;
+    }
+}
+
+fn rebuild_fluid_frontier_sources(
+    blocks: &BlockStorage,
+    fluids: &FluidStorage,
+    sources: &mut [u64; FLUID_FRONTIER_WORDS],
+) {
+    for voxel_index in 0..CHUNK_VOLUME {
+        if fluids.get(voxel_index).is_none() {
+            continue;
+        }
+        let (x, y, z) = coordinates(voxel_index);
+        refresh_fluid_frontier_source(
+            blocks,
+            fluids,
+            sources,
+            IVec3::new(x as i32, y as i32, z as i32),
+        );
     }
 }
 
