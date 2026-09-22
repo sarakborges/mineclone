@@ -15,7 +15,7 @@ pub(crate) use self::queue::ChunkRemeshQueue;
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_remesh_tasks::{
-        ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
+        ChunkRemeshPublication, ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
     },
     chunk_rendering::{
         ChunkRenderPool, apply_built_chunk_fluid_meshlets,
@@ -99,28 +99,20 @@ fn collect_completed_remesh_tasks(
         if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
             continue;
         }
-        if completed.revision != current_revision
-            || !output.dependencies.content_is_current(world)
-        {
+        if completed.revision != current_revision {
             queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
             continue;
         }
 
-        let lighting_is_current = output.dependencies.lighting_is_current(tasks);
-        if !lighting_is_current {
-            match kind {
-                ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
-                    queue.enqueue_task_meshlets_priority(
-                        coord,
-                        ChunkRemeshTaskKind::Lighting,
-                        meshlets,
-                    );
-                }
-                ChunkRemeshTaskKind::Fluid => {
-                    queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
-                }
+        match output.dependencies.publication(kind, world, tasks) {
+            ChunkRemeshPublication::Ready => {}
+            ChunkRemeshPublication::Retry(retry_kind) => {
+                queue.enqueue_task_meshlets_priority(coord, retry_kind, meshlets);
+                continue;
             }
-            continue;
+            ChunkRemeshPublication::FluidWithLightingCatchup => {
+                queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
+            }
         }
 
         let render_context = content.render_context(

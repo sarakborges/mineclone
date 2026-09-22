@@ -40,6 +40,13 @@ pub(crate) enum ChunkRemeshTaskMeshes {
     Fluid(Vec<ChunkFluidMesh>),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ChunkRemeshPublication {
+    Ready,
+    Retry(ChunkRemeshTaskKind),
+    FluidWithLightingCatchup,
+}
+
 #[derive(Clone)]
 struct LightingRemeshDependencies {
     center: IVec3,
@@ -96,6 +103,28 @@ impl ChunkRemeshDependencies {
         self.lighting.is_current(&tasks.lighting_revisions)
     }
 
+    pub(super) fn publication(
+        &self,
+        kind: ChunkRemeshTaskKind,
+        world: &VoxelWorld,
+        tasks: &ChunkRemeshTasks,
+    ) -> ChunkRemeshPublication {
+        if !self.content_is_current(world) {
+            return ChunkRemeshPublication::Retry(kind);
+        }
+        if self.lighting_is_current(tasks) {
+            return ChunkRemeshPublication::Ready;
+        }
+
+        match kind {
+            // Fluid geometry must remain observable while lighting converges.
+            // Its content is current; a queued follow-up refreshes vertex light.
+            ChunkRemeshTaskKind::Fluid => ChunkRemeshPublication::FluidWithLightingCatchup,
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                ChunkRemeshPublication::Retry(ChunkRemeshTaskKind::Lighting)
+            }
+        }
+    }
 }
 
 pub(crate) struct ChunkRemeshTaskOutput {
@@ -343,5 +372,54 @@ mod tests {
 
         assert!(dependencies.content_is_current(&world));
         assert!(!dependencies.lighting_is_current(&tasks));
+    }
+
+    #[test]
+    fn fluid_publication_survives_lighting_churn_but_never_stale_content() {
+        let center = IVec3::ZERO;
+        let position = IVec3::new(4, 4, 4);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(center, VoxelChunk::empty());
+        let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
+        let mut tasks = ChunkRemeshTasks::default();
+        let dependencies = ChunkRemeshDependencies::capture(
+            center,
+            ChunkMeshletMask::ALL,
+            &snapshot,
+            &tasks.lighting_revisions,
+        );
+        let kinds = [
+            ChunkRemeshTaskKind::Geometry,
+            ChunkRemeshTaskKind::Lighting,
+            ChunkRemeshTaskKind::Fluid,
+        ];
+        for kind in kinds {
+            assert_eq!(
+                dependencies.publication(kind, &world, &tasks),
+                ChunkRemeshPublication::Ready,
+            );
+        }
+
+        for _ in 0..3 {
+            tasks.bump_lighting_revisions_for_positions(&world, [position]);
+            assert_eq!(
+                dependencies.publication(ChunkRemeshTaskKind::Fluid, &world, &tasks),
+                ChunkRemeshPublication::FluidWithLightingCatchup,
+            );
+            for kind in [ChunkRemeshTaskKind::Geometry, ChunkRemeshTaskKind::Lighting] {
+                assert_eq!(
+                    dependencies.publication(kind, &world, &tasks),
+                    ChunkRemeshPublication::Retry(ChunkRemeshTaskKind::Lighting),
+                );
+            }
+        }
+
+        world.set_fluid_at(position, Some(crate::voxel::fluid::FluidCell::source(0, 8)));
+        for kind in kinds {
+            assert_eq!(
+                dependencies.publication(kind, &world, &tasks),
+                ChunkRemeshPublication::Retry(kind),
+            );
+        }
     }
 }

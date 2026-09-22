@@ -32,7 +32,19 @@ Máscaras coalescidas são devolvidas em ordem de prioridade. Initial meshing
 também contabiliza descartes/deferimentos, preservando o teto de quatro
 candidatos e a preempção nearest-first. Geração já contabilizava esses casos.
 VERSION: `0.50.16`. Revisão do fluxo e `git diff --check`: PASS.
-CI de P1: aguardando publicação e conclusão.
+CI de P1: **verde**, commit `e8d0ce78c6874633dcb01d0d2a8786d70f77f5ff`,
+run de push [35682045191](https://github.com/sarakborges/mineclone/actions/runs/35682045191).
+
+### P2 — publicação de fluidos sem starvation por iluminação
+
+A política de publicação agora pertence às dependências do remesh: resultado
+atual, retry obrigatório ou fluido válido com catch-up de luz. Conteúdo e
+definições obsoletos continuam rejeitados; geometria/lighting de terreno com
+luz obsoleta continuam em retry. Fluidos com conteúdo atual são publicados e
+reenfileirados para a iluminação final. Máscara e recuperação de patch falho
+continuam preservadas. Regressão Rust cobre mudanças repetidas de luz e
+rejeição quando o conteúdo finalmente muda. VERSION: `0.50.17`.
+CI de P2: aguardando publicação e conclusão.
 
 ### Ordem de execução definida
 
