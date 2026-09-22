@@ -11094,3 +11094,23 @@ cargo check).
 Commit de versão: `c1495738aad6ef4f93948b95cdbe9f1274ed5eea`.
 CI de versão push `35773013742`: localizações, Clippy e cargo check **verdes**.
 VERSION: `0.50.82`.
+
+## 2026-09-22 — Focus loss respeita menus abertos
+
+O auto-pause por perda de foco foi mantido, mas agora só acontece quando não
+há nenhuma UI modal aberta.
+
+Regras:
+- perder foco com gameplay livre continua abrindo pause;
+- perder foco com Settings, Inventory, Brush Palette ou Character Info abertos
+  não altera `PauseState`;
+- Chat aberto também bloqueia o auto-pause;
+- o comportamento manual de `Escape` permanece separado e inalterado.
+
+Commit funcional final: `55b14acd9d7b19fbefd46ad3cfbfdde09fa3301e`.
+CI funcional push `35774242599`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `f5c4cdd9bf091d04b99f509ef6a289544b572d61`.
+CI de versão push `35774360164`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+VERSION: `0.50.83`.
