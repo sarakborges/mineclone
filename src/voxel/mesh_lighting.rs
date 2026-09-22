@@ -559,10 +559,44 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
-    use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
+    use super::{
+        ChunkLightingCache, ao_brightness, average_shader_light_levels, face_lighting,
+        face_lighting_with_cache, provisional_top_sky_sample, sample_occlusion,
+        sample_open_fraction, should_flip_diagonal,
+    };
+    use crate::voxel::{
+        block_face::BlockFace, cell::VoxelCell, chunk::VoxelChunk, light::VoxelLight,
+        microblock::MicroblockMask, world::VoxelWorld,
+    };
 
     const DARK: [f32; 3] = [0.0; 3];
+
+    #[test]
+    fn dense_cache_matches_direct_face_lighting_at_chunk_corners() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let chunk = world.chunk(IVec3::ZERO).expect("center chunk should be loaded");
+        let cache = ChunkLightingCache::capture_with_center(&world, IVec3::ZERO, chunk);
+
+        for x in [0, 15] {
+            for y in [0, 15] {
+                for z in [0, 15] {
+                    let voxel = IVec3::new(x, y, z);
+                    for face in BlockFace::ALL {
+                        let direct = face_lighting(&world, voxel, face, [0.0; 3]);
+                        let cached = face_lighting_with_cache(
+                            Some(&cache),
+                            &world,
+                            voxel,
+                            face,
+                            [0.0; 3],
+                        );
+                        assert!(cached == direct);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn partial_microblocks_reduce_ambient_occlusion() {
