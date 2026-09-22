@@ -910,7 +910,26 @@ Commits: query exata
 `87ec4e0182bc866d67a8818c4a72db24b2a3e50a`.
 VERSION: `0.50.60`, commit
 `73b8827ab22ec52afe3a2029b1760faf965cfcac`.
-CI de P37: aguardando.
+CI de P37: **verde** nos runs push `35747894980` e PR `35747903773` para `73b8827ab22ec52afe3a2029b1760faf965cfcac`.
+
+### P38 — reduzir latency da generation wave crítica
+
+Streaming publica chunks novos somente depois de a generation wave inteira
+terminar e passar pelo settling verificado de fluidos. A wave padrão de 8 é boa
+para throughput distante, mas perto do player isso aumenta time-to-first-mesh e
+faz grupos grandes chegarem ao `ready` de uma vez.
+
+Enquanto existir trabalho pending no raio crítico (1 chunk em X/Y/Z), a wave
+fica limitada a 4 targets, alinhada ao teto de 4 initial-mesh dispatches por
+frame. Assim o primeiro grupo entra em settling/meshing antes e a wave seguinte
+pode sobrepor generation aos meshes anteriores. Depois que o frontier crítico
+acaba, o limite retorna automaticamente a 8.
+
+Commit funcional/regressão:
+`6945732a0b43ab463715cd1e627d8486c0dee792`.
+VERSION: `0.50.61`, commit
+`cb1da07f87a300cd95dbc6cb3bb0977be15fef25`.
+CI de P38: aguardando.
 
 ### Ordem de execução definida
 
