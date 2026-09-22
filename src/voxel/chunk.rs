@@ -683,6 +683,21 @@ impl VoxelChunk {
         self.light[index(x as usize, y as usize, z as usize)]
     }
 
+    pub(crate) fn sample_local_at(
+        &self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> (Option<VoxelCell>, Option<FluidCell>, VoxelLight) {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        let voxel_index = index(x, y, z);
+        (
+            self.blocks.get(voxel_index),
+            self.fluids.get(voxel_index),
+            self.light[voxel_index],
+        )
+    }
+
     pub(crate) fn sample_local(
         &self,
         x: i32,
@@ -693,8 +708,7 @@ impl VoxelChunk {
             return None;
         }
 
-        let index = index(x as usize, y as usize, z as usize);
-        Some((self.blocks.get(index), self.fluids.get(index), self.light[index]))
+        Some(self.sample_local_at(x as usize, y as usize, z as usize))
     }
 
     pub(crate) fn edit_initial_blocks<R>(
