@@ -91,6 +91,7 @@ fn spawn_breaking_overlay(
     ));
 }
 
+#[allow(clippy::type_complexity)]
 fn update_breaking_overlay(
     targeted: Res<TargetedBlock>,
     mining: Res<BlockMiningState>,
