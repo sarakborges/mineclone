@@ -861,7 +861,7 @@ mod tests {
             .insert(coord, ChunkMeshletMask::ALL);
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
-        assert!(!state.initial_mesh_seed_catchup.contains(&coord));
+        assert!(!state.initial_mesh_seed_catchup.contains_key(&coord));
     }
 
     #[test]
