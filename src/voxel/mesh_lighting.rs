@@ -147,6 +147,27 @@ pub(super) struct FaceLighting {
     pub(super) ambient_occlusion: [f32; 4],
 }
 
+pub(super) fn surface_block_srgb_with_cache(
+    cache: Option<&ChunkLightingCache>,
+    world_position: IVec3,
+    fallback_light: VoxelLight,
+    neutralize_emissive_surface_light: bool,
+) -> [f32; 3] {
+    let block_srgb = cache
+        .and_then(|cache| cache.sample(world_position))
+        .map_or_else(
+            || fallback_light.block_srgb_levels(),
+            |sample| sample.block_srgb,
+        )
+        .map(|level| level as f32);
+
+    if neutralize_emissive_surface_light {
+        [max_component(block_srgb); 3]
+    } else {
+        block_srgb
+    }
+}
+
 pub(super) fn surface_block_srgb(
     light: VoxelLight,
     neutralize_emissive_surface_light: bool,
