@@ -54,9 +54,6 @@ struct PlayerModelHead;
 struct PlayerModelHand;
 
 #[derive(Component)]
-struct PlayerModelRestTransform(Transform);
-
-#[derive(Component)]
 struct ThirdPersonHeldBlockRoot;
 
 #[derive(Component)]
@@ -125,7 +122,6 @@ type ThirdPersonHeldBlockRootQuery<'w, 's> = Query<
 #[derive(SystemParam)]
 struct PlayerSceneVisuals<'w, 's> {
     asset_server: Res<'w, AssetServer>,
-    transforms: Query<'w, 's, &'static Transform>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
 }
@@ -310,21 +306,7 @@ fn configure_loaded_player_scene(
                     commands.entity(descendant).insert(PlayerModelHead);
                 }
                 "RightArmPivot" => {
-                    if let Ok(transform) = visuals.transforms.get(descendant) {
-                        commands.entity(descendant).insert((
-                            PlayerModelHand,
-                            PlayerModelRestTransform(*transform),
-                        ));
-                    } else {
-                        commands.entity(descendant).insert(PlayerModelHand);
-                    }
-                }
-                "Visual" | "BodyPivot" | "LeftArmPivot" | "RightLegPivot" | "LeftLegPivot" => {
-                    if let Ok(transform) = visuals.transforms.get(descendant) {
-                        commands
-                            .entity(descendant)
-                            .insert(PlayerModelRestTransform(*transform));
-                    }
+                    commands.entity(descendant).insert(PlayerModelHand);
                 }
                 _ => {}
             }
@@ -464,7 +446,6 @@ fn sync_player_model_animations(
         &mut AnimationTransitions,
         &mut PlayerModelAnimationLink,
     )>,
-    mut rest_transforms: Query<(&PlayerModelRestTransform, &mut Transform)>,
 ) {
     let Some(state) = states.iter().next() else {
         return;
@@ -478,11 +459,10 @@ fn sync_player_model_animations(
             continue;
         };
 
-        for (rest, mut transform) in &mut rest_transforms {
-            *transform = rest.0;
-        }
-
-        let animation = transitions.play(&mut player, index, Duration::ZERO);
+        // Let AnimationTransitions own the handoff between clips. Resetting
+        // animated transforms manually here produced a visible one-frame rest
+        // pose between states.
+        let animation = transitions.play(&mut player, index, Duration::from_millis(80));
         if matches!(
             state.name.as_str(),
             "idle" | "walk" | "run" | "fall" | "break"
@@ -514,8 +494,8 @@ fn spawn_third_person_held_block(
         .item_at(hotbar.selected_slot())
         .filter(|block_id| definitions.blocks.get(block_id).is_some());
     let block_model = selected_block_id
-        .map(BlockModel::display)
-        .unwrap_or_else(BlockModel::empty_display);
+        .map(|block_id| BlockModel::world(block_id, 1.0))
+        .unwrap_or_else(|| BlockModel::empty_world(1.0));
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
     let root_visibility = third_person_item_visibility(selected_block_id);
 
@@ -569,7 +549,7 @@ fn spawn_third_person_held_block(
 
                         held.spawn((
                             ThirdPersonHeldBlockFace { face, layer_index },
-                            Mesh3d(block_meshes.display_face(face)),
+                            Mesh3d(block_meshes.world_face(face)),
                             MeshMaterial3d(material),
                             visibility,
                             NotShadowCaster,
