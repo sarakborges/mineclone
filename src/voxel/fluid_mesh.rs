@@ -976,7 +976,9 @@ fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{cell::VoxelCell, microblock::ChiselResolution};
+    use crate::voxel::{
+        cell::VoxelCell, microblock::ChiselResolution, world::VoxelWorld,
+    };
 
     #[test]
     fn greedy_fluid_lighting_compacts_uniform_face_without_loss() {
@@ -998,6 +1000,32 @@ mod tests {
         let mut non_uniform = lighting;
         non_uniform.channels[3][0] = 0.7;
         assert!(FluidGreedyLighting::from_uniform(non_uniform).is_none());
+    }
+
+    #[test]
+    fn fluid_height_plane_cache_matches_direct_sampling() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_fluid(0, 3, 0, Some(FluidCell::source(0, 8)));
+        chunk.set_fluid(1, 3, 0, Some(FluidCell::spreading(0, 5, 1)));
+        chunk.set_fluid(0, 3, 1, Some(FluidCell::spreading(0, 3, 2)));
+        chunk.set_fluid(1, 4, 1, Some(FluidCell::source(0, 8)));
+
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, chunk);
+        let chunk = world.chunk(IVec3::ZERO).expect("test chunk should be loaded");
+        let cache = FluidHeightPlaneCache::capture(&world, chunk, IVec3::ZERO, 3);
+
+        for (x, z) in [(0, 0), (1, 0), (0, 1), (15, 15)] {
+            let local = IVec3::new(x as i32, 3, z as i32);
+            let direct =
+                fluid_face_heights(&world, chunk, local, local, 0);
+            let cached = cache.heights_at(x, z, 0);
+
+            assert_eq!(cached.h00.to_bits(), direct.h00.to_bits());
+            assert_eq!(cached.h10.to_bits(), direct.h10.to_bits());
+            assert_eq!(cached.h11.to_bits(), direct.h11.to_bits());
+            assert_eq!(cached.h01.to_bits(), direct.h01.to_bits());
+        }
     }
 
     #[test]
