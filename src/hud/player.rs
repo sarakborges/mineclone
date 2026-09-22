@@ -26,16 +26,8 @@ pub struct PlayerHudPlugin;
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<portrait::PlayerPreviewImages>()
-            .init_resource::<portrait::PlayerPreviewRenderState>()
             .add_systems(PostStartup, portrait::spawn_player_preview_renderer)
-            .add_systems(
-                Update,
-                (
-                    portrait::attach_player_preview_model,
-                    portrait::render_player_preview,
-                )
-                    .chain(),
-            )
+            .add_systems(Update, portrait::render_player_preview)
             .add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
             .add_systems(
                 Update,
@@ -64,10 +56,8 @@ fn spawn_player_hud(
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
     preview_images: Res<portrait::PlayerPreviewImages>,
-    mut preview_render: ResMut<portrait::PlayerPreviewRenderState>,
 ) {
     let portrait_image = preview_images.portrait();
-    preview_render.request_portrait();
     let hint_kind = inventory_hint_kind(*inventory_state.get());
     let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
