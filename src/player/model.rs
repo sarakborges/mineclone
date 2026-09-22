@@ -121,6 +121,8 @@ type ThirdPersonHeldBlockRootQuery<'w, 's> = Query<
 #[derive(SystemParam)]
 struct PlayerSceneVisuals<'w, 's> {
     asset_server: Res<'w, AssetServer>,
+    mesh_entities: Query<'w, 's, &'static Mesh3d>,
+    meshes: Res<'w, Assets<Mesh>>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
 }
@@ -292,6 +294,19 @@ fn configure_loaded_player_scene(
     };
 
     for descendant in descendants.iter_descendants(ready.entity) {
+        if let Ok(mesh_handle) = visuals.mesh_entities.get(descendant)
+            && visuals
+                .meshes
+                .get(mesh_handle.id())
+                .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0)
+        {
+            commands
+                .entity(descendant)
+                .remove::<Mesh3d>()
+                .remove::<MeshMaterial3d<StandardMaterial>>();
+            continue;
+        }
+
         if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
             if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
                 material.base_color = Color::WHITE;
