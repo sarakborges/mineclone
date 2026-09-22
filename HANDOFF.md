@@ -11529,3 +11529,61 @@ CI funcional push `35796952385`: **verde**.
 Commit de versão: `b0a1118d933f0b49f30629ef755eb2331f75e5f9`.
 CI de versão push `35797108145`: **verde**.
 VERSION: `0.50.93`.
+
+## 2026-09-22 — HUD/Character Info, modal swap, hotbar e save thumbnail
+
+Ajustes consolidados após a migração do player para viewports 3D diretos:
+
+- Player HUD:
+  - mantém o viewport direto do `PlayerModelRoot` real;
+  - deixa de aproximar agressivamente a câmera;
+  - passa a usar o mesmo framing full-body comprovado no Character Info e
+    `SubCameraView` para recortar a região superior/waist-up no quadrado do HUD.
+- Character Info:
+  - drag horizontal restaurado;
+  - o drag altera somente o orbit/yaw da câmera do modal, sem rotacionar o
+    `PlayerModelRoot` compartilhado e sem contaminar o HUD.
+- Hotbar / Inventory:
+  - abrir Inventory não esconde mais a hotbar principal do gameplay;
+  - a hotbar exibida dentro do Inventory não destaca mais o slot atualmente
+    selecionado no gameplay;
+  - search-match e hover continuam podendo estilizar slots normalmente.
+- Troca de modais:
+  - Inventory e Character Info não se bloqueiam mais por `run_if`;
+  - pressionar a key de outro modal fecha os demais gameplay modals e abre o
+    solicitado no mesmo ciclo de state transition;
+  - Brush Palette também é fechado quando Inventory/Character Info assume;
+  - atalhos de modal são ignorados enquanto um campo de texto tem `InputFocus`,
+    evitando troca de modal ao digitar E/C em searches.
+- World thumbnail:
+  - durante a captura de `thumbnail.png`, todas as câmeras que não são
+    `GameplayWorldCamera` são forçadas para `CameraOutputMode::Skip`;
+  - a regra é reaplicada em `Last` enquanto `WorldThumbnailCapture` existir,
+    evitando que HUD/viewmodel/preview cameras se reativem no mesmo frame;
+  - modos anteriores das câmeras auxiliares são preservados/restaurados após a
+    captura;
+  - a mesma regra vale para Leave World, Exit Game e fechamento da janela.
+
+Commits principais:
+- hotbar permanece visível com Inventory: `9bfe70a4e44e12dcb005f0a6ed688921ee1afdb2`;
+- sem selected highlight na hotbar interna:
+  `06f4576316a32da0dd8bf1995ece958e064082b2`,
+  `2576bdb857acda8da7f9d85bcc9dd6c22b4cc60b`;
+- modal swap Inventory / Character Info:
+  `fac6115b1f96969a23df69fc430c77f1a0bfac36`,
+  `2eae077378481856126aa91cc2153a15a98d53d5`;
+- HUD crop por `SubCameraView`: `9aaecb6e2bab758fc19ad19c930bafc4f86a4aff`;
+- orbit drag no Character Info: `e4d8bc4dad54db8b802a38e309908ae2b7fb918d`;
+- isolamento de câmeras no thumbnail:
+  `d086350d9c53624a629867d49491286449c23672`,
+  `b2d41b56dca4ee63f7ffc6c3f72d86d22b631a47`,
+  `a8fb0553fa1d453ff8b4a089d088b8a3dc03c8e0`,
+  `6b1586a3c77f3172d26bf17d03f1b6f7fca8c45d`;
+- organização final de modal inputs:
+  `2315c35aa7c84ef5c9aaf199d014d45fc3c488f7`,
+  `fde03a6201fb3d04d30c0b838bb32dc1a28813dc`.
+
+CI funcional push `35798945862`: **verde**.
+Commit de versão: `57934dbeae5f8bae953aa7244449ba7a8e91ce35`.
+CI de versão push `35799095419`: **verde**.
+VERSION: `0.50.94`.
