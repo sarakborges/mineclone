@@ -11066,3 +11066,31 @@ cargo check).
 Commit de versão: `37819862c0d43e957185cf42909be6a495eace44`.
 CI de versão push `35771777704`: localizações, Clippy e cargo check **verdes**.
 VERSION: `0.50.81`.
+
+## 2026-09-22 — Ajustes de Character Info e escala do Inventory
+
+Correções após QA do Character Info:
+- o `Escape` usado para fechar Character Info agora é consumido e não vaza
+  para o pause no mesmo fluxo;
+- perda de foco também não aciona pause enquanto Character Info está aberto;
+- nome e preview passaram a viver em um único card de Character Info, em vez de
+  dois cards independentes;
+- o modelo e o render target continuam persistentes durante toda a sessão de
+  gameplay;
+- a câmera 3D do preview deixou de renderizar continuamente enquanto o menu está
+  aberto: ela renderiza somente frames necessários ao abrir/carregar o modelo e
+  enquanto o jogador arrasta para rotacioná-lo.
+
+Ajuste visual do Inventory:
+- slots, search bar e botão de organizar agora usam 40 px;
+- `ITEM_ICON_SIZE` foi reduzido de 34 para 30 px para preservar o padding
+  interno;
+- grids/categorias que derivam de `SLOT_SIZE` acompanham automaticamente a
+  nova escala.
+
+Commit funcional final: `18b232cc87d0d157b7baac315de98723238aceeb`.
+CI funcional push `35772874931`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `c1495738aad6ef4f93948b95cdbe9f1274ed5eea`.
+CI de versão push `35773013742`: localizações, Clippy e cargo check **verdes**.
+VERSION: `0.50.82`.
