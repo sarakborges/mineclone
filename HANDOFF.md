@@ -11023,3 +11023,46 @@ Commit funcional: `407d649ef18a20dc1d0eaa76ea26c2c5c1ae5ac1`.
 CI funcional push `35770737554`: **verde** (localizações, Clippy rigoroso e cargo check).
 Commit de versão: `2fd9b0e8ffdeb4021d2e23bc1dd1e2e4834a45bb`.
 VERSION: `0.50.80`.
+
+## 2026-09-22 — Character Info com preview 3D rotacionável
+
+Foi criada a nova tela de gameplay `Character Info`, aberta por padrão com
+`C`.
+
+Fluxo e input:
+- novo `CharacterInfoState` com estados `Closed/Open`;
+- `C` foi integrado formalmente em `Keybinds` como
+  `KeybindAction::CharacterInfo`, portanto pode ser remapeado nas settings;
+- `Escape` fecha Character Info antes de permitir pause;
+- enquanto a tela está aberta, world interaction, mouselook, chat e inventory
+  ficam bloqueados para evitar disputa de input;
+- o cursor é liberado ao abrir e recapturado ao fechar.
+
+UI:
+- segue o padrão overlay do inventory;
+- primeira linha: card com o nome visível do jogador, atualmente
+  `Yogg'Sara`, centralizado a partir de uma única constante compartilhada com
+  o chat;
+- segunda linha: um único card de preview com o mesmo tratamento visual da
+  moldura usada nas thumbnails de mundo.
+
+Preview 3D:
+- usa o mesmo GLB e a mesma skin do player;
+- renderiza uma cópia isolada do modelo em um `RenderTarget` próprio
+  (384×512), sem alterar o modelo real no mundo;
+- o render target é criado uma vez por sessão de gameplay e reutilizado em
+  aberturas subsequentes;
+- a câmera do preview só fica ativa enquanto Character Info está aberto;
+- clicar e arrastar horizontalmente sobre o card gira o modelo no eixo Y;
+- a textura do preview é liberada depois que a sessão de gameplay é desmontada.
+
+O primeiro CI apontou somente `clippy::too_many_arguments` no observer de
+configuração da skin. Os assets/queries foram agrupados em `SystemParam`, sem
+`#[allow]`.
+
+Commit funcional final: `aac93f3ac6779cff564580a993edc66bcecabcc2`.
+CI funcional push `35771645635`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `37819862c0d43e957185cf42909be6a495eace44`.
+CI de versão push `35771777704`: localizações, Clippy e cargo check **verdes**.
+VERSION: `0.50.81`.
