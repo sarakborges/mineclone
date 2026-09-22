@@ -241,126 +241,128 @@ fn emit_greedy_fluid_top_faces<W, F>(
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, FluidId) -> [f32; 3],
 {
+    let plane_capacity = chunk.fluid_count().div_ceil(CHUNK_SIZE).max(4);
+    let mut active_by_y: [Vec<(u8, u8, FluidCell)>; CHUNK_SIZE] =
+        std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
+    chunk.visit_fluid_voxels(|x, y, z, cell| {
+        if meshlets.contains_voxel(x, y, z) {
+            active_by_y[y].push((x as u8, z as u8, cell));
+        }
+    });
+
     let mut mask = vec![None::<FluidGreedyTop>; CHUNK_SIZE * CHUNK_SIZE];
 
-    for y in 0..CHUNK_SIZE {
-        for z in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                if !meshlets.contains_voxel(x, y, z) {
-                    continue;
-                }
-                let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
-                    continue;
-                };
+    for (y, active) in active_by_y.iter().enumerate() {
+        for &(x, z, cell) in active {
+            let x = usize::from(x);
+            let z = usize::from(z);
+            let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+            let world_voxel = chunk_origin + local_voxel;
+            let top_sample = fluid_neighbor_content(
+                world,
+                chunk,
+                local_voxel,
+                world_voxel,
+                BlockFace::Top,
+            );
+            if !fluid_face_is_exposed(
+                top_sample,
+                cell.fluid_id,
+                BlockFace::Top,
+            ) {
+                continue;
+            }
 
-                let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
-                let world_voxel = chunk_origin + local_voxel;
-                let top_sample = fluid_neighbor_content(
-                    world,
-                    chunk,
-                    local_voxel,
-                    world_voxel,
-                    BlockFace::Top,
-                );
-                if !fluid_face_is_exposed(
-                    top_sample,
-                    cell.fluid_id,
-                    BlockFace::Top,
-                ) {
-                    continue;
-                }
+            let heights = fluid_face_heights(
+                world,
+                chunk,
+                local_voxel,
+                world_voxel,
+                cell.fluid_id,
+            );
+            let source_block_srgb = surface_block_srgb_with_cache(
+                lighting_cache,
+                world_voxel,
+                chunk.light_at(x as i32, y as i32, z as i32),
+                false,
+            );
+            let lighting = face_lighting_with_cache(
+                lighting_cache,
+                world,
+                world_voxel,
+                BlockFace::Top,
+                source_block_srgb,
+            );
+            let tint = tint_at(world_voxel, cell.fluid_id);
+            let source_mask = chunk
+                .cell_at(x as i32, y as i32, z as i32)
+                .filter(|block| MicroblockMask::is_modified(*block))
+                .map(MicroblockMask::from_cell);
+            let neighbor_mask = top_sample
+                .and_then(|(block, _)| block)
+                .filter(|block| MicroblockMask::is_modified(*block))
+                .map(MicroblockMask::from_cell);
 
-                let heights = fluid_face_heights(
-                    world,
-                    chunk,
-                    local_voxel,
-                    world_voxel,
-                    cell.fluid_id,
-                );
-                let source_block_srgb = surface_block_srgb_with_cache(
-                    lighting_cache,
-                    world_voxel,
-                    chunk.light_at(x as i32, y as i32, z as i32),
-                    false,
-                );
-                let lighting = face_lighting_with_cache(
-                    lighting_cache,
-                    world,
-                    world_voxel,
+            if source_mask.is_some() || neighbor_mask.is_some() {
+                emit_fluid_openings(
+                    fluid_buffer(buffers, cell.fluid_id),
                     BlockFace::Top,
-                    source_block_srgb,
+                    x as f32,
+                    y as f32,
+                    z as f32,
+                    heights,
+                    source_mask,
+                    neighbor_mask,
+                    tint,
+                    lighting,
                 );
-                let tint = tint_at(world_voxel, cell.fluid_id);
-                let source_mask = chunk
-                    .cell_at(x as i32, y as i32, z as i32)
-                    .filter(|block| MicroblockMask::is_modified(*block))
-                    .map(MicroblockMask::from_cell);
-                let neighbor_mask = top_sample
-                    .and_then(|(block, _)| block)
-                    .filter(|block| MicroblockMask::is_modified(*block))
-                    .map(MicroblockMask::from_cell);
+                continue;
+            }
 
-                if source_mask.is_some() || neighbor_mask.is_some() {
-                    emit_fluid_openings(
-                        fluid_buffer(buffers, cell.fluid_id),
+            let Some(height) = flat_fluid_height(heights) else {
+                push_lit_quad(
+                    fluid_buffer(buffers, cell.fluid_id),
+                    fluid_face_vertices(
                         BlockFace::Top,
                         x as f32,
                         y as f32,
                         z as f32,
                         heights,
-                        source_mask,
-                        neighbor_mask,
-                        tint,
-                        lighting,
-                    );
-                    continue;
-                }
-
-                let Some(height) = flat_fluid_height(heights) else {
-                    push_lit_quad(
-                        fluid_buffer(buffers, cell.fluid_id),
-                        fluid_face_vertices(
-                            BlockFace::Top,
-                            x as f32,
-                            y as f32,
-                            z as f32,
-                            heights,
-                        ),
-                        BlockFace::Top.normal(),
-                        VOXEL_FACE_UVS,
-                        tint,
-                        lighting,
-                        0.0,
-                    );
-                    continue;
-                };
-
-                if !fluid_lighting_is_uniform(lighting) {
-                    push_lit_quad(
-                        fluid_buffer(buffers, cell.fluid_id),
-                        fluid_face_vertices(
-                            BlockFace::Top,
-                            x as f32,
-                            y as f32,
-                            z as f32,
-                            heights,
-                        ),
-                        BlockFace::Top.normal(),
-                        VOXEL_FACE_UVS,
-                        tint,
-                        lighting,
-                        0.0,
-                    );
-                    continue;
-                }
-
-                mask[x + z * CHUNK_SIZE] = Some(FluidGreedyTop {
-                    fluid_id: cell.fluid_id,
+                    ),
+                    BlockFace::Top.normal(),
+                    VOXEL_FACE_UVS,
                     tint,
                     lighting,
-                    height,
-                });
+                    0.0,
+                );
+                continue;
+            };
+
+            if !fluid_lighting_is_uniform(lighting) {
+                push_lit_quad(
+                    fluid_buffer(buffers, cell.fluid_id),
+                    fluid_face_vertices(
+                        BlockFace::Top,
+                        x as f32,
+                        y as f32,
+                        z as f32,
+                        heights,
+                    ),
+                    BlockFace::Top.normal(),
+                    VOXEL_FACE_UVS,
+                    tint,
+                    lighting,
+                    0.0,
+                );
+                continue;
             }
+
+            mask[x + z * CHUNK_SIZE] = Some(FluidGreedyTop {
+                fluid_id: cell.fluid_id,
+                tint,
+                lighting,
+                height,
+            });
         }
 
         emit_greedy_fluid_top_plane(y, &mut mask, buffers);
