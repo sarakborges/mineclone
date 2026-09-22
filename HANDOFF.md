@@ -705,8 +705,11 @@ commit específico de cloud foi `eadb6ead648d8b8fe790d81b9be0f85a045835c4`
 
 VERSION: `0.50.49`, commit
 `909b1cd1884e9bb2983d0fcbbfcc2f94649baa87`.
-CI do hotfix: aguardando. QA runtime continua obrigatória porque ausência de
-erro no CI não valida WGSL/WGPU nem confirma publicação visual dos chunks.
+A CI intermediária do rollback de shader/mesher foi afetada por commits
+concorrentes de inventory HUD, não por erros do renderer. O estado acumulado
+de estabilização passou depois nos gates de `0.50.50` e `0.50.52`.
+QA runtime continua obrigatória porque ausência de erro no CI não valida
+WGSL/WGPU nem confirma publicação visual dos chunks.
 
 ### Hotfix — fallback de chunk culling para CPU
 
@@ -724,9 +727,10 @@ identity também permanecem intactos.
 Commit funcional: `dc1c6896d1b32a64eae2824ab974e29b575c662a`.
 VERSION: `0.50.50`, commit
 `ff26e987856ee458b8b4e9cf4f667b0bfcda9093`.
-CI: aguardando. QA runtime é obrigatória; se chunks voltarem a aparecer, GPU
-culling deve ser tratado como incompatível/instável até ser reintroduzido com
-detecção e fallback.
+CI: **verde** nos runs push `35742082161` e PR `35742088174` para
+`ff26e987856ee458b8b4e9cf4f667b0bfcda9093`. QA runtime é obrigatória; se
+chunks voltarem a aparecer, GPU culling deve ser tratado como
+incompatível/instável até ser reintroduzido com detecção e fallback.
 
 ### Hotfix — estabilizar cloud rendering sem transparência ordenada
 
@@ -744,8 +748,9 @@ Commits: material `7533742ed85d8bfa182912be49e4eb8e6e54cdbf`;
 presentation `c407a0245c460ddfeb1d3cccb77af5210e86d72a`.
 VERSION: `0.50.52`, commit
 `752d9b8ddabf308c1c64dadbfb0f3efb5731f964`.
-CI: aguardando. QA runtime ainda é necessária para confirmar que o flicker
-sumiu no backend/GPU usado em Windows.
+CI: **verde** nos runs push `35742467046` e PR `35742473237` para
+`752d9b8ddabf308c1c64dadbfb0f3efb5731f964`. QA runtime ainda é necessária
+para confirmar que o flicker sumiu no backend/GPU usado em Windows.
 
 ### Ordem de execução definida
 
