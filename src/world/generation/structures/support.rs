@@ -168,6 +168,8 @@ fn supported_surface_ground_y(
                 world_seed: context.biome_field.seed(),
                 minimum_y: surface_carver_minimum_y,
                 maximum_y: surface_carver_maximum_y,
+                surface_height_override: (context.world_generation.mode() == WorldGenerationMode::Flat)
+                    .then_some(super::super::flat_surface_height(context.dimension) as f32),
                 cave_graph: anchored_caves.map(|caves| &caves.connector_graph),
             },
         );

@@ -102,6 +102,7 @@ pub(super) struct SurfaceCarverResolveContext<'a> {
     pub(super) world_seed: u64,
     pub(super) minimum_y: f32,
     pub(super) maximum_y: f32,
+    pub(super) surface_height_override: Option<f32>,
     pub(super) cave_graph: Option<&'a FeatureGraph>,
 }
 
@@ -315,12 +316,14 @@ fn resolve_tunnel_candidates(
                 let tunnel_radius = sample_range(radius, hash.rotate_left(23));
                 let underground_y = sample_range(elevation, hash.rotate_left(41));
                 let mouth_block = IVec2::new(anchor.x.floor() as i32, anchor.y.floor() as i32);
-                let mouth_surface = surface_height(
-                    mouth_block,
-                    context.dimension,
-                    context.biomes,
-                    context.biome_field,
-                ) as f32;
+                let mouth_surface = context.surface_height_override.unwrap_or_else(|| {
+                    surface_height(
+                        mouth_block,
+                        context.dimension,
+                        context.biomes,
+                        context.biome_field,
+                    ) as f32
+                });
                 let mouth_y = mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - tunnel_radius;
                 if underground_y >= mouth_y - TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH {
                     return None;
@@ -373,12 +376,14 @@ fn connected_surface_tunnel(
     let mut surface_at = |horizontal: Vec2| {
         let block_position =
             IVec2::new(horizontal.x.floor() as i32, horizontal.y.floor() as i32);
-        surface_height(
-            block_position,
-            context.dimension,
-            context.biomes,
-            context.biome_field,
-        ) as f32
+        context.surface_height_override.unwrap_or_else(|| {
+            surface_height(
+                block_position,
+                context.dimension,
+                context.biomes,
+                context.biome_field,
+            ) as f32
+        })
     };
 
     // Descending surface tunnels are authored from the terrain mouth toward

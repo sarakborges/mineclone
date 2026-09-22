@@ -103,6 +103,8 @@ pub(super) fn sample_density_field(
         world_seed: pass.biome_field.seed(),
         minimum_y: chunk_minimum_y,
         maximum_y: chunk_maximum_y,
+        surface_height_override: (!pass.allow_solid_volume)
+            .then_some(columns.first().map_or(1.0, |column| column.surface_height as f32)),
         cave_graph: pass
             .anchored_caves
             .map(|caves| &caves.connector_graph),

@@ -38,7 +38,11 @@ struct GenerationSnapshot {
 }
 
 impl GenerationSnapshot {
-    fn from_sources(generation: &ChunkGeneration<'_>, content: &ChunkContent<'_>) -> Self {
+    fn from_sources(
+        generation: &ChunkGeneration<'_>,
+        content: &ChunkContent<'_>,
+        fresh_feature_caches: bool,
+    ) -> Self {
         Self {
             blocks: content.blocks().clone(),
             fluids: content.fluids().clone(),
@@ -49,7 +53,11 @@ impl GenerationSnapshot {
             game_rules: *generation.game_rules,
             world_generation: *generation.world_generation,
             biome_field: content.biome_field.as_ref().clone(),
-            feature_fields: generation.feature_fields.as_ref().clone(),
+            feature_fields: if fresh_feature_caches {
+                generation.feature_fields.clone_with_fresh_caches()
+            } else {
+                generation.feature_fields.as_ref().clone()
+            },
         }
     }
 
@@ -87,9 +95,13 @@ impl ChunkGenerationTasks {
             return;
         }
 
+        let fresh_feature_caches = self.snapshot.is_some()
+            && (generation.game_rules.is_changed() || generation.world_generation.is_changed());
         self.revision = self.revision.wrapping_add(1).max(1);
         self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
-            generation, content,
+            generation,
+            content,
+            fresh_feature_caches,
         )));
     }
 

@@ -54,6 +54,14 @@ impl WorldFeatureFields {
         }
     }
 
+    pub(crate) fn clone_with_fresh_caches(&self) -> Self {
+        Self {
+            hydrology: self.hydrology.clone(),
+            cave_connectivity: self.cave_connectivity.clone(),
+            caches: Arc::new(FeatureCaches::new()),
+        }
+    }
+
     pub(crate) fn hydrology_biome_overlay(
         &self,
         continentalness: f32,
