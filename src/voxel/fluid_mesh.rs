@@ -4,6 +4,9 @@ use smallvec::SmallVec;
 use crate::{content::fluid::FluidId, voxel::cell::VoxelCell};
 
 const MIN_FLUID_CELLS_FOR_GREEDY_TOP: usize = 64;
+const MIN_EXPOSED_FLUID_TOPS_FOR_HEIGHT_CACHE: usize = 64;
+const FLUID_HEIGHT_PLANE_SIDE: usize = CHUNK_SIZE + 2;
+const FLUID_HEIGHT_PLANE_AREA: usize = FLUID_HEIGHT_PLANE_SIDE * FLUID_HEIGHT_PLANE_SIDE;
 
 use super::{
     block_face::BlockFace,
@@ -77,6 +80,71 @@ struct FluidTopSource {
     x: u8,
     z: u8,
     cell: FluidCell,
+}
+
+#[derive(Clone, Copy)]
+struct ExposedFluidTop {
+    source: FluidTopSource,
+    top_sample: FluidNeighborContent,
+}
+
+struct FluidHeightPlaneCache {
+    current: [Option<FluidCell>; FLUID_HEIGHT_PLANE_AREA],
+    above: [Option<FluidCell>; FLUID_HEIGHT_PLANE_AREA],
+}
+
+impl FluidHeightPlaneCache {
+    fn capture<W: VoxelRead + ?Sized>(
+        world: &W,
+        chunk: &VoxelChunk,
+        chunk_origin: IVec3,
+        y: usize,
+    ) -> Self {
+        let mut current = [None; FLUID_HEIGHT_PLANE_AREA];
+        let mut above = [None; FLUID_HEIGHT_PLANE_AREA];
+
+        for cache_z in 0..FLUID_HEIGHT_PLANE_SIDE {
+            for cache_x in 0..FLUID_HEIGHT_PLANE_SIDE {
+                let local = IVec3::new(
+                    cache_x as i32 - 1,
+                    y as i32,
+                    cache_z as i32 - 1,
+                );
+                let world_position = chunk_origin + local;
+                let index = cache_x + cache_z * FLUID_HEIGHT_PLANE_SIDE;
+                current[index] =
+                    fluid_at_local_or_world(world, chunk, local, world_position);
+                above[index] = fluid_at_local_or_world(
+                    world,
+                    chunk,
+                    local + IVec3::Y,
+                    world_position + IVec3::Y,
+                );
+            }
+        }
+
+        Self { current, above }
+    }
+
+    fn heights_at(&self, x: usize, z: usize, fluid_id: FluidId) -> FluidFaceHeights {
+        let mut current = [[None; 3]; 3];
+        let mut above = [[None; 3]; 3];
+
+        for dz in 0..3 {
+            for dx in 0..3 {
+                let index = (x + dx) + (z + dz) * FLUID_HEIGHT_PLANE_SIDE;
+                current[dz][dx] = self.current[index];
+                above[dz][dx] = self.above[index];
+            }
+        }
+
+        FluidFaceHeights {
+            h00: fluid_corner_height(&current, &above, fluid_id, 0, 0),
+            h10: fluid_corner_height(&current, &above, fluid_id, 2, 0),
+            h11: fluid_corner_height(&current, &above, fluid_id, 2, 2),
+            h01: fluid_corner_height(&current, &above, fluid_id, 0, 2),
+        }
+    }
 }
 
 struct FluidTopPlanes {
@@ -295,6 +363,7 @@ fn emit_greedy_fluid_top_faces<W, F>(
 {
     let active_by_y = FluidTopPlanes::collect(chunk, meshlets);
     let mut mask = vec![None::<FluidGreedyTop>; CHUNK_SIZE * CHUNK_SIZE];
+    let mut exposed_tops = Vec::<ExposedFluidTop>::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
 
     for y in 0..CHUNK_SIZE {
         let active = active_by_y.plane(y);
@@ -302,10 +371,10 @@ fn emit_greedy_fluid_top_faces<W, F>(
             continue;
         }
 
-        for source in active {
+        exposed_tops.clear();
+        for &source in active {
             let x = usize::from(source.x);
             let z = usize::from(source.z);
-            let cell = source.cell;
             let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
             let world_voxel = chunk_origin + local_voxel;
             let top_sample = fluid_neighbor_content(
@@ -315,20 +384,37 @@ fn emit_greedy_fluid_top_faces<W, F>(
                 world_voxel,
                 BlockFace::Top,
             );
-            if !fluid_face_is_exposed(
-                top_sample,
-                cell.fluid_id,
-                BlockFace::Top,
-            ) {
-                continue;
+            if fluid_face_is_exposed(top_sample, source.cell.fluid_id, BlockFace::Top) {
+                exposed_tops.push(ExposedFluidTop { source, top_sample });
             }
+        }
+        if exposed_tops.is_empty() {
+            continue;
+        }
 
-            let heights = fluid_face_heights(
-                world,
-                chunk,
-                local_voxel,
-                world_voxel,
-                cell.fluid_id,
+        let height_cache =
+            (exposed_tops.len() >= MIN_EXPOSED_FLUID_TOPS_FOR_HEIGHT_CACHE)
+                .then(|| FluidHeightPlaneCache::capture(world, chunk, chunk_origin, y));
+
+        for exposed in &exposed_tops {
+            let source = exposed.source;
+            let top_sample = exposed.top_sample;
+            let x = usize::from(source.x);
+            let z = usize::from(source.z);
+            let cell = source.cell;
+            let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+            let world_voxel = chunk_origin + local_voxel;
+            let heights = height_cache.as_ref().map_or_else(
+                || {
+                    fluid_face_heights(
+                        world,
+                        chunk,
+                        local_voxel,
+                        world_voxel,
+                        cell.fluid_id,
+                    )
+                },
+                |cache| cache.heights_at(x, z, cell.fluid_id),
             );
             let source_block_srgb = surface_block_srgb_with_cache(
                 lighting_cache,
