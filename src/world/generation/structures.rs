@@ -94,17 +94,30 @@ pub(super) fn rasterize_structures(
         return;
     }
 
+    let needs_base_occupied = candidates.iter().any(|candidate| {
+        let structure = context
+            .structures
+            .get(&candidate.structure_id)
+            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
+        matches!(
+            structure.generation.replace_policy,
+            StructureReplacePolicy::AirOnly
+        )
+    });
+
     let mut base_occupied = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
-    for local_y in 0..CHUNK_SIZE {
-        for local_z in 0..CHUNK_SIZE {
-            for local_x in 0..CHUNK_SIZE {
-                let index =
-                    local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
-                if chunk
-                    .cell_at(local_x as i32, local_y as i32, local_z as i32)
-                    .is_some()
-                {
-                    bit_set(&mut base_occupied, index);
+    if needs_base_occupied {
+        for local_y in 0..CHUNK_SIZE {
+            for local_z in 0..CHUNK_SIZE {
+                for local_x in 0..CHUNK_SIZE {
+                    let index =
+                        local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+                    if chunk
+                        .cell_at(local_x as i32, local_y as i32, local_z as i32)
+                        .is_some()
+                    {
+                        bit_set(&mut base_occupied, index);
+                    }
                 }
             }
         }
