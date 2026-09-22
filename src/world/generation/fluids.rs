@@ -428,8 +428,8 @@ mod tests {
         };
         let original_surface = 104.0;
         let crossing = (-2..=2).find_map(|region_z: i32| {
-            let left = field.region_from_macro_terrain(IVec2::new(0, region_z), terrain);
-            let right = field.region_from_macro_terrain(IVec2::new(1, region_z), terrain);
+            let left = field.region_from_macro_terrain(IVec2::new(0, region_z), true, true, true, terrain);
+            let right = field.region_from_macro_terrain(IVec2::new(1, region_z), true, true, true, terrain);
             (region_z * 128..(region_z + 1) * 128)
                 .find_map(|world_z| {
                     let z = world_z as f32 + 0.5;
@@ -521,6 +521,8 @@ mod tests {
                     biome_field: &biome_field,
                     biomes: &biomes,
                     dimension: &dimension,
+                    allow_caverns: true,
+                    allow_solid_volume: true,
                 },
             );
             let density_index = voxel_index(local_x as usize, local_y as usize, local_z as usize);
