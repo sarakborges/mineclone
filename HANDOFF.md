@@ -834,8 +834,7 @@ Commits: remoção do cache global de missing render
 na integração `2874b0f900952e4d2426172071c735a89ed74ec9`.
 VERSION: `0.50.56`, commit
 `1e7a119c7224bf5f474af193ad83205c1ec00748`.
-CI de P33: aguardando. QA Windows deve observar especificamente suavidade da
-expansão visual dos chunks e se nearest-first continua coerente.
+CI de P33: **verde** nos runs push `35745922323` e PR `35745930103` para `1e7a119c7224bf5f474af193ad83205c1ec00748`. QA Windows deve observar especificamente suavidade da expansão visual dos chunks e se nearest-first continua coerente.
 
 ### Ordem de execução definida
 
