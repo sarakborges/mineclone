@@ -117,7 +117,9 @@ impl ChunkMeshTasks {
         let dependencies = world.dependencies();
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
-            let world = world.materialize_shell();
+            // The meshers now read central voxels directly and build a compact
+            // lighting cache once when worthwhile. Flattening the captured halo
+            // into another 18³ shell here only duplicates the same traversal.
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
                 meshes: build_chunk_render_meshes(coord, world.chunk(), &context),
