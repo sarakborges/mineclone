@@ -317,6 +317,27 @@ VERSION: `0.50.30`, commit
 `f2b1ee8c03e65f85177029c62100bae0664178c8`.
 CI de P14: **verde** nos runs push `35732870883` e PR `35732876927` para `f2b1ee8c03e65f85177029c62100bae0664178c8`. Nenhum `cargo test` foi adicionado/executado.
 
+### P15 — caminho sparse para cache vertical de dampening
+
+`LightingContext::vertical_dampening_by_column` varria até 4.096 posições de
+todo chunk não vazio. Para chunks realmente densos esse caminho continua bom,
+pois cada coluna pode saturar a dampening cedo; para árvores/estruturas
+esparsas, porém, a maior parte das leituras era ar.
+
+`VoxelChunk` agora expõe uma visita exata da união dos bitsets de ocupação de
+blocos/fluidos. Quando `block_count + fluid_count <= 256`, o cache vertical
+usa essa visita sparse e acumula dampening somente nos voxels ocupados. Acima
+desse limiar, mantém o scan denso antigo com early-exit por coluna. O threshold
+é conservador: o caminho sparse nunca visita mais voxels ocupados do que as
+256 colunas mínimas do caminho denso.
+
+Commits: traversal de conteúdo
+`ae49e39490b0ba3194b1ca57eb1fa3ed31d3a4f3`; cache híbrido + regressão
+`7899f5361fb5027c3ad0d0159d0c3adfaed49f9d`.
+VERSION: `0.50.31`, commit
+`57eb0a3e9bcf45272309d61375d5d63eda5cc4fe`.
+CI de P15: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
