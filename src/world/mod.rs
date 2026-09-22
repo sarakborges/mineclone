@@ -40,6 +40,7 @@ mod storage_durability;
 mod streaming;
 pub(crate) mod terrain;
 pub(crate) mod tick;
+pub(crate) mod thumbnail;
 mod work_budget;
 pub(crate) mod warp;
 pub(crate) mod world_feature_fields;
