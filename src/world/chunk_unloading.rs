@@ -343,17 +343,25 @@ pub(super) fn unload_chunk_meshes(
             continue;
         }
 
+        let might_affect_direct_skylight = runtime
+            .world
+            .chunk(coord)
+            .is_some_and(chunk_might_affect_direct_skylight);
+
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         runtime.remesh_queue.remove(coord);
         runtime.remesh_tasks.cancel_coord(coord);
         runtime.remesh_tasks.remove_lighting_revision(coord);
         runtime.world.archive_chunk(coord);
 
-        // Removing a 16³ section can reopen direct skylight for every
-        // resident section below it in the same x/z column.
-        runtime
-            .lighting
-            .enqueue_loaded_column_below(&runtime.world, coord);
+        // Removing an empty section is equivalent to removing the missing-air
+        // section that direct skylight already assumed, so lower sections do
+        // not need a full relight. Non-empty sections remain conservative.
+        if might_affect_direct_skylight {
+            runtime
+                .lighting
+                .enqueue_loaded_column_below(&runtime.world, coord);
+        }
 
         // Restored or newly generated chunks need a fresh direct-light seed,
         // but an obsolete mesh retry while still resident must not reseed.
@@ -431,6 +439,10 @@ fn halo_remesh_needs(chunk: &VoxelChunk, offset: IVec3) -> (bool, bool) {
     )
 }
 
+fn chunk_might_affect_direct_skylight(chunk: &VoxelChunk) -> bool {
+    !chunk.is_empty()
+}
+
 fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
     let nominal_radius = render_distance_chunks.max(1);
     let proportional_margin = (nominal_radius + 1) / 2;
@@ -443,6 +455,24 @@ mod tests {
     use crate::voxel::{
         cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
     };
+
+    #[test]
+    fn empty_chunk_cannot_change_direct_skylight_when_unloaded() {
+        assert!(!chunk_might_affect_direct_skylight(&VoxelChunk::empty()));
+    }
+
+    #[test]
+    fn occupied_chunk_stays_on_conservative_skylight_unload_path() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            1,
+            1,
+            1,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+
+        assert!(chunk_might_affect_direct_skylight(&chunk));
+    }
 
     #[test]
     fn unload_retention_scales_from_render_distance() {
