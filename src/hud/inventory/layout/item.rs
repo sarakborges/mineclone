@@ -11,7 +11,8 @@ use super::{
     InventoryItemView,
     super::state::{
         InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipHint,
-        InventoryItemTooltipId, InventoryItemTooltipStats, InventoryItemTooltipText, ITEM_ICON_SIZE,
+        InventoryItemTooltipId, InventoryItemTooltipStats, InventoryItemTooltipStatsTitle,
+        InventoryItemTooltipText, ITEM_ICON_SIZE,
     },
 };
 
@@ -47,6 +48,16 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
         tooltip.spawn((
             InventoryItemTooltipHint,
             typography::caption(""),
+            Visibility::Hidden,
+            Pickable::IGNORE,
+        ));
+        tooltip.spawn((
+            InventoryItemTooltipStatsTitle,
+            typography::inventory_category(""),
+            Node {
+                margin: UiRect::top(px(6)),
+                ..default()
+            },
             Visibility::Hidden,
             Pickable::IGNORE,
         ));
