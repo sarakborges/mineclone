@@ -10897,3 +10897,18 @@ continuam sendo respeitadas normalmente.
 Commit funcional: `e5fa74cdf6368f99fe236b6a3d6aadbd209ca6f7`.
 CI push `35761909149`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.76`.
+
+
+## 2026-09-22 — Hardness de bricks e glass
+
+Ajustes adicionais de mineração:
+- `asteria:bricks`: `hardness = 2`;
+- `asteria:glass`: `hardness = 0.25`.
+
+Com o tempo-base atual de 5s a 1x:
+- bricks levam 10s a 1x;
+- glass leva 1.25s a 1x.
+
+Commit funcional: `ba915836145e56565eeb687a365c682f41ac994b`.
+CI push `35762345224`: **verde** (localizações, Clippy rigoroso e cargo check).
+VERSION: `0.50.77`.
