@@ -76,7 +76,47 @@ impl ChunkLightingCache {
     ) -> Option<Self> {
         const MIN_CONTENT_VOXELS: usize = 96;
         (chunk.block_count() + chunk.fluid_count() >= MIN_CONTENT_VOXELS)
-            .then(|| Self::capture(world, chunk_origin))
+            .then(|| Self::capture_with_center(world, chunk_origin, chunk))
+    }
+
+    fn capture_with_center<W: VoxelRead + ?Sized>(
+        world: &W,
+        chunk_origin: IVec3,
+        chunk: &VoxelChunk,
+    ) -> Self {
+        let origin = chunk_origin - IVec3::ONE;
+        let mut samples = vec![CachedLightingSample::default(); LIGHTING_CACHE_VOLUME];
+
+        for y in 0..LIGHTING_CACHE_SIDE {
+            for z in 0..LIGHTING_CACHE_SIDE {
+                for x in 0..LIGHTING_CACHE_SIDE {
+                    let sample = if x > 0
+                        && y > 0
+                        && z > 0
+                        && x <= CHUNK_SIZE
+                        && y <= CHUNK_SIZE
+                        && z <= CHUNK_SIZE
+                    {
+                        chunk.sample_local(
+                            x as i32 - 1,
+                            y as i32 - 1,
+                            z as i32 - 1,
+                        )
+                    } else {
+                        let world_position =
+                            origin + IVec3::new(x as i32, y as i32, z as i32);
+                        world.sample_at(world_position)
+                    };
+                    samples[lighting_cache_index(x, y, z)] =
+                        cached_lighting_sample(sample);
+                }
+            }
+        }
+
+        Self {
+            origin,
+            samples: samples.into_boxed_slice(),
+        }
     }
 
     pub(crate) fn capture<W: VoxelRead + ?Sized>(
