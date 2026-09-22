@@ -1,4 +1,17 @@
 {
   "health": 20.0,
-  "attack": "asteria:punch"
+  "attack": "asteria:punch",
+  "model": "models/entities/player/player.gltf",
+  "animations": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "run": "Run",
+    "jump": "Jump",
+    "fall": "Fall",
+    "hit": "Hit",
+    "place": "Place",
+    "break": "Break",
+    "hurt": "Hurt",
+    "death": "Death"
+  }
 }
