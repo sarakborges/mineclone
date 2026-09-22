@@ -86,7 +86,7 @@ fn spawn_player_hud(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_entity_card(root, EntityCardSource::LocalPlayer);
+            spawn_entity_card(root, EntityCardSource::LocalPlayer, None);
             root.spawn((
                 InventoryHint,
                 typography::crosshair_hint(
