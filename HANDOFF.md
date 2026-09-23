@@ -12885,3 +12885,56 @@ Commits:
 Rust validation for functional commit `d20fe0c1f7383b04623c64b8e9a812eb9d59d1d2` passed completely in Actions run `35877109893`: localization audit, Clippy and Check all successful.
 
 VERSION: `0.50.150`, commit de versão `d18507dfd6187d501842f1fca9b870e0c09f60af`.
+
+
+## 2026-09-23 — Slime surface texture + entity/entity separation
+
+Two related visual/gameplay issues were addressed.
+
+### Slime shell now has actual surface texture
+
+The slime shell was previously rendered from tint + unlit vertex shading only. That made both models read as nearly uniform colored masses even after opacity/culling fixes.
+
+A new subtle grayscale surface texture was added for each variant:
+- `assets/textures/creatures/slime/surface.png`;
+- `assets/textures/creatures/slime_legacy/surface.png`.
+
+The texture is fully opaque, low-contrast and pixel-art friendly. It adds small-scale mottling without reintroducing transparency, reflections, hard lighting or a visible grid.
+
+Both creature definitions now bind `SlimeShell` to the new surface texture.
+
+UV mapping was also corrected so the texture is actually readable:
+- rounded slime: planar mapping by exposed face axis across the whole body;
+- legacy slime: full-face planar mapping instead of only sampling the old atlas tile;
+- existing outer-volume vertex shading remains as a separate subtle depth cue.
+
+The generated GLBs were updated to match the generators.
+
+Commits:
+- surface texture assets: `d94f5909190470aa91c1a1750cb301e130a2e8a8`;
+- rounded texture binding: `0f60e761ef91f4be49f04083d1253be598bfe757`;
+- legacy texture binding: `bda21cfec6d83b28df2636a5297a588f069d4d64`;
+- rounded UV generator: `6322a4d430df8dd8a66a95b89c5a76284ff1acb0`;
+- legacy UV generator: `bcc01c07673b8848d53d442bb19f510c3f5dd4b4`;
+- GLB UV update: `30d5669e62c56d6e7c73ef5dda4e5eff320d640d`.
+
+### Entities no longer stack inside each other
+
+Player/creature contact response already existed, but creature/creature overlap was not resolved. The existing terrain-safe contact helpers are now reused for both cases.
+
+New behavior:
+- creature ↔ creature horizontal overlap is resolved after movement;
+- displacement is shared 50/50 by default;
+- if one participant cannot move because of terrain or an unloaded voxel, the remaining displacement is transferred to the other;
+- pushes are swept in collision-sized steps, so separation cannot tunnel through walls;
+- up to four solver passes are performed to settle small groups;
+- creature/creature resolution runs before player/creature resolution, so the final pass keeps the player separated as well;
+- only gameplay root transforms/colliders participate; animated visual children never affect collision.
+
+Commits:
+- creature/creature contact solver: `02ce0b1f3add17002df9c34f2bc8e43c1ef94395`;
+- PostUpdate scheduling: `4a737935fd8acdeca80b481789f6fa63bff33f6b`.
+
+Rust validation for the functional state completed successfully on Actions run `35882475225` (Clippy + Check).
+
+VERSION: `0.50.156`, commit de versão `fea2283139fecc535accc0a3ecfb3f2a4c36370b`.
