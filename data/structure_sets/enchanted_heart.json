@@ -43,9 +43,9 @@
       "required": false,
       "placement": {
         "relativeTo": "origin",
-        "minDistance": 30,
-        "maxDistance": 92,
-        "minSeparation": 16,
+        "minDistance": 22,
+        "maxDistance": 86,
+        "minSeparation": 15,
         "attempts": 384,
         "allowOverlap": false
       }
