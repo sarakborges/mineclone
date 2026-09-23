@@ -10,10 +10,8 @@ use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::inventory_category::InventoryCategoryRegistry,
     localization::UiLocalization,
-    player::{
-        character_info::CharacterInfoState,
-        inventory::{InventoryCursor, InventoryState},
-    },
+    gameplay::modal::GameplayModalState,
+    player::inventory::InventoryCursor,
 };
 
 use crate::hud::block_icon::BlockIconMaterial;
@@ -98,11 +96,11 @@ impl Plugin for InventoryHudPlugin {
                     .chain(),
             )
             .add_systems(
-                OnEnter(InventoryState::Open),
+                OnEnter(GameplayModalState::Inventory),
                 spawn_inventory.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
-                OnExit(InventoryState::Open),
+                OnExit(GameplayModalState::Inventory),
                 (
                     reset_resource::<CreativeInventoryView>,
                     reset_resource::<PlayerInventoryView>,
@@ -111,7 +109,7 @@ impl Plugin for InventoryHudPlugin {
                 ),
             )
             .add_systems(
-                OnExit(CharacterInfoState::Open),
+                OnExit(GameplayModalState::CharacterInfo),
                 (
                     reset_resource::<InventoryCursor>,
                     reset_resource::<PlayerInventoryView>,
@@ -124,7 +122,7 @@ impl Plugin for InventoryHudPlugin {
                     handle_search_focus,
                     focus_inventory_search_frame,
                     handle_player_search_focus,
-                    handle_inventory_close_shortcut.run_if(in_state(InventoryState::Open)),
+                    handle_inventory_close_shortcut.run_if(in_state(GameplayModalState::Inventory)),
                     handle_search_input,
                     handle_player_search_input,
                     handle_category_clicks,
@@ -147,7 +145,7 @@ impl Plugin for InventoryHudPlugin {
                 (
                     sync_inventory_cursor_icon,
                     sync_inventory_slot_contents,
-                    rebuild_inventory_when_changed.run_if(in_state(InventoryState::Open)),
+                    rebuild_inventory_when_changed.run_if(in_state(GameplayModalState::Inventory)),
                 )
                     .chain()
                     .in_set(InventoryHudSet::Sync)
@@ -177,10 +175,6 @@ impl Plugin for InventoryHudPlugin {
     }
 }
 
-fn inventory_ui_open(
-    inventory: Res<State<InventoryState>>,
-    character_info: Res<State<CharacterInfoState>>,
-) -> bool {
-    *inventory.get() == InventoryState::Open
-        || *character_info.get() == CharacterInfoState::Open
+fn inventory_ui_open(modal: Res<State<GameplayModalState>>) -> bool {
+    modal.get().shows_inventory()
 }
