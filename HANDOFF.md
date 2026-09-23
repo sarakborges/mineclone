@@ -146,7 +146,18 @@ skin/material, identificação de head/hand e ligação de animação. O retorno
 `configure_player_mesh` preserva o comportamento de ignorar meshes vazias nas
 etapas seguintes. VERSION: `0.50.122`.
 
-CI de Q12: pendente neste checkpoint.
+CI de Q12: **verde** no run `35818910071` após corrigir a mutabilidade do material (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q13 — encapsular view dos toggles de worldgen
+
+`new_world_section.rs` não suprime mais `type_complexity` na sincronização de
+spawn structures/single biome. `WorldGenerationToggleView` possui apenas as
+quatro queries que representam os dois controls + thumbs e reutiliza
+`toggle::colors`, `toggle::thumb_left` e `selectable::apply_colors` já
+existentes. O system público fica responsável somente por ler
+`NewWorldConfig` e fornecer o estado semântico à view. VERSION: `0.50.123`.
+
+CI de Q13: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
