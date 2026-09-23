@@ -173,6 +173,8 @@ pub(super) fn new_world_generation_section(
         settings_layout::group_column(),
         children![
             world_generation_mode_setting(config, localization, language),
+            spawn_biome_setting(localization, language),
+            biome_size_multiplier_setting(config, localization, language),
             spawn_structures_setting(config, localization, language),
             single_biome_setting(config, localization, language),
             world_generation_feature_setting(
@@ -207,8 +209,6 @@ pub(super) fn new_world_generation_section(
                 localization,
                 language,
             ),
-            spawn_biome_setting(localization, language),
-            biome_size_multiplier_setting(config, localization, language),
         ],
     )
 }
