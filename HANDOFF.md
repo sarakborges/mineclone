@@ -13131,3 +13131,21 @@ Functional commits:
 Rust validation for `1fe3e6139de1dfbe3c1d2c71408980faa9e3321e` completed successfully in Actions run `35885906071`: localization audit, Clippy and Check all passed.
 
 VERSION: `0.50.163`, commit de versão `9d353b6170b68690b9c18b53c2f9ef6e18e3d40a`.
+
+
+## 2026-09-23 — Slime surface detail strengthened
+
+The first surface microtexture was technically present but still read almost uniformly at gameplay distance. The shell remained a single green mass in close-up because its grayscale range was only about 239..254, so the tint multiplication left too little local contrast.
+
+The two slime variants now use stronger, fully opaque pixel-art surface maps with different patterns:
+- rounded slime: irregular organic 4px-scale mottling with larger connected patches and short accents;
+- legacy slime: a distinct, slightly more directional/blocky pattern instead of sharing the rounded texture;
+- rounded grayscale range is approximately 179..253, with average near 227;
+- legacy grayscale range is approximately 192..254, with average near 235;
+- alpha remains 255 everywhere, so this does not reintroduce transparency;
+- there are still no per-voxel borders or checker grids;
+- the existing ~5% object-local vertex shading is unchanged and continues to supply only the large-scale volume cue.
+
+This deliberately separates two scales of visual information: vertex color describes the body volume, while the PNG carries visible small/mid-scale material detail. The stronger texture contrast is multiplicative under the same muted green tint, so the slime gains readable variation without becoming neon again.
+
+VERSION: `0.50.170`.
