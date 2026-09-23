@@ -194,14 +194,14 @@ fn configure_loaded_scene(
                             if let Some(image) = texture {
                                 material.base_color_texture = Some(image.clone());
                             }
-                            // Creature override materials stay matte and non-emissive so legacy
-                            // GLB settings cannot make them glow like polished glass. Opacity is
-                            // handled below: tinted body materials are opaque, texture-only
-                            // cutouts preserve the model's authored alpha mode.
+                            // Creature override materials are intentionally fully matte.
+                            // Keep normal light/shadow response, but remove the PBR specular/
+                            // environment-reflection lobe instead of making creatures unlit.
+                            // This also neutralizes glossy settings accidentally authored in a GLB.
                             material.metallic = 0.0;
-                            material.perceptual_roughness = 0.92;
+                            material.perceptual_roughness = 1.0;
                             material.reflectance = 0.0;
-                            material.specular_tint = Color::WHITE;
+                            material.specular_tint = Color::BLACK;
                             material.clearcoat = 0.0;
                             material.diffuse_transmission = 0.0;
                             material.specular_transmission = 0.0;
