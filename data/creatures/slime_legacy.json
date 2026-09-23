@@ -7,7 +7,7 @@
   },
   "model": "models/creatures/slime/slime.glb",
   "health": 10,
-  "maxPerType": 1,
+  "maxPerType": 4,
   "collider": {
     "size": [
       0.78,
@@ -25,10 +25,14 @@
       "hue": 153,
       "saturation": 0.62,
       "intensity": 0.64
+    },
+    "SlimeCore": {
+      "hue": 153,
+      "saturation": 0.72,
+      "intensity": 0.34
     }
   },
   "unlitMaterials": [
-    "SlimeShell",
     "SlimeFace"
   ],
   "animations": {
@@ -45,7 +49,8 @@
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
   "textures": {
-    "SlimeShell": "textures/creatures/slime/shell.png",
-    "SlimeFace": "textures/creatures/slime/face.png"
+    "SlimeShell": "textures/creatures/slime_legacy/shell.png",
+    "SlimeCore": "textures/creatures/slime_legacy/core.png",
+    "SlimeFace": "textures/creatures/slime_legacy/face.png"
   }
 }
