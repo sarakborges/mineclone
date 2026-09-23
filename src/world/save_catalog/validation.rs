@@ -8,6 +8,7 @@ use crate::{
         day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
         fluid::FluidRegistry,
+        item::{ItemRegistry, canonical_inventory_item_id},
         layer::LayerRegistry,
         tool::ToolRegistry,
     },
@@ -24,6 +25,7 @@ use crate::world::{
 pub(crate) struct SaveRegistries<'a> {
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) items: &'a ItemRegistry,
     pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) tools: &'a ToolRegistry,
@@ -58,7 +60,8 @@ impl SaveRegistries<'_> {
             spawn_biome_valid,
             current_biome_valid,
             |id| {
-                self.blocks.get(id).is_some()
+                self.items.get(id).is_some()
+                    || self.blocks.get(id).is_some()
                     || self.layers.get(id).is_some()
                     || self.tools.get(id).is_some()
             },
@@ -72,9 +75,10 @@ impl SaveRegistries<'_> {
 
     pub(crate) fn owned_for_pruning(self) -> PruneRegistries {
         let valid_items = self
-            .blocks
+            .items
             .iter()
-            .map(|block| block.id.clone())
+            .map(|item| item.id.clone())
+            .chain(self.blocks.iter().map(|block| block.id.clone()))
             .chain(self.layers.iter().map(|layer| layer.id.clone()))
             .chain(self.tools.iter().map(|tool| tool.id.clone()))
             .collect();
@@ -202,7 +206,8 @@ fn validate_playable(
         return Err(invalid_data("invalid selected hotbar slot"));
     }
     for id in snapshot.inventory.iter().flatten() {
-        if !valid_item(id) {
+        let canonical = canonical_inventory_item_id(id);
+        if !valid_item(canonical) {
             return Err(invalid_data(format!("unknown inventory item ID: {id}")));
         }
     }
