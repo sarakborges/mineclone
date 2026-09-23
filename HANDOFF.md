@@ -290,7 +290,7 @@ centralizadas em `player/material.rs`: base color branca, player texture,
 modelo completo (reflectance/emissive) permanecem locais para preservar o
 comportamento visual específico. VERSION: `0.50.141`.
 
-CI de Q25: pendente neste checkpoint.
+CI de Q25: **verde** no run `35871995004` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
