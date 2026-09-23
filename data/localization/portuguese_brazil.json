@@ -103,7 +103,6 @@
   "settings.hint.breakOrPlaceBlock": "Hint de Quebrar / Colocar Bloco",
   "settings.hint.brushPaint": "Hint de Pintar com Pincel",
   "settings.hint.brushClear": "Hint de Limpar com Pincel",
-  "settings.hint.chisel": "Hint de Cinzel",
   "settings.hint.shears": "Hint de Tesoura",
   "settings.hint.structureTool": "Hint da Ferramenta de Estrutura",
   "settings.targetBlockPosition": "Posição do Bloco Selecionado",
@@ -124,12 +123,8 @@
   "hud.closeInventory": "Pressione {inventory} ou ESC para fechar o inventário.",
   "hud.brushPaint": "Clique esquerdo para pintar de {color}. Clique direito para escolher a cor.",
   "hud.brushClear": "Clique esquerdo para remover a tinta. Clique direito para escolher a cor.",
-  "hud.chisel": "Cinzel: {precision} · {toolAction}: precisão · Esquerdo: remover · Direito: colocar",
   "hud.shears": "Tesoura: clique direito para remover a camada superficial superior",
   "hud.structureTool": "Ferramenta de Estrutura: clique direito para definir um ponto da seleção",
-  "chisel.precision.thick": "Grosso",
-  "chisel.precision.thin": "Fino",
-  "chisel.precision.extraThin": "Extrafino",
   "hud.light": "Luz",
   "hud.day": "Dia",
   "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
@@ -174,5 +169,10 @@
   "controls.sendChat": "Enviar Mensagem no Chat",
   "controls.chatHistory": "Navegar no Histórico do Chat",
   "controls.autocomplete": "Autocompletar Comando",
-  "controls.title": "CONTROLES"
+  "controls.title": "CONTROLES",
+  "settings.hint.artisansKit": "Hint do Kit de Artesão",
+  "hud.artisansKit": "Kit de Artesão: {precision} · {toolAction}: precisão · Esquerdo: remover · Direito: colocar",
+  "artisansKit.precision.thick": "Grosso",
+  "artisansKit.precision.thin": "Fino",
+  "artisansKit.precision.extraThin": "Extrafino"
 }
