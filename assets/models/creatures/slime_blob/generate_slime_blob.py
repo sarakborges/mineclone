@@ -204,10 +204,9 @@ def material(name: str, color, *, alpha_mode=None, unlit=False):
 
 
 materials = [
-    # The shell is deliberately lit now: it keeps zero metallic/high roughness,
-    # but receives diffuse world lighting and therefore a small amount of shade.
-    # The face stays unlit so its expression remains readable from every heading.
-    material('SlimeShell', [.50, .91, .78]),
+    # Both materials stay unlit so facing direction never produces harsh face-by-face
+    # lighting. A subtle vertical shade is baked into shell_soft.png instead.
+    material('SlimeShell', [.50, .91, .78], unlit=True),
     material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
 ]
 shell_mesh = make_voxel_surface_mesh()
@@ -307,7 +306,7 @@ scene = {
         'voxel_resolution': [NX, NY, NZ],
         'occupied_voxels': len(voxels),
         'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Lit matte shell receives soft world shading; face remains unlit. Legacy slime assets remain untouched.',
+        'notes': 'Second-generation sampled voxel blob. Shell and face are unlit; subtle stable shade comes from shell_soft.png. Legacy slime assets remain untouched.',
     },
 }
 json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
