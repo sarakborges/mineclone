@@ -193,6 +193,17 @@ preservado. VERSION: `0.50.126`.
 
 CI de Q16: **verde** no run `35819981289` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q17 — compartilhar regras de material entre criatura e portrait
+
+A transformação de `StandardMaterial` para criaturas foi centralizada em
+`creatures/material.rs`. Gameplay e target portrait agora reutilizam a mesma
+regra para tint, texture override, materiais matte, `unlit`, emissive/transmission
+e alpha de materiais tintados. O HUD acessa somente o helper reexportado pelo
+boundary `creatures`, sem depender do submódulo interno. Isso remove duas
+implementações que já haviam divergido visualmente. VERSION: `0.50.127`.
+
+CI de Q17: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
