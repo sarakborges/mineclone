@@ -2,7 +2,11 @@ use bevy::prelude::*;
 
 use crate::{
     app::keybinds::{KeybindAction, Keybinds},
-    player::{PlayerEntity, camera::GameplayCamera, game_mode::GameMode},
+    player::{
+        PlayerEntity,
+        camera::{CameraPerspective, GameplayCamera},
+        game_mode::GameMode,
+    },
     voxel::world::VoxelWorld,
     world::{game_rules::GameRules, tick::WorldTickClock},
 };
@@ -103,6 +107,7 @@ pub(super) fn move_flying(
     keys: Res<ButtonInput<KeyCode>>,
     keybinds: Res<Keybinds>,
     world: Res<VoxelWorld>,
+    perspective: Res<CameraPerspective>,
     player: Single<
         (&mut Transform, &GameplayCamera, &mut FlightState, &mut GravityState),
         With<PlayerEntity>,
@@ -123,9 +128,7 @@ pub(super) fn move_flying(
     }
 
     let fly_speed = FLY_SPEED;
-    let yaw_rotation = Quat::from_rotation_y(camera.yaw);
-    let forward = yaw_rotation * Vec3::NEG_Z;
-    let right = yaw_rotation * Vec3::X;
+    let (forward, right) = perspective.horizontal_movement_axes(camera.yaw);
     let mut horizontal_input = Vec3::ZERO;
 
     if keys.pressed(KeyCode::KeyW) {
