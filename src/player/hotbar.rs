@@ -4,8 +4,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        block::BlockRegistry, block_id::intern_block_id, layer::LayerRegistry,
-        layer_id::intern_layer_id, tool::ToolRegistry, tool_id::intern_tool_id,
+        block::BlockRegistry, block_id::intern_block_id,
+        item::{ItemRegistry, canonical_inventory_item_id}, item_id::intern_item_id,
+        layer::LayerRegistry, layer_id::intern_layer_id, tool::ToolRegistry,
+        tool_id::intern_tool_id,
     },
     gameplay::availability::world_interaction_available,
 };
@@ -93,6 +95,7 @@ impl PlayerHotbar {
     pub(crate) fn from_saved_items_and_selection(
         items: &[Option<String>],
         selected_slot: usize,
+        items: &ItemRegistry,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
         tools: &ToolRegistry,
@@ -111,14 +114,22 @@ impl PlayerHotbar {
         for (index, item) in items.iter().enumerate() {
             let resolved = match item {
                 None => None,
-                Some(id) if blocks.get(id).is_some() => Some(intern_block_id(id)),
-                Some(id) if layers.get(id).is_some() => Some(intern_layer_id(id)),
-                Some(id) if tools.get(id).is_some() => Some(intern_tool_id(id)),
                 Some(id) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("unknown inventory item ID: {id}"),
-                    ));
+                    let canonical = canonical_inventory_item_id(id);
+                    if items.get(canonical).is_some() {
+                        Some(intern_item_id(canonical))
+                    } else if blocks.get(canonical).is_some() {
+                        Some(intern_block_id(canonical))
+                    } else if layers.get(canonical).is_some() {
+                        Some(intern_layer_id(canonical))
+                    } else if tools.get(canonical).is_some() {
+                        Some(intern_tool_id(canonical))
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("unknown inventory item ID: {id}"),
+                        ));
+                    }
                 }
             };
 
