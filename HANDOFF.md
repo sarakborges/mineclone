@@ -734,6 +734,17 @@ limpar o target, enquanto block edit bem-sucedido limpa. VERSION: `0.50.183`.
 CI acumulado de Q60: **verde** no run `35893682774` (localizações, Clippy
 com `-D warnings` e `cargo check`).
 
+### Q61 — mover validação de referências para LayerDefinition
+
+A referência de `layer.category` saiu da validação global e passou a
+`LayerDefinition::validate_references`, que resolve a inventory category
+diretamente no registry correspondente. `content::validation` preserva apenas
+as invariantes globais de namespace que impedem o mesmo ID de ser layer e
+block/tool. VERSION: `0.50.184`.
+
+CI de Q61: **verde** no run `35894108568` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
