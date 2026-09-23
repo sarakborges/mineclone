@@ -378,6 +378,17 @@ e tem lifecycle próprio. VERSION: `0.50.152`.
 
 CI de Q33: **verde** no run `35880111845` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q34 — separar derivação de texto e ícone do target HUD
+
+`update_target_hud` deixou de concentrar toda a apresentação do alvo. A
+montagem do texto foi extraída para `target_hud_text` e a derivação de tint/
+snapshot do ícone para `target_hud_icon_snapshot`. O system principal mantém
+somente coleta do estado, cache/early-return, visibilidade e aplicação das
+mudanças. O snapshot é movido ao cache apenas depois de todos os cálculos que o
+consultam, sem clone adicional. VERSION: `0.50.153`.
+
+CI de Q34: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
