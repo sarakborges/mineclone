@@ -1,17 +1,17 @@
 {
   "id": "asteria:structure_tool_rustic",
   "name": {
-    "english": "Structure Tool",
-    "portuguese_brazil": "Ferramenta de Estrutura",
-    "spanish": "Herramienta de Estructura"
+    "english": "Architect's Compass",
+    "portuguese_brazil": "Bússola do Arquiteto",
+    "spanish": "Brújula del Arquitecto"
   },
   "hint": {
     "english": "Selects regions to export as structures.",
     "portuguese_brazil": "Seleciona regiões para exportar como estruturas.",
     "spanish": "Selecciona regiones para exportarlas como estructuras."
   },
-  "category": "tools",
-  "icon": "",
+  "category": "creative_tools",
+  "icon": "textures/tools/archiects-compass.png",
   "leftBehavior": "asteria:none",
   "rightBehavior": "asteria:structure/select"
 }
