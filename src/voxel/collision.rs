@@ -87,7 +87,7 @@ pub fn try_step_up_aabb(
     None
 }
 
-fn aabb_is_clear(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+pub(crate) fn aabb_is_clear(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
     let min = (bounds.0 + Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
     let max = (bounds.1 - Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
     for y in min.y..=max.y {
