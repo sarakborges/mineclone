@@ -68,18 +68,22 @@ def make_skin(kind: str) -> bytes:
                 gray = 229 if border else (247 if (u//8 + v//8) % 2 else 255)
             elif kind == 'face':
                 gray = 255
+                alpha = 0
                 if 20 <= v <= 29 and (16 <= u <= 23 or 40 <= u <= 47):
-                    gray = 15
+                    gray, alpha = 15, 255
                 if v == 20 and u in (16, 40):
-                    gray = 255
+                    gray, alpha = 255, 255
                 if 29 <= v <= 31 and (8 <= u <= 13 or 50 <= u <= 55):
-                    gray = 170
+                    gray, alpha = 170, 255
                 if (v == 38 and 24 <= u <= 39) or (v == 39 and 27 <= u <= 36):
-                    gray = 24
+                    gray, alpha = 24, 255
             else:
                 raise ValueError(f'unknown slime skin kind: {kind}')
             index = (y * 64 + x) * 4
-            pixels[index:index + 4] = bytes((gray, gray, gray, 255))
+            if kind == 'face':
+                pixels[index:index + 4] = bytes((gray, gray, gray, alpha))
+            else:
+                pixels[index:index + 4] = bytes((gray, gray, gray, 255))
     scanlines = b''.join(b'\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
     return (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
             + png_chunk(b'IDAT', zlib.compress(scanlines, 9)) + png_chunk(b'IEND', b''))
