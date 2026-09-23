@@ -1,9 +1,9 @@
-//! Persisted Chisel geometry. The original macro cell supplies the material,
+//! Persisted Artisan's Kit geometry. The original macro cell supplies the material,
 //! texture rotation, orientation and visual properties; its occupancy mask
 //! preserves the carved shape across saves and archived chunks.
 //!
 //! A leading `t` is retained for compatibility with legacy session-created
-//! parent blocks. New Chisel placement never creates parents in empty space.
+//! parent blocks. New Artisan's Kit placement never creates parents in empty space.
 
 use std::{
     collections::HashMap,
@@ -18,21 +18,22 @@ use super::{
 };
 
 pub(crate) const MICROBLOCK_EDGE: i32 = 8;
-pub(crate) const CHISEL_MASK_PROPERTY: &str = "asteria:chisel_mask";
+pub(crate) const ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:artisans_kit_mask";
+pub(crate) const LEGACY_ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:chisel_mask";
 const LAYERS: usize = MICROBLOCK_EDGE as usize;
 const ENCODED_LENGTH: usize = LAYERS * 16;
 const TRANSIENT_PREFIX: char = 't';
 
-/// Full-block interactions belong to ordinary block tools, not the Chisel.
+/// Full-block interactions belong to ordinary block tools, not the Artisan's Kit.
 #[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum ChiselResolution {
+pub(crate) enum ArtisansKitResolution {
     #[default]
     Thick,
     Thin,
     ExtraThin,
 }
 
-impl ChiselResolution {
+impl ArtisansKitResolution {
     pub(crate) const fn next(self) -> Self {
         match self {
             Self::Thick => Self::Thin,
@@ -134,7 +135,7 @@ impl MicroblockMask {
     pub(crate) fn edit(
         &mut self,
         position: [usize; 3],
-        resolution: ChiselResolution,
+        resolution: ArtisansKitResolution,
         occupied: bool,
     ) -> bool {
         if position.iter().any(|&axis| axis >= LAYERS) {
