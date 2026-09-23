@@ -20,6 +20,7 @@ pub(super) struct VisualAttached;
 pub(super) struct CreatureAppearance {
     owner: Entity,
     material_tints: HashMap<String, Hsi>,
+    material_alphas: HashMap<String, f32>,
     material_textures: HashMap<String, Handle<Image>>,
     unlit_materials: HashSet<String>,
     graph: Option<Handle<AnimationGraph>>,
@@ -61,6 +62,7 @@ impl CreatureAnimationState {
 struct CreatureMaterialCacheKey {
     material: AssetId<StandardMaterial>,
     tint_bits: Option<[u32; 3]>,
+    alpha_bits: Option<u32>,
     texture: Option<AssetId<Image>>,
     unlit: bool,
 }
@@ -123,6 +125,7 @@ pub(super) fn attach_loaded_models(
             )
         };
         let tints = definition.material_tints.clone();
+        let alphas = definition.material_alphas.clone();
         let unlit_materials = definition.unlit_materials.clone();
         let textures = definition
             .textures
@@ -140,6 +143,7 @@ pub(super) fn attach_loaded_models(
                     CreatureAppearance {
                         owner: root,
                         material_tints: tints,
+                        material_alphas: alphas,
                         material_textures: textures,
                         unlit_materials,
                         graph,
@@ -174,13 +178,15 @@ fn configure_loaded_scene(
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
             let tint = appearance.material_tints.get(name);
+            let alpha = appearance.material_alphas.get(name).copied();
             let texture = appearance.material_textures.get(name);
             let unlit = appearance.unlit_materials.contains(name);
-            if tint.is_some() || texture.is_some() || unlit {
+            if tint.is_some() || alpha.is_some() || texture.is_some() || unlit {
                 let rgb = tint.map(|color| color.to_srgb());
                 let cache_key = CreatureMaterialCacheKey {
                     material: original.id(),
                     tint_bits: rgb.map(|color| color.map(f32::to_bits)),
+                    alpha_bits: alpha.map(f32::to_bits),
                     texture: texture.map(|image| image.id()),
                     unlit,
                 };
@@ -215,10 +221,18 @@ fn configure_loaded_scene(
                             material.thickness = 0.0;
                             material.emissive = LinearRgba::BLACK;
                             material.emissive_texture = None;
-                            // Tinted body materials are deliberately opaque. Texture-only
-                            // materials keep the GLB's authored alpha mode so decals/cutouts
-                            // such as a creature face can use transparent pixels.
-                            if tint.is_some() {
+                            // Definitions may explicitly preserve translucency for a material
+                            // (the legacy slime shell uses this so its core remains visible).
+                            // Otherwise tinted body materials stay opaque; texture-only decals
+                            // keep the GLB-authored alpha mode.
+                            if let Some(alpha) = alpha {
+                                material.base_color = material.base_color.with_alpha(alpha);
+                                material.alpha_mode = if alpha < 1.0 {
+                                    AlphaMode::Blend
+                                } else {
+                                    AlphaMode::Opaque
+                                };
+                            } else if tint.is_some() {
                                 material.base_color = material.base_color.with_alpha(1.0);
                                 material.alpha_mode = AlphaMode::Opaque;
                             }
