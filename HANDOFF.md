@@ -92,7 +92,18 @@ caminhos de probe, estrutura direta e structure set. O helper
 o Y de origem de uma peça gerada, reduzindo o risco de divergência entre locate,
 candidate probing e geração efetiva. VERSION: `0.50.117`.
 
-CI de Q7: pendente neste checkpoint.
+CI de Q7: **verde** no run `35817559972` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q8 — reutilizar hashing determinístico de structures
+
+Os helpers bit-exatos de hashing usados por placement, structure sets e surface
+layers foram consolidados em `world/generation/structures/hash.rs`.
+`string_hash`, `avalanche` e `unit_interval` agora possuem uma única
+implementação privada do módulo. As constantes e operações foram preservadas
+para manter determinismo de seed/worldgen; a mudança remove implementações
+duplicadas que poderiam divergir silenciosamente. VERSION: `0.50.118`.
+
+CI de Q8: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
