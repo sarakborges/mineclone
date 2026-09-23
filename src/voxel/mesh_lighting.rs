@@ -154,8 +154,8 @@ fn cached_lighting_sample(sample: VoxelSample) -> CachedLightingSample {
         sky: light.sky(),
         block_srgb: light.block_srgb_levels(),
         occupied_count: cell.map_or(0, |cell| {
-            if MicroblockMask::is_modified(cell) {
-                u16::try_from(MicroblockMask::from_cell(cell).occupied_count())
+            if MicroblockMask::has_partial_geometry(cell) {
+                u16::try_from(MicroblockMask::geometry_for_cell(cell).occupied_count())
                     .expect("microblock occupancy must fit in u16")
             } else {
                 MICROBLOCK_VOLUME
@@ -433,8 +433,8 @@ fn sign_index(sign: i32) -> usize {
 fn sample_occlusion(sample: VoxelSample) -> f32 {
     sample.map_or(0.0, |(cell, _, _)| {
         cell.map_or(0.0, |cell| {
-            if crate::voxel::microblock::MicroblockMask::is_modified(cell) {
-                crate::voxel::microblock::MicroblockMask::from_cell(cell)
+            if crate::voxel::microblock::MicroblockMask::has_partial_geometry(cell) {
+                crate::voxel::microblock::MicroblockMask::geometry_for_cell(cell)
                     .occupied_fraction()
             } else {
                 1.0
@@ -493,8 +493,8 @@ fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
 #[cfg(test)]
 fn sample_open_fraction(cell: Option<VoxelCell>) -> f32 {
     cell.map_or(1.0, |cell| {
-        if crate::voxel::microblock::MicroblockMask::is_modified(cell) {
-            1.0 - crate::voxel::microblock::MicroblockMask::from_cell(cell)
+        if crate::voxel::microblock::MicroblockMask::has_partial_geometry(cell) {
+            1.0 - crate::voxel::microblock::MicroblockMask::geometry_for_cell(cell)
                 .occupied_fraction()
         } else {
             0.0
