@@ -1,4 +1,26 @@
 # HANDOFF — Asteria / Mineclone
+## Checkpoint 184 — 2026-09-23: auditoria de qualidade de código [EM ANDAMENTO]
+
+A auditoria passa a começar pelas alterações mais recentes e depois percorre o
+restante do código. Critérios explícitos: responsabilidade única,
+componentização, nomes claros, baixo acoplamento, parâmetros apenas necessários,
+uso criterioso de contexts/SystemParams e reutilização máxima de primitivas já
+existentes quando a semântica/invariante for a mesma. Cada bloco só libera o
+próximo após CI verde, sem warnings.
+
+### Q1 — encapsular infraestrutura de partículas de criaturas
+
+`creatures/particles.rs` não expõe mais dois `too_many_arguments`. Um
+`CreatureParticleSpawner` SystemParam agora possui Commands, assets, cache e
+estado pseudoaleatório usados conjuntamente para materializar efeitos. O sistema
+`emit_creature_particles` ficou responsável apenas por observar
+estado/animação e temporização; criação de mesh/material e spawn pertencem ao
+contexto coeso. O limite de delta compartilhado entre emissão e atualização
+também passou a uma constante única. Sem alteração intencional de comportamento.
+VERSION: `0.50.110`.
+
+CI: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
