@@ -113,7 +113,18 @@ de candidatos quanto pelo resolver de structure sets, foi movido para
 da mesma definição geométrica de interseção, eliminando uma segunda
 implementação idêntica. VERSION: `0.50.119`.
 
-CI de Q9: pendente neste checkpoint.
+CI de Q9: **verde** no run `35818020464` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q10 — encapsular probe normal de superfície/hidrologia
+
+`structures/restrictions.rs` deixou de recalcular em três lugares a cadeia
+posição → sample de superfície → altura → chunk → generation region. O novo
+`NormalSurfaceProbe` concentra esse estado derivado e é reutilizado pelas
+restrições de bloco de chão, fluido de superfície e interseção com água.
+Flat/Void continuam com seus caminhos explícitos; o context só representa o
+caso Normal em que esses dados existem. VERSION: `0.50.120`.
+
+CI de Q10: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
