@@ -1,3 +1,4 @@
+mod lifecycle;
 mod material;
 mod motion;
 mod natural_spawn;
@@ -11,6 +12,8 @@ use crate::{
     content::creature::CreatureCollider,
 };
 
+pub(crate) use lifecycle::CreatureDeathTimer;
+use lifecycle::despawn_dead_creatures;
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
@@ -27,9 +30,6 @@ pub(crate) use visual::CreatureAnimationState;
 pub(crate) struct CreatureInstance {
     pub definition_id: String,
 }
-
-#[derive(Component)]
-pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
 
 /// Visual targeting can be larger than the physics AABB. This prevents a ray
 /// from visually entering a creature before gameplay considers it targeted.
@@ -74,18 +74,5 @@ impl Plugin for CreaturesPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             );
-    }
-}
-
-fn despawn_dead_creatures(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut dead: Query<(Entity, &mut CreatureDeathTimer)>,
-) {
-    for (entity, mut timer) in &mut dead {
-        timer.0.tick(time.delta());
-        if timer.0.just_finished() {
-            commands.entity(entity).despawn();
-        }
     }
 }
