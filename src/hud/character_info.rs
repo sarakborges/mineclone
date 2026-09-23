@@ -10,8 +10,8 @@ use crate::{
 
 use super::{
     inventory::{
-        CharacterInfoInventoryRoot, CharacterInfoInventorySpawn, INVENTORY_SLOT_GAP,
-        INVENTORY_SLOT_SIZE,
+        CharacterInfoInventoryRoot, CharacterInfoInventorySpawn, INVENTORY_PANEL_BORDER_WIDTH,
+        INVENTORY_SLOT_GAP, INVENTORY_SLOT_SIZE,
     },
     player::portrait::{CharacterInfoPreviewViewport, CharacterPreviewOrbit},
 };
@@ -104,7 +104,7 @@ fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
         surface::hud_container(Node {
             width: px(CHARACTER_INFO_PANEL_WIDTH),
             padding: UiRect::all(px(18)),
-            border: UiRect::all(px(1)),
+            border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
             column_gap: px(18),

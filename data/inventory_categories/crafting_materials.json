@@ -5,5 +5,6 @@
     "portuguese_brazil": "Materiais de Fabricação",
     "spanish": "Materiales de Fabricación"
   },
-  "order": 60
+  "order": 60,
+  "icon": "textures/inventory/categories/crafting-materials.png"
 }

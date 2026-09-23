@@ -13607,3 +13607,31 @@ A animação de troca agora observa qualquer item selecionado na hotbar, não ap
 block IDs.
 
 VERSION: `0.50.195`.
+
+
+## 2026-09-23 — Creative Inventory alinhado ao layout do inventory comum
+
+O Creative Inventory foi reorganizado para usar a mesma linguagem estrutural do
+inventory normal: card com borda de 1 px, header com título "Inventory" à
+esquerda e busca de 210 px à direita, e espaçamento vertical de seção igual ao
+painel comum.
+
+O corpo agora possui duas colunas reais. A esquerda contém as categorias e
+ocupa a altura combinada do catálogo + gap de seção + hotbar. A direita contém
+o catálogo em cima e, abaixo, a hotbar real + botão de delete. O footer continua
+reutilizando `spawn_player_hotbar_footer`, então posição, slots e delete não
+possuem uma implementação Creative separada.
+
+As duas scrollbars do Creative Inventory (categorias e catálogo) agora usam
+`vertical_scrollbar_always` e permanecem visíveis mesmo sem overflow.
+
+Categorias deixaram de usar modelos de bloco como ícone. Cada
+`InventoryCategoryDefinition` agora exige um `icon` 2D próprio, validado como
+asset path seguro. Os JSONs apontam para
+`textures/inventory/categories/<categoria>.png`; a categoria virtual
+"Everything" usa `textures/inventory/categories/everything.png`.
+
+A borda externa do Character Info passou a usar explicitamente a mesma constante
+de borda dos cards de inventory, evitando divergência futura.
+
+VERSION: `0.50.196`.

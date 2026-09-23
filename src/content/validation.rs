@@ -14,7 +14,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
     content.player.validate_references(&content.attacks);
 
     for category in content.inventory_categories.iter() {
-        category.validate_references(&content.blocks);
+        category.validate();
     }
 
     for block in content.blocks.iter() {

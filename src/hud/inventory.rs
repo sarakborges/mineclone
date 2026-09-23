@@ -52,6 +52,7 @@ pub(super) struct CharacterInfoInventoryRoot;
 
 pub(super) const INVENTORY_SLOT_SIZE: f32 = state::SLOT_SIZE;
 pub(super) const INVENTORY_SLOT_GAP: f32 = state::SLOT_GAP;
+pub(super) const INVENTORY_PANEL_BORDER_WIDTH: f32 = state::PANEL_BORDER_WIDTH;
 
 #[derive(SystemParam)]
 pub(super) struct CharacterInfoInventorySpawn<'w, 's> {

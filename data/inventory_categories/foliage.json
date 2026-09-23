@@ -1,1 +1,10 @@
-{ "id": "foliage", "displayName": { "english": "Foliage", "portuguese_brazil": "Folhagem", "spanish": "Follaje" }, "order": 20, "blockIcon": { "block": "asteria:leaf_oak" } }
+{
+  "id": "foliage",
+  "displayName": {
+    "english": "Foliage",
+    "portuguese_brazil": "Folhagem",
+    "spanish": "Follaje"
+  },
+  "order": 20,
+  "icon": "textures/inventory/categories/foliage.png"
+}

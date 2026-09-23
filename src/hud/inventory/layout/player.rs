@@ -16,9 +16,9 @@ use super::{
     item::spawn_inventory_item,
     super::state::{
         InventorySearchBar, InventorySearchFrame, InventorySearchText, InventorySlot,
-        InventorySortButton, InventorySortTooltip, InventoryTrashButton, PANEL_PADDING,
-        PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
-        TRASH_GAP,
+        InventorySortButton, InventorySortTooltip, InventoryTrashButton, PANEL_BORDER_WIDTH,
+        PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT, SECTION_GAP,
+        SLOT_GAP, SLOT_SIZE, TRASH_GAP,
     },
 };
 
@@ -34,7 +34,7 @@ pub(super) fn spawn_player_inventory_panel(
         align_items: AlignItems::FlexStart,
         row_gap: px(SECTION_GAP),
         padding: UiRect::all(px(PANEL_PADDING)),
-        border: UiRect::all(px(1)),
+        border: UiRect::all(px(PANEL_BORDER_WIDTH)),
         ..default()
     }))
     .insert(Pickable::IGNORE)
@@ -356,7 +356,7 @@ fn spawn_slot(
         });
 }
 
-fn player_panel_content_width() -> f32 {
+pub(super) fn player_panel_content_width() -> f32 {
     HOTBAR_SLOT_COUNT as f32 * SLOT_SIZE
         + (HOTBAR_SLOT_COUNT - 1) as f32 * SLOT_GAP
         + TRASH_GAP

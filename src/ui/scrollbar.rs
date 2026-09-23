@@ -16,6 +16,33 @@ pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
     scrollbar(target, true)
 }
 
+pub(crate) fn vertical_scrollbar_always(target: Entity) -> impl Bundle {
+    (
+        Interaction::default(),
+        Node {
+            display: Display::Flex,
+            min_width: px(8),
+            margin: UiRect::left(px(6)),
+            grid_column: GridPlacement::start(2),
+            grid_row: GridPlacement::start(1),
+            ..default()
+        },
+        Scrollbar {
+            target,
+            orientation: ControlOrientation::Vertical,
+            min_thumb_length: 28.0,
+        },
+        children![(
+            BackgroundColor(theme::TEXT_SUBTLE.with_alpha(0.38)),
+            BorderColor::all(theme::TEXT_SUBTLE.with_alpha(0.24)),
+            ScrollbarThumb {
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::ZERO,
+            },
+        )],
+    )
+}
+
 pub(crate) fn vertical_scrollbar_marked<M>(target: Entity) -> impl Bundle
 where
     M: Component + Default,

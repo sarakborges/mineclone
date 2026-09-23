@@ -16,21 +16,20 @@ use crate::{
         tool_id::intern_tool_id,
     },
     localization::{Language, UiLocalization},
-    rendering::block_model::BlockModel,
     ui::{scrollbar, selectable, surface, text_input, typography},
 };
-
-use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
     InventoryItemView, InventoryLayoutState,
     item::spawn_inventory_item,
     super::state::{
-        CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH, CREATIVE_COLUMNS,
-        CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea, CreativeCatalogScrollbar,
-        CreativeCategoryButton, CreativeCategoryScrollArea, CreativeCategoryScrollbar,
-        CreativeInventorySlot, CreativeInventoryView, CreativeSearchBar, CreativeSearchText,
-        PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP, SEARCH_HEIGHT, SLOT_GAP, SLOT_SIZE,
+        CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
+        CREATIVE_CATEGORY_HEIGHT, CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT,
+        CreativeCatalogScrollArea, CreativeCatalogScrollbar, CreativeCategoryButton,
+        CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
+        CreativeInventoryView, CreativeSearchBar, CreativeSearchText, PANEL_BORDER_WIDTH,
+        PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SCROLLBAR_TOTAL_WIDTH,
+        SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
     },
 };
 
@@ -97,20 +96,15 @@ pub(super) fn spawn_creative_panel(
 ) {
     root.spawn(surface::hud_container(Node {
         flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        row_gap: px(SEARCH_GAP),
+        align_items: AlignItems::FlexStart,
+        row_gap: px(SECTION_GAP),
         padding: UiRect::all(px(PANEL_PADDING)),
-        border: UiRect::all(px(2)),
+        border: UiRect::all(px(PANEL_BORDER_WIDTH)),
         ..default()
     }))
     .insert(Pickable::IGNORE)
     .with_children(|panel| {
-        spawn_search_bar(
-            panel,
-            state.creative_view,
-            state.localization,
-            items.language,
-        );
+        spawn_creative_header(panel, state, items);
 
         panel
             .spawn((
@@ -136,47 +130,99 @@ pub(super) fn spawn_creative_panel(
                 content
                     .spawn((
                         Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Stretch,
-                            height: px(CREATIVE_GRID_HEIGHT),
+                            width: px(super::player::player_panel_content_width()),
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::FlexStart,
+                            row_gap: px(SECTION_GAP),
                             ..default()
                         },
                         Pickable::IGNORE,
                     ))
-                    .with_children(|catalog_content| {
-                        let scroll_area = catalog_content
-                            .spawn((
-                                CreativeCatalogScrollArea,
-                                ScrollPosition(Vec2::new(0.0, state.scroll_state.catalog_y)),
-                                Node {
-                                    width: px(creative_grid_width()),
-                                    height: px(CREATIVE_GRID_HEIGHT),
-                                    flex_direction: FlexDirection::Column,
-                                    row_gap: px(SLOT_GAP),
-                                    overflow: Overflow::scroll_y(),
-                                    ..default()
-                                },
-                                Pickable::IGNORE,
-                            ))
-                            .with_children(|scroll| {
-                                spawn_creative_catalog_rows(
-                                    scroll,
-                                    state.categories,
-                                    state.creative_view,
-                                    state.cursor.item(),
-                                    items,
-                                );
-                            })
-                            .id();
-
-                        catalog_content
-                            .spawn(scrollbar::vertical_scrollbar(scroll_area))
-                            .insert(CreativeCatalogScrollbar);
+                    .with_children(|right_column| {
+                        spawn_creative_catalog(right_column, state, items);
+                        super::player::spawn_player_hotbar_footer(
+                            right_column,
+                            state.hotbar,
+                            items,
+                        );
                     });
             });
-
-        super::player::spawn_player_hotbar_footer(panel, state.hotbar, items);
     });
+}
+
+fn spawn_creative_header(
+    parent: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &InventoryItemView<'_>,
+) {
+    parent
+        .spawn((
+            Node {
+                width: px(creative_content_width()),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                column_gap: px(PLAYER_HEADER_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|header| {
+            header.spawn((typography::hud_heading("Inventory"), Pickable::IGNORE));
+            spawn_search_bar(
+                header,
+                state.creative_view,
+                state.localization,
+                items.language,
+            );
+        });
+}
+
+fn spawn_creative_catalog(
+    parent: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    parent
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Stretch,
+                height: px(CREATIVE_GRID_HEIGHT),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|catalog_content| {
+            let scroll_area = catalog_content
+                .spawn((
+                    CreativeCatalogScrollArea,
+                    ScrollPosition(Vec2::new(0.0, state.scroll_state.catalog_y)),
+                    Node {
+                        width: px(creative_grid_width()),
+                        height: px(CREATIVE_GRID_HEIGHT),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(SLOT_GAP),
+                        overflow: Overflow::scroll_y(),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|scroll| {
+                    spawn_creative_catalog_rows(
+                        scroll,
+                        state.categories,
+                        state.creative_view,
+                        state.cursor.item(),
+                        items,
+                    );
+                })
+                .id();
+
+            catalog_content
+                .spawn(scrollbar::vertical_scrollbar_always(scroll_area))
+                .insert(CreativeCatalogScrollbar);
+        });
 }
 
 fn spawn_search_bar(
@@ -199,7 +245,7 @@ fn spawn_search_bar(
             },
             text_input::editor_style(17.0, FontWeight::NORMAL),
             Node {
-                width: px(creative_content_width()),
+                width: px(PLAYER_SEARCH_WIDTH),
                 height: px(SEARCH_HEIGHT),
                 padding: UiRect::horizontal(px(12)),
                 border: UiRect::all(px(2)),
@@ -242,7 +288,7 @@ fn spawn_category_list(
             Node {
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Stretch,
-                height: px(CREATIVE_GRID_HEIGHT),
+                height: px(CREATIVE_CATEGORY_HEIGHT),
                 ..default()
             },
             Pickable::IGNORE,
@@ -254,7 +300,7 @@ fn spawn_category_list(
                     ScrollPosition(Vec2::new(0.0, initial_scroll_y)),
                     Node {
                         width: px(CATEGORY_WIDTH),
-                        height: px(CREATIVE_GRID_HEIGHT),
+                        height: px(CREATIVE_CATEGORY_HEIGHT),
                         flex_direction: FlexDirection::Column,
                         row_gap: px(SLOT_GAP),
                         overflow: Overflow::scroll_y(),
@@ -280,7 +326,7 @@ fn spawn_category_list(
                 .id();
 
             category_content
-                .spawn(scrollbar::vertical_scrollbar(scroll_area))
+                .spawn(scrollbar::vertical_scrollbar_always(scroll_area))
                 .insert(CreativeCategoryScrollbar);
         });
 }
@@ -317,33 +363,19 @@ fn spawn_category_button(
             BorderColor::all(border),
         ))
         .with_children(|button| {
-            if let Some((category, block_icon)) = category
-                .and_then(|category| category.block_icon.as_ref().map(|icon| (category, icon)))
-            {
-                let block = items.blocks.get(&block_icon.block).unwrap_or_else(|| {
-                    panic!(
-                        "inventory category {} references missing block icon {}",
-                        category.id, block_icon.block
-                    )
-                });
-                let block_id = intern_block_id(&block.id);
-                let material = items.icon_materials.add(BlockIconMaterial::from_block(
-                    block,
-                    items.asset_server,
-                    category.icon_tint(block),
-                ));
-
-                button.spawn((
-                    BlockModel::display(block_id),
-                    MaterialNode(material),
-                    Node {
-                        width: px(CATEGORY_ICON_SIZE),
-                        height: px(CATEGORY_ICON_SIZE),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-            }
+            let icon = category.map_or(
+                "textures/inventory/categories/everything.png",
+                |category| category.icon.as_str(),
+            );
+            button.spawn((
+                ImageNode::new(items.asset_server.load(icon.to_owned())),
+                Node {
+                    width: px(CATEGORY_ICON_SIZE),
+                    height: px(CATEGORY_ICON_SIZE),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
 
             button.spawn((typography::inventory_category(label), Pickable::IGNORE));
         });
@@ -478,6 +510,5 @@ fn creative_content_width() -> f32 {
     CATEGORY_WIDTH
         + SCROLLBAR_TOTAL_WIDTH
         + CATEGORY_GAP
-        + creative_grid_width()
-        + SCROLLBAR_TOTAL_WIDTH
+        + super::player::player_panel_content_width()
 }

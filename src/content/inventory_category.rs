@@ -4,22 +4,9 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    block::{BlockDefinition, BlockRegistry, BlockTint},
-    color::Hsi,
+    asset_path::is_safe_relative_asset_path,
     registry::DefinitionMap,
 };
-
-const DEFAULT_GRASS_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
-const DEFAULT_LEAF_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
-const DEFAULT_FOLIAGE_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InventoryCategoryBlockIcon {
-    pub block: String,
-    #[serde(default)]
-    pub tint: Option<Hsi>,
-}
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,46 +14,28 @@ pub struct InventoryCategoryDefinition {
     pub id: String,
     pub display_name: LocalizedText,
     pub order: u16,
-    #[serde(default)]
-    pub block_icon: Option<InventoryCategoryBlockIcon>,
+    pub icon: String,
 }
 
 impl InventoryCategoryDefinition {
-    pub fn validate_references(&self, blocks: &BlockRegistry) {
+    pub fn validate(&self) {
         assert!(
             !self.id.trim().is_empty(),
             "inventory category id cannot be empty"
         );
+        assert!(
+            !self.icon.trim().is_empty(),
+            "inventory category {} icon cannot be empty",
+            self.id
+        );
+        assert!(
+            is_safe_relative_asset_path(&self.icon),
+            "inventory category {} icon must be a safe relative asset path: {}",
+            self.id,
+            self.icon
+        );
         self.display_name
             .validate(&format!("inventory category {} display name", self.id));
-        if let Some(block_icon) = &self.block_icon {
-            assert!(
-                blocks.get(&block_icon.block).is_some(),
-                "inventory category {} references missing block icon {}",
-                self.id,
-                block_icon.block
-            );
-            if let Some(tint) = block_icon.tint {
-                assert!(
-                    tint.is_valid(),
-                    "inventory category {} block icon HSI tint is invalid",
-                    self.id
-                );
-            }
-        }
-    }
-
-    pub fn icon_tint(&self, block: &BlockDefinition) -> Color {
-        if let Some(tint) = self.block_icon.as_ref().and_then(|icon| icon.tint) {
-            return tint.to_color();
-        }
-
-        match block.tint {
-            BlockTint::None => Color::WHITE,
-            BlockTint::Grass => DEFAULT_GRASS_ICON_TINT.to_color(),
-            BlockTint::Leaf => DEFAULT_LEAF_ICON_TINT.to_color(),
-            BlockTint::Foliage => DEFAULT_FOLIAGE_ICON_TINT.to_color(),
-        }
     }
 }
 
@@ -76,7 +45,9 @@ pub struct InventoryCategoryRegistry {
 }
 
 impl InventoryCategoryRegistry {
-    pub fn insert(&mut self, definition: InventoryCategoryDefinition) {
+    pub fn insert(&mut self, mut definition: InventoryCategoryDefinition) {
+        definition.id = definition.id.trim().to_owned();
+        definition.icon = definition.icon.trim().to_owned();
         self.definitions.insert(definition.id.clone(), definition);
     }
 

@@ -6,8 +6,8 @@ pub(super) const SLOT_GAP: f32 = 4.0;
 pub(super) const SECTION_GAP: f32 = 18.0;
 pub(super) const PANEL_GAP: f32 = 24.0;
 pub(super) const PANEL_PADDING: f32 = 18.0;
+pub(super) const PANEL_BORDER_WIDTH: f32 = 1.0;
 pub(super) const SEARCH_HEIGHT: f32 = 40.0;
-pub(super) const SEARCH_GAP: f32 = 14.0;
 pub(super) const PLAYER_SEARCH_WIDTH: f32 = 210.0;
 pub(super) const PLAYER_HEADER_GAP: f32 = 8.0;
 pub(super) const CATEGORY_WIDTH: f32 = 172.0;
@@ -20,6 +20,8 @@ pub(super) const SCROLLBAR_TOTAL_WIDTH: f32 = 14.0;
 pub(super) const TRASH_GAP: f32 = 10.0;
 pub(super) const CREATIVE_GRID_HEIGHT: f32 =
     CREATIVE_VISIBLE_ROWS as f32 * SLOT_SIZE + (CREATIVE_VISIBLE_ROWS - 1) as f32 * SLOT_GAP;
+pub(super) const CREATIVE_CATEGORY_HEIGHT: f32 =
+    CREATIVE_GRID_HEIGHT + SECTION_GAP + SLOT_SIZE;
 
 #[derive(Component)]
 pub(super) struct InventoryHudRoot;
