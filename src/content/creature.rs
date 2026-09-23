@@ -172,98 +172,97 @@ impl CreatureDefinition {
     pub fn target_collider(&self) -> CreatureCollider {
         self.target_collider.unwrap_or(self.collider)
     }
+
+    fn validate(&self) {
+        assert!(!self.id.trim().is_empty(), "creature id cannot be empty");
+        self.name.validate(&format!("creature {} name", self.id));
+        assert!(
+            valid_creature_model_path(&self.model),
+            "creature {} model must be a safe relative .glb/.gltf path under assets/models/creatures/: {}",
+            self.id,
+            self.model
+        );
+        for (material, texture) in &self.textures {
+            assert!(
+                !material.trim().is_empty() && valid_creature_texture_path(texture),
+                "creature {} material {material:?} has an invalid texture path: {texture}",
+                self.id
+            );
+        }
+        self.collider.validate(&self.id);
+        if let Some(target_collider) = self.target_collider {
+            target_collider.validate(&format!("{} target", self.id));
+        }
+        assert!(
+            self.max_per_type > 0,
+            "creature {} maxPerType must be positive",
+            self.id
+        );
+        assert!(
+            self.health.is_finite() && self.health > 0.0,
+            "creature {} health must be positive and finite",
+            self.id
+        );
+        assert!(
+            self.jump_speed.is_finite() && self.jump_speed >= 0.0,
+            "creature {} has invalid jumpSpeed",
+            self.id
+        );
+        assert!(
+            self.move_speed.is_finite() && self.move_speed >= 0.0,
+            "creature {} has invalid moveSpeed",
+            self.id
+        );
+        assert!(
+            self.jump_interval.is_finite() && self.jump_interval > 0.0,
+            "creature {} has invalid jumpInterval",
+            self.id
+        );
+        assert!(
+            self.anticipation_seconds.is_finite() && self.anticipation_seconds >= 0.0,
+            "creature {} has invalid anticipationSeconds",
+            self.id
+        );
+        assert!(
+            self.landing_seconds.is_finite() && self.landing_seconds >= 0.0,
+            "creature {} has invalid landingSeconds",
+            self.id
+        );
+        for (material, tint) in &self.material_tints {
+            assert!(
+                !material.is_empty() && tint.is_valid(),
+                "creature {} has an invalid material tint for {material}",
+                self.id
+            );
+        }
+        for material in &self.unlit_materials {
+            assert!(
+                !material.trim().is_empty(),
+                "creature {} has an empty unlit material name",
+                self.id
+            );
+        }
+        for (state, effect) in &self.particle_effects {
+            assert!(
+                !state.trim().is_empty(),
+                "creature {} has an empty particle effect state",
+                self.id
+            );
+            effect.validate(&self.id, state);
+        }
+        for (state, clip) in &self.animations {
+            assert!(
+                !state.is_empty() && !clip.is_empty(),
+                "creature {} has an empty animation state/clip",
+                self.id
+            );
+        }
+    }
 }
 
 impl CreatureRegistry {
     pub fn insert(&mut self, definition: CreatureDefinition) {
-        assert!(
-            !definition.id.trim().is_empty(),
-            "creature id cannot be empty"
-        );
-        definition
-            .name
-            .validate(&format!("creature {} name", definition.id));
-        assert!(
-            valid_creature_model_path(&definition.model),
-            "creature {} model must be a safe relative .glb/.gltf path under assets/models/creatures/: {}",
-            definition.id,
-            definition.model
-        );
-        for (material, texture) in &definition.textures {
-            assert!(
-                !material.trim().is_empty() && valid_creature_texture_path(texture),
-                "creature {} material {material:?} has an invalid texture path: {texture}",
-                definition.id
-            );
-        }
-        definition.collider.validate(&definition.id);
-        if let Some(target_collider) = definition.target_collider {
-            target_collider.validate(&format!("{} target", definition.id));
-        }
-        assert!(
-            definition.max_per_type > 0,
-            "creature {} maxPerType must be positive",
-            definition.id
-        );
-        assert!(
-            definition.health.is_finite() && definition.health > 0.0,
-            "creature {} health must be positive and finite",
-            definition.id
-        );
-        assert!(
-            definition.jump_speed.is_finite() && definition.jump_speed >= 0.0,
-            "creature {} has invalid jumpSpeed",
-            definition.id
-        );
-        assert!(
-            definition.move_speed.is_finite() && definition.move_speed >= 0.0,
-            "creature {} has invalid moveSpeed",
-            definition.id
-        );
-        assert!(
-            definition.jump_interval.is_finite() && definition.jump_interval > 0.0,
-            "creature {} has invalid jumpInterval",
-            definition.id
-        );
-        assert!(
-            definition.anticipation_seconds.is_finite() && definition.anticipation_seconds >= 0.0,
-            "creature {} has invalid anticipationSeconds",
-            definition.id
-        );
-        assert!(
-            definition.landing_seconds.is_finite() && definition.landing_seconds >= 0.0,
-            "creature {} has invalid landingSeconds",
-            definition.id
-        );
-        for (material, tint) in &definition.material_tints {
-            assert!(
-                !material.is_empty() && tint.is_valid(),
-                "creature {} has an invalid material tint for {material}",
-                definition.id
-            );
-        }
-        for material in &definition.unlit_materials {
-            assert!(
-                !material.trim().is_empty(),
-                "creature {} has an empty unlit material name",
-                definition.id
-            );
-        }
-        for (state, effect) in &definition.particle_effects {
-            assert!(
-                !state.trim().is_empty(),
-                "creature {} has an empty particle effect state",
-                definition.id
-            );
-            effect.validate(&definition.id, state);
-        }
-        for (state, clip) in &definition.animations {
-            assert!(
-                !state.is_empty() && !clip.is_empty(),
-                "creature {} has an empty animation state/clip",
-                definition.id
-            );
-        }
+        definition.validate();
         self.definitions.insert(definition.id.clone(), definition);
     }
 
