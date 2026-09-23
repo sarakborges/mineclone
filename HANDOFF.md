@@ -399,6 +399,17 @@ parâmetros de autocomplete. VERSION: `0.50.154`.
 
 CI de Q35: **verde** no run `35881879789` após a integração concorrente de entity contacts (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q36 — reutilizar sugestões de structures no autocomplete
+
+`StructureId` e `/locate structure` não mantêm mais dois pipelines paralelos
+para estruturas simples, groups e structure sets. O helper
+`structure_suggestions` concentra filtro de prefixo, formatação das
+descriptions e a regra opcional `locatable_only`. Isso também removeu o último
+matching inline que ainda não reutilizava `id_matches_prefix`. VERSION:
+`0.50.155`.
+
+CI de Q36: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
