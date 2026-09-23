@@ -228,31 +228,6 @@ fn displaced_eye_for_set(
     None
 }
 
-fn structure_clear_above_positions(
-    structure: &StructureDefinition,
-    rotation: StructureRotation,
-    origin: IVec3,
-) -> Vec<IVec3> {
-    if structure.clear_above == 0 {
-        return Vec::new();
-    }
-
-    let mut positions = Vec::with_capacity(
-        structure.column_spans().len() * structure.clear_above as usize,
-    );
-    for span in structure.column_spans() {
-        let horizontal = origin.xz() + rotation.rotate_horizontal(span.offset);
-        for delta_y in 1..=structure.clear_above as i32 {
-            positions.push(IVec3::new(
-                horizontal.x,
-                origin.y + span.max_y_offset + delta_y,
-                horizontal.y,
-            ));
-        }
-    }
-    positions
-}
-
 fn set_piece_bounds(piece: &ResolvedSetPiece<'_>) -> (Vec3, Vec3) {
     let minimum = IVec3::new(
         piece.minimum.x,
@@ -397,16 +372,13 @@ impl ChatPlacementContext<'_, '_> {
             })
             + IVec3::Y * structure.clear_above as i32;
         let blocked = (min.as_vec3(), (max + IVec3::ONE).as_vec3());
-        let clear_above_positions =
-            structure_clear_above_positions(structure, structure_rotation, origin);
-
         // Manual placement may replace terrain and fluids, but it still refuses
         // to touch unloaded chunks or place blocks through creatures requested
         // in this frame / already alive in the world.
         let all_loaded_and_entity_clear = voxels
             .iter()
             .map(|voxel| origin + structure_rotation.rotate_offset(voxel.offset))
-            .chain(clear_above_positions.iter().copied())
+            .chain(structure.clear_above_positions(structure_rotation, origin))
             .all(|position| {
                 let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
                 world.is_loaded_at(position)
@@ -472,7 +444,7 @@ impl ChatPlacementContext<'_, '_> {
                 let _ = self.runtime.set_fluid(position, None);
             }
         }
-        for position in clear_above_positions {
+        for position in structure.clear_above_positions(structure_rotation, origin) {
             let _ = self.runtime.set_block(position, None);
             let _ = self.runtime.set_fluid(position, None);
         }
@@ -515,14 +487,12 @@ impl ChatPlacementContext<'_, '_> {
         let blocked = pieces.iter().map(set_piece_bounds).collect::<Vec<_>>();
         let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
             let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
-            let clear_above_positions =
-                structure_clear_above_positions(piece.structure, piece.rotation, origin);
             piece
                 .structure
                 .voxels()
                 .iter()
                 .map(|voxel| origin + piece.rotation.rotate_offset(voxel.offset))
-                .chain(clear_above_positions)
+                .chain(piece.structure.clear_above_positions(piece.rotation, origin))
                 .all(|position| {
                     let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
                     world.is_loaded_at(position)
@@ -559,8 +529,6 @@ impl ChatPlacementContext<'_, '_> {
 
         for piece in &pieces {
             let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
-            let clear_above_positions =
-                structure_clear_above_positions(piece.structure, piece.rotation, origin);
             for voxel in piece.structure.voxels() {
                 let position = origin + piece.rotation.rotate_offset(voxel.offset);
                 if let Some(block_id) = voxel.block_id {
@@ -606,7 +574,7 @@ impl ChatPlacementContext<'_, '_> {
                     let _ = self.runtime.set_fluid(position, None);
                 }
             }
-            for position in clear_above_positions {
+            for position in piece.structure.clear_above_positions(piece.rotation, origin) {
                 let _ = self.runtime.set_block(position, None);
                 let _ = self.runtime.set_fluid(position, None);
             }
