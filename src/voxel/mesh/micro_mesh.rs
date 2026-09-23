@@ -22,7 +22,7 @@ use super::super::{
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
     },
-    log_variant::hollow_surface_texture_face,
+    log_variant::{hollow_surface_texture_face, is_hollow_log_id},
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     orientation::{orientation_rotation, source_face_for_oriented_face},
     read::VoxelRead,
@@ -94,6 +94,7 @@ impl<'a> MicroMeshBuffers<'a> {
 }
 
 const EDGE: usize = MICROBLOCK_EDGE as usize;
+const HOLLOW_LOG_WALL_SCALE: f32 = 0.5;
 
 pub(super) fn material_buffer<'buffer, 'definition>(
     buffers: &'buffer mut MicroMeshBuffers<'definition>,
@@ -351,7 +352,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         BlockFace::Back => upper[2] = lower[2],
     }
 
-    let vertices = face.unit_vertices().map(|corner| {
+    let mut vertices = face.unit_vertices().map(|corner| {
         std::array::from_fn(|axis| {
             let coordinate = if corner[axis] == 0.0 {
                 lower[axis]
@@ -361,6 +362,13 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
             surface.local_voxel[axis] as f32 + coordinate as f32 / MICROBLOCK_EDGE as f32
         })
     });
+    if is_hollow_log_id(surface.cell.block_id) {
+        thin_hollow_log_shell(
+            &mut vertices,
+            surface.cell.orientation,
+            surface.local_voxel,
+        );
+    }
     let source_face = source_face_for_oriented_face(face, surface.cell.orientation);
     let rotation = if rotates_texture(surface.block.rotate_texture, source_face) {
         surface.cell.texture_rotation
@@ -396,6 +404,35 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         lighting,
         material_code,
     );
+}
+
+fn thin_hollow_log_shell(
+    vertices: &mut [[f32; 3]; 4],
+    orientation: crate::content::block_orientation::BlockOrientation,
+    local_voxel: IVec3,
+) {
+    use crate::content::block_orientation::BlockOrientation;
+
+    let radial_axes = match orientation {
+        BlockOrientation::Y => [0, 2],
+        BlockOrientation::Z => [0, 1],
+        BlockOrientation::X => [1, 2],
+    };
+    let origin = local_voxel.as_vec3().to_array();
+
+    for vertex in vertices {
+        for axis in radial_axes {
+            let local = vertex[axis] - origin[axis];
+            let distance_from_edge = local.min(1.0 - local);
+            let scaled_distance = distance_from_edge * HOLLOW_LOG_WALL_SCALE;
+            vertex[axis] = origin[axis]
+                + if local <= 0.5 {
+                    scaled_distance
+                } else {
+                    1.0 - scaled_distance
+                };
+        }
+    }
 }
 
 fn is_macro_boundary(face: BlockFace, depth: usize) -> bool {
