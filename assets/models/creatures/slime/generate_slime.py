@@ -122,8 +122,10 @@ def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0),
             if project_outer_shade:
                 # The cubic legacy model uses the same continuous outer-volume
                 # shade as the rounded slime instead of face-specific darkening.
-                projected_u = point[0] / extent[0] + .5
-                projected_v = 1.0 - (point[1] / extent[1] + .5)
+                shade_min = .5 / 64
+                shade_span = 63.0 / 64
+                projected_u = shade_min + (point[0] / extent[0] + .5) * shade_span
+                projected_v = shade_min + (1.0 - (point[1] / extent[1] + .5)) * shade_span
                 uvs.extend((projected_u, projected_v))
             else:
                 uvs.extend(uv)
