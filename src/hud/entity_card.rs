@@ -68,27 +68,32 @@ pub(super) fn spawn_entity_card(
             Pickable::IGNORE,
         ))
         .with_children(|row| {
-            row.spawn((
-                Node {
-                    width: px(AVATAR_SIZE),
-                    height: px(AVATAR_SIZE),
-                    min_width: px(AVATAR_SIZE),
-                    min_height: px(AVATAR_SIZE),
-                    border: UiRect::all(px(2)),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    overflow: Overflow::clip(),
-                    ..default()
-                },
-                BackgroundColor(avatar_background),
-                BorderColor::all(avatar_border),
-                Pickable::IGNORE,
-            ))
-            .with_children(|avatar| {
-                match source {
-                    EntityCardSource::LocalPlayer => {
+            let avatar = row
+                .spawn((
+                    Node {
+                        width: px(AVATAR_SIZE),
+                        height: px(AVATAR_SIZE),
+                        min_width: px(AVATAR_SIZE),
+                        min_height: px(AVATAR_SIZE),
+                        border: UiRect::all(px(2)),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        overflow: Overflow::clip(),
+                        ..default()
+                    },
+                    BackgroundColor(avatar_background),
+                    BorderColor::all(avatar_border),
+                    Pickable::IGNORE,
+                ))
+                .id();
+
+            if source == EntityCardSource::LocalPlayer {
+                row.commands().entity(avatar).insert(PlayerHudPreviewViewport);
+            } else {
+                row.commands().entity(avatar).with_children(|avatar| {
+                    if let Some(image) = portrait {
                         avatar.spawn((
-                            PlayerHudPreviewViewport,
+                            ImageNode::new(image),
                             Node {
                                 width: px(AVATAR_IMAGE_SIZE),
                                 height: px(AVATAR_IMAGE_SIZE),
@@ -96,28 +101,15 @@ pub(super) fn spawn_entity_card(
                             },
                             Pickable::IGNORE,
                         ));
+                    } else {
+                        avatar.spawn((
+                            typography::hud_subheading("?"),
+                            TextLayout::justify(Justify::Center),
+                            Pickable::IGNORE,
+                        ));
                     }
-                    EntityCardSource::Target => {
-                        if let Some(image) = portrait {
-                            avatar.spawn((
-                                ImageNode::new(image),
-                                Node {
-                                    width: px(AVATAR_IMAGE_SIZE),
-                                    height: px(AVATAR_IMAGE_SIZE),
-                                    ..default()
-                                },
-                                Pickable::IGNORE,
-                            ));
-                        } else {
-                            avatar.spawn((
-                                typography::hud_subheading("?"),
-                                TextLayout::justify(Justify::Center),
-                                Pickable::IGNORE,
-                            ));
-                        }
-                    }
-                }
-            });
+                });
+            }
 
             row.spawn((
                 Node {
