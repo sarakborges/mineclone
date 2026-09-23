@@ -23,8 +23,8 @@
   "materialTints": {
     "SlimeShell": {
       "hue": 153,
-      "saturation": 0.43,
-      "intensity": 0.49
+      "saturation": 0.32,
+      "intensity": 0.44
     },
     "SlimeCore": {
       "hue": 153,
@@ -53,5 +53,17 @@
   "textures": {
     "SlimeCore": "textures/creatures/slime_legacy/core.png",
     "SlimeFace": "textures/creatures/slime_legacy/face.png"
+  },
+  "targetCollider": {
+    "size": [
+      0.96,
+      0.9,
+      0.96
+    ],
+    "centerOffset": [
+      0,
+      0.45,
+      0
+    ]
   }
 }
