@@ -13,7 +13,7 @@ pub(crate) mod light;
 pub(crate) mod lighting;
 pub(crate) mod layer;
 pub(crate) mod layer_mesh;
-pub(crate) mod log_state;
+pub(crate) mod log_variant;
 pub(crate) mod mesh;
 pub(crate) mod mesh_buffer;
 pub(crate) mod meshlet;
