@@ -11756,3 +11756,44 @@ CI funcional push `35802313828`: **verde**.
 Commit de versão: `a761a499424705ee26a1f715bdd3ce67fd8b8754`.
 CI de versão push `35802418113`: **verde**.
 VERSION: `0.50.97`.
+
+## 2026-09-22 — HUD + Character Info compostos na mesma camera stack
+
+Após o Character HUD finalmente aparecer, o player deixou de aparecer no
+Character Info quando os dois previews estavam ativos ao mesmo tempo.
+
+A investigação confirmou a semântica de `CameraOutputMode` do Bevy 0.19:
+- câmeras anteriores de uma stack para o mesmo target podem renderizar com
+  `CameraOutputMode::Skip`, preservando o resultado nos intermediários;
+- uma câmera posterior com `CameraOutputMode::Write` finaliza a composição no
+  target;
+- fazer `Write` em ambas as câmeras de preview permitia que o writer final
+  (HUD) descartasse o resultado previamente finalizado pelo Character Info.
+
+Correção:
+- Character Info continua com order `UI_CAMERA_ORDER + 1`, mas quando o modal
+  está aberto renderiza em `CameraOutputMode::Skip`;
+- Character HUD continua com order `UI_CAMERA_ORDER + 2` e é o único
+  `CameraOutputMode::Write` final da stack de previews;
+- o HUD finaliza, portanto, os intermediários contendo Character Info + HUD;
+- para evitar qualquer interferência adicional de visibilidade, o mesmo
+  `PlayerModelRoot` agora pertence a duas render layers de UI:
+  - layer 3: Character HUD;
+  - layer 4: Character Info;
+- cada câmera enxerga apenas sua layer; em third person os mesmos meshes também
+  pertencem à layer 0 do mundo;
+- não existe duplicação de GLB/modelo/scene: são os mesmos meshes, materiais,
+  transforms e animações da terceira pessoa.
+
+Commits funcionais:
+- layers separadas para HUD / Character Info:
+  `ec6ab9188cb78502149bec14cf25a8de13b83458`,
+  `8934ec98813c48f15b6c8e92c46ae5fc9a03e7cb`,
+  `2d2948ee2a7e6b8cf8233e94f9f99a2b63edfe41`;
+- composição correta da stack, com HUD como único writer final:
+  `881e18024a16ca625fa515bc607cadbbcd3da736`.
+
+CI funcional push `35803036750`: **verde**.
+Commit de versão: `d0e9c7e43d7f3113f4869657cb110033fc956996`.
+CI de versão push `35803124436`: **verde**.
+VERSION: `0.50.98`.
