@@ -324,7 +324,7 @@ settings reutilizam esses helpers, removendo implementações paralelas de
 `colors + apply_colors + thumb_left`. Estados visuais especiais, como feature
 desabilitada em Void, continuam locais. VERSION: `0.50.146`.
 
-CI de Q28: pendente neste checkpoint.
+CI de Q28: **verde** no run `35874540721` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
