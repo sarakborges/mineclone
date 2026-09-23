@@ -5,6 +5,6 @@
     "portuguese_brazil": "Fibra Vegetal",
     "spanish": "Fibra Vegetal"
   },
-  "category": "materials",
+  "category": "crafting_materials",
   "icon": "textures/items/plant-fiber.png"
 }
