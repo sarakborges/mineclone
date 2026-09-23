@@ -124,7 +124,17 @@ restrições de bloco de chão, fluido de superfície e interseção com água.
 Flat/Void continuam com seus caminhos explícitos; o context só representa o
 caso Normal em que esses dados existem. VERSION: `0.50.120`.
 
-CI de Q10: pendente neste checkpoint.
+CI de Q10: **verde** no run `35818240594` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q11 — remover too_many_arguments do player preview
+
+`hud/player/portrait.rs` não suprime mais `too_many_arguments`.
+`PlayerPreviewLayout` concentra somente window + viewports de UI e expõe os
+viewports físicos derivados; `PlayerPreviewState` concentra somente os estados
+que determinam visibilidade/orbit. As duas queries de câmera continuam
+explícitas por serem os outputs mutados pelo sistema. VERSION: `0.50.121`.
+
+CI de Q11: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
