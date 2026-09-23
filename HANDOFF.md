@@ -767,6 +767,17 @@ conhecer a estrutura interna da lista de spawns. VERSION: `0.50.187`.
 CI de Q63: **verde** no run `35895014590` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q64 — mover validação de surfaceFluid para BiomeDefinition
+
+A resolução da referência de `biome.surfaceFluid` saiu de
+`content::validation` e passou a
+`BiomeDefinition::validate_surface_fluid_references`. O próprio biome decide
+se possui surface fluid e qual fluid ID deve existir; o coordenador global
+apenas fornece `FluidRegistry`. VERSION: `0.50.188`.
+
+CI de Q64: **verde** no run `35895458112` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
