@@ -5,7 +5,7 @@ use crate::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
         fluid::FluidRegistry,
-        structure::{StructureDefinition, StructureRegistry, StructureRotation},
+        structure::StructureRegistry,
         structure_set::{StructureSetDefinition, StructureSetRegistry},
     },
     creatures::{CreatureInstance, spawn_creature_at},
