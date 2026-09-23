@@ -24,6 +24,7 @@ pub(crate) mod dimension;
 pub(crate) mod dimension_hydrology;
 pub(crate) mod fluid;
 pub(crate) mod inventory_category;
+pub(crate) mod item;
 pub(crate) mod layer;
 pub(crate) mod layer_id;
 pub(crate) mod player;
