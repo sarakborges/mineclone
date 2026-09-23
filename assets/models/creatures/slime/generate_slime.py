@@ -130,7 +130,9 @@ def cube(positions, normals, uvs, colors, indices, extent, center=(0,0,0), tile=
                 llen = (lx*lx + ly*ly + lz*lz) ** .5
                 lx, ly, lz = lx/llen, ly/llen, lz/llen
                 half_lambert = ((nx*lx + ny*ly + nz*lz) + 1.0) * .5
-                shade = .95 + .05 * max(0.0, min(1.0, half_lambert))
+                # Vertex colors are linear: .89 maps to about .95 sRGB, giving
+                # the requested ~5% perceptual shade without dynamic lighting.
+                shade = .89 + .11 * max(0.0, min(1.0, half_lambert))
             else:
                 shade = 1.0
             colors.extend((shade, shade, shade, 1.0))
