@@ -279,7 +279,7 @@ para cinco registrations nomeadas, preservando a ordem, `chain()`, system sets
 e `run_if` existentes. Isso deixa o wiring navegável sem alterar a semântica
 de execução dos sistemas de settings/new-world. VERSION: `0.50.140`.
 
-CI de Q24: pendente neste checkpoint.
+CI de Q24: **verde** no run `35871181227` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
