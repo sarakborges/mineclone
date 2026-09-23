@@ -19,7 +19,7 @@ use super::{
     chunk_archive::ArchivedChunk,
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
-    microblock::{CHISEL_MASK_PROPERTY, MicroblockMask},
+    microblock::{ARTISANS_KIT_MASK_PROPERTY, LEGACY_ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
@@ -118,7 +118,7 @@ impl DiskChunkBuilder {
                 .map(|(key, value)| (key.to_owned(), value.to_owned()))
                 .collect::<Vec<_>>();
             if let Some(encoded) = MicroblockMask::encoded_for_save(cell) {
-                properties.push((CHISEL_MASK_PROPERTY.to_owned(), encoded));
+                properties.push((ARTISANS_KIT_MASK_PROPERTY.to_owned(), encoded));
             }
             properties.sort_unstable();
             let state = DiskBlockState {
@@ -474,10 +474,10 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
         .ok_or_else(|| invalid_data(format!("missing block definition: {}", state.id)))?;
     validate_properties(&state.properties, definition.can_fragment())?;
     let mut properties = SecondaryProperties::default();
-    let mut chisel_mask = None;
+    let mut artisans_kit_mask = None;
     for (key, value) in state.properties {
-        if key == CHISEL_MASK_PROPERTY {
-            chisel_mask = Some(value);
+        if key == ARTISANS_KIT_MASK_PROPERTY || key == LEGACY_ARTISANS_KIT_MASK_PROPERTY {
+            artisans_kit_mask = Some(value);
         } else {
             properties.set(&key, &value);
         }
@@ -489,9 +489,9 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
         BlockOrientation::from_index(state.orientation),
     )
     .with_secondary_properties(properties);
-    if let Some(encoded) = chisel_mask {
+    if let Some(encoded) = artisans_kit_mask {
         cell = MicroblockMask::apply_saved(cell, &encoded)
-            .ok_or_else(|| invalid_data("invalid Chisel mask"))?;
+            .ok_or_else(|| invalid_data("invalid Artisan's Kit mask"))?;
     }
     Ok(cell)
 }
@@ -524,10 +524,10 @@ fn validate_properties(
         {
             return Err(invalid_data("empty or duplicate secondary property"));
         }
-        if key == CHISEL_MASK_PROPERTY
+        if (key == ARTISANS_KIT_MASK_PROPERTY || key == LEGACY_ARTISANS_KIT_MASK_PROPERTY)
             && (!can_fragment || !MicroblockMask::valid_saved(value))
         {
-            return Err(invalid_data("invalid Chisel mask or ineligible block"));
+            return Err(invalid_data("invalid Artisan's Kit mask or ineligible block"));
         }
     }
     Ok(())
