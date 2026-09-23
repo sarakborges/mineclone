@@ -1007,7 +1007,7 @@ fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
 mod tests {
     use super::*;
     use crate::voxel::{
-        cell::VoxelCell, microblock::ChiselResolution, world::VoxelWorld,
+        cell::VoxelCell, microblock::ArtisansKitResolution, world::VoxelWorld,
     };
 
     #[test]
@@ -1110,7 +1110,7 @@ mod tests {
             (BlockFace::Back, [0, 0, 7]),
         ] {
             let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
-            mask.edit(position, ChiselResolution::ExtraThin, false);
+            mask.edit(position, ArtisansKitResolution::ExtraThin, false);
             let partial = mask.apply_to_cell(cell, true);
             assert!(partial_block_face_has_opening(partial, face));
         }
@@ -1169,12 +1169,12 @@ mod tests {
             (BlockFace::Back, [0, 0, 7], [0, 0, 0]),
         ] {
             let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
-            mask.edit(wrong_position, ChiselResolution::ExtraThin, false);
+            mask.edit(wrong_position, ArtisansKitResolution::ExtraThin, false);
             let partial = mask.apply_to_cell(cell, true);
             assert!(!partial_block_face_has_opening(partial, face));
 
             let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
-            mask.edit(open_position, ChiselResolution::ExtraThin, false);
+            mask.edit(open_position, ArtisansKitResolution::ExtraThin, false);
             let partial = mask.apply_to_cell(cell, true);
             assert!(partial_block_face_has_opening(partial, face));
         }
