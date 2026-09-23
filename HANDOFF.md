@@ -667,17 +667,20 @@ O número `0.50.176` foi ocupado concorrentemente pelo novo slime candy; Q55
 usou o próximo patch disponível. CI de Q55: **verde** no run `35891400788`
 (localizações, Clippy com `-D warnings` e `cargo check`).
 
-### Q55 — promover RNG compartilhado para gameplay
+### Q56 — mover runtime de combate para creatures
 
-O xorshift32 deixou de pertencer ao domínio `creatures` e passou a
-`gameplay/random.rs`, porque também é usado por attack effects em targeting.
-Natural spawn, creature motion, particles e efeitos probabilísticos de ataque
-agora reutilizam `next_u32`, `next_unit_f32` e `next_signed_f32`; os
-seeds e políticas de consumo continuam locais a cada sistema. O módulo
-`creatures/random.rs` e os helpers duplicados remanescentes foram removidos.
-VERSION: `0.50.176`.
+`CreatureAttackRuntime` saiu de `targeting/interaction.rs` para
+`creatures/combat.rs`, junto com a aplicação de damage, chance de efeitos,
+knockback, animação de hurt/death e agendamento de despawn. O targeting mantém
+apenas seleção do attack definition, posição do jogador e feedback do
+viewmodel, delegando a mutação da creature ao domínio que possui health/motion
+e lifecycle. `CreatureMotion` e `CreatureDeathTimer` deixaram de ser
+re-exportados pelo módulo raiz quando não havia mais callers externos.
+VERSION: `0.50.178`.
 
-CI de Q55: **verde** no run `35891400788` (localizações, Clippy com
+A primeira validação do bloco, run `35891770968`, encontrou esses dois
+re-exports agora não usados; a correção permaneceu no mesmo bloco/version.
+CI de Q56: **verde** no run `35891909492` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
 
