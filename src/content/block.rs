@@ -18,7 +18,6 @@ use super::{
 const MAX_LIGHT_DAMPENING: u8 = 15;
 pub const DEFAULT_BLOCK_BREAK_TICKS: u32 = 200;
 pub const FRAGMENTABLE_BLOCK_TAG: &str = "fragmentable";
-pub const LOG_BLOCK_TAG: &str = "log";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -211,9 +210,6 @@ impl BlockDefinition {
         self.tags.iter().any(|tag| tag == FRAGMENTABLE_BLOCK_TAG)
     }
 
-    pub fn is_log(&self) -> bool {
-        self.tags.iter().any(|tag| tag == LOG_BLOCK_TAG)
-    }
 
     pub fn alpha_mode(&self, opacity: f32) -> AlphaMode {
         if opacity < 1.0 || self.alpha_blend {
