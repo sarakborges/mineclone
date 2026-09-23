@@ -81,7 +81,7 @@ evoluir em lockstep. Os parâmetros do helper são apenas os owners realmente
 necessários (`VoxelTopologyRuntime`, registries, seed e geometria). VERSION:
 `0.50.116`.
 
-CI de Q6: pendente neste checkpoint.
+CI de Q6: **verde** no run `35817270980` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
