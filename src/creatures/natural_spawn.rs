@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-use super::{CreatureInstance, spawn_creature_at};
+use super::{CreatureInstance, random::next_u32, spawn_creature_at};
 
 const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
@@ -127,9 +127,9 @@ fn find_natural_spawn_position(
     random_state: &mut u32,
 ) -> Option<Vec3> {
     for _ in 0..NATURAL_SPAWN_ATTEMPTS {
-        let angle = next_random(random_state) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
+        let angle = next_u32(random_state) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
         let distance = NATURAL_SPAWN_MIN_DISTANCE
-            + (next_random(random_state) as f32 / u32::MAX as f32)
+            + (next_u32(random_state) as f32 / u32::MAX as f32)
                 * (NATURAL_SPAWN_MAX_DISTANCE - NATURAL_SPAWN_MIN_DISTANCE);
         let position =
             player_position + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
@@ -195,7 +195,7 @@ fn select_natural_spawn_rule<'a>(
         return None;
     }
 
-    let roll = next_random(random_state) as f32 / u32::MAX as f32 * total_weight;
+    let roll = next_u32(random_state) as f32 / u32::MAX as f32 * total_weight;
     let mut cursor = 0.0;
     rules
         .iter()
@@ -222,11 +222,4 @@ fn natural_spawn_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
         }
     }
     None
-}
-
-fn next_random(state: &mut u32) -> u32 {
-    *state ^= *state << 13;
-    *state ^= *state >> 17;
-    *state ^= *state << 5;
-    *state
 }
