@@ -478,17 +478,20 @@ contexto léxico da linha em edição. VERSION: `0.50.161`.
 CI de Q41: **verde** no run `35884382877` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
-### Q41 — reutilizar contexto de tokens no autocomplete
+### Q42 — encapsular dependências do natural spawn
 
-`suggestions_for` não reexecuta mais `split_whitespace` para recuperar
-repetidamente command, primeiro argumento e segundo argumento em branches
-diferentes. A linha é tokenizada uma única vez por resolução de autocomplete e
-os mesmos `first_argument`/`second_argument` alimentam variation e locate.
-Isso remove scans redundantes da string sem introduzir alocação ou novo context
-persistente. VERSION: `0.50.161`.
+`creatures::natural_spawn_creatures` não depende mais de 15 parâmetros de
+system nem de `#[allow(clippy::too_many_arguments)]`. O novo
+`NaturalSpawnContext`, derivado de `SystemParam`, agrupa somente os recursos,
+queries e single que pertencem ao domínio de natural spawn; `Time`, `Commands`
+e o estado local do scheduler permanecem explícitos no system. As mesmas regras
+de biome, dimension, entity caps, luz, spacing, fluido e posição continuam
+inalteradas. VERSION: `0.50.162`.
 
-CI de Q41: **verde** no run `35884382877` (localizações, Clippy com
-`-D warnings` e `cargo check`).
+A primeira validação do bloco, run `35885075497`, encontrou a assinatura
+incompleta de lifetimes de `Single` no Bevy 0.19. A correção permaneceu no
+mesmo bloco/version. CI de Q42: **verde** no run `35885223986` (localizações,
+Clippy com `-D warnings` e `cargo check`).
 
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
