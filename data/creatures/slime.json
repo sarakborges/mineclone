@@ -5,7 +5,7 @@
     "portuguese_brazil": "Gosma",
     "spanish": "Limo"
   },
-  "model": "models/creatures/slime_blob/slime_blob.glb",
+  "model": "models/creatures/slime_candy/slime_candy.glb",
   "health": 10,
   "maxPerType": 4,
   "collider": {
@@ -20,16 +20,14 @@
       0
     ]
   },
-  "materialTints": {
-    "SlimeShell": {
-      "hue": 153,
-      "saturation": 0.32,
-      "intensity": 0.44
-    }
-  },
   "unlitMaterials": [
     "SlimeShell",
-    "SlimeFace"
+    "SlimeHighlightSoft",
+    "SlimeHighlightBright",
+    "SlimeEye",
+    "SlimeEyeHighlight",
+    "SlimeBlush",
+    "SlimeMouth"
   ],
   "animations": {
     "idle": "Idle",
@@ -44,16 +42,12 @@
   "jumpInterval": 2,
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
-  "textures": {
-    "SlimeFace": "textures/creatures/slime/face.png",
-    "SlimeShell": "textures/creatures/slime/surface.png"
-  },
   "particleEffects": {
     "idle": {
       "count": 1,
       "color": [
-        0.62,
         1,
+        0.7,
         0.82,
         0.58
       ],
@@ -71,9 +65,9 @@
     "anticipate": {
       "count": 5,
       "color": [
-        0.62,
         1,
-        0.82,
+        0.67,
+        0.8,
         0.72
       ],
       "size": 0.05,
@@ -89,9 +83,9 @@
     "airborne": {
       "count": 2,
       "color": [
-        0.67,
         1,
-        0.86,
+        0.74,
+        0.85,
         0.58
       ],
       "size": 0.042,
@@ -108,9 +102,9 @@
     "land": {
       "count": 10,
       "color": [
-        0.58,
         1,
-        0.8,
+        0.64,
+        0.78,
         0.76
       ],
       "size": 0.055,
@@ -126,9 +120,9 @@
     "hurt": {
       "count": 7,
       "color": [
-        0.78,
         1,
-        0.9,
+        0.78,
+        0.88,
         0.82
       ],
       "size": 0.052,
@@ -144,8 +138,8 @@
     "death": {
       "count": 18,
       "color": [
-        0.62,
         1,
+        0.69,
         0.82,
         0.82
       ],
@@ -162,13 +156,13 @@
   },
   "targetCollider": {
     "size": [
-      1.2,
-      1,
-      1.14
+      1.44,
+      1.04,
+      1.36
     ],
     "centerOffset": [
       0,
-      0.5,
+      0.52,
       0
     ]
   }

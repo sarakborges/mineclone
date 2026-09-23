@@ -13241,3 +13241,20 @@ The two slime variants now use stronger, fully opaque pixel-art surface maps wit
 This deliberately separates two scales of visual information: vertex color describes the body volume, while the PNG carries visible small/mid-scale material detail. The stronger texture contrast is multiplicative under the same muted green tint, so the slime gains readable variation without becoming neon again.
 
 VERSION: `0.50.170`.
+
+
+## 2026-09-23 — Slime principal reconstruído a partir da referência kawaii rosa
+
+Foi criado um terceiro asset dedicado, `slime_candy`, e `asteria:slime` agora aponta para ele. `slime_blob` e o slime legacy continuam preservados.
+
+O novo visual segue a referência fornecida: corpo gumdrop largo/baixo com base achatada e cúpula voxelizada, resolução 18x13x17, rosa pastel autorado diretamente, shading fixo upper-left/front, highlights escalonados opacos no quadrante superior esquerdo, olhos grandes/sonolentos com brilho branco, blushes quadrados, boca pequena em W e dois cubos de gel flutuantes com bobbing. As partículas do slime também passaram para a família rosa.
+
+O corpo continua totalmente opaco e unlit. Não há shell transparente nem texture sampling; shell, highlights e rosto são materiais geométricos separados. O collider físico continua compacto, enquanto target/contact usam 1.44 x 1.04 x 1.36 para acompanhar o volume visível.
+
+Arquivos:
+- `assets/models/creatures/slime_candy/generate_slime_candy.py`
+- `assets/models/creatures/slime_candy/slime_candy.glb`
+- `assets/models/creatures/slime_candy/slime_candy.collider.json`
+- `data/creatures/slime.json`
+
+VERSION: `0.50.176`.

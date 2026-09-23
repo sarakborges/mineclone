@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "id": "asteria:slime_candy",
+  "asset": "slime_candy.glb",
+  "units": "meters",
+  "world_up": "+Y",
+  "forward": "-Z",
+  "origin": "center of ground contact, feet at local y = 0",
+  "model_bounds_rest": {
+    "size": [
+      1.44,
+      1.04,
+      1.36
+    ],
+    "center": [
+      0,
+      0.52,
+      0
+    ],
+    "approximate_visual_height": 1.04
+  },
+  "collider": {
+    "type": "aabb",
+    "size": [
+      0.78,
+      0.84,
+      0.78
+    ],
+    "center_offset": [
+      0,
+      0.42,
+      0
+    ],
+    "min_offset": [
+      -0.39,
+      0,
+      -0.39
+    ],
+    "max_offset": [
+      0.39,
+      0.84,
+      0.39
+    ],
+    "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLB animation",
+    "solid_world_collision": true,
+    "targeting": true
+  },
+  "animation": {
+    "clips": {
+      "Idle": {
+        "duration_s": 2,
+        "loop": true
+      },
+      "Anticipate": {
+        "duration_s": 0.24,
+        "loop": false
+      },
+      "Airborne": {
+        "duration_s": 0.72,
+        "loop": true
+      },
+      "Land": {
+        "duration_s": 0.34,
+        "loop": false
+      },
+      "Hurt": {
+        "duration_s": 0.38,
+        "loop": false
+      },
+      "Death": {
+        "duration_s": 0.75,
+        "loop": false
+      }
+    },
+    "root_motion": false,
+    "visual_root": "BodyPivot",
+    "jump_sequence": [
+      "Anticipate",
+      "Airborne",
+      "Land",
+      "Idle"
+    ],
+    "transition_rule": "Movement simulation owns lift, gravity, collision and landing; visual animation never moves the collider."
+  },
+  "materials": {
+    "shell": "SlimeShell",
+    "face": [
+      "SlimeEye",
+      "SlimeEyeHighlight",
+      "SlimeBlush",
+      "SlimeMouth"
+    ],
+    "highlights": [
+      "SlimeHighlightSoft",
+      "SlimeHighlightBright"
+    ],
+    "unlit": true,
+    "core": null,
+    "rule": "All visual materials are authored opaque/unlit; no shell transparency or texture sampling."
+  },
+  "authoring": {
+    "generator": "generate_slime_candy.py",
+    "voxel_resolution": [
+      18,
+      13,
+      17
+    ],
+    "construction": "sampled voxel gumdrop volume with exposed-face meshing, material-split highlight facets, geometric face, and two floating voxel gel cubes",
+    "older_assets_preserved": [
+      "../slime_blob/slime_blob.glb",
+      "../slime/slime.glb"
+    ]
+  }
+}
