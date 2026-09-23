@@ -23,8 +23,8 @@ use crate::{
     rendering::camera_stack::UI_CAMERA_ORDER,
 };
 
-const CHARACTER_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 1;
-const HUD_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 2;
+const HUD_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 1;
+const CHARACTER_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 2;
 const PLAYER_PREVIEW_CENTER_Y: f32 = 0.90;
 const PLAYER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 
@@ -171,10 +171,10 @@ fn sync_camera<F: QueryFilter>(
     let offset = model.rotation() * orbit * Vec3::Z * distance;
     for (mut camera, mut transform) in cameras.iter_mut() {
         camera.viewport = Some(viewport.clone());
-        // Each active preview viewport must write its own rectangle. In Bevy 0.19,
-        // the final upscaling pass scissors the output copy to this camera's viewport,
-        // so a later HUD writer cannot flush a disjoint Character Info viewport that
-        // was left in CameraOutputMode::Skip.
+        // Every active preview writes its own scissored viewport. Character Info
+        // stays later in the camera stack because that is the last known-good
+        // ordering for the large preview; the HUD viewport anchor is now fixed
+        // independently and no longer needs to be the final preview camera.
         camera.output_mode = CameraOutputMode::Write {
             blend_state: Some(BlendState::ALPHA_BLENDING),
             clear_color: ClearColorConfig::None,
