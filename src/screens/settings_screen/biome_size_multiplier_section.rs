@@ -35,6 +35,9 @@ pub(super) struct BiomeSizeMultiplierSlider;
 pub(super) struct BiomeSizeMultiplierSliderThumb;
 
 #[derive(Component)]
+pub(super) struct BiomeSizeMultiplierSetting;
+
+#[derive(Component)]
 pub(super) struct BiomeSizeMultiplierInput;
 
 #[derive(Component)]
@@ -50,9 +53,16 @@ pub(super) fn biome_size_multiplier_setting(
     language: Language,
 ) -> impl Bundle {
     let value = config.biome_size_multiplier();
+    let mut node = settings_layout::setting_column();
+    node.display = if config.world_generation().single_biome() {
+        Display::None
+    } else {
+        Display::Flex
+    };
 
     (
-        settings_layout::setting_column(),
+        BiomeSizeMultiplierSetting,
+        node,
         children![
             typography::setting_title(
                 localization
@@ -171,6 +181,26 @@ pub(super) fn handle_biome_size_multiplier_keyboard(
     let value = config.biome_size_multiplier();
     for slider in &sliders {
         commands.entity(slider).insert(SliderValue(value));
+    }
+}
+
+pub(super) fn sync_biome_size_multiplier_visibility(
+    config: Res<NewWorldConfig>,
+    mut settings: Query<&mut Node, With<BiomeSizeMultiplierSetting>>,
+) {
+    if !config.is_changed() {
+        return;
+    }
+
+    let display = if config.world_generation().single_biome() {
+        Display::None
+    } else {
+        Display::Flex
+    };
+    for mut node in &mut settings {
+        if node.display != display {
+            node.display = display;
+        }
     }
 }
 
