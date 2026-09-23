@@ -12084,3 +12084,75 @@ Commits funcionais:
 - fallback da face transparente: `df9784807faf6f26e9459863b4d1dfcdbb6ecf84`.
 
 VERSION: `0.50.108`, commit de versão `697df906c66d34cf297d15fc0644ba1404f75f94`.
+
+
+## 2026-09-22 — Second-generation slime model + animation particles
+
+A new slime model was created from scratch without deleting or replacing the previous authored assets.
+
+### Model authoring
+
+The previous model remains under `assets/models/creatures/slime/` and is exposed as `asteria:slime_legacy`.
+
+The active slime now uses:
+- `assets/models/creatures/slime_blob/generate_slime_blob.py`
+- `assets/models/creatures/slime_blob/slime_blob.glb`
+- `assets/models/creatures/slime_blob/slime_blob.collider.json`
+
+The new generator does not stack progressively smaller cuboids. It samples a 24 x 20 x 22 voxel volume using a rounded vertical profile, then emits only exposed voxel faces. This produces a genuinely rounded voxel blob in X/Y/Z rather than a cuboid with a rounded cap.
+
+Rest bounds are approximately `1.20 x 1.00 x 1.14`. The lower body narrows toward the contact patch, reaches maximum width below/around the middle, then contracts through progressively smaller upper layers. The crown contains only 8 voxels on the top layer, avoiding the broad flat cap of the previous model. A small crown drift introduces subtle asymmetry.
+
+The new GLB contains only:
+- `SlimeShell`
+- `SlimeFace`
+
+There is no core. Both materials remain unlit, fully rough and non-metallic. The existing external shell and transparent face textures are reused.
+
+`data/creatures/slime.json` now points to the new model. `data/creatures/slime_legacy.json` keeps the old model available without adding it to natural biome spawn tables.
+
+### Generic creature particle effects
+
+Creature definitions now support a data-driven `particleEffects` map. Each animation-state effect can define:
+- count;
+- RGBA color;
+- particle size and lifetime;
+- optional repeat interval;
+- spawn radius and Y offset;
+- horizontal/vertical velocity;
+- vertical jitter;
+- gravity;
+- ending scale.
+
+Runtime support lives in `src/creatures/particles.rs`. Particles reuse one cube mesh and cached unlit materials, shrink over lifetime, and are automatically despawned when gameplay exits.
+
+The active slime defines effects for:
+- `idle`: sparse floating bubbles;
+- `anticipate`: small droplets pulled downward during squash;
+- `airborne`: short trailing droplets;
+- `land`: outward gelatinous splash;
+- `hurt`: sharper burst;
+- `death`: larger final burst.
+
+Particle spawning is chained immediately after creature movement so animation state transitions and effects remain synchronized. The system stops while gameplay is paused.
+
+### Validation
+
+The first CI pass exposed two Clippy/privacy issues in the new particle module:
+- `CreatureParticle` visibility was narrower than the public-to-parent system signature;
+- `emit_creature_particles` exceeded the project Clippy argument limit.
+
+Both were corrected in `95af4969a27c0af37504533e990b1417e5a5f09e`. Rust validation for that functional state completed successfully in Actions run `35812138010`.
+
+Key commits:
+- particle schema: `48d69fb7f54700a132e3f28503c0f34623dd349e`
+- particle runtime: `85e408198df6062ae7d4ff00acde1ea74967cd65`
+- runtime wiring: `3c065933155627f16c9ad0f49d7f782ccd6ab274`
+- new generator: `909da9d7ccbf2bc71e6c5b0bea67791716f11bc0`
+- new GLB: `a689fa4123d96e6e8601b93d07dc2159c1466622`
+- model metadata: `27cdb3e30b4acf0cf4dee3a4043906c0aa017092`
+- active slime + effects: `525d59b9b8222a97ee0777db7365a1daedd9afa4`
+- legacy creature definition: `d97bcf46f4f081775cf65fb8111784fa246505e8`
+- CI fixes: `95af4969a27c0af37504533e990b1417e5a5f09e`
+- documentation: `d8f89ad19b2dee2a7ef7e54c1c93c392e2860a8d`
+- VERSION: `0.50.109` (`8c71d68ed1967b5f2d59802f81277c4e49a29adf`)
