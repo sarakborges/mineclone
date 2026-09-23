@@ -171,6 +171,10 @@ fn sync_camera<F: QueryFilter>(
     let offset = model.rotation() * orbit * Vec3::Z * distance;
     for (mut camera, mut transform) in cameras.iter_mut() {
         camera.viewport = Some(viewport.clone());
+        // Each active preview viewport must write its own rectangle. In Bevy 0.19,
+        // the final upscaling pass scissors the output copy to this camera's viewport,
+        // so a later HUD writer cannot flush a disjoint Character Info viewport that
+        // was left in CameraOutputMode::Skip.
         camera.output_mode = CameraOutputMode::Write {
             blend_state: Some(BlendState::ALPHA_BLENDING),
             clear_color: ClearColorConfig::None,
