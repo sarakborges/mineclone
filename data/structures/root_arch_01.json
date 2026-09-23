@@ -1,0 +1,168 @@
+{
+  "id": "asteria:root_arch_01",
+  "group_id": "root_arch",
+  "name": {
+    "english": "Root Arch",
+    "portuguese_brazil": "Arco de Raízes",
+    "spanish": "Arco de Raíces"
+  },
+  "locatable": false,
+  "rotation": true,
+  "priority": 0,
+  "conflictGroups": [
+    "heart_feature"
+  ],
+  "restrictions": {
+    "groundBlocks": [
+      "asteria:grass",
+      "asteria:dirt"
+    ],
+    "maxSlope": 2,
+    "requiresDryGround": true
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "forbid",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 6,
+    "y": 0,
+    "z": 2
+  },
+  "palette": {
+    "W": {
+      "block": "asteria:log_world_tree",
+      "orientation": "y",
+      "surfaceLayers": [
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "top",
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "chance": 0.34
+        }
+      ]
+    },
+    "X": {
+      "block": "asteria:log_world_tree",
+      "orientation": "x",
+      "surfaceLayers": [
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "top",
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "chance": 0.34
+        }
+      ]
+    },
+    "Z": {
+      "block": "asteria:log_world_tree",
+      "orientation": "z",
+      "surfaceLayers": [
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "top",
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "chance": 0.34
+        }
+      ]
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        "..Z.......Z..",
+        "..Z.......Z..",
+        "XXZX.....XZXX",
+        "..Z.......Z..",
+        "..Z.......Z.."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".............",
+        "..W.......W..",
+        ".WW.......WW.",
+        "..W.......W..",
+        "............."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".............",
+        ".............",
+        ".WW.......WW.",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 3,
+      "rows": [
+        ".............",
+        ".............",
+        ".WW.......WW.",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 4,
+      "rows": [
+        ".............",
+        ".............",
+        "..X.......X..",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 5,
+      "rows": [
+        ".............",
+        ".............",
+        "...X.....X...",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 6,
+      "rows": [
+        ".............",
+        ".............",
+        "....X...X....",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 7,
+      "rows": [
+        ".............",
+        ".....XXX.....",
+        ".....XXX.....",
+        ".....XXX.....",
+        "............."
+      ]
+    }
+  ]
+}

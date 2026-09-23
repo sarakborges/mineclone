@@ -12,6 +12,7 @@ use crate::{
     content::{
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
+        fluid::FluidRegistry,
         layer::LayerFace,
         structure::{StructureDefinition, StructureRotation, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
@@ -19,6 +20,7 @@ use crate::{
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkStructureMut},
+        fluid::{FluidCell, MAX_FLUID_LEVEL},
         layer::LayerCell,
         texture_rotation::TextureRotation,
     },
@@ -65,6 +67,7 @@ struct StructurePlacementContext<'a> {
 struct StructureRasterizationContext<'a> {
     base_occupied: &'a [u64; STRUCTURE_OCCUPANCY_WORDS],
     blocks: &'a BlockRegistry,
+    fluids: &'a FluidRegistry,
     chunk_origin: IVec3,
     world_seed: u64,
 }
@@ -115,6 +118,9 @@ pub(super) fn rasterize_structures(
                     if chunk
                         .cell_at(local_x as i32, local_y as i32, local_z as i32)
                         .is_some()
+                        || chunk
+                            .fluid_at(local_x as i32, local_y as i32, local_z as i32)
+                            .is_some()
                     {
                         bit_set(&mut base_occupied, index);
                     }
@@ -156,6 +162,7 @@ pub(super) fn rasterize_structures(
                 &StructureRasterizationContext {
                     base_occupied: &base_occupied,
                     blocks: context.blocks,
+                    fluids: context.fluids,
                     chunk_origin,
                     world_seed: context.biome_field.seed(),
                 },
@@ -836,42 +843,61 @@ fn rasterize_structure(
                 return false;
             }
 
-            let block = context.blocks.get(voxel.block_id).unwrap_or_else(|| {
-                panic!(
-                    "structure {} references missing block: {}",
-                    structure.id, voxel.block_id
-                )
-            });
-            let texture_rotation =
-                TextureRotation::for_position(world_position, block.rotate_texture.any());
+            if let Some(block_id) = voxel.block_id {
+                let block = context.blocks.get(block_id).unwrap_or_else(|| {
+                    panic!(
+                        "structure {} references missing block: {}",
+                        structure.id, block_id
+                    )
+                });
+                let texture_rotation =
+                    TextureRotation::for_position(world_position, block.rotate_texture.any());
 
-            chunk.set_block(
-                local_x,
-                local_y,
-                local_z,
-                VoxelCell::oriented(
-                    voxel.block_id,
-                    texture_rotation,
-                    rotation.rotate_orientation(voxel.orientation),
-                ),
-            );
-            for (face, layer) in surface_layer_placements(
-                context.world_seed,
-                structure,
-                rotation,
-                voxel,
-                world_position,
-            ) {
-                let _ = chunk.add_layer(
+                chunk.set_block(
                     local_x,
                     local_y,
                     local_z,
-                    face,
-                    layer,
+                    VoxelCell::oriented(
+                        block_id,
+                        texture_rotation,
+                        rotation.rotate_orientation(voxel.orientation),
+                    ),
                 );
-            }
-            if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
-                chunk.clear_fluid(local_x, local_y, local_z);
+                for (face, layer) in surface_layer_placements(
+                    context.world_seed,
+                    structure,
+                    rotation,
+                    voxel,
+                    world_position,
+                ) {
+                    let _ = chunk.add_layer(
+                        local_x,
+                        local_y,
+                        local_z,
+                        face,
+                        layer,
+                    );
+                }
+                if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
+                    chunk.clear_fluid(local_x, local_y, local_z);
+                }
+            } else {
+                let fluid_reference = structure
+                    .fluid_for_voxel(voxel)
+                    .expect("validated structure voxel must reference block or fluid");
+                let fluid_id = context.fluids.id_of(fluid_reference).unwrap_or_else(|| {
+                    panic!(
+                        "structure {} references missing fluid: {}",
+                        structure.id, fluid_reference
+                    )
+                });
+                chunk.clear_block(local_x, local_y, local_z);
+                chunk.set_fluid(
+                    local_x,
+                    local_y,
+                    local_z,
+                    FluidCell::source(fluid_id, MAX_FLUID_LEVEL),
+                );
             }
             bit_set(claimed, index);
             false

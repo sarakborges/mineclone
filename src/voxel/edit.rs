@@ -6,7 +6,8 @@ use crate::{
 };
 
 use super::{
-    cell::VoxelCell, layer::LayerCell, lighting::PendingLightingUpdates, world::VoxelWorld,
+    cell::VoxelCell, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
+    world::VoxelWorld,
 };
 
 #[derive(SystemParam)]
@@ -64,6 +65,18 @@ impl VoxelMutationRuntime<'_> {
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(chunk)
     }
+
+    pub(crate) fn set_fluid(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+    ) -> Option<IVec3> {
+        let chunk = self.world.set_fluid_at(world_position, fluid)?;
+        self.lighting.enqueue_medium_edit(world_position);
+        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.fluid_updates.enqueue_voxel_edit(world_position);
+        Some(chunk)
+    }
 }
 
 #[derive(SystemParam)]
@@ -99,5 +112,13 @@ impl VoxelTopologyRuntime<'_> {
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
         self.mutation.set_block(world_position, block)
+    }
+
+    pub(crate) fn set_fluid(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+    ) -> Option<IVec3> {
+        self.mutation.set_fluid(world_position, fluid)
     }
 }

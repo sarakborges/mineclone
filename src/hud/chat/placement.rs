@@ -4,6 +4,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
+        fluid::FluidRegistry,
         structure::StructureRegistry,
         structure_set::{StructureSetDefinition, StructureSetRegistry},
     },
@@ -12,7 +13,8 @@ use crate::{
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
-        texture_rotation::TextureRotation, world::VoxelWorld,
+        fluid::{FluidCell, MAX_FLUID_LEVEL}, texture_rotation::TextureRotation,
+        world::VoxelWorld,
     },
     world::{
         generation::{ResolvedSetPiece, resolve_set_pieces, surface_layer_placements},
@@ -39,6 +41,7 @@ pub(super) struct ChatPlacementContext<'w, 's> {
     structures: Res<'w, StructureRegistry>,
     structure_sets: Res<'w, StructureSetRegistry>,
     blocks: Res<'w, BlockRegistry>,
+    fluids: Res<'w, FluidRegistry>,
     seed: Res<'w, WorldSeed>,
     assets: Res<'w, AssetServer>,
     language: Res<'w, ActiveLanguage>,
@@ -398,23 +401,38 @@ impl ChatPlacementContext<'_, '_> {
 
         for voxel in voxels {
             let position = origin + structure_rotation.rotate_offset(voxel.offset);
-            let block = self.blocks.get(voxel.block_id).expect("validated structure block");
-            let texture_rotation =
-                TextureRotation::for_position(position, block.rotate_texture.any());
-            let cell = VoxelCell::oriented(
-                voxel.block_id,
-                texture_rotation,
-                structure_rotation.rotate_orientation(voxel.orientation),
-            );
-            let _ = self.runtime.set_block(position, Some(cell));
-            for (face, layer) in surface_layer_placements(
-                self.seed.0,
-                structure,
-                structure_rotation,
-                voxel,
-                position,
-            ) {
-                let _ = self.runtime.add_layer(position, face, layer);
+            if let Some(block_id) = voxel.block_id {
+                let block = self.blocks.get(block_id).expect("validated structure block");
+                let texture_rotation =
+                    TextureRotation::for_position(position, block.rotate_texture.any());
+                let cell = VoxelCell::oriented(
+                    block_id,
+                    texture_rotation,
+                    structure_rotation.rotate_orientation(voxel.orientation),
+                );
+                let _ = self.runtime.set_block(position, Some(cell));
+                for (face, layer) in surface_layer_placements(
+                    self.seed.0,
+                    structure,
+                    structure_rotation,
+                    voxel,
+                    position,
+                ) {
+                    let _ = self.runtime.add_layer(position, face, layer);
+                }
+            } else {
+                let fluid_reference = structure
+                    .fluid_for_voxel(voxel)
+                    .expect("validated structure voxel must reference block or fluid");
+                let fluid_id = self
+                    .fluids
+                    .id_of(fluid_reference)
+                    .expect("validated structure fluid");
+                let _ = self.runtime.set_block(position, None);
+                let _ = self.runtime.set_fluid(
+                    position,
+                    Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
+                );
             }
         }
         player.translation = destination;
@@ -495,26 +513,42 @@ impl ChatPlacementContext<'_, '_> {
             let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
             for voxel in piece.structure.voxels() {
                 let position = origin + piece.rotation.rotate_offset(voxel.offset);
-                let block = self
-                    .blocks
-                    .get(voxel.block_id)
-                    .expect("validated structure block");
-                let texture_rotation =
-                    TextureRotation::for_position(position, block.rotate_texture.any());
-                let cell = VoxelCell::oriented(
-                    voxel.block_id,
-                    texture_rotation,
-                    piece.rotation.rotate_orientation(voxel.orientation),
-                );
-                let _ = self.runtime.set_block(position, Some(cell));
-                for (face, layer) in surface_layer_placements(
-                    self.seed.0,
-                    piece.structure,
-                    piece.rotation,
-                    voxel,
-                    position,
-                ) {
-                    let _ = self.runtime.add_layer(position, face, layer);
+                if let Some(block_id) = voxel.block_id {
+                    let block = self
+                        .blocks
+                        .get(block_id)
+                        .expect("validated structure block");
+                    let texture_rotation =
+                        TextureRotation::for_position(position, block.rotate_texture.any());
+                    let cell = VoxelCell::oriented(
+                        block_id,
+                        texture_rotation,
+                        piece.rotation.rotate_orientation(voxel.orientation),
+                    );
+                    let _ = self.runtime.set_block(position, Some(cell));
+                    for (face, layer) in surface_layer_placements(
+                        self.seed.0,
+                        piece.structure,
+                        piece.rotation,
+                        voxel,
+                        position,
+                    ) {
+                        let _ = self.runtime.add_layer(position, face, layer);
+                    }
+                } else {
+                    let fluid_reference = piece
+                        .structure
+                        .fluid_for_voxel(voxel)
+                        .expect("validated structure voxel must reference block or fluid");
+                    let fluid_id = self
+                        .fluids
+                        .id_of(fluid_reference)
+                        .expect("validated structure fluid");
+                    let _ = self.runtime.set_block(position, None);
+                    let _ = self.runtime.set_fluid(
+                        position,
+                        Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
+                    );
                 }
             }
         }

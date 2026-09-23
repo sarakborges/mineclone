@@ -321,6 +321,42 @@ impl VoxelChunkStructureMut<'_> {
         }
     }
 
+    pub(crate) fn clear_block(&mut self, x: usize, y: usize, z: usize) {
+        let voxel_index = index(x, y, z);
+        let previous_index = self.blocks.indices[voxel_index];
+        if previous_index == 0 {
+            return;
+        }
+
+        let previous = self.blocks.get(voxel_index);
+        let became_unused = {
+            let usage = &mut self.blocks.usage[previous_index as usize - 1];
+            *usage = usage
+                .checked_sub(1)
+                .expect("structure block palette usage cannot underflow");
+            *usage == 0
+        };
+        self.blocks.set_palette_index(voxel_index, 0);
+        *self.block_count = self
+            .block_count
+            .checked_sub(1)
+            .expect("chunk block count cannot underflow");
+        if became_unused
+            && let Some(previous) = previous
+        {
+            self.block_palette_indices.remove(&previous);
+        }
+        if let Some(removed) = self.layers.remove(&(voxel_index as u16)) {
+            *self.layer_count = self
+                .layer_count
+                .checked_sub(removed.len())
+                .expect("chunk layer count cannot underflow");
+        }
+        if self.fluids.get(voxel_index).is_none() {
+            adjust_boundary_counts(self.boundary_content_counts, x, y, z, false);
+        }
+    }
+
     pub(crate) fn add_layer(
         &mut self,
         x: usize,
@@ -362,6 +398,36 @@ impl VoxelChunkStructureMut<'_> {
             adjust_boundary_counts(self.boundary_content_counts, x, y, z, false);
         }
         set_voxel_bit(self.dynamic_fluid_cells, voxel_index, false);
+    }
+
+    pub(crate) fn set_fluid(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        fluid: FluidCell,
+    ) {
+        let voxel_index = index(x, y, z);
+        let previous = self.fluids.get(voxel_index);
+        if previous == Some(fluid) {
+            return;
+        }
+
+        let had_fluid = previous.is_some();
+        let had_content = had_fluid || self.blocks.get(voxel_index).is_some();
+        self.fluids.set(voxel_index, Some(fluid));
+        if !had_fluid {
+            *self.fluid_count += 1;
+            adjust_boundary_counts(self.boundary_fluid_counts, x, y, z, true);
+            if !had_content {
+                adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
+            }
+        }
+        set_voxel_bit(
+            self.dynamic_fluid_cells,
+            voxel_index,
+            !fluid.is_source(),
+        );
     }
 }
 

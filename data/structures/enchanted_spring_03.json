@@ -1,0 +1,88 @@
+{
+  "id": "asteria:enchanted_spring_03",
+  "group_id": "enchanted_spring",
+  "name": {
+    "english": "Enchanted Spring",
+    "portuguese_brazil": "Nascente Encantada",
+    "spanish": "Manantial Encantado"
+  },
+  "locatable": false,
+  "rotation": true,
+  "priority": 0,
+  "conflictGroups": [
+    "heart_feature"
+  ],
+  "restrictions": {
+    "groundBlocks": [
+      "asteria:grass",
+      "asteria:dirt"
+    ],
+    "maxSlope": 2,
+    "requiresDryGround": true
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 4,
+    "y": 0,
+    "z": 5
+  },
+  "palette": {
+    "S": {
+      "block": "asteria:stone",
+      "surfaceLayers": [
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "top",
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "chance": 0.58
+        }
+      ]
+    },
+    "W": {
+      "fluid": "asteria:water"
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        "...SS....",
+        "..SSSSS..",
+        ".SSWWSSS.",
+        ".SSWWWSS.",
+        ".SWWWWWS.",
+        "SSWWWWWSS",
+        "SSWWWWWS.",
+        ".SSWWWSS.",
+        "..SSWSSS.",
+        "..SSSSS..",
+        "...SS...."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".........",
+        "......S..",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".......S.",
+        "..S......",
+        "........."
+      ]
+    }
+  ]
+}

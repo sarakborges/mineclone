@@ -118,7 +118,10 @@ pub struct StructureAnchor {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StructurePaletteEntry {
-    pub block: String,
+    #[serde(default)]
+    pub block: Option<String>,
+    #[serde(default)]
+    pub fluid: Option<String>,
     #[serde(default)]
     pub orientation: BlockOrientation,
     #[serde(default)]
@@ -185,7 +188,7 @@ pub struct StructureDefinition {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct StructureVoxel {
     pub offset: IVec3,
-    pub block_id: &'static str,
+    pub block_id: Option<&'static str>,
     pub orientation: BlockOrientation,
     palette_symbol: char,
 }
@@ -234,12 +237,22 @@ impl StructureDefinition {
             .validate_references(&self.id, blocks, fluids);
 
         for entry in self.palette.values() {
-            assert!(
-                blocks.get(&entry.block).is_some(),
-                "structure {} references missing block: {}",
-                self.id,
-                entry.block
-            );
+            if let Some(block) = entry.block.as_deref() {
+                assert!(
+                    blocks.get(block).is_some(),
+                    "structure {} references missing block: {}",
+                    self.id,
+                    block
+                );
+            }
+            if let Some(fluid) = entry.fluid.as_deref() {
+                assert!(
+                    fluids.id_of(fluid).is_some(),
+                    "structure {} references missing fluid: {}",
+                    self.id,
+                    fluid
+                );
+            }
             for surface in &entry.surface_layers {
                 let definition = layers.get(&surface.layer).unwrap_or_else(|| {
                     panic!(
@@ -330,6 +343,11 @@ impl StructureDefinition {
             .unwrap_or(&[])
     }
 
+    pub(crate) fn fluid_for_voxel(&self, voxel: &StructureVoxel) -> Option<&str> {
+        self.palette_entry(voxel.palette_symbol)
+            .and_then(|entry| entry.fluid.as_deref())
+    }
+
     pub(crate) fn surface_layers_for_voxel(
         &self,
         voxel: &StructureVoxel,
@@ -376,7 +394,7 @@ impl StructureDefinition {
                     max_y_offset = max_y_offset.max(offset.y);
                     voxels.push(StructureVoxel {
                         offset,
-                        block_id: intern_block_id(&entry.block),
+                        block_id: entry.block.as_deref().map(intern_block_id),
                         orientation: entry.orientation,
                         palette_symbol: symbol,
                     });
@@ -498,11 +516,32 @@ impl StructureDefinition {
                 "structure {} palette keys must be exactly one non-dot character",
                 self.id
             );
-            assert!(
-                !entry.block.trim().is_empty(),
-                "structure {} palette symbol {symbol} must reference a block",
+            let content_count =
+                usize::from(entry.block.is_some()) + usize::from(entry.fluid.is_some());
+            assert_eq!(
+                content_count, 1,
+                "structure {} palette symbol {symbol} must define exactly one of block or fluid",
                 self.id
             );
+            if let Some(block) = entry.block.as_deref() {
+                assert!(
+                    !block.trim().is_empty(),
+                    "structure {} palette symbol {symbol} block cannot be empty",
+                    self.id
+                );
+            }
+            if let Some(fluid) = entry.fluid.as_deref() {
+                assert!(
+                    !fluid.trim().is_empty(),
+                    "structure {} palette symbol {symbol} fluid cannot be empty",
+                    self.id
+                );
+                assert!(
+                    entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} fluid entries cannot define surfaceLayers",
+                    self.id
+                );
+            }
 
             for (surface_index, surface) in entry.surface_layers.iter().enumerate() {
                 assert!(
