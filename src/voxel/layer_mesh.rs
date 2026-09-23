@@ -120,7 +120,7 @@ where
             };
             let tint = tint_at(world_voxel, definition);
 
-            if MicroblockMask::is_modified(support_cell) {
+            if MicroblockMask::has_partial_geometry(support_cell) {
                 emit_sculpted_layer(
                     world,
                     &mut block_lookup,
@@ -213,7 +213,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     tint: [f32; 3],
     lighting: super::mesh_lighting::FaceLighting,
 ) {
-    let shape = MicroblockMask::from_cell(support_cell);
+    let shape = MicroblockMask::geometry_for_cell(support_cell);
 
     // A layer attached to a sculpted face must follow every exposed microface
     // with that normal, exactly like the host block's own texture. Restricting
