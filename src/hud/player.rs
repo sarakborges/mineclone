@@ -9,8 +9,8 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
+    gameplay::modal::GameplayModalState,
     localization::{ActiveLanguage, UiLocalization},
-    player::character_info::CharacterInfoState,
     ui::typography,
 };
 
@@ -56,17 +56,17 @@ fn spawn_player_hud(
     keybinds: Res<Keybinds>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    character_info_state: Res<State<CharacterInfoState>>,
+    modal_state: Res<State<GameplayModalState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
 ) {
-    let hint_kind = inventory_hint_kind(*character_info_state.get());
+    let hint_kind = inventory_hint_kind(*modal_state.get());
     let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
     } else {
         Visibility::Hidden
     };
-    let hint_key = inventory_hint_key(*character_info_state.get());
+    let hint_key = inventory_hint_key(*modal_state.get());
 
     commands
         .spawn((
@@ -127,27 +127,27 @@ fn sync_inventory_hint(
     keybinds: Res<Keybinds>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    character_info_state: Res<State<CharacterInfoState>>,
+    modal_state: Res<State<GameplayModalState>>,
     hint: Single<(&mut Text, &mut Visibility), With<InventoryHint>>,
 ) {
     if !settings.is_changed()
         && !keybinds.is_changed()
         && !localization.is_changed()
         && !language.is_changed()
-        && !character_info_state.is_changed()
+        && !modal_state.is_changed()
     {
         return;
     }
 
     let (mut text, mut visibility) = hint.into_inner();
     let next_text = localization
-        .text(language.get(), inventory_hint_key(*character_info_state.get()))
+        .text(language.get(), inventory_hint_key(*modal_state.get()))
         .replace("{inventory}", keybinds.label(KeybindAction::Inventory));
     if text.0 != next_text {
         text.0 = next_text;
     }
 
-    let next_visibility = if settings.hint_enabled(inventory_hint_kind(*character_info_state.get())) {
+    let next_visibility = if settings.hint_enabled(inventory_hint_kind(*modal_state.get())) {
         Visibility::Inherited
     } else {
         Visibility::Hidden
@@ -157,16 +157,18 @@ fn sync_inventory_hint(
     }
 }
 
-const fn inventory_hint_kind(state: CharacterInfoState) -> HintKind {
-    match state {
-        CharacterInfoState::Closed => HintKind::OpenInventory,
-        CharacterInfoState::Open => HintKind::CloseInventory,
+const fn inventory_hint_kind(state: GameplayModalState) -> HintKind {
+    if matches!(state, GameplayModalState::CharacterInfo) {
+        HintKind::CloseInventory
+    } else {
+        HintKind::OpenInventory
     }
 }
 
-const fn inventory_hint_key(state: CharacterInfoState) -> &'static str {
-    match state {
-        CharacterInfoState::Closed => "hud.openInventory",
-        CharacterInfoState::Open => "hud.closeInventory",
+const fn inventory_hint_key(state: GameplayModalState) -> &'static str {
+    if matches!(state, GameplayModalState::CharacterInfo) {
+        "hud.closeInventory"
+    } else {
+        "hud.openInventory"
     }
 }
