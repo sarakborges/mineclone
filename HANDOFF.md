@@ -134,7 +134,19 @@ viewports físicos derivados; `PlayerPreviewState` concentra somente os estados
 que determinam visibilidade/orbit. As duas queries de câmera continuam
 explícitas por serem os outputs mutados pelo sistema. VERSION: `0.50.121`.
 
-CI de Q11: pendente neste checkpoint.
+CI de Q11: **verde** no run `35818668992` após corrigir os lifetimes de `Single` e a visibilidade dos SystemParams (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q12 — separar configuração da cena do player
+
+`player/model.rs` não suprime mais `too_many_arguments` no observer de cena.
+O novo `PlayerSceneQueries` agrupa somente as queries da cena, reutilizando o
+`PlayerSceneVisuals` já existente para assets/materials. A configuração de
+cada descendente foi separada em responsabilidades nomeadas: mesh/render layer,
+skin/material, identificação de head/hand e ligação de animação. O retorno de
+`configure_player_mesh` preserva o comportamento de ignorar meshes vazias nas
+etapas seguintes. VERSION: `0.50.122`.
+
+CI de Q12: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
