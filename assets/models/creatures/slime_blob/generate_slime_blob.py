@@ -119,6 +119,15 @@ FACE_SPECS = [
 ]
 
 
+def surface_uv(px: float, py: float, pz: float, normal) -> tuple[float, float]:
+    """Planar UVs that cover the full body instead of sampling one flat texel."""
+    if normal[0] != 0:
+        return (pz / BODY_DEPTH + 0.5, 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT))
+    if normal[1] != 0:
+        return (px / BODY_WIDTH + 0.5, pz / BODY_DEPTH + 0.5)
+    return (px / BODY_WIDTH + 0.5, 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT))
+
+
 def outer_shade(px: float, py: float, pz: float) -> float:
     # Object-local soft light baked from the OUTER volume only. Equal positions
     # get equal brightness even when they belong to different voxel faces.
@@ -150,7 +159,7 @@ def make_voxel_surface_mesh() -> int:
                 pz = -BODY_DEPTH * 0.5 + (iz + cz) * DZ
                 positions.extend((px, py, pz))
                 normals.extend(normal)
-                uvs.extend((0.5, 0.5))
+                uvs.extend(surface_uv(px, py, pz, normal))
                 shade = outer_shade(px, py, pz)
                 colors.extend((shade, shade, shade, 1.0))
             # Keep rasterizer winding aligned with the declared outward normal.
@@ -344,7 +353,7 @@ scene = {
         'voxel_resolution': [NX, NY, NZ],
         'occupied_voxels': len(voxels),
         'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Shell uses 5% object-local outer-volume vertex shading; no shell texture or face-normal shading. Legacy slime assets remain untouched.',
+        'notes': 'Second-generation sampled voxel blob. Shell combines 5% object-local vertex shading with a subtle planar-mapped surface texture; legacy slime assets remain untouched.',
     },
 }
 json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
