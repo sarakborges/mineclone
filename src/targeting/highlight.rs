@@ -207,7 +207,7 @@ fn update_highlight(
         .get(highlight_material_handle)
         .is_some_and(|material| material.base_color != highlight_color);
     if highlight_color_changed
-        && let Some(material) = view.materials.get_mut(highlight_material_handle)
+        && let Some(mut material) = view.materials.get_mut(highlight_material_handle)
     {
         material.base_color = highlight_color;
     }
