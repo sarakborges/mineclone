@@ -281,6 +281,17 @@ de execução dos sistemas de settings/new-world. VERSION: `0.50.140`.
 
 CI de Q24: **verde** no run `35871181227` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q25 — compartilhar regras-base de material da skin do player
+
+As regras comuns de skin do modelo completo e do first-person arm foram
+centralizadas em `player/material.rs`: base color branca, player texture,
+`unlit`, metallic zero e roughness máxima. O módulo fica privado e o root
+`player` reexporta somente `apply_player_skin_material`. Overrides extras do
+modelo completo (reflectance/emissive) permanecem locais para preservar o
+comportamento visual específico. VERSION: `0.50.141`.
+
+CI de Q25: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
