@@ -130,6 +130,28 @@ pub(super) enum WorldGenerationFeatureToggle {
     Oceans,
 }
 
+impl WorldGenerationFeatureToggle {
+    fn enabled(self, config: &NewWorldConfig) -> bool {
+        let settings = config.world_generation();
+        match self {
+            Self::Caves => settings.spawn_caves(),
+            Self::Rivers => settings.spawn_rivers(),
+            Self::Lakes => settings.spawn_lakes(),
+            Self::Oceans => settings.spawn_oceans(),
+        }
+    }
+
+    fn toggle(self, config: &mut NewWorldConfig) {
+        let enabled = self.enabled(config);
+        match self {
+            Self::Caves => config.set_spawn_caves(!enabled),
+            Self::Rivers => config.set_spawn_rivers(!enabled),
+            Self::Lakes => config.set_spawn_lakes(!enabled),
+            Self::Oceans => config.set_spawn_oceans(!enabled),
+        }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 pub(super) struct WorldGenerationFeatureToggleThumb(WorldGenerationFeatureToggle);
 
@@ -596,17 +618,7 @@ pub(super) fn handle_world_generation_feature_toggles(
             continue;
         }
 
-        let settings = config.world_generation();
-        match feature {
-            WorldGenerationFeatureToggle::Caves => config.set_spawn_caves(!settings.spawn_caves()),
-            WorldGenerationFeatureToggle::Rivers => {
-                config.set_spawn_rivers(!settings.spawn_rivers())
-            }
-            WorldGenerationFeatureToggle::Lakes => config.set_spawn_lakes(!settings.spawn_lakes()),
-            WorldGenerationFeatureToggle::Oceans => {
-                config.set_spawn_oceans(!settings.spawn_oceans())
-            }
-        }
+        feature.toggle(&mut config);
         break;
     }
 }
@@ -803,13 +815,6 @@ pub(super) fn sync_world_generation_feature_toggles(
 ) {
     let settings = config.world_generation();
     let disabled = settings.mode() == WorldGenerationMode::Void;
-    let enabled = |feature: WorldGenerationFeatureToggle| match feature {
-        WorldGenerationFeatureToggle::Caves => settings.spawn_caves(),
-        WorldGenerationFeatureToggle::Rivers => settings.spawn_rivers(),
-        WorldGenerationFeatureToggle::Lakes => settings.spawn_lakes(),
-        WorldGenerationFeatureToggle::Oceans => settings.spawn_oceans(),
-    };
-
     for (feature, interaction, mut background, mut border) in &mut toggles {
         if !config.is_changed() && !interaction.is_changed() {
             continue;
@@ -817,7 +822,7 @@ pub(super) fn sync_world_generation_feature_toggles(
         let (next_background, next_border) = if disabled {
             (theme::SURFACE_INSET, theme::BORDER)
         } else {
-            toggle::colors(enabled(*feature), *interaction)
+            toggle::colors(feature.enabled(&config), *interaction)
         };
         background.0 = next_background;
         *border = BorderColor::all(next_border);
@@ -825,7 +830,7 @@ pub(super) fn sync_world_generation_feature_toggles(
 
     if config.is_changed() {
         for (thumb, mut node) in &mut thumbs {
-            toggle::apply_thumb_position(enabled(thumb.0), &mut node);
+            toggle::apply_thumb_position(thumb.0.enabled(&config), &mut node);
         }
     }
 }
