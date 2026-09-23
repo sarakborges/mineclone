@@ -170,7 +170,7 @@ fn spawn_highlight(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::from_size(Vec3::splat(HIGHLIGHT_SCALE)))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(0.95, 0.30, 0.30, 0.24),
+            base_color: Color::srgba(0.30, 0.95, 0.65, 0.24),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
             depth_bias: -10.0,
@@ -212,7 +212,7 @@ fn update_highlight(
     *last_scene = Some(scene_snapshot);
 
     let highlight_color = if artisans_kit_selected {
-        Color::srgba(0.30, 0.95, 0.65, 0.18)
+        Color::srgba(0.95, 0.30, 0.30, 0.18)
     } else {
         Color::srgba(1.0, 1.0, 1.0, 0.18)
     };
