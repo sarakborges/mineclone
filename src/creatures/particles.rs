@@ -18,7 +18,7 @@ pub(super) struct CreatureParticleEmitter {
 }
 
 #[derive(Component)]
-struct CreatureParticle {
+pub(super) struct CreatureParticle {
     velocity: Vec3,
     gravity: f32,
     age: f32,
@@ -33,6 +33,7 @@ pub(super) struct CreatureParticleAssets {
     materials: HashMap<[u32; 4], Handle<StandardMaterial>>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn emit_creature_particles(
     time: Res<Time>,
     definitions: Res<CreatureRegistry>,
