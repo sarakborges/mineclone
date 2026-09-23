@@ -37,9 +37,7 @@ fn toggle_pause(
     chat: Res<ChatState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
-    if !keys.just_pressed(KeyCode::Escape)
-        || chat.blocks_pause_escape()
-    {
+    if !keys.just_pressed(KeyCode::Escape) || chat.blocks_pause_escape() {
         return;
     }
 
@@ -50,7 +48,6 @@ fn toggle_pause(
 
     transition.request(ScreenTransitionTarget::pause(next));
 }
-
 
 fn pause_on_focus_lost(
     mut focused_events: MessageReader<WindowFocused>,
