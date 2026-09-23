@@ -16,7 +16,7 @@ use crate::{
     targeting::{ToolUse, ToolUseButton, block::{BlockTargetingSet, TargetedBlock}},
     voxel::{
         edit::VoxelMutationRuntime,
-        log_state::is_hollow,
+        log_variant::is_hollow_log_id,
         microblock::{
             MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
         },
@@ -99,7 +99,7 @@ fn handle_artisans_kit_use(
             // block in air (including at a neighboring macroblock boundary).
             continue;
         };
-        if is_hollow(source) {
+        if is_hollow_log_id(source.block_id) {
             continue;
         }
         if placing && (voxel != hit.voxel || !MicroblockMask::can_restore(source)) {
