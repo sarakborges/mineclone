@@ -76,9 +76,13 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
         PlayerHudPreviewCamera,
         Camera3d::default(),
         Camera {
+            is_active: false,
             order: HUD_PREVIEW_CAMERA_ORDER,
-            output_mode: CameraOutputMode::Skip,
-            clear_color: ClearColorConfig::None,
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
         RenderLayers::layer(PLAYER_MODEL_HUD_RENDER_LAYER),
@@ -89,9 +93,13 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
         CharacterInfoPreviewCamera,
         Camera3d::default(),
         Camera {
+            is_active: false,
             order: CHARACTER_PREVIEW_CAMERA_ORDER,
-            output_mode: CameraOutputMode::Skip,
-            clear_color: ClearColorConfig::None,
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
         RenderLayers::layer(PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER),
@@ -119,8 +127,8 @@ pub(super) fn sync_player_preview_cameras(
     mut character_camera: CharacterPreviewCameraQuery,
 ) {
     let Some(model_transform) = model.iter().next() else {
-        skip_cameras(&mut hud_camera);
-        skip_cameras(&mut character_camera);
+        deactivate_cameras(&mut hud_camera);
+        deactivate_cameras(&mut character_camera);
         return;
     };
 
@@ -162,7 +170,7 @@ fn sync_camera<F: QueryFilter>(
     orbit_yaw: f32,
 ) {
     let Some(viewport) = viewport else {
-        skip_cameras(cameras);
+        deactivate_cameras(cameras);
         return;
     };
 
@@ -170,22 +178,17 @@ fn sync_camera<F: QueryFilter>(
     let orbit = Quat::from_rotation_y(-orbit_yaw);
     let offset = model.rotation() * orbit * Vec3::Z * distance;
     for (mut camera, mut transform) in cameras.iter_mut() {
+        camera.is_active = true;
         camera.viewport = Some(viewport.clone());
-        // Every active preview writes its own scissored viewport. Character Info
-        // stays later in the camera stack because that is the last known-good
-        // ordering for the large preview; the HUD viewport anchor is now fixed
-        // independently and no longer needs to be the final preview camera.
-        camera.output_mode = CameraOutputMode::Write {
-            blend_state: Some(BlendState::ALPHA_BLENDING),
-            clear_color: ClearColorConfig::None,
-        };
         *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
     }
 }
 
-fn skip_cameras<F: QueryFilter>(cameras: &mut Query<(&mut Camera, &mut Transform), F>) {
+fn deactivate_cameras<F: QueryFilter>(
+    cameras: &mut Query<(&mut Camera, &mut Transform), F>,
+) {
     for (mut camera, _) in cameras.iter_mut() {
-        camera.output_mode = CameraOutputMode::Skip;
+        camera.is_active = false;
         camera.viewport = None;
     }
 }
