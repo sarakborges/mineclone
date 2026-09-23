@@ -14,6 +14,7 @@ use super::{
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::{FluidDefinition, FluidRegistry},
     inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
+    item::{ItemDefinition, ItemRegistry},
     json_file::{collect_json_files, read_json_definition},
     layer::{LayerDefinition, LayerRegistry},
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
@@ -36,6 +37,7 @@ pub(crate) struct LoadedContent {
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
     pub inventory_categories: InventoryCategoryRegistry,
+    pub items: ItemRegistry,
     pub layers: LayerRegistry,
     pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
@@ -56,6 +58,7 @@ impl LoadedContent {
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
         commands.insert_resource(self.inventory_categories);
+        commands.insert_resource(self.items);
         commands.insert_resource(self.layers);
         commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
@@ -114,6 +117,8 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content
             .inventory_categories
             .insert(read_json_definition::<InventoryCategoryDefinition>(path));
+    } else if path_has_component(path, "items") {
+        content.items.insert(read_json_definition::<ItemDefinition>(path));
     } else if path_has_component(path, "layers") {
         content.layers.insert(read_json_definition::<LayerDefinition>(path));
     } else if path_has_component(path, "secondary_properties") {
