@@ -227,7 +227,7 @@ resources realmente compartilhados pela criação e sincronização da hint
 visibilidade e change detection. Pause/settings continuam explícitos no spawn
 por serem responsabilidade do root do HUD, não da hint. VERSION: `0.50.132`.
 
-CI de Q19: pendente neste checkpoint.
+CI de Q19: **verde** no run `35867870522` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
