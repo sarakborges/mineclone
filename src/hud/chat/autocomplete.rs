@@ -276,42 +276,42 @@ impl AutocompleteCatalog<'_> {
     fn structure_suggestions(&self, prefix: &str, locatable_only: bool) -> Vec<Suggestion> {
         let mut values = self
             .structures
-        .iter()
-        .filter(|structure| structure.group_id.is_none())
-        .filter(|structure| !locatable_only || structure.locatable)
-        .filter(|structure| id_matches_prefix(&structure.id, prefix))
-        .map(|structure| Suggestion {
-            value: structure.id.clone(),
-            description: structure.name.text(language.get()).to_owned(),
-        })
-        .collect::<Vec<_>>();
-
-    values.extend(
-        self.structures
-            .group_references()
-            .filter(|(_, structure, _)| !locatable_only || structure.locatable)
-            .filter(|(reference, _, _)| id_matches_prefix(reference, prefix))
-            .map(|(reference, structure, count)| Suggestion {
-                value: reference.to_owned(),
-                description: format!(
-                    "{} ({count} variations)",
-                    structure.name.text(self.language.get())
-                ),
-            }),
-    );
-    values.extend(
-        self.structure_sets
             .iter()
-            .filter(|set| !locatable_only || set.locatable)
-            .filter(|set| id_matches_prefix(&set.id, prefix))
-            .map(|set| Suggestion {
-                value: set.id.clone(),
-                description: format!(
-                    "{} (structure set)",
-                    set.name.text(self.language.get())
-                ),
-            }),
-    );
+            .filter(|structure| structure.group_id.is_none())
+            .filter(|structure| !locatable_only || structure.locatable)
+            .filter(|structure| id_matches_prefix(&structure.id, prefix))
+            .map(|structure| Suggestion {
+                value: structure.id.clone(),
+                description: structure.name.text(self.language.get()).to_owned(),
+            })
+            .collect::<Vec<_>>();
+
+        values.extend(
+            self.structures
+                .group_references()
+                .filter(|(_, structure, _)| !locatable_only || structure.locatable)
+                .filter(|(reference, _, _)| id_matches_prefix(reference, prefix))
+                .map(|(reference, structure, count)| Suggestion {
+                    value: reference.to_owned(),
+                    description: format!(
+                        "{} ({count} variations)",
+                        structure.name.text(self.language.get())
+                    ),
+                }),
+        );
+        values.extend(
+            self.structure_sets
+                .iter()
+                .filter(|set| !locatable_only || set.locatable)
+                .filter(|set| id_matches_prefix(&set.id, prefix))
+                .map(|set| Suggestion {
+                    value: set.id.clone(),
+                    description: format!(
+                        "{} (structure set)",
+                        set.name.text(self.language.get())
+                    ),
+                }),
+        );
 
         values
     }
