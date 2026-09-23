@@ -6,9 +6,9 @@
     "spanish": "Hacha de Carpintero"
   },
   "hint": {
-    "english": "A specialized woodworking tool.",
-    "portuguese_brazil": "Uma ferramenta especializada para marcenaria.",
-    "spanish": "Una herramienta especializada para carpintería."
+    "english": "Left click hollows logs; right click strips bark.",
+    "portuguese_brazil": "Botão esquerdo deixa troncos ocos; botão direito remove a casca.",
+    "spanish": "El clic izquierdo ahueca troncos; el derecho quita la corteza."
   },
   "category": "tools",
   "icon": "textures/tools/carpenters-axe.png"
