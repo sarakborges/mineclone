@@ -3,7 +3,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        block::BlockRegistry, block_orientation::BlockOrientation, item::display_name,
+        block::BlockRegistry, block_orientation::BlockOrientation,
+        item::{ItemRegistry, display_name},
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
     hud::{
@@ -50,6 +51,7 @@ struct HotbarVisualCache {
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
+    items: Res<'w, ItemRegistry>,
     blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
     tools: Res<'w, ToolRegistry>,
@@ -61,6 +63,7 @@ struct HotbarHudContent<'w> {
 
 struct HotbarItemView<'a> {
     asset_server: &'a AssetServer,
+    items: &'a ItemRegistry,
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
     tools: &'a ToolRegistry,
@@ -125,6 +128,7 @@ fn spawn_hotbar(
         .map(|item_id| {
             display_name(
                 item_id,
+                &content.items,
                 &content.blocks,
                 &content.layers,
                 &content.tools,
@@ -134,6 +138,7 @@ fn spawn_hotbar(
         .unwrap_or("");
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
+        items: &content.items,
         blocks: &content.blocks,
         layers: &content.layers,
         tools: &content.tools,
@@ -255,6 +260,7 @@ fn sync_hotbar(
         .map(|item_id| {
             display_name(
                 item_id,
+                &content.items,
                 &content.blocks,
                 &content.layers,
                 &content.tools,
@@ -269,6 +275,7 @@ fn sync_hotbar(
     let language_changed = content.language.is_changed();
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
+        items: &content.items,
         blocks: &content.blocks,
         layers: &content.layers,
         tools: &content.tools,
@@ -308,6 +315,19 @@ fn spawn_hotbar_item(
     item_id: &'static str,
     items: &mut HotbarItemView<'_>,
 ) {
+    if let Some(item) = items.items.get(item_id) {
+        slot.spawn((
+            ImageNode::new(items.asset_server.load(item.icon.clone())),
+            Node {
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
     if let Some(block) = items.blocks.get(item_id) {
         let orientation = block.default_orientation();
         let material = items.icon_materials.add(BlockIconMaterial::from_block(
