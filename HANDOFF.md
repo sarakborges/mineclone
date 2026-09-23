@@ -56,7 +56,7 @@ localização e transição continuam explícitos porque pertencem a
 responsabilidades distintas. Isso reduz a assinatura sem criar um context
 genérico ou duplicar lógica de input. VERSION: `0.50.114`.
 
-CI de Q4: pendente neste checkpoint.
+CI de Q4: **verde** no run `35814592315` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
