@@ -160,7 +160,7 @@ pub(in crate::world) fn begin_world_loading(
             biomes,
             &biome_field,
             &feature_fields,
-            forced_spawn_biome.is_some(),
+            forced_spawn_biome.is_some() && !world_generation.single_biome(),
             world_generation,
         )
     };
