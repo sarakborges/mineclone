@@ -63,6 +63,84 @@ pub(super) struct SingleBiomeToggle;
 #[derive(Component)]
 pub(super) struct SingleBiomeToggleThumb;
 
+#[derive(SystemParam)]
+pub(super) struct WorldGenerationToggleView<'w, 's> {
+    structure_toggles: Query<
+        'w,
+        's,
+        (
+            Ref<'static, Interaction>,
+            &'static mut BackgroundColor,
+            &'static mut BorderColor,
+        ),
+        (With<SpawnStructuresToggle>, Without<SingleBiomeToggle>),
+    >,
+    structure_thumbs: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (
+            With<SpawnStructuresToggleThumb>,
+            Without<SingleBiomeToggleThumb>,
+        ),
+    >,
+    single_toggles: Query<
+        'w,
+        's,
+        (
+            Ref<'static, Interaction>,
+            &'static mut BackgroundColor,
+            &'static mut BorderColor,
+        ),
+        (With<SingleBiomeToggle>, Without<SpawnStructuresToggle>),
+    >,
+    single_thumbs: Query<
+        'w,
+        's,
+        &'static mut Node,
+        (
+            With<SingleBiomeToggleThumb>,
+            Without<SpawnStructuresToggleThumb>,
+        ),
+    >,
+}
+
+impl WorldGenerationToggleView<'_, '_> {
+    fn sync(&mut self, config_changed: bool, structures: bool, single: bool) {
+        for (interaction, background, border) in &mut self.structure_toggles {
+            if config_changed || interaction.is_changed() {
+                selectable::apply_colors(
+                    toggle::colors(structures, *interaction),
+                    background,
+                    border,
+                );
+            }
+        }
+        for (interaction, background, border) in &mut self.single_toggles {
+            if config_changed || interaction.is_changed() {
+                selectable::apply_colors(
+                    toggle::colors(single, *interaction),
+                    background,
+                    border,
+                );
+            }
+        }
+
+        if !config_changed {
+            return;
+        }
+
+        let structures_left = px(toggle::thumb_left(structures));
+        for mut thumb in &mut self.structure_thumbs {
+            thumb.left = structures_left;
+        }
+        let single_left = px(toggle::thumb_left(single));
+        for mut thumb in &mut self.single_thumbs {
+            thumb.left = single_left;
+        }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 pub(super) enum WorldGenerationFeatureToggle {
     Caves,
@@ -720,58 +798,16 @@ pub(super) fn sync_world_generation_mode_buttons(
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub(super) fn sync_world_generation_toggles(
     config: Res<NewWorldConfig>,
-    mut structure_toggles: Query<
-        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
-        (With<SpawnStructuresToggle>, Without<SingleBiomeToggle>),
-    >,
-    mut structure_thumbs: Query<
-        &mut Node,
-        (With<SpawnStructuresToggleThumb>, Without<SingleBiomeToggleThumb>),
-    >,
-    mut single_toggles: Query<
-        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
-        (With<SingleBiomeToggle>, Without<SpawnStructuresToggle>),
-    >,
-    mut single_thumbs: Query<
-        &mut Node,
-        (With<SingleBiomeToggleThumb>, Without<SpawnStructuresToggleThumb>),
-    >,
+    mut view: WorldGenerationToggleView,
 ) {
-    let structures = config.world_generation().spawn_structures();
-    let single = config.world_generation().single_biome();
-
-    for (interaction, background, border) in &mut structure_toggles {
-        if config.is_changed() || interaction.is_changed() {
-            selectable::apply_colors(
-                toggle::colors(structures, *interaction),
-                background,
-                border,
-            );
-        }
-    }
-    for (interaction, background, border) in &mut single_toggles {
-        if config.is_changed() || interaction.is_changed() {
-            selectable::apply_colors(
-                toggle::colors(single, *interaction),
-                background,
-                border,
-            );
-        }
-    }
-
-    if config.is_changed() {
-        let structures_left = px(toggle::thumb_left(structures));
-        for mut thumb in &mut structure_thumbs {
-            thumb.left = structures_left;
-        }
-        let single_left = px(toggle::thumb_left(single));
-        for mut thumb in &mut single_thumbs {
-            thumb.left = single_left;
-        }
-    }
+    let settings = config.world_generation();
+    view.sync(
+        config.is_changed(),
+        settings.spawn_structures(),
+        settings.single_biome(),
+    );
 }
 
 pub(super) fn sync_world_generation_feature_toggles(
