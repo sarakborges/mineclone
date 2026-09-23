@@ -329,8 +329,6 @@ fn update_target_hud(
     {
         return;
     }
-    *cached = Some(snapshot);
-
     if *root_visibility != Visibility::Visible {
         *root_visibility = Visibility::Visible;
     }
@@ -342,6 +340,7 @@ fn update_target_hud(
     }
 
     let icon_snapshot = target_hud_icon_snapshot(&snapshot, cell, block, &content);
+    *cached = Some(snapshot);
     let block_changed = cached_icon
         .as_ref()
         .is_none_or(|previous| previous.block_id != icon_snapshot.block_id);
