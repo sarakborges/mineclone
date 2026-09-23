@@ -19,6 +19,8 @@ use super::{
 };
 
 pub(crate) const MICROBLOCK_EDGE: i32 = 8;
+pub(crate) const HOLLOW_LOG_EDGE: i32 = MICROBLOCK_EDGE * 2;
+pub(crate) const HOLLOW_LOG_WALL_THICKNESS: f32 = 1.0 / HOLLOW_LOG_EDGE as f32;
 pub(crate) const ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:artisans_kit_mask";
 pub(crate) const LEGACY_ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:chisel_mask";
 const LAYERS: usize = MICROBLOCK_EDGE as usize;
@@ -118,6 +120,25 @@ impl MicroblockMask {
                     u64::MAX,
                 ],
             },
+        }
+    }
+
+    pub(crate) fn hollow_log_contains(
+        orientation: crate::content::block_orientation::BlockOrientation,
+        [x, y, z]: [usize; 3],
+    ) -> bool {
+        use crate::content::block_orientation::BlockOrientation;
+
+        let edge = HOLLOW_LOG_EDGE as usize;
+        if x >= edge || y >= edge || z >= edge {
+            return false;
+        }
+
+        let at_edge = |coordinate: usize| coordinate == 0 || coordinate + 1 == edge;
+        match orientation {
+            BlockOrientation::Y => at_edge(x) || at_edge(z),
+            BlockOrientation::Z => at_edge(x) || at_edge(y),
+            BlockOrientation::X => at_edge(y) || at_edge(z),
         }
     }
 
