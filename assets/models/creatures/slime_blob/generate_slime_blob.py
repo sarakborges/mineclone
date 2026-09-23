@@ -119,8 +119,23 @@ FACE_SPECS = [
 ]
 
 
+def outer_shade(px: float, py: float, pz: float) -> float:
+    # Object-local soft light baked from the OUTER volume only. Equal positions
+    # get equal brightness even when they belong to different voxel faces.
+    nx = px / (BODY_WIDTH * 0.5)
+    ny = py / (BODY_HEIGHT * 0.5)
+    nz = pz / (BODY_DEPTH * 0.5)
+    length = max((nx*nx + ny*ny + nz*nz) ** 0.5, 1e-6)
+    nx, ny, nz = nx/length, ny/length, nz/length
+    lx, ly, lz = -0.35, 0.76, -0.55
+    light_len = (lx*lx + ly*ly + lz*lz) ** 0.5
+    lx, ly, lz = lx/light_len, ly/light_len, lz/light_len
+    half_lambert = ((nx*lx + ny*ly + nz*lz) + 1.0) * 0.5
+    return 0.95 + 0.05 * max(0.0, min(1.0, half_lambert))
+
+
 def make_voxel_surface_mesh() -> int:
-    positions, normals, uvs, indices = [], [], [], []
+    positions, normals, uvs, colors, indices = [], [], [], [], []
     for ix, iy, iz in sorted(voxels, key=lambda value: (value[1], value[2], value[0])):
         for normal, corners in FACE_SPECS:
             neighbor = (ix + normal[0], iy + normal[1], iz + normal[2])
@@ -133,14 +148,9 @@ def make_voxel_surface_mesh() -> int:
                 pz = -BODY_DEPTH * 0.5 + (iz + cz) * DZ
                 positions.extend((px, py, pz))
                 normals.extend(normal)
-                # Project one continuous soft outer-volume gradient across the
-                # whole body. Neighboring voxel faces therefore agree on the
-                # same shade instead of looking like dark internal walls.
-                shade_min = .5 / 64
-                shade_span = 63.0 / 64
-                u = shade_min + ((px / BODY_WIDTH) + 0.5) * shade_span
-                v = shade_min + (1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT)) * shade_span
-                uvs.extend((u, v))
+                uvs.extend((0.5, 0.5))
+                shade = outer_shade(px, py, pz)
+                colors.extend((shade, shade, shade, 1.0))
             indices.extend((offset, offset + 1, offset + 2, offset, offset + 2, offset + 3))
 
     assert len(positions) // 3 < 65536
@@ -148,6 +158,7 @@ def make_voxel_surface_mesh() -> int:
         'POSITION': accessor(positions, bounds=True, target=34962),
         'NORMAL': accessor(normals, target=34962),
         'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962),
+        'COLOR_0': accessor(colors, kind='VEC4', target=34962),
     }
     meshes.append({
         'name': 'rounded_voxel_blob',
@@ -210,8 +221,8 @@ def material(name: str, color, *, alpha_mode=None, unlit=False):
 
 
 materials = [
-    # Both materials stay unlit so facing direction never produces harsh face-by-face
-    # lighting. A subtle vertical shade is baked into shell_soft.png instead.
+    # Shell stays unlit so rotation never changes brightness. A 5% object-local
+    # outer-volume shade is carried in vertex colors, not a surface texture.
     material('SlimeShell', [.50, .91, .78], unlit=True),
     material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
 ]
@@ -312,7 +323,7 @@ scene = {
         'voxel_resolution': [NX, NY, NZ],
         'occupied_voxels': len(voxels),
         'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Shell uses one continuous 5% outer-volume shade projection, avoiding dark per-voxel internal-wall artifacts. Legacy slime assets remain untouched.',
+        'notes': 'Second-generation sampled voxel blob. Shell uses 5% object-local outer-volume vertex shading; no shell texture or face-normal shading. Legacy slime assets remain untouched.',
     },
 }
 json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
