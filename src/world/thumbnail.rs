@@ -27,6 +27,12 @@ pub(crate) enum WorldThumbnailCompletion {
     ExitGame,
 }
 
+pub(crate) type WorldThumbnailCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Camera, Option<&'static GameplayWorldCamera>),
+>;
+
 #[derive(Component)]
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
@@ -36,25 +42,11 @@ pub(crate) struct WorldThumbnailCapture {
 
 pub(crate) fn begin_world_thumbnail_capture(
     commands: &mut Commands,
-    cameras: &mut Query<(Entity, &mut Camera, Option<&GameplayWorldCamera>)>,
+    cameras: &mut WorldThumbnailCameraQuery,
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    let mut world_camera_found = false;
-    for (_, mut camera, world_camera) in cameras.iter_mut() {
-        if world_camera.is_some() {
-            world_camera_found = true;
-            camera.is_active = true;
-            camera.output_mode = CameraOutputMode::Write {
-                blend_state: None,
-                clear_color: ClearColorConfig::Default,
-            };
-        } else {
-            camera.is_active = false;
-            camera.output_mode = CameraOutputMode::Skip;
-        }
-    }
-    if !world_camera_found {
+    if !isolate_world_thumbnail_cameras(cameras) {
         warn!("world thumbnail capture started without a GameplayWorldCamera");
     }
 
@@ -154,14 +146,20 @@ fn world_thumbnail_path(world_id: &str) -> io::Result<PathBuf> {
 
 pub(crate) fn enforce_world_thumbnail_camera_isolation(
     captures: Query<(), With<WorldThumbnailCapture>>,
-    mut cameras: Query<(&mut Camera, Option<&GameplayWorldCamera>)>,
+    mut cameras: WorldThumbnailCameraQuery,
 ) {
     if captures.is_empty() {
         return;
     }
 
-    for (mut camera, world_camera) in &mut cameras {
+    isolate_world_thumbnail_cameras(&mut cameras);
+}
+
+fn isolate_world_thumbnail_cameras(cameras: &mut WorldThumbnailCameraQuery) -> bool {
+    let mut world_camera_found = false;
+    for (mut camera, world_camera) in cameras.iter_mut() {
         if world_camera.is_some() {
+            world_camera_found = true;
             camera.is_active = true;
             camera.output_mode = CameraOutputMode::Write {
                 blend_state: None,
@@ -172,4 +170,5 @@ pub(crate) fn enforce_world_thumbnail_camera_isolation(
             camera.output_mode = CameraOutputMode::Skip;
         }
     }
+    world_camera_found
 }
