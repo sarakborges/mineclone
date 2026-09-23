@@ -103,7 +103,6 @@
   "settings.hint.breakOrPlaceBlock": "Break / Place Block Hint",
   "settings.hint.brushPaint": "Brush Paint Hint",
   "settings.hint.brushClear": "Brush Clear Hint",
-  "settings.hint.chisel": "Chisel Hint",
   "settings.hint.shears": "Shears Hint",
   "settings.hint.structureTool": "Structure Tool Hint",
   "settings.targetBlockPosition": "Target Block Position",
@@ -124,12 +123,8 @@
   "hud.closeInventory": "Press {inventory} or ESC to close inventory.",
   "hud.brushPaint": "Left click to paint {color}. Right click to choose color.",
   "hud.brushClear": "Left click to clear. Right click to choose color.",
-  "hud.chisel": "Chisel: {precision} · {toolAction}: precision · Left: remove · Right: place",
   "hud.shears": "Shears: Right click to remove the top surface layer",
   "hud.structureTool": "Structure Tool: Right click to set a selection point",
-  "chisel.precision.thick": "Thick",
-  "chisel.precision.thin": "Thin",
-  "chisel.precision.extraThin": "Extra Thin",
   "hud.light": "Light",
   "hud.day": "Day",
   "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
@@ -174,5 +169,10 @@
   "controls.sendChat": "Send Chat Message",
   "controls.chatHistory": "Browse Chat History",
   "controls.autocomplete": "Autocomplete Command",
-  "controls.title": "CONTROLS"
+  "controls.title": "CONTROLS",
+  "settings.hint.artisansKit": "Artisan's Kit Hint",
+  "hud.artisansKit": "Artisan's Kit: {precision} · {toolAction}: precision · Left: remove · Right: place",
+  "artisansKit.precision.thick": "Thick",
+  "artisansKit.precision.thin": "Thin",
+  "artisansKit.precision.extraThin": "Extra Thin"
 }
