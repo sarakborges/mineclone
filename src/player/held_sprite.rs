@@ -124,7 +124,12 @@ type HeldSpriteTintQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub(crate) struct HeldSpriteSyncView<'w, 's> {
-    roots: Query<'w, 's, &'static mut Visibility, With<HeldSpriteRoot>>,
+    roots: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (With<HeldSpriteRoot>, Without<HeldSpriteTint>),
+    >,
     bases: HeldSpriteBaseQuery<'w, 's>,
     tints: HeldSpriteTintQuery<'w, 's>,
     materials: ResMut<'w, Assets<StandardMaterial>>,

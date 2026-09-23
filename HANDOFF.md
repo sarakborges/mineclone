@@ -13635,3 +13635,20 @@ A borda externa do Character Info passou a usar explicitamente a mesma constante
 de borda dos cards de inventory, evitando divergência futura.
 
 VERSION: `0.50.196`.
+
+
+## 2026-09-23 — Corrigido conflito B0001 no held sprite sync
+
+`sync_held_sprites` panicked em runtime porque o Bevy não conseguia provar que a
+query mutável de `Visibility` dos `HeldSpriteRoot` era disjunta da query
+mutável de `Visibility` dos `HeldSpriteTint`. Embora root e tint sejam
+entidades diferentes na hierarquia spawnada, essa relação estrutural não é
+suficiente para a validação estática de queries do ECS.
+
+A query de roots agora declara explicitamente
+`(With<HeldSpriteRoot>, Without<HeldSpriteTint>)`. A query de tint já exige
+`With<HeldSpriteTint>`, então o scheduler consegue provar que as duas nunca
+acessam a mesma entidade. Isso elimina o B0001 sem `ParamSet` desnecessário e
+sem silenciar validações do Bevy.
+
+VERSION: `0.50.197`.
