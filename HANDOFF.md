@@ -667,6 +667,21 @@ O número `0.50.176` foi ocupado concorrentemente pelo novo slime candy; Q55
 usou o próximo patch disponível. CI de Q55: **verde** no run `35891400788`
 (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q56 — mover combate para o domínio de creatures
+
+`CreatureAttackRuntime` saiu de `targeting/interaction.rs` para
+`creatures/combat.rs`. Targeting continua responsável por decidir qual entity
+foi atingida e qual `AttackDefinition` o player usa; o domínio creatures passou
+a ser owner de health damage, efeitos de knockback, animação hurt/death, RNG de
+efeitos e agendamento do `CreatureDeathTimer`. Os re-exports de
+`CreatureMotion` e `CreatureDeathTimer` ficaram sem consumidores externos e
+foram removidos, reduzindo a API do módulo. VERSION: `0.50.178`.
+
+A primeira validação do bloco falhou apenas por esses dois re-exports agora
+ociosos; a correção permaneceu no mesmo bloco/version. CI de Q56: **verde** no
+run `35891909492` (localizações, Clippy com `-D warnings` e
+`cargo check`).
+
 ### Q56 — mover runtime de combate para creatures
 
 `CreatureAttackRuntime` saiu de `targeting/interaction.rs` para
