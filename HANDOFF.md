@@ -519,6 +519,18 @@ somente scheduler → regra → posição → criação da entidade. VERSION:
 CI de Q44: **verde** no run `35886797670` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q45 — nomear estado local do natural spawn
+
+O scheduler de natural spawn não usa mais `Local<(f32, u32)>` nem acessos
+opacos `state.0/state.1`. `NaturalSpawnState` nomeia explicitamente
+`seconds_until_attempt` e `random_state`, deixando cooldown e RNG legíveis
+sem alterar persistência, seed ou cadência. VERSION: `0.50.166`.
+
+A primeira validação do bloco, run `35887166521`, encontrou um único
+`state.1` remanescente na chamada de busca de posição; ele foi corrigido no
+mesmo bloco/version. CI de Q45: **verde** no run `35887319637` (localizações,
+Clippy com `-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
