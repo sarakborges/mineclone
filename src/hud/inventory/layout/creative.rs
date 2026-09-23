@@ -14,23 +14,21 @@ use crate::{
         tool_id::intern_tool_id,
     },
     localization::{Language, UiLocalization},
-    rendering::{block_model::BlockModel, block_tint::block_tint_at},
+    rendering::block_model::BlockModel,
     ui::{scrollbar, selectable, surface, text_input, typography},
 };
 
-use crate::hud::{
-    block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
-};
+use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
     InventoryItemView, InventoryLayoutState,
+    item::spawn_inventory_item,
     super::state::{
         CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH, CREATIVE_COLUMNS,
         CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea, CreativeCatalogScrollbar,
         CreativeCategoryButton, CreativeCategoryScrollArea, CreativeCategoryScrollbar,
         CreativeInventorySlot, CreativeInventoryView, CreativeSearchBar, CreativeSearchText,
-        ITEM_ICON_SIZE, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP, SEARCH_HEIGHT, SLOT_GAP,
-        SLOT_SIZE,
+        PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP, SEARCH_HEIGHT, SLOT_GAP, SLOT_SIZE,
     },
 };
 
@@ -407,62 +405,8 @@ fn spawn_creative_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            let Some(item) = item else {
-                return;
-            };
-
-            match item {
-                CreativeCatalogItem::Block(block) => {
-                    let block_id = intern_block_id(&block.id);
-                    let tint = block_tint_at(
-                        block.tint,
-                        items.player_position,
-                        items.biome_field,
-                        items.biomes,
-                    );
-                    let material = items.icon_materials.add(BlockIconMaterial::from_block(
-                        block,
-                        items.asset_server,
-                        tint,
-                    ));
-
-                    slot.spawn((
-                        BlockModel::display(block_id),
-                        MaterialNode(material),
-                        Node {
-                            width: px(ITEM_ICON_SIZE),
-                            height: px(ITEM_ICON_SIZE),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ));
-                }
-                CreativeCatalogItem::Layer(layer) => {
-                    let tint = block_tint_at(
-                        layer.tint,
-                        items.player_position,
-                        items.biome_field,
-                        items.biomes,
-                    );
-                    spawn_layer_icon(
-                        slot,
-                        layer,
-                        items.asset_server,
-                        tint,
-                        ITEM_ICON_SIZE,
-                    );
-                }
-                CreativeCatalogItem::Tool(tool) => {
-                    spawn_tool_icon(
-                        slot,
-                        tool,
-                        items.asset_server,
-                        items.brush_mode,
-                        items.dyes,
-                        items.language,
-                        ITEM_ICON_SIZE,
-                    );
-                }
+            if let Some(item_id) = item_id {
+                spawn_inventory_item(slot, item_id, items);
             }
         });
 }
