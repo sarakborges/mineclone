@@ -458,7 +458,11 @@ fn sync_player_model(
     }
 
     let layers = if perspective.is_third_person() {
-        RenderLayers::from_layers(&[0, PLAYER_MODEL_PREVIEW_RENDER_LAYER])
+        RenderLayers::from_layers(&[
+            0,
+            PLAYER_MODEL_HUD_RENDER_LAYER,
+            PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
+        ])
     } else {
         player_ui_render_layers()
     };
