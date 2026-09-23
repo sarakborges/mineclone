@@ -70,6 +70,19 @@ VERSION: `0.50.115`.
 
 CI de Q5: **verde** no run `35817031531` após restaurar o accessor de column spans ainda usado por restrictions e remover imports obsoletos.
 
+### Q6 — deduplicar validação e escrita do /place
+
+`hud/chat/placement.rs` agora possui um único caminho para verificar se todos
+os voxels/clearAbove estão carregados e livres de criaturas, reutilizado por
+estrutura simples e structure sets. A aplicação de block/fluid/clear,
+orientação, rotação de textura e surface layers também foi extraída para
+`apply_structure`, eliminando duas implementações paralelas que precisavam
+evoluir em lockstep. Os parâmetros do helper são apenas os owners realmente
+necessários (`VoxelTopologyRuntime`, registries, seed e geometria). VERSION:
+`0.50.116`.
+
+CI de Q6: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
