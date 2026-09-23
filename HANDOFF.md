@@ -11876,3 +11876,45 @@ Correção:
 
 Commit funcional:
 - `dceda2aae701daa8ac06522465de58e194489ed1`.
+
+
+## 2026-09-22 — Previews do player isolados por scene instance
+
+A alternância entre “Character HUD funciona / Character Info não” e o inverso
+mostrou que compartilhar a mesma scene instance renderizável entre duas câmeras
+de preview era a arquitetura errada para este caso. Trocar a ordem das câmeras
+apenas mudava qual preview sobrevivia à composição.
+
+Arquitetura final:
+- o asset GLTF continua sendo carregado uma única vez;
+- meshes, materiais, skin e animation clips continuam compartilhados por handle;
+- existem três **scene instances ECS** distintas do mesmo modelo:
+  - gameplay / third person;
+  - Character HUD;
+  - Character Info;
+- cada scene instance possui seus próprios bones, transforms e
+  `AnimationPlayer`;
+- HUD e Character Info possuem render layers exclusivas e não compartilham mais
+  as mesmas entidades renderizáveis;
+- fechar um preview **não descarrega assets nem recria a scene**:
+  - a câmera usa `Camera::is_active = false`;
+  - a scene correspondente usa `Visibility::Hidden`;
+- abrir novamente apenas reativa câmera e visibilidade;
+- as duas câmeras de preview usam `CameraOutputMode::Write` com alpha blending
+  e limpam seu próprio pass para transparente;
+- `CameraOutputMode::Skip` deixou de ser usado como mecanismo de
+  ativação/desativação dos previews.
+
+Isso mantém os previews permanentemente preparados sem reload de GLTF, textura
+ou mesh, ao custo apenas de duplicar a estrutura ECS leve das duas scene
+instances de UI.
+
+Commits:
+- scene instances independentes para world/HUD/Character Info:
+  `03ade62b97a0a8e98fd974e1674fa76e65977f65`;
+- câmeras de preview passam a usar `is_active` e passes transparentes:
+  `f5bb42c00920d531d1e440fcf3e44080ae994190`;
+- ajuste de Clippy do setup das scenes:
+  `56fb7ae7c93336b631d2f3ef5c28b6dd92bb3ccb`.
+
+CI funcional push `35805704238`: **verde**.
