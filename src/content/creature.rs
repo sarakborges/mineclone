@@ -276,35 +276,29 @@ impl CreatureRegistry {
     }
 }
 
-fn valid_creature_model_path(path: &str) -> bool {
+fn valid_creature_asset_path(path: &str, root: &str, extensions: &[&str]) -> bool {
     if !is_safe_relative_asset_path(path) {
         return false;
     }
-    let candidate = Path::new(path);
+
     let mut parts = path.split('/');
-    if parts.next() != Some("models") || parts.next() != Some("creatures") {
+    if parts.next() != Some(root) || parts.next() != Some("creatures") {
         return false;
     }
-    matches!(
-        candidate.extension().and_then(|ext| ext.to_str()),
-        Some("glb" | "gltf")
-    )
+
+    Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extensions.contains(&extension))
+}
+
+fn valid_creature_model_path(path: &str) -> bool {
+    valid_creature_asset_path(path, "models", &["glb", "gltf"])
 }
 
 /// Creature materials may only refer to PNGs beneath the moddable creature texture root.
 fn valid_creature_texture_path(path: &str) -> bool {
-    if !is_safe_relative_asset_path(path) {
-        return false;
-    }
-    let candidate = Path::new(path);
-    let mut parts = path.split('/');
-    if parts.next() != Some("textures") || parts.next() != Some("creatures") {
-        return false;
-    }
-    matches!(
-        candidate.extension().and_then(|ext| ext.to_str()),
-        Some("png")
-    )
+    valid_creature_asset_path(path, "textures", &["png"])
 }
 
 #[cfg(test)]
