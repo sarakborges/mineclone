@@ -23,7 +23,9 @@ use super::super::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
     },
     log_variant::{hollow_surface_texture_face, is_hollow_log_id},
-    microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
+    microblock::{
+        HOLLOW_LOG_WALL_THICKNESS, MICROBLOCK_EDGE, MicroblockMask, occupied_cell,
+    },
     orientation::{orientation_rotation, source_face_for_oriented_face},
     read::VoxelRead,
     texture_rotation::TextureRotation,
@@ -94,7 +96,6 @@ impl<'a> MicroMeshBuffers<'a> {
 }
 
 const EDGE: usize = MICROBLOCK_EDGE as usize;
-const HOLLOW_LOG_WALL_SCALE: f32 = 0.5;
 
 pub(super) fn material_buffer<'buffer, 'definition>(
     buffers: &'buffer mut MicroMeshBuffers<'definition>,
@@ -209,6 +210,11 @@ pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
     face: BlockFace,
     neighbor: VoxelCell,
 ) {
+    if is_hollow_log_id(neighbor.block_id) && !MicroblockMask::is_modified(neighbor) {
+        emit_hollow_log_neighbor_opening(surface, buffers, face, neighbor);
+        return;
+    }
+
     let neighbor_mask = MicroblockMask::geometry_for_cell(neighbor);
     let outward = face.offset();
     let depth = if outward.x + outward.y + outward.z > 0 {
@@ -406,6 +412,84 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
     );
 }
 
+fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
+    surface: &MicroSurface<'a, W>,
+    buffers: &mut MicroMeshBuffers<'a>,
+    face: BlockFace,
+    neighbor: VoxelCell,
+) {
+    use crate::content::block_orientation::BlockOrientation;
+
+    let axis_aligned = match neighbor.orientation {
+        BlockOrientation::X => matches!(face, BlockFace::Right | BlockFace::Left),
+        BlockOrientation::Y => matches!(face, BlockFace::Top | BlockFace::Bottom),
+        BlockOrientation::Z => matches!(face, BlockFace::Front | BlockFace::Back),
+    };
+    if !axis_aligned {
+        return;
+    }
+
+    let normal_axis = match face {
+        BlockFace::Right | BlockFace::Left => 0,
+        BlockFace::Top | BlockFace::Bottom => 1,
+        BlockFace::Front | BlockFace::Back => 2,
+    };
+    let origin = surface.local_voxel.as_vec3();
+    let vertices = face.unit_vertices().map(|mut vertex| {
+        for axis in 0..3 {
+            if axis != normal_axis {
+                vertex[axis] = if vertex[axis] == 0.0 {
+                    HOLLOW_LOG_WALL_THICKNESS
+                } else {
+                    1.0 - HOLLOW_LOG_WALL_THICKNESS
+                };
+            }
+        }
+        (origin + Vec3::from_array(vertex)).to_array()
+    });
+
+    let source_face = source_face_for_oriented_face(face, surface.cell.orientation);
+    let rotation = if rotates_texture(surface.block.rotate_texture, source_face) {
+        surface.cell.texture_rotation
+    } else {
+        TextureRotation::default()
+    };
+    let inverse_orientation = orientation_rotation(surface.cell.orientation).inverse();
+    let uvs = vertices.map(|vertex| {
+        let local = Vec3::from_array(vertex) - surface.local_voxel.as_vec3();
+        let oriented = Vec3::splat(0.5)
+            + inverse_orientation * (local - Vec3::splat(0.5));
+        rotate_macro_uv(macro_uv(source_face, oriented), rotation)
+    });
+    let material_face = block_face_material_face(source_face, surface.block);
+    let material_code = surface
+        .texture_table
+        .encoded_layers(block_face_texture_layers(material_face, surface.block))
+        .unwrap_or(0.0);
+    let lighting = face_lighting_with_cache(
+        surface.lighting_cache,
+        surface.world,
+        surface.world_voxel,
+        face,
+        surface.block_srgb,
+    );
+
+    push_lit_quad(
+        material_buffer(
+            buffers,
+            surface.cell.block_id,
+            surface.block,
+            material_face,
+        ),
+        vertices,
+        face.normal(),
+        uvs,
+        surface.tint,
+        lighting,
+        material_code,
+    );
+}
+
 fn thin_hollow_log_shell(
     vertices: &mut [[f32; 3]; 4],
     orientation: crate::content::block_orientation::BlockOrientation,
@@ -423,14 +507,15 @@ fn thin_hollow_log_shell(
     for vertex in vertices {
         for axis in radial_axes {
             let local = vertex[axis] - origin[axis];
-            let distance_from_edge = local.min(1.0 - local);
-            let scaled_distance = distance_from_edge * HOLLOW_LOG_WALL_SCALE;
-            vertex[axis] = origin[axis]
-                + if local <= 0.5 {
-                    scaled_distance
-                } else {
-                    1.0 - scaled_distance
-                };
+            let old_wall = 1.0 / MICROBLOCK_EDGE as f32;
+            let local = if local == old_wall {
+                HOLLOW_LOG_WALL_THICKNESS
+            } else if local == 1.0 - old_wall {
+                1.0 - HOLLOW_LOG_WALL_THICKNESS
+            } else {
+                local
+            };
+            vertex[axis] = origin[axis] + local;
         }
     }
 }
