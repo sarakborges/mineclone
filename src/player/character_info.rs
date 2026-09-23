@@ -34,7 +34,7 @@ struct CharacterInfoModalInput<'w, 's> {
     keybinds: Res<'w, Keybinds>,
     modal: Res<'w, State<GameplayModalState>>,
     chat: Res<'w, ChatState>,
-    focus: ResMut<'w, InputFocus>,
+    focus: Res<'w, InputFocus>,
     editable_text: Query<'w, 's, (), With<EditableText>>,
     next_modal: ResMut<'w, NextState<GameplayModalState>>,
 }
