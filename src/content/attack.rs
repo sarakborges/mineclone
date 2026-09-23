@@ -3,10 +3,24 @@ use serde::Deserialize;
 
 use super::registry::DefinitionMap;
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AttackEffectKind {
+    Knockback,
+}
+
+impl AttackEffectKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Knockback => "knockback",
+        }
+    }
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttackEffectDefinition {
-    pub effect: String,
+    pub effect: AttackEffectKind,
     #[serde(default = "default_effect_chance")]
     pub chance: f32,
     #[serde(default)]
@@ -17,9 +31,9 @@ fn default_effect_chance() -> f32 { 1.0 }
 
 impl AttackEffectDefinition {
     fn validate(&self, attack_id: &str) {
-        assert!(!self.effect.trim().is_empty(), "attack {attack_id} has an empty effect");
-        assert!(self.chance.is_finite() && (0.0..=1.0).contains(&self.chance), "attack {attack_id} effect {} chance must be between 0 and 1", self.effect);
-        assert!(self.strength.is_finite() && self.strength >= 0.0, "attack {attack_id} effect {} strength must be non-negative", self.effect);
+        let effect = self.effect.as_str();
+        assert!(self.chance.is_finite() && (0.0..=1.0).contains(&self.chance), "attack {attack_id} effect {effect} chance must be between 0 and 1");
+        assert!(self.strength.is_finite() && self.strength >= 0.0, "attack {attack_id} effect {effect} strength must be non-negative");
     }
 }
 
