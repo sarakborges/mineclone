@@ -117,7 +117,6 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
                     height: px(CHARACTER_PREVIEW_IMAGE_HEIGHT),
                     ..default()
                 },
-                Pickable::IGNORE,
             ));
         });
 }
