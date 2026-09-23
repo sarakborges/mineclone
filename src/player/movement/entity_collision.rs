@@ -108,6 +108,56 @@ fn push(
     moved
 }
 
+fn resolve_contact_pair(
+    world: &VoxelWorld,
+    first_position: &mut Vec3,
+    second_position: &mut Vec3,
+    axis: HorizontalAxis,
+    penetration: f32,
+    second_direction: f32,
+    first_share: f32,
+    first_bounds_at: impl Fn(Vec3) -> Bounds,
+    second_bounds_at: impl Fn(Vec3) -> Bounds,
+) {
+    let first_target = penetration * first_share;
+    let second_target = penetration - first_target;
+    let first_moved = push(
+        first_position,
+        world,
+        axis,
+        -second_direction * first_target,
+        &first_bounds_at,
+    );
+    let second_moved = push(
+        second_position,
+        world,
+        axis,
+        second_direction * second_target,
+        &second_bounds_at,
+    );
+    let remainder = (penetration - first_moved - second_moved).max(0.0);
+    if remainder <= 0.0 {
+        return;
+    }
+
+    let extra_second = push(
+        second_position,
+        world,
+        axis,
+        second_direction * remainder,
+        &second_bounds_at,
+    );
+    if extra_second < remainder {
+        push(
+            first_position,
+            world,
+            axis,
+            -second_direction * (remainder - extra_second),
+            &first_bounds_at,
+        );
+    }
+}
+
 /// After the movement systems, share horizontal penetration between the
 /// player and each creature. If one hits terrain, transfer the remainder to
 /// the other. No displacement may pass through a solid or unloaded voxel.
@@ -125,41 +175,17 @@ pub(super) fn resolve_player_creature_contacts(
                 continue;
             };
             had_contact = true;
-            let player_target = penetration * PLAYER_PUSH_SHARE;
-            let creature_target = penetration - player_target;
-            let player_moved = push(
+            resolve_contact_pair(
+                &world,
                 &mut player.translation,
-                &world,
-                axis,
-                -direction * player_target,
-                player_bounds,
-            );
-            let creature_moved = push(
                 &mut creature.translation,
-                &world,
                 axis,
-                direction * creature_target,
+                penetration,
+                direction,
+                PLAYER_PUSH_SHARE,
+                player_bounds,
                 |feet| collider.bounds(feet),
             );
-            let remainder = (penetration - player_moved - creature_moved).max(0.0);
-            if remainder > 0.0 {
-                let extra_creature = push(
-                    &mut creature.translation,
-                    &world,
-                    axis,
-                    direction * remainder,
-                    |feet| collider.bounds(feet),
-                );
-                if extra_creature < remainder {
-                    push(
-                        &mut player.translation,
-                        &world,
-                        axis,
-                        -direction * (remainder - extra_creature),
-                        player_bounds,
-                    );
-                }
-            }
         }
         if !had_contact {
             break;
@@ -189,41 +215,17 @@ pub(super) fn resolve_creature_creature_contacts(
             };
             had_contact = true;
 
-            let first_target = penetration * CREATURE_PUSH_SHARE;
-            let second_target = penetration - first_target;
-            let first_moved = push(
+            resolve_contact_pair(
+                &world,
                 &mut first.translation,
-                &world,
-                axis,
-                -direction * first_target,
-                |feet| first_collider.bounds(feet),
-            );
-            let second_moved = push(
                 &mut second.translation,
-                &world,
                 axis,
-                direction * second_target,
+                penetration,
+                direction,
+                CREATURE_PUSH_SHARE,
+                |feet| first_collider.bounds(feet),
                 |feet| second_collider.bounds(feet),
             );
-            let remainder = (penetration - first_moved - second_moved).max(0.0);
-            if remainder > 0.0 {
-                let extra_second = push(
-                    &mut second.translation,
-                    &world,
-                    axis,
-                    direction * remainder,
-                    |feet| second_collider.bounds(feet),
-                );
-                if extra_second < remainder {
-                    push(
-                        &mut first.translation,
-                        &world,
-                        axis,
-                        -direction * (remainder - extra_second),
-                        |feet| first_collider.bounds(feet),
-                    );
-                }
-            }
         }
         if !had_contact {
             break;
