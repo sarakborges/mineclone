@@ -280,6 +280,51 @@ fn id_matches_prefix(id: &str, prefix: &str) -> bool {
             .is_some_and(|short| short.starts_with(prefix))
 }
 
+fn structure_suggestions(
+    structures: &StructureRegistry,
+    structure_sets: &StructureSetRegistry,
+    language: &ActiveLanguage,
+    prefix: &str,
+    locatable_only: bool,
+) -> Vec<Suggestion> {
+    let mut values = structures
+        .iter()
+        .filter(|structure| structure.group_id.is_none())
+        .filter(|structure| !locatable_only || structure.locatable)
+        .filter(|structure| id_matches_prefix(&structure.id, prefix))
+        .map(|structure| Suggestion {
+            value: structure.id.clone(),
+            description: structure.name.text(language.get()).to_owned(),
+        })
+        .collect::<Vec<_>>();
+
+    values.extend(
+        structures
+            .group_references()
+            .filter(|(_, structure, _)| !locatable_only || structure.locatable)
+            .filter(|(reference, _, _)| id_matches_prefix(reference, prefix))
+            .map(|(reference, structure, count)| Suggestion {
+                value: reference.to_owned(),
+                description: format!(
+                    "{} ({count} variations)",
+                    structure.name.text(language.get())
+                ),
+            }),
+    );
+    values.extend(
+        structure_sets
+            .iter()
+            .filter(|set| !locatable_only || set.locatable)
+            .filter(|set| id_matches_prefix(&set.id, prefix))
+            .map(|set| Suggestion {
+                value: set.id.clone(),
+                description: format!("{} (structure set)", set.name.text(language.get())),
+            }),
+    );
+
+    values
+}
+
 fn suggestions_for(
     text: &str,
     cursor: usize,
@@ -322,42 +367,13 @@ fn suggestions_for(
                     description: creature.name.text(language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::StructureId => {
-                let mut values = structures
-                    .iter()
-                    .filter(|structure| structure.group_id.is_none())
-                    .filter(|structure| id_matches_prefix(&structure.id, &prefix))
-                    .map(|structure| Suggestion {
-                        value: structure.id.clone(),
-                        description: structure.name.text(language.get()).to_owned(),
-                    })
-                    .collect::<Vec<_>>();
-                values.extend(
-                    structures
-                        .group_references()
-                        .filter(|(reference, _, _)| id_matches_prefix(reference, &prefix))
-                        .map(|(reference, structure, count)| Suggestion {
-                            value: reference.to_owned(),
-                            description: format!(
-                                "{} ({count} variations)",
-                                structure.name.text(language.get())
-                            ),
-                        }),
-                );
-                values.extend(
-                    structure_sets
-                        .iter()
-                        .filter(|set| id_matches_prefix(&set.id, &prefix))
-                        .map(|set| Suggestion {
-                            value: set.id.clone(),
-                            description: format!(
-                                "{} (structure set)",
-                                set.name.text(language.get())
-                            ),
-                        }),
-                );
-                values
-            },
+            ParameterKind::StructureId => structure_suggestions(
+                structures,
+                structure_sets,
+                language,
+                &prefix,
+                false,
+            ),
             ParameterKind::StructureVariation => {
                 if text.split_whitespace().nth(1)? != "structure" {
                     return Some((range, Vec::new()));
@@ -415,50 +431,13 @@ fn suggestions_for(
                         },
                     })
                     .collect::<Vec<_>>(),
-                "structure" => {
-                    let mut values = structures
-                        .iter()
-                        .filter(|structure| structure.group_id.is_none() && structure.locatable)
-                        .filter(|structure| {
-                            let id = structure.id.to_ascii_lowercase();
-                            id.starts_with(&prefix)
-                                || id
-                                    .strip_prefix("asteria:")
-                                    .is_some_and(|short| short.starts_with(&prefix))
-                        })
-                        .map(|structure| Suggestion {
-                            value: structure.id.clone(),
-                            description: structure.name.text(language.get()).to_owned(),
-                        })
-                        .collect::<Vec<_>>();
-                    values.extend(
-                        structures
-                            .group_references()
-                            .filter(|(_, structure, _)| structure.locatable)
-                            .filter(|(reference, _, _)| id_matches_prefix(reference, &prefix))
-                            .map(|(reference, structure, count)| Suggestion {
-                                value: reference.to_owned(),
-                                description: format!(
-                                    "{} ({count} variations)",
-                                    structure.name.text(language.get())
-                                ),
-                            }),
-                    );
-                    values.extend(
-                        structure_sets
-                            .iter()
-                            .filter(|set| set.locatable)
-                            .filter(|set| id_matches_prefix(&set.id, &prefix))
-                            .map(|set| Suggestion {
-                                value: set.id.clone(),
-                                description: format!(
-                                    "{} (structure set)",
-                                    set.name.text(language.get())
-                                ),
-                            }),
-                    );
-                    values
-                },
+                "structure" => structure_suggestions(
+                    structures,
+                    structure_sets,
+                    language,
+                    &prefix,
+                    true,
+                ),
                 _ => Vec::new(),
             },
             ParameterKind::Coordinate => Vec::new(),
