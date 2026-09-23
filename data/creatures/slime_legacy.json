@@ -52,5 +52,8 @@
     "SlimeShell": "textures/creatures/slime_legacy/shell.png",
     "SlimeCore": "textures/creatures/slime_legacy/core.png",
     "SlimeFace": "textures/creatures/slime_legacy/face.png"
+  },
+  "materialAlphas": {
+    "SlimeShell": 0.76
   }
 }
