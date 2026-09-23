@@ -219,7 +219,11 @@ impl Plugin for WorldPlugin {
             .add_systems(Last, advance_deferred_mesh_asset_retirements)
             .add_systems(
                 Last,
-                thumbnail::enforce_world_thumbnail_camera_isolation
+                (
+                    thumbnail::advance_world_thumbnail_capture,
+                    thumbnail::enforce_world_thumbnail_camera_isolation,
+                )
+                    .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
