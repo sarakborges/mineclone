@@ -1,4 +1,17 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Held sprites centralizados no ponto da mão [VERSION 0.61.1]
+
+O renderer genérico de items/tools segurados estava deslocando toda tool por um
+`HELD_TOOL_GRIP_OFFSET` dentro do próprio plano 2D. Isso fazia sprites grandes
+ou não alongados — como o Artisan's Kit — orbitarem para longe do anchor da mão,
+apesar de o `HeldSpriteRoot` já estar posicionado no ponto correto do grip.
+
+O offset interno foi removido. Items continuam centrados como antes e tools
+mantêm apenas o ângulo visual de exibição, agora rotacionando em torno do próprio
+centro. Como `player/held_sprite.rs` é compartilhado, a correção vale para
+first person, third person, HUD preview e Character Info preview sem criar
+ajustes específicos por tool.
+
 ## 2026-09-23 — Auditoria integral de versionamento [VERSION 0.61.0]
 
 A versão foi reavaliada a partir do histórico completo da branch `develop`,
