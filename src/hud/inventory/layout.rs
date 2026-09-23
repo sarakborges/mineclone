@@ -57,6 +57,25 @@ pub(super) struct InventoryLayoutState<'a> {
     pub(super) cursor_position: Option<Vec2>,
 }
 
+pub(super) fn spawn_character_info_inventory(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    spawn_player_inventory_panel(root, state, items);
+    spawn_item_tooltip(root);
+
+    let Some(item_id) = state.cursor.item() else {
+        return;
+    };
+    spawn_cursor_icon(
+        root,
+        item_id,
+        state.cursor_position.unwrap_or(Vec2::ZERO),
+        items,
+    );
+}
+
 pub(super) fn spawn_inventory_root(
     commands: &mut Commands,
     state: &InventoryLayoutState<'_>,

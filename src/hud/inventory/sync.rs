@@ -20,6 +20,7 @@ use crate::{
 use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
+    CharacterInfoInventoryRoot,
     layout::{
         InventoryItemView, InventoryLayoutState, spawn_creative_catalog_rows, spawn_cursor_icon,
         spawn_inventory_item, spawn_inventory_root,
@@ -96,7 +97,12 @@ pub(super) struct InventoryCursorSyncContext<'w, 's> {
     cursor: Res<'w, InventoryCursor>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     window: Single<'w, 's, &'static Window>,
-    roots: Query<'w, 's, Entity, With<InventoryHudRoot>>,
+    roots: Query<
+        'w,
+        's,
+        Entity,
+        Or<(With<InventoryHudRoot>, With<CharacterInfoInventoryRoot>)>,
+    >,
     icons: Query<'w, 's, Entity, With<InventoryCursorIcon>>,
 }
 

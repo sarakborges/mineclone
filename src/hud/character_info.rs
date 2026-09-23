@@ -2,20 +2,36 @@ use bevy::{input::mouse::MouseMotion, prelude::*};
 
 use crate::{
     app::game_state::GameState,
+    entity::EntityHealth,
     player::{
         PLAYER_DISPLAY_NAME,
+        camera::GameplayCamera,
         character_info::CharacterInfoState,
     },
-    ui::{surface, theme, typography},
+    ui::{selectable, surface, theme, typography},
 };
 
-use super::player::portrait::{CharacterInfoPreviewViewport, CharacterPreviewOrbit};
+use super::{
+    inventory::{
+        CharacterInfoInventoryRoot, CharacterInfoInventorySpawn, INVENTORY_SLOT_GAP,
+        INVENTORY_SLOT_SIZE,
+    },
+    player::portrait::{CharacterInfoPreviewViewport, CharacterPreviewOrbit},
+};
 
+const CHARACTER_INFO_PANEL_WIDTH: f32 = 480.0;
+const CHARACTER_INFO_DETAILS_WIDTH: f32 = 202.0;
+const CHARACTER_INFO_PANEL_GAP: f32 = 24.0;
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
 const CHARACTER_PREVIEW_IMAGE_WIDTH: f32 = 216.0;
 const CHARACTER_PREVIEW_IMAGE_HEIGHT: f32 = 288.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
+const CHARACTER_NAME_HEALTH_GAP: f32 = 14.0;
+const CHARACTER_HEALTH_EQUIPMENT_GAP: f32 = 18.0;
+const CHARACTER_HEALTH_BAR_HEIGHT: f32 = 22.0;
+const CHARACTER_HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
+const EQUIPMENT_LABEL_GAP: f32 = 10.0;
 
 #[derive(Resource, Default)]
 struct CharacterPreviewInteraction {
@@ -24,6 +40,12 @@ struct CharacterPreviewInteraction {
 
 #[derive(Component)]
 struct CharacterInfoRoot;
+
+#[derive(Component)]
+struct CharacterInfoHealthFill;
+
+#[derive(Component)]
+struct CharacterInfoHealthLabel;
 
 pub(super) struct CharacterInfoHudPlugin;
 
@@ -41,26 +63,31 @@ impl Plugin for CharacterInfoHudPlugin {
             )
             .add_systems(
                 Update,
-                rotate_character_preview
+                (rotate_character_preview, sync_character_info_health)
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(CharacterInfoState::Open)),
             );
     }
 }
 
-fn spawn_character_info(mut commands: Commands) {
-
+fn spawn_character_info(
+    mut commands: Commands,
+    mut inventory: CharacterInfoInventorySpawn,
+) {
     commands
         .spawn((
             CharacterInfoRoot,
+            CharacterInfoInventoryRoot,
             Node {
                 position_type: PositionType::Absolute,
                 left: px(0),
                 top: px(0),
                 width: percent(100),
                 height: percent(100),
+                flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
+                column_gap: px(CHARACTER_INFO_PANEL_GAP),
                 ..default()
             },
             GlobalZIndex(100),
@@ -69,26 +96,44 @@ fn spawn_character_info(mut commands: Commands) {
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            root.spawn((
-                surface::hud_container(Node {
-                    width: px(460),
-                    padding: UiRect::all(px(18)),
-                    border: UiRect::all(px(1)),
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::FlexStart,
-                    column_gap: px(18),
-                    ..default()
-                }),
-                Pickable::IGNORE,
-            ))
-            .with_children(|card| {
-                spawn_character_preview_viewport(card);
-                card.spawn((
-                    typography::hud_heading(PLAYER_DISPLAY_NAME),
-                    Pickable::IGNORE,
-                ));
-            });
+            spawn_character_info_panel(root);
+            inventory.spawn(root);
         });
+}
+
+fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
+    root.spawn((
+        surface::hud_container(Node {
+            width: px(CHARACTER_INFO_PANEL_WIDTH),
+            padding: UiRect::all(px(18)),
+            border: UiRect::all(px(1)),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(18),
+            ..default()
+        }),
+        Pickable::IGNORE,
+    ))
+    .with_children(|card| {
+        spawn_character_preview_viewport(card);
+        card.spawn((
+            Node {
+                width: px(CHARACTER_INFO_DETAILS_WIDTH),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|details| {
+            details.spawn((
+                typography::hud_heading(PLAYER_DISPLAY_NAME),
+                Pickable::IGNORE,
+            ));
+            spawn_character_health_bar(details);
+            spawn_equipment_table(details);
+        });
+    });
 }
 
 fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
@@ -119,6 +164,139 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
                 },
             ));
         });
+}
+
+fn spawn_character_health_bar(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Node {
+                position_type: PositionType::Relative,
+                width: percent(100),
+                height: px(CHARACTER_HEALTH_BAR_HEIGHT),
+                margin: UiRect::top(px(CHARACTER_NAME_HEALTH_GAP)),
+                border: UiRect::all(px(1)),
+                ..default()
+            },
+            BackgroundColor(theme::SLIDER_TRACK),
+            BorderColor::all(selectable::BORDER_COLOR),
+            Pickable::IGNORE,
+        ))
+        .with_children(|health| {
+            health.spawn((
+                CharacterInfoHealthFill,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(0),
+                    width: percent(100),
+                    height: percent(100),
+                    ..default()
+                },
+                BackgroundColor(CHARACTER_HEALTH_FILL_COLOR),
+                Pickable::IGNORE,
+            ));
+            health
+                .spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        top: px(0),
+                        width: percent(100),
+                        height: percent(100),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|label| {
+                    label.spawn((
+                        CharacterInfoHealthLabel,
+                        typography::inventory_category(""),
+                        typography::tooltip_shadow(),
+                        TextLayout::justify(Justify::Center),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
+}
+
+fn spawn_equipment_table(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                margin: UiRect::top(px(CHARACTER_HEALTH_EQUIPMENT_GAP)),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(INVENTORY_SLOT_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|table| {
+            for label in [
+                "No helm equiped",
+                "No armor equiped",
+                "No leggings equiped",
+                "No boots equiped",
+            ] {
+                spawn_equipment_row(table, label);
+            }
+        });
+}
+
+fn spawn_equipment_row(parent: &mut ChildSpawnerCommands, label: &'static str) {
+    let (background, border) = selectable::static_colors(false);
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                height: px(INVENTORY_SLOT_SIZE),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(EQUIPMENT_LABEL_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    width: px(INVENTORY_SLOT_SIZE),
+                    height: px(INVENTORY_SLOT_SIZE),
+                    min_width: px(INVENTORY_SLOT_SIZE),
+                    min_height: px(INVENTORY_SLOT_SIZE),
+                    border: UiRect::all(px(2)),
+                    ..default()
+                },
+                BackgroundColor(background),
+                BorderColor::all(border),
+                Pickable::IGNORE,
+            ));
+            row.spawn((typography::caption(label), Pickable::IGNORE));
+        });
+}
+
+fn sync_character_info_health(
+    player: Query<&EntityHealth, With<GameplayCamera>>,
+    mut fill: Single<&mut Node, With<CharacterInfoHealthFill>>,
+    mut label: Single<&mut Text, With<CharacterInfoHealthLabel>>,
+) {
+    let health = player
+        .iter()
+        .next()
+        .map(|health| (health.current(), health.max()));
+    let fraction = health
+        .map(|(current, max)| (current / max).clamp(0.0, 1.0))
+        .unwrap_or(0.0);
+    fill.width = percent(fraction * 100.0);
+
+    let desired = health
+        .map(|(current, max)| format!("{current:.0} / {max:.0}"))
+        .unwrap_or_default();
+    if label.0 != desired {
+        label.0 = desired;
+    }
 }
 
 fn rotate_character_preview(
