@@ -745,6 +745,17 @@ block/tool. VERSION: `0.50.184`.
 CI de Q61: **verde** no run `35894108568` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q62 — mover validação de referências para ToolDefinition
+
+As referências próprias de tool saíram de `content::validation` para
+`ToolDefinition::validate_references`: inventory category e a tool category
+opcional de mining. O validador global mantém somente os conflitos entre
+namespaces que impedem o mesmo ID de ser tool e block/layer. VERSION:
+`0.50.185`.
+
+CI de Q62: **verde** no run `35894479724` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
