@@ -11946,3 +11946,32 @@ Commits:
 - correção de Clippy nos testes: `d4ac9530a2a9d69e4cb1aeb90055bfffacc09cef`.
 
 CI funcional push `35806322688`: **verde**.
+
+
+## 2026-09-22 — Thumbnail de save isola todas as câmeras auxiliares
+
+A captura de thumbnail ao sair do mundo agora deixa somente a
+`GameplayWorldCamera` ativa durante o frame do screenshot.
+
+Motivo:
+- após a refatoração dos previews de personagem, usar apenas
+  `CameraOutputMode::Skip` não bastava;
+- câmeras auxiliares ainda ativas podiam participar do render graph e aparecer
+  na captura;
+- Character HUD e Character Info eram os casos visíveis.
+
+Correção:
+- durante a captura, a `GameplayWorldCamera` fica `is_active = true` e em
+  `CameraOutputMode::Write`;
+- todas as demais câmeras ficam `is_active = false` e em
+  `CameraOutputMode::Skip`;
+- o isolamento é reaplicado no sistema de `Last` até o screenshot concluir;
+- nenhum estado de câmera é restaurado depois da captura, porque esse fluxo
+  sempre termina em Leave World ou Exit Game e o mundo é desmontado logo em
+  seguida.
+
+Commits:
+- isolamento por `Camera::is_active`:
+  `70c985805c538f430b3e071baac887b42adb838a`;
+- remoção da restauração desnecessária:
+  `e73645b8a8f50b19fb01ecb62b62486ac7463c21`.
