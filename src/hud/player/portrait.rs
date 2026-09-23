@@ -1,6 +1,6 @@
 use bevy::{
     camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
-    ecs::query::QueryFilter,
+    ecs::{query::QueryFilter, system::SystemParam},
     prelude::*,
     render::render_resource::BlendState,
     window::PrimaryWindow,
@@ -71,6 +71,62 @@ type CharacterPreviewCameraQuery<'w, 's> = Query<
     ),
 >;
 
+#[derive(SystemParam)]
+struct PlayerPreviewLayout<'w, 's> {
+    window: Single<'w, &'static Window, With<PrimaryWindow>>,
+    hud_viewport: Query<
+        'w,
+        's,
+        (&'static ComputedNode, &'static UiGlobalTransform),
+        With<PlayerHudPreviewViewport>,
+    >,
+    character_viewport: Query<
+        'w,
+        's,
+        (&'static ComputedNode, &'static UiGlobalTransform),
+        With<CharacterInfoPreviewViewport>,
+    >,
+}
+
+impl PlayerPreviewLayout<'_, '_> {
+    fn hud_viewport(&self) -> Option<Viewport> {
+        self.hud_viewport
+            .iter()
+            .next()
+            .and_then(|(node, transform)| viewport_from_ui(node, transform, &self.window))
+    }
+
+    fn character_viewport(&self) -> Option<Viewport> {
+        self.character_viewport
+            .iter()
+            .next()
+            .and_then(|(node, transform)| viewport_from_ui(node, transform, &self.window))
+    }
+}
+
+#[derive(SystemParam)]
+struct PlayerPreviewState<'w> {
+    pause: Res<'w, State<PauseState>>,
+    settings: Res<'w, State<SettingsState>>,
+    character_info: Res<'w, State<CharacterInfoState>>,
+    orbit: Res<'w, CharacterPreviewOrbit>,
+}
+
+impl PlayerPreviewState<'_> {
+    fn hud_visible(&self) -> bool {
+        *self.pause.get() == PauseState::Running
+            && *self.settings.get() == SettingsState::Closed
+    }
+
+    fn character_visible(&self) -> bool {
+        *self.character_info.get() == CharacterInfoState::Open
+    }
+
+    fn character_yaw(&self) -> f32 {
+        self.orbit.yaw
+    }
+}
+
 pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
     commands.spawn((
         PlayerHudPreviewCamera,
@@ -107,22 +163,10 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn sync_player_preview_cameras(
-    window: Single<&Window, With<PrimaryWindow>>,
     model: Query<&GlobalTransform, With<PlayerModelRoot>>,
-    hud_viewport: Query<
-        (&ComputedNode, &UiGlobalTransform),
-        With<PlayerHudPreviewViewport>,
-    >,
-    character_viewport: Query<
-        (&ComputedNode, &UiGlobalTransform),
-        With<CharacterInfoPreviewViewport>,
-    >,
-    pause: Res<State<PauseState>>,
-    settings: Res<State<SettingsState>>,
-    character_info: Res<State<CharacterInfoState>>,
-    orbit: Res<CharacterPreviewOrbit>,
+    layout: PlayerPreviewLayout,
+    state: PlayerPreviewState,
     mut hud_camera: HudPreviewCameraQuery,
     mut character_camera: CharacterPreviewCameraQuery,
 ) {
@@ -132,12 +176,7 @@ pub(super) fn sync_player_preview_cameras(
         return;
     };
 
-    let hud_visible =
-        *pause.get() == PauseState::Running && *settings.get() == SettingsState::Closed;
-    let hud_rect = hud_visible
-        .then(|| hud_viewport.iter().next())
-        .flatten()
-        .and_then(|(node, transform)| viewport_from_ui(node, transform, &window));
+    let hud_rect = state.hud_visible().then(|| layout.hud_viewport()).flatten();
     sync_camera(
         &mut hud_camera,
         hud_rect,
@@ -147,17 +186,17 @@ pub(super) fn sync_player_preview_cameras(
         0.0,
     );
 
-    let character_rect = (*character_info.get() == CharacterInfoState::Open)
-        .then(|| character_viewport.iter().next())
-        .flatten()
-        .and_then(|(node, transform)| viewport_from_ui(node, transform, &window));
+    let character_rect = state
+        .character_visible()
+        .then(|| layout.character_viewport())
+        .flatten();
     sync_camera(
         &mut character_camera,
         character_rect,
         model_transform,
         PLAYER_PREVIEW_CENTER_Y,
         PLAYER_PREVIEW_CAMERA_DISTANCE,
-        orbit.yaw,
+        state.character_yaw(),
     );
 }
 
