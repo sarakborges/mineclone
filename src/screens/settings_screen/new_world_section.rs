@@ -11,7 +11,6 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
-        selectable,
         settings as settings_layout,
         theme,
         text_input::editable_value,
@@ -826,7 +825,7 @@ pub(super) fn sync_world_generation_feature_toggles(
 
     if config.is_changed() {
         for (thumb, mut node) in &mut thumbs {
-            node.left = px(toggle::thumb_left(enabled(thumb.0)));
+            toggle::apply_thumb_position(enabled(thumb.0), &mut node);
         }
     }
 }
