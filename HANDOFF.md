@@ -250,6 +250,16 @@ preservadas. VERSION: `0.50.135`.
 
 CI de Q21: **verde** no run `35869445843` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q22 — centralizar seleção de registries do bootstrap
+
+A escolha entre registries recém-lidos e resources já carregados saiu de cinco
+`map_or` paralelos para `BootstrapRegistries::resolve`. O bundle contém
+somente dimensions, biomes, blocks, layers e fluids, exatamente o conjunto
+consumido pelo bootstrap. `LoadedContent` foi reexportado apenas dentro do
+crate para tornar essa fronteira explícita. VERSION: `0.50.137`.
+
+CI de Q22: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
