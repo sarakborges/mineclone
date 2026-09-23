@@ -174,9 +174,12 @@ def material(name, color, alpha=1., rough=.36, emission=None):
 
 
 materials = [
-    material('SlimeShell', [.50,.91,.78], 1., .85),
-    material('SlimeCore', [.18,.70,.57], 1., .85),
-    material('SlimeFace', [1.,1.,1.], 1., .30),
+    # Author the source asset fully rough as well. Runtime creature overrides also
+    # zero reflectance/specular, so both the GLB fallback and the in-game material
+    # remain matte with no glossy/environment reflection.
+    material('SlimeShell', [.50,.91,.78], 1., 1.0),
+    material('SlimeCore', [.18,.70,.57], 1., 1.0),
+    material('SlimeFace', [1.,1.,1.], 1., 1.0),
 ]
 # Keep the lower body broad for the face, then progressively carve the upper
 # corners away in short voxel-like tiers. The overall rest bounds stay identical
