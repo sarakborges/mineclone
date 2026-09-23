@@ -1,4 +1,13 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Held sprite first-person movido +0.12 à direita [VERSION 0.61.4]
+
+O anchor do held sprite em first person foi deslocado em `+0.12` no eixo X,
+passando de `-0.08` para `0.04`. O lift vertical de `+0.24`, o eixo Z e a
+rotação permanecem inalterados.
+
+A mudança continua restrita a
+`src/player/viewmodel.rs::spawn_first_person_held_sprite`.
+
 ## 2026-09-23 — Held sprite first-person elevado para +0.24 [VERSION 0.61.3]
 
 O ajuste vertical do held sprite em first person foi triplicado conforme QA
