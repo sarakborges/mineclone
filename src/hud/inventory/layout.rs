@@ -10,6 +10,7 @@ use crate::{
         biome::BiomeRegistry,
         block::BlockRegistry,
         inventory_category::InventoryCategoryRegistry,
+        item::ItemRegistry,
         layer::LayerRegistry,
         tool::ToolRegistry,
     },
@@ -34,6 +35,7 @@ use super::state::{InventoryHudRoot, PANEL_GAP};
 
 pub(super) struct InventoryItemView<'a> {
     pub(super) asset_server: &'a AssetServer,
+    pub(super) items: &'a ItemRegistry,
     pub(super) blocks: &'a BlockRegistry,
     pub(super) layers: &'a LayerRegistry,
     pub(super) tools: &'a ToolRegistry,
