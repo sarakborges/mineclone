@@ -13,8 +13,13 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, ARTISANS_KIT_TOOL_ID, DYED_PROPERTY_ID, STRUCTURE_TOOL_ID},
+        builtin_ids::DYED_PROPERTY_ID,
         secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
+        tool_behavior::{
+            ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
+            BRUSH_PAINT_BEHAVIOR_ID, STRUCTURE_SELECT_BEHAVIOR_ID,
+        },
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
@@ -110,6 +115,7 @@ struct TargetHighlightInput<'w, 's> {
 #[derive(SystemParam)]
 struct TargetHighlightContent<'w> {
     blocks: Res<'w, BlockRegistry>,
+    tools: Res<'w, ToolRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
 }
 
@@ -186,11 +192,19 @@ fn update_highlight(
 ) {
     let scene_snapshot = input.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
-    let artisans_kit_selected = input.scene.selected_item() == Some(ARTISANS_KIT_TOOL_ID);
+    let selected_tool = input
+        .scene
+        .selected_item()
+        .and_then(|item_id| content.tools.get(item_id));
+    let artisans_kit_selected = selected_tool.is_some_and(|tool| {
+        tool.uses_behavior(ARTISANS_KIT_REMOVE_BEHAVIOR_ID)
+            || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
+    });
     if !scene_changed
         && !artisans_kit_selected
         && !input.brush_mode.is_changed()
         && !content.blocks.is_changed()
+        && !content.tools.is_changed()
         && !content.secondary_properties.is_changed()
     {
         return;
@@ -282,8 +296,9 @@ fn update_highlight(
         view.highlight.0.scale = Vec3::ONE;
     }
     let selected_item = input.scene.selected_item();
+    let selected_tool = selected_item.and_then(|item_id| content.tools.get(item_id));
 
-    if selected_item == Some(STRUCTURE_TOOL_ID) {
+    if selected_tool.is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID)) {
         hide_if_visible(&mut view.brush_ghost.1);
         let Some(voxel) =
             placement_voxel(hit, input.scene.world(), input.scene.player_translation())
@@ -298,7 +313,7 @@ fn update_highlight(
         show_if_hidden(&mut view.highlight.1);
         return;
     }
-    if selected_item == Some(BRUSH_TOOL_ID) {
+    if selected_tool.is_some_and(|tool| tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID)) {
         hide_if_visible(&mut view.highlight.1);
 
         let Some(block) = content.blocks.get(hit.block_id) else {

@@ -8,7 +8,7 @@ use crate::{
         day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
         fluid::FluidRegistry,
-        item::{ItemRegistry, canonical_inventory_item_id},
+        item::ItemRegistry,
         layer::LayerRegistry,
         tool::ToolRegistry,
     },
@@ -206,8 +206,7 @@ fn validate_playable(
         return Err(invalid_data("invalid selected hotbar slot"));
     }
     for id in snapshot.inventory.iter().flatten() {
-        let canonical = canonical_inventory_item_id(id);
-        if !valid_item(canonical) {
+        if !valid_item(id) {
             return Err(invalid_data(format!("unknown inventory item ID: {id}")));
         }
     }

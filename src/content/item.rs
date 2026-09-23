@@ -6,7 +6,6 @@ use crate::localization::{Language, LocalizedText};
 use super::{
     asset_path::is_safe_relative_asset_path,
     block::BlockRegistry,
-    builtin_ids::ARTISANS_KIT_TOOL_ID,
     inventory_category::InventoryCategoryRegistry,
     item_id::intern_item_id,
     layer::LayerRegistry,

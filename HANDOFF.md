@@ -13695,3 +13695,17 @@ Não há aliases/migração de IDs antigos no carregamento de inventory: saves
 antigos com IDs removidos são considerados incompatíveis.
 
 VERSION: `0.50.199`.
+
+
+## 2026-09-23 — Removidos os últimos acoplamentos de UI/save a tool IDs
+
+Crosshair e target highlight agora identificam Artisan's Kit, Brush, Shears e
+Structure Tool pelas capabilities configuradas em `leftBehavior` /
+`rightBehavior`, usando `ToolRegistry::uses_behavior`. Nenhum desses visuais
+compara mais o ID concreto do item.
+
+A validação/restauração de inventory deixou de canonicalizar IDs antigos. O ID
+salvo precisa existir exatamente no conteúdo atual; aliases históricos não são
+mantidos.
+
+VERSION: `0.50.200`.

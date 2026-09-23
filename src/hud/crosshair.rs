@@ -9,11 +9,14 @@ use crate::{
     },
     content::{
         block::BlockRegistry,
-        builtin_ids::{
-            BRUSH_TOOL_ID, ARTISANS_KIT_TOOL_ID, DYED_PROPERTY_ID, SHEARS_TOOL_ID,
-            STRUCTURE_TOOL_ID,
-        },
+        builtin_ids::DYED_PROPERTY_ID,
         secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
+        tool_behavior::{
+            ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
+            BRUSH_PAINT_BEHAVIOR_ID, LAYER_REMOVE_BEHAVIOR_ID,
+            STRUCTURE_SELECT_BEHAVIOR_ID,
+        },
     },
     gameplay::{
         availability::world_interaction_available,
@@ -88,6 +91,7 @@ struct ActionHintRuntime<'w> {
 #[derive(SystemParam)]
 struct ActionHintContent<'w> {
     blocks: Res<'w, BlockRegistry>,
+    tools: Res<'w, ToolRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -172,6 +176,7 @@ fn update_action_hint(
         && !runtime.artisans_kit_resolution.is_changed()
         && !runtime.keybinds.is_changed()
         && !content.blocks.is_changed()
+        && !content.tools.is_changed()
         && !content.secondary_properties.is_changed()
         && !content.localization.is_changed()
         && !content.language.is_changed()
@@ -182,11 +187,22 @@ fn update_action_hint(
     let language = content.language.get();
     let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
     let selected_block = selected_item.and_then(|id| content.blocks.get(id));
+    let selected_tool = selected_item.and_then(|id| content.tools.get(id));
+    let uses_artisans_kit = selected_tool.is_some_and(|tool| {
+        tool.uses_behavior(ARTISANS_KIT_REMOVE_BEHAVIOR_ID)
+            || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
+    });
+    let uses_shears = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(LAYER_REMOVE_BEHAVIOR_ID));
+    let uses_structure_tool = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID));
+    let uses_brush = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID));
     let tool_action = runtime.keybinds.label(KeybindAction::ToolAction);
 
     let next_text = if runtime.targeted_creature.0.is_some() {
         None
-    } else if selected_item == Some(ARTISANS_KIT_TOOL_ID) {
+    } else if uses_artisans_kit {
         if !runtime.settings.hint_enabled(HintKind::ArtisansKit) {
             None
         } else {
@@ -206,18 +222,18 @@ fn update_action_hint(
                     .replace("{toolAction}", tool_action),
             )
         }
-    } else if selected_item == Some(SHEARS_TOOL_ID) {
+    } else if uses_shears {
         runtime
             .settings
             .hint_enabled(HintKind::Shears)
             .then(|| content.localization.text(language, "hud.shears").to_owned())
-    } else if selected_item == Some(STRUCTURE_TOOL_ID) {
+    } else if uses_structure_tool {
         runtime
             .settings
             .hint_enabled(HintKind::StructureTool)
             .then(|| content.localization.text(language, "hud.structureTool").to_owned())
     } else if let Some(hit) = runtime.targeted.0 {
-        if selected_item == Some(BRUSH_TOOL_ID) {
+        if uses_brush {
             let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
                 block
                     .secondary_properties
@@ -266,7 +282,7 @@ fn update_action_hint(
                 .hint_enabled(HintKind::BreakBlock)
                 .then(|| content.localization.text(language, "hud.breakBlock").to_owned())
         }
-    } else if selected_item == Some(BRUSH_TOOL_ID) {
+    } else if uses_brush {
         None
     } else {
         selected_block
