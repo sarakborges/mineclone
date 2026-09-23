@@ -22,6 +22,7 @@ use crate::{
     voxel::world::VoxelWorld,
 };
 
+pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
 use particles::{CreatureParticleEmitter, emit_creature_particles, update_creature_particles};
