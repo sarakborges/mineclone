@@ -11662,3 +11662,69 @@ CI funcional push `35800497605`: **verde**.
 Commit de versão: `7bcfc2dd087759f42ae06c48bc3ba30fbcc03c50`.
 CI de versão push `35800597838`: **verde**.
 VERSION: `0.50.95`.
+
+## 2026-09-22 — Thumbnail world-only e ordem final do Character HUD
+
+Após teste manual, dois problemas continuavam:
+- o thumbnail de save estava vazio;
+- o Character HUD continuava sem renderizar o player, embora o Character Info
+  já renderizasse corretamente o mesmo modelo.
+
+### Thumbnail vazio
+A causa era o funcionamento de `CameraOutputMode::Skip` no stack do Bevy
+0.19.1:
+- `GameplayWorldCamera` nasce em `Skip`;
+- normalmente uma câmera posterior da stack faz o `Write` final da janela;
+- ao colocar todas as câmeras auxiliares em `Skip`, nenhuma câmera fazia o
+  `Write` final, então o screenshot capturava uma janela sem frame final.
+
+Correção:
+- durante `WorldThumbnailCapture`, `GameplayWorldCamera` é explicitamente
+  forçada para `CameraOutputMode::Write`;
+- todas as demais câmeras são forçadas para `Skip`;
+- o estado anterior de **todas** as câmeras é preservado;
+- a captura não cria `Screenshot::primary_window()` imediatamente;
+- primeiro é renderizado um frame com somente a câmera do mundo;
+- no frame seguinte `advance_world_thumbnail_capture` adiciona o componente
+  `Screenshot`;
+- `enforce_world_thumbnail_camera_isolation` reaplica a configuração em
+  `Last` enquanto a captura existir;
+- após `ScreenshotCaptured`, os `CameraOutputMode` originais são restaurados.
+
+Commits:
+- world camera como único writer + captura adiada:
+  `a0fe128a05cb91514973c7235c7f79111edcaab2`;
+- pause menu passa a stack inteira de câmeras:
+  `2d83b97f6cb50a8c10b598226fdf42da260c6722`;
+- window-close save usa a mesma stack:
+  `7f09c0e76ff671a3408eb67994ec4f7f8dda3800`;
+- staging em `Last`:
+  `5e44573badcf63757674b49cb77aad5d670859f1`.
+
+### Character HUD sem player
+O Character Info já renderizava corretamente o modelo real da terceira pessoa,
+então modelo, render layer, material e cálculo de viewport estavam validados.
+
+A diferença restante estava na ordem da stack:
+- Character HUD: order `UI_CAMERA_ORDER + 1`;
+- Character Info: order `UI_CAMERA_ORDER + 2`;
+- com o modal fechado, a câmera de Character Info permanecia acima do HUD em
+  `CameraOutputMode::Skip`;
+- o próprio Bevy documenta que um `Skip` em stacks multi-camera pode fazer
+  resultados anteriores se perderem quando não existe um writer posterior.
+
+Correção:
+- Character Info passa a order `UI_CAMERA_ORDER + 1`;
+- Character HUD passa a order `UI_CAMERA_ORDER + 2`;
+- quando Character Info está fechado, o HUD é o writer final da stack de
+  preview;
+- quando Character Info está aberto, ambos fazem `Write`, com o HUD ainda
+  finalizando a stack.
+
+Commit:
+- `c11a750161a0a74f256415e7cb6d321efcaaf60f`.
+
+CI funcional push `35801677259`: **verde**.
+Commit de versão: `021ce09a622a32badd5a5307a67d3b57a14dc50a`.
+CI de versão push `35801833908`: **verde**.
+VERSION: `0.50.96`.
