@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::render_resource::Face};
 
 use crate::content::color::Hsi;
 
@@ -36,5 +36,8 @@ pub(crate) fn apply_creature_material_overrides(
     if tint.is_some() {
         material.base_color = material.base_color.with_alpha(1.0);
         material.alpha_mode = AlphaMode::Opaque;
+        material.double_sided = false;
+        material.cull_mode = Some(Face::Back);
+        material.depth_bias = 0.0;
     }
 }
