@@ -694,6 +694,20 @@ mantêm as mesmas validações. VERSION: `0.50.179`.
 CI de Q57: **verde** no run `35892501151` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q58 — mover validação da referência de attack para PlayerDefinition
+
+A checagem de que `player.attack` resolve para uma attack existente saiu da
+validação global ad hoc e passou a `PlayerDefinition::validate_references`.
+`content::validation` apenas coordena a validação cruzada chamando o owner dos
+dados, alinhando player ao padrão já usado por outras definitions. Com a
+remoção desse loop genérico, `AttackRegistry::iter` ficou sem consumidor e
+foi removido em vez de suprimir o warning. VERSION: `0.50.180`.
+
+A primeira validação do bloco expôs exatamente esse método `iter` morto no
+Clippy; a correção permaneceu no mesmo bloco/version. CI de Q58: **verde** no
+run `35893177922` (localizações, Clippy com `-D warnings` e
+`cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
