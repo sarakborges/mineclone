@@ -10,7 +10,7 @@ pub(crate) mod camera_stack;
 mod celestial;
 mod celestial_path;
 pub(crate) mod color;
-mod directional_shadows;
+mod sun_lighting;
 mod dynamic_lights;
 mod environment;
 mod fog;
@@ -25,7 +25,7 @@ use bevy::prelude::*;
 use block_model::setup_block_model_assets;
 use block_model_material::BlockModelMaterial;
 use celestial::CelestialPlugin;
-use directional_shadows::DirectionalShadowsPlugin;
+use sun_lighting::SunLightingPlugin;
 use dynamic_lights::DynamicLightsPlugin;
 use environment::EnvironmentPlugin;
 use fog::FogPlugin;
@@ -49,7 +49,7 @@ impl Plugin for RenderingPlugin {
             MeshAllocatorDiagnosticsPlugin,
             EnvironmentPlugin,
             LightingPlugin,
-            DirectionalShadowsPlugin,
+            SunLightingPlugin,
             DynamicLightsPlugin,
             FogPlugin,
             SkyPlugin,
