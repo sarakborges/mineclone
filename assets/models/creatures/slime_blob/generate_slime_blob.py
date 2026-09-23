@@ -186,7 +186,7 @@ def make_front_quad() -> int:
     return len(meshes) - 1
 
 
-def material(name: str, color, *, alpha_mode=None):
+def material(name: str, color, *, alpha_mode=None, unlit=False):
     result = {
         'name': name,
         'pbrMetallicRoughness': {
@@ -195,16 +195,20 @@ def material(name: str, color, *, alpha_mode=None):
             'roughnessFactor': 1.0,
         },
         'doubleSided': False,
-        'extensions': {'KHR_materials_unlit': {}},
     }
+    if unlit:
+        result['extensions'] = {'KHR_materials_unlit': {}}
     if alpha_mode:
         result['alphaMode'] = alpha_mode
     return result
 
 
 materials = [
+    # The shell is deliberately lit now: it keeps zero metallic/high roughness,
+    # but receives diffuse world lighting and therefore a small amount of shade.
+    # The face stays unlit so its expression remains readable from every heading.
     material('SlimeShell', [.50, .91, .78]),
-    material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND'),
+    material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
 ]
 shell_mesh = make_voxel_surface_mesh()
 face_mesh = make_front_quad()
@@ -303,7 +307,7 @@ scene = {
         'voxel_resolution': [NX, NY, NZ],
         'occupied_voxels': len(voxels),
         'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Legacy slime assets remain untouched.',
+        'notes': 'Second-generation sampled voxel blob. Lit matte shell receives soft world shading; face remains unlit. Legacy slime assets remain untouched.',
     },
 }
 json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
