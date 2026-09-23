@@ -42,7 +42,7 @@ mod validation;
 
 use bevy::prelude::*;
 use loader::load_content;
-pub(crate) use loader::read_content;
+pub(crate) use loader::{LoadedContent, read_content};
 
 pub(crate) struct ContentPlugin;
 
