@@ -12014,3 +12014,21 @@ Commits:
 - GLB regenerado: `3776fccf03e51b83dbbf6103357ac06f0b59e6e7`.
 
 VERSION: `0.50.105`, commit de versão `7190467f6b06aa625c89c17474b2cc3758be8082`.
+
+
+## 2026-09-22 — Refinamento final apenas da silhueta do slime
+
+A referência aprovada foi usada exclusivamente para ajustar o FORMATO do corpo. Nenhum material, textura, rosto, core, collider, animação ou comportamento foi alterado neste lote.
+
+O shell passou de uma base praticamente retangular com degraus apenas no topo para um perfil voxel arredondado completo:
+- base de contato levemente mais estreita;
+- expansão progressiva até a maior largura no meio inferior;
+- contração gradual em nove degraus até um pequeno platô superior;
+- largura visual máxima de 1.08, mantendo a altura total de repouso em 0.90;
+- perfil aplicado igualmente em X/Z para preservar o volume de slime em 3D.
+
+Commits funcionais:
+- script de geração: `580e1400935c7b77916a156279ef640c0241605d`;
+- GLB regenerado: `ee9c781a3a467b92f24b155740f933dfa056de54`.
+
+VERSION: `0.50.106`, commit de versão `2f73da517eda12dab23fcf007882cb34b8f774cd`.
