@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 use crate::content::biome_structure::StructurePlacementRules;
 
+use super::hash::{avalanche, string_hash, unit_interval};
+
 pub(super) fn candidate_anchor(
     world_seed: u64,
     biome_id: &str,
@@ -52,17 +54,6 @@ fn placement_hash(world_seed: u64, biome_id: &str, structure_id: &str, cell: IVe
     avalanche(hash)
 }
 
-fn string_hash(value: &str) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-
-    for byte in value.bytes() {
-        hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-
-    hash
-}
-
 fn signed_jitter(hash: u64, maximum: i32) -> i32 {
     if maximum == 0 {
         return 0;
@@ -70,19 +61,6 @@ fn signed_jitter(hash: u64, maximum: i32) -> i32 {
 
     let range = (maximum * 2 + 1) as u64;
     (avalanche(hash) % range) as i32 - maximum
-}
-
-fn unit_interval(hash: u64) -> f32 {
-    let value = hash >> 11;
-    (value as f64 * (1.0 / (1_u64 << 53) as f64)) as f32
-}
-
-fn avalanche(mut value: u64) -> u64 {
-    value ^= value >> 30;
-    value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value ^= value >> 27;
-    value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
 }
 
 #[cfg(test)]
