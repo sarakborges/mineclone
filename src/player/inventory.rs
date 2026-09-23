@@ -1,4 +1,9 @@
-use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    input_focus::InputFocus,
+    prelude::*,
+    text::EditableText,
+};
 
 use crate::{
     app::{
@@ -71,19 +76,24 @@ impl Plugin for PlayerInventoryPlugin {
 }
 
 #[derive(SystemParam)]
-struct InventoryModalInput<'w> {
+struct InventoryModalInput<'w, 's> {
     keys: Res<'w, ButtonInput<KeyCode>>,
     keybinds: Res<'w, Keybinds>,
     inventory_state: Res<'w, State<InventoryState>>,
     chat: Res<'w, ChatState>,
     focus: Res<'w, InputFocus>,
+    editable_text: Query<'w, 's, (), With<EditableText>>,
     next_inventory_state: ResMut<'w, NextState<InventoryState>>,
     next_character_info: ResMut<'w, NextState<CharacterInfoState>>,
     next_brush_palette: ResMut<'w, NextState<BrushPaletteState>>,
 }
 
 fn toggle_inventory(mut input: InventoryModalInput) {
-    if input.chat.is_open() || input.focus.get().is_some() {
+    let typing = input
+        .focus
+        .get()
+        .is_some_and(|entity| input.editable_text.get(entity).is_ok());
+    if input.chat.is_open() || typing {
         return;
     }
     match input.inventory_state.get() {
