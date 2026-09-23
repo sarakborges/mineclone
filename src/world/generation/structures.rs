@@ -1,3 +1,4 @@
+mod geometry;
 mod hash;
 mod placement;
 mod restrictions;
@@ -32,7 +33,7 @@ use crate::{
 
 pub(crate) use self::set::{ResolvedSetPiece, resolve_set_pieces};
 
-use self::hash::{avalanche, unit_interval};
+use self::{geometry::rectangles_overlap, hash::{avalanche, unit_interval}};
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
@@ -778,18 +779,6 @@ fn bit_get(bits: &[u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) -> bool {
 
 fn bit_set(bits: &mut [u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) {
     bits[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
-}
-
-fn rectangles_overlap(
-    left_min: IVec2,
-    left_max: IVec2,
-    right_min: IVec2,
-    right_max: IVec2,
-) -> bool {
-    left_min.x <= right_max.x
-        && left_max.x >= right_min.x
-        && left_min.y <= right_max.y
-        && left_max.y >= right_min.y
 }
 
 fn rasterize_structure(
