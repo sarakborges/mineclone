@@ -12491,3 +12491,25 @@ Não há bordas/grid no atlas; a diferença vem apenas da orientação da face.
 
 Commit funcional: `aa4191707d999fe52cc894e7eef98eea72da8b1a`.
 VERSION: `0.50.131`, commit de versão `0a0e98c96dc263e162a22e91a0d608e27fa3f0de`.
+
+
+## 2026-09-23 — Slime shading projetado pela superfície externa
+
+O shading de 5% anterior ainda era escolhido por orientação de cada face voxel individual. Nos degraus do slime arredondado isso fazia os risers entre voxels parecerem paredes internas sombreadas, mesmo sendo faces externas válidas.
+
+A correção muda o critério completamente:
+- `shell_soft.png` agora é um único gradiente contínuo, sem tiles e sem bordas;
+- o contraste máximo continua em aproximadamente 5%;
+- UVs do shell são projetados pela posição externa X/Y do vértice, e não pela normal da face;
+- vértices que ocupam a mesma região externa recebem a mesma luminância mesmo quando pertencem a faces voxel diferentes;
+- isso remove o efeito de "sombra do interior" e transforma o shading em um volume suave sobre a silhueta inteira;
+- materiais continuam unlit, sem reflexo/specular e sem mudança de brilho quando a criatura gira;
+- legacy e rounded usam a mesma lógica de projeção externa.
+
+Commits funcionais:
+- textura de gradiente externo: `4c97a614a5a4474ecb960d557513d293ed31390d`;
+- gerador rounded: `10c90e827b1987096718ee8f3e2aef23e5148175`;
+- gerador legacy: `cc89185e9b8985714810a06bc6d20483bdc0e86b`;
+- GLBs com UVs projetados externamente: `47ddcda56fb37868e05d1fcdffc1f93266b4e34b`.
+
+VERSION: `0.50.133`, commit de versão `518d1b69c7c51fd80d0791d984e02b6a1ab5c7f8`.
