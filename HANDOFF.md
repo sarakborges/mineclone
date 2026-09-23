@@ -12767,3 +12767,69 @@ Commits:
 O CI do estado funcional `f3c876545f63e5cb09563efa4aee2608592c4000` concluiu com sucesso.
 
 VERSION: `0.50.145`, commit de versão `702a66e89d7b1f0b55017513e45daae84e726c88`.
+
+
+## 2026-09-23 — Deep slime opacity investigation: visual target bounds vs physics bounds
+
+A deeper audit separated actual material opacity from the visual symptom reported in-game.
+
+### What was verified
+
+Both current slime GLBs are closed/manifold meshes and their shell materials are authored opaque:
+- `SlimeShell.alphaMode = OPAQUE`;
+- base-color alpha = `1.0`;
+- vertex-color alpha = `1.0`;
+- rounded shell triangles are outward-wound after the previous correction;
+- legacy shell triangles are also outward-wound.
+
+The runtime tint path also forces tinted creature body materials to alpha 1 / `AlphaMode::Opaque`.
+
+### Root cause of the "block highlight inside the slime" symptom
+
+Block targeting already gives creatures priority over blocks, but it was using the **physics collider** for that test.
+
+Both slimes have visible geometry larger than the physics collider:
+- rounded visible body: approximately `1.20 x 1.00 x 1.14`;
+- legacy visible body: approximately `0.96 x 0.90 x 0.96`;
+- shared physics collider: only `0.78 x 0.84 x 0.78`.
+
+This meant the crosshair could visibly intersect the slime shell while the targeting ray still missed the smaller physics AABB and selected a block behind it. The resulting block highlight appeared inside the visible creature and looked like material transparency.
+
+Creature definitions now support an optional `targetCollider` independent from physics collision:
+- rounded target collider: `1.20 x 1.00 x 1.14`, center `[0, 0.50, 0]`;
+- legacy target collider: `0.96 x 0.90 x 0.96`, center `[0, 0.45, 0]`;
+- movement/world collision continues using the original smaller physics collider.
+
+### Runtime material hardening
+
+Tinted body materials now explicitly enforce:
+- alpha = 1;
+- `AlphaMode::Opaque`;
+- `double_sided = false`;
+- back-face culling;
+- zero depth bias.
+
+This removes reliance on whatever culling/depth state happened to be authored in a GLB.
+
+### Color
+
+The shell color was still reading too bright despite the previous reduction. Both models now use:
+- HSI `153 / 0.32 / 0.44`;
+- approximate sRGB `[0.299, 0.573, 0.448]`.
+
+The same muted fallback color is stored in both GLBs, so the asset does not revert to a brighter green when no runtime tint is available.
+
+Commits:
+- target-collider schema: `26f37e8e16a9d7ab13dd9552e4b6341655d3a92b`;
+- spawn target collider: `8f548294668065f700d15c570682c5b5d65373ca`;
+- targeting uses visual collider: `7337d4663c582d3214127d3622a9cd9e4925a1b2`;
+- rounded target bounds/color: `30372a5a4fa2ece82f7d1f48e323d5e9c678fa86`;
+- legacy target bounds/color: `e23d8e853a3a2fa243c18cd6188df9a9ef228475`;
+- runtime opaque/culling hardening: `f21142248f2474b21078413cc44c01bb24a57f55`;
+- rounded fallback generator color: `53de70e9d87182b946f0e81075e8498e67655cdb`;
+- legacy fallback generator color: `42e3f8ba653ad23b6e4f0b185a838df5a2cb0a79`;
+- GLB fallback colors: `d20fe0c1f7383b04623c64b8e9a812eb9d59d1d2`.
+
+Rust validation for functional commit `d20fe0c1f7383b04623c64b8e9a812eb9d59d1d2` passed completely in Actions run `35877109893`: localization audit, Clippy and Check all successful.
+
+VERSION: `0.50.150`, commit de versão `d18507dfd6187d501842f1fca9b870e0c09f60af`.
