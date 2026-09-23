@@ -123,6 +123,8 @@ pub struct StructurePaletteEntry {
     #[serde(default)]
     pub fluid: Option<String>,
     #[serde(default)]
+    pub clear: bool,
+    #[serde(default)]
     pub orientation: BlockOrientation,
     #[serde(default)]
     pub surface_layers: Vec<StructureSurfaceLayer>,
@@ -356,6 +358,11 @@ impl StructureDefinition {
             .and_then(|entry| entry.fluid.as_deref())
     }
 
+    pub(crate) fn clears_voxel(&self, voxel: &StructureVoxel) -> bool {
+        self.palette_entry(voxel.palette_symbol)
+            .is_some_and(|entry| entry.clear)
+    }
+
     pub(crate) fn surface_layers_for_voxel(
         &self,
         voxel: &StructureVoxel,
@@ -524,11 +531,12 @@ impl StructureDefinition {
                 "structure {} palette keys must be exactly one non-dot character",
                 self.id
             );
-            let content_count =
-                usize::from(entry.block.is_some()) + usize::from(entry.fluid.is_some());
+            let content_count = usize::from(entry.block.is_some())
+                + usize::from(entry.fluid.is_some())
+                + usize::from(entry.clear);
             assert_eq!(
                 content_count, 1,
-                "structure {} palette symbol {symbol} must define exactly one of block or fluid",
+                "structure {} palette symbol {symbol} must define exactly one of block, fluid, or clear",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -547,6 +555,13 @@ impl StructureDefinition {
                 assert!(
                     entry.surface_layers.is_empty(),
                     "structure {} palette symbol {symbol} fluid entries cannot define surfaceLayers",
+                    self.id
+                );
+            }
+            if entry.clear {
+                assert!(
+                    entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} clear entries cannot define surfaceLayers",
                     self.id
                 );
             }

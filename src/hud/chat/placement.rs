@@ -420,10 +420,7 @@ impl ChatPlacementContext<'_, '_> {
                 ) {
                     let _ = self.runtime.add_layer(position, face, layer);
                 }
-            } else {
-                let fluid_reference = structure
-                    .fluid_for_voxel(voxel)
-                    .expect("validated structure voxel must reference block or fluid");
+            } else if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
                 let fluid_id = self
                     .fluids
                     .id_of(fluid_reference)
@@ -433,6 +430,13 @@ impl ChatPlacementContext<'_, '_> {
                     position,
                     Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
                 );
+            } else {
+                debug_assert!(
+                    structure.clears_voxel(voxel),
+                    "validated structure voxel must reference block, fluid, or clear"
+                );
+                let _ = self.runtime.set_block(position, None);
+                let _ = self.runtime.set_fluid(position, None);
             }
         }
         player.translation = destination;
@@ -535,11 +539,9 @@ impl ChatPlacementContext<'_, '_> {
                     ) {
                         let _ = self.runtime.add_layer(position, face, layer);
                     }
-                } else {
-                    let fluid_reference = piece
-                        .structure
-                        .fluid_for_voxel(voxel)
-                        .expect("validated structure voxel must reference block or fluid");
+                } else if let Some(fluid_reference) =
+                    piece.structure.fluid_for_voxel(voxel)
+                {
                     let fluid_id = self
                         .fluids
                         .id_of(fluid_reference)
@@ -549,6 +551,13 @@ impl ChatPlacementContext<'_, '_> {
                         position,
                         Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
                     );
+                } else {
+                    debug_assert!(
+                        piece.structure.clears_voxel(voxel),
+                        "validated structure voxel must reference block, fluid, or clear"
+                    );
+                    let _ = self.runtime.set_block(position, None);
+                    let _ = self.runtime.set_fluid(position, None);
                 }
             }
         }

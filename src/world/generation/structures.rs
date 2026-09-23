@@ -881,10 +881,7 @@ fn rasterize_structure(
                 if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
                     chunk.clear_fluid(local_x, local_y, local_z);
                 }
-            } else {
-                let fluid_reference = structure
-                    .fluid_for_voxel(voxel)
-                    .expect("validated structure voxel must reference block or fluid");
+            } else if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
                 let fluid_id = context.fluids.id_of(fluid_reference).unwrap_or_else(|| {
                     panic!(
                         "structure {} references missing fluid: {}",
@@ -898,6 +895,13 @@ fn rasterize_structure(
                     local_z,
                     FluidCell::source(fluid_id, MAX_FLUID_LEVEL),
                 );
+            } else {
+                debug_assert!(
+                    structure.clears_voxel(voxel),
+                    "validated structure voxel must reference block, fluid, or clear"
+                );
+                chunk.clear_block(local_x, local_y, local_z);
+                chunk.clear_fluid(local_x, local_y, local_z);
             }
             bit_set(claimed, index);
             false

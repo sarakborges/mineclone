@@ -17,7 +17,7 @@
       "asteria:grass",
       "asteria:dirt"
     ],
-    "maxSlope": 1,
+    "maxSlope": 4,
     "requiresDryGround": true
   },
   "generation": {
@@ -30,6 +30,7 @@
     "y": 0,
     "z": 12
   },
+  "groundAnchorY": 0,
   "palette": {
     "S": {
       "block": "asteria:stone",
@@ -53,137 +54,161 @@
         }
       ]
     },
-    "X": {
-      "block": "asteria:log_world_tree",
-      "orientation": "x",
-      "surfaceLayers": [
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "top"
-          ],
-          "chance": 0.16
-        },
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "left",
-            "right",
-            "front",
-            "back"
-          ],
-          "chance": 0.035
-        }
-      ]
-    },
-    "Y": {
-      "block": "asteria:log_world_tree",
-      "orientation": "y",
-      "surfaceLayers": [
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "top"
-          ],
-          "chance": 0.16
-        },
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "left",
-            "right",
-            "front",
-            "back"
-          ],
-          "chance": 0.035
-        }
-      ]
-    },
-    "Z": {
-      "block": "asteria:log_world_tree",
-      "orientation": "z",
-      "surfaceLayers": [
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "top"
-          ],
-          "chance": 0.16
-        },
-        {
-          "layer": "asteria:moss",
-          "faces": [
-            "left",
-            "right",
-            "front",
-            "back"
-          ],
-          "chance": 0.035
-        }
-      ]
-    },
     "W": {
       "fluid": "asteria:water"
+    },
+    "C": {
+      "clear": true
     }
   },
   "layers": [
     {
+      "y": -3,
+      "rows": [
+        "...............................",
+        "...............................",
+        "...............................",
+        "...............................",
+        "........SSSSSSSSSSSSSSSSSS.....",
+        ".....SSSSSSSSSSSSSSSSSSSSSSS...",
+        "....SSSSSSSSSSSSSSSSSSSSSSSS...",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSS.",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSS.",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSS.",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSS....",
+        "...SSSSSSSSSSSSSSSSSSSSSSSS....",
+        "....SSSSSSSSSSSSSSSSSSSSSSS....",
+        ".....SSSSSSSSSSSSSSSSSSSSSS....",
+        "......SSSSSSSSSSSSSSSSSSSSS....",
+        "........SSSSSSSSSSSSSSSSSS.....",
+        ".............SSSSSSSSSSSSS.....",
+        "...............SSSSSSSSS.......",
+        "................SSSSSS........."
+      ]
+    },
+    {
+      "y": -2,
+      "rows": [
+        "...............................",
+        "...............................",
+        "...............................",
+        "...............................",
+        "........SSSSSSSSSSSSSSSSSS.....",
+        ".....SSSSWWWWWWWWWWWWWWWWSSS...",
+        "....SSWWWWWWWWWWWWWWWWWWWWWS...",
+        "...SSWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "...SWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SSWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWWS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWSS...",
+        "..SSWWWWWWWWWWWWWWWWWWWWWSS....",
+        "...SSWWWWWWWWWWWWWWWWWWWWWS....",
+        "....SSWWWWWWWWWWWWWWWWWWWWS....",
+        ".....SSWWWWWWWWWWWWWWWWWWWS....",
+        "......SSSWWWWWWWWWWWWWWWWSS....",
+        "........SSSSSSWWWWWWWWWWWS.....",
+        ".............SSSWWWWWWWSSS.....",
+        "...............SSWWWWSSS.......",
+        "................SSSSSS........."
+      ]
+    },
+    {
+      "y": -1,
+      "rows": [
+        "...............................",
+        "...............................",
+        "...............................",
+        "...............................",
+        "........SSSSSSSSSSSSSSSSSS.....",
+        ".....SSSSWWWWWWWWWWWWWWWWSSS...",
+        "....SSWWWWWWWWWWWWWWWWWWWWWS...",
+        "...SSWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "...SWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SSWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWWS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWSS...",
+        "..SSWWWWWWWWWWWWWWWWWWWWWSS....",
+        "...SSWWWWWWWWWWWWWWWWWWWWWS....",
+        "....SSWWWWWWWWWWWWWWWWWWWWS....",
+        ".....SSWWWWWWWWWWWWWWWWWWWS....",
+        "......SSSWWWWWWWWWWWWWWWWSS....",
+        "........SSSSSSWWWWWWWWWWWS.....",
+        ".............SSSWWWWWWWSSS.....",
+        "...............SSWWWWSSS.......",
+        "................SSSSSS........."
+      ]
+    },
+    {
       "y": 0,
       "rows": [
         "...............................",
-        "............................XXX",
-        "..........................XXXXX",
-        "............SSSS.SSSSSSSSXXXXXX",
-        "......S.SSSWWWWWWWWWWWWWXXXXXXX",
-        "...SSSWWWWWWWWWWWWWWWWWXXXXXXXX",
-        "...SSSWWWWWWWWWWWWWWWWWXXXXXX..",
-        "...SSSWWWWWWWWWWWWWWWWWXXXWSS..",
+        "...............................",
+        "...............................",
+        "...............................",
+        "........SSSSSSSSSSSSSSSSSS.....",
+        ".....SSSSWWWWWWWWWWWWWWWWSSS...",
+        "....SSWWWWWWWWWWWWWWWWWWWWWS...",
+        "...SSWWWWWWWWWWWWWWWWWWWWWWSS..",
         "...SWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SSWWWWWWWWWWWWWWWWWWWWWWWWS..",
         "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
         "..SWWWWWWWWWWWWWWWWWWWWWWWWWWS.",
-        ".SWWWWWWWWWWWWWWWWWWWWWWWWWWWS.",
-        ".SSSWWWWWWWWWWWWWWWWWWWWWWWWWS.",
-        ".SSSWWWWWWWWWWWWWWWWWWWWWWWWWS.",
-        ".SSSWWWWWWWWWWWWWWWWWWWWWWWWSS.",
-        ".SSWWWWWWWWWWWWWWWWWWWWWWWSSS..",
-        "..SWWWWWWWWWWWWWWWWWWWWWWSSSS..",
-        "..SSWWXXXXXWWWWWWWWWWWWWWWSSS..",
-        "...XXXXXXXXWWWWWWWWWWWWWWWS....",
-        ".XXXXXXXXXWWWWWWWWWWWWWWWWS....",
-        "XXXXXXXXXWWWWWWWWWWWWWWWWS.....",
-        "XXXXXXXSSWWWWWWWWWWSSSWWWS.....",
-        "XXXXXX..SSSSSSSWWWWSSSWSSS.....",
-        ".XXX...........SSWWSSSSS.......",
-        "................SSSS.S........."
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWSS.",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWSS...",
+        "..SSWWWWWWWWWWWWWWWWWWWWWSS....",
+        "...SSWWWWWWWWWWWWWWWWWWWWWS....",
+        "....SSWWWWWWWWWWWWWWWWWWWWS....",
+        ".....SSWWWWWWWWWWWWWWWWWWWS....",
+        "......SSSWWWWWWWWWWWWWWWWSS....",
+        "........SSSSSSWWWWWWWWWWWS.....",
+        ".............SSSWWWWWWWSSS.....",
+        "...............SSWWWWSSS.......",
+        "................SSSSSS........."
       ]
     },
     {
       "y": 1,
       "rows": [
         "...............................",
-        ".............................X.",
-        "...........................XXXX",
-        "........................SXXXXXX",
-        "....S..................XXXXXXXX",
-        "..SSSSS...............XXXXXXXX.",
-        "..SSSSS..............ZZZXXXX...",
-        "..SSSSS..............ZZZXXS....",
-        "....S................ZZZ.......",
         "...............................",
         "...............................",
-        "..SS...........................",
-        ".SSSS..........................",
-        ".SSSS..........................",
-        ".SSSS..........................",
-        "..SS.......X.............SSSSS.",
-        "........XXXXX............SSSSS.",
-        "......XXXXXXX............SSSSS.",
-        "....XXXXXXXX...................",
-        "..XXXXXXXXX....................",
-        ".XXXXXXXXS.....................",
-        "XXXXXXXSS.........SSSSS........",
-        ".XXXX.............SSSSS........",
-        "..X...............SSSSS........",
+        "...............................",
+        "...............................",
+        ".........CCCCCCCCCCCCCCCC......",
+        "......CCCCCCCCCCCCCCCCCCCCC....",
+        ".....CCCCCCCCCCCCCCCCCCCCCC....",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
+        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
+        "....CCCCCCCCCCCCCCCCCCCCC......",
+        ".....CCCCCCCCCCCCCCCCCCCCC.....",
+        "......CCCCCCCCCCCCCCCCCCCC.....",
+        ".......CCCCCCCCCCCCCCCCCCC.....",
+        ".........CCCCCCCCCCCCCCCC......",
+        "..............CCCCCCCCCCC......",
+        "................CCCCCCC........",
+        ".................CCCC..........",
         "..............................."
       ]
     },
@@ -193,27 +218,27 @@
         "...............................",
         "...............................",
         "...............................",
-        "........................SSS....",
-        "........................SSS....",
-        "...SSS.................XXXSS...",
-        "..SSSSS..............ZZZXXS....",
-        "...SSS..............ZZZZXSS....",
-        "....................ZZZZ.......",
-        "...................ZZZZ........",
-        "....................Z..........",
         "...............................",
-        "..SS...........................",
-        "..SS...........................",
-        "..SS.........XX................",
-        "...........XXXX...........SSS..",
-        ".........XXXXX...........SSSSS.",
-        "........XXXXX.............SSS..",
-        ".......XXXXX...................",
-        "......SXX......................",
-        "......SSS......................",
-        "......SSS..........SSS.........",
-        "..................SSSSS........",
-        "...................SSS.........",
+        "...............................",
+        ".........CCCCCCCCCCCCCCCC......",
+        "......CCCCCCCCCCCCCCCCCCCCC....",
+        ".....CCCCCCCCCCCCCCCCCCCCCC....",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
+        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
+        "....CCCCCCCCCCCCCCCCCCCCC......",
+        ".....CCCCCCCCCCCCCCCCCCCCC.....",
+        "......CCCCCCCCCCCCCCCCCCCC.....",
+        ".......CCCCCCCCCCCCCCCCCCC.....",
+        ".........CCCCCCCCCCCCCCCC......",
+        "..............CCCCCCCCCCC......",
+        "................CCCCCCC........",
+        ".................CCCC..........",
         "..............................."
       ]
     },
@@ -224,56 +249,26 @@
         "...............................",
         "...............................",
         "...............................",
-        "........................SSS....",
-        "........................SSS....",
-        "........................SSS....",
         "...............................",
-        "....................ZZ.........",
-        "...................ZZZ.........",
-        "....................Z..........",
-        "...............................",
-        "...............................",
-        "................X..............",
-        ".............XXXXX.............",
-        "............XXXXX..............",
-        "............XXX................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "..............................."
-      ]
-    },
-    {
-      "y": 4,
-      "rows": [
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............XX..............",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
+        ".........CCCCCCCCCCCCCCCC......",
+        "......CCCCCCCCCCCCCCCCCCCCC....",
+        ".....CCCCCCCCCCCCCCCCCCCCCC....",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
+        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
+        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
+        "....CCCCCCCCCCCCCCCCCCCCC......",
+        ".....CCCCCCCCCCCCCCCCCCCCC.....",
+        "......CCCCCCCCCCCCCCCCCCCC.....",
+        ".......CCCCCCCCCCCCCCCCCCC.....",
+        ".........CCCCCCCCCCCCCCCC......",
+        "..............CCCCCCCCCCC......",
+        "................CCCCCCC........",
+        ".................CCCC..........",
         "..............................."
       ]
     }
