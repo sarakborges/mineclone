@@ -11,7 +11,7 @@ use bevy::{
 use crate::{
     content::player::PlayerDefinition,
     player::{
-        PLAYER_SKIN_TEXTURE_PATH,
+        PLAYER_SKIN_TEXTURE_PATH, apply_player_skin_material,
         camera::GameplayCamera,
         hotbar::PlayerHotbar,
     },
@@ -332,12 +332,7 @@ fn configure_viewmodel_arm_scene(
         if let Ok(original) = assets.mesh_materials.get(descendant)
             && let Some(mut material) = assets.materials.get(original.id()).cloned()
         {
-            material.base_color = Color::WHITE;
-            material.base_color_texture =
-                Some(assets.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
-            material.unlit = true;
-            material.metallic = 0.0;
-            material.perceptual_roughness = 1.0;
+            apply_player_skin_material(&mut material, &assets.asset_server);
             let material = assets.materials.add(material);
             commands
                 .entity(descendant)
