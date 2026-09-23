@@ -13,14 +13,14 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID, STRUCTURE_TOOL_ID},
+        builtin_ids::{BRUSH_TOOL_ID, ARTISANS_KIT_TOOL_ID, DYED_PROPERTY_ID, STRUCTURE_TOOL_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
     voxel::{
         microblock::{
-            MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, local_cell, parent_voxel,
+            MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
         },
         raycast::raycast_micro_voxels,
     },
@@ -43,7 +43,7 @@ type HighlightTarget<'w, 's> = Single<
     (
         With<TargetHighlight>,
         Without<BrushGhost>,
-        Without<ChiselPlacementGhost>,
+        Without<ArtisansKitPlacementGhost>,
         Without<GameplayCamera>,
     ),
 >;
@@ -59,17 +59,17 @@ type BrushGhostTarget<'w, 's> = Single<
     (
         With<BrushGhost>,
         Without<TargetHighlight>,
-        Without<ChiselPlacementGhost>,
+        Without<ArtisansKitPlacementGhost>,
         Without<GameplayCamera>,
     ),
 >;
 
-type ChiselPlacementTarget<'w, 's> = Single<
+type ArtisansKitPlacementTarget<'w, 's> = Single<
     'w,
     's,
     (&'static mut Transform, &'static mut Visibility),
     (
-        With<ChiselPlacementGhost>,
+        With<ArtisansKitPlacementGhost>,
         Without<BrushGhost>,
         Without<TargetHighlight>,
         Without<GameplayCamera>,
@@ -97,13 +97,13 @@ struct TargetHighlight;
 struct BrushGhost;
 
 #[derive(Component)]
-struct ChiselPlacementGhost;
+struct ArtisansKitPlacementGhost;
 
 #[derive(SystemParam)]
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
     brush_mode: Res<'w, BrushMode>,
-    chisel_resolution: Res<'w, ChiselResolution>,
+    artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
 }
 
 #[derive(SystemParam)]
@@ -117,7 +117,7 @@ struct TargetHighlightView<'w, 's> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
     highlight: HighlightTarget<'w, 's>,
     brush_ghost: BrushGhostTarget<'w, 's>,
-    chisel_placement: ChiselPlacementTarget<'w, 's>,
+    artisans_kit_placement: ArtisansKitPlacementTarget<'w, 's>,
 }
 
 fn spawn_highlight(
@@ -172,7 +172,7 @@ fn spawn_highlight(
         Transform::default(),
         Visibility::Hidden,
         NotShadowCaster,
-        ChiselPlacementGhost,
+        ArtisansKitPlacementGhost,
         DespawnOnExit(GameState::Gameplay),
     ));
 }
@@ -185,9 +185,9 @@ fn update_highlight(
 ) {
     let scene_snapshot = input.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
-    let chisel_selected = input.scene.selected_item() == Some(CHISEL_TOOL_ID);
+    let artisans_kit_selected = input.scene.selected_item() == Some(ARTISANS_KIT_TOOL_ID);
     if !scene_changed
-        && !chisel_selected
+        && !artisans_kit_selected
         && !input.brush_mode.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
@@ -196,7 +196,7 @@ fn update_highlight(
     }
     *last_scene = Some(scene_snapshot);
 
-    let highlight_color = if chisel_selected {
+    let highlight_color = if artisans_kit_selected {
         Color::srgba(0.30, 0.95, 0.65, 0.18)
     } else {
         Color::srgba(1.0, 1.0, 1.0, 0.18)
@@ -215,11 +215,11 @@ fn update_highlight(
     let Some(hit) = input.scene.hit() else {
         hide_if_visible(&mut view.highlight.1);
         hide_if_visible(&mut view.brush_ghost.1);
-        hide_if_visible(&mut view.chisel_placement.1);
+        hide_if_visible(&mut view.artisans_kit_placement.1);
         return;
     };
 
-    if chisel_selected {
+    if artisans_kit_selected {
         hide_if_visible(&mut view.brush_ghost.1);
         let precise = raycast_micro_voxels(
             input.scene.world(),
@@ -232,10 +232,10 @@ fn update_highlight(
                 && content.blocks.get(precise.block_id).is_some_and(|block| block.can_fragment())
         }) else {
             hide_if_visible(&mut view.highlight.1);
-            hide_if_visible(&mut view.chisel_placement.1);
+            hide_if_visible(&mut view.artisans_kit_placement.1);
             return;
         };
-        let width = input.chisel_resolution.cell_width() as i32;
+        let width = input.artisans_kit_resolution.cell_width() as i32;
         let (translation, edge) = snapped_preview(precise.fine, width);
         if view.highlight.0.translation != translation {
             view.highlight.0.translation = translation + precise.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
@@ -247,7 +247,7 @@ fn update_highlight(
 
         let placement_cell = precise.fine + precise.normal;
         let placement_voxel = parent_voxel(placement_cell);
-        // The preview must match the actual Chisel edit: only a previously
+        // The preview must match the actual Artisan's Kit edit: only a previously
         // carved cell of the targeted macroblock can be restored, never air or
         // a fresh neighboring block. Also suppress no-op green previews.
         let can_place = precise.normal != IVec3::ZERO
@@ -257,25 +257,25 @@ fn update_highlight(
                     && MicroblockMask::can_restore(cell)
                     && {
                         let mut mask = MicroblockMask::from_cell(cell);
-                        mask.edit(local_cell(placement_cell), *input.chisel_resolution, true)
+                        mask.edit(local_cell(placement_cell), *input.artisans_kit_resolution, true)
                     }
             });
         if can_place {
             let (translation, edge) = snapped_preview(placement_cell, width);
-            if view.chisel_placement.0.translation != translation {
-                view.chisel_placement.0.translation = translation;
+            if view.artisans_kit_placement.0.translation != translation {
+                view.artisans_kit_placement.0.translation = translation;
             }
-            if view.chisel_placement.0.scale != Vec3::splat(edge) {
-                view.chisel_placement.0.scale = Vec3::splat(edge);
+            if view.artisans_kit_placement.0.scale != Vec3::splat(edge) {
+                view.artisans_kit_placement.0.scale = Vec3::splat(edge);
             }
-            show_if_hidden(&mut view.chisel_placement.1);
+            show_if_hidden(&mut view.artisans_kit_placement.1);
         } else {
-            hide_if_visible(&mut view.chisel_placement.1);
+            hide_if_visible(&mut view.artisans_kit_placement.1);
         }
         return;
     }
 
-    hide_if_visible(&mut view.chisel_placement.1);
+    hide_if_visible(&mut view.artisans_kit_placement.1);
     if view.highlight.0.scale != Vec3::ONE {
         view.highlight.0.scale = Vec3::ONE;
     }
