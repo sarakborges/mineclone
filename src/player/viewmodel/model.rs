@@ -9,7 +9,7 @@ use bevy::{
 };
 
 use crate::{
-    content::player::PlayerDefinition,
+    content::{block::BlockDefinition, player::PlayerDefinition},
     player::{
         apply_player_skin_material,
         camera::GameplayCamera,
@@ -219,22 +219,17 @@ pub(super) fn spawn_viewmodel(
                                     let mut visibility = Visibility::Hidden;
 
                                     if let Some((_, block)) = selected_block
-                                        && let Some(face_material) = block_face_material_data(
-                                            face,
-                                            layer_index,
+                                        && let Some(face_material) = held_block_face_material(
                                             block,
                                             &definitions.asset_server,
+                                            face,
+                                            layer_index,
                                             block_model.opacity(),
                                         )
                                         && let Some(mut material_asset) =
                                             materials.get_mut(&material)
                                     {
                                         *material_asset = face_material;
-                                        apply_block_display_shading(
-                                            &mut material_asset,
-                                            face,
-                                            block_model.opacity(),
-                                        );
                                         set_block_model_tint(
                                             &mut material_asset,
                                             tint.unwrap_or(Color::WHITE),
@@ -411,11 +406,11 @@ pub(super) fn sync_held_block(
                     continue;
                 };
 
-                let Some(face_material) = block_face_material_data(
-                    face.face,
-                    face.layer_index,
+                let Some(face_material) = held_block_face_material(
                     block,
                     &definitions.asset_server,
+                    face.face,
+                    face.layer_index,
                     held.opacity(),
                 ) else {
                     if *layer_visibility != Visibility::Hidden {
@@ -425,7 +420,6 @@ pub(super) fn sync_held_block(
                 };
 
                 *material = face_material;
-                apply_block_display_shading(&mut material, face.face, held.opacity());
                 if *layer_visibility != Visibility::Inherited {
                     *layer_visibility = Visibility::Inherited;
                 }
@@ -448,6 +442,19 @@ pub(super) fn sync_held_block(
             cache.tint = Some(tint);
         }
     }
+}
+
+fn held_block_face_material(
+    block: &BlockDefinition,
+    asset_server: &AssetServer,
+    face: BlockFace,
+    layer_index: usize,
+    opacity: f32,
+) -> Option<BlockModelMaterial> {
+    let mut material =
+        block_face_material_data(face, layer_index, block, asset_server, opacity)?;
+    apply_block_display_shading(&mut material, face, opacity);
+    Some(material)
 }
 
 fn item_visibility(block_id: Option<&'static str>) -> Visibility {
