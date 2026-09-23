@@ -52,7 +52,8 @@
   "landingSeconds": 0.34,
   "textures": {
     "SlimeCore": "textures/creatures/slime_legacy/core.png",
-    "SlimeFace": "textures/creatures/slime_legacy/face.png"
+    "SlimeFace": "textures/creatures/slime_legacy/face.png",
+    "SlimeShell": "textures/creatures/slime_legacy/surface.png"
   },
   "targetCollider": {
     "size": [
