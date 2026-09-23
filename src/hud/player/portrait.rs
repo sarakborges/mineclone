@@ -137,7 +137,6 @@ pub(super) fn sync_player_preview_cameras(
         PLAYER_PREVIEW_CENTER_Y,
         PLAYER_PREVIEW_CAMERA_DISTANCE,
         0.0,
-        true,
     );
 
     let character_rect = (*character_info.get() == CharacterInfoState::Open)
@@ -151,7 +150,6 @@ pub(super) fn sync_player_preview_cameras(
         PLAYER_PREVIEW_CENTER_Y,
         PLAYER_PREVIEW_CAMERA_DISTANCE,
         orbit.yaw,
-        true,
     );
 }
 
@@ -162,7 +160,6 @@ fn sync_camera<F: QueryFilter>(
     center_y: f32,
     distance: f32,
     orbit_yaw: f32,
-    write_to_target: bool,
 ) {
     let Some(viewport) = viewport else {
         skip_cameras(cameras);
@@ -174,13 +171,9 @@ fn sync_camera<F: QueryFilter>(
     let offset = model.rotation() * orbit * Vec3::Z * distance;
     for (mut camera, mut transform) in cameras.iter_mut() {
         camera.viewport = Some(viewport.clone());
-        camera.output_mode = if write_to_target {
-            CameraOutputMode::Write {
-                blend_state: Some(BlendState::ALPHA_BLENDING),
-                clear_color: ClearColorConfig::None,
-            }
-        } else {
-            CameraOutputMode::Skip
+        camera.output_mode = CameraOutputMode::Write {
+            blend_state: Some(BlendState::ALPHA_BLENDING),
+            clear_color: ClearColorConfig::None,
         };
         *transform = Transform::from_translation(center + offset).looking_at(center, Vec3::Y);
     }
