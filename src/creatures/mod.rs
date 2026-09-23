@@ -1,4 +1,5 @@
 mod motion;
+mod particles;
 mod visual;
 
 use std::io;
@@ -22,6 +23,7 @@ use crate::{
 
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
+use particles::{CreatureParticleEmitter, emit_creature_particles, update_creature_particles};
 use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
 pub(crate) use visual::CreatureAnimationState;
 
@@ -83,6 +85,7 @@ pub(crate) struct CreaturesPlugin;
 impl Plugin for CreaturesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<visual::TintedCreatureMaterials>()
+            .init_resource::<particles::CreatureParticleAssets>()
             .init_resource::<PendingCreatureRestores>()
             .add_systems(
                 OnEnter(GameState::StartingScreen),
@@ -103,7 +106,8 @@ impl Plugin for CreaturesPlugin {
 
             .add_systems(
                 Update,
-                move_creatures
+                (move_creatures, emit_creature_particles, update_creature_particles)
+                    .chain()
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             )
@@ -158,6 +162,7 @@ fn spawn_creature_with_health(
         },
         CreatureModel(asset_server.load(definition.model.clone())),
         CreatureMotion::default(),
+        CreatureParticleEmitter::default(),
         saved_health.map_or_else(
             || EntityHealth::new(definition.health),
             |health| EntityHealth::restored(definition.health, health),
