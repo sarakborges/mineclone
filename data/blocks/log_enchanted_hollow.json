@@ -1,0 +1,39 @@
+{
+  "id": "asteria:log_enchanted_hollow",
+  "name": {
+    "english": "Hollow Enchanted Log",
+    "portuguese_brazil": "Tronco Encantado Oco",
+    "spanish": "Tronco Encantado Hueco"
+  },
+  "category": "wooden_blocks",
+  "tags": [],
+  "textures": {
+    "top": "textures/blocks/trees/enchanted_tree/top.png",
+    "bottom": "textures/blocks/trees/enchanted_tree/top.png",
+    "left": "textures/blocks/trees/enchanted_tree/side.png",
+    "right": "textures/blocks/trees/enchanted_tree/side.png",
+    "front": "textures/blocks/trees/enchanted_tree/side.png",
+    "back": "textures/blocks/trees/enchanted_tree/side.png"
+  },
+  "rotateTexture": {
+    "top": false,
+    "bottom": false,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
+  "orientations": [
+    "y",
+    "z",
+    "x"
+  ],
+  "lightDampening": 15,
+  "castsShadow": true,
+  "mining": {
+    "hardness": 1,
+    "requiredTools": [
+      "hatchet"
+    ]
+  }
+}
