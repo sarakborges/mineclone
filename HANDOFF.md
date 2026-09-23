@@ -301,7 +301,7 @@ contexto redundante, e mantém explícitos apenas spawn biome, biome multiplier 
 world-generation settings. As validações de load e o `begin_new_world`
 permanecem bit-a-bit no mesmo caminho. VERSION: `0.50.143`.
 
-CI de Q26: pendente neste checkpoint.
+CI de Q26: **verde** no run `35872529337` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
