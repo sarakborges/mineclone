@@ -127,28 +127,18 @@ def make_voxel_surface_mesh() -> int:
             if neighbor in voxels:
                 continue
             offset = len(positions) // 3
-            if normal[1] > 0:
-                tile_x = 2
-            elif normal[1] < 0:
-                tile_x = 3
-            elif normal[0] != 0:
-                tile_x = 1
-            else:
-                tile_x = 0
-            u0, u1 = (tile_x * 16 + .5) / 64, (tile_x * 16 + 15.5) / 64
-            v0, v1 = .5 / 64, 15.5 / 64
-            face_uvs = ((u0, v1), (u1, v1), (u1, v0), (u0, v0))
-            for (cx, cy, cz), uv in zip(corners, face_uvs):
-                positions.extend((
-                    -BODY_WIDTH * 0.5 + (ix + cx) * DX,
-                    -BODY_HEIGHT * 0.5 + (iy + cy) * DY,
-                    -BODY_DEPTH * 0.5 + (iz + cz) * DZ,
-                ))
+            for cx, cy, cz in corners:
+                px = -BODY_WIDTH * 0.5 + (ix + cx) * DX
+                py = -BODY_HEIGHT * 0.5 + (iy + cy) * DY
+                pz = -BODY_DEPTH * 0.5 + (iz + cz) * DZ
+                positions.extend((px, py, pz))
                 normals.extend(normal)
-                # Every exposed voxel face gets the full 16x16 soft-shade tile.
-                # The 1px low-contrast border makes individual voxels readable
-                # without reintroducing direction-dependent PBR lighting.
-                uvs.extend(uv)
+                # Project one continuous soft outer-volume gradient across the
+                # whole body. Neighboring voxel faces therefore agree on the
+                # same shade instead of looking like dark internal walls.
+                u = (px / BODY_WIDTH) + 0.5
+                v = 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT)
+                uvs.extend((u, v))
             indices.extend((offset, offset + 1, offset + 2, offset, offset + 2, offset + 3))
 
     assert len(positions) // 3 < 65536
@@ -320,7 +310,7 @@ scene = {
         'voxel_resolution': [NX, NY, NZ],
         'occupied_voxels': len(voxels),
         'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Each exposed voxel maps a low-contrast shell_soft tile so blocks remain readable without directional lighting. Legacy slime assets remain untouched.',
+        'notes': 'Second-generation sampled voxel blob. Shell uses one continuous 5% outer-volume shade projection, avoiding dark per-voxel internal-wall artifacts. Legacy slime assets remain untouched.',
     },
 }
 json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
