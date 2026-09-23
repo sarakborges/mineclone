@@ -13,11 +13,12 @@ use crate::{
         layer::LayerRegistry,
         tool::ToolRegistry,
     },
+    gameplay::modal::GameplayModalState,
     localization::{Language, UiLocalization},
     player::{
         game_mode::GameMode,
         hotbar::PlayerHotbar,
-        inventory::{InventoryCursor, InventoryState},
+        inventory::InventoryCursor,
     },
     world::biome_field::BiomeField,
 };
@@ -98,7 +99,7 @@ pub(super) fn spawn_inventory_root(
             },
             GlobalZIndex(100),
             Pickable::IGNORE,
-            DespawnOnExit(InventoryState::Open),
+            DespawnOnExit(GameplayModalState::Inventory),
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
