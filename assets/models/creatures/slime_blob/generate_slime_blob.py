@@ -153,9 +153,28 @@ def make_voxel_surface_mesh() -> int:
                 uvs.extend((0.5, 0.5))
                 shade = outer_shade(px, py, pz)
                 colors.extend((shade, shade, shade, 1.0))
-            indices.extend((offset, offset + 1, offset + 2, offset, offset + 2, offset + 3))
+            # Keep rasterizer winding aligned with the declared outward normal.
+            # The old order pointed every triangle inward, causing the front shell
+            # to be back-face culled and making the slime look transparent.
+            indices.extend((offset, offset + 2, offset + 1, offset, offset + 3, offset + 2))
 
     assert len(positions) // 3 < 65536
+    # All emitted triangles must wind outwards. Back-face culling is enabled,
+    # so an inward-wound shell makes the rear surface visible through the body.
+    for triangle in range(0, len(indices), 3):
+        ia, ib, ic = indices[triangle:triangle + 3]
+        a = positions[ia*3:ia*3+3]
+        b = positions[ib*3:ib*3+3]
+        c = positions[ic*3:ic*3+3]
+        normal = normals[ia*3:ia*3+3]
+        ab = [b[i] - a[i] for i in range(3)]
+        ac = [c[i] - a[i] for i in range(3)]
+        cross = [
+            ab[1]*ac[2] - ab[2]*ac[1],
+            ab[2]*ac[0] - ab[0]*ac[2],
+            ab[0]*ac[1] - ab[1]*ac[0],
+        ]
+        assert sum(cross[i] * normal[i] for i in range(3)) > 0.0
     attrs = {
         'POSITION': accessor(positions, bounds=True, target=34962),
         'NORMAL': accessor(normals, target=34962),
@@ -225,7 +244,7 @@ def material(name: str, color, *, alpha_mode=None, unlit=False):
 materials = [
     # Shell stays unlit so rotation never changes brightness. A 5% object-local
     # outer-volume shade is carried in vertex colors, not a surface texture.
-    material('SlimeShell', [.50, .91, .78], unlit=True),
+    material('SlimeShell', [.2793, .6883, .5024], unlit=True),
     material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
 ]
 shell_mesh = make_voxel_surface_mesh()
