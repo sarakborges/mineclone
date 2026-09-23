@@ -8,24 +8,12 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        inventory_category::InventoryCategoryRegistry,
-        layer::LayerRegistry,
-        secondary_property::SecondaryPropertyRegistry,
-        tool::ToolRegistry,
-    },
-    localization::{ActiveLanguage, UiLocalization},
+    content::inventory_category::InventoryCategoryRegistry,
+    localization::UiLocalization,
     player::{
-        camera::GameplayCamera,
         character_info::CharacterInfoState,
-        game_mode::GameMode,
-        hotbar::PlayerHotbar,
         inventory::{InventoryCursor, InventoryState},
     },
-    tools::BrushMode,
-    world::biome_field::BiomeField,
 };
 
 use crate::hud::block_icon::BlockIconMaterial;
@@ -41,12 +29,13 @@ use search_style::{
     focus_inventory_search_frame, frame_inventory_search_field, style_inventory_search_field,
     style_player_inventory_search_field,
 };
-use layout::{InventoryItemView, InventoryLayoutState, spawn_character_info_inventory};
+use layout::spawn_character_info_inventory;
 use state::{
     CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, PlayerInventoryView,
 };
 use sync::{
-    rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
+    InventoryItemContent, InventoryPanelState, rebuild_inventory_when_changed, spawn_inventory,
+    style_category_buttons, style_creative_slots,
     style_inventory_slots, style_inventory_trash_button, style_search_bar,
     sync_inventory_cursor_icon, sync_inventory_item_tooltip, sync_inventory_slot_contents,
     sync_inventory_sort_tooltip,
@@ -68,58 +57,24 @@ pub(super) const INVENTORY_SLOT_GAP: f32 = state::SLOT_GAP;
 
 #[derive(SystemParam)]
 pub(super) struct CharacterInfoInventorySpawn<'w, 's> {
-    asset_server: Res<'w, AssetServer>,
-    blocks: Res<'w, BlockRegistry>,
-    layers: Res<'w, LayerRegistry>,
-    tools: Res<'w, ToolRegistry>,
-    dyes: Res<'w, SecondaryPropertyRegistry>,
-    brush_mode: Res<'w, BrushMode>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
-    language: Res<'w, ActiveLanguage>,
+    content: InventoryItemContent<'w>,
     categories: Res<'w, InventoryCategoryRegistry>,
     localization: Res<'w, UiLocalization>,
-    hotbar: Res<'w, PlayerHotbar>,
-    cursor: Res<'w, InventoryCursor>,
-    creative_view: Res<'w, CreativeInventoryView>,
-    player_view: Res<'w, PlayerInventoryView>,
-    scroll_state: Res<'w, CreativeScrollState>,
-    player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
+    panel: InventoryPanelState<'w, 's>,
     window: Single<'w, 's, &'static Window>,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
 
 impl CharacterInfoInventorySpawn<'_, '_> {
     pub(super) fn spawn(&mut self, root: &mut ChildSpawnerCommands) {
-        let (player_transform, game_mode) = *self.player;
-        let player_position = Vec2::new(
-            player_transform.translation.x,
-            player_transform.translation.z,
+        let mut items = self
+            .content
+            .view(self.panel.player_position(), &mut self.icon_materials);
+        let layout = self.panel.layout(
+            &self.categories,
+            &self.localization,
+            self.window.cursor_position(),
         );
-        let mut items = InventoryItemView {
-            asset_server: &self.asset_server,
-            blocks: &self.blocks,
-            layers: &self.layers,
-            tools: &self.tools,
-            dyes: &self.dyes,
-            brush_mode: &self.brush_mode,
-            biomes: &self.biomes,
-            biome_field: &self.biome_field,
-            player_position,
-            language: self.language.get(),
-            icon_materials: &mut self.icon_materials,
-        };
-        let layout = InventoryLayoutState {
-            categories: &self.categories,
-            hotbar: &self.hotbar,
-            cursor: &self.cursor,
-            creative_view: &self.creative_view,
-            player_view: &self.player_view,
-            scroll_state: &self.scroll_state,
-            localization: &self.localization,
-            game_mode: *game_mode,
-            cursor_position: self.window.cursor_position(),
-        };
 
         spawn_character_info_inventory(root, &layout, &mut items);
     }
