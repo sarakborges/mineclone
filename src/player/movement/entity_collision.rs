@@ -2,8 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::creature::CreatureCollider,
-    creatures::CreatureInstance,
+    creatures::{CreatureInstance, CreatureTargetCollider},
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity},
     voxel::{collision::aabb_is_clear, world::VoxelWorld},
 };
@@ -22,7 +21,7 @@ type Bounds = (Vec3, Vec3);
 type CreatureContacts<'w, 's> = Query<
     'w,
     's,
-    (&'static mut Transform, &'static CreatureCollider),
+    (&'static mut Transform, &'static CreatureTargetCollider),
     (With<CreatureInstance>, Without<PlayerEntity>),
 >;
 
@@ -189,7 +188,7 @@ pub(super) fn resolve_player_creature_contacts(
         for (mut creature, collider) in &mut creatures {
             let Some(contact) = contact(
                 player_bounds(player.translation),
-                collider.bounds(creature.translation),
+                collider.0.bounds(creature.translation),
             ) else {
                 continue;
             };
@@ -202,7 +201,7 @@ pub(super) fn resolve_player_creature_contacts(
                 contact,
                 PLAYER_PUSH_SHARE,
                 player_bounds,
-                |feet| collider.bounds(feet),
+                |feet| collider.0.bounds(feet),
             );
         }
         if !had_contact {
@@ -226,8 +225,8 @@ pub(super) fn resolve_creature_creature_contacts(
             pairs.fetch_next()
         {
             let Some(contact) = contact(
-                first_collider.bounds(first.translation),
-                second_collider.bounds(second.translation),
+                first_collider.0.bounds(first.translation),
+                second_collider.0.bounds(second.translation),
             ) else {
                 continue;
             };
@@ -239,8 +238,8 @@ pub(super) fn resolve_creature_creature_contacts(
                 &mut second.translation,
                 contact,
                 CREATURE_PUSH_SHARE,
-                |feet| first_collider.bounds(feet),
-                |feet| second_collider.bounds(feet),
+                |feet| first_collider.0.bounds(feet),
+                |feet| second_collider.0.bounds(feet),
             );
         }
         if !had_contact {
