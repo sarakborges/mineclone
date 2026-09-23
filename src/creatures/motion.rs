@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use crate::{
     content::creature::{CreatureCollider, CreatureRegistry},
     player::movement::config::{COLLISION_STEP, GRAVITY},
-    voxel::{collision::collides_aabb, world::VoxelWorld},
+    voxel::{
+        collision::{aabb_is_clear, collides_aabb},
+        world::VoxelWorld,
+    },
 };
 
 use super::{CreatureInstance, random::next_u32, visual::CreatureAnimationState};
@@ -112,7 +115,12 @@ pub(super) fn move_creatures(
         }
         if motion.knockback_time > 0.0 {
             let travel = motion.knockback * dt;
-            if advance_horizontal(&world, *collider, &mut transform.translation, Vec2::new(travel.x, travel.z)) {
+            if advance(
+                &world,
+                *collider,
+                &mut transform.translation,
+                Vec3::new(travel.x, 0.0, travel.z),
+            ) {
                 motion.knockback = Vec3::ZERO;
                 motion.knockback_time = 0.0;
             } else {
@@ -156,14 +164,24 @@ pub(super) fn move_creatures(
             HopPhase::Airborne => {
                 let horizontal = motion.direction * definition.move_speed * dt;
                 if horizontal != Vec2::ZERO
-                    && advance_horizontal(&world, *collider, &mut transform.translation, horizontal)
+                    && advance(
+                        &world,
+                        *collider,
+                        &mut transform.translation,
+                        Vec3::new(horizontal.x, 0.0, horizontal.y),
+                    )
                 {
                     // A wall stops this hop, without ever moving the static collider through it.
                     motion.direction = Vec2::ZERO;
                 }
                 motion.velocity_y += GRAVITY * dt;
                 let travel = motion.velocity_y * dt;
-                let hit = advance_vertical(&world, *collider, &mut transform.translation, travel);
+                let hit = advance(
+                    &world,
+                    *collider,
+                    &mut transform.translation,
+                    Vec3::Y * travel,
+                );
                 if hit && motion.velocity_y <= 0.0 {
                     motion.phase = HopPhase::Land;
                     motion.timer = definition.landing_seconds;
@@ -197,46 +215,19 @@ fn on_ground(world: &VoxelWorld, collider: CreatureCollider, feet: Vec3) -> bool
     collides_aabb(world, min, max)
 }
 
-/// Prevents crossing a solid or unloaded voxel while moving laterally in a jump.
-fn advance_horizontal(
+/// Substep movement so fast hops or knockback cannot skip thin collision.
+/// Returns true when the next substep would enter solid or unloaded space.
+fn advance(
     world: &VoxelWorld,
     collider: CreatureCollider,
     feet: &mut Vec3,
-    delta: Vec2,
+    delta: Vec3,
 ) -> bool {
     let steps = (delta.length() / COLLISION_STEP).ceil().max(1.0) as usize;
     let step = delta / steps as f32;
     for _ in 0..steps {
-        let next = *feet + Vec3::new(step.x, 0.0, step.y);
-        let (min, max) = collider.bounds(next);
-        if !world.is_loaded_at(min.floor().as_ivec3())
-            || !world.is_loaded_at(max.floor().as_ivec3())
-            || collides_aabb(world, min, max)
-        {
-            return true;
-        }
-        *feet = next;
-    }
-    false
-}
-
-/// Substeps stop thin blocks from being skipped at high vertical speed.
-/// The collider remains the same size throughout every squash/stretch clip.
-fn advance_vertical(
-    world: &VoxelWorld,
-    collider: CreatureCollider,
-    feet: &mut Vec3,
-    delta: f32,
-) -> bool {
-    let steps = (delta.abs() / COLLISION_STEP).ceil().max(1.0) as usize;
-    let step = delta / steps as f32;
-    for _ in 0..steps {
-        let next = *feet + Vec3::Y * step;
-        let (min, max) = collider.bounds(next);
-        if !world.is_loaded_at(min.floor().as_ivec3())
-            || !world.is_loaded_at(max.floor().as_ivec3())
-            || collides_aabb(world, min, max)
-        {
+        let next = *feet + step;
+        if !aabb_is_clear(world, collider.bounds(next)) {
             return true;
         }
         *feet = next;
