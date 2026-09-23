@@ -202,15 +202,7 @@ impl ChatAutocomplete {
         }
     }
 
-    fn refresh(
-        &mut self,
-        editor: &EditableText,
-        creatures: &CreatureRegistry,
-        biomes: &BiomeRegistry,
-        structures: &StructureRegistry,
-        structure_sets: &StructureSetRegistry,
-        language: &ActiveLanguage,
-    ) {
+    fn refresh(&mut self, editor: &EditableText, catalog: &AutocompleteCatalog<'_>) {
         if editor.is_composing() {
             self.set_suggestions(0..0, Vec::new());
             return;
@@ -227,16 +219,8 @@ impl ChatAutocomplete {
             self.set_suggestions(0..0, Vec::new());
             return;
         }
-        let (range, suggestions) = suggestions_for(
-            &context.0,
-            context.1,
-            creatures,
-            biomes,
-            structures,
-            structure_sets,
-            language,
-        )
-        .unwrap_or_else(|| (0..0, Vec::new()));
+        let (range, suggestions) =
+            suggestions_for(&context.0, context.1, catalog).unwrap_or_else(|| (0..0, Vec::new()));
         self.set_suggestions(range, suggestions);
     }
 }
@@ -280,14 +264,18 @@ fn id_matches_prefix(id: &str, prefix: &str) -> bool {
             .is_some_and(|short| short.starts_with(prefix))
 }
 
-fn structure_suggestions(
-    structures: &StructureRegistry,
-    structure_sets: &StructureSetRegistry,
-    language: &ActiveLanguage,
-    prefix: &str,
-    locatable_only: bool,
-) -> Vec<Suggestion> {
-    let mut values = structures
+struct AutocompleteCatalog<'a> {
+    creatures: &'a CreatureRegistry,
+    biomes: &'a BiomeRegistry,
+    structures: &'a StructureRegistry,
+    structure_sets: &'a StructureSetRegistry,
+    language: &'a ActiveLanguage,
+}
+
+impl AutocompleteCatalog<'_> {
+    fn structure_suggestions(&self, prefix: &str, locatable_only: bool) -> Vec<Suggestion> {
+        let mut values = self
+            .structures
         .iter()
         .filter(|structure| structure.group_id.is_none())
         .filter(|structure| !locatable_only || structure.locatable)
@@ -299,7 +287,7 @@ fn structure_suggestions(
         .collect::<Vec<_>>();
 
     values.extend(
-        structures
+        self.structures
             .group_references()
             .filter(|(_, structure, _)| !locatable_only || structure.locatable)
             .filter(|(reference, _, _)| id_matches_prefix(reference, prefix))
@@ -307,32 +295,32 @@ fn structure_suggestions(
                 value: reference.to_owned(),
                 description: format!(
                     "{} ({count} variations)",
-                    structure.name.text(language.get())
+                    structure.name.text(self.language.get())
                 ),
             }),
     );
     values.extend(
-        structure_sets
+        self.structure_sets
             .iter()
             .filter(|set| !locatable_only || set.locatable)
             .filter(|set| id_matches_prefix(&set.id, prefix))
             .map(|set| Suggestion {
                 value: set.id.clone(),
-                description: format!("{} (structure set)", set.name.text(language.get())),
+                description: format!(
+                    "{} (structure set)",
+                    set.name.text(self.language.get())
+                ),
             }),
     );
 
-    values
+        values
+    }
 }
 
 fn suggestions_for(
     text: &str,
     cursor: usize,
-    creatures: &CreatureRegistry,
-    biomes: &BiomeRegistry,
-    structures: &StructureRegistry,
-    structure_sets: &StructureSetRegistry,
-    language: &ActiveLanguage,
+    catalog: &AutocompleteCatalog<'_>,
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let (range, word_index) = active_token(text, cursor)?;
     let prefix = text[range.start..cursor].to_ascii_lowercase();
@@ -359,34 +347,29 @@ fn suggestions_for(
                     description: "Structure".to_owned(),
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::CreatureId => creatures
+            ParameterKind::CreatureId => catalog
+                .creatures
                 .iter()
                 .filter(|creature| id_matches_prefix(&creature.id, &prefix))
                 .map(|creature| Suggestion {
                     value: creature.id.clone(),
-                    description: creature.name.text(language.get()).to_owned(),
+                    description: creature.name.text(catalog.language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::StructureId => structure_suggestions(
-                structures,
-                structure_sets,
-                language,
-                &prefix,
-                false,
-            ),
+            ParameterKind::StructureId => catalog.structure_suggestions(&prefix, false),
             ParameterKind::StructureVariation => {
                 if text.split_whitespace().nth(1)? != "structure" {
                     return Some((range, Vec::new()));
                 }
                 let reference = text.split_whitespace().nth(2)?;
-                if structure_sets.get(reference).is_some() {
+                if catalog.structure_sets.get(reference).is_some() {
                     Vec::new()
                 } else {
-                    let count = structures.variation_count(reference)?;
+                    let count = catalog.structures.variation_count(reference)?;
                     (1..=count)
                         .filter(|variation| variation.to_string().starts_with(&prefix))
                         .filter_map(|variation| {
-                            let structure = structures.variation(reference, variation)?;
+                            let structure = catalog.structures.variation(reference, variation)?;
                             Some(Suggestion {
                                 value: variation.to_string(),
                                 description: structure.id.clone(),
@@ -409,13 +392,14 @@ fn suggestions_for(
                 })
                 .collect::<Vec<_>>(),
             ParameterKind::LocateTargetId => match text.split_whitespace().nth(1)? {
-                "biome" => biomes
+                "biome" => catalog
+                    .biomes
                     .iter()
                     .filter(|biome| biome.kind != crate::content::biome::BiomeKind::Hydrology)
                     .filter(|biome| id_matches_prefix(&biome.id, &prefix))
                     .map(|biome| Suggestion {
                         value: biome.id.clone(),
-                        description: biome.name.text(language.get()).to_owned(),
+                        description: biome.name.text(catalog.language.get()).to_owned(),
                     })
                     .collect::<Vec<_>>(),
                 "hydrology" => ["ocean", "river", "lake"]
@@ -431,13 +415,7 @@ fn suggestions_for(
                         },
                     })
                     .collect::<Vec<_>>(),
-                "structure" => structure_suggestions(
-                    structures,
-                    structure_sets,
-                    language,
-                    &prefix,
-                    true,
-                ),
+                "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
             ParameterKind::Coordinate => Vec::new(),
@@ -472,6 +450,18 @@ pub(super) struct AutocompleteContent<'w> {
     language: Res<'w, ActiveLanguage>,
 }
 
+impl AutocompleteContent<'_> {
+    fn catalog(&self) -> AutocompleteCatalog<'_> {
+        AutocompleteCatalog {
+            creatures: &self.creatures,
+            biomes: &self.biomes,
+            structures: &self.structures,
+            structure_sets: &self.structure_sets,
+            language: &self.language,
+        }
+    }
+}
+
 /// Called after chat opening/closing; never steals focus or submits a command.
 pub(super) fn update_autocomplete(
     chat: Res<ChatState>,
@@ -486,14 +476,8 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    autocomplete.refresh(
-        &draft,
-        &content.creatures,
-        &content.biomes,
-        &content.structures,
-        &content.structure_sets,
-        &content.language,
-    );
+    let catalog = content.catalog();
+    autocomplete.refresh(&draft, &catalog);
     if !autocomplete.visible() || draft.is_composing() {
         return;
     }
