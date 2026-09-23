@@ -244,7 +244,6 @@ fn unobstructed_camera_distance(
 #[cfg(test)]
 mod tests {
     use super::CameraPerspective;
-    use bevy::prelude::*;
 
     #[test]
     fn perspective_cycles_first_back_front_first() {
