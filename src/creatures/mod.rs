@@ -2,6 +2,7 @@ mod material;
 mod motion;
 mod natural_spawn;
 mod particles;
+mod spawn;
 mod visual;
 
 use std::io;
@@ -10,19 +11,18 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entity::EntityHealth,
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
     content::creature::{CreatureCollider, CreatureRegistry},
-    localization::{ActiveLanguage, Language},
-    voxel::world::VoxelWorld,
 };
 
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
 use natural_spawn::natural_spawn_creatures;
-use particles::{CreatureParticleEmitter, emit_creature_particles, update_creature_particles};
-use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
+use particles::{emit_creature_particles, update_creature_particles};
+use spawn::restore_saved_creatures;
+use visual::{attach_loaded_models, sync_creature_animations, sync_creature_facing};
+pub(crate) use spawn::spawn_creature_at;
 pub(crate) use visual::CreatureAnimationState;
 
 /// The entity root owns position and collision; only its visual child is animated or rotated.
@@ -122,101 +122,6 @@ impl Plugin for CreaturesPlugin {
             );
     }
 }
-
-/// The chat preflights world occupancy and relocates the player before calling
-/// this function. The exact feet position is preserved; this function never
-/// searches neighboring slots or mutates the terrain.
-pub(crate) fn spawn_creature_at(
-    commands: &mut Commands,
-    definitions: &CreatureRegistry,
-    asset_server: &AssetServer,
-    language: Language,
-    id: &str,
-    feet: Vec3,
-) -> Result<String, String> {
-    spawn_creature_with_health(
-        commands,
-        definitions,
-        asset_server,
-        language,
-        id,
-        feet,
-        None,
-    )
-}
-
-fn spawn_creature_with_health(
-    commands: &mut Commands,
-    definitions: &CreatureRegistry,
-    asset_server: &AssetServer,
-    language: Language,
-    id: &str,
-    feet: Vec3,
-    saved_health: Option<f32>,
-) -> Result<String, String> {
-    let definition = definitions
-        .get(id)
-        .ok_or_else(|| format!("Unknown creature id: {id}"))?;
-    let name = definition.name.text(language).to_owned();
-    commands.spawn((
-        Name::new(name.clone()),
-        CreatureInstance {
-            definition_id: definition.id.clone(),
-        },
-        CreatureModel(asset_server.load(definition.model.clone())),
-        CreatureMotion::default(),
-        CreatureParticleEmitter::default(),
-        saved_health.map_or_else(
-            || EntityHealth::new(definition.health),
-            |health| EntityHealth::restored(definition.health, health),
-        ),
-        definition.collider,
-        CreatureTargetCollider(definition.target_collider()),
-        Transform::from_translation(feet),
-        Visibility::default(),
-        DespawnOnExit(GameState::Gameplay),
-    ));
-    Ok(name)
-}
-
-fn restore_saved_creatures(
-    mut commands: Commands,
-    world: Res<VoxelWorld>,
-    definitions: Res<CreatureRegistry>,
-    asset_server: Res<AssetServer>,
-    language: Res<ActiveLanguage>,
-    mut pending: ResMut<PendingCreatureRestores>,
-) {
-    if pending.creatures.is_empty() {
-        return;
-    }
-
-    let saved = std::mem::take(&mut pending.creatures);
-    for creature in saved {
-        let feet = Vec3::from_array(creature.position);
-        if !world.is_loaded_at(feet.floor().as_ivec3()) {
-            pending.creatures.push(creature);
-            continue;
-        }
-
-        if let Err(error) = spawn_creature_with_health(
-            &mut commands,
-            &definitions,
-            &asset_server,
-            language.get(),
-            &creature.definition_id,
-            feet,
-            Some(creature.health),
-        ) {
-            warn!(
-                "Could not restore creature {}: {error}",
-                creature.definition_id
-            );
-        }
-    }
-}
-
-
 
 fn despawn_dead_creatures(
     time: Res<Time>,
