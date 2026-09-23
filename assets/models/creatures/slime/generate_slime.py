@@ -119,7 +119,16 @@ def cube(positions, normals, uvs, colors, indices, extent, center=(0,0,0), tile=
                      + b*vertical[i]*half[i] for i in range(3)]
             positions.extend(point)
             normals.extend(normal)
-            uvs.extend(uv)
+            if shade_outer_volume:
+                if normal[0] != 0:
+                    surface_uv = (point[2] / extent[2] + .5, 1.0 - (point[1] / extent[1] + .5))
+                elif normal[1] != 0:
+                    surface_uv = (point[0] / extent[0] + .5, point[2] / extent[2] + .5)
+                else:
+                    surface_uv = (point[0] / extent[0] + .5, 1.0 - (point[1] / extent[1] + .5))
+                uvs.extend(surface_uv)
+            else:
+                uvs.extend(uv)
             if shade_outer_volume:
                 nx = point[0] / max(extent[0] * .5, 1e-6)
                 ny = point[1] / max(extent[1] * .5, 1e-6)
@@ -291,7 +300,7 @@ scene = {
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Preserved cubic legacy shell/core; opaque unlit shell uses 5% object-local outer-volume vertex shading; collider does not animate'},
+              'notes':'Preserved cubic legacy shell/core; opaque shell combines 5% object-local vertex shading with subtle full-face surface texture; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
