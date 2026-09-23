@@ -73,7 +73,7 @@ type CharacterPreviewCameraQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 struct PlayerPreviewLayout<'w, 's> {
-    window: Single<'w, &'static Window, With<PrimaryWindow>>,
+    window: Single<'w, 's, &'static Window, With<PrimaryWindow>>,
     hud_viewport: Query<
         'w,
         's,
