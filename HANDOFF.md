@@ -720,6 +720,20 @@ não pode ser simultaneamente block e layer. VERSION: `0.50.182`.
 CI de Q59: **verde** no run `35893580265` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q60 — separar tool dispatch e voxel editing
+
+`targeting/interaction.rs::edit_targeted_block` continua sendo o único
+coordenador da precedência de um clique (creature → tool → layer/block), mas
+não implementa mais internamente o dispatch de tools nem a mutação detalhada do
+alvo voxel. `dispatch_selected_tool` concentra a emissão de `ToolUse`, e
+`edit_targeted_voxel` recebe um `TargetedVoxelEdit` explícito e retorna
+`VoxelEditOutcome` para diferenciar layer placement, block placement, break
+e interação consumida. Isso preserva inclusive o detalhe de layer placement não
+limpar o target, enquanto block edit bem-sucedido limpa. VERSION: `0.50.183`.
+
+CI acumulado de Q60: **verde** no run `35893682774` (localizações, Clippy
+com `-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
