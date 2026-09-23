@@ -12032,3 +12032,27 @@ Commits funcionais:
 - GLB regenerado: `ee9c781a3a467b92f24b155740f933dfa056de54`.
 
 VERSION: `0.50.106`, commit de versão `2f73da517eda12dab23fcf007882cb34b8f774cd`.
+
+
+## 2026-09-22 — Slime sem shading direcional nem reflexo
+
+O problema restante não era apenas roughness/specular: mesmo completamente matte, um material PBR ainda recebe iluminação difusa pela normal da face. Ao girar o slime, o painel frontal podia escurecer porque deixava de apontar para a principal direção de luz.
+
+A correção agora é explícita e data-driven:
+- `CreatureDefinition` ganhou `unlitMaterials`;
+- o slime marca `SlimeShell`, `SlimeCore` e `SlimeFace` como unlit;
+- o cache de materiais inclui o bit `unlit`, evitando reutilização incorreta entre espécies;
+- o override runtime seta `StandardMaterial::unlit = true` para esses materiais;
+- o GLB autoral também usa `KHR_materials_unlit` nos três materiais;
+- metallic continua 0, roughness 1, reflectance 0, specular tint preto, clearcoat/transmission/emissive zerados.
+
+Efeito esperado: a cor/luminância do slime não muda conforme ele gira em relação à luz. O rosto não escurece ao mudar de direção e nenhum highlight/reflexo PBR é calculado nos materiais do slime. Fog/exposure pós-processados ainda podem afetar a imagem global, mas não de forma dependente da orientação das faces.
+
+Commits funcionais:
+- definição data-driven de materiais unlit: `fbd7f3c1599d87b0532ff739f9b68c45383c31a1`;
+- aplicação runtime/cache: `05fd6bd1e4f6a80b46ca5d23287a230aeef140bb`;
+- slime opt-in: `4b79fc74d853a668cece7accfdcc3364f98c1db4`;
+- gerador GLB unlit: `3608fcdcfc99c7e132af76dedde9b8cd7d9919e2`;
+- GLB atualizado: `d8ea1cd29576032fa4ba6fa6f51571686d3cc68b`.
+
+VERSION: `0.50.107`, commit de versão `a5d20897a3bdf9df229b90be8c4ea4f209ef9605`.
