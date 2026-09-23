@@ -267,10 +267,10 @@ fn spawn_equipment_table(parent: &mut ChildSpawnerCommands) {
                 ))
                 .with_children(|table| {
                     for label in [
-                        "No helm equiped",
-                        "No breastplate equiped",
-                        "No leggings equiped",
-                        "No boots equiped",
+                        "No helm equipped",
+                        "No breastplate equipped",
+                        "No leggings equipped",
+                        "No boots equipped",
                     ] {
                         spawn_equipment_row(table, label);
                     }
@@ -306,7 +306,18 @@ fn spawn_equipment_row(parent: &mut ChildSpawnerCommands, label: &'static str) {
                 BorderColor::all(border),
                 Pickable::IGNORE,
             ));
-            row.spawn((typography::caption(label), Pickable::IGNORE));
+            row.spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|copy| {
+                copy.spawn((typography::caption(label), Pickable::IGNORE));
+                copy.spawn((typography::caption("No effect"), Pickable::IGNORE));
+            });
         });
 }
 
