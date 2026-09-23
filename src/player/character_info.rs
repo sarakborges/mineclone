@@ -1,4 +1,9 @@
-use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    input_focus::InputFocus,
+    prelude::*,
+    text::EditableText,
+};
 
 use crate::{
     app::{
@@ -54,12 +59,13 @@ impl Plugin for PlayerCharacterInfoPlugin {
 }
 
 #[derive(SystemParam)]
-struct CharacterInfoModalInput<'w> {
+struct CharacterInfoModalInput<'w, 's> {
     keys: Res<'w, ButtonInput<KeyCode>>,
     keybinds: Res<'w, Keybinds>,
     state: Res<'w, State<CharacterInfoState>>,
     chat: Res<'w, ChatState>,
     focus: Res<'w, InputFocus>,
+    editable_text: Query<'w, 's, (), With<EditableText>>,
     input_state: ResMut<'w, CharacterInfoInputState>,
     next_state: ResMut<'w, NextState<CharacterInfoState>>,
     next_inventory: ResMut<'w, NextState<InventoryState>>,
@@ -70,7 +76,11 @@ fn toggle_character_info(mut input: CharacterInfoModalInput) {
     if !input.keys.just_pressed(KeyCode::Escape) {
         input.input_state.escape_consumed = false;
     }
-    if input.chat.is_open() || input.focus.get().is_some() {
+    let typing = input
+        .focus
+        .get()
+        .is_some_and(|entity| input.editable_text.get(entity).is_ok());
+    if input.chat.is_open() || typing {
         return;
     }
 
