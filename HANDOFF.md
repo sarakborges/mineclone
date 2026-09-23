@@ -103,7 +103,17 @@ implementação privada do módulo. As constantes e operações foram preservada
 para manter determinismo de seed/worldgen; a mudança remove implementações
 duplicadas que poderiam divergir silenciosamente. VERSION: `0.50.118`.
 
-CI de Q8: pendente neste checkpoint.
+CI de Q8: **verde** no run `35817835875` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q9 — reutilizar interseção retangular de structures
+
+O teste de overlap inclusivo de retângulos 2D, usado tanto pela resolução global
+de candidatos quanto pelo resolver de structure sets, foi movido para
+`world/generation/structures/geometry.rs`. Os dois caminhos passam a depender
+da mesma definição geométrica de interseção, eliminando uma segunda
+implementação idêntica. VERSION: `0.50.119`.
+
+CI de Q9: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
