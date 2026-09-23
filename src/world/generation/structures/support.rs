@@ -69,7 +69,7 @@ pub(super) fn compute_structure_origin_y(
         return fit_structure_to_ground(
             anchor,
             &structure.support_offsets_for_rotation(rotation),
-            structure.min_y_offset(),
+            structure.ground_anchor_y_offset(),
             structure.restrictions.max_slope,
             |_| Some(ground_y),
         );
@@ -80,7 +80,7 @@ pub(super) fn compute_structure_origin_y(
     fit_structure_to_ground(
         anchor,
         &support_offsets,
-        structure.min_y_offset(),
+        structure.ground_anchor_y_offset(),
         structure.restrictions.max_slope,
         |position| {
             let sample_position = position.as_vec2() + Vec2::splat(0.5);

@@ -179,6 +179,8 @@ pub struct StructureDefinition {
     pub generation: StructureGenerationRules,
     #[serde(default)]
     pub anchor: StructureAnchor,
+    #[serde(default)]
+    pub ground_anchor_y: Option<i32>,
     pub palette: HashMap<String, StructurePaletteEntry>,
     pub layers: Vec<StructureLayer>,
     #[serde(skip)]
@@ -307,6 +309,12 @@ impl StructureDefinition {
 
     pub(crate) fn min_y_offset(&self) -> i32 {
         self.runtime.min_y_offset
+    }
+
+    pub(crate) fn ground_anchor_y_offset(&self) -> i32 {
+        self.ground_anchor_y
+            .map(|ground_y| ground_y - self.anchor.y)
+            .unwrap_or(self.runtime.min_y_offset)
     }
 
     pub(crate) fn support_offsets_for_rotation(

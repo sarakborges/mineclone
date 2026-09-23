@@ -360,7 +360,7 @@ impl ChatPlacementContext<'_, '_> {
         let Some(surface_y) = loaded_surface_level(world, feet_block) else {
             return format!("no loaded ground available to place {reference}");
         };
-        let origin_y = surface_y - structure.min_y_offset();
+        let origin_y = surface_y - structure.ground_anchor_y_offset();
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
         let min = voxels.iter().fold(IVec3::splat(i32::MAX), |min, voxel| {
             min.min(origin + structure_rotation.rotate_offset(voxel.offset))
@@ -465,7 +465,7 @@ impl ChatPlacementContext<'_, '_> {
             |structure, _rotation, anchor| {
                 let surface_y =
                     loaded_surface_level_at(world, anchor, search_top)?;
-                Some(surface_y - structure.min_y_offset())
+                Some(surface_y - structure.ground_anchor_y_offset())
             },
         ) else {
             return format!("could not resolve structure set {} in loaded terrain", set.id);
