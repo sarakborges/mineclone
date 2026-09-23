@@ -363,7 +363,7 @@ fn update_target_hud(
         material.set_block(block, &content.visual.asset_server);
     }
     if tint_changed {
-        material.set_tint(tint);
+        material.set_tint(icon_snapshot.tint);
     }
     *cached_icon = Some(icon_snapshot);
 }
