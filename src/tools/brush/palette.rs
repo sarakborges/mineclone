@@ -8,11 +8,12 @@ use crate::{
         builtin_ids::DYED_PROPERTY_ID,
         secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     },
+    gameplay::modal::GameplayModalState,
     localization::{ActiveLanguage, UiLocalization},
     ui::{theme, typography},
 };
 
-use super::{BrushMode, BrushPaletteState, BrushSelection};
+use super::{BrushMode, BrushSelection};
 
 const PALETTE_COLUMNS: usize = 9;
 const SWATCH_SIZE: f32 = 30.0;
@@ -55,7 +56,7 @@ pub(super) fn spawn_brush_palette(
             },
             GlobalZIndex(120),
             Pickable::IGNORE,
-            DespawnOnExit(BrushPaletteState::Open),
+            DespawnOnExit(GameplayModalState::BrushPalette),
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
@@ -186,7 +187,7 @@ fn compare_palette_colors(
 pub(super) fn handle_palette_selection(
     choices: Query<(&Interaction, &BrushPaletteChoice), Changed<Interaction>>,
     mut mode: ResMut<BrushMode>,
-    mut next_palette: ResMut<NextState<BrushPaletteState>>,
+    mut next_modal: ResMut<NextState<GameplayModalState>>,
 ) {
     for (interaction, choice) in &choices {
         if *interaction != Interaction::Pressed {
@@ -194,7 +195,7 @@ pub(super) fn handle_palette_selection(
         }
 
         mode.selection = choice.selection.clone();
-        next_palette.set(BrushPaletteState::Closed);
+        next_modal.set(GameplayModalState::Closed);
         break;
     }
 }
