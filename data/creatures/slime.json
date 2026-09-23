@@ -24,6 +24,11 @@
       "intensity": 0.34
     }
   },
+  "unlitMaterials": [
+    "SlimeShell",
+    "SlimeCore",
+    "SlimeFace"
+  ],
   "animations": {
     "idle": "Idle",
     "anticipate": "Anticipate",
