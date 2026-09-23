@@ -43,6 +43,13 @@
       "lightMin": 0,
       "lightMax": 15,
       "spacing": 16
+    },
+    {
+      "creature": "asteria:slime_legacy",
+      "weight": 1,
+      "lightMin": 0,
+      "lightMax": 15,
+      "spacing": 16
     }
   ],
   "structures": [
