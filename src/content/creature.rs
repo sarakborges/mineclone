@@ -18,6 +18,8 @@ pub struct CreatureDefinition {
     #[serde(default)]
     pub textures: std::collections::HashMap<String, String>,
     pub collider: CreatureCollider,
+    #[serde(default)]
+    pub target_collider: Option<CreatureCollider>,
     #[serde(default = "default_creature_health")]
     pub health: f32,
     #[serde(default = "default_creature_max_per_type")]
@@ -166,6 +168,12 @@ pub struct CreatureRegistry {
     definitions: DefinitionMap<CreatureDefinition>,
 }
 
+impl CreatureDefinition {
+    pub fn target_collider(&self) -> CreatureCollider {
+        self.target_collider.unwrap_or(self.collider)
+    }
+}
+
 impl CreatureRegistry {
     pub fn insert(&mut self, definition: CreatureDefinition) {
         assert!(
@@ -189,6 +197,9 @@ impl CreatureRegistry {
             );
         }
         definition.collider.validate(&definition.id);
+        if let Some(target_collider) = definition.target_collider {
+            target_collider.validate(&format!("{} target", definition.id));
+        }
         assert!(
             definition.max_per_type > 0,
             "creature {} maxPerType must be positive",
