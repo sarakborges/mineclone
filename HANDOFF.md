@@ -12056,3 +12056,31 @@ Commits funcionais:
 - GLB atualizado: `d8ea1cd29576032fa4ba6fa6f51571686d3cc68b`.
 
 VERSION: `0.50.107`, commit de versão `a5d20897a3bdf9df229b90be8c4ea4f209ef9605`.
+
+
+## 2026-09-22 — Slime sem core, face restaurada e dome mais arredondado
+
+O core visual do slime foi removido por completo:
+- mesh/material `SlimeCore` removidos do GLB;
+- tint/texture/unlit slot removidos de `data/creatures/slime.json`;
+- `assets/textures/creatures/slime/core.png` removido;
+- animações deixaram de carregar tracks de scale/rotation para um core inexistente.
+
+A face havia sumido porque o perfil novo ficou mais largo/profundo, mas o quad da face continuava em `z=-0.485`, atrás da superfície frontal do shell. O quad agora fica em `z=-0.606`, ligeiramente à frente do máximo frontal de `-0.600`, com `AlphaMode::Blend` e material unlit. O gerador também recria `face.png` com fundo realmente transparente caso o arquivo esteja ausente.
+
+O arredondamento foi refinado com 14 tiers voxel-like e uma escala visual maior:
+- bounds visuais aproximados: `1.20 x 1.00 x 1.20`;
+- base estreita e expansão gradual até o corpo;
+- contração superior em degraus menores;
+- último platô superior reduzido para `0.22 x 0.005 x 0.22`, eliminando o aspecto de topo largo/flat;
+- collider de gameplay não foi alterado neste lote.
+
+Commits funcionais:
+- shape/core/face no gerador: `5f143e90132994a8a33a3c00458fd940edcd253a`;
+- definição sem core: `293b72cdabedca165eb0c3cc2c62820fdc496201`;
+- metadata dos bounds: `4dc77f972b0dd5db97b0f48ba70106c3ada9a564`;
+- remoção de `core.png`: `8ab7a82e648779a505fd31c7373aa7105c3a323b`;
+- GLB regenerado sem core: `540a216dcaa9980a8f0aa3f2b842e76a2df0a849`;
+- fallback da face transparente: `df9784807faf6f26e9459863b4d1dfcdbb6ecf84`.
+
+VERSION: `0.50.108`, commit de versão `697df906c66d34cf297d15fc0644ba1404f75f94`.
