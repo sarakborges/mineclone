@@ -12446,3 +12446,21 @@ Commits:
 - GLBs atualizados: `c5405c29ba0d55c52d6aab5f559d5d5469f9dcfd`.
 
 VERSION: `0.50.128`, commit de versão `3d919f44027e989b016c0e71a7d7c6e8a10a4f85`.
+
+
+## 2026-09-23 — Slime shading sem grid visível
+
+O atlas anterior colocava uma borda de contraste em cada tile de 16x16. Como o slime arredondado mapeia um tile por face exposta de voxel, isso desenhava literalmente uma grade em toda a superfície.
+
+A correção remove completamente essas bordas. `shell_soft.png` agora usa somente quatro tons planos e muito próximos entre si, um por orientação de face:
+- frente/trás: 252/255;
+- lados: 249/255;
+- topo: 255/255;
+- base: 246/255.
+
+Os materiais continuam unlit, então a aparência não muda quando o slime gira e não volta o shading PBR agressivo. A diferença entre orientações serve apenas como uma sombra ambiente extremamente suave, suficiente para ler os degraus da silhueta sem desenhar uma malha sobre o corpo.
+
+O mesmo atlas é usado pelo slime arredondado e pelo legacy.
+
+Commit funcional: `2a874c5d06e0c79011b95aafee09433b9f44164e`.
+VERSION: `0.50.130`, commit de versão `ee16252f33d33bdfb0e219445c56ba8e0ceed42b`.
