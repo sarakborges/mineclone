@@ -103,6 +103,18 @@ pub(super) enum ParsedLine<'a> {
     Unknown(&'a str),
 }
 
+fn parse_optional_variation(value: Option<&str>) -> Result<Option<usize>, ()> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|variation| *variation > 0)
+        .map(Some)
+        .ok_or(())
+}
+
 pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
     let line = input.trim();
     if !line.starts_with('/') {
@@ -128,12 +140,8 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
             if args[0] != "structure" {
                 return ParsedLine::Usage(definition.usage);
             }
-            let variation = match args.get(2) {
-                Some(value) => match value.parse::<usize>() {
-                    Ok(variation) if variation > 0 => Some(variation),
-                    _ => return ParsedLine::Usage(definition.usage),
-                },
-                None => None,
+            let Ok(variation) = parse_optional_variation(args.get(2).copied()) else {
+                return ParsedLine::Usage(definition.usage);
             };
             ParsedLine::Place(args[1], variation)
         },
@@ -142,12 +150,8 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
                 ParsedLine::Locate(args[0], args[1], None)
             }
             "structure" => {
-                let variation = match args.get(2) {
-                    Some(value) => match value.parse::<usize>() {
-                        Ok(variation) if variation > 0 => Some(variation),
-                        _ => return ParsedLine::Usage(definition.usage),
-                    },
-                    None => None,
+                let Ok(variation) = parse_optional_variation(args.get(2).copied()) else {
+                    return ParsedLine::Usage(definition.usage);
                 };
                 ParsedLine::Locate(args[0], args[1], variation)
             }
@@ -554,6 +558,14 @@ mod tests {
         assert_eq!(
             parse_line("/place structure asteria:tree_oak 0"),
             ParsedLine::Usage("/place structure <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/locate structure asteria:tree_oak nope"),
+            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/locate structure asteria:tree_oak 0"),
+            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
