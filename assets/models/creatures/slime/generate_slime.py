@@ -161,21 +161,27 @@ def make_front_quad(name, width, height, z, material):
     return len(meshes)-1
 
 
-def material(name, color, alpha=1., rough=.36, emission=None):
+def material(name, color, alpha=1., rough=1.0, emission=None, alpha_mode=None, unlit=False):
     mat = {'name': name, 'pbrMetallicRoughness': {
         'baseColorFactor': [*color, alpha],
         'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False}
-    if alpha < 1:
+    if alpha_mode is not None:
+        mat['alphaMode'] = alpha_mode
+    elif alpha < 1:
         mat['alphaMode'] = 'BLEND'
+    if unlit:
+        mat['extensions'] = {'KHR_materials_unlit': {}}
     if emission is not None:
         mat['emissiveFactor'] = emission
     return mat
 
 
 materials = [
-    material('SlimeShell', [.50,.91,.78], 1., .85),
-    material('SlimeCore', [.18,.70,.57], 1., .85),
-    material('SlimeFace', [1.,1.,1.], 1., .30),
+    # Preserve the original cubic silhouette/core, but keep the body matte and
+    # lit so it receives world shade. The face remains unlit and transparent.
+    material('SlimeShell', [.50,.91,.78]),
+    material('SlimeCore', [.18,.70,.57]),
+    material('SlimeFace', [1.,1.,1.], alpha_mode='BLEND', unlit=True),
 ]
 shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
@@ -255,12 +261,13 @@ tracks('Death',[0,.12,.31,.55,.75],
 scene = {
     'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v3'},
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
+    'extensionsUsed':['KHR_materials_unlit'],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Only cubic shell and enlarged core; face in species PNG front tile; collider does not animate'},
+              'notes':'Preserved cubic legacy shell/core; lit matte body receives world shade; transparent face remains unlit; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
