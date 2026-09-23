@@ -306,7 +306,7 @@ fn natural_spawn_creatures(
         &context.creatures,
         context.player.translation,
         rule,
-        &mut state.1,
+        &mut state.random_state,
     ) else {
         return;
     };
