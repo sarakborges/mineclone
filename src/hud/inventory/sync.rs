@@ -92,17 +92,19 @@ pub(super) struct InventoryPanelState<'w, 's> {
     player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
 }
 
+type InventoryRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    Or<(With<InventoryHudRoot>, With<CharacterInfoInventoryRoot>)>,
+>;
+
 #[derive(SystemParam)]
 pub(super) struct InventoryCursorSyncContext<'w, 's> {
     cursor: Res<'w, InventoryCursor>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     window: Single<'w, 's, &'static Window>,
-    roots: Query<
-        'w,
-        's,
-        Entity,
-        Or<(With<InventoryHudRoot>, With<CharacterInfoInventoryRoot>)>,
-    >,
+    roots: InventoryRootQuery<'w, 's>,
     icons: Query<'w, 's, Entity, With<InventoryCursorIcon>>,
 }
 
