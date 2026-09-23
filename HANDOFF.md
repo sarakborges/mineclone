@@ -440,7 +440,7 @@ sem qualquer `allow(clippy::too_many_arguments)`. Os systems
 player↔creature e creature↔creature agora cuidam apenas de descobrir pares e
 fornecer o share apropriado. VERSION: `0.50.158`.
 
-CI de Q38: pendente neste checkpoint.
+CI de Q38: **verde** no run `35883376612` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
