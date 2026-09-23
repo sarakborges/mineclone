@@ -14,6 +14,7 @@ use bevy::prelude::*;
 
 use super::{
     cell::VoxelCell,
+    log_state::is_hollow,
     read::VoxelRead,
 };
 
@@ -66,6 +67,58 @@ impl MicroblockMask {
 
     pub(crate) fn is_modified(cell: VoxelCell) -> bool {
         cell.microblock_layers().is_some()
+    }
+
+    pub(crate) fn has_partial_geometry(cell: VoxelCell) -> bool {
+        Self::is_modified(cell) || is_hollow(cell)
+    }
+
+    pub(crate) fn geometry_for_cell(cell: VoxelCell) -> Self {
+        if Self::is_modified(cell) {
+            return Self::from_cell(cell);
+        }
+        if is_hollow(cell) {
+            return Self::hollow_log(cell.orientation);
+        }
+        Self::FULL
+    }
+
+    fn hollow_log(orientation: crate::content::block_orientation::BlockOrientation) -> Self {
+        use crate::content::block_orientation::BlockOrientation;
+
+        const EDGE_WALL: u64 = 0x8181_8181_8181_8181;
+        const XY_RING: u64 = 0xff81_8181_8181_81ff;
+        const Y_WALL: u64 = 0xff00_0000_0000_00ff;
+
+        match orientation {
+            BlockOrientation::Y => Self {
+                layers: [
+                    u64::MAX,
+                    EDGE_WALL,
+                    EDGE_WALL,
+                    EDGE_WALL,
+                    EDGE_WALL,
+                    EDGE_WALL,
+                    EDGE_WALL,
+                    u64::MAX,
+                ],
+            },
+            BlockOrientation::Z => Self {
+                layers: [XY_RING; LAYERS],
+            },
+            BlockOrientation::X => Self {
+                layers: [
+                    u64::MAX,
+                    Y_WALL,
+                    Y_WALL,
+                    Y_WALL,
+                    Y_WALL,
+                    Y_WALL,
+                    Y_WALL,
+                    u64::MAX,
+                ],
+            },
+        }
     }
 
     pub(crate) fn is_transient_parent(cell: VoxelCell) -> bool {
@@ -217,7 +270,7 @@ pub(crate) fn local_cell(fine: IVec3) -> [usize; 3] {
 
 pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Option<VoxelCell> {
     let cell = world.cell_at(parent_voxel(fine))?;
-    MicroblockMask::from_cell(cell)
+    MicroblockMask::geometry_for_cell(cell)
         .contains(local_cell(fine))
         .then_some(cell)
 }
@@ -261,5 +314,25 @@ mod tests {
     #[test]
     fn zero_base_dampening_stays_zero_for_sculpted_geometry() {
         assert_eq!(MicroblockMask::FULL.light_dampening(0), 0);
+    }
+
+    #[test]
+    fn hollow_log_mask_is_open_along_its_orientation_axis() {
+        use crate::content::block_orientation::BlockOrientation;
+
+        let vertical = MicroblockMask::hollow_log(BlockOrientation::Y);
+        assert!(!vertical.contains([4, 0, 4]));
+        assert!(!vertical.contains([4, 7, 4]));
+        assert!(vertical.contains([0, 4, 4]));
+
+        let along_z = MicroblockMask::hollow_log(BlockOrientation::Z);
+        assert!(!along_z.contains([4, 4, 0]));
+        assert!(!along_z.contains([4, 4, 7]));
+        assert!(along_z.contains([0, 4, 4]));
+
+        let along_x = MicroblockMask::hollow_log(BlockOrientation::X);
+        assert!(!along_x.contains([0, 4, 4]));
+        assert!(!along_x.contains([7, 4, 4]));
+        assert!(along_x.contains([4, 0, 4]));
     }
 }
