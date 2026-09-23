@@ -13509,3 +13509,19 @@ Infra alterada:
 - `data/dimensions/overworld/biomes/plains.json`: removido spawn natural de `slime_legacy`.
 
 VERSION: `0.50.190`.
+
+
+## 2026-09-23 — Gerador completo do Air Slime
+
+O primeiro commit do Air Slime já continha o GLB funcional e os dados de gameplay, mas o `generate_slime_air.py` ainda estava reduzido a uma ficha de constantes. O gerador completo foi adicionado ao projeto.
+
+Ele agora reproduz:
+- o volume 24x20x22 derivado do slime blob;
+- a classificação das regiões turquesa/mint/brancas do shell;
+- o quad de `SlimeFace` com winding frontal correto;
+- as seis penas voxelizadas (três por asa);
+- os dois motes de ar;
+- todos os materiais fixed-color/unlit;
+- a hierarquia de nodes e os seis clips de animação.
+
+VERSION: `0.50.191`.
