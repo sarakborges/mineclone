@@ -258,7 +258,7 @@ somente dimensions, biomes, blocks, layers e fluids, exatamente o conjunto
 consumido pelo bootstrap. `LoadedContent` foi reexportado apenas dentro do
 crate para tornar essa fronteira explícita. VERSION: `0.50.137`.
 
-CI de Q22: pendente neste checkpoint.
+CI de Q22: **verde** no run `35870037840` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
