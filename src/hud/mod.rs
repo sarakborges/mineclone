@@ -60,7 +60,7 @@ pub(crate) enum HintKind {
     BreakOrPlaceBlock,
     BrushPaint,
     BrushClear,
-    Chisel,
+    ArtisansKit,
     Shears,
     StructureTool,
 }
@@ -75,7 +75,7 @@ impl HintKind {
             Self::BreakOrPlaceBlock => "settings.hint.breakOrPlaceBlock",
             Self::BrushPaint => "settings.hint.brushPaint",
             Self::BrushClear => "settings.hint.brushClear",
-            Self::Chisel => "settings.hint.chisel",
+            Self::ArtisansKit => "settings.hint.artisansKit",
             Self::Shears => "settings.hint.shears",
             Self::StructureTool => "settings.hint.structureTool",
         }
@@ -92,7 +92,8 @@ struct HintSettings {
     break_or_place_block: bool,
     brush_paint: bool,
     brush_clear: bool,
-    chisel: bool,
+    #[serde(alias = "chisel")]
+    artisans_kit: bool,
     shears: bool,
     structure_tool: bool,
 }
@@ -107,7 +108,7 @@ impl Default for HintSettings {
             break_or_place_block: true,
             brush_paint: true,
             brush_clear: true,
-            chisel: true,
+            artisans_kit: true,
             shears: true,
             structure_tool: true,
         }
@@ -124,7 +125,7 @@ impl HintSettings {
             HintKind::BreakOrPlaceBlock => self.break_or_place_block,
             HintKind::BrushPaint => self.brush_paint,
             HintKind::BrushClear => self.brush_clear,
-            HintKind::Chisel => self.chisel,
+            HintKind::ArtisansKit => self.artisans_kit,
             HintKind::Shears => self.shears,
             HintKind::StructureTool => self.structure_tool,
         }
@@ -139,7 +140,7 @@ impl HintSettings {
             HintKind::BreakOrPlaceBlock => self.break_or_place_block = enabled,
             HintKind::BrushPaint => self.brush_paint = enabled,
             HintKind::BrushClear => self.brush_clear = enabled,
-            HintKind::Chisel => self.chisel = enabled,
+            HintKind::ArtisansKit => self.artisans_kit = enabled,
             HintKind::Shears => self.shears = enabled,
             HintKind::StructureTool => self.structure_tool = enabled,
         }
