@@ -708,6 +708,18 @@ Clippy; a correção permaneceu no mesmo bloco/version. CI de Q58: **verde** no
 run `35893177922` (localizações, Clippy com `-D warnings` e
 `cargo check`).
 
+### Q59 — mover validação de referências para BlockDefinition
+
+As referências externas próprias de block saíram do corpo de
+`content::validation` para `BlockDefinition::validate_references`:
+inventory category, secondary properties e tool categories de mining, inclusive
+a exigência de existir ao menos uma tool que implemente cada categoria usada.
+A validação global preserva somente a invariável entre namespaces de que um ID
+não pode ser simultaneamente block e layer. VERSION: `0.50.182`.
+
+CI de Q59: **verde** no run `35893580265` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
