@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        attack::AttackRegistry, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
+        attack::{AttackDefinition, AttackRegistry}, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
         player::PlayerDefinition, tool::ToolRegistry,
     },
     gameplay::availability::world_interaction_available,
@@ -67,16 +67,66 @@ struct BlockEditDefinitions<'w> {
     player: Res<'w, PlayerDefinition>,
 }
 
-#[allow(clippy::too_many_arguments)]
+type DamageableCreatures<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut EntityHealth,
+        &'static mut CreatureAnimationState,
+        &'static mut CreatureMotion,
+        &'static Transform,
+    ),
+    With<CreatureInstance>,
+>;
+
+#[derive(SystemParam)]
+struct CreatureAttackRuntime<'w, 's> {
+    commands: Commands<'w, 's>,
+    creatures: DamageableCreatures<'w, 's>,
+    random_state: Local<'s, u32>,
+}
+
+impl CreatureAttackRuntime<'_, '_> {
+    fn apply(&mut self, entity: Entity, attack: &AttackDefinition, player_position: Vec3) -> bool {
+        let Ok((mut health, mut animation, mut motion, creature_transform)) =
+            self.creatures.get_mut(entity)
+        else {
+            return false;
+        };
+        if health.is_dead() {
+            return false;
+        }
+
+        let dead = health.damage(attack.damage);
+        let direction = creature_transform.translation - player_position;
+        for effect in &attack.effects {
+            if (effect.chance >= 1.0
+                || next_random(&mut self.random_state) as f32 / u32::MAX as f32 <= effect.chance)
+                && effect.effect == "knockback"
+            {
+                motion.apply_knockback(direction, effect.strength);
+            }
+        }
+        animation.trigger(if dead { "death" } else { "hurt" });
+        if dead {
+            self.commands
+                .entity(entity)
+                .insert(CreatureDeathTimer(Timer::from_seconds(
+                    0.75,
+                    TimerMode::Once,
+                )));
+        }
+        true
+    }
+}
+
 fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
     mut runtime: VoxelTopologyRuntime,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
-    mut commands: Commands,
-    mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState, &mut CreatureMotion, &Transform), With<CreatureInstance>>,
-    mut random_state: Local<u32>,
+    mut creature_attack: CreatureAttackRuntime,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
@@ -117,25 +167,8 @@ fn edit_targeted_block(
         let Some(attack) = definitions.attacks.get(&definitions.player.attack) else {
             return;
         };
-        if let Ok((mut health, mut animation, mut motion, creature_transform)) = creature_health.get_mut(entity) {
-            if health.is_dead() {
-                return;
-            }
-            let dead = health.damage(attack.damage);
-            let direction = creature_transform.translation - player_transform.translation;
-            for effect in &attack.effects {
-                if (effect.chance >= 1.0
-                    || next_random(&mut random_state) as f32 / u32::MAX as f32 <= effect.chance)
-                    && effect.effect == "knockback"
-                {
-                    motion.apply_knockback(direction, effect.strength);
-                }
-            }
+        if creature_attack.apply(entity, attack, player_transform.translation) {
             viewmodel_animation.play_hit();
-            animation.trigger(if dead { "death" } else { "hurt" });
-            if dead {
-                commands.entity(entity).insert(CreatureDeathTimer(Timer::from_seconds(0.75, TimerMode::Once)));
-            }
         }
         return;
     }
