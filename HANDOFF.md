@@ -12192,3 +12192,51 @@ Key commits:
 - CI fixes: `95af4969a27c0af37504533e990b1417e5a5f09e`
 - documentation: `d8f89ad19b2dee2a7ef7e54c1c93c392e2860a8d`
 - VERSION: `0.50.109` (`8c71d68ed1967b5f2d59802f81277c4e49a29adf`)
+
+
+## 2026-09-23 — Dual slime models in Plains + stable soft shading
+
+Both slime variants are now intentionally kept active.
+
+### Legacy cube restoration
+
+`asteria:slime_legacy` was restored to the original pre-sculpt cubic model from commit parent `8d28bee28671e3cb04fcc0507b17949cae020d70`:
+- original cubic `slime.glb` silhouette restored;
+- original cubic generator restored;
+- original core mesh/material restored;
+- legacy textures copied into `assets/textures/creatures/slime_legacy/` so the two models no longer depend on the same shell source;
+- legacy definition again includes `SlimeCore`.
+
+The legacy shell is now opaque at runtime. This deliberately hides the internal core/texture through the shell and removes the visual impression of seeing an internal surface.
+
+### Plains spawning
+
+`data/dimensions/overworld/biomes/plains.json` now contains spawn entries for both:
+- `asteria:slime`
+- `asteria:slime_legacy`
+
+Both currently use the same spawn weight/light range/spacing rule, so either model may be selected naturally in Plains.
+
+### Shading correction
+
+Direct PBR lighting on the voxel faces produced harsh orientation-dependent darkness and made individual voxel/cube faces read as separate lighting patches. Both slime bodies are back to unlit materials, with the face also unlit.
+
+A dedicated `shell_soft.png` is now used for each variant. It is fully opaque and contains only a very subtle stable brightness ramp. This gives the body a little depth without directional world-light shadows, specular response or face-to-face lighting jumps.
+
+For the rounded blob, the shell UV V coordinate now follows local model height instead of sampling one fixed texel, so the soft ramp follows the body vertically and remains stable as the creature rotates.
+
+The legacy cube keeps its core asset for preservation, but the opaque shell prevents it from showing through.
+
+### Validation
+
+Rust validation for rounded slime UV/shading state `bb7d64a3ef34e2f4b6f04313b28eeb27a9a71f4e` completed successfully in Actions run `35813927427` (Clippy + Check).
+
+Relevant commits:
+- rounded shell soft shading definition: `e4ef1f989d0027d47c9f9e31b6e3796e95c71dab`
+- legacy opaque/unlit definition: `bba6868989976bdfddf60933f17e2a87515e3b7a`
+- soft shell texture: `9d0ee48bb2ad820ac039a1b0ead37f7e54ff4adc`
+- rounded generator height UVs: `a97b65142320aa4d433b0827ec1517b976336b2c`
+- rounded GLB height UVs: `bb7d64a3ef34e2f4b6f04313b28eeb27a9a71f4e`
+- restored legacy assets: `7033ba42aa3c49a9cea8f77b1b18357c25d322d2`
+- both variants in Plains: `61ced2cab7f3257cc6f8b3bf1a79b5b9b331e0d7`
+- VERSION: `0.50.112` (`7612fb331e7a11a0c3c3c3cd9a5be4c7f6101e15`)
