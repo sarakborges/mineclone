@@ -176,7 +176,12 @@ pub(super) fn move_creatures(
                     // A wall stops this hop, without ever moving the static collider through it.
                     motion.direction = Vec2::ZERO;
                 }
-                motion.velocity_y += GRAVITY * dt;
+                let gravity_scale = if motion.velocity_y <= 0.0 {
+                    definition.fall_gravity_scale
+                } else {
+                    1.0
+                };
+                motion.velocity_y += GRAVITY * gravity_scale * dt;
                 let travel = motion.velocity_y * dt;
                 let hit = advance(
                     &world,

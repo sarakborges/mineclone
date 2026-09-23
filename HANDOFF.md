@@ -13463,3 +13463,49 @@ Não existem bordas, tiles ou trocas de material no shell legacy: a profundidade
 Nenhum `materialTint` foi reintroduzido; shell/core continuam sem textura runtime.
 
 VERSION: `0.50.189`.
+
+
+## 2026-09-23 — Família elemental de slimes: Air Slime + Plains somente blob
+
+A geração natural de Plains volta a usar somente `asteria:slime` (rounded/blob). `asteria:slime_legacy` continua registrado, carregável e preservado como asset/modelo de referência, mas foi removido da tabela `creatureSpawns` de Plains.
+
+Foi criada a primeira variante elemental baseada diretamente no blob: `asteria:slime_air`.
+
+### Visual do Air Slime
+- mantém a silhueta 24x20x22 do slime blob;
+- coloração fixa autorada no GLB, sem `materialTints` de JSON;
+- base turquesa puxada para verde;
+- centro mint mais claro;
+- bordas turquesa mais profundas;
+- topo quase branco;
+- highlights branco/mint;
+- duas asas voxelizadas, cada uma construída como três penas/blocos sobrepostos;
+- pequenos motes de ar mint/branco sobre o corpo;
+- reutiliza apenas a textura `SlimeFace` do blob normal.
+
+A largura visual com asas chega a aproximadamente 1.80 m, mas collider físico e target collider continuam baseados no corpo, para que asas decorativas não alterem colisão/gameplay.
+
+### Movimento elemental
+Foi adicionada uma propriedade genérica de criatura, `fallGravityScale`, com default `1.0`. Ela só multiplica a gravidade quando a criatura já está descendo; a subida mantém a gravidade padrão. Isso permite variantes flutuantes sem distorcer o impulso inicial do salto.
+
+Air Slime:
+- `jumpSpeed: 6.75` (normal: 5.0);
+- `fallGravityScale: 0.45`;
+- `moveSpeed: 1.65`;
+- landing/anticipation ligeiramente mais rápidos;
+- partículas próprias em branco/mint/turquesa, com comportamento mais leve.
+
+O Air Slime foi registrado como criatura e pode ser spawnado explicitamente, mas **não foi adicionado a Plains** ainda; isso preserva a regra atual de spawn natural “só o blob normal” até definirmos o biome/raridade das variantes elementais.
+
+Arquivos novos:
+- `data/creatures/slime_air.json`;
+- `assets/models/creatures/slime_air/slime_air.glb`;
+- `assets/models/creatures/slime_air/generate_slime_air.py`;
+- `assets/models/creatures/slime_air/slime_air.collider.json`.
+
+Infra alterada:
+- `src/content/creature.rs`: `fallGravityScale`;
+- `src/creatures/motion.rs`: gravidade reduzida apenas na descida;
+- `data/dimensions/overworld/biomes/plains.json`: removido spawn natural de `slime_legacy`.
+
+VERSION: `0.50.190`.

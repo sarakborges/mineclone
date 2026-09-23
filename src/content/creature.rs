@@ -34,6 +34,8 @@ pub struct CreatureDefinition {
     pub animations: std::collections::HashMap<String, String>,
     #[serde(default = "default_jump_speed")]
     pub jump_speed: f32,
+    #[serde(default = "default_fall_gravity_scale")]
+    pub fall_gravity_scale: f32,
     #[serde(default)]
     pub move_speed: f32,
     #[serde(default = "default_jump_interval")]
@@ -130,6 +132,10 @@ fn default_jump_speed() -> f32 {
     0.0
 }
 
+fn default_fall_gravity_scale() -> f32 {
+    1.0
+}
+
 fn default_jump_interval() -> f32 {
     2.0
 }
@@ -206,6 +212,11 @@ impl CreatureDefinition {
         assert!(
             self.jump_speed.is_finite() && self.jump_speed >= 0.0,
             "creature {} has invalid jumpSpeed",
+            self.id
+        );
+        assert!(
+            self.fall_gravity_scale.is_finite() && self.fall_gravity_scale > 0.0,
+            "creature {} has invalid fallGravityScale",
             self.id
         );
         assert!(

@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "id": "asteria:slime_air",
+  "asset": "slime_air.glb",
+  "units": "meters",
+  "world_up": "+Y",
+  "forward": "-Z",
+  "origin": "center of ground contact, feet at local y = 0",
+  "model_bounds_rest": {
+    "size": [
+      1.8,
+      1,
+      1.14
+    ],
+    "center": [
+      0,
+      0.5,
+      0
+    ],
+    "approximate_visual_height": 1
+  },
+  "collider": {
+    "type": "aabb",
+    "size": [
+      0.78,
+      0.84,
+      0.78
+    ],
+    "center_offset": [
+      0,
+      0.42,
+      0
+    ],
+    "min_offset": [
+      -0.39,
+      0,
+      -0.39
+    ],
+    "max_offset": [
+      0.39,
+      0.84,
+      0.39
+    ],
+    "follows": "SlimeRoot world transform, not visual squash",
+    "solid_world_collision": true,
+    "targeting": true
+  },
+  "animation": {
+    "clips": {
+      "Idle": {
+        "duration_s": 2,
+        "loop": true
+      },
+      "Anticipate": {
+        "duration_s": 0.24,
+        "loop": false
+      },
+      "Airborne": {
+        "duration_s": 0.72,
+        "loop": true
+      },
+      "Land": {
+        "duration_s": 0.34,
+        "loop": false
+      },
+      "Hurt": {
+        "duration_s": 0.38,
+        "loop": false
+      },
+      "Death": {
+        "duration_s": 0.75,
+        "loop": false
+      }
+    },
+    "root_motion": false,
+    "visual_root": "BodyPivot",
+    "jump_sequence": [
+      "Anticipate",
+      "Airborne",
+      "Land",
+      "Idle"
+    ]
+  },
+  "materials": {
+    "shell": [
+      "AirShell",
+      "AirShellCenter",
+      "AirShellOuter",
+      "AirShellBottom",
+      "AirShellTop",
+      "AirShellLight",
+      "AirShellBright"
+    ],
+    "face": "SlimeFace",
+    "wings": [
+      "AirWingWhite",
+      "AirWingMint"
+    ],
+    "detail": "AirDetail",
+    "unlit": true,
+    "rule": "Body, wings and air details use fixed authored colors; SlimeFace is the only runtime texture override."
+  },
+  "authoring": {
+    "generator": "generate_slime_air.py",
+    "base_model": "../slime_blob/slime_blob.glb",
+    "voxel_resolution": [
+      24,
+      20,
+      22
+    ],
+    "construction": "rounded blob body plus blocky feather wings and two air motes"
+  }
+}
