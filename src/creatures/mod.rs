@@ -228,6 +228,17 @@ fn restore_saved_creatures(
 const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
 const NATURAL_SPAWN_MAX_DISTANCE: f32 = 32.0;
+const NATURAL_SPAWN_ATTEMPTS: usize = 8;
+
+type NaturalSpawnCreatures<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static CreatureInstance,
+        &'static Transform,
+        &'static EntityHealth,
+    ),
+>;
 
 #[derive(SystemParam)]
 struct NaturalSpawnContext<'w, 's> {
@@ -239,15 +250,7 @@ struct NaturalSpawnContext<'w, 's> {
     language: Res<'w, ActiveLanguage>,
     asset_server: Res<'w, AssetServer>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
-    creatures: Query<
-        'w,
-        's,
-        (
-            &'static CreatureInstance,
-            &'static Transform,
-            &'static EntityHealth,
-        ),
-    >,
+    creatures: NaturalSpawnCreatures<'w, 's>,
     current_dimension: Res<'w, CurrentDimension>,
     entity_counts: ResMut<'w, DimensionEntityCounts>,
     dimensions: Res<'w, DimensionRegistry>,
@@ -288,34 +291,68 @@ fn natural_spawn_creatures(
         return;
     };
 
-    for _ in 0..8 {
-        let angle = next_random(&mut state.1) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
-        let distance = NATURAL_SPAWN_MIN_DISTANCE + (next_random(&mut state.1) as f32 / u32::MAX as f32) * (NATURAL_SPAWN_MAX_DISTANCE - NATURAL_SPAWN_MIN_DISTANCE);
-        let position = context.player.translation + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
+    let Some(feet) = find_natural_spawn_position(
+        &context.world,
+        &context.creatures,
+        context.player.translation,
+        rule,
+        &mut state.1,
+    ) else {
+        return;
+    };
+    let _ = spawn_creature_at(
+        &mut commands,
+        &context.definitions,
+        &context.asset_server,
+        context.language.get(),
+        &rule.creature,
+        feet,
+    );
+}
+
+fn find_natural_spawn_position(
+    world: &VoxelWorld,
+    creatures: &NaturalSpawnCreatures<'_, '_>,
+    player_position: Vec3,
+    rule: &CreatureSpawnRule,
+    random_state: &mut u32,
+) -> Option<Vec3> {
+    for _ in 0..NATURAL_SPAWN_ATTEMPTS {
+        let angle = next_random(random_state) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
+        let distance = NATURAL_SPAWN_MIN_DISTANCE
+            + (next_random(random_state) as f32 / u32::MAX as f32)
+                * (NATURAL_SPAWN_MAX_DISTANCE - NATURAL_SPAWN_MIN_DISTANCE);
+        let position =
+            player_position + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
         let column = IVec2::new(position.x.floor() as i32, position.z.floor() as i32);
-        let Some(feet_y) = natural_spawn_feet_y(&context.world, column) else { continue; };
-        let feet = Vec3::new(column.x as f32 + 0.5, feet_y as f32, column.y as f32 + 0.5);
-        let light = context.world.light_at(feet.floor().as_ivec3());
+        let Some(feet_y) = natural_spawn_feet_y(world, column) else {
+            continue;
+        };
+        let feet = Vec3::new(
+            column.x as f32 + 0.5,
+            feet_y as f32,
+            column.y as f32 + 0.5,
+        );
+        let light = world.light_at(feet.floor().as_ivec3());
         let light_level = light.sky().max(light.block());
-        if light_level < rule.light_min || light_level > rule.light_max { continue; }
-        if context.creatures.iter().any(|(instance, transform, health)| {
+        if light_level < rule.light_min || light_level > rule.light_max {
+            continue;
+        }
+        if creatures.iter().any(|(instance, transform, health)| {
             !health.is_dead()
                 && instance.definition_id == rule.creature
                 && transform.translation.distance(feet) < rule.spacing
         }) {
             continue;
         }
-        if !context.world.is_loaded_at(feet.floor().as_ivec3()) || context.world.fluid_at(feet.floor().as_ivec3()).is_some() { continue; }
-        let _ = spawn_creature_at(
-            &mut commands,
-            &context.definitions,
-            &context.asset_server,
-            context.language.get(),
-            &rule.creature,
-            feet,
-        );
-        break;
+        if !world.is_loaded_at(feet.floor().as_ivec3())
+            || world.fluid_at(feet.floor().as_ivec3()).is_some()
+        {
+            continue;
+        }
+        return Some(feet);
     }
+    None
 }
 
 fn natural_spawn_rule_is_eligible(
