@@ -337,6 +337,16 @@ VERSION: `0.50.147`.
 
 CI de Q29: **verde** no run `35875079940` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q30 — centralizar resolução do nome localizado de item
+
+O fallback comum `item_id → block/layer/tool → localized name` foi movido para
+`content/item.rs::display_name`. Hotbar e inventory tooltip agora compartilham
+a mesma ordem de resolução e o mesmo fallback para IDs desconhecidos, removendo
+duas implementações idênticas em módulos de HUD distintos. VERSION:
+`0.50.148`.
+
+CI de Q30: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
