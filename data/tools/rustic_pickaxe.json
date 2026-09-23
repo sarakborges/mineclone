@@ -1,0 +1,19 @@
+{
+  "id": "asteria:rustic_pickaxe",
+  "name": {
+    "english": "Rustic Pickaxe",
+    "portuguese_brazil": "Picareta Rústica",
+    "spanish": "Pico Rústico"
+  },
+  "hint": {
+    "english": "Mines stone and masonry blocks.",
+    "portuguese_brazil": "Minera blocos de pedra e alvenaria.",
+    "spanish": "Mina bloques de piedra y mampostería."
+  },
+  "category": "tools",
+  "icon": "textures/tools/pickaxe-rustic.png",
+  "mining": {
+    "category": "pickaxe",
+    "speed": 1.5
+  }
+}
