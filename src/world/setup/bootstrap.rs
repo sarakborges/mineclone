@@ -2,8 +2,12 @@ use bevy::{prelude::*, render::storage::ShaderBuffer};
 
 use crate::{
     content::{
+        LoadedContent,
         biome::{BiomeKind, BiomeRegistry},
-        dimension::DimensionDefinition,
+        block::BlockRegistry,
+        dimension::{DimensionDefinition, DimensionRegistry},
+        fluid::FluidRegistry,
+        layer::LayerRegistry,
         read_content,
     },
     player::player_id::LOCAL_PLAYER_ID,
@@ -35,6 +39,38 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+
+struct BootstrapRegistries<'a> {
+    dimensions: &'a DimensionRegistry,
+    biomes: &'a BiomeRegistry,
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    fluids: &'a FluidRegistry,
+}
+
+impl<'a> BootstrapRegistries<'a> {
+    fn resolve(
+        loaded: &'a WorldBootstrapContent<'_>,
+        fresh: Option<&'a LoadedContent>,
+    ) -> Self {
+        match fresh {
+            Some(fresh) => Self {
+                dimensions: &fresh.dimensions,
+                biomes: &fresh.biomes,
+                blocks: &fresh.blocks,
+                layers: &fresh.layers,
+                fluids: &fresh.fluids,
+            },
+            None => Self {
+                dimensions: &loaded.dimensions,
+                biomes: &loaded.biomes,
+                blocks: &loaded.blocks,
+                layers: &loaded.layers,
+                fluids: &loaded.fluids,
+            },
+        }
+    }
+}
 
 struct BootstrapGenerationSettings {
     forced_spawn_biome: Option<String>,
@@ -146,21 +182,13 @@ pub(in crate::world) fn begin_world_loading(
     } else {
         None
     };
-    let dimensions = fresh_content
-        .as_ref()
-        .map_or(&*content.dimensions, |content| &content.dimensions);
-    let biomes = fresh_content
-        .as_ref()
-        .map_or(&*content.biomes, |content| &content.biomes);
-    let blocks = fresh_content
-        .as_ref()
-        .map_or(&*content.blocks, |content| &content.blocks);
-    let layers = fresh_content
-        .as_ref()
-        .map_or(&*content.layers, |content| &content.layers);
-    let fluids = fresh_content
-        .as_ref()
-        .map_or(&*content.fluids, |content| &content.fluids);
+    let BootstrapRegistries {
+        dimensions,
+        biomes,
+        blocks,
+        layers,
+        fluids,
+    } = BootstrapRegistries::resolve(&content, fresh_content.as_ref());
     let dimension = dimensions
         .get(&config.current_dimension.id)
         .unwrap_or_else(|| {
