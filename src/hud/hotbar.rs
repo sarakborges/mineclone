@@ -3,8 +3,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        block::BlockRegistry, block_orientation::BlockOrientation, layer::LayerRegistry,
-        secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
+        block::BlockRegistry, block_orientation::BlockOrientation, item::display_name,
+        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
     hud::{
         block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
@@ -122,7 +122,15 @@ fn spawn_hotbar(
     let selected_name = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .map(|item_id| item_name(item_id, &content.blocks, &content.layers, &content.tools, language))
+        .map(|item_id| {
+            display_name(
+                item_id,
+                &content.blocks,
+                &content.layers,
+                &content.tools,
+                language,
+            )
+        })
         .unwrap_or("");
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
@@ -244,7 +252,15 @@ fn sync_hotbar(
     let next_name = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .map(|item_id| item_name(item_id, &content.blocks, &content.layers, &content.tools, language))
+        .map(|item_id| {
+            display_name(
+                item_id,
+                &content.blocks,
+                &content.layers,
+                &content.tools,
+                language,
+            )
+        })
         .unwrap_or("");
     if selected_name.0 != next_name {
         selected_name.0 = next_name.to_owned();
@@ -339,25 +355,6 @@ fn spawn_hotbar_item(
     }
 
     panic!("hotbar references missing item: {item_id}");
-}
-
-fn item_name<'a>(
-    item_id: &'a str,
-    blocks: &'a BlockRegistry,
-    layers: &'a LayerRegistry,
-    tools: &'a ToolRegistry,
-    language: Language,
-) -> &'a str {
-    if let Some(block) = blocks.get(item_id) {
-        return block.name.text(language);
-    }
-    if let Some(layer) = layers.get(item_id) {
-        return layer.name.text(language);
-    }
-    if let Some(tool) = tools.get(item_id) {
-        return tool.name.text(language);
-    }
-    item_id
 }
 
 fn update_hotbar_item_visuals(
