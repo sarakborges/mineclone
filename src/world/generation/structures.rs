@@ -90,7 +90,7 @@ pub(super) fn rasterize_structures(
             .get(&candidate.structure_id)
             .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
         let minimum_y = candidate.origin_y + structure.min_y_offset();
-        let maximum_y = candidate.origin_y + structure.max_y_offset();
+        let maximum_y = candidate.origin_y + structure.effective_max_y_offset();
         maximum_y >= chunk_min_y && minimum_y <= chunk_max_y
     });
     if !intersects_section {
@@ -151,7 +151,7 @@ pub(super) fn rasterize_structures(
                 continue;
             }
             let minimum_y = candidate.origin_y + structure.min_y_offset();
-            let maximum_y = candidate.origin_y + structure.max_y_offset();
+            let maximum_y = candidate.origin_y + structure.effective_max_y_offset();
             if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
                 continue;
             }
@@ -442,7 +442,7 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
             let minimum = candidate.anchor + minimum_offset;
             let maximum = candidate.anchor + maximum_offset;
             rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum)
-                .then_some(candidate.origin_y + structure.max_y_offset())
+                .then_some(candidate.origin_y + structure.effective_max_y_offset())
         })
         .max()
         .unwrap_or(0)
@@ -907,6 +907,41 @@ fn rasterize_structure(
             false
         },
     );
+
+    if structure.clear_above == 0 {
+        return;
+    }
+
+    let chunk_size = CHUNK_SIZE as i32;
+    for span in structure.column_spans() {
+        let horizontal =
+            origin.xz() + rotation.rotate_horizontal(span.offset);
+        let local_x = horizontal.x - context.chunk_origin.x;
+        let local_z = horizontal.y - context.chunk_origin.z;
+        if local_x < 0 || local_z < 0 || local_x >= chunk_size || local_z >= chunk_size {
+            continue;
+        }
+
+        for delta_y in 1..=structure.clear_above as i32 {
+            let world_y = origin.y + span.max_y_offset + delta_y;
+            let local_y = world_y - context.chunk_origin.y;
+            if local_y < 0 || local_y >= chunk_size {
+                continue;
+            }
+
+            let local_x = local_x as usize;
+            let local_y = local_y as usize;
+            let local_z = local_z as usize;
+            let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+            if bit_get(claimed, index) {
+                continue;
+            }
+
+            chunk.clear_block(local_x, local_y, local_z);
+            chunk.clear_fluid(local_x, local_y, local_z);
+            bit_set(claimed, index);
+        }
+    }
 }
 
 pub(crate) fn surface_layer_placements(

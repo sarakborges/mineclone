@@ -183,6 +183,8 @@ pub struct StructureDefinition {
     pub anchor: StructureAnchor,
     #[serde(default)]
     pub ground_anchor_y: Option<i32>,
+    #[serde(default)]
+    pub clear_above: u32,
     pub palette: HashMap<String, StructurePaletteEntry>,
     pub layers: Vec<StructureLayer>,
     #[serde(skip)]
@@ -307,6 +309,10 @@ impl StructureDefinition {
 
     pub(crate) fn max_y_offset(&self) -> i32 {
         self.runtime.max_y_offset
+    }
+
+    pub(crate) fn effective_max_y_offset(&self) -> i32 {
+        self.runtime.max_y_offset + self.clear_above as i32
     }
 
     pub(crate) fn min_y_offset(&self) -> i32 {
@@ -522,6 +528,11 @@ impl StructureDefinition {
         assert!(
             !self.layers.is_empty(),
             "structure {} must define at least one layer",
+            self.id
+        );
+        assert!(
+            self.clear_above <= 64,
+            "structure {} clearAbove must be <= 64",
             self.id
         );
 

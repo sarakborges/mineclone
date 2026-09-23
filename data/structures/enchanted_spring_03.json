@@ -56,9 +56,6 @@
     },
     "W": {
       "fluid": "asteria:water"
-    },
-    "C": {
-      "clear": true
     }
   },
   "layers": [
@@ -197,108 +194,7 @@
         "....................SSSSSS...........",
         "....................................."
       ]
-    },
-    {
-      "y": 1,
-      "rows": [
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        "....................CCCCCCCCC........",
-        ".........CCCCCCCCCCCCCCCCCCCCCC......",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "........CCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "..........CCCCCCCCCCCCCCCCCCCC.......",
-        "............CCC.CCCCCCCCCCCCC........",
-        ".................CCCCCCCCCCC.........",
-        "..................CCCCCCCCC..........",
-        ".....................CCCC............",
-        ".....................................",
-        "....................................."
-      ]
-    },
-    {
-      "y": 2,
-      "rows": [
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        "....................CCCCCCCCC........",
-        ".........CCCCCCCCCCCCCCCCCCCCCC......",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "........CCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "..........CCCCCCCCCCCCCCCCCCCC.......",
-        "............CCC.CCCCCCCCCCCCC........",
-        ".................CCCCCCCCCCC.........",
-        "..................CCCCCCCCC..........",
-        ".....................CCCC............",
-        ".....................................",
-        "....................................."
-      ]
-    },
-    {
-      "y": 3,
-      "rows": [
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        ".....................................",
-        "....................CCCCCCCCC........",
-        ".........CCCCCCCCCCCCCCCCCCCCCC......",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCC.....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".....CCCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "......CCCCCCCCCCCCCCCCCCCCCCCCCCCC...",
-        ".......CCCCCCCCCCCCCCCCCCCCCCCCCC....",
-        "........CCCCCCCCCCCCCCCCCCCCCCCC.....",
-        "..........CCCCCCCCCCCCCCCCCCCC.......",
-        "............CCC.CCCCCCCCCCCCC........",
-        ".................CCCCCCCCCCC.........",
-        "..................CCCCCCCCC..........",
-        ".....................CCCC............",
-        ".....................................",
-        "....................................."
-      ]
     }
-  ]
+  ],
+  "clearAbove": 3
 }

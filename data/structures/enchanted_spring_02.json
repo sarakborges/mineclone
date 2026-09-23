@@ -56,9 +56,6 @@
     },
     "W": {
       "fluid": "asteria:water"
-    },
-    "C": {
-      "clear": true
     }
   },
   "layers": [
@@ -181,96 +178,7 @@
         "...............SSWWWWSSS.......",
         "................SSSSSS........."
       ]
-    },
-    {
-      "y": 1,
-      "rows": [
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        ".........CCCCCCCCCCCCCCCC......",
-        "......CCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
-        "....CCCCCCCCCCCCCCCCCCCCC......",
-        ".....CCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCC.....",
-        ".......CCCCCCCCCCCCCCCCCCC.....",
-        ".........CCCCCCCCCCCCCCCC......",
-        "..............CCCCCCCCCCC......",
-        "................CCCCCCC........",
-        ".................CCCC..........",
-        "..............................."
-      ]
-    },
-    {
-      "y": 2,
-      "rows": [
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        ".........CCCCCCCCCCCCCCCC......",
-        "......CCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
-        "....CCCCCCCCCCCCCCCCCCCCC......",
-        ".....CCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCC.....",
-        ".......CCCCCCCCCCCCCCCCCCC.....",
-        ".........CCCCCCCCCCCCCCCC......",
-        "..............CCCCCCCCCCC......",
-        "................CCCCCCC........",
-        ".................CCCC..........",
-        "..............................."
-      ]
-    },
-    {
-      "y": 3,
-      "rows": [
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        "...............................",
-        ".........CCCCCCCCCCCCCCCC......",
-        "......CCCCCCCCCCCCCCCCCCCCC....",
-        ".....CCCCCCCCCCCCCCCCCCCCCC....",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "....CCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCCC..",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCCC...",
-        "...CCCCCCCCCCCCCCCCCCCCCCCC....",
-        "...CCCCCCCCCCCCCCCCCCCCCCC.....",
-        "....CCCCCCCCCCCCCCCCCCCCC......",
-        ".....CCCCCCCCCCCCCCCCCCCCC.....",
-        "......CCCCCCCCCCCCCCCCCCCC.....",
-        ".......CCCCCCCCCCCCCCCCCCC.....",
-        ".........CCCCCCCCCCCCCCCC......",
-        "..............CCCCCCCCCCC......",
-        "................CCCCCCC........",
-        ".................CCCC..........",
-        "..............................."
-      ]
     }
-  ]
+  ],
+  "clearAbove": 3
 }
