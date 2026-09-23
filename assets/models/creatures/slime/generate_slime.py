@@ -181,16 +181,21 @@ materials = [
     material('SlimeCore', [.18,.70,.57], 1., 1.0),
     material('SlimeFace', [1.,1.,1.], 1., 1.0),
 ]
-# Keep the lower body broad for the face, then progressively carve the upper
-# corners away in short voxel-like tiers. The overall rest bounds stay identical
-# to the previous 0.96 x 0.90 x 0.96 shell, so animation scale and collider setup
-# remain stable while the top reads as a rounded pixel-art blob.
+# Pixel-art dome profile inspired by the approved slime reference. The shell
+# now tapers at BOTH ends: a slightly narrower contact footprint expands into
+# the widest lower-middle mass, then contracts through progressively smaller
+# upper tiers. Only the visual silhouette changes; face, core, materials,
+# animation, collider and gameplay dimensions remain untouched.
 shell_profile = [
-    ([.96, .62, .96], (0, -.14, 0)),
-    ([.92, .10, .92], (0, .22, 0)),
-    ([.82, .08, .82], (0, .31, 0)),
-    ([.68, .06, .68], (0, .38, 0)),
-    ([.48, .04, .48], (0, .43, 0)),
+    ([.82, .06, .82], (0, -.42, 0)),
+    ([.92, .08, .92], (0, -.35, 0)),
+    ([1.00, .11, 1.00], (0, -.255, 0)),
+    ([1.06, .14, 1.06], (0, -.13, 0)),
+    ([1.08, .18, 1.08], (0, .03, 0)),
+    ([1.04, .13, 1.04], (0, .185, 0)),
+    ([.94, .10, .94], (0, .30, 0)),
+    ([.78, .07, .78], (0, .385, 0)),
+    ([.54, .03, .54], (0, .435, 0)),
 ]
 shell = make_mesh('pixel_rounded_shell', shell_profile, 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
