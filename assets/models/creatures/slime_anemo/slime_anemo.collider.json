@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "id": "asteria:slime_air",
-  "asset": "slime_air.glb",
+  "id": "asteria:slime_anemo",
+  "asset": "slime_anemo.glb",
   "units": "meters",
   "world_up": "+Y",
   "forward": "-Z",
@@ -101,7 +101,7 @@
     "rule": "Body, wings and air details use fixed authored colors; SlimeFace is the only runtime texture override."
   },
   "authoring": {
-    "generator": "generate_slime_air.py",
+    "generator": "generate_slime_anemo.py",
     "base_model": "../slime_blob/slime_blob.glb",
     "voxel_resolution": [
       24,

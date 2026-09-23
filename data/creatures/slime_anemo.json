@@ -1,11 +1,11 @@
 {
-  "id": "asteria:slime_air",
+  "id": "asteria:slime_anemo",
   "name": {
-    "english": "Air Slime",
-    "portuguese_brazil": "Slime do Ar",
-    "spanish": "Slime de Aire"
+    "english": "Anemo Slime",
+    "portuguese_brazil": "Slime Anemo",
+    "spanish": "Slime Anemo"
   },
-  "model": "models/creatures/slime_air/slime_air.glb",
+  "model": "models/creatures/slime_anemo/slime_anemo.glb",
   "health": 8,
   "maxPerType": 4,
   "collider": {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Asteria's elemental Air Slime from the rounded slime blob base.
+"""Generate Asteria's elemental Anemo Slime from the rounded slime blob base.
 
 The body preserves the standard slime_blob shape/animations. All shell, wing and
 air-detail colors are fixed in the GLB. The only runtime texture override is
@@ -315,7 +315,7 @@ def node(name, mesh=None, children=None, translation=None, extras=None):
 
 
 root = node("SlimeRoot", children=[], extras={
-    "asteria_asset": "creature/slime_air",
+    "asteria_asset": "creature/slime_anemo",
     "unit": "meters",
     "forward": "-Z",
     "collider": {"shape": "aabb", "size": [.78, .84, .78], "offset": [0, .42, 0]},
@@ -370,9 +370,9 @@ tracks("Hurt", [0,.085,.15,.24,.38], [[1,1,1],[1.08,.90,1.08],[.95,1.06,.95],[1.
 tracks("Death", [0,.12,.31,.55,.75], [[1,1,1],[1.10,.84,1.10],[1.16,.65,1.16],[1.10,.20,1.10],[.001,.001,.001]], center=[BODY_HALF_HEIGHT,.42,.31,.10,.0005])
 
 scene = {
-    "asset": {"version": "2.0", "generator": "Asteria air slime v1"},
+    "asset": {"version": "2.0", "generator": "Asteria anemo slime v1"},
     "scene": 0,
-    "scenes": [{"name": "AirSlime", "nodes": [root]}],
+    "scenes": [{"name": "AnemoSlime", "nodes": [root]}],
     "extensionsUsed": ["KHR_materials_unlit"],
     "nodes": nodes,
     "meshes": meshes,
@@ -382,9 +382,9 @@ scene = {
     "accessors": accessors,
     "buffers": [{"byteLength": len(binary)}],
     "extras": {
-        "asset_id": "asteria:slime_air",
+        "asset_id": "asteria:slime_anemo",
         "color_materials": [material["name"] for material in materials],
-        "collision_source": "slime_air.collider.json",
+        "collision_source": "slime_anemo.collider.json",
         "voxel_resolution": [NX, NY, NZ],
         "occupied_voxels": len(voxels),
         "notes": "Air elemental derived from rounded blob: green-leaning turquoise base, near-white top, blocky feather wings and two air motes.",
@@ -399,5 +399,5 @@ glb = (
     + struct.pack("<I4s", len(json_chunk), b"JSON") + json_chunk
     + struct.pack("<I4s", len(bin_chunk), b"BIN\0") + bin_chunk
 )
-(OUT / "slime_air.glb").write_bytes(glb)
-print(f"Generated {OUT / 'slime_air.glb'}: {len(voxels)} body voxels")
+(OUT / "slime_anemo.glb").write_bytes(glb)
+print(f"Generated {OUT / 'slime_anemo.glb'}: {len(voxels)} body voxels")

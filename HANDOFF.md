@@ -13525,3 +13525,20 @@ Ele agora reproduz:
 - a hierarquia de nodes e os seis clips de animação.
 
 VERSION: `0.50.191`.
+
+
+## 2026-09-23 — Air Slime renomeado para Anemo Slime
+
+Somente a nomenclatura da variante elemental foi alterada. Visual, paleta, asas, partículas, stats e comportamento continuam exatamente iguais.
+
+Nome/id autoritativos agora:
+- id: `asteria:slime_anemo`;
+- nome: `Anemo Slime` / `Slime Anemo`;
+- definition: `data/creatures/slime_anemo.json`;
+- modelo: `assets/models/creatures/slime_anemo/slime_anemo.glb`;
+- gerador: `assets/models/creatures/slime_anemo/generate_slime_anemo.py`;
+- collider metadata: `assets/models/creatures/slime_anemo/slime_anemo.collider.json`.
+
+Os caminhos/definition antigos `slime_air` foram removidos.
+
+VERSION: `0.50.192`.
