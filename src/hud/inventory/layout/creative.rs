@@ -35,6 +35,16 @@ use super::{
 };
 
 #[derive(Clone, Copy)]
+struct CreativeCatalogSources<'a> {
+    items: &'a ItemRegistry,
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    tools: &'a ToolRegistry,
+    categories: &'a InventoryCategoryRegistry,
+    language: Language,
+}
+
+#[derive(Clone, Copy)]
 enum CreativeCatalogItem<'a> {
     Item(&'a ItemDefinition),
     Block(&'a BlockDefinition),
@@ -345,14 +355,16 @@ pub(in crate::hud::inventory) fn spawn_creative_catalog_rows(
     items: &mut InventoryItemView<'_>,
 ) {
     let catalog = filtered_creative_catalog(
-        items.items,
-        items.blocks,
-        items.layers,
-        items.tools,
-        categories,
+        CreativeCatalogSources {
+            items: items.items,
+            blocks: items.blocks,
+            layers: items.layers,
+            tools: items.tools,
+            categories,
+            language: items.language,
+        },
         creative_view.search_query(),
         creative_view.selected_category(),
-        items.language,
     );
     spawn_creative_grid(parent, &catalog, selected_item, items);
 }
@@ -420,29 +432,31 @@ fn spawn_creative_slot(
 }
 
 fn filtered_creative_catalog<'a>(
-    items: &'a ItemRegistry,
-    blocks: &'a BlockRegistry,
-    layers: &'a LayerRegistry,
-    tools: &'a ToolRegistry,
-    categories: &InventoryCategoryRegistry,
+    sources: CreativeCatalogSources<'a>,
     query: &str,
     category: Option<&str>,
-    language: Language,
 ) -> Vec<CreativeCatalogItem<'a>> {
     let query = query.trim().to_lowercase();
-    let mut catalog = items
+    let mut catalog = sources
+        .items
         .iter()
         .map(CreativeCatalogItem::Item)
-        .chain(blocks.iter().map(CreativeCatalogItem::Block))
-        .chain(layers.iter().map(CreativeCatalogItem::Layer))
-        .chain(tools.iter().map(CreativeCatalogItem::Tool))
+        .chain(sources.blocks.iter().map(CreativeCatalogItem::Block))
+        .chain(sources.layers.iter().map(CreativeCatalogItem::Layer))
+        .chain(sources.tools.iter().map(CreativeCatalogItem::Tool))
         .filter(|item| category.is_none_or(|category| item.category() == category))
-        .filter(|item| query.is_empty() || item.name(language).to_lowercase().contains(&query))
+        .filter(|item| {
+            query.is_empty()
+                || item
+                    .name(sources.language)
+                    .to_lowercase()
+                    .contains(&query)
+        })
         .collect::<Vec<_>>();
 
     catalog.sort_by(|left, right| {
-        category_order(categories, left.category())
-            .cmp(&category_order(categories, right.category()))
+        category_order(sources.categories, left.category())
+            .cmp(&category_order(sources.categories, right.category()))
             .then_with(|| left.id().cmp(right.id()))
     });
     catalog
