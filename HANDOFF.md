@@ -335,7 +335,7 @@ do jogador. Tint de biome, material de block, layer icon e tool icon passam a
 ter um único owner, reduzindo risco de divergência visual entre os painéis.
 VERSION: `0.50.147`.
 
-CI de Q29: pendente neste checkpoint.
+CI de Q29: **verde** no run `35875079940` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
