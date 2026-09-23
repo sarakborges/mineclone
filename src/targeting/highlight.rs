@@ -19,7 +19,7 @@ use crate::{
     player::camera::GameplayCamera,
     tools::BrushMode,
     voxel::{
-        log_state::is_hollow,
+        log_variant::is_hollow_log_id,
         microblock::{
             MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
         },
@@ -231,7 +231,7 @@ fn update_highlight(
         let Some(precise) = precise.filter(|precise| {
             precise.voxel == hit.voxel
                 && content.blocks.get(precise.block_id).is_some_and(|block| block.can_fragment())
-                && input.scene.world().cell_at(precise.voxel).is_some_and(|cell| !is_hollow(cell))
+                && input.scene.world().cell_at(precise.voxel).is_some_and(|cell| !is_hollow_log_id(cell.block_id))
         }) else {
             hide_if_visible(&mut view.highlight.1);
             hide_if_visible(&mut view.artisans_kit_placement.1);
