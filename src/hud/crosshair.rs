@@ -10,7 +10,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         builtin_ids::{
-            BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID, SHEARS_TOOL_ID,
+            BRUSH_TOOL_ID, ARTISANS_KIT_TOOL_ID, DYED_PROPERTY_ID, SHEARS_TOOL_ID,
             STRUCTURE_TOOL_ID,
         },
         secondary_property::SecondaryPropertyRegistry,
@@ -24,7 +24,7 @@ use crate::{
     targeting::block::{TargetedBlock, TargetedCreature},
     tools::BrushMode,
     ui::{theme, typography, visibility::set_visibility},
-    voxel::microblock::ChiselResolution,
+    voxel::microblock::ArtisansKitResolution,
 };
 
 use super::{HintKind, HudSettings};
@@ -81,7 +81,7 @@ struct ActionHintRuntime<'w> {
     targeted: Res<'w, TargetedBlock>,
     targeted_creature: Res<'w, TargetedCreature>,
     brush_mode: Res<'w, BrushMode>,
-    chisel_resolution: Res<'w, ChiselResolution>,
+    artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
     keybinds: Res<'w, Keybinds>,
 }
 
@@ -169,7 +169,7 @@ fn update_action_hint(
         && !runtime.targeted.is_changed()
         && !runtime.targeted_creature.is_changed()
         && !runtime.brush_mode.is_changed()
-        && !runtime.chisel_resolution.is_changed()
+        && !runtime.artisans_kit_resolution.is_changed()
         && !runtime.keybinds.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
@@ -186,19 +186,19 @@ fn update_action_hint(
 
     let next_text = if runtime.targeted_creature.0.is_some() {
         None
-    } else if selected_item == Some(CHISEL_TOOL_ID) {
-        if !runtime.settings.hint_enabled(HintKind::Chisel) {
+    } else if selected_item == Some(ARTISANS_KIT_TOOL_ID) {
+        if !runtime.settings.hint_enabled(HintKind::ArtisansKit) {
             None
         } else {
-            let precision_key = match *runtime.chisel_resolution {
-                ChiselResolution::Thick => "chisel.precision.thick",
-                ChiselResolution::Thin => "chisel.precision.thin",
-                ChiselResolution::ExtraThin => "chisel.precision.extraThin",
+            let precision_key = match *runtime.artisans_kit_resolution {
+                ArtisansKitResolution::Thick => "artisansKit.precision.thick",
+                ArtisansKitResolution::Thin => "artisansKit.precision.thin",
+                ArtisansKitResolution::ExtraThin => "artisansKit.precision.extraThin",
             };
             Some(
                 content
                     .localization
-                    .text(language, "hud.chisel")
+                    .text(language, "hud.artisansKit")
                     .replace(
                         "{precision}",
                         content.localization.text(language, precision_key),
