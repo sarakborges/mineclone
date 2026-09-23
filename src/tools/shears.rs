@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        builtin_ids::SHEARS_TOOL_ID,
         layer::LayerFace,
+        tool_behavior::LAYER_REMOVE_BEHAVIOR_ID,
     },
     gameplay::availability::world_interaction_available,
     player::viewmodel::ViewModelAnimation,
-    targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
+    targeting::{ToolUse, block::BlockTargetingSet},
     voxel::edit::VoxelTopologyRuntime,
 };
 
@@ -30,7 +30,7 @@ fn handle_shears_use(
     mut viewmodel: ResMut<ViewModelAnimation>,
 ) {
     for usage in uses.read() {
-        if usage.tool_id != SHEARS_TOOL_ID || usage.button != ToolUseButton::Right {
+        if usage.behavior_id != LAYER_REMOVE_BEHAVIOR_ID {
             continue;
         }
         let Some(hit) = usage.target else {

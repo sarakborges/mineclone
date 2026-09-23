@@ -6,10 +6,11 @@ use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::DYED_PROPERTY_ID,
+        tool_behavior::{BRUSH_PAINT_BEHAVIOR_ID, BRUSH_PALETTE_BEHAVIOR_ID},
     },
     gameplay::{availability::world_interaction_available, modal::GameplayModalState},
-    targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
+    targeting::{ToolUse, block::BlockTargetingSet},
     voxel::edit::VoxelMutationRuntime,
 };
 
@@ -79,13 +80,13 @@ fn handle_brush_use(
     mut next_modal: ResMut<NextState<GameplayModalState>>,
 ) {
     for usage in uses.read() {
-        if usage.tool_id != BRUSH_TOOL_ID {
-            continue;
-        }
-
-        if usage.button == ToolUseButton::Right {
-            next_modal.set(GameplayModalState::BrushPalette);
-            continue;
+        match usage.behavior_id.as_str() {
+            BRUSH_PALETTE_BEHAVIOR_ID => {
+                next_modal.set(GameplayModalState::BrushPalette);
+                continue;
+            }
+            BRUSH_PAINT_BEHAVIOR_ID => {}
+            _ => continue,
         }
 
         let Some(hit) = usage.target else {

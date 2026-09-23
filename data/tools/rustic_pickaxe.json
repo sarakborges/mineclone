@@ -1,5 +1,5 @@
 {
-  "id": "asteria:rustic_pickaxe",
+  "id": "asteria:pickaxe_rustic",
   "name": {
     "english": "Rustic Pickaxe",
     "portuguese_brazil": "Picareta Rústica",
@@ -12,6 +12,8 @@
   },
   "category": "tools",
   "icon": "textures/tools/pickaxe-rustic.png",
+  "leftBehavior": "asteria:mine",
+  "rightBehavior": "asteria:none",
   "mining": {
     "category": "pickaxe",
     "speed": 1.5

@@ -7,10 +7,11 @@ use bevy::{
 
 use crate::{
     content::{
-        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::DYED_PROPERTY_ID,
         item::ItemRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
+        tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
     player::hotbar::PlayerHotbar,
     tools::BrushMode,
@@ -74,7 +75,7 @@ impl HeldSpriteContent<'_> {
             return None;
         }
 
-        let tint = if item_id == BRUSH_TOOL_ID {
+        let tint = if tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID) {
             self.brush_mode
                 .dye_id()
                 .and_then(|dye| self.properties.get(DYED_PROPERTY_ID, dye))

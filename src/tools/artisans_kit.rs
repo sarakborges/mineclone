@@ -5,7 +5,13 @@ use bevy::prelude::*;
 
 use crate::{
     app::keybinds::{KeybindAction, Keybinds},
-    content::{block::BlockRegistry, builtin_ids::ARTISANS_KIT_TOOL_ID},
+    content::{
+        block::BlockRegistry,
+        tool::ToolRegistry,
+        tool_behavior::{
+            ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
+        },
+    },
     gameplay::availability::world_interaction_available,
     player::{
         PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT,
@@ -13,7 +19,7 @@ use crate::{
         hotbar::PlayerHotbar,
         viewmodel::ViewModelAnimation,
     },
-    targeting::{ToolUse, ToolUseButton, block::{BlockTargetingSet, TargetedBlock}},
+    targeting::{ToolUse, block::{BlockTargetingSet, TargetedBlock}},
     voxel::{
         edit::VoxelMutationRuntime,
         log_variant::is_hollow_log_id,
@@ -40,10 +46,19 @@ fn cycle_artisans_kit_resolution(
     keys: Res<ButtonInput<KeyCode>>,
     keybinds: Res<Keybinds>,
     hotbar: Res<PlayerHotbar>,
+    tools: Res<ToolRegistry>,
     mut resolution: ResMut<ArtisansKitResolution>,
 ) {
+    let selected_uses_artisans_kit = hotbar
+        .item_at(hotbar.selected_slot())
+        .and_then(|item_id| tools.get(item_id))
+        .is_some_and(|tool| {
+            tool.uses_behavior(ARTISANS_KIT_REMOVE_BEHAVIOR_ID)
+                || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
+        });
+
     if keys.just_pressed(keybinds.key_code(KeybindAction::ToolAction))
-        && hotbar.item_at(hotbar.selected_slot()) == Some(ARTISANS_KIT_TOOL_ID)
+        && selected_uses_artisans_kit
     {
         *resolution = resolution.next();
     }
@@ -59,7 +74,12 @@ fn handle_artisans_kit_use(
     mut viewmodel: ResMut<ViewModelAnimation>,
 ) {
     for usage in uses.read() {
-        if usage.tool_id != ARTISANS_KIT_TOOL_ID || usage.target.is_none() {
+        let placing = match usage.behavior_id.as_str() {
+            ARTISANS_KIT_REMOVE_BEHAVIOR_ID => false,
+            ARTISANS_KIT_RESTORE_BEHAVIOR_ID => true,
+            _ => continue,
+        };
+        if usage.target.is_none() {
             continue;
         }
 
@@ -84,16 +104,18 @@ fn handle_artisans_kit_use(
             continue;
         }
 
-        let fine = match usage.button {
-            ToolUseButton::Left => hit.fine,
-            ToolUseButton::Right if hit.normal != IVec3::ZERO => hit.fine + hit.normal,
-            ToolUseButton::Right => continue,
+        let fine = if placing {
+            if hit.normal == IVec3::ZERO {
+                continue;
+            }
+            hit.fine + hit.normal
+        } else {
+            hit.fine
         };
         let voxel = parent_voxel(fine);
         if voxel.y < 0 || !runtime.world().is_loaded_at(voxel) {
             continue;
         }
-        let placing = usage.button == ToolUseButton::Right;
         let Some(source) = runtime.cell_at(voxel) else {
             // The Artisan's Kit can restore a removed piece, never create a new parent
             // block in air (including at a neighboring macroblock boundary).

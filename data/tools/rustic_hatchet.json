@@ -1,5 +1,5 @@
 {
-  "id": "asteria:rustic_hatchet",
+  "id": "asteria:hatchet_rustic",
   "name": {
     "english": "Rustic Hatchet",
     "portuguese_brazil": "Machadinha Rústica",
@@ -12,6 +12,8 @@
   },
   "category": "tools",
   "icon": "textures/tools/hatchet-rustic.png",
+  "leftBehavior": "asteria:mine",
+  "rightBehavior": "asteria:none",
   "mining": {
     "category": "hatchet",
     "speed": 1.5

@@ -7,6 +7,7 @@ use super::{
     asset_path::is_safe_relative_asset_path,
     inventory_category::InventoryCategoryRegistry,
     registry::DefinitionMap,
+    tool_behavior::is_known_tool_behavior,
     tool_category::ToolCategoryRegistry,
     tool_id::intern_tool_id,
 };
@@ -70,11 +71,17 @@ pub struct ToolDefinition {
     pub icon: String,
     #[serde(default)]
     pub tint_icon: Option<String>,
+    pub left_behavior: String,
+    pub right_behavior: String,
     #[serde(default)]
     pub mining: ToolMiningDefinition,
 }
 
 impl ToolDefinition {
+    pub fn uses_behavior(&self, behavior_id: &str) -> bool {
+        self.left_behavior == behavior_id || self.right_behavior == behavior_id
+    }
+
     pub(crate) fn validate_references(
         &self,
         inventory_categories: &InventoryCategoryRegistry,
@@ -111,6 +118,8 @@ impl ToolRegistry {
             .tint_icon
             .map(|path| path.trim().to_owned())
             .filter(|path| !path.is_empty());
+        definition.left_behavior = definition.left_behavior.trim().to_owned();
+        definition.right_behavior = definition.right_behavior.trim().to_owned();
         definition.mining.category = definition
             .mining
             .category
@@ -136,6 +145,18 @@ impl ToolRegistry {
                 is_safe_relative_asset_path(tint_icon),
                 "tool {} tintIcon must be a safe relative asset path: {tint_icon}",
                 definition.id
+            );
+        }
+        for (field, behavior) in [
+            ("leftBehavior", definition.left_behavior.as_str()),
+            ("rightBehavior", definition.right_behavior.as_str()),
+        ] {
+            assert!(
+                is_known_tool_behavior(behavior),
+                "tool {} references unknown {} ID: {}",
+                definition.id,
+                field,
+                behavior
             );
         }
         definition
@@ -180,6 +201,8 @@ mod tests {
             category: "tools".to_owned(),
             icon: String::new(),
             tint_icon: None,
+            left_behavior: "asteria:none".to_owned(),
+            right_behavior: "asteria:none".to_owned(),
             mining: ToolMiningDefinition::default(),
         });
 

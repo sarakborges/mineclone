@@ -1,5 +1,5 @@
 {
-  "id": "asteria:structure_tool",
+  "id": "asteria:structure_tool_rustic",
   "name": {
     "english": "Structure Tool",
     "portuguese_brazil": "Ferramenta de Estrutura",
@@ -11,5 +11,7 @@
     "spanish": "Selecciona regiones para exportarlas como estructuras."
   },
   "category": "tools",
-  "icon": ""
+  "icon": "",
+  "leftBehavior": "asteria:none",
+  "rightBehavior": "asteria:structure/select"
 }

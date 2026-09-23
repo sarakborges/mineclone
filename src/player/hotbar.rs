@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::{
     content::{
         block::BlockRegistry, block_id::intern_block_id,
-        item::{ItemRegistry, canonical_inventory_item_id}, item_id::intern_item_id,
+        item::ItemRegistry, item_id::intern_item_id,
         layer::LayerRegistry, layer_id::intern_layer_id, tool::ToolRegistry,
         tool_id::intern_tool_id,
     },
@@ -115,15 +115,14 @@ impl PlayerHotbar {
             let resolved = match item {
                 None => None,
                 Some(id) => {
-                    let canonical = canonical_inventory_item_id(id);
-                    if items.get(canonical).is_some() {
-                        Some(intern_item_id(canonical))
-                    } else if blocks.get(canonical).is_some() {
-                        Some(intern_block_id(canonical))
-                    } else if layers.get(canonical).is_some() {
-                        Some(intern_layer_id(canonical))
-                    } else if tools.get(canonical).is_some() {
-                        Some(intern_tool_id(canonical))
+                    if items.get(id).is_some() {
+                        Some(intern_item_id(id))
+                    } else if blocks.get(id).is_some() {
+                        Some(intern_block_id(id))
+                    } else if layers.get(id).is_some() {
+                        Some(intern_layer_id(id))
+                    } else if tools.get(id).is_some() {
+                        Some(intern_tool_id(id))
                     } else {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,

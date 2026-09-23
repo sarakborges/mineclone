@@ -4,6 +4,7 @@ use crate::{
     content::{
         block::{BlockDefinition, BlockRegistry, DEFAULT_BLOCK_BREAK_TICKS},
         tool::{ToolDefinition, ToolRegistry},
+        tool_behavior::MINE_TOOL_BEHAVIOR_ID,
     },
     gameplay::availability::world_interaction_available,
     player::{
@@ -105,9 +106,9 @@ fn advance_survival_mining(
     let selected_item = hotbar.item_at(hotbar.selected_slot());
     let selected_tool = selected_item.and_then(|item_id| tools.get(item_id));
 
-    // Tools without mining tags own their left-click action (brush, artisan's kit, etc.)
-    // and must not also mine the underlying block.
-    if selected_tool.is_some_and(|tool| !tool.mining.is_mining_tool()) {
+    // The left-click behavior owns dispatch. Only tools explicitly configured
+    // with the mining behavior may participate in the mining loop.
+    if selected_tool.is_some_and(|tool| tool.left_behavior != MINE_TOOL_BEHAVIOR_ID) {
         mining.reset();
         return;
     }

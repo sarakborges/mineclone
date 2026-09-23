@@ -1,11 +1,14 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{block::BlockRegistry, builtin_ids::CARPENTERS_AXE_TOOL_ID},
+    content::{
+        block::BlockRegistry,
+        tool_behavior::{LOG_HOLLOW_BEHAVIOR_ID, LOG_STRIP_BEHAVIOR_ID},
+    },
     gameplay::availability::world_interaction_available,
     player::viewmodel::ViewModelAnimation,
     targeting::{
-        ToolUse, ToolUseButton,
+        ToolUse,
         block::{BlockTargetingSet, TargetedBlock},
     },
     voxel::{
@@ -36,7 +39,8 @@ fn handle_carpenters_axe_use(
     mut viewmodel: ResMut<ViewModelAnimation>,
 ) {
     for usage in uses.read() {
-        if usage.tool_id != CARPENTERS_AXE_TOOL_ID {
+        let behavior = usage.behavior_id.as_str();
+        if !matches!(behavior, LOG_HOLLOW_BEHAVIOR_ID | LOG_STRIP_BEHAVIOR_ID) {
             continue;
         }
         let Some(hit) = usage.target else {
@@ -52,8 +56,8 @@ fn handle_carpenters_axe_use(
             continue;
         };
 
-        let target = match usage.button {
-            ToolUseButton::Left => {
+        let target = match behavior {
+            LOG_HOLLOW_BEHAVIOR_ID => {
                 if MicroblockMask::is_modified(cell) {
                     continue;
                 }
@@ -63,11 +67,12 @@ fn handle_carpenters_axe_use(
                     LogVariant::Hollow | LogVariant::StrippedHollow => continue,
                 }
             }
-            ToolUseButton::Right => match current {
+            LOG_STRIP_BEHAVIOR_ID => match current {
                 LogVariant::Natural => LogVariant::Stripped,
                 LogVariant::Hollow => LogVariant::StrippedHollow,
                 LogVariant::Stripped | LogVariant::StrippedHollow => continue,
             },
+            _ => continue,
         };
         let Some(target_id) = transformed_log_id(cell.block_id, target, &blocks) else {
             continue;

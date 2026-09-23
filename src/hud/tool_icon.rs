@@ -2,9 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::DYED_PROPERTY_ID,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolDefinition,
+        tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
     localization::Language,
     tools::BrushMode,
@@ -64,7 +65,7 @@ pub(crate) fn spawn_tool_icon(
                 Pickable::IGNORE,
             ));
 
-            if tool.id == BRUSH_TOOL_ID
+            if tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID)
                 && let Some(tint_icon) = &tool.tint_icon
             {
                 let tint = selected_brush_tint(mode, properties);

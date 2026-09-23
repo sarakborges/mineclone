@@ -78,18 +78,6 @@ impl ItemRegistry {
     }
 }
 
-/// Old IDs stay readable so existing inventories migrate to the renamed items
-/// the next time the world is saved.
-pub(crate) fn canonical_inventory_item_id(id: &str) -> &str {
-    match id {
-        "asteria:chisel" => ARTISANS_KIT_TOOL_ID,
-        "asteria:stone_pickaxe" => "asteria:rustic_pickaxe",
-        "asteria:stone_hatchet" => "asteria:rustic_hatchet",
-        "asteria:stone_shovel" => "asteria:rustic_shovel",
-        _ => id,
-    }
-}
-
 pub(crate) fn display_name<'a>(
     item_id: &'a str,
     items: &'a ItemRegistry,

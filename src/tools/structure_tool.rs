@@ -6,11 +6,15 @@ use serde::Serialize;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::{block_orientation::BlockOrientation, builtin_ids::STRUCTURE_TOOL_ID},
+    content::{
+        block_orientation::BlockOrientation,
+        tool::ToolRegistry,
+        tool_behavior::STRUCTURE_SELECT_BEHAVIOR_ID,
+    },
     gameplay::availability::world_interaction_available,
     hud::chat::ChatState,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    targeting::{ToolUse, ToolUseButton, block::{BlockTargetingSet, TargetedBlock}, placement_voxel},
+    targeting::{ToolUse, block::{BlockTargetingSet, TargetedBlock}, placement_voxel},
     voxel::world::VoxelWorld,
 };
 
@@ -104,15 +108,19 @@ impl Plugin for StructureToolPlugin {
 
 fn clear_selection_on_hotbar_change(
     hotbar: Res<PlayerHotbar>,
+    tools: Res<ToolRegistry>,
     mut selection: ResMut<StructureSelection>,
     mut chat: ResMut<ChatState>,
 ) {
     let Some(slot) = selection.slot else {
         return;
     };
-    if hotbar.selected_slot() == slot
-        && hotbar.item_at(slot) == Some(STRUCTURE_TOOL_ID)
-    {
+    let still_using_structure_behavior = hotbar.selected_slot() == slot
+        && hotbar
+            .item_at(slot)
+            .and_then(|item_id| tools.get(item_id))
+            .is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID));
+    if still_using_structure_behavior {
         return;
     }
 
@@ -129,7 +137,7 @@ fn handle_structure_tool_use(
     mut chat: ResMut<ChatState>,
 ) {
     for usage in uses.read() {
-        if usage.tool_id != STRUCTURE_TOOL_ID || usage.button != ToolUseButton::Right {
+        if usage.behavior_id != STRUCTURE_SELECT_BEHAVIOR_ID {
             continue;
         }
         let Some(hit) = usage.target else {

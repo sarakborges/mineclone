@@ -13667,3 +13667,31 @@ ajustados para a variante Rustic:
 - Español: `Hacha de Carpintero Rústica`
 
 VERSION: `0.50.198`.
+
+
+## 2026-09-23 — Tool variants desacopladas de behaviors
+
+Tools concretas agora são apenas dados de item. Todos os IDs atuais usam o
+sufixo de variante `_rustic` (por exemplo
+`asteria:carpenters_axe_rustic`, `asteria:pickaxe_rustic` e
+`asteria:artisans_kit_rustic`).
+
+`ToolDefinition` passou a exigir `leftBehavior` e `rightBehavior`. O
+dispatcher não envia mais o ID da tool nem decide comportamento por identidade:
+ele resolve o behavior configurado no JSON e publica `ToolUse { behavior_id,
+target }`. Os sistemas especializados filtram behavior IDs, permitindo que
+qualquer variante futura reutilize a mesma função sem novo código.
+
+Behaviors built-in atuais incluem mineração, no-op, sculpt/restore do Artisan's
+Kit, paint/palette do Brush, hollow/strip de logs, remoção de layer e seleção de
+structure. Mining também é escolhido explicitamente por
+`leftBehavior: "asteria:mine"`, em vez de ser inferido do ID da tool.
+
+Tint do Brush, ciclo de resolução do Artisan's Kit e persistência de seleção da
+Structure Tool também detectam capabilities pelos behaviors configurados, não
+por IDs de items.
+
+Não há aliases/migração de IDs antigos no carregamento de inventory: saves
+antigos com IDs removidos são considerados incompatíveis.
+
+VERSION: `0.50.199`.

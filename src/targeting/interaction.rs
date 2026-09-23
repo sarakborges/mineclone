@@ -3,7 +3,9 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::{
         attack::AttackRegistry, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
-        player::PlayerDefinition, tool::ToolRegistry,
+        player::PlayerDefinition,
+        tool::ToolRegistry,
+        tool_behavior::{MINE_TOOL_BEHAVIOR_ID, NONE_TOOL_BEHAVIOR_ID},
     },
     creatures::CreatureAttackRuntime,
     gameplay::availability::world_interaction_available,
@@ -20,16 +22,9 @@ use super::{
     placement_orientation::PlacementOrientation,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolUseButton {
-    Left,
-    Right,
-}
-
-#[derive(Message, Clone, Copy)]
+#[derive(Message, Clone)]
 pub(crate) struct ToolUse {
-    pub tool_id: &'static str,
-    pub button: ToolUseButton,
+    pub behavior_id: String,
     pub target: Option<VoxelHit>,
 }
 
@@ -119,7 +114,7 @@ fn edit_targeted_block(
     if left_pressed && input.creature_target.0.is_none() && input.targeted.0.is_none() {
         let mining_tool = selected_item
             .and_then(|item_id| definitions.tools.get(item_id))
-            .is_some_and(|tool| tool.mining.is_mining_tool());
+            .is_some_and(|tool| tool.left_behavior == MINE_TOOL_BEHAVIOR_ID);
         if mining_tool {
             viewmodel_animation.play_break();
         } else {
@@ -191,30 +186,33 @@ fn dispatch_selected_tool(
     tools: &ToolRegistry,
     tool_uses: &mut MessageWriter<'_, ToolUse>,
 ) -> bool {
-    let Some(tool_id) = selected_item else {
+    let Some(tool) = selected_item.and_then(|tool_id| tools.get(tool_id)) else {
         return false;
     };
-    let Some(tool) = tools.get(tool_id) else {
-        return false;
-    };
-    let is_mining_tool = tool.mining.is_mining_tool();
 
-    if left_pressed && !is_mining_tool {
-        tool_uses.write(ToolUse {
-            tool_id,
-            button: ToolUseButton::Left,
-            target,
-        });
+    let mut consumed = false;
+
+    if left_pressed && tool.left_behavior != MINE_TOOL_BEHAVIOR_ID {
+        consumed = true;
+        if tool.left_behavior != NONE_TOOL_BEHAVIOR_ID {
+            tool_uses.write(ToolUse {
+                behavior_id: tool.left_behavior.clone(),
+                target,
+            });
+        }
     }
+
     if right_pressed {
-        tool_uses.write(ToolUse {
-            tool_id,
-            button: ToolUseButton::Right,
-            target,
-        });
+        consumed = true;
+        if tool.right_behavior != NONE_TOOL_BEHAVIOR_ID {
+            tool_uses.write(ToolUse {
+                behavior_id: tool.right_behavior.clone(),
+                target,
+            });
+        }
     }
 
-    right_pressed || (left_pressed && !is_mining_tool)
+    consumed
 }
 
 fn edit_targeted_voxel(

@@ -1,5 +1,5 @@
 {
-  "id": "asteria:rustic_shovel",
+  "id": "asteria:shovel_rustic",
   "name": {
     "english": "Rustic Shovel",
     "portuguese_brazil": "Pá Rústica",
@@ -12,6 +12,8 @@
   },
   "category": "tools",
   "icon": "textures/tools/shovel-rustic.png",
+  "leftBehavior": "asteria:mine",
+  "rightBehavior": "asteria:none",
   "mining": {
     "category": "shovel",
     "speed": 1.5

@@ -1,5 +1,5 @@
 {
-  "id": "asteria:artisans_kit",
+  "id": "asteria:artisans_kit_rustic",
   "name": {
     "english": "Artisan's Kit",
     "portuguese_brazil": "Kit de Artesão",
@@ -11,5 +11,7 @@
     "spanish": "Esculpe bloques fragmentables."
   },
   "category": "tools",
-  "icon": "textures/tools/artisans-kit.png"
+  "icon": "textures/tools/artisans-kit.png",
+  "leftBehavior": "asteria:artisans_kit/remove",
+  "rightBehavior": "asteria:artisans_kit/restore"
 }
