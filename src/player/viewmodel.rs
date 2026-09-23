@@ -5,20 +5,14 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
-    content::{
-        item::ItemRegistry,
-        secondary_property::SecondaryPropertyRegistry,
-        tool::ToolRegistry,
-    },
     player::{
         camera::CameraPerspective,
         held_sprite::{
-            HeldSpriteMesh, setup_held_sprite_mesh, spawn_held_sprite, sync_held_sprites,
+            HeldSpriteAssets, HeldSpriteContent, setup_held_sprite_mesh, spawn_held_sprite,
+            sync_held_sprites,
         },
-        hotbar::PlayerHotbar,
     },
     targeting::block::BlockTargetingSet,
-    tools::BrushMode,
 };
 
 pub(crate) use animation::ViewModelAnimation;
@@ -93,14 +87,8 @@ fn sync_viewmodel_visibility(
 fn spawn_first_person_held_sprite(
     mut commands: Commands,
     viewmodels: Query<Entity, Added<PlayerViewModel>>,
-    hotbar: Res<PlayerHotbar>,
-    items: Res<ItemRegistry>,
-    tools: Res<ToolRegistry>,
-    brush_mode: Res<BrushMode>,
-    properties: Res<SecondaryPropertyRegistry>,
-    asset_server: Res<AssetServer>,
-    mesh: Res<HeldSpriteMesh>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    content: HeldSpriteContent,
+    mut assets: HeldSpriteAssets,
 ) {
     let rotation = animation::base_viewmodel_transform().rotation.inverse();
     let root_transform =
@@ -113,14 +101,8 @@ fn spawn_first_person_held_sprite(
                 hand,
                 root_transform,
                 bevy::camera::visibility::RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                &hotbar,
-                &items,
-                &tools,
-                &brush_mode,
-                &properties,
-                &asset_server,
-                &mesh.0,
-                &mut materials,
+                &content,
+                &mut assets,
             );
         });
     }

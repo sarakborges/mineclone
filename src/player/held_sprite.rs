@@ -1,5 +1,6 @@
 use bevy::{
     camera::visibility::RenderLayers,
+    ecs::system::SystemParam,
     light::NotShadowCaster,
     prelude::*,
 };
@@ -40,10 +41,94 @@ pub(crate) struct HeldSpriteMesh(pub(crate) Handle<Mesh>);
 pub(crate) struct HeldSpriteRoot;
 
 #[derive(Component)]
-pub(crate) struct HeldSpriteBase;
+struct HeldSpriteBase;
 
 #[derive(Component)]
-pub(crate) struct HeldSpriteTint;
+struct HeldSpriteTint;
+
+#[derive(SystemParam)]
+pub(crate) struct HeldSpriteContent<'w> {
+    hotbar: Res<'w, PlayerHotbar>,
+    items: Res<'w, ItemRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    brush_mode: Res<'w, BrushMode>,
+    properties: Res<'w, SecondaryPropertyRegistry>,
+    asset_server: Res<'w, AssetServer>,
+}
+
+impl HeldSpriteContent<'_> {
+    fn selected_visual(&self) -> Option<HeldSpriteVisual<'_>> {
+        let item_id = self.hotbar.item_at(self.hotbar.selected_slot())?;
+
+        if let Some(item) = self.items.get(item_id) {
+            return Some(HeldSpriteVisual {
+                icon: &item.icon,
+                tint_icon: None,
+                tint: None,
+                kind: HeldSpriteKind::Item,
+            });
+        }
+
+        let tool = self.tools.get(item_id)?;
+        if tool.icon.is_empty() {
+            return None;
+        }
+
+        let tint = if item_id == BRUSH_TOOL_ID {
+            self.brush_mode
+                .dye_id()
+                .and_then(|dye| self.properties.get(DYED_PROPERTY_ID, dye))
+                .map(|definition| definition.color.to_color())
+        } else {
+            None
+        };
+
+        Some(HeldSpriteVisual {
+            icon: &tool.icon,
+            tint_icon: tool.tint_icon.as_deref(),
+            tint,
+            kind: HeldSpriteKind::Tool,
+        })
+    }
+
+    fn inputs_changed(&self) -> bool {
+        self.hotbar.is_changed()
+            || self.brush_mode.is_changed()
+            || self.properties.is_changed()
+    }
+}
+
+#[derive(SystemParam)]
+pub(crate) struct HeldSpriteAssets<'w> {
+    mesh: Res<'w, HeldSpriteMesh>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+type HeldSpriteBaseQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static MeshMaterial3d<StandardMaterial>, &'static mut Transform),
+    (With<HeldSpriteBase>, Without<HeldSpriteTint>),
+>;
+
+type HeldSpriteTintQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static MeshMaterial3d<StandardMaterial>,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (With<HeldSpriteTint>, Without<HeldSpriteBase>),
+>;
+
+#[derive(SystemParam)]
+struct HeldSpriteSyncView<'w, 's> {
+    roots: Query<'w, 's, &'static mut Visibility, With<HeldSpriteRoot>>,
+    bases: HeldSpriteBaseQuery<'w, 's>,
+    tints: HeldSpriteTintQuery<'w, 's>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
 
 pub(crate) fn setup_held_sprite_mesh(
     mut commands: Commands,
@@ -52,46 +137,6 @@ pub(crate) fn setup_held_sprite_mesh(
     commands.insert_resource(HeldSpriteMesh(
         meshes.add(Rectangle::new(HELD_SPRITE_SIZE, HELD_SPRITE_SIZE)),
     ));
-}
-
-fn selected_visual<'a>(
-    hotbar: &PlayerHotbar,
-    items: &'a ItemRegistry,
-    tools: &'a ToolRegistry,
-    brush_mode: &BrushMode,
-    properties: &SecondaryPropertyRegistry,
-) -> Option<HeldSpriteVisual<'a>> {
-    let item_id = hotbar.item_at(hotbar.selected_slot())?;
-
-    if let Some(item) = items.get(item_id) {
-        return Some(HeldSpriteVisual {
-            icon: &item.icon,
-            tint_icon: None,
-            tint: None,
-            kind: HeldSpriteKind::Item,
-        });
-    }
-
-    let tool = tools.get(item_id)?;
-    if tool.icon.is_empty() {
-        return None;
-    }
-
-    let tint = if item_id == BRUSH_TOOL_ID {
-        brush_mode
-            .dye_id()
-            .and_then(|dye| properties.get(DYED_PROPERTY_ID, dye))
-            .map(|definition| definition.color.to_color())
-    } else {
-        None
-    };
-
-    Some(HeldSpriteVisual {
-        icon: &tool.icon,
-        tint_icon: tool.tint_icon.as_deref(),
-        tint,
-        kind: HeldSpriteKind::Tool,
-    })
 }
 
 fn plane_transform(kind: HeldSpriteKind, depth: f32) -> Transform {
@@ -139,16 +184,10 @@ pub(crate) fn spawn_held_sprite(
     parent: &mut ChildSpawnerCommands,
     root_transform: Transform,
     render_layers: RenderLayers,
-    hotbar: &PlayerHotbar,
-    items: &ItemRegistry,
-    tools: &ToolRegistry,
-    brush_mode: &BrushMode,
-    properties: &SecondaryPropertyRegistry,
-    asset_server: &AssetServer,
-    mesh: &Handle<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    content: &HeldSpriteContent<'_>,
+    assets: &mut HeldSpriteAssets<'_>,
 ) -> [Entity; 2] {
-    let visual = selected_visual(hotbar, items, tools, brush_mode, properties);
+    let visual = content.selected_visual();
     let kind = visual
         .as_ref()
         .map_or(HeldSpriteKind::Item, |visual| visual.kind);
@@ -165,8 +204,14 @@ pub(crate) fn spawn_held_sprite(
     } else {
         Visibility::Hidden
     };
-    let base_material = materials.add(base_material(visual.as_ref(), asset_server));
-    let tint_material = materials.add(tint_material(visual.as_ref(), asset_server));
+    let base_material = assets.materials.add(base_material(
+        visual.as_ref(),
+        &content.asset_server,
+    ));
+    let tint_material = assets.materials.add(tint_material(
+        visual.as_ref(),
+        &content.asset_server,
+    ));
 
     let mut renderables = [Entity::PLACEHOLDER; 2];
     parent
@@ -180,7 +225,7 @@ pub(crate) fn spawn_held_sprite(
             renderables[0] = root
                 .spawn((
                     HeldSpriteBase,
-                    Mesh3d(mesh.clone()),
+                    Mesh3d(assets.mesh.0.clone()),
                     MeshMaterial3d(base_material),
                     plane_transform(kind, 0.0),
                     render_layers.clone(),
@@ -190,7 +235,7 @@ pub(crate) fn spawn_held_sprite(
             renderables[1] = root
                 .spawn((
                     HeldSpriteTint,
-                    Mesh3d(mesh.clone()),
+                    Mesh3d(assets.mesh.0.clone()),
                     MeshMaterial3d(tint_material),
                     plane_transform(kind, HELD_TINT_DEPTH),
                     tint_visibility,
@@ -203,45 +248,27 @@ pub(crate) fn spawn_held_sprite(
 }
 
 pub(crate) fn sync_held_sprites(
-    hotbar: Res<PlayerHotbar>,
-    items: Res<ItemRegistry>,
-    tools: Res<ToolRegistry>,
-    brush_mode: Res<BrushMode>,
-    properties: Res<SecondaryPropertyRegistry>,
-    asset_server: Res<AssetServer>,
-    mut roots: Query<&mut Visibility, With<HeldSpriteRoot>>,
-    mut bases: Query<
-        (&MeshMaterial3d<StandardMaterial>, &mut Transform),
-        (With<HeldSpriteBase>, Without<HeldSpriteTint>),
-    >,
-    mut tints: Query<
-        (
-            &MeshMaterial3d<StandardMaterial>,
-            &mut Transform,
-            &mut Visibility,
-        ),
-        (With<HeldSpriteTint>, Without<HeldSpriteBase>),
-    >,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    content: HeldSpriteContent,
+    mut view: HeldSpriteSyncView,
 ) {
-    if !hotbar.is_changed() && !brush_mode.is_changed() && !properties.is_changed() {
+    if !content.inputs_changed() {
         return;
     }
 
-    let visual = selected_visual(&hotbar, &items, &tools, &brush_mode, &properties);
+    let visual = content.selected_visual();
     let root_visibility = if visual.is_some() {
         Visibility::Inherited
     } else {
         Visibility::Hidden
     };
-    for mut visibility in &mut roots {
+    for mut visibility in &mut view.roots {
         if *visibility != root_visibility {
             *visibility = root_visibility;
         }
     }
 
     let Some(visual) = visual else {
-        for (_, _, mut visibility) in &mut tints {
+        for (_, _, mut visibility) in &mut view.tints {
             if *visibility != Visibility::Hidden {
                 *visibility = Visibility::Hidden;
             }
@@ -250,13 +277,14 @@ pub(crate) fn sync_held_sprites(
     };
 
     let base_transform = plane_transform(visual.kind, 0.0);
-    for (material_handle, mut transform) in &mut bases {
+    for (material_handle, mut transform) in &mut view.bases {
         if *transform != base_transform {
             *transform = base_transform;
         }
-        if let Some(mut material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = Color::WHITE;
-            material.base_color_texture = Some(asset_server.load(visual.icon.to_owned()));
+            material.base_color_texture =
+                Some(content.asset_server.load(visual.icon.to_owned()));
         }
     }
 
@@ -266,18 +294,18 @@ pub(crate) fn sync_held_sprites(
     } else {
         Visibility::Hidden
     };
-    for (material_handle, mut transform, mut visibility) in &mut tints {
+    for (material_handle, mut transform, mut visibility) in &mut view.tints {
         if *transform != tint_transform {
             *transform = tint_transform;
         }
         if *visibility != tint_visibility {
             *visibility = tint_visibility;
         }
-        if let Some(mut material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = visual.tint.unwrap_or(Color::WHITE);
             material.base_color_texture = visual
                 .tint_icon
-                .map(|path| asset_server.load(path.to_owned()));
+                .map(|path| content.asset_server.load(path.to_owned()));
         }
     }
 }

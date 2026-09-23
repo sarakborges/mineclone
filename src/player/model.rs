@@ -16,17 +16,14 @@ use crate::{
         settings_state::SettingsState,
     },
     content::{
-        item::ItemRegistry,
         player::PlayerDefinition,
-        secondary_property::SecondaryPropertyRegistry,
-        tool::ToolRegistry,
     },
     entity::EntityHealth,
     gameplay::modal::GameplayModalState,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity, apply_player_skin_material,
         camera::{CameraPerspective, GameplayCamera},
-        held_sprite::{HeldSpriteMesh, spawn_held_sprite},
+        held_sprite::{HeldSpriteAssets, HeldSpriteContent, spawn_held_sprite},
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
         viewmodel::ViewModelAnimation,
@@ -40,7 +37,6 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::BlockTargetingSet,
-    tools::BrushMode,
     voxel::block_face::BlockFace,
 };
 
@@ -728,14 +724,8 @@ fn spawn_third_person_held_block(
 fn spawn_third_person_held_sprite(
     mut commands: Commands,
     hands: Query<(Entity, &PlayerModelHand), Added<PlayerModelHand>>,
-    hotbar: Res<PlayerHotbar>,
-    items: Res<ItemRegistry>,
-    tools: Res<ToolRegistry>,
-    brush_mode: Res<BrushMode>,
-    properties: Res<SecondaryPropertyRegistry>,
-    asset_server: Res<AssetServer>,
-    mesh: Res<HeldSpriteMesh>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    content: HeldSpriteContent,
+    mut assets: HeldSpriteAssets,
 ) {
     for (hand_entity, hand_scope) in &hands {
         let root_transform = Transform::from_translation(Vec3::new(0.0, -0.72, -0.06))
@@ -748,14 +738,8 @@ fn spawn_third_person_held_sprite(
                 hand,
                 root_transform,
                 render_layers,
-                &hotbar,
-                &items,
-                &tools,
-                &brush_mode,
-                &properties,
-                &asset_server,
-                &mesh.0,
-                &mut materials,
+                &content,
+                &mut assets,
             );
         });
 
