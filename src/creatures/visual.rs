@@ -7,7 +7,11 @@ use bevy::{
 
 use crate::content::{color::Hsi, creature::CreatureRegistry};
 
-use super::{CreatureInstance, motion::CreatureMotion};
+use super::{
+    CreatureInstance,
+    material::apply_creature_material_overrides,
+    motion::CreatureMotion,
+};
 
 /// The glTF asset belongs to the visual loader; the root owns physics/position.
 #[derive(Component)]
@@ -233,35 +237,7 @@ fn configure_creature_material(
             .get(original.id())
             .cloned()
             .map(|mut material| {
-                if let Some(color) = rgb {
-                    let alpha = material.base_color.to_srgba().alpha;
-                    material.base_color = Color::srgba(color[0], color[1], color[2], alpha);
-                }
-                if let Some(image) = texture {
-                    material.base_color_texture = Some(image.clone());
-                }
-                // Creature override materials are intentionally fully matte.
-                // Keep normal light/shadow response, but remove the PBR specular/
-                // environment-reflection lobe instead of making creatures unlit.
-                // This also neutralizes glossy settings accidentally authored in a GLB.
-                material.metallic = 0.0;
-                material.perceptual_roughness = 1.0;
-                material.reflectance = 0.0;
-                material.specular_tint = Color::BLACK;
-                material.clearcoat = 0.0;
-                material.unlit = unlit;
-                material.diffuse_transmission = 0.0;
-                material.specular_transmission = 0.0;
-                material.thickness = 0.0;
-                material.emissive = LinearRgba::BLACK;
-                material.emissive_texture = None;
-                // Tinted body materials are deliberately opaque. Texture-only
-                // materials keep the GLB-authored alpha mode so decals/cutouts
-                // such as a creature face can use transparent pixels.
-                if tint.is_some() {
-                    material.base_color = material.base_color.with_alpha(1.0);
-                    material.alpha_mode = AlphaMode::Opaque;
-                }
+                apply_creature_material_overrides(&mut material, tint, texture, unlit);
                 let handle = tint_assets.materials.add(material);
                 tint_assets.cache.0.insert(cache_key, handle.clone());
                 handle
