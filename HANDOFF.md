@@ -202,7 +202,21 @@ e alpha de materiais tintados. O HUD acessa somente o helper reexportado pelo
 boundary `creatures`, sem depender do submódulo interno. Isso remove duas
 implementações que já haviam divergido visualmente. VERSION: `0.50.127`.
 
-CI de Q17: pendente neste checkpoint.
+CI de Q17: **verde** no run `35863947177` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q18 — single-source gameplay modal manager
+
+Os modais exclusivos de gameplay agora usam um único `GameplayModalState`:
+`Closed`, `Inventory`, `CharacterInfo` e `BrushPalette`. Os states
+paralelos `InventoryState`, `CharacterInfoState` e `BrushPaletteState`
+foram removidos. O manager centraliza Esc (fecha o modal ativo e limpa
+`InputFocus`), fechamento em pause/saída de gameplay e exclusividade por
+construção. Camera/cursor, crosshair, chat, pause, world interaction,
+Character Info, inventory HUD, player preview/model e brush palette passaram a
+consumir a mesma fonte de verdade. `CharacterInfoInputState`, antes necessário
+apenas para coordenar Esc com pause, deixou de existir. VERSION: `0.50.129`.
+
+CI de Q18: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
