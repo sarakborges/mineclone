@@ -10,7 +10,9 @@ use crate::{
     },
 };
 
-use super::{CreatureInstance, random::next_u32, visual::CreatureAnimationState};
+use crate::gameplay::random::next_u32;
+
+use super::{CreatureInstance, visual::CreatureAnimationState};
 
 const GROUND_PROBE: f32 = 0.06;
 const DIRECTIONS: [(i32, i32); 8] = [
