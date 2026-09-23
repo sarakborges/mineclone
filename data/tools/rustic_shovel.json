@@ -1,0 +1,19 @@
+{
+  "id": "asteria:rustic_shovel",
+  "name": {
+    "english": "Rustic Shovel",
+    "portuguese_brazil": "Pá Rústica",
+    "spanish": "Pala Rústica"
+  },
+  "hint": {
+    "english": "Digs soil and loose natural blocks.",
+    "portuguese_brazil": "Escava solo e blocos naturais soltos.",
+    "spanish": "Excava suelo y bloques naturales sueltos."
+  },
+  "category": "tools",
+  "icon": "textures/tools/shovel-rustic.png",
+  "mining": {
+    "category": "shovel",
+    "speed": 1.5
+  }
+}
