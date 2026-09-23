@@ -33,6 +33,42 @@
       }
     },
     {
+      "id": "root_arches",
+      "structure": "asteria:root_arch",
+      "count": {
+        "min": 2,
+        "max": 3
+      },
+      "chance": 1,
+      "required": false,
+      "placement": {
+        "relativeTo": "origin",
+        "minDistance": 88,
+        "maxDistance": 148,
+        "minSeparation": 50,
+        "attempts": 160,
+        "allowOverlap": false
+      }
+    },
+    {
+      "id": "enchanted_springs",
+      "structure": "asteria:enchanted_spring",
+      "count": {
+        "min": 1,
+        "max": 2
+      },
+      "chance": 1,
+      "required": false,
+      "placement": {
+        "relativeTo": "origin",
+        "minDistance": 78,
+        "maxDistance": 142,
+        "minSeparation": 42,
+        "attempts": 192,
+        "allowOverlap": false
+      }
+    },
+    {
       "id": "enchanted_trees",
       "structure": "asteria:tree_enchanted",
       "count": {
@@ -46,43 +82,7 @@
         "minDistance": 78,
         "maxDistance": 112,
         "minSeparation": 14,
-        "attempts": 64,
-        "allowOverlap": false
-      }
-    },
-    {
-      "id": "root_arches",
-      "structure": "asteria:root_arch",
-      "count": {
-        "min": 3,
-        "max": 5
-      },
-      "chance": 1,
-      "required": false,
-      "placement": {
-        "relativeTo": "origin",
-        "minDistance": 60,
-        "maxDistance": 124,
-        "minSeparation": 20,
-        "attempts": 64,
-        "allowOverlap": false
-      }
-    },
-    {
-      "id": "enchanted_springs",
-      "structure": "asteria:enchanted_spring",
-      "count": {
-        "min": 2,
-        "max": 4
-      },
-      "chance": 1,
-      "required": false,
-      "placement": {
-        "relativeTo": "origin",
-        "minDistance": 64,
-        "maxDistance": 128,
-        "minSeparation": 22,
-        "attempts": 64,
+        "attempts": 96,
         "allowOverlap": false
       }
     }
