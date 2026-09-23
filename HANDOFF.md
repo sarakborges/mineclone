@@ -11797,3 +11797,51 @@ CI funcional push `35803036750`: **verde**.
 Commit de versão: `d0e9c7e43d7f3113f4869657cb110033fc956996`.
 CI de versão push `35803124436`: **verde**.
 VERSION: `0.50.98`.
+
+## 2026-09-22 — Correção da semântica de output dos viewports do player
+
+A seção anterior da versão 0.50.98 concluiu incorretamente que o Character Info
+deveria usar `CameraOutputMode::Skip` e que o Character HUD, por ser o writer
+posterior, finalizaria os dois previews.
+
+A investigação no código do **Bevy 0.19.1** mostrou por que isso não funciona
+quando as câmeras usam viewports diferentes no mesmo window target:
+
+- câmeras para o mesmo target compartilham os main textures intermediários;
+- `CameraOutputMode::Skip` realmente deixa o resultado no intermediário;
+- porém o nó de upscaling/final output de uma câmera `Write` aplica
+  `set_scissor_rect` usando **o viewport da própria câmera**;
+- portanto o `Write` posterior do Character HUD copia para a janela apenas o
+  retângulo do HUD;
+- os pixels do Character Info que ficaram no intermediário, fora do viewport do
+  HUD, nunca são copiados para a janela.
+
+Isso explica exatamente o estado observado manualmente:
+- Character HUD visível;
+- Character Info vazio.
+
+Correção:
+- qualquer preview com viewport válido usa `CameraOutputMode::Write`;
+- ambos usam alpha blending e `ClearColorConfig::None`;
+- Character Info escreve somente seu retângulo;
+- Character HUD escreve somente seu retângulo;
+- quando o viewport correspondente não existe/está fechado, a câmera continua
+  em `CameraOutputMode::Skip`;
+- o booleano `write_to_target` foi removido para impedir a reintrodução dessa
+  configuração inválida;
+- o viewport de Character Info voltou a aceitar picking para o drag/orbit.
+
+Commits:
+- Character Info volta a escrever seu próprio viewport:
+  `a25099af760898925d083f8ae84700f1f6f428c1`;
+- remoção do `write_to_target`:
+  `870bc557b67893d6f9e3c013e32eea0c3a45a797`;
+- drag/picking do Character Info:
+  `afca3d5fbcf738d59ba381f6b91e78f37b4567da`;
+- comentário de proteção documentando a semântica no código:
+  `c4997d9e6570db155a4100f811ff9b878d5ada00`.
+
+CI funcional push `35804014362`: **verde**.
+Commit de versão: `dd0e319016b025ee05eed420ec3b7da02f66e6b6`.
+CI de versão push `35804104493`: **verde**.
+VERSION: `0.50.99`.
