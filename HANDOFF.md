@@ -389,6 +389,16 @@ consultam, sem clone adicional. VERSION: `0.50.153`.
 
 CI de Q34: **verde** no run `35880982707` após corrigir o uso do tint derivado (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q35 — reutilizar matching de prefixo no autocomplete
+
+`hud/chat/autocomplete.rs` não repete mais a mesma normalização de IDs em
+creatures, structures, structure groups, structure sets e biomes. O helper
+`id_matches_prefix` concentra o comportamento case-insensitive e o fallback
+para IDs sem o prefixo `asteria:`, mantendo a mesma semântica em todos os
+parâmetros de autocomplete. VERSION: `0.50.154`.
+
+CI de Q35: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
