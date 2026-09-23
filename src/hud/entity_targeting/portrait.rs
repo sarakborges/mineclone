@@ -52,8 +52,12 @@ pub(super) fn sync_portrait(
         .and_then(|entity| selection.creatures.get(entity).ok())
         .and_then(|creature| selection.definitions.get(&creature.definition_id));
     let Some(definition) = target else {
+        // Target loss is often transient (for example, knockback can move a
+        // creature out of the crosshair for a frame). Keep already-loaded
+        // portrait scenes cached instead of tearing their render assets down
+        // mid-frame and recreating them when the target is reacquired.
         for (entity, _) in &portraits {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(Visibility::Hidden);
         }
         return;
     };
@@ -63,12 +67,20 @@ pub(super) fn sync_portrait(
     **camera_transform = Transform::from_xyz(distance * 0.4, distance * 0.25, distance)
         .looking_at(Vec3::ZERO, Vec3::Y);
 
-    if portraits.iter().any(|(_, model)| model.definition_id == definition.id) {
+    let mut cached = false;
+    for (entity, model) in &portraits {
+        let visibility = if model.definition_id == definition.id {
+            cached = true;
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        commands.entity(entity).insert(visibility);
+    }
+    if cached {
         return;
     }
-    for (entity, _) in &portraits {
-        commands.entity(entity).despawn();
-    }
+
     commands.spawn((
         PortraitModel {
             definition_id: definition.id.clone(),
@@ -76,6 +88,7 @@ pub(super) fn sync_portrait(
             scene_attached: false,
         },
         Transform::default(),
+        Visibility::Inherited,
         RenderLayers::layer(PORTRAIT_RENDER_LAYER),
         DespawnOnExit(GameState::Gameplay),
     ));
