@@ -19,7 +19,7 @@ use crate::{
     entity::EntityHealth,
     gameplay::modal::GameplayModalState,
     player::{
-        PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity,
+        PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity, apply_player_skin_material,
         camera::{CameraPerspective, GameplayCamera},
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
@@ -408,11 +408,7 @@ fn configure_player_material(
     };
 
     if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
-        material.base_color = Color::WHITE;
-        material.base_color_texture = Some(visuals.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
-        material.unlit = true;
-        material.metallic = 0.0;
-        material.perceptual_roughness = 1.0;
+        apply_player_skin_material(&mut material, &visuals.asset_server);
         material.reflectance = 0.0;
         material.emissive = LinearRgba::BLACK;
         material.emissive_texture = None;
