@@ -368,6 +368,16 @@ no outro. VERSION: `0.50.151`.
 
 CI de Q32: **verde** no run `35879396036` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q33 — reutilizar construção de material do bloco segurado
+
+`player/viewmodel/model.rs` não monta mais o material-base de cada face em
+dois caminhos paralelos. Spawn inicial e sync do held block reutilizam
+`held_block_face_material`, que concentra `block_face_material_data` +
+display shading. Tint permanece fora do helper porque depende da posição/célula
+e tem lifecycle próprio. VERSION: `0.50.152`.
+
+CI de Q33: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
