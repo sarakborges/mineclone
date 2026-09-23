@@ -127,7 +127,10 @@ fn spawn_highlight(
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
-            depth_bias: 100.0,
+            // The highlight cube is already scaled/offset away from the block
+            // surface. A large depth bias turns it into an x-ray overlay that
+            // can render through opaque creatures in front of the block.
+            depth_bias: 0.0,
             ..default()
         })),
         Transform::default(),
