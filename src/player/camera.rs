@@ -6,9 +6,10 @@ use crate::{
         keybinds::{KeybindAction, Keybinds},
         pause_state::PauseState,
     },
-    gameplay::availability::world_interaction_available,
-    player::{character_info::CharacterInfoState, inventory::InventoryState},
-    tools::BrushPaletteState,
+    gameplay::{
+        availability::world_interaction_available,
+        modal::GameplayModalState,
+    },
     voxel::world::VoxelWorld,
 };
 use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cursor};
@@ -51,27 +52,11 @@ impl Plugin for PlayerCameraPlugin {
                 capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
-                OnEnter(InventoryState::Open),
+                OnExit(GameplayModalState::Closed),
                 release_cursor.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
-                OnEnter(CharacterInfoState::Open),
-                release_cursor.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(InventoryState::Closed),
-                capture_cursor.run_if(world_interaction_available),
-            )
-            .add_systems(
-                OnEnter(CharacterInfoState::Closed),
-                capture_cursor.run_if(world_interaction_available),
-            )
-            .add_systems(
-                OnEnter(BrushPaletteState::Open),
-                release_cursor.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(BrushPaletteState::Closed),
+                OnEnter(GameplayModalState::Closed),
                 capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
