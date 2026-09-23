@@ -2,7 +2,9 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        inventory_category::InventoryCategoryRegistry, item::display_name, layer::LayerRegistry,
+        inventory_category::InventoryCategoryRegistry,
+        item::{ItemRegistry, display_name},
+        layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
@@ -39,6 +41,7 @@ use super::{
 #[derive(SystemParam)]
 pub(super) struct InventoryItemContent<'w> {
     visual: BlockVisualContent<'w>,
+    items: Res<'w, ItemRegistry>,
     layers: Res<'w, LayerRegistry>,
     tools: Res<'w, ToolRegistry>,
     dyes: Res<'w, SecondaryPropertyRegistry>,
@@ -54,6 +57,7 @@ impl InventoryItemContent<'_> {
     ) -> InventoryItemView<'a> {
         InventoryItemView {
             asset_server: &self.visual.asset_server,
+            items: &self.items,
             blocks: &self.visual.blocks,
             layers: &self.layers,
             tools: &self.tools,
@@ -70,6 +74,7 @@ impl InventoryItemContent<'_> {
     fn item_name<'a>(&'a self, item_id: &'a str) -> &'a str {
         display_name(
             item_id,
+            &self.items,
             &self.visual.blocks,
             &self.layers,
             &self.tools,
