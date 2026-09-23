@@ -1,4 +1,5 @@
 pub(crate) mod availability;
+pub(crate) mod modal;
 mod pause;
 
 use bevy::prelude::*;
@@ -8,6 +9,7 @@ use crate::player::{
     hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin, model::PlayerModelPlugin,
     movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
 };
+use modal::GameplayModalPlugin;
 use pause::PausePlugin;
 
 pub(crate) struct GameplayPlugin;
@@ -15,6 +17,7 @@ pub(crate) struct GameplayPlugin;
 impl Plugin for GameplayPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            GameplayModalPlugin,
             PlayerInventoryPlugin,
             PlayerCharacterInfoPlugin,
             PausePlugin,
