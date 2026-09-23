@@ -11994,3 +11994,23 @@ Commits funcionais:
 - GLB regenerado/alinhado ao gerador: `ed22f45e2d5b8a62ce0cf54873d041effe5d259f`.
 
 VERSION: `0.50.104`, commit de versão `1257714fc33bac83d995ddc1d3cbc901c951037c`.
+
+
+## 2026-09-22 — Remoção definitiva do reflexo dos slimes
+
+Os materiais de criaturas continuavam com resposta especular perceptível mesmo após zerar `reflectance`, porque o override ainda usava roughness abaixo de 1 e `specular_tint` branco.
+
+Correção aplicada:
+- materiais runtime de criaturas usam `perceptual_roughness = 1.0`;
+- `reflectance = 0.0` permanece;
+- `specular_tint = Color::BLACK`, removendo o lobo especular/ambiente sem transformar a criatura em material unlit;
+- metallic, clearcoat, diffuse/specular transmission e emissive continuam zerados;
+- iluminação difusa e sombras permanecem ativas;
+- o GLB autoral do slime também foi atualizado para roughness 1.0 nos três materiais, evitando brilho inclusive antes do override runtime.
+
+Commits:
+- runtime matte: `304fdcd631b4592e76d9578a7749d31a392d836a`;
+- gerador matte: `0883a90fc825fa2f1b47e69e749893dc4a9d9237`;
+- GLB regenerado: `3776fccf03e51b83dbbf6103357ac06f0b59e6e7`.
+
+VERSION: `0.50.105`, commit de versão `7190467f6b06aa625c89c17474b2cc3758be8082`.
