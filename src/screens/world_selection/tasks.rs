@@ -11,7 +11,7 @@ use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
     voxel::world::VoxelWorld,
     world::save_catalog::{
@@ -81,6 +81,7 @@ impl PendingWorldScan {
 struct OwnedLoadContent {
     biomes: BiomeRegistry,
     blocks: BlockRegistry,
+    items: ItemRegistry,
     layers: LayerRegistry,
     fluids: FluidRegistry,
     tools: ToolRegistry,
@@ -91,6 +92,10 @@ struct OwnedLoadContent {
 
 impl OwnedLoadContent {
     fn capture(registries: SaveRegistries<'_>) -> Self {
+        let mut items = ItemRegistry::default();
+        for definition in registries.items.iter() {
+            items.insert(definition.clone());
+        }
         let mut tools = ToolRegistry::default();
         for definition in registries.tools.iter() {
             tools.insert(definition.clone());
@@ -111,6 +116,7 @@ impl OwnedLoadContent {
         Self {
             biomes: registries.biomes.clone(),
             blocks: registries.blocks.clone(),
+            items,
             layers: registries.layers.clone(),
             fluids: registries.fluids.clone(),
             tools,
@@ -124,6 +130,7 @@ impl OwnedLoadContent {
         SaveRegistries {
             biomes: &self.biomes,
             blocks: &self.blocks,
+            items: &self.items,
             layers: &self.layers,
             fluids: &self.fluids,
             tools: &self.tools,
