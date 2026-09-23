@@ -1,6 +1,6 @@
 pub(super) mod portrait;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{
@@ -49,25 +49,52 @@ struct PlayerHudRoot;
 #[derive(Component)]
 struct InventoryHint;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+struct InventoryHintContent<'w> {
+    settings: Res<'w, HudSettings>,
+    keybinds: Res<'w, Keybinds>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+    modal: Res<'w, State<GameplayModalState>>,
+}
+
+impl InventoryHintContent<'_> {
+    fn kind(&self) -> HintKind {
+        inventory_hint_kind(*self.modal.get())
+    }
+
+    fn text(&self) -> String {
+        self.localization
+            .text(self.language.get(), inventory_hint_key(*self.modal.get()))
+            .replace(
+                "{inventory}",
+                self.keybinds.label(KeybindAction::Inventory),
+            )
+    }
+
+    fn visibility(&self) -> Visibility {
+        if self.settings.hint_enabled(self.kind()) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        }
+    }
+
+    fn is_changed(&self) -> bool {
+        self.settings.is_changed()
+            || self.keybinds.is_changed()
+            || self.localization.is_changed()
+            || self.language.is_changed()
+            || self.modal.is_changed()
+    }
+}
+
 fn spawn_player_hud(
     mut commands: Commands,
-    settings: Res<HudSettings>,
-    keybinds: Res<Keybinds>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
-    modal_state: Res<State<GameplayModalState>>,
+    hint: InventoryHintContent,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
 ) {
-    let hint_kind = inventory_hint_kind(*modal_state.get());
-    let hint_visibility = if settings.hint_enabled(hint_kind) {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-    let hint_key = inventory_hint_key(*modal_state.get());
-
     commands
         .spawn((
             PlayerHudRoot,
@@ -89,12 +116,8 @@ fn spawn_player_hud(
             spawn_entity_card(root, EntityCardSource::LocalPlayer, None);
             root.spawn((
                 InventoryHint,
-                typography::crosshair_hint(
-                    localization
-                        .text(language.get(), hint_key)
-                        .replace("{inventory}", keybinds.label(KeybindAction::Inventory)),
-                ),
-                hint_visibility,
+                typography::crosshair_hint(hint.text()),
+                hint.visibility(),
                 Pickable::IGNORE,
             ));
         });
@@ -123,35 +146,20 @@ fn sync_player_hud_visibility(
 }
 
 fn sync_inventory_hint(
-    settings: Res<HudSettings>,
-    keybinds: Res<Keybinds>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
-    modal_state: Res<State<GameplayModalState>>,
+    content: InventoryHintContent,
     hint: Single<(&mut Text, &mut Visibility), With<InventoryHint>>,
 ) {
-    if !settings.is_changed()
-        && !keybinds.is_changed()
-        && !localization.is_changed()
-        && !language.is_changed()
-        && !modal_state.is_changed()
-    {
+    if !content.is_changed() {
         return;
     }
 
     let (mut text, mut visibility) = hint.into_inner();
-    let next_text = localization
-        .text(language.get(), inventory_hint_key(*modal_state.get()))
-        .replace("{inventory}", keybinds.label(KeybindAction::Inventory));
+    let next_text = content.text();
     if text.0 != next_text {
         text.0 = next_text;
     }
 
-    let next_visibility = if settings.hint_enabled(inventory_hint_kind(*modal_state.get())) {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
+    let next_visibility = content.visibility();
     if *visibility != next_visibility {
         *visibility = next_visibility;
     }
