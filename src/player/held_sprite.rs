@@ -254,7 +254,7 @@ pub(crate) fn sync_held_sprites(
         if *transform != base_transform {
             *transform = base_transform;
         }
-        if let Some(material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.base_color = Color::WHITE;
             material.base_color_texture = Some(asset_server.load(visual.icon.to_owned()));
         }
@@ -273,7 +273,7 @@ pub(crate) fn sync_held_sprites(
         if *visibility != tint_visibility {
             *visibility = tint_visibility;
         }
-        if let Some(material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.base_color = visual.tint.unwrap_or(Color::WHITE);
             material.base_color_texture = visual
                 .tint_icon
