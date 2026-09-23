@@ -1,4 +1,36 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Normalização da versão do projeto [VERSION 0.51.0]
+
+Foi feita uma revisão do histórico integral registrado em `HANDOFF.md`, dos
+handoffs arquivados em `docs/handoffs/` e da sequência de commits da branch
+`develop`. A linha `0.50.x` deixou de representar releases coerentes e passou
+a funcionar, na prática, como contador de microcommits/refactors, chegando a
+`0.50.200` apesar de conter vários marcos funcionais independentes.
+
+A versão funcional canônica do jogo continua sendo exclusivamente o arquivo
+raiz `VERSION`. O `Cargo.toml` permanece deliberadamente em `0.10.16`,
+conforme `src/app/version.rs`, para evitar invalidar fingerprints do Cargo e
+prejudicar builds incrementais de desenvolvimento.
+
+O novo baseline funcional é **`0.51.0`**. Ele consolida a linha `0.50` após
+os grandes blocos de rendering/performance, player 3D e previews, Character
+Info/modais, criaturas/slimes, Creative Inventory, generic items/tools,
+Carpenter's Axe/log variants e o desacoplamento data-driven de tool behaviors.
+
+Regra de versionamento a partir deste checkpoint:
+- não incrementar `VERSION` por commit intermediário, lint fix, documentação
+  isolada ou etapa interna de um mesmo trabalho;
+- `PATCH` fecha um checkpoint coerente de correção/refactor/polish já validado;
+- `MINOR` marca um conjunto funcional novo ou mudança relevante de arquitetura,
+  conteúdo, gameplay ou compatibilidade;
+- um trabalho com vários commits recebe um único bump quando o bloco estiver
+  fechado e com CI verde;
+- `Cargo.toml` não acompanha a versão funcional do jogo enquanto a estratégia
+  de build incremental atual permanecer vigente.
+
+Baseline anterior: `0.50.200`.
+Baseline novo: `0.51.0`.
+
 ## Checkpoint 184 — 2026-09-23: auditoria de qualidade de código [EM ANDAMENTO]
 
 A auditoria passa a começar pelas alterações mais recentes e depois percorre o
