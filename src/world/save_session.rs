@@ -16,7 +16,7 @@ use crate::{
     creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
     player::{
-        camera::{GameplayCamera, GameplayWorldCamera}, game_mode::GameMode, hotbar::PlayerHotbar,
+        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         movement::flight::FlightState, player_id::PlayerId,
     },
     voxel::world::VoxelWorld,
@@ -33,7 +33,8 @@ use super::{
     save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
     seed::WorldSeed,
     thumbnail::{
-        WorldThumbnailCapture, WorldThumbnailCompletion, begin_world_thumbnail_capture,
+        WorldThumbnailCameraQuery, WorldThumbnailCapture, WorldThumbnailCompletion,
+        begin_world_thumbnail_capture,
     },
     tick::WorldTickClock,
 };
@@ -262,9 +263,7 @@ pub(crate) fn save_on_gameplay_window_close(
     mut close_requests: MessageReader<WindowCloseRequested>,
     session: Res<WorldSession>,
     snapshot: WorldSaveContext,
-    mut thumbnail_cameras: Query<
-        (Entity, &mut Camera, Option<&GameplayWorldCamera>),
-    >,
+    mut thumbnail_cameras: WorldThumbnailCameraQuery,
     thumbnail_captures: Query<(), With<WorldThumbnailCapture>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
