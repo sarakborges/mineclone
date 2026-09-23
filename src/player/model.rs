@@ -10,12 +10,17 @@ use bevy::{
 };
 
 use crate::{
-    app::game_state::GameState,
+    app::{
+        game_state::GameState,
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
     content::player::PlayerDefinition,
     entity::EntityHealth,
     player::{
         PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity,
         camera::{CameraPerspective, GameplayCamera},
+        character_info::CharacterInfoState,
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
         viewmodel::ViewModelAnimation,
@@ -39,18 +44,37 @@ const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
 pub(crate) const PLAYER_MODEL_HUD_RENDER_LAYER: usize = 3;
 pub(crate) const PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER: usize = 4;
 
-fn player_ui_render_layers() -> RenderLayers {
-    RenderLayers::from_layers(&[
-        PLAYER_MODEL_HUD_RENDER_LAYER,
-        PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
-    ])
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlayerModelRenderScope {
+    Gameplay,
+    HudPreview,
+    CharacterInfoPreview,
+}
+
+fn player_model_render_layers(
+    scope: PlayerModelRenderScope,
+    third_person: bool,
+) -> RenderLayers {
+    match scope {
+        PlayerModelRenderScope::Gameplay if third_person => RenderLayers::layer(0),
+        PlayerModelRenderScope::Gameplay => RenderLayers::from_layers(&[]),
+        PlayerModelRenderScope::HudPreview => {
+            RenderLayers::layer(PLAYER_MODEL_HUD_RENDER_LAYER)
+        }
+        PlayerModelRenderScope::CharacterInfoPreview => {
+            RenderLayers::layer(PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER)
+        }
+    }
 }
 
 #[derive(Component)]
 pub(crate) struct PlayerModelRoot;
 
+#[derive(Component, Clone, Copy)]
+struct PlayerModelSceneScope(PlayerModelRenderScope);
+
 #[derive(Component)]
-struct PlayerModelRenderable;
+struct PlayerModelRenderable(PlayerModelRenderScope);
 
 #[derive(Component)]
 struct PlayerModel(Handle<Gltf>);
@@ -62,7 +86,7 @@ struct PlayerModelVisualAttached;
 struct PlayerModelHead;
 
 #[derive(Component)]
-struct PlayerModelHand;
+struct PlayerModelHand(PlayerModelRenderScope);
 
 #[derive(Component)]
 struct ThirdPersonHeldBlockRoot;
@@ -79,7 +103,7 @@ struct ThirdPersonHeldBlockVisualCache {
     tint: Option<Color>,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct PlayerModelAppearance {
     graph: Option<Handle<AnimationGraph>>,
     nodes: HashMap<String, AnimationNodeIndex>,
@@ -206,6 +230,7 @@ impl Plugin for PlayerModelPlugin {
                 Update,
                 (
                     attach_loaded_player_model,
+                    sync_player_preview_model_visibility,
                     spawn_third_person_held_block,
                     sync_player_model,
                     sync_player_model_animations,
@@ -281,13 +306,27 @@ fn attach_loaded_player_model(
 
         commands.entity(root).insert(PlayerModelVisualAttached);
         commands.entity(root).with_children(|parent| {
-            parent
-                .spawn((
-                    WorldAssetRoot(scene),
-                    Transform::default(),
-                    PlayerModelAppearance { graph, nodes },
-                ))
-                .observe(configure_loaded_player_scene);
+            for (scope, visibility) in [
+                (PlayerModelRenderScope::Gameplay, Visibility::Inherited),
+                (PlayerModelRenderScope::HudPreview, Visibility::Inherited),
+                (
+                    PlayerModelRenderScope::CharacterInfoPreview,
+                    Visibility::Hidden,
+                ),
+            ] {
+                parent
+                    .spawn((
+                        WorldAssetRoot(scene.clone()),
+                        Transform::default(),
+                        visibility,
+                        PlayerModelSceneScope(scope),
+                        PlayerModelAppearance {
+                            graph: graph.clone(),
+                            nodes: nodes.clone(),
+                        },
+                    ))
+                    .observe(configure_loaded_player_scene);
+            }
         });
     }
 }
@@ -298,12 +337,17 @@ fn configure_loaded_player_scene(
     descendants: Query<&Children>,
     names: Query<&Name>,
     appearances: Query<&PlayerModelAppearance>,
+    scene_scopes: Query<&PlayerModelSceneScope>,
     mut players: Query<(Entity, &mut AnimationPlayer)>,
     mut visuals: PlayerSceneVisuals,
 ) {
     let Ok(appearance) = appearances.get(ready.entity) else {
         return;
     };
+    let Ok(scene_scope) = scene_scopes.get(ready.entity) else {
+        return;
+    };
+    let scope = scene_scope.0;
 
     for descendant in descendants.iter_descendants(ready.entity) {
         if let Ok(mesh_handle) = visuals.mesh_entities.get(descendant)
@@ -321,8 +365,8 @@ fn configure_loaded_player_scene(
 
         if visuals.mesh_entities.get(descendant).is_ok() {
             commands.entity(descendant).insert((
-                PlayerModelRenderable,
-                player_ui_render_layers(),
+                PlayerModelRenderable(scope),
+                player_model_render_layers(scope, false),
             ));
         }
 
@@ -347,7 +391,7 @@ fn configure_loaded_player_scene(
                     commands.entity(descendant).insert(PlayerModelHead);
                 }
                 "RightArmPivot" => {
-                    commands.entity(descendant).insert(PlayerModelHand);
+                    commands.entity(descendant).insert(PlayerModelHand(scope));
                 }
                 _ => {}
             }
@@ -376,6 +420,38 @@ fn configure_loaded_player_scene(
     }
 }
 
+fn sync_player_preview_model_visibility(
+    pause: Res<State<PauseState>>,
+    settings: Res<State<SettingsState>>,
+    character_info: Res<State<CharacterInfoState>>,
+    mut scene_roots: Query<(&PlayerModelSceneScope, &mut Visibility)>,
+) {
+    for (scene_scope, mut visibility) in &mut scene_roots {
+        let next = match scene_scope.0 {
+            PlayerModelRenderScope::Gameplay => Visibility::Inherited,
+            PlayerModelRenderScope::HudPreview => {
+                if *pause.get() == PauseState::Running
+                    && *settings.get() == SettingsState::Closed
+                {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
+            }
+            PlayerModelRenderScope::CharacterInfoPreview => {
+                if *character_info.get() == CharacterInfoState::Open {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
+            }
+        };
+        if *visibility != next {
+            *visibility = next;
+        }
+    }
+}
+
 fn sync_player_model(
     time: Res<Time>,
     perspective: Res<CameraPerspective>,
@@ -392,7 +468,7 @@ fn sync_player_model(
     >,
     mut models: PlayerModelRootQuery,
     mut heads: PlayerModelHeadQuery,
-    mut renderables: Query<&mut RenderLayers, With<PlayerModelRenderable>>,
+    mut renderables: Query<(&PlayerModelRenderable, &mut RenderLayers)>,
 ) {
     let (player_transform, camera, walking, gravity, health) = *player;
 
@@ -457,18 +533,11 @@ fn sync_player_model(
         head.rotation = Quat::from_rotation_x(-camera.pitch);
     }
 
-    let layers = if perspective.is_third_person() {
-        RenderLayers::from_layers(&[
-            0,
-            PLAYER_MODEL_HUD_RENDER_LAYER,
-            PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
-        ])
-    } else {
-        player_ui_render_layers()
-    };
-    for mut render_layers in &mut renderables {
+    for (renderable, mut render_layers) in &mut renderables {
+        let layers =
+            player_model_render_layers(renderable.0, perspective.is_third_person());
         if *render_layers != layers {
-            *render_layers = layers.clone();
+            *render_layers = layers;
         }
     }
 }
@@ -519,7 +588,7 @@ fn sync_player_model_animations(
 
 fn spawn_third_person_held_block(
     mut commands: Commands,
-    hands: Query<Entity, Added<PlayerModelHand>>,
+    hands: Query<(Entity, &PlayerModelHand), Added<PlayerModelHand>>,
     definitions: BlockVisualContent,
     hotbar: Res<PlayerHotbar>,
     player: Single<&Transform, With<PlayerEntity>>,
@@ -539,8 +608,8 @@ fn spawn_third_person_held_block(
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
     let root_visibility = third_person_item_visibility(selected_block_id);
 
-    for hand in &hands {
-        commands.entity(hand).with_children(|hand| {
+    for (hand_entity, hand_scope) in &hands {
+        commands.entity(hand_entity).with_children(|hand| {
             hand.spawn((
                 ThirdPersonHeldBlockRoot,
                 block_model,
@@ -593,8 +662,8 @@ fn spawn_third_person_held_block(
                             MeshMaterial3d(material),
                             visibility,
                             NotShadowCaster,
-                            PlayerModelRenderable,
-                            player_ui_render_layers(),
+                            PlayerModelRenderable(hand_scope.0),
+                            player_model_render_layers(hand_scope.0, false),
                         ));
                     }
                 }
