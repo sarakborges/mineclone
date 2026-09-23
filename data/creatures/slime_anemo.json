@@ -50,7 +50,7 @@
   "anticipationSeconds": 0.22,
   "landingSeconds": 0.28,
   "textures": {
-    "SlimeFace": "textures/creatures/slime/face.png"
+    "SlimeFace": "textures/creatures/slime_anemo/face.png"
   },
   "particleEffects": {
     "idle": {
