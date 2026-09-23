@@ -9,7 +9,7 @@ use chisel::ChiselPlugin;
 use shears::ShearsPlugin;
 use structure_tool::StructureToolPlugin;
 
-pub(crate) use brush::{BrushMode, BrushPaletteState};
+pub(crate) use brush::BrushMode;
 
 pub(crate) struct ToolsPlugin;
 
