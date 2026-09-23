@@ -9,7 +9,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::creature::CreatureRegistry,
-    creatures::CreatureInstance,
+    creatures::{material::apply_creature_material_overrides, CreatureInstance},
     hud::entity_card::{EntityCard, EntityCardSource},
 };
 
@@ -164,21 +164,18 @@ fn configure_portrait_scene(
         };
         let name = material_name.0.as_str();
         let tint = definition.material_tints.get(name);
-        let texture = definition.textures.get(name);
-        if tint.is_none() && texture.is_none() {
+        let texture = definition
+            .textures
+            .get(name)
+            .map(|path| assets.asset_server.load::<Image>(path.clone()));
+        let unlit = definition.unlit_materials.contains(name);
+        if tint.is_none() && texture.is_none() && !unlit {
             continue;
         }
         let Some(mut material) = assets.materials.get(original.id()).cloned() else {
             continue;
         };
-        if let Some(tint) = tint {
-            let rgb = tint.to_srgb();
-            let alpha = material.base_color.to_srgba().alpha;
-            material.base_color = Color::srgba(rgb[0], rgb[1], rgb[2], alpha);
-        }
-        if let Some(path) = texture {
-            material.base_color_texture = Some(assets.asset_server.load(path.clone()));
-        }
+        apply_creature_material_overrides(&mut material, tint, texture.as_ref(), unlit);
         let handle = assets.materials.add(material);
         commands.entity(entity).insert(MeshMaterial3d(handle));
     }
