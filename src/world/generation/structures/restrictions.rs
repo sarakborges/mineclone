@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -10,7 +12,8 @@ use crate::{
     },
     voxel::coordinates::chunk_coord_from_world,
     world::{
-        generation_region::generation_region_coord,
+        biome_field::BiomeFieldSample,
+        generation_region::{GenerationRegion, generation_region_coord},
         hydrology::HydrologyWaterKind,
         new_world::WorldGenerationMode,
         terrain::surface_height_from_sample,
@@ -18,6 +21,34 @@ use crate::{
 };
 
 use super::super::{ChunkGenerationContext, fluids::authored_surface_fluid_id_at};
+
+struct NormalSurfaceProbe<'a> {
+    horizontal: Vec2,
+    surface: BiomeFieldSample<'a>,
+    surface_height: i32,
+    region: Arc<GenerationRegion>,
+}
+
+fn normal_surface_probe<'a>(
+    position: IVec2,
+    context: &ChunkGenerationContext<'a>,
+) -> NormalSurfaceProbe<'a> {
+    let horizontal = position.as_vec2() + Vec2::splat(0.5);
+    let surface = context.biome_field.sample_surface(horizontal);
+    let surface_height =
+        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
+    let mut chunk_coord =
+        chunk_coord_from_world(IVec3::new(position.x, (surface_height - 1).max(0), position.y));
+    chunk_coord.y = chunk_coord.y.max(0);
+    let region = context.region(generation_region_coord(chunk_coord));
+
+    NormalSurfaceProbe {
+        horizontal,
+        surface,
+        surface_height,
+        region,
+    }
+}
 
 pub(super) fn candidate_satisfies_restrictions(
     biome_id: &str,
@@ -114,22 +145,16 @@ fn surface_block_matches(
         return biome.surface_block_at_depth(0).is_some_and(matches);
     }
 
-    let horizontal = position.as_vec2() + Vec2::splat(0.5);
-    let surface = context.biome_field.sample_surface(horizontal);
-    let surface_height =
-        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
-    let mut chunk_coord =
-        chunk_coord_from_world(IVec3::new(position.x, (surface_height - 1).max(0), position.y));
-    chunk_coord.y = chunk_coord.y.max(0);
-    let region = context.region(generation_region_coord(chunk_coord));
+    let probe = normal_surface_probe(position, context);
 
-    if let Some(water) = region
+    if let Some(water) = probe
+        .region
         .hydrology
-        .supported_water_at(horizontal, surface_height as f32)
+        .supported_water_at(probe.horizontal, probe.surface_height as f32)
     {
         let surface_biome_id = context
             .biome_field
-            .surface_biome_id(surface.identity_surface_index);
+            .surface_biome_id(probe.surface.identity_surface_index);
         let surface_biome = context
             .biomes
             .get(surface_biome_id)
@@ -164,7 +189,7 @@ fn surface_block_matches(
         }
     }
 
-    if let Some(margin_index) = surface.surface_margin_index {
+    if let Some(margin_index) = probe.surface.surface_margin_index {
         let biome_id = context.biome_field.surface_biome_id(margin_index);
         let biome = context
             .biomes
@@ -179,7 +204,8 @@ fn surface_block_matches(
         }
     }
 
-    surface
+    probe
+        .surface
         .influences
         .iter()
         .filter_map(|influence| {
@@ -300,18 +326,12 @@ fn surface_fluid_matches(
         return true;
     }
 
-    let horizontal = position.as_vec2() + Vec2::splat(0.5);
-    let surface = context.biome_field.sample_surface(horizontal);
-    let surface_height =
-        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
-    let mut chunk_coord =
-        chunk_coord_from_world(IVec3::new(position.x, (surface_height - 1).max(0), position.y));
-    chunk_coord.y = chunk_coord.y.max(0);
-    let region = context.region(generation_region_coord(chunk_coord));
+    let probe = normal_surface_probe(position, context);
 
-    region
+    probe
+        .region
         .hydrology
-        .supported_water_at(horizontal, surface_height as f32)
+        .supported_water_at(probe.horizontal, probe.surface_height as f32)
         .is_some_and(|water| water.fluid_id == target_fluid)
 }
 
@@ -328,24 +348,11 @@ fn intersects_surface_fluid(
 
     structure.column_spans().iter().any(|span| {
         let position = anchor + rotation.rotate_horizontal(span.offset);
-        let horizontal = position.as_vec2() + Vec2::splat(0.5);
-        let surface = context.biome_field.sample_surface(horizontal);
-        let surface_height = surface_height_from_sample(
-            position,
-            context.dimension,
-            context.biome_field,
-            &surface,
-        );
-        let mut chunk_coord = chunk_coord_from_world(IVec3::new(
-            position.x,
-            (surface_height - 1).max(0),
-            position.y,
-        ));
-        chunk_coord.y = chunk_coord.y.max(0);
-        let region = context.region(generation_region_coord(chunk_coord));
-        let Some(water) = region
+        let probe = normal_surface_probe(position, context);
+        let Some(water) = probe
+            .region
             .hydrology
-            .supported_water_at(horizontal, surface_height as f32)
+            .supported_water_at(probe.horizontal, probe.surface_height as f32)
         else {
             return false;
         };
