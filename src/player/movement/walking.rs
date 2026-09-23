@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::{PlayerEntity, camera::GameplayCamera},
+    player::{
+        PlayerEntity,
+        camera::{CameraPerspective, GameplayCamera},
+    },
     voxel::{collision::ENTITY_STEP_HEIGHT, world::VoxelWorld},
     world::{game_rules::GameRules, tick::WorldTickClock},
 };
@@ -48,6 +51,7 @@ pub(super) fn walk(
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
     camera: Single<&GameplayCamera>,
+    perspective: Res<CameraPerspective>,
     player: Single<
         (&mut Transform, &FlightState, &mut GravityState, &mut WalkingState),
         With<PlayerEntity>,
@@ -86,9 +90,7 @@ pub(super) fn walk(
         }
     }
 
-    let yaw_rotation = Quat::from_rotation_y(camera.yaw);
-    let forward = yaw_rotation * Vec3::NEG_Z;
-    let right = yaw_rotation * Vec3::X;
+    let (forward, right) = perspective.horizontal_movement_axes(camera.yaw);
     let mut input = Vec3::ZERO;
 
     if keys.pressed(KeyCode::KeyW) {
