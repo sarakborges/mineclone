@@ -331,6 +331,7 @@ fn attach_loaded_player_model(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn configure_loaded_player_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
