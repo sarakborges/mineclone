@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use super::{microblock::MicroblockMask, world::VoxelWorld};
+use super::{
+    log_variant::is_hollow_log_id,
+    microblock::{HOLLOW_LOG_WALL_THICKNESS, MicroblockMask},
+    world::VoxelWorld,
+};
 
 const COLLISION_EPSILON: f32 = 0.0001;
 const MICRO_EDGE: f32 = 8.0;
@@ -25,8 +29,21 @@ pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
                     return true;
                 }
 
-                let shape = MicroblockMask::geometry_for_cell(cell);
                 let origin = voxel.as_vec3();
+                if is_hollow_log_id(cell.block_id) && !MicroblockMask::is_modified(cell) {
+                    let local_min = (min - origin).max(Vec3::ZERO);
+                    let local_max = (max - origin).min(Vec3::ONE);
+                    if hollow_log_shell_intersects(
+                        cell.orientation,
+                        local_min,
+                        local_max,
+                    ) {
+                        return true;
+                    }
+                    continue;
+                }
+
+                let shape = MicroblockMask::geometry_for_cell(cell);
                 let min_cell = ((min - origin) * MICRO_EDGE)
                     .floor()
                     .as_ivec3()
@@ -49,6 +66,25 @@ pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
     }
 
     false
+}
+
+fn hollow_log_shell_intersects(
+    orientation: crate::content::block_orientation::BlockOrientation,
+    local_min: Vec3,
+    local_max: Vec3,
+) -> bool {
+    use crate::content::block_orientation::BlockOrientation;
+
+    let radial_axes = match orientation {
+        BlockOrientation::Y => [0, 2],
+        BlockOrientation::Z => [0, 1],
+        BlockOrientation::X => [1, 2],
+    };
+
+    radial_axes.into_iter().any(|axis| {
+        local_min[axis] < HOLLOW_LOG_WALL_THICKNESS
+            || local_max[axis] > 1.0 - HOLLOW_LOG_WALL_THICKNESS
+    })
 }
 
 /// Try to climb a collision that is no taller than the entity step height.
