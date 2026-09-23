@@ -19,6 +19,7 @@ use super::{
     chunk_archive::ArchivedChunk,
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
+    log_state::{has_valid_log_state, is_hollow},
     microblock::{ARTISANS_KIT_MASK_PROPERTY, LEGACY_ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
@@ -492,6 +493,11 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
     if let Some(encoded) = artisans_kit_mask {
         cell = MicroblockMask::apply_saved(cell, &encoded)
             .ok_or_else(|| invalid_data("invalid Artisan's Kit mask"))?;
+    }
+    if !has_valid_log_state(cell, definition)
+        || (is_hollow(cell) && MicroblockMask::is_modified(cell))
+    {
+        return Err(invalid_data("invalid or mutually exclusive log state"));
     }
     Ok(cell)
 }
