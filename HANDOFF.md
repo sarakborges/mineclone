@@ -248,7 +248,7 @@ somente os inputs necessários para as regras de New/Load e Normal/Flat/Void, e
 fallback para posição salva, busca de spawn e Void sem player persistido foram
 preservadas. VERSION: `0.50.135`.
 
-CI de Q21: pendente neste checkpoint.
+CI de Q21: **verde** no run `35869445843` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
