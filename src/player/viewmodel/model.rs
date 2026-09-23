@@ -11,7 +11,7 @@ use bevy::{
 use crate::{
     content::player::PlayerDefinition,
     player::{
-        PLAYER_SKIN_TEXTURE_PATH, apply_player_skin_material,
+        apply_player_skin_material,
         camera::GameplayCamera,
         hotbar::PlayerHotbar,
     },
