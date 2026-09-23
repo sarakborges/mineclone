@@ -4,9 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::creature::CreatureCollider,
     creatures::CreatureInstance,
-    player::{
-        PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity,
-    },
+    player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity},
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
 
@@ -31,8 +29,16 @@ type CreatureContacts<'w, 's> = Query<
 fn player_bounds(eye: Vec3) -> Bounds {
     let feet = eye.y - PLAYER_EYE_HEIGHT;
     (
-        Vec3::new(eye.x - PLAYER_HALF_WIDTH, feet, eye.z - PLAYER_HALF_WIDTH),
-        Vec3::new(eye.x + PLAYER_HALF_WIDTH, feet + PLAYER_HEIGHT, eye.z + PLAYER_HALF_WIDTH),
+        Vec3::new(
+            eye.x - PLAYER_HALF_WIDTH,
+            feet,
+            eye.z - PLAYER_HALF_WIDTH,
+        ),
+        Vec3::new(
+            eye.x + PLAYER_HALF_WIDTH,
+            feet + PLAYER_HEIGHT,
+            eye.z + PLAYER_HALF_WIDTH,
+        ),
     )
 }
 
@@ -54,18 +60,35 @@ fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
     if overlap_y <= 0.0 {
         return None;
     }
+
     let overlap_x = first.1.x.min(second.1.x) - first.0.x.max(second.0.x);
     let overlap_z = first.1.z.min(second.1.z) - first.0.z.max(second.0.z);
     if overlap_x <= 0.0 || overlap_z <= 0.0 {
         return None;
     }
+
     let (axis, penetration, first_center, second_center) = if overlap_x <= overlap_z {
-        (HorizontalAxis::X, overlap_x, first.0.x + first.1.x, second.0.x + second.1.x)
+        (
+            HorizontalAxis::X,
+            overlap_x,
+            first.0.x + first.1.x,
+            second.0.x + second.1.x,
+        )
     } else {
-        (HorizontalAxis::Z, overlap_z, first.0.z + first.1.z, second.0.z + second.1.z)
+        (
+            HorizontalAxis::Z,
+            overlap_z,
+            first.0.z + first.1.z,
+            second.0.z + second.1.z,
+        )
     };
     // When centers coincide, pick a stable side rather than producing NaN.
-    let second_direction = if second_center >= first_center { 1.0 } else { -1.0 };
+    let second_direction = if second_center >= first_center {
+        1.0
+    } else {
+        -1.0
+    };
+
     Some(HorizontalContact {
         axis,
         penetration: penetration + CONTACT_EPSILON,
@@ -74,8 +97,12 @@ fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
 }
 
 fn clear_volume(world: &VoxelWorld, bounds: Bounds) -> bool {
-    let min = (bounds.0 + Vec3::splat(CONTACT_EPSILON)).floor().as_ivec3();
-    let max = (bounds.1 - Vec3::splat(CONTACT_EPSILON)).floor().as_ivec3();
+    let min = (bounds.0 + Vec3::splat(CONTACT_EPSILON))
+        .floor()
+        .as_ivec3();
+    let max = (bounds.1 - Vec3::splat(CONTACT_EPSILON))
+        .floor()
+        .as_ivec3();
     for y in min.y..=max.y {
         for z in min.z..=max.z {
             for x in min.x..=max.x {
@@ -101,6 +128,7 @@ fn push(
     if distance == 0.0 {
         return 0.0;
     }
+
     let steps = (distance.abs() / COLLISION_STEP).ceil().max(1.0) as usize;
     let step = distance / steps as f32;
     let mut moved = 0.0;
@@ -178,12 +206,14 @@ pub(super) fn resolve_player_creature_contacts(
     for _ in 0..MAX_CONTACT_PASSES {
         let mut had_contact = false;
         for (mut creature, collider) in &mut creatures {
-            let Some(contact) =
-                contact(player_bounds(player.translation), collider.bounds(creature.translation))
-            else {
+            let Some(contact) = contact(
+                player_bounds(player.translation),
+                collider.bounds(creature.translation),
+            ) else {
                 continue;
             };
             had_contact = true;
+
             resolve_contact_pair(
                 &world,
                 &mut player.translation,
