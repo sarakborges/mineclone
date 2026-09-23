@@ -141,11 +141,14 @@ fn spawn_pause_menu(
 #[derive(SystemParam)]
 struct PauseMenuContext<'w, 's> {
     session: Res<'w, WorldSession>,
-    non_world_cameras: Query<
+    thumbnail_cameras: Query<
         'w,
         's,
-        (Entity, &'static mut Camera),
-        Without<GameplayWorldCamera>,
+        (
+            Entity,
+            &'static mut Camera,
+            Option<&'static GameplayWorldCamera>,
+        ),
     >,
     thumbnail_captures: Query<'w, 's, (), With<WorldThumbnailCapture>>,
     settings_mode: ResMut<'w, SettingsScreenMode>,
@@ -206,7 +209,7 @@ fn handle_pause_menu_buttons(
                 };
                 begin_world_thumbnail_capture(
                     &mut commands,
-                    &mut context.non_world_cameras,
+                    &mut context.thumbnail_cameras,
                     world_id,
                     completion,
                 );
