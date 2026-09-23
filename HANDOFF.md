@@ -68,7 +68,7 @@ accessor público de `column_spans` deixaram de existir. Isso reduz divergência
 entre geração e colocação manual e elimina um `Vec` temporário por peça.
 VERSION: `0.50.115`.
 
-CI de Q5: pendente neste checkpoint.
+CI de Q5: **verde** no run `35817031531` após restaurar o accessor de column spans ainda usado por restrictions e remover imports obsoletos.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
