@@ -27,7 +27,6 @@ use super::{
         surface_block_srgb_with_cache,
     },
     meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
-    log_state::texture_face,
     microblock::MicroblockMask,
     orientation::source_face_for_oriented_face,
     quad::VOXEL_FACE_UVS,
@@ -262,7 +261,7 @@ where
                     continue;
                 }
 
-                let face_visual = block_visual.faces.get(texture_face(cell, source_face));
+                let face_visual = block_visual.faces.get(source_face);
                 let texture_rotation = if face_visual.uses_texture_rotation {
                     cell.texture_rotation
                 } else {
