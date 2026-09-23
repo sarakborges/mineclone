@@ -79,15 +79,15 @@ pub(super) fn restore_saved_creatures(
     language: Res<ActiveLanguage>,
     mut pending: ResMut<PendingCreatureRestores>,
 ) {
-    if pending.creatures.is_empty() {
+    if pending.is_empty() {
         return;
     }
 
-    let saved = std::mem::take(&mut pending.creatures);
+    let saved = pending.take();
     for creature in saved {
         let feet = Vec3::from_array(creature.position);
         if !world.is_loaded_at(feet.floor().as_ivec3()) {
-            pending.creatures.push(creature);
+            pending.defer(creature);
             continue;
         }
 
