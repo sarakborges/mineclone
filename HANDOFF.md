@@ -11728,3 +11728,31 @@ CI funcional push `35801677259`: **verde**.
 Commit de versão: `021ce09a622a32badd5a5307a67d3b57a14dc50a`.
 CI de versão push `35801833908`: **verde**.
 VERSION: `0.50.96`.
+
+## 2026-09-22 — Character HUD: viewport ancorado no frame visível
+
+Após a versão 0.50.96, Character Info continuava renderizando corretamente o
+mesmo `PlayerModelRoot`, enquanto o Character HUD permanecia com a área do
+avatar vazia. Isso isolou o problema no anchor/layout do viewport pequeno do HUD,
+não no modelo, render layer, câmera 3D ou material.
+
+Correção:
+- o HUD deixou de usar um Node-filho vazio de 54×54 como
+  `PlayerHudPreviewViewport`;
+- o marker de viewport agora é aplicado diretamente no próprio frame visível
+  64×64 do avatar;
+- a câmera do HUD passa, portanto, a usar exatamente o mesmo retângulo que a UI
+  desenha para o avatar, eliminando dependência de layout/transform de um filho
+  invisível;
+- Character Info não foi alterado;
+- a ordem consolidada da stack permanece:
+  - Character Info: `UI_CAMERA_ORDER + 1`;
+  - Character HUD: `UI_CAMERA_ORDER + 2`.
+
+Commit funcional:
+- `bb52f3b6fef0676cb30ce1c97597231378bad53c`.
+
+CI funcional push `35802313828`: **verde**.
+Commit de versão: `a761a499424705ee26a1f715bdd3ce67fd8b8754`.
+CI de versão push `35802418113`: **verde**.
+VERSION: `0.50.97`.
