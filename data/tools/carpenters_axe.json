@@ -1,0 +1,15 @@
+{
+  "id": "asteria:carpenters_axe",
+  "name": {
+    "english": "Carpenter's Axe",
+    "portuguese_brazil": "Machado de Carpinteiro",
+    "spanish": "Hacha de Carpintero"
+  },
+  "hint": {
+    "english": "A specialized woodworking tool.",
+    "portuguese_brazil": "Uma ferramenta especializada para marcenaria.",
+    "spanish": "Una herramienta especializada para carpintería."
+  },
+  "category": "tools",
+  "icon": "textures/tools/carpenters-axe.png"
+}
