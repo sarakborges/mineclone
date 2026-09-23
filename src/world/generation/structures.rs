@@ -908,39 +908,30 @@ fn rasterize_structure(
         },
     );
 
-    if structure.clear_above == 0 {
-        return;
-    }
-
     let chunk_size = CHUNK_SIZE as i32;
-    for span in structure.column_spans() {
-        let horizontal =
-            origin.xz() + rotation.rotate_horizontal(span.offset);
-        let local_x = horizontal.x - context.chunk_origin.x;
-        let local_z = horizontal.y - context.chunk_origin.z;
-        if local_x < 0 || local_z < 0 || local_x >= chunk_size || local_z >= chunk_size {
+    for world_position in structure.clear_above_positions(rotation, origin) {
+        let local = world_position - context.chunk_origin;
+        if local.x < 0
+            || local.y < 0
+            || local.z < 0
+            || local.x >= chunk_size
+            || local.y >= chunk_size
+            || local.z >= chunk_size
+        {
             continue;
         }
 
-        for delta_y in 1..=structure.clear_above as i32 {
-            let world_y = origin.y + span.max_y_offset + delta_y;
-            let local_y = world_y - context.chunk_origin.y;
-            if local_y < 0 || local_y >= chunk_size {
-                continue;
-            }
-
-            let local_x = local_x as usize;
-            let local_y = local_y as usize;
-            let local_z = local_z as usize;
-            let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
-            if bit_get(claimed, index) {
-                continue;
-            }
-
-            chunk.clear_block(local_x, local_y, local_z);
-            chunk.clear_fluid(local_x, local_y, local_z);
-            bit_set(claimed, index);
+        let local_x = local.x as usize;
+        let local_y = local.y as usize;
+        let local_z = local.z as usize;
+        let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+        if bit_get(claimed, index) {
+            continue;
         }
+
+        chunk.clear_block(local_x, local_y, local_z);
+        chunk.clear_fluid(local_x, local_y, local_z);
+        bit_set(claimed, index);
     }
 }
 
