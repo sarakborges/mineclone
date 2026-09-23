@@ -288,8 +288,6 @@ impl InventoryTooltipView<'_, '_> {
     }
 }
 
-}
-
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
     'w,
     's,
