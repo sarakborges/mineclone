@@ -27,6 +27,7 @@ use super::{
         surface_block_srgb_with_cache,
     },
     meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
+    log_state::texture_face,
     microblock::MicroblockMask,
     orientation::source_face_for_oriented_face,
     quad::VOXEL_FACE_UVS,
@@ -106,7 +107,7 @@ where
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
 
-        if !MicroblockMask::is_modified(*cell) {
+        if !MicroblockMask::has_partial_geometry(*cell) {
             let source_index = active_sources.len();
             debug_assert!(source_index < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
             active_sources.push(VoxelMeshSource {
@@ -202,7 +203,7 @@ where
                     face,
                 );
                 let partial_occluder = neighbor_cell
-                    .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
+                    .filter(|neighbor| MicroblockMask::has_partial_geometry(*neighbor))
                     .filter(|neighbor| {
                         let definition = block_lookup.get(neighbor.block_id);
                         occludes(
@@ -261,7 +262,7 @@ where
                     continue;
                 }
 
-                let face_visual = block_visual.faces.get(source_face);
+                let face_visual = block_visual.faces.get(texture_face(cell, source_face));
                 let texture_rotation = if face_visual.uses_texture_rotation {
                     cell.texture_rotation
                 } else {
