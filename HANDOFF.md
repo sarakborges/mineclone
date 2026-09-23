@@ -653,6 +653,19 @@ combate. VERSION: `0.50.175`.
 CI de Q54: **verde** no run `35890881976` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q55 — promover RNG compartilhado para gameplay
+
+O xorshift32 deixou de pertencer ao domínio `creatures` e passou a
+`gameplay/random.rs`, porque também é usado por attack effects em targeting.
+Natural spawn, creature motion, particles e efeitos probabilísticos de ataque
+agora reutilizam `next_u32`, `next_unit_f32` e `next_signed_f32`; os
+seeds e políticas de consumo continuam locais a cada sistema. O módulo
+`creatures/random.rs` e os helpers duplicados remanescentes foram removidos.
+VERSION: `0.50.176`.
+
+CI de Q55: **verde** no run `35891400788` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
