@@ -756,6 +756,17 @@ namespaces que impedem o mesmo ID de ser tool e block/layer. VERSION:
 CI de Q62: **verde** no run `35894479724` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q63 — mover validação de creature spawns para BiomeDefinition
+
+A checagem de que cada `biome.creatureSpawns[].creature` resolve para uma
+creature existente saiu do loop global e passou a
+`BiomeDefinition::validate_spawn_references`. `content::validation` apenas
+coordena a chamada junto às demais validações especializadas do biome, sem
+conhecer a estrutura interna da lista de spawns. VERSION: `0.50.187`.
+
+CI de Q63: **verde** no run `35895014590` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
