@@ -197,7 +197,7 @@ def material(name, color, alpha=1., rough=1.0, emission=None, alpha_mode=None, u
 materials = [
     # Preserve the original cubic silhouette/core. Shell shading is an object-local
     # 5% outer-volume vertex gradient, so it stays soft and stable while rotating.
-    material('SlimeShell', [.2793,.6883,.5024], unlit=True),
+    material('SlimeShell', [.2992,.5725,.4483], unlit=True),
     material('SlimeCore', [.18,.70,.57], unlit=True),
     material('SlimeFace', [1.,1.,1.], alpha_mode='BLEND', unlit=True),
 ]
