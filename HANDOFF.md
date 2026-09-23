@@ -410,6 +410,25 @@ matching inline que ainda não reutilizava `id_matches_prefix`. VERSION:
 
 CI de Q36: **verde** no run `35882339417` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q37 — encapsular catálogo read-only do autocomplete
+
+A resolução de sugestões em `hud/chat/autocomplete.rs` não repassa mais
+creatures, biomes, structures, structure sets e idioma como cinco dependências
+paralelas entre `update_autocomplete`, `ChatAutocomplete::refresh` e
+`suggestions_for`. `AutocompleteCatalog` representa somente essa view
+read-only do conteúdo e passou a ser também o owner de
+`structure_suggestions`; `AutocompleteContent` continua sendo o SystemParam
+de entrada e expõe apenas a conversão para o catálogo emprestado. Isso reduz
+acoplamento de assinatura sem esconder estado mutável ou ampliar o contexto.
+VERSION: `0.50.157`.
+
+A primeira validação do bloco, run `35882822138`, foi bloqueada por um
+`too_many_arguments` introduzido concorrentemente em
+`player/movement/entity_collision.rs`. A correção concorrente
+`db59ea44a73c3ee4653abd39126cbdb69a61937d` nomeou a geometria de contato e
+reduziu a assinatura sem suppressão. CI acumulado de Q37: **verde** no run
+`35883024902` (localizações, Clippy com `-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
