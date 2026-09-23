@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     entity::EntityHealth,
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
-    content::{biome::BiomeRegistry, creature::CreatureRegistry},
+    content::{biome::BiomeRegistry, creature::{CreatureCollider, CreatureRegistry}},
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
     world::{
@@ -37,6 +37,11 @@ pub(crate) struct CreatureInstance {
 
 #[derive(Component)]
 pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
+
+/// Visual targeting can be larger than the physics AABB. This prevents a ray
+/// from visually entering a creature before gameplay considers it targeted.
+#[derive(Component, Clone, Copy)]
+pub(crate) struct CreatureTargetCollider(pub(crate) CreatureCollider);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -170,6 +175,7 @@ fn spawn_creature_with_health(
             |health| EntityHealth::restored(definition.health, health),
         ),
         definition.collider,
+        CreatureTargetCollider(definition.target_collider()),
         Transform::from_translation(feet),
         Visibility::default(),
         DespawnOnExit(GameState::Gameplay),
