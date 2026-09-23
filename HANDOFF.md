@@ -83,6 +83,17 @@ necessários (`VoxelTopologyRuntime`, registries, seed e geometria). VERSION:
 
 CI de Q6: **verde** no run `35817270980` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q7 — centralizar resolução validada de origin_y
+
+`world/generation/structures.rs` não repete mais o trio
+`structure_origin_y` + `compute_structure_origin_y` + restrictions nos
+caminhos de probe, estrutura direta e structure set. O helper
+`validated_structure_origin_y` virou a única fronteira para cachear e validar
+o Y de origem de uma peça gerada, reduzindo o risco de divergência entre locate,
+candidate probing e geração efetiva. VERSION: `0.50.117`.
+
+CI de Q7: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
