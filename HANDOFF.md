@@ -216,7 +216,7 @@ Character Info, inventory HUD, player preview/model e brush palette passaram a
 consumir a mesma fonte de verdade. `CharacterInfoInputState`, antes necessário
 apenas para coordenar Esc com pause, deixou de existir. VERSION: `0.50.129`.
 
-CI de Q18: pendente neste checkpoint.
+CI de Q18: **verde** no run `35865794175` após remover o helper obsoleto `reset_next_state_on_escape` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
