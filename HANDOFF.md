@@ -639,6 +639,20 @@ mesmo contrato já usado por stepping e entity contacts. VERSION: `0.50.174`.
 CI de Q53: **verde** no run `35890258890` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q54 — extrair runtime de ataque a creatures
+
+`targeting/interaction.rs::edit_targeted_block` não depende mais de
+`#[allow(clippy::too_many_arguments)]`. `CreatureAttackRuntime` agrupa a
+query mutável da creature, Commands e o estado pseudoaleatório e passou a ser
+owner da aplicação de damage, efeitos de knockback, trigger de animação e
+inserção de `CreatureDeathTimer`. O editor principal continua responsável
+por input, seleção de attack definition, feedback do viewmodel e edição de
+voxel/tool, reduzindo mistura de responsabilidades sem alterar o contrato de
+combate. VERSION: `0.50.175`.
+
+CI de Q54: **verde** no run `35890881976` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
