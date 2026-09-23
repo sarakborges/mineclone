@@ -682,23 +682,6 @@ ociosos; a correção permaneceu no mesmo bloco/version. CI de Q56: **verde** no
 run `35891909492` (localizações, Clippy com `-D warnings` e
 `cargo check`).
 
-### Q56 — mover runtime de combate para creatures
-
-`CreatureAttackRuntime` saiu de `targeting/interaction.rs` para
-`creatures/combat.rs`, junto com a aplicação de damage, chance de efeitos,
-knockback, animação de hurt/death e agendamento de despawn. O targeting mantém
-apenas seleção do attack definition, posição do jogador e feedback do
-viewmodel, delegando a mutação da creature ao domínio que possui health/motion
-e lifecycle. `CreatureMotion` e `CreatureDeathTimer` deixaram de ser
-re-exportados pelo módulo raiz quando não havia mais callers externos.
-VERSION: `0.50.178`.
-
-A primeira validação do bloco, run `35891770968`, encontrou esses dois
-re-exports agora não usados; a correção permaneceu no mesmo bloco/version.
-CI de Q56: **verde** no run `35891909492` (localizações, Clippy com
-`-D warnings` e `cargo check`).
-
-
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
