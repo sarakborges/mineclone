@@ -20,11 +20,8 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    player::{
-        PLAYER_DISPLAY_NAME, camera::look::MouseLookInputState,
-        character_info::CharacterInfoState, inventory::InventoryState,
-    },
-    tools::BrushPaletteState,
+    gameplay::modal::GameplayModalState,
+    player::{PLAYER_DISPLAY_NAME, camera::look::MouseLookInputState},
     world::warp::PendingWarp,
     ui::text_input::editable_value,
 };
@@ -166,9 +163,7 @@ struct ChatInputContext<'w> {
     keybinds: Res<'w, Keybinds>,
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
-    inventory: Res<'w, State<InventoryState>>,
-    character_info: Res<'w, State<CharacterInfoState>>,
-    brush_palette: Res<'w, State<BrushPaletteState>>,
+    modal: Res<'w, State<GameplayModalState>>,
     focus: ResMut<'w, InputFocus>,
     autocomplete: ResMut<'w, ChatAutocomplete>,
 }
@@ -230,9 +225,7 @@ fn handle_chat_input(
 
     let can_open = *input.pause.get() == PauseState::Running
         && *input.settings.get() == SettingsState::Closed
-        && *input.inventory.get() == InventoryState::Closed
-        && *input.character_info.get() == CharacterInfoState::Closed
-        && *input.brush_palette.get() == BrushPaletteState::Closed;
+        && *input.modal.get() == GameplayModalState::Closed;
     let has_command_modifier = [
         KeyCode::ControlLeft,
         KeyCode::ControlRight,
