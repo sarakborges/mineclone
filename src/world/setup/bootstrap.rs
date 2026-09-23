@@ -217,6 +217,40 @@ impl BootstrapSpawnContext<'_> {
     }
 }
 
+fn initialize_bootstrap_persistence(
+    commands: &mut Commands,
+    config: &mut WorldBootstrapConfig<'_>,
+    persistence: &mut WorldBootstrapPersistence<'_>,
+    forced_spawn_biome: Option<&str>,
+    biome_size_multiplier: f32,
+    world_generation: WorldGenerationSettings,
+) {
+    match *persistence.load_mode {
+        WorldLoadMode::New => {
+            commands.insert_resource(VoxelWorld::default());
+            persistence.save.begin_new_world(
+                *config.seed,
+                &config.current_dimension.id,
+                *config.game_rules,
+                forced_spawn_biome,
+                biome_size_multiplier,
+                world_generation,
+            );
+        }
+        WorldLoadMode::Load => {
+            assert!(
+                persistence.save.has_world(),
+                "cannot load a world that is not saved in memory"
+            );
+            assert!(
+                persistence.existing_world.is_some(),
+                "saved world voxel state is missing from memory"
+            );
+            *config.game_rules = persistence.save.game_rules();
+        }
+    }
+}
+
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -334,30 +368,14 @@ pub(in crate::world) fn begin_world_loading(
         .collect::<std::collections::HashSet<_>>();
     feature_fields.retain_for_chunks(&bootstrap_chunks);
 
-    match *persistence.load_mode {
-        WorldLoadMode::New => {
-            commands.insert_resource(VoxelWorld::default());
-            persistence.save.begin_new_world(
-                *config.seed,
-                &config.current_dimension.id,
-                *config.game_rules,
-                forced_spawn_biome.as_deref(),
-                biome_size_multiplier,
-                world_generation,
-            );
-        }
-        WorldLoadMode::Load => {
-            assert!(
-                persistence.save.has_world(),
-                "cannot load a world that is not saved in memory"
-            );
-            assert!(
-                persistence.existing_world.is_some(),
-                "saved world voxel state is missing from memory"
-            );
-            *config.game_rules = persistence.save.game_rules();
-        }
-    }
+    initialize_bootstrap_persistence(
+        &mut commands,
+        &mut config,
+        &mut persistence,
+        forced_spawn_biome.as_deref(),
+        biome_size_multiplier,
+        world_generation,
+    );
 
     commands.insert_resource(world_generation);
     commands.insert_resource(biome_field);
