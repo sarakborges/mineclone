@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
 use super::{
-    microblock::{MICROBLOCK_EDGE, occupied_cell, parent_voxel},
+    cell::VoxelCell,
+    log_variant::is_hollow_log_id,
+    microblock::{HOLLOW_LOG_EDGE, MICROBLOCK_EDGE, MicroblockMask},
     world::VoxelWorld,
 };
 
@@ -47,8 +49,8 @@ pub(crate) fn raycast_micro_voxels(
 
     // Scale both origin and velocity. DDA times remain measured in macro-block
     // world units, so the existing target-range semantics are unchanged.
-    let direction = direction.normalize() * MICROBLOCK_EDGE as f32;
-    let origin = origin * MICROBLOCK_EDGE as f32;
+    let direction = direction.normalize() * HOLLOW_LOG_EDGE as f32;
+    let origin = origin * HOLLOW_LOG_EDGE as f32;
     let mut fine = origin.floor().as_ivec3();
     let step = IVec3::new(
         direction.x.signum() as i32,
@@ -69,10 +71,10 @@ pub(crate) fn raycast_micro_voxels(
     );
 
     loop {
-        if let Some(cell) = occupied_cell(world, fine) {
+        if let Some((cell, voxel, artisan_fine)) = occupied_raycast_cell(world, fine) {
             return Some(MicroVoxelHit {
-                voxel: parent_voxel(fine),
-                fine,
+                voxel,
+                fine: artisan_fine,
                 block_id: cell.block_id,
                 normal: entry_normal,
             });
@@ -102,6 +104,43 @@ pub(crate) fn raycast_micro_voxels(
             return None;
         }
     }
+}
+
+fn occupied_raycast_cell(
+    world: &VoxelWorld,
+    fine: IVec3,
+) -> Option<(VoxelCell, IVec3, IVec3)> {
+    let voxel = IVec3::new(
+        fine.x.div_euclid(HOLLOW_LOG_EDGE),
+        fine.y.div_euclid(HOLLOW_LOG_EDGE),
+        fine.z.div_euclid(HOLLOW_LOG_EDGE),
+    );
+    let local = [
+        fine.x.rem_euclid(HOLLOW_LOG_EDGE) as usize,
+        fine.y.rem_euclid(HOLLOW_LOG_EDGE) as usize,
+        fine.z.rem_euclid(HOLLOW_LOG_EDGE) as usize,
+    ];
+    let cell = world.cell_at(voxel)?;
+
+    let occupied = if MicroblockMask::is_modified(cell) {
+        let artisan_local = local.map(|axis| axis / 2);
+        MicroblockMask::from_cell(cell).contains(artisan_local)
+    } else if is_hollow_log_id(cell.block_id) {
+        MicroblockMask::hollow_log_contains(cell.orientation, local)
+    } else {
+        true
+    };
+    if !occupied {
+        return None;
+    }
+
+    let artisan_local = IVec3::new(
+        (local[0] / 2) as i32,
+        (local[1] / 2) as i32,
+        (local[2] / 2) as i32,
+    );
+    let artisan_fine = voxel * MICROBLOCK_EDGE + artisan_local;
+    Some((cell, voxel, artisan_fine))
 }
 
 fn reciprocal_abs(value: f32) -> f32 {
