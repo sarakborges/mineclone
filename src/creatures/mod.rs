@@ -14,10 +14,8 @@ use crate::{
 };
 
 pub(crate) use combat::CreatureAttackRuntime;
-pub(crate) use lifecycle::CreatureDeathTimer;
 use lifecycle::despawn_dead_creatures;
 pub(crate) use material::apply_creature_material_overrides;
-pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
 pub(crate) use persistence::{PendingCreatureRestores, SavedCreature};
 use natural_spawn::natural_spawn_creatures;
