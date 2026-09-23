@@ -7,7 +7,6 @@ use crate::{
         pause_state::PauseState,
         settings_state::{SettingsScreenMode, SettingsState},
     },
-    player::camera::GameplayWorldCamera,
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
@@ -18,7 +17,8 @@ use crate::{
     world::{
         save_session::{WorldSaveContext, WorldSession},
         thumbnail::{
-            WorldThumbnailCapture, WorldThumbnailCompletion, begin_world_thumbnail_capture,
+            WorldThumbnailCameraQuery, WorldThumbnailCapture, WorldThumbnailCompletion,
+            begin_world_thumbnail_capture,
         },
     },
 };
@@ -155,15 +155,7 @@ fn spawn_pause_menu(
 #[derive(SystemParam)]
 struct PauseMenuContext<'w, 's> {
     session: Res<'w, WorldSession>,
-    thumbnail_cameras: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static mut Camera,
-            Option<&'static GameplayWorldCamera>,
-        ),
-    >,
+    thumbnail_cameras: WorldThumbnailCameraQuery<'w, 's>,
     thumbnail_captures: Query<'w, 's, (), With<WorldThumbnailCapture>>,
     settings_mode: ResMut<'w, SettingsScreenMode>,
     feedback: Query<'w, 's, &'static mut Text, With<PauseSaveFeedback>>,
