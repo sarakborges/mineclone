@@ -13542,3 +13542,26 @@ Nome/id autoritativos agora:
 Os caminhos/definition antigos `slime_air` foram removidos.
 
 VERSION: `0.50.192`.
+
+
+## 2026-09-23 — Creative inventory substitui o inventory e reutiliza a hotbar real
+
+Em Creative mode, abrir o inventory agora mostra somente o Creative Inventory; o
+painel de inventory/backpack normal deixa de ser renderizado ao lado dele. Em
+Survival, o fluxo continua abrindo somente o inventory normal. Character Info
+continua reutilizando o painel de inventory do jogador, sem alteração.
+
+O Creative Inventory ganhou um footer com os nove slots da hotbar e o botão de
+deletar item na mesma posição relativa usada pelo inventory normal. Esse footer
+não possui estado próprio: ele reutiliza diretamente os slots
+`HOTBAR_INVENTORY_OFFSET..HOTBAR_SLOT_COUNT` do `PlayerHotbar`, os mesmos
+`InventorySlot` e os mesmos handlers de movimentação/sincronização. Assim,
+mover/colocar/trocar um item nesse footer altera imediatamente a hotbar real do
+jogador e não existe uma segunda cópia de hotbar específica do Creative.
+
+A composição hotbar + trash também passou a ter um único owner:
+`spawn_player_hotbar_footer` em `layout/player.rs`. O inventory normal e o
+Creative Inventory chamam o mesmo primitive, garantindo posição e comportamento
+idênticos para o botão de delete e evitando duplicação de UI/interação.
+
+VERSION: `0.50.193`.

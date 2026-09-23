@@ -107,8 +107,9 @@ pub(super) fn spawn_inventory_root(
         .with_children(|root| {
             if state.game_mode.has_creative_inventory() {
                 spawn_creative_panel(root, state, items);
+            } else {
+                spawn_player_inventory_panel(root, state, items);
             }
-            spawn_player_inventory_panel(root, state, items);
             spawn_item_tooltip(root);
 
             let Some(item_id) = state.cursor.item() else {

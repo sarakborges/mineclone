@@ -100,41 +100,7 @@ pub(super) fn spawn_player_inventory_panel(
                 }
             });
 
-        panel
-            .spawn((
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    column_gap: px(TRASH_GAP),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ))
-            .with_children(|footer| {
-                footer
-                    .spawn((
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: px(SLOT_GAP),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|hotbar_row| {
-                        for hotbar_index in 0..HOTBAR_SLOT_COUNT {
-                            spawn_slot(
-                                hotbar_row,
-                                HOTBAR_INVENTORY_OFFSET + hotbar_index,
-                                false,
-                                hotbar,
-                                items,
-                            );
-                        }
-                    });
-
-                spawn_inventory_trash_button(footer);
-            });
+        spawn_player_hotbar_footer(panel, hotbar, items);
     });
 }
 
@@ -245,6 +211,48 @@ fn spawn_inventory_sort_button(
                         Pickable::IGNORE,
                     ));
                 });
+        });
+}
+
+pub(super) fn spawn_player_hotbar_footer(
+    parent: &mut ChildSpawnerCommands,
+    hotbar: &PlayerHotbar,
+    items: &mut InventoryItemView<'_>,
+) {
+    parent
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(TRASH_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|footer| {
+            footer
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: px(SLOT_GAP),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|hotbar_row| {
+                    for hotbar_index in 0..HOTBAR_SLOT_COUNT {
+                        spawn_slot(
+                            hotbar_row,
+                            HOTBAR_INVENTORY_OFFSET + hotbar_index,
+                            false,
+                            hotbar,
+                            items,
+                        );
+                    }
+                });
+
+            spawn_inventory_trash_button(footer);
         });
 }
 

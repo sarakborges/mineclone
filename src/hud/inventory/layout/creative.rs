@@ -174,6 +174,8 @@ pub(super) fn spawn_creative_panel(
                             .insert(CreativeCatalogScrollbar);
                     });
             });
+
+        super::player::spawn_player_hotbar_footer(panel, state.hotbar, items);
     });
 }
 
