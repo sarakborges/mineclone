@@ -12,7 +12,7 @@ use game_rules_section::{
 use biome_size_multiplier_section::{
     BiomeSizeMultiplierInputState, handle_biome_size_multiplier_input,
     handle_biome_size_multiplier_keyboard, sync_biome_size_multiplier_input,
-    sync_biome_size_multiplier_slider_thumb,
+    sync_biome_size_multiplier_slider_thumb, sync_biome_size_multiplier_visibility,
 };
 use hud_section::{
     TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside,
@@ -211,6 +211,7 @@ impl Plugin for SettingsScreenPlugin {
                         sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
                         sync_world_name_view.run_if(in_state(GameState::NewWorld)),
                         sync_seed_text,
+                        sync_biome_size_multiplier_visibility.run_if(in_state(GameState::NewWorld)),
                         sync_biome_size_multiplier_input.run_if(in_state(GameState::NewWorld)),
                         sync_biome_size_multiplier_slider_thumb
                             .run_if(in_state(GameState::NewWorld)),
