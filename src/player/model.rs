@@ -17,10 +17,10 @@ use crate::{
     },
     content::player::PlayerDefinition,
     entity::EntityHealth,
+    gameplay::modal::GameplayModalState,
     player::{
         PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity,
         camera::{CameraPerspective, GameplayCamera},
-        character_info::CharacterInfoState,
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
         viewmodel::ViewModelAnimation,
@@ -472,7 +472,7 @@ fn configure_player_animation(
 fn sync_player_preview_model_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
-    character_info: Res<State<CharacterInfoState>>,
+    modal: Res<State<GameplayModalState>>,
     mut scene_roots: Query<(&PlayerModelSceneScope, &mut Visibility)>,
 ) {
     for (scene_scope, mut visibility) in &mut scene_roots {
@@ -488,7 +488,7 @@ fn sync_player_preview_model_visibility(
                 }
             }
             PlayerModelRenderScope::CharacterInfoPreview => {
-                if *character_info.get() == CharacterInfoState::Open {
+                if *modal.get() == GameplayModalState::CharacterInfo {
                     Visibility::Inherited
                 } else {
                     Visibility::Hidden
