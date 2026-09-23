@@ -410,6 +410,30 @@ matching inline que ainda não reutilizava `id_matches_prefix`. VERSION:
 
 CI de Q36: **verde** no run `35882339417` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q37 — encapsular o catálogo de conteúdo do autocomplete
+
+`ChatAutocomplete::refresh` e `suggestions_for` deixaram de receber cinco
+registries/resources soltos. `AutocompleteCatalog` concentra creatures,
+biomes, structures, structure sets e idioma, e passa a ser derivado diretamente
+de `AutocompleteContent`. O helper de sugestões de structures passou a método
+do catálogo, reduzindo acoplamento e mantendo a superfície de parâmetros
+semântica. VERSION: `0.50.157`.
+
+CI de Q37: **verde** no run `35883030671` junto ao HEAD consolidado.
+
+### Q38 — reutilizar o solver de penetração entre entidades
+
+`player/movement/entity_collision.rs` não mantém mais duas implementações do
+mesmo algoritmo de resolução de contato. `resolve_contact_pair` centraliza
+divisão da penetração, push voxel-safe dos dois participantes e transferência
+do remainder quando um lado encontra terreno. `HorizontalContact` encapsula
+axis, penetration e direction, mantendo o helper dentro do limite de argumentos
+sem qualquer `allow(clippy::too_many_arguments)`. Os systems
+player↔creature e creature↔creature agora cuidam apenas de descobrir pares e
+fornecer o share apropriado. VERSION: `0.50.158`.
+
+CI de Q38: pendente neste checkpoint.
+
 ### Q37 — encapsular catálogo read-only do autocomplete
 
 A resolução de sugestões em `hud/chat/autocomplete.rs` não repassa mais
