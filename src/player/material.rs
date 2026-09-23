@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::model::PLAYER_SKIN_TEXTURE_PATH;
+use super::PLAYER_SKIN_TEXTURE_PATH;
 
 pub(crate) fn apply_player_skin_material(
     material: &mut StandardMaterial,
