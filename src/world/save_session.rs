@@ -11,7 +11,7 @@ use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
     creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
@@ -179,6 +179,7 @@ impl WorldSaveEntities<'_, '_> {
 struct WorldSaveRegistries<'w> {
     biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
+    items: Res<'w, ItemRegistry>,
     layers: Res<'w, LayerRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
@@ -192,6 +193,7 @@ impl WorldSaveRegistries<'_> {
         SaveRegistries {
             biomes: &self.biomes,
             blocks: &self.blocks,
+            items: &self.items,
             layers: &self.layers,
             fluids: &self.fluids,
             tools: &self.tools,
