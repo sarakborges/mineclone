@@ -11975,3 +11975,22 @@ Commits:
   `70c985805c538f430b3e071baac887b42adb838a`;
 - remoção da restauração desnecessária:
   `e73645b8a8f50b19fb01ecb62b62486ac7463c21`.
+
+
+## 2026-09-22 — Slime com silhueta arredondada em pixel art
+
+O modelo 3D do slime deixou de usar uma caixa única no corpo externo. A silhueta agora é construída por degraus de cubo progressivamente menores no topo, removendo os cantos superiores como uma escultura voxel e aproximando o formato da referência arredondada sem introduzir geometria lisa.
+
+- base inferior permanece larga para preservar a leitura do rosto;
+- topo usa cinco níveis voxel-like, cada um menor que o anterior;
+- bounds visuais de repouso continuam em 0.96 x 0.90 x 0.96;
+- collider permanece 0.78 x 0.84 x 0.78 e não acompanha squash/stretch;
+- rosto foi reposicionado para o painel frontal inferior;
+- nomes de materiais, nodes e clips foram preservados para não quebrar tint/texturas/animações;
+- o gerador autoral e o `slime.glb` foram atualizados em conjunto.
+
+Commits funcionais:
+- gerador: `e45f52e21c63efb2d4cc0ffc9fc80a5d49a65c1e`;
+- GLB regenerado/alinhado ao gerador: `ed22f45e2d5b8a62ce0cf54873d041effe5d259f`.
+
+VERSION: `0.50.104`, commit de versão `1257714fc33bac83d995ddc1d3cbc901c951037c`.
