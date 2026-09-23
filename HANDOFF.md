@@ -11587,3 +11587,78 @@ CI funcional push `35798945862`: **verde**.
 Commit de versão: `57934dbeae5f8bae953aa7244449ba7a8e91ce35`.
 CI de versão push `35799095419`: **verde**.
 VERSION: `0.50.94`.
+
+## 2026-09-22 — Correções de modais, hotbar, player preview e thumbnail de save
+
+A partir da investigação das regressões recentes de HUD/Character Info, foram
+corrigidos vários comportamentos de UI e captura de save.
+
+### Player HUD / Character Info
+- atalhos de Inventory (`E`) e Character Info (`C`) deixaram de bloquear por
+  qualquer `InputFocus`;
+- agora o bloqueio acontece apenas quando o foco atual pertence a um
+  `EditableText`, evitando abrir/fechar modal enquanto o usuário digita sem
+  impedir os atalhos em uso normal;
+- Character Info voltou a permitir drag horizontal para orbitar a câmera do
+  modal ao redor do mesmo `PlayerModelRoot`, sem girar o modelo compartilhado;
+- o experimento de `SubCameraView` do player HUD foi removido: o HUD usa a
+  projeção/câmera 3D normal, com o mesmo framing-base full-body que o Character
+  Info, priorizando estabilidade do render no viewport pequeno;
+- o player continua sendo exibido por viewport 3D direto sobre o modelo real da
+  terceira pessoa; não foi reintroduzido `Handle<Image>` para o player.
+
+### Hotbar / Inventory
+- abrir Inventory não esconde mais a hotbar principal do gameplay;
+- a cópia visual da hotbar dentro do Inventory não destaca mais o slot
+  atualmente selecionado no gameplay;
+- a estilização dinâmica do Inventory também ignora o selected hotbar slot,
+  preservando highlight apenas para hover/search pertinentes ao Inventory.
+
+### Troca entre modais
+- abrir Inventory fecha Character Info e Brush Palette antes de abrir;
+- abrir Character Info fecha Inventory e Brush Palette antes de abrir;
+- foram removidos os `run_if(...Closed)` que impediam `E` e `C` de trocar
+  diretamente entre esses modais;
+- o estado de cada modal continua separado, mas a troca ocorre no mesmo input
+  frame via `NextState`, evitando precisar fechar manualmente o modal atual.
+
+### Screenshot / thumbnail de world save
+- a captura de thumbnail agora isola a pilha inteira de câmeras:
+  - somente `GameplayWorldCamera` permanece renderizando;
+  - UI camera, viewmodel, creature portrait, player HUD preview, Character Info
+    preview e qualquer outra câmera auxiliar entram em
+    `CameraOutputMode::Skip`;
+- os modos anteriores das câmeras são guardados no
+  `WorldThumbnailCapture` e restaurados ao finalizar a screenshot;
+- existe uma proteção adicional em `Last` que força toda câmera
+  `Without<GameplayWorldCamera>` para `Skip` enquanto a captura estiver
+  ativa, evitando que sistemas de HUD reativem câmeras no mesmo frame;
+- esse comportamento vale tanto para Leave World / Exit Game do pause menu
+  quanto para fechamento da janela durante gameplay.
+
+Commits principais deste lote:
+- hotbar continua visível com Inventory: `9bfe70a4e44e12dcb005f0a6ed688921ee1afdb2`,
+  `2dbb711f3369c4afcdb4fe191947fbdd232e2f63`;
+- hotbar interna sem selected highlight:
+  `06f4576316a32da0dd8bf1995ece958e064082b2`,
+  `2576bdb857acda8da7f9d85bcc9dd6c22b4cc60b`;
+- troca direta Inventory / Character Info:
+  `fac6115b1f96969a23df69fc430c77f1a0bfac36`,
+  `2eae077378481856126aa91cc2153a15a98d53d5`;
+- foco de texto corrigido para os atalhos:
+  `b2ceaba9de9fcd558db24516f465eb0a85fa89d9`,
+  `94f9d87b4b48e476aab2064cd6fc3fcd0a320f5a`;
+- drag/orbit do Character Info:
+  `e4d8bc4dad54db8b802a38e309908ae2b7fb918d`;
+- remoção do `SubCameraView` experimental do HUD:
+  `b4897626bce671ae8585c8f51b2a7f4daa8bcecc`;
+- isolamento completo de câmeras na thumbnail:
+  `d086350d9c53624a629867d49491286449c23672`,
+  `b2d41b56dca4ee63f7ffc6c3f72d86d22b631a47`,
+  `a8fb0553fa1d453ff8b4a089d088b8a3dc03c8e0`,
+  `6b1586a3c77f3172d26bf17d03f1b6f7fca8c45d`.
+
+CI funcional push `35800497605`: **verde**.
+Commit de versão: `7bcfc2dd087759f42ae06c48bc3ba30fbcc03c50`.
+CI de versão push `35800597838`: **verde**.
+VERSION: `0.50.95`.
