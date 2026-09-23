@@ -4,7 +4,10 @@ use crate::{
     content::{block::BlockRegistry, builtin_ids::CARPENTERS_AXE_TOOL_ID},
     gameplay::availability::world_interaction_available,
     player::viewmodel::ViewModelAnimation,
-    targeting::{ToolUse, ToolUseButton, block::{BlockTargetingSet, TargetedBlock}},
+    targeting::{
+        ToolUse, ToolUseButton,
+        block::{BlockTargetingSet, TargetedBlock},
+    },
     voxel::{
         edit::VoxelMutationRuntime,
         log_state::{
