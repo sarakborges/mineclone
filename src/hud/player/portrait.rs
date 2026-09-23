@@ -14,7 +14,11 @@ use crate::{
     },
     player::{
         character_info::CharacterInfoState,
-        model::{PLAYER_MODEL_PREVIEW_RENDER_LAYER, PlayerModelRoot},
+        model::{
+            PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
+            PLAYER_MODEL_HUD_RENDER_LAYER,
+            PlayerModelRoot,
+        },
     },
     rendering::camera_stack::UI_CAMERA_ORDER,
 };
@@ -77,7 +81,7 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
             clear_color: ClearColorConfig::None,
             ..default()
         },
-        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+        RenderLayers::layer(PLAYER_MODEL_HUD_RENDER_LAYER),
         DespawnOnExit(GameState::Gameplay),
     ));
 
@@ -90,7 +94,7 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
             clear_color: ClearColorConfig::None,
             ..default()
         },
-        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+        RenderLayers::layer(PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER),
         DespawnOnExit(GameState::Gameplay),
     ));
 }
