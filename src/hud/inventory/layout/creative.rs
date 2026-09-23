@@ -8,6 +8,8 @@ use crate::{
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
+        item::{ItemDefinition, ItemRegistry},
+        item_id::intern_item_id,
         layer::{LayerDefinition, LayerRegistry},
         layer_id::intern_layer_id,
         tool::{ToolDefinition, ToolRegistry},
@@ -34,6 +36,7 @@ use super::{
 
 #[derive(Clone, Copy)]
 enum CreativeCatalogItem<'a> {
+    Item(&'a ItemDefinition),
     Block(&'a BlockDefinition),
     Layer(&'a LayerDefinition),
     Tool(&'a ToolDefinition),
@@ -42,6 +45,7 @@ enum CreativeCatalogItem<'a> {
 impl<'a> CreativeCatalogItem<'a> {
     fn id(self) -> &'a str {
         match self {
+            Self::Item(item) => &item.id,
             Self::Block(block) => &block.id,
             Self::Layer(layer) => &layer.id,
             Self::Tool(tool) => &tool.id,
@@ -50,6 +54,7 @@ impl<'a> CreativeCatalogItem<'a> {
 
     fn category(self) -> &'a str {
         match self {
+            Self::Item(item) => &item.category,
             Self::Block(block) => &block.category,
             Self::Layer(layer) => &layer.category,
             Self::Tool(tool) => &tool.category,
@@ -58,6 +63,7 @@ impl<'a> CreativeCatalogItem<'a> {
 
     fn name(self, language: Language) -> &'a str {
         match self {
+            Self::Item(item) => item.name.text(language),
             Self::Block(block) => block.name.text(language),
             Self::Layer(layer) => layer.name.text(language),
             Self::Tool(tool) => tool.name.text(language),
@@ -66,6 +72,7 @@ impl<'a> CreativeCatalogItem<'a> {
 
     fn interned_id(self) -> &'static str {
         match self {
+            Self::Item(item) => intern_item_id(&item.id),
             Self::Block(block) => intern_block_id(&block.id),
             Self::Layer(layer) => intern_layer_id(&layer.id),
             Self::Tool(tool) => intern_tool_id(&tool.id),
@@ -338,6 +345,7 @@ pub(in crate::hud::inventory) fn spawn_creative_catalog_rows(
     items: &mut InventoryItemView<'_>,
 ) {
     let catalog = filtered_creative_catalog(
+        items.items,
         items.blocks,
         items.layers,
         items.tools,
@@ -412,6 +420,7 @@ fn spawn_creative_slot(
 }
 
 fn filtered_creative_catalog<'a>(
+    items: &'a ItemRegistry,
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
     tools: &'a ToolRegistry,
@@ -421,9 +430,10 @@ fn filtered_creative_catalog<'a>(
     language: Language,
 ) -> Vec<CreativeCatalogItem<'a>> {
     let query = query.trim().to_lowercase();
-    let mut catalog = blocks
+    let mut catalog = items
         .iter()
-        .map(CreativeCatalogItem::Block)
+        .map(CreativeCatalogItem::Item)
+        .chain(blocks.iter().map(CreativeCatalogItem::Block))
         .chain(layers.iter().map(CreativeCatalogItem::Layer))
         .chain(tools.iter().map(CreativeCatalogItem::Tool))
         .filter(|item| category.is_none_or(|category| item.category() == category))
