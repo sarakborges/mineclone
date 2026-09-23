@@ -179,7 +179,7 @@ def material(name, color, alpha=1., rough=1.0, emission=None, alpha_mode=None, u
 materials = [
     # Preserve the original cubic silhouette/core, but keep the body matte and
     # lit so it receives world shade. The face remains unlit and transparent.
-    material('SlimeShell', [.50,.91,.78]),
+    material('SlimeShell', [.50,.91,.78], alpha=.76),
     material('SlimeCore', [.18,.70,.57]),
     material('SlimeFace', [1.,1.,1.], alpha_mode='BLEND', unlit=True),
 ]
