@@ -93,14 +93,14 @@ impl PlayerHotbar {
     }
 
     pub(crate) fn from_saved_items_and_selection(
-        items: &[Option<String>],
+        saved_items: &[Option<String>],
         selected_slot: usize,
         items: &ItemRegistry,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
         tools: &ToolRegistry,
     ) -> io::Result<Self> {
-        if items.len() != INVENTORY_SLOT_COUNT {
+        if saved_items.len() != INVENTORY_SLOT_COUNT {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid inventory length"));
         }
         if selected_slot >= HOTBAR_SLOT_COUNT {
@@ -111,7 +111,7 @@ impl PlayerHotbar {
         }
 
         let mut restored = Self::default();
-        for (index, item) in items.iter().enumerate() {
+        for (index, item) in saved_items.iter().enumerate() {
             let resolved = match item {
                 None => None,
                 Some(id) => {
