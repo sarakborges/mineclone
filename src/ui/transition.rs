@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState};
+use crate::app::{
+    controls_state::ControlsState, game_state::GameState, pause_state::PauseState,
+    settings_state::SettingsState,
+};
 
 use super::theme;
 
@@ -11,6 +14,7 @@ pub struct ScreenTransitionTarget {
     game_state: Option<GameState>,
     pause_state: Option<PauseState>,
     settings_state: Option<SettingsState>,
+    controls_state: Option<ControlsState>,
 }
 
 impl ScreenTransitionTarget {
@@ -31,6 +35,13 @@ impl ScreenTransitionTarget {
     pub fn settings(state: SettingsState) -> Self {
         Self {
             settings_state: Some(state),
+            ..default()
+        }
+    }
+
+    pub fn controls(state: ControlsState) -> Self {
+        Self {
+            controls_state: Some(state),
             ..default()
         }
     }
@@ -106,6 +117,7 @@ pub fn animate_screen_transition(
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_pause_state: ResMut<NextState<PauseState>>,
     mut next_settings_state: ResMut<NextState<SettingsState>>,
+    mut next_controls_state: ResMut<NextState<ControlsState>>,
 ) {
     let Ok((mut background, mut visibility)) = overlay.single_mut() else {
         return;
@@ -136,6 +148,9 @@ pub fn animate_screen_transition(
                     }
                     if let Some(state) = target.settings_state {
                         next_settings_state.set(state);
+                    }
+                    if let Some(state) = target.controls_state {
+                        next_controls_state.set(state);
                     }
                 }
 

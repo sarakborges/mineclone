@@ -1,7 +1,12 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
+    app::{
+        controls_state::ControlsState,
+        game_state::GameState,
+        pause_state::PauseState,
+        settings_state::{SettingsScreenMode, SettingsState},
+    },
     player::camera::GameplayWorldCamera,
     localization::{ActiveLanguage, UiLocalization},
     ui::{
@@ -35,7 +40,8 @@ impl Plugin for PauseMenuPlugin {
                 Update,
                 handle_pause_menu_buttons
                     .run_if(in_state(PauseState::Paused))
-                    .run_if(in_state(SettingsState::Closed)),
+                    .run_if(in_state(SettingsState::Closed))
+                    .run_if(in_state(ControlsState::Closed)),
             );
     }
 }
@@ -51,6 +57,7 @@ enum PauseMenuAction {
     Resume,
     WorldSettings,
     GameSettings,
+    Controls,
     LeaveWorld,
     ExitGame,
 }
@@ -120,6 +127,13 @@ fn spawn_pause_menu(
                     ],
                 ));
                 menu.spawn(button(
+                    localization.text(language, "common.controls").to_owned(),
+                    PauseMenuAction::Controls,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn(button(
                     localization.text(language, "pause.leaveWorld").to_owned(),
                     PauseMenuAction::LeaveWorld,
                     px(360),
@@ -181,6 +195,11 @@ fn handle_pause_menu_buttons(
             PauseMenuAction::GameSettings => {
                 *context.settings_mode = SettingsScreenMode::Game;
                 context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            PauseMenuAction::Controls => {
+                context
+                    .transition
+                    .request(ScreenTransitionTarget::controls(ControlsState::Open));
             }
             PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
                 if let Err(error) = context.session.persist(&snapshot) {

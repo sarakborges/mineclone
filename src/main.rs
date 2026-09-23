@@ -29,6 +29,7 @@ use bevy_dylib;
 
 use app::{
     crash_log::{install_crash_logger, mark_clean_shutdown, write_caught_panic},
+    controls_state::ControlsState,
     game_config::GameConfigPlugin,
     game_state::GameState,
     pause_state::PauseState,
@@ -96,6 +97,7 @@ fn run_game() {
         .add_plugins(default_plugins)
         .init_state::<GameState>()
         .init_state::<PauseState>()
+        .init_state::<ControlsState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
         .add_plugins((
             WindowIconPlugin,

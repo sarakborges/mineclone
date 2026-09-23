@@ -1,3 +1,4 @@
+mod controls_screen;
 mod loading_screen;
 mod pause_menu;
 mod settings_screen;
@@ -5,6 +6,7 @@ mod starting_screen;
 mod world_selection;
 
 use bevy::prelude::*;
+use controls_screen::ControlsScreenPlugin;
 use loading_screen::LoadingScreenPlugin;
 use pause_menu::PauseMenuPlugin;
 use settings_screen::SettingsScreenPlugin;
@@ -16,6 +18,7 @@ pub(crate) struct ScreensPlugin;
 impl Plugin for ScreensPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            ControlsScreenPlugin,
             SettingsScreenPlugin,
             StartingScreenPlugin,
             WorldSelectionPlugin,

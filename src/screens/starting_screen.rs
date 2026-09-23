@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, settings_state::SettingsState, version},
+    app::{
+        controls_state::ControlsState, game_state::GameState, settings_state::SettingsState,
+        version,
+    },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::{button, ButtonVariant, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH},
@@ -25,7 +28,8 @@ impl Plugin for StartingScreenPlugin {
                 Update,
                 handle_menu_buttons
                     .run_if(in_state(GameState::StartingScreen))
-                    .run_if(in_state(SettingsState::Closed)),
+                    .run_if(in_state(SettingsState::Closed))
+                    .run_if(in_state(ControlsState::Closed)),
             );
     }
 }
@@ -35,6 +39,7 @@ enum StartingScreenAction {
     NewWorld,
     LoadWorlds,
     Settings,
+    Controls,
     ExitGame,
 }
 
@@ -44,6 +49,7 @@ impl StartingScreenAction {
             Self::NewWorld => "starting.newWorld",
             Self::LoadWorlds => "starting.loadWorlds",
             Self::Settings => "common.settings",
+            Self::Controls => "common.controls",
             Self::ExitGame => "common.exitGame",
         }
     }
@@ -123,6 +129,13 @@ fn setup_starting_screen(
                         ButtonVariant::Normal,
                     ));
                     content.spawn(button(
+                        localization.text(language, "common.controls").to_owned(),
+                        StartingScreenAction::Controls,
+                        px(MENU_BUTTON_WIDTH),
+                        MENU_BUTTON_HEIGHT,
+                        ButtonVariant::Normal,
+                    ));
+                    content.spawn(button(
                         localization.text(language, "common.exitGame").to_owned(),
                         StartingScreenAction::ExitGame,
                         px(MENU_BUTTON_WIDTH),
@@ -185,6 +198,9 @@ fn handle_menu_buttons(
             }
             StartingScreenAction::Settings => {
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            StartingScreenAction::Controls => {
+                transition.request(ScreenTransitionTarget::controls(ControlsState::Open));
             }
             StartingScreenAction::ExitGame => {
                 app_exit.write(AppExit::Success);

@@ -156,5 +156,22 @@
   "inventory.tool.speed": "Velocidade",
   "hud.requiredTools": "Ferramentas Necessárias",
   "hud.preferredTools": "Ferramentas Preferidas",
-  "hud.breakingProgress": "Progresso de Quebra"
+  "hud.breakingProgress": "Progresso de Quebra",
+  "common.controls": "CONTROLES",
+  "controls.category.movement": "Movimento",
+  "controls.category.interface": "Interface",
+  "controls.category.actions": "Ações",
+  "controls.category.chat": "Chat",
+  "controls.movement": "Movimento",
+  "controls.run": "Correr (toque duplo para frente)",
+  "controls.toggleFlight": "Ativar/desativar voo (quando disponível)",
+  "controls.look": "Olhar ao redor",
+  "controls.hotbar": "Selecionar item da hotbar",
+  "controls.pauseClose": "Pausar / fechar modal",
+  "controls.primaryAction": "Atacar / quebrar / ações especiais",
+  "controls.secondaryAction": "Colocar / ações especiais",
+  "controls.pickBlock": "Selecionar bloco mirado (Criativo)",
+  "controls.sendChat": "Enviar mensagem no chat",
+  "controls.chatHistory": "Navegar no histórico do chat",
+  "controls.autocomplete": "Autocompletar comando"
 }

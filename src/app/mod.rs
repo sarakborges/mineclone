@@ -1,4 +1,5 @@
 pub(crate) mod crash_log;
+pub(crate) mod controls_state;
 pub(crate) mod game_config;
 pub(crate) mod game_state;
 pub(crate) mod keybinds;
