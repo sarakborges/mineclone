@@ -239,6 +239,17 @@ independente da origem desses valores. VERSION: `0.50.134`.
 
 CI de Q20: **verde** no run `35868575932` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q21 — encapsular resolução de spawn do bootstrap
+
+A escolha de `spawn_column` e `initial_center` saiu de
+`begin_world_loading` para `BootstrapSpawnContext::resolve`. O contexto reúne
+somente os inputs necessários para as regras de New/Load e Normal/Flat/Void, e
+`BootstrapSpawn` devolve os dois resultados derivados juntos. As regras de
+fallback para posição salva, busca de spawn e Void sem player persistido foram
+preservadas. VERSION: `0.50.135`.
+
+CI de Q21: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
