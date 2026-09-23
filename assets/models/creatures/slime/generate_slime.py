@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Generate Asteria's sharp-edged shared slime GLB and standalone 64x64 skins.
+"""Generate Asteria's pixel-rounded shared slime GLB and standalone 64x64 skins.
 
-Uses only Python's standard library. Never rounds corners or smooths face details.
+Uses only Python's standard library. The silhouette stays deliberately blocky: stepped
+cuboids carve the upper corners into a pixel-art dome without smooth geometry.
 Creature JSON determines which PNG is loaded; GLB embeds no image data.
 Physics stays on SlimeRoot; named animation clips move only visual children.
 """
@@ -177,9 +178,20 @@ materials = [
     material('SlimeCore', [.18,.70,.57], 1., .85),
     material('SlimeFace', [1.,1.,1.], 1., .30),
 ]
-shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
+# Keep the lower body broad for the face, then progressively carve the upper
+# corners away in short voxel-like tiers. The overall rest bounds stay identical
+# to the previous 0.96 x 0.90 x 0.96 shell, so animation scale and collider setup
+# remain stable while the top reads as a rounded pixel-art blob.
+shell_profile = [
+    ([.96, .62, .96], (0, -.14, 0)),
+    ([.92, .10, .92], (0, .22, 0)),
+    ([.82, .08, .82], (0, .31, 0)),
+    ([.68, .06, .68], (0, .38, 0)),
+    ([.48, .04, .48], (0, .43, 0)),
+]
+shell = make_mesh('pixel_rounded_shell', shell_profile, 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
-face = make_front_quad('square_pixel_face', .96, .90, -.50, 2)
+face = make_front_quad('square_pixel_face', .96, .62, -.485, 2)
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
@@ -200,7 +212,7 @@ root = node('SlimeRoot', children=[], extras={
 visual = node('Visual', children=[])
 body = node('BodyPivot', children=[], translation=[0,.5,0])
 inner = node('InnerCore', mesh=core, translation=[0,-.025,0], scale=[1,1,1])
-body_children = [node('Shell',mesh=shell),inner,node('Face',mesh=face,translation=[0,0,0])]
+body_children = [node('Shell',mesh=shell),inner,node('Face',mesh=face,translation=[0,-.14,0])]
 nodes[body]['children'] = body_children
 nodes[visual]['children'] = [body]
 collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
@@ -253,14 +265,14 @@ tracks('Death',[0,.12,.31,.55,.75],
        core_angle=[0,.2,.5,.9,1.2])
 
 scene = {
-    'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v3'},
+    'asset':{'version':'2.0','generator':'Asteria pixel-rounded slime v4'},
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Only cubic shell and enlarged core; face in species PNG front tile; collider does not animate'},
+              'notes':'Pixel-rounded stepped shell with enlarged core; face on lower front panel; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
