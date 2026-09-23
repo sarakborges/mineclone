@@ -142,19 +142,13 @@ pub(in crate::world) fn begin_world_loading(
         &terrain_lighting,
         terrain_materials.texture_array_handle(),
     );
-    let spawn_column = if world_generation.mode() != WorldGenerationMode::Normal {
-        persistence
-            .save
-            .player_position(LOCAL_PLAYER_ID)
-            .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
-            .unwrap_or(DEFAULT_SPAWN_COLUMN)
-    } else if *persistence.load_mode == WorldLoadMode::Load {
-        persistence
-            .save
-            .player_position(LOCAL_PLAYER_ID)
-            .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
-            .unwrap_or(DEFAULT_SPAWN_COLUMN)
-    } else {
+    let saved_player_position = persistence.save.player_position(LOCAL_PLAYER_ID);
+    let restored_spawn_column = saved_player_position
+        .map(spawn_column_from_position)
+        .unwrap_or(DEFAULT_SPAWN_COLUMN);
+    let spawn_column = if *persistence.load_mode == WorldLoadMode::New
+        && world_generation.mode() == WorldGenerationMode::Normal
+    {
         find_initial_spawn_column(
             dimension,
             biomes,
@@ -163,25 +157,20 @@ pub(in crate::world) fn begin_world_loading(
             forced_spawn_biome.is_some() && !world_generation.single_biome(),
             world_generation,
         )
+    } else {
+        restored_spawn_column
     };
     let initial_center = if world_generation.mode() == WorldGenerationMode::Void
-        && persistence.save.player_position(LOCAL_PLAYER_ID).is_none()
+        && saved_player_position.is_none()
     {
         IVec3::ZERO
     } else if *persistence.load_mode == WorldLoadMode::Load {
-        persistence
-            .save
-            .player_position(LOCAL_PLAYER_ID)
-            .map(|position| {
-                let chunk = chunk_coord_from_position(position);
-                IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
-            })
+        saved_player_position
+            .map(restored_player_chunk)
             .unwrap_or_else(|| {
-                let surface_y = surface_height(spawn_column, dimension, biomes, &biome_field);
-                IVec3::new(
-                    spawn_column.x.div_euclid(CHUNK_SIZE as i32),
-                    surface_y.div_euclid(CHUNK_SIZE as i32),
-                    spawn_column.y.div_euclid(CHUNK_SIZE as i32),
+                spawn_surface_chunk(
+                    spawn_column,
+                    surface_height(spawn_column, dimension, biomes, &biome_field),
                 )
             })
     } else {
@@ -190,11 +179,7 @@ pub(in crate::world) fn begin_world_loading(
         } else {
             surface_height(spawn_column, dimension, biomes, &biome_field)
         };
-        IVec3::new(
-            spawn_column.x.div_euclid(CHUNK_SIZE as i32),
-            surface_y.div_euclid(CHUNK_SIZE as i32),
-            spawn_column.y.div_euclid(CHUNK_SIZE as i32),
-        )
+        spawn_surface_chunk(spawn_column, surface_y)
     };
     // Saves persist only modified chunks. Untouched terrain is intentionally absent and
     // must be regenerated from the pinned worldgen identity around the restored player.
@@ -253,6 +238,23 @@ pub(in crate::world) fn begin_world_loading(
     if let Some(content) = fresh_content {
         content.insert(&mut commands);
     }
+}
+
+fn spawn_column_from_position(position: Vec3) -> IVec2 {
+    IVec2::new(position.x.floor() as i32, position.z.floor() as i32)
+}
+
+fn restored_player_chunk(position: Vec3) -> IVec3 {
+    let chunk = chunk_coord_from_position(position);
+    IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
+}
+
+fn spawn_surface_chunk(column: IVec2, surface_y: i32) -> IVec3 {
+    IVec3::new(
+        column.x.div_euclid(CHUNK_SIZE as i32),
+        surface_y.div_euclid(CHUNK_SIZE as i32),
+        column.y.div_euclid(CHUNK_SIZE as i32),
+    )
 }
 
 fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSettings) -> Vec<IVec3> {
