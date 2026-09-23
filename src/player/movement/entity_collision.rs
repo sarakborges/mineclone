@@ -42,7 +42,14 @@ enum HorizontalAxis {
     Z,
 }
 
-fn contact(first: Bounds, second: Bounds) -> Option<(HorizontalAxis, f32, f32)> {
+#[derive(Clone, Copy)]
+struct HorizontalContact {
+    axis: HorizontalAxis,
+    penetration: f32,
+    second_direction: f32,
+}
+
+fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
     let overlap_y = first.1.y.min(second.1.y) - first.0.y.max(second.0.y);
     if overlap_y <= 0.0 {
         return None;
@@ -59,7 +66,11 @@ fn contact(first: Bounds, second: Bounds) -> Option<(HorizontalAxis, f32, f32)> 
     };
     // When centers coincide, pick a stable side rather than producing NaN.
     let second_direction = if second_center >= first_center { 1.0 } else { -1.0 };
-    Some((axis, penetration + CONTACT_EPSILON, second_direction))
+    Some(HorizontalContact {
+        axis,
+        penetration: penetration + CONTACT_EPSILON,
+        second_direction,
+    })
 }
 
 fn clear_volume(world: &VoxelWorld, bounds: Bounds) -> bool {
@@ -112,30 +123,28 @@ fn resolve_contact_pair(
     world: &VoxelWorld,
     first_position: &mut Vec3,
     second_position: &mut Vec3,
-    axis: HorizontalAxis,
-    penetration: f32,
-    second_direction: f32,
+    contact: HorizontalContact,
     first_share: f32,
     first_bounds_at: impl Fn(Vec3) -> Bounds,
     second_bounds_at: impl Fn(Vec3) -> Bounds,
 ) {
-    let first_target = penetration * first_share;
-    let second_target = penetration - first_target;
+    let first_target = contact.penetration * first_share;
+    let second_target = contact.penetration - first_target;
     let first_moved = push(
         first_position,
         world,
-        axis,
-        -second_direction * first_target,
+        contact.axis,
+        -contact.second_direction * first_target,
         &first_bounds_at,
     );
     let second_moved = push(
         second_position,
         world,
-        axis,
-        second_direction * second_target,
+        contact.axis,
+        contact.second_direction * second_target,
         &second_bounds_at,
     );
-    let remainder = (penetration - first_moved - second_moved).max(0.0);
+    let remainder = (contact.penetration - first_moved - second_moved).max(0.0);
     if remainder <= 0.0 {
         return;
     }
@@ -143,16 +152,16 @@ fn resolve_contact_pair(
     let extra_second = push(
         second_position,
         world,
-        axis,
-        second_direction * remainder,
+        contact.axis,
+        contact.second_direction * remainder,
         &second_bounds_at,
     );
     if extra_second < remainder {
         push(
             first_position,
             world,
-            axis,
-            -second_direction * (remainder - extra_second),
+            contact.axis,
+            -contact.second_direction * (remainder - extra_second),
             &first_bounds_at,
         );
     }
@@ -169,7 +178,7 @@ pub(super) fn resolve_player_creature_contacts(
     for _ in 0..MAX_CONTACT_PASSES {
         let mut had_contact = false;
         for (mut creature, collider) in &mut creatures {
-            let Some((axis, penetration, direction)) =
+            let Some(contact) =
                 contact(player_bounds(player.translation), collider.bounds(creature.translation))
             else {
                 continue;
@@ -179,9 +188,7 @@ pub(super) fn resolve_player_creature_contacts(
                 &world,
                 &mut player.translation,
                 &mut creature.translation,
-                axis,
-                penetration,
-                direction,
+                contact,
                 PLAYER_PUSH_SHARE,
                 player_bounds,
                 |feet| collider.bounds(feet),
@@ -207,7 +214,7 @@ pub(super) fn resolve_creature_creature_contacts(
         while let Some([(mut first, first_collider), (mut second, second_collider)]) =
             pairs.fetch_next()
         {
-            let Some((axis, penetration, direction)) = contact(
+            let Some(contact) = contact(
                 first_collider.bounds(first.translation),
                 second_collider.bounds(second.translation),
             ) else {
@@ -219,9 +226,7 @@ pub(super) fn resolve_creature_creature_contacts(
                 &world,
                 &mut first.translation,
                 &mut second.translation,
-                axis,
-                penetration,
-                direction,
+                contact,
                 CREATURE_PUSH_SHARE,
                 |feet| first_collider.bounds(feet),
                 |feet| second_collider.bounds(feet),
