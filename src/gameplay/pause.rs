@@ -5,12 +5,8 @@ use crate::{
         controls_state::ControlsState, game_state::GameState, pause_state::PauseState,
         settings_state::SettingsState,
     },
+    gameplay::modal::GameplayModalState,
     hud::chat::ChatState,
-    player::{
-        character_info::{CharacterInfoInputState, CharacterInfoState},
-        inventory::InventoryState,
-    },
-    tools::BrushPaletteState,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
 
@@ -24,15 +20,11 @@ impl Plugin for PausePlugin {
                 toggle_pause
                     .run_if(in_state(SettingsState::Closed))
                     .run_if(in_state(ControlsState::Closed))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed))
-                    .run_if(in_state(CharacterInfoState::Closed)),
+                    .run_if(in_state(GameplayModalState::Closed)),
                 pause_on_focus_lost
                     .run_if(in_state(SettingsState::Closed))
                     .run_if(in_state(ControlsState::Closed))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed))
-                    .run_if(in_state(CharacterInfoState::Closed)),
+                    .run_if(in_state(GameplayModalState::Closed)),
             )
                 .run_if(in_state(GameState::Gameplay)),
         );
@@ -43,12 +35,10 @@ fn toggle_pause(
     keys: Res<ButtonInput<KeyCode>>,
     pause_state: Res<State<PauseState>>,
     chat: Res<ChatState>,
-    character_info_input: Res<CharacterInfoInputState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
     if !keys.just_pressed(KeyCode::Escape)
         || chat.blocks_pause_escape()
-        || character_info_input.blocks_pause_escape()
     {
         return;
     }
