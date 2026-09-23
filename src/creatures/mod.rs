@@ -2,22 +2,19 @@ mod material;
 mod motion;
 mod natural_spawn;
 mod particles;
+mod persistence;
 mod spawn;
 mod visual;
-
-use std::io;
-
 use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
-    content::creature::{CreatureCollider, CreatureRegistry},
+    content::creature::CreatureCollider,
 };
 
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
+pub(crate) use persistence::{PendingCreatureRestores, SavedCreature};
 use natural_spawn::natural_spawn_creatures;
 use particles::{emit_creature_particles, update_creature_particles};
 use spawn::restore_saved_creatures;
@@ -39,49 +36,6 @@ pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
 #[derive(Component, Clone, Copy)]
 pub(crate) struct CreatureTargetCollider(pub(crate) CreatureCollider);
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SavedCreature {
-    pub(crate) definition_id: String,
-    pub(crate) position: [f32; 3],
-    pub(crate) health: f32,
-}
-
-impl SavedCreature {
-    pub(crate) fn validate(&self, definitions: &CreatureRegistry) -> io::Result<()> {
-        if definitions.get(&self.definition_id).is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("unknown saved creature definition: {}", self.definition_id),
-            ));
-        }
-        if self.position.iter().any(|value| !value.is_finite())
-            || !self.health.is_finite()
-            || self.health <= 0.0
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "saved creature position or health is invalid",
-            ));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Resource, Default)]
-pub(crate) struct PendingCreatureRestores {
-    creatures: Vec<SavedCreature>,
-}
-
-impl PendingCreatureRestores {
-    pub(crate) fn new(creatures: Vec<SavedCreature>) -> Self {
-        Self { creatures }
-    }
-
-    pub(crate) fn saved(&self) -> &[SavedCreature] {
-        &self.creatures
-    }
-}
 
 pub(crate) struct CreaturesPlugin;
 
