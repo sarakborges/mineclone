@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{CameraOutputMode, SubCameraView, Viewport, visibility::RenderLayers},
+    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     ecs::query::QueryFilter,
     prelude::*,
     render::render_resource::BlendState,
@@ -23,9 +23,6 @@ const HUD_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 1;
 const CHARACTER_PREVIEW_CAMERA_ORDER: isize = UI_CAMERA_ORDER + 2;
 const PLAYER_PREVIEW_CENTER_Y: f32 = 0.90;
 const PLAYER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
-const PLAYER_PREVIEW_REFERENCE_WIDTH: u32 = 216;
-const PLAYER_PREVIEW_REFERENCE_HEIGHT: u32 = 288;
-const HUD_PREVIEW_CROP_HEIGHT: u32 = 216;
 
 #[derive(Component)]
 pub(super) struct PlayerHudPreviewCamera;
@@ -78,17 +75,6 @@ pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
             order: HUD_PREVIEW_CAMERA_ORDER,
             output_mode: CameraOutputMode::Skip,
             clear_color: ClearColorConfig::None,
-            sub_camera_view: Some(SubCameraView {
-                full_size: UVec2::new(
-                    PLAYER_PREVIEW_REFERENCE_WIDTH,
-                    PLAYER_PREVIEW_REFERENCE_HEIGHT,
-                ),
-                offset: Vec2::ZERO,
-                size: UVec2::new(
-                    PLAYER_PREVIEW_REFERENCE_WIDTH,
-                    HUD_PREVIEW_CROP_HEIGHT,
-                ),
-            }),
             ..default()
         },
         RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
