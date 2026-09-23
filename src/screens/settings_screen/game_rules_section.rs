@@ -293,15 +293,12 @@ pub(super) fn sync_boolean_game_rule_toggles(
         if !changed && !interaction.is_changed() {
             continue;
         }
-        selectable::apply_colors(toggle::colors(enabled(*rule), *interaction), background, border);
+        toggle::apply_control_colors(enabled(*rule), *interaction, background, border);
     }
 
     if changed {
         for (thumb, mut node) in &mut thumbs {
-            let next_left = px(toggle::thumb_left(enabled(thumb.0)));
-            if node.left != next_left {
-                node.left = next_left;
-            }
+            toggle::apply_thumb_position(enabled(thumb.0), &mut node);
         }
     }
 }
