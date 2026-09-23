@@ -345,7 +345,7 @@ a mesma ordem de resolução e o mesmo fallback para IDs desconhecidos, removend
 duas implementações idênticas em módulos de HUD distintos. VERSION:
 `0.50.148`.
 
-CI de Q30: pendente neste checkpoint.
+CI de Q30: **verde** no run `35875948606` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
