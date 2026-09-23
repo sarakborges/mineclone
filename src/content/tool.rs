@@ -4,7 +4,11 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path, registry::DefinitionMap, tool_id::intern_tool_id,
+    asset_path::is_safe_relative_asset_path,
+    inventory_category::InventoryCategoryRegistry,
+    registry::DefinitionMap,
+    tool_category::ToolCategoryRegistry,
+    tool_id::intern_tool_id,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -68,6 +72,29 @@ pub struct ToolDefinition {
     pub tint_icon: Option<String>,
     #[serde(default)]
     pub mining: ToolMiningDefinition,
+}
+
+impl ToolDefinition {
+    pub(crate) fn validate_references(
+        &self,
+        inventory_categories: &InventoryCategoryRegistry,
+        tool_categories: &ToolCategoryRegistry,
+    ) {
+        assert!(
+            inventory_categories.get(&self.category).is_some(),
+            "tool {} references missing inventory category {}",
+            self.id,
+            self.category
+        );
+        if let Some(category) = self.mining.category() {
+            assert!(
+                tool_categories.get(category).is_some(),
+                "tool {} references missing tool category {}",
+                self.id,
+                category
+            );
+        }
+    }
 }
 
 #[derive(Resource, Default)]
