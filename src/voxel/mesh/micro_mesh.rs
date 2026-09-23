@@ -436,9 +436,9 @@ fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
     };
     let origin = surface.local_voxel.as_vec3();
     let vertices = face.unit_vertices().map(|mut vertex| {
-        for axis in 0..3 {
+        for (axis, coordinate) in vertex.iter_mut().enumerate() {
             if axis != normal_axis {
-                vertex[axis] = if vertex[axis] == 0.0 {
+                *coordinate = if *coordinate == 0.0 {
                     HOLLOW_LOG_WALL_THICKNESS
                 } else {
                     1.0 - HOLLOW_LOG_WALL_THICKNESS
