@@ -1,35 +1,83 @@
 # HANDOFF — Asteria / Mineclone
-## 2026-09-23 — Normalização da versão do projeto [VERSION 0.51.0]
+## 2026-09-23 — Auditoria integral de versionamento [VERSION 0.61.0]
 
-Foi feita uma revisão do histórico integral registrado em `HANDOFF.md`, dos
-handoffs arquivados em `docs/handoffs/` e da sequência de commits da branch
-`develop`. A linha `0.50.x` deixou de representar releases coerentes e passou
-a funcionar, na prática, como contador de microcommits/refactors, chegando a
-`0.50.200` apesar de conter vários marcos funcionais independentes.
+A versão foi reavaliada a partir do histórico completo da branch `develop`,
+não apenas do estado recente. A auditoria cobriu as 68 páginas do histórico da
+branch (6.729 commits desde `chore: initialize Bevy project` em 2026-09-08),
+as 566 alterações que tocaram o arquivo raiz `VERSION`, o `HANDOFF.md`
+integral e os handoffs arquivados em `docs/handoffs/`.
 
-A versão funcional canônica do jogo continua sendo exclusivamente o arquivo
-raiz `VERSION`. O `Cargo.toml` permanece deliberadamente em `0.10.16`,
-conforme `src/app/version.rs`, para evitar invalidar fingerprints do Cargo e
-prejudicar builds incrementais de desenvolvimento.
+O primeiro `VERSION` canônico foi `0.10.17`, criado em 2026-09-14. O padrão
+histórico anterior ao congestionamento de `0.50.x` era subir `MINOR` quando
+uma capacidade independente ou uma mudança arquitetural relevante ficava
+estabelecida. Exemplos: `0.16` creatures data-driven, `0.17` chat,
+`0.20` autocomplete, `0.21` persistência do Chisel, `0.22` Player ECS /
+step-up, `0.24` design system, `0.25` configuração persistente de worldgen,
+`0.31` fluidos runtime, `0.33` scheduler de fluidos, `0.34` lifecycle de
+chunks/luz, `0.40` settling por generation region, `0.47` locate/warp,
+`0.48` structures/World Tree e `0.49` structure groups.
 
-O novo baseline funcional é **`0.51.0`**. Ele consolida a linha `0.50` após
-os grandes blocos de rendering/performance, player 3D e previews, Character
-Info/modais, criaturas/slimes, Creative Inventory, generic items/tools,
-Carpenter's Axe/log variants e o desacoplamento data-driven de tool behaviors.
+`0.50.0` entrou com ecology/proximity restrictions + willow trees. A partir
+daí o versionamento perdeu a escala semântica e o patch passou a ser
+incrementado por micro-refactor, lint fix e etapas internas, chegando a
+`0.50.200`. Aplicando retroativamente a mesma granularidade usada antes de
+`0.50`, os marcos independentes são:
 
-Regra de versionamento a partir deste checkpoint:
-- não incrementar `VERSION` por commit intermediário, lint fix, documentação
-  isolada ou etapa interna de um mesmo trabalho;
-- `PATCH` fecha um checkpoint coerente de correção/refactor/polish já validado;
-- `MINOR` marca um conjunto funcional novo ou mudança relevante de arquitetura,
-  conteúdo, gameplay ou compatibilidade;
-- um trabalho com vários commits recebe um único bump quando o bloco estiver
-  fechado e com CI verde;
-- `Cargo.toml` não acompanha a versão funcional do jogo enquanto a estratégia
-  de build incremental atual permanecer vigente.
+- `0.51` — voxel surface layers como subsistema completo: persist/render,
+  layers em inventory/creative, placement e Shears;
+- `0.52` — structure rotation + Structure Sets + Structure Tool + primeiro
+  Enchanted Heart;
+- `0.53` — modos/configuração persistente de world generation, game rules,
+  controles/keybinds centralizados e respectiva UI;
+- `0.54` — mineração Survival data-driven: hardness/timing, tool categories,
+  preferred/required tools, breaking progress e cracks;
+- `0.55` — overhaul de rendering/meshing/streaming: meshlets, texture arrays,
+  GPU culling, lighting caches, remesh/worker scheduling e residency;
+- `0.56` — player 3D: modelo/skin/animações, braço first-person, third-person,
+  held item integration, run/flight/action timing;
+- `0.57` — thumbnails persistidas de mundos/saves;
+- `0.58` — Character Info + previews 3D compartilhados, HUD portrait,
+  composição de câmeras/viewports, modal switching e terceira perspectiva
+  frontal;
+- `0.59` — evolução do domínio de creatures/slimes: novo modelo/partículas,
+  material/targeting/collision/contact, refactors de spawn/lifecycle/combat e
+  primeira variante elemental Anemo;
+- `0.60` — Creative Inventory substituindo o inventory em Creative, generic
+  item registry, Plant Fiber/crafting materials e renderer genérico de
+  items/tools segurados;
+- `0.61` — Carpenter's Axe + variantes reais de logs stripped/hollow,
+  geometria/collision/raycast de hollow logs e tool variants totalmente
+  desacopladas de behavior IDs.
 
-Baseline anterior: `0.50.200`.
-Baseline novo: `0.51.0`.
+A separação `0.57` / `0.58` é intencional: thumbnails são uma capacidade
+persistente de save/world selection; Character Info/previews são outro
+subsistema de UI/render. Da mesma forma, `0.60` estabelece generic items /
+Creative Inventory e `0.61` estabelece a arquitetura data-driven de tool
+behaviors e log transformations.
+
+Portanto o baseline funcional correto após reconstrução histórica é
+**`0.61.0`**. O `0.51.0` criado imediatamente antes desta auditoria foi uma
+normalização conservadora e fica explicitamente superseded por este checkpoint.
+
+A versão funcional canônica continua sendo exclusivamente o arquivo raiz
+`VERSION`. `Cargo.toml` permanece deliberadamente em `0.10.16`, conforme
+`src/app/version.rs`, para não invalidar fingerprints do Cargo em bumps
+funcionais.
+
+Regra daqui para frente:
+- não incrementar `VERSION` por microcommit, lint fix, documentação isolada ou
+  etapa interna de um mesmo trabalho;
+- `PATCH` fecha correção/refactor/polish coerente dentro da capacidade atual;
+- `MINOR` fecha uma capacidade nova ou mudança relevante de arquitetura,
+  conteúdo, gameplay, persistência ou compatibilidade;
+- um trabalho multi-commit recebe um único bump quando o bloco funcional está
+  fechado e validado;
+- `Cargo.toml` não acompanha a versão funcional enquanto a estratégia atual de
+  build incremental permanecer vigente.
+
+Baseline histórico congestionado: `0.50.200`.
+Normalização provisória superseded: `0.51.0`.
+Baseline corrigido: `0.61.0`.
 
 ## Checkpoint 184 — 2026-09-23: auditoria de qualidade de código [EM ANDAMENTO]
 
