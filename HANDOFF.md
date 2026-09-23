@@ -576,6 +576,20 @@ CI de Q48: **verde** no run `35888263251` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
 
+### Q49 — mover validação para CreatureDefinition
+
+A validação integral de uma creature definition não pertence mais a
+`CreatureRegistry::insert`. `CreatureDefinition::validate` passou a ser o
+owner das invariantes do próprio conteúdo — id/name, model/texture paths,
+colliders, caps/health/motion, tints, materiais, particles e animations — e o
+registry voltou a cuidar apenas da inserção/indexação depois de validar. Isso
+reduz responsabilidade do container e mantém a política próxima dos dados que
+ela valida. VERSION: `0.50.170`.
+
+CI de Q49: **verde** no run `35888565600` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
