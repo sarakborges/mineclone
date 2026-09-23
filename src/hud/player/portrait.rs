@@ -151,7 +151,7 @@ pub(super) fn sync_player_preview_cameras(
         PLAYER_PREVIEW_CENTER_Y,
         PLAYER_PREVIEW_CAMERA_DISTANCE,
         orbit.yaw,
-        false,
+        true,
     );
 }
 
