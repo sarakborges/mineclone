@@ -105,7 +105,7 @@ fn advance_survival_mining(
     let selected_item = hotbar.item_at(hotbar.selected_slot());
     let selected_tool = selected_item.and_then(|item_id| tools.get(item_id));
 
-    // Tools without mining tags own their left-click action (brush, chisel, etc.)
+    // Tools without mining tags own their left-click action (brush, artisan's kit, etc.)
     // and must not also mine the underlying block.
     if selected_tool.is_some_and(|tool| !tool.mining.is_mining_tool()) {
         mining.reset();
