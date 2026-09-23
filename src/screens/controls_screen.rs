@@ -15,6 +15,7 @@ use crate::{
     },
 };
 
+const SECTION_GAP: f32 = 18.0;
 const COLUMN_GAP: f32 = 18.0;
 const CARD_GAP: f32 = 14.0;
 const ENTRY_GAP: f32 = 10.0;
@@ -169,44 +170,47 @@ fn spawn_controls_screen(
 
             root.spawn(screen::header()).with_children(|header| {
                 header.spawn(typography::title(
-                    localization.text(language, "common.controls").to_owned(),
+                    localization.text(language, "controls.title").to_owned(),
                 ));
             });
 
             root.spawn(screen::body()).with_children(|body| {
-                let mut content = screen::content();
-                content.display = Display::Grid;
-                content.grid_template_columns = vec![RepeatedGridTrack::flex(4, 1.0)];
-                content.column_gap = px(COLUMN_GAP);
-                content.align_items = AlignItems::Start;
+                let mut content = screen::content_column(SECTION_GAP);
+                content.overflow = Overflow::scroll_y();
+                content.padding = UiRect::right(px(12));
 
-                body.spawn(content).with_children(|columns| {
-                    spawn_control_column(
-                        columns,
+                body.spawn((
+                    content,
+                    ScrollPosition(Vec2::ZERO),
+                    ScrollArea,
+                ))
+                .with_children(|sections| {
+                    spawn_control_section(
+                        sections,
                         "controls.category.movement",
                         MOVEMENT_CONTROLS,
                         &keybinds,
                         &localization,
                         language,
                     );
-                    spawn_control_column(
-                        columns,
+                    spawn_control_section(
+                        sections,
                         "controls.category.interface",
                         INTERFACE_CONTROLS,
                         &keybinds,
                         &localization,
                         language,
                     );
-                    spawn_control_column(
-                        columns,
+                    spawn_control_section(
+                        sections,
                         "controls.category.actions",
                         ACTION_CONTROLS,
                         &keybinds,
                         &localization,
                         language,
                     );
-                    spawn_control_column(
-                        columns,
+                    spawn_control_section(
+                        sections,
                         "controls.category.chat",
                         CHAT_CONTROLS,
                         &keybinds,
@@ -228,7 +232,7 @@ fn spawn_controls_screen(
         });
 }
 
-fn spawn_control_column(
+fn spawn_control_section(
     parent: &mut ChildSpawnerCommands,
     title_key: &'static str,
     controls: &[ControlSpec],
@@ -247,9 +251,19 @@ fn spawn_control_column(
                 },
             ));
 
-            for &control in controls {
-                spawn_control_entry(card, control, keybinds, localization, language);
-            }
+            card.spawn(Node {
+                display: Display::Grid,
+                width: percent(100),
+                grid_template_columns: vec![RepeatedGridTrack::flex(4, 1.0)],
+                column_gap: px(COLUMN_GAP),
+                row_gap: px(ENTRY_GAP),
+                ..default()
+            })
+            .with_children(|grid| {
+                for &control in controls {
+                    spawn_control_entry(grid, control, keybinds, localization, language);
+                }
+            });
         });
 }
 
@@ -267,7 +281,6 @@ fn spawn_control_entry(
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             column_gap: px(ENTRY_GAP),
-            margin: UiRect::bottom(px(ENTRY_GAP)),
             ..default()
         })
         .with_children(|entry| {

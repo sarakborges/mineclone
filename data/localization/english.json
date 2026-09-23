@@ -157,7 +157,7 @@
   "hud.requiredTools": "Required Tools",
   "hud.preferredTools": "Preferred Tools",
   "hud.breakingProgress": "Breaking Progress",
-  "common.controls": "CONTROLS",
+  "common.controls": "Controls",
   "controls.category.movement": "Movement",
   "controls.category.interface": "Interface",
   "controls.category.actions": "Actions",
@@ -173,5 +173,6 @@
   "controls.pickBlock": "Pick targeted block (Creative)",
   "controls.sendChat": "Send chat message",
   "controls.chatHistory": "Browse chat history",
-  "controls.autocomplete": "Autocomplete command"
+  "controls.autocomplete": "Autocomplete command",
+  "controls.title": "CONTROLS"
 }

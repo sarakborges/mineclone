@@ -157,7 +157,7 @@
   "hud.requiredTools": "Herramientas Requeridas",
   "hud.preferredTools": "Herramientas Preferidas",
   "hud.breakingProgress": "Progreso de Rotura",
-  "common.controls": "CONTROLES",
+  "common.controls": "Controles",
   "controls.category.movement": "Movimiento",
   "controls.category.interface": "Interfaz",
   "controls.category.actions": "Acciones",
@@ -173,5 +173,6 @@
   "controls.pickBlock": "Seleccionar bloque apuntado (Creativo)",
   "controls.sendChat": "Enviar mensaje de chat",
   "controls.chatHistory": "Recorrer historial del chat",
-  "controls.autocomplete": "Autocompletar comando"
+  "controls.autocomplete": "Autocompletar comando",
+  "controls.title": "CONTROLES"
 }
