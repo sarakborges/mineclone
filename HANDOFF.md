@@ -314,6 +314,18 @@ detalhes internos de construção desses fields. VERSION: `0.50.144`.
 
 CI de Q27: **verde** no run `35873589026` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q28 — reutilizar atualização visual dos toggles
+
+`ui/toggle.rs` agora é owner também da atualização visual de controls já
+spawnados: `apply_control_colors` aplica background/border via
+`selectable::apply_colors` e `apply_thumb_position` atualiza a posição do
+thumb somente quando necessário. Game rules, HUD settings e world-generation
+settings reutilizam esses helpers, removendo implementações paralelas de
+`colors + apply_colors + thumb_left`. Estados visuais especiais, como feature
+desabilitada em Void, continuam locais. VERSION: `0.50.146`.
+
+CI de Q28: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
