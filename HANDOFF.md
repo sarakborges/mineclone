@@ -614,6 +614,19 @@ tipos runtime compartilhados. VERSION: `0.50.172`.
 CI de Q51: **verde** no run `35889427483` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q52 — reutilizar RNG de creatures
+
+Natural spawn, escolha de heading do movimento e partículas não mantêm mais
+três cópias do mesmo xorshift32 (`<<13`, `>>17`, `<<5`).
+`creatures/random.rs` concentra `next_u32`, `next_unit_f32` e
+`next_signed_f32`; cada domínio continua sendo owner do próprio seed e da
+forma como consome o stream. Assim, a sequência pseudoaleatória e a distribuição
+permanecem inalteradas, mas o algoritmo base possui um único owner. VERSION:
+`0.50.173`.
+
+CI de Q52: **verde** no run `35889910889` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
