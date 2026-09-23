@@ -603,6 +603,18 @@ CI de Q50: **verde** no run `35889054248` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
 
+### Q51 — extrair lifecycle de morte das creatures
+
+`CreatureDeathTimer` e o system `despawn_dead_creatures` saíram de
+`creatures/mod.rs` para `creatures/lifecycle.rs`. O componente continua
+disponível no mesmo caminho externo por re-export, enquanto o módulo raiz deixa
+de possuir lógica de tick/despawn e fica concentrado em composição do plugin e
+tipos runtime compartilhados. VERSION: `0.50.172`.
+
+CI de Q51: **verde** no run `35889427483` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
