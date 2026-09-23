@@ -21,11 +21,11 @@ pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
                 let Some(cell) = world.cell_at(voxel) else {
                     continue;
                 };
-                if !MicroblockMask::is_modified(cell) {
+                if !MicroblockMask::has_partial_geometry(cell) {
                     return true;
                 }
 
-                let shape = MicroblockMask::from_cell(cell);
+                let shape = MicroblockMask::geometry_for_cell(cell);
                 let origin = voxel.as_vec3();
                 let min_cell = ((min - origin) * MICRO_EDGE)
                     .floor()
