@@ -25,6 +25,8 @@ pub struct CreatureDefinition {
     #[serde(default)]
     pub material_tints: std::collections::HashMap<String, Hsi>,
     #[serde(default)]
+    pub unlit_materials: std::collections::HashSet<String>,
+    #[serde(default)]
     pub animations: std::collections::HashMap<String, String>,
     #[serde(default = "default_jump_speed")]
     pub jump_speed: f32,
@@ -150,6 +152,13 @@ impl CreatureRegistry {
             assert!(
                 !material.is_empty() && tint.is_valid(),
                 "creature {} has an invalid material tint for {material}",
+                definition.id
+            );
+        }
+        for material in &definition.unlit_materials {
+            assert!(
+                !material.trim().is_empty(),
+                "creature {} has an empty unlit material name",
                 definition.id
             );
         }
