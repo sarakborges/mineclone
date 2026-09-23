@@ -506,6 +506,19 @@ tentativa de posicionamento. VERSION: `0.50.164`.
 CI de Q43: **verde** no run `35886364834` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q44 — separar busca da posição de natural spawn
+
+`natural_spawn_creatures` não contém mais o loop de oito tentativas e as
+validações espaciais da posição escolhida. `find_natural_spawn_position`
+concentra distância aleatória, coluna/surface, faixa de luz, spacing por tipo,
+chunk carregado e ausência de fluido; `NaturalSpawnCreatures` nomeia a query
+reutilizada pelo contexto e pelo helper. O system principal agora coordena
+somente scheduler → regra → posição → criação da entidade. VERSION:
+`0.50.165`.
+
+CI de Q44: **verde** no run `35886797670` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
