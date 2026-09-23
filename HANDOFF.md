@@ -653,6 +653,20 @@ combate. VERSION: `0.50.175`.
 CI de Q54: **verde** no run `35890881976` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q55 — promover RNG para gameplay
+
+O xorshift32 compartilhado deixou de viver em `creatures/random.rs` porque o
+mesmo stream também é usado pelos efeitos probabilísticos de attack.
+`gameplay/random.rs` passou a ser o owner genérico de `next_u32`,
+`next_unit_f32` e `next_signed_f32`; natural spawn, creature motion,
+particles e `CreatureAttackRuntime` reutilizam essa primitiva. Cada caller
+continua controlando seu seed/fallback, preservando exatamente quando o RNG é
+consumido. VERSION: `0.50.177`.
+
+O número `0.50.176` foi ocupado concorrentemente pelo novo slime candy; Q55
+usou o próximo patch disponível. CI de Q55: **verde** no run `35891400788`
+(localizações, Clippy com `-D warnings` e `cargo check`).
+
 ### Q55 — promover RNG compartilhado para gameplay
 
 O xorshift32 deixou de pertencer ao domínio `creatures` e passou a
