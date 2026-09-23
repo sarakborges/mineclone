@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::theme;
+use super::{selectable, theme};
 
 pub const WIDTH: f32 = 52.0;
 pub const HEIGHT: f32 = 30.0;
@@ -51,6 +51,22 @@ pub const fn thumb_left(enabled: bool) -> f32 {
 
 pub fn colors(enabled: bool, interaction: Interaction) -> (Color, Color) {
     (background(enabled, interaction), border(enabled))
+}
+
+pub fn apply_control_colors(
+    enabled: bool,
+    interaction: Interaction,
+    background: Mut<'_, BackgroundColor>,
+    border: Mut<'_, BorderColor>,
+) {
+    selectable::apply_colors(colors(enabled, interaction), background, border);
+}
+
+pub fn apply_thumb_position(enabled: bool, node: &mut Node) {
+    let next_left = px(thumb_left(enabled));
+    if node.left != next_left {
+        node.left = next_left;
+    }
 }
 
 fn border(enabled: bool) -> Color {
