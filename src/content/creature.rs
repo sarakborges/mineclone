@@ -27,6 +27,8 @@ pub struct CreatureDefinition {
     #[serde(default)]
     pub unlit_materials: std::collections::HashSet<String>,
     #[serde(default)]
+    pub particle_effects: std::collections::HashMap<String, CreatureParticleEffect>,
+    #[serde(default)]
     pub animations: std::collections::HashMap<String, String>,
     #[serde(default = "default_jump_speed")]
     pub jump_speed: f32,
@@ -38,6 +40,80 @@ pub struct CreatureDefinition {
     pub anticipation_seconds: f32,
     #[serde(default)]
     pub landing_seconds: f32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatureParticleEffect {
+    pub count: usize,
+    pub color: [f32; 4],
+    pub size: f32,
+    pub lifetime: f32,
+    #[serde(default)]
+    pub interval: f32,
+    #[serde(default)]
+    pub spawn_radius: f32,
+    #[serde(default)]
+    pub y_offset: f32,
+    #[serde(default)]
+    pub horizontal_speed: f32,
+    #[serde(default)]
+    pub vertical_speed: f32,
+    #[serde(default)]
+    pub vertical_jitter: f32,
+    #[serde(default)]
+    pub gravity: f32,
+    #[serde(default = "default_particle_end_scale")]
+    pub end_scale: f32,
+}
+
+impl CreatureParticleEffect {
+    fn validate(&self, creature_id: &str, state: &str) {
+        assert!(
+            (1..=64).contains(&self.count),
+            "creature {creature_id} particle effect {state} count must be between 1 and 64"
+        );
+        assert!(
+            self.color
+                .iter()
+                .all(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+            "creature {creature_id} particle effect {state} has an invalid RGBA color"
+        );
+        assert!(
+            self.size.is_finite() && self.size > 0.0,
+            "creature {creature_id} particle effect {state} size must be positive and finite"
+        );
+        assert!(
+            self.lifetime.is_finite() && self.lifetime > 0.0,
+            "creature {creature_id} particle effect {state} lifetime must be positive and finite"
+        );
+        assert!(
+            self.interval.is_finite() && self.interval >= 0.0,
+            "creature {creature_id} particle effect {state} interval must be finite and non-negative"
+        );
+        assert!(
+            self.spawn_radius.is_finite() && self.spawn_radius >= 0.0,
+            "creature {creature_id} particle effect {state} spawnRadius must be finite and non-negative"
+        );
+        assert!(
+            self.y_offset.is_finite()
+                && self.horizontal_speed.is_finite()
+                && self.horizontal_speed >= 0.0
+                && self.vertical_speed.is_finite()
+                && self.vertical_jitter.is_finite()
+                && self.vertical_jitter >= 0.0
+                && self.gravity.is_finite(),
+            "creature {creature_id} particle effect {state} has invalid motion values"
+        );
+        assert!(
+            self.end_scale.is_finite() && self.end_scale >= 0.0,
+            "creature {creature_id} particle effect {state} endScale must be finite and non-negative"
+        );
+    }
+}
+
+fn default_particle_end_scale() -> f32 {
+    0.15
 }
 
 fn default_creature_health() -> f32 {
@@ -161,6 +237,14 @@ impl CreatureRegistry {
                 "creature {} has an empty unlit material name",
                 definition.id
             );
+        }
+        for (state, effect) in &definition.particle_effects {
+            assert!(
+                !state.trim().is_empty(),
+                "creature {} has an empty particle effect state",
+                definition.id
+            );
+            effect.validate(&definition.id, state);
         }
         for (state, clip) in &definition.animations {
             assert!(
