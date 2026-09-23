@@ -364,7 +364,7 @@ fn spawn_category_button(
         ))
         .with_children(|button| {
             let icon = category.map_or(
-                "textures/inventory/categories/everything.png",
+                "textures/creative_categories/everything.png",
                 |category| category.icon.as_str(),
             );
             button.spawn((
