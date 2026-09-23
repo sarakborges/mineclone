@@ -12464,3 +12464,19 @@ O mesmo atlas é usado pelo slime arredondado e pelo legacy.
 
 Commit funcional: `2a874c5d06e0c79011b95aafee09433b9f44164e`.
 VERSION: `0.50.130`, commit de versão `ee16252f33d33bdfb0e219445c56ba8e0ceed42b`.
+
+
+## 2026-09-23 — Slime soft shading aumentado para 5%
+
+O contraste do atlas `shell_soft.png` foi aumentado conforme feedback visual. O shading continua totalmente estável/unlit e sem reflexo, mas as faces sombreadas agora usam aproximadamente 95% da luminância base (`242/255`), em vez de ~1%.
+
+Ajuste aplicado aos dois modelos:
+- frente/trás: 100%;
+- lados: ~95%;
+- topo: 100%;
+- base: ~95%.
+
+Não há bordas/grid no atlas; a diferença vem apenas da orientação da face.
+
+Commit funcional: `aa4191707d999fe52cc894e7eef98eea72da8b1a`.
+VERSION: `0.50.131`, commit de versão `0a0e98c96dc263e162a22e91a0d608e27fa3f0de`.
