@@ -347,6 +347,24 @@ impl StructureDefinition {
         &self.runtime.column_spans
     }
 
+    pub(crate) fn clear_above_positions(
+        &self,
+        rotation: StructureRotation,
+        origin: IVec3,
+    ) -> impl Iterator<Item = IVec3> + '_ {
+        let clear_above = self.clear_above as i32;
+        self.runtime.column_spans.iter().flat_map(move |span| {
+            let horizontal = origin.xz() + rotation.rotate_horizontal(span.offset);
+            (1..=clear_above).map(move |delta_y| {
+                IVec3::new(
+                    horizontal.x,
+                    origin.y + span.max_y_offset + delta_y,
+                    horizontal.y,
+                )
+            })
+        })
+    }
+
     pub(crate) fn column_voxels(&self, offset: IVec2) -> &[StructureVoxel] {
         self.runtime
             .column_voxels
