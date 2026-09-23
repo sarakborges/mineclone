@@ -9,7 +9,7 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
-        selectable, toggle, typography,
+        toggle, typography,
     },
     world::{InMemoryWorldSave, NewWorldConfig, game_rules::GameRules},
 };
