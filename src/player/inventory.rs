@@ -1,18 +1,11 @@
 use bevy::prelude::*;
 
-use crate::app::{
-    game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
-    state_systems::reset_next_state,
+use crate::{
+    app::resource_systems::reset_resource,
+    gameplay::modal::GameplayModalState,
 };
 
 use super::hotbar::PlayerHotbar;
-
-#[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) enum InventoryState {
-    #[default]
-    Closed,
-    Open,
-}
 
 #[derive(Resource, Default)]
 pub(crate) struct InventoryCursor {
@@ -41,19 +34,9 @@ pub(crate) struct PlayerInventoryPlugin;
 
 impl Plugin for PlayerInventoryPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<InventoryState>()
-            .init_resource::<InventoryCursor>()
-            .add_systems(
-                OnExit(InventoryState::Open),
-                reset_resource::<InventoryCursor>,
-            )
-            .add_systems(
-                OnEnter(PauseState::Paused),
-                reset_next_state::<InventoryState>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnExit(GameState::Gameplay),
-                reset_next_state::<InventoryState>,
-            );
+        app.init_resource::<InventoryCursor>().add_systems(
+            OnExit(GameplayModalState::Inventory),
+            reset_resource::<InventoryCursor>,
+        );
     }
 }
