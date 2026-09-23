@@ -23,6 +23,11 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a block and a layer",
             block.id
         );
+        assert!(
+            content.items.get(&block.id).is_none(),
+            "content id {} cannot be both a block and an item",
+            block.id
+        );
         block.validate_references(
             &content.inventory_categories,
             &content.secondary_properties,
@@ -42,6 +47,11 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a layer and a tool",
             layer.id
         );
+        assert!(
+            content.items.get(&layer.id).is_none(),
+            "content id {} cannot be both a layer and an item",
+            layer.id
+        );
         layer.validate_references(&content.inventory_categories);
     }
 
@@ -56,7 +66,31 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a tool and a layer",
             tool.id
         );
+        assert!(
+            content.items.get(&tool.id).is_none(),
+            "content id {} cannot be both a tool and an item",
+            tool.id
+        );
         tool.validate_references(&content.inventory_categories, &content.tool_categories);
+    }
+
+    for item in content.items.iter() {
+        assert!(
+            content.blocks.get(&item.id).is_none(),
+            "content id {} cannot be both an item and a block",
+            item.id
+        );
+        assert!(
+            content.layers.get(&item.id).is_none(),
+            "content id {} cannot be both an item and a layer",
+            item.id
+        );
+        assert!(
+            content.tools.get(&item.id).is_none(),
+            "content id {} cannot be both an item and a tool",
+            item.id
+        );
+        item.validate_references(&content.inventory_categories);
     }
 
     for structure in content.structures.iter() {
