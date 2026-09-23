@@ -128,13 +128,14 @@ def make_voxel_surface_mesh() -> int:
                 continue
             offset = len(positions) // 3
             for cx, cy, cz in corners:
-                positions.extend((
-                    -BODY_WIDTH * 0.5 + (ix + cx) * DX,
-                    -BODY_HEIGHT * 0.5 + (iy + cy) * DY,
-                    -BODY_DEPTH * 0.5 + (iz + cz) * DZ,
-                ))
+                px = -BODY_WIDTH * 0.5 + (ix + cx) * DX
+                py = -BODY_HEIGHT * 0.5 + (iy + cy) * DY
+                pz = -BODY_DEPTH * 0.5 + (iz + cz) * DZ
+                positions.extend((px, py, pz))
                 normals.extend(normal)
-                uvs.extend((0.5, 0.5))
+                # shell_soft.png is a 1-D vertical shade ramp. Mapping V from
+                # geometry height keeps the subtle shade stable while rotating.
+                uvs.extend((0.5, (py + BODY_HALF_HEIGHT) / BODY_HEIGHT))
             indices.extend((offset, offset + 1, offset + 2, offset, offset + 2, offset + 3))
 
     assert len(positions) // 3 < 65536
