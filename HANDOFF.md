@@ -12678,3 +12678,48 @@ Commits:
 - obsolete legacy shell shade texture removed: `1fdf55f3f8c1708c037937197330be36192e71ef`.
 
 VERSION: `0.50.142`, commit de versão `5f5cd3674878fef1e51e9f713983929dcb689db7`.
+
+
+## 2026-09-23 — Root cause real da transparência do slime arredondado
+
+A investigação profunda encontrou um bug geométrico objetivo no novo `slime_blob.glb`: **100% dos 4.860 triângulos do shell estavam com winding invertido em relação às normals externas**.
+
+Antes da correção:
+- triângulos com winding alinhado à normal: `0`;
+- triângulos invertidos: `4.860`;
+- material do shell: `doubleSided = false`.
+
+Com back-face culling ativo, isso fazia justamente a superfície externa frontal ser descartada. O jogador acabava vendo a superfície oposta/traseira através do volume, o que visualmente parecia transparência, "sombra interna" e leitura do interior do slime mesmo com `alphaMode = OPAQUE`.
+
+Correção:
+- ordem dos índices do shell arredondado foi invertida para alinhar rasterizer winding e normals;
+- o gerador agora valida todos os triângulos e falha se `cross(edge1, edge2) · normal <= 0`;
+- GLB corrigido e validado: `4.860/4.860` triângulos agora têm winding externo;
+- legacy foi auditado e já estava correto: `12/12` triângulos externos;
+- `SlimeShell` de ambos os modelos foi explicitamente mantido em `AlphaMode::Opaque`, alpha `1.0`;
+- `COLOR_0` dos shells também foi auditado com alpha `1.0` em todos os vértices;
+- shading continua em vertex color, sem transmissão e sem textura de shell.
+
+A cor também foi reduzida na origem e no override runtime para evitar o aspecto neon/estourado:
+- shell tint agora: HSI `153 / 0.43 / 0.49`;
+- sRGB aproximado: `[0.279, 0.688, 0.502]`;
+- o mesmo valor foi colocado como fallback no GLB, então a aparência não depende de o override JSON ter sido aplicado para deixar de usar o verde anterior `[0.50, 0.91, 0.78]`.
+
+Validação estrutural final dos GLBs:
+- rounded shell: `4860` triângulos, todos outward;
+- rounded shell alpha mode: `OPAQUE`;
+- rounded vertex alpha: `1.0..1.0`;
+- legacy shell: `12` triângulos, todos outward;
+- legacy shell alpha mode: `OPAQUE`;
+- legacy vertex alpha: `1.0..1.0`.
+
+Commits:
+- gerador rounded / winding assertion: `07dcaa803c2844d7f10a99dd01017d0e059834fa`;
+- tint rounded: `62094e6457a3f3e17bbdf0f468891afe5c5c8256`;
+- tint legacy: `ff5ae6380555672b4bbeb8e4dc47768f33a151de`;
+- fallback legacy: `1f6c4ab53e92533e94de437952a505abd6065a50`;
+- GLBs corrigidos: `f3c876545f63e5cb09563efa4aee2608592c4000`.
+
+O CI do estado funcional `f3c876545f63e5cb09563efa4aee2608592c4000` concluiu com sucesso.
+
+VERSION: `0.50.145`, commit de versão `702a66e89d7b1f0b55017513e45daae84e726c88`.
