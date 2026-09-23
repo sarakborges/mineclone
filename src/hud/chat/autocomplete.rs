@@ -272,6 +272,14 @@ fn active_token(text: &str, cursor: usize) -> Option<(Range<usize>, usize)> {
     Some((start..end, parameter))
 }
 
+fn id_matches_prefix(id: &str, prefix: &str) -> bool {
+    let id = id.to_ascii_lowercase();
+    id.starts_with(prefix)
+        || id
+            .strip_prefix("asteria:")
+            .is_some_and(|short| short.starts_with(prefix))
+}
+
 fn suggestions_for(
     text: &str,
     cursor: usize,
@@ -308,11 +316,7 @@ fn suggestions_for(
                 .collect::<Vec<_>>(),
             ParameterKind::CreatureId => creatures
                 .iter()
-                .filter(|creature| {
-                    let id = creature.id.to_ascii_lowercase();
-                    id.starts_with(&prefix)
-                        || id.strip_prefix("asteria:").is_some_and(|short| short.starts_with(&prefix))
-                })
+                .filter(|creature| id_matches_prefix(&creature.id, &prefix))
                 .map(|creature| Suggestion {
                     value: creature.id.clone(),
                     description: creature.name.text(language.get()).to_owned(),
@@ -322,13 +326,7 @@ fn suggestions_for(
                 let mut values = structures
                     .iter()
                     .filter(|structure| structure.group_id.is_none())
-                    .filter(|structure| {
-                        let id = structure.id.to_ascii_lowercase();
-                        id.starts_with(&prefix)
-                            || id
-                                .strip_prefix("asteria:")
-                                .is_some_and(|short| short.starts_with(&prefix))
-                    })
+                    .filter(|structure| id_matches_prefix(&structure.id, &prefix))
                     .map(|structure| Suggestion {
                         value: structure.id.clone(),
                         description: structure.name.text(language.get()).to_owned(),
@@ -337,13 +335,7 @@ fn suggestions_for(
                 values.extend(
                     structures
                         .group_references()
-                        .filter(|(reference, _, _)| {
-                            let id = reference.to_ascii_lowercase();
-                            id.starts_with(&prefix)
-                                || id
-                                    .strip_prefix("asteria:")
-                                    .is_some_and(|short| short.starts_with(&prefix))
-                        })
+                        .filter(|(reference, _, _)| id_matches_prefix(reference, &prefix))
                         .map(|(reference, structure, count)| Suggestion {
                             value: reference.to_owned(),
                             description: format!(
@@ -355,13 +347,7 @@ fn suggestions_for(
                 values.extend(
                     structure_sets
                         .iter()
-                        .filter(|set| {
-                            let id = set.id.to_ascii_lowercase();
-                            id.starts_with(&prefix)
-                                || id
-                                    .strip_prefix("asteria:")
-                                    .is_some_and(|short| short.starts_with(&prefix))
-                        })
+                        .filter(|set| id_matches_prefix(&set.id, &prefix))
                         .map(|set| Suggestion {
                             value: set.id.clone(),
                             description: format!(
@@ -410,13 +396,7 @@ fn suggestions_for(
                 "biome" => biomes
                     .iter()
                     .filter(|biome| biome.kind != crate::content::biome::BiomeKind::Hydrology)
-                    .filter(|biome| {
-                        let id = biome.id.to_ascii_lowercase();
-                        id.starts_with(&prefix)
-                            || id
-                                .strip_prefix("asteria:")
-                                .is_some_and(|short| short.starts_with(&prefix))
-                    })
+                    .filter(|biome| id_matches_prefix(&biome.id, &prefix))
                     .map(|biome| Suggestion {
                         value: biome.id.clone(),
                         description: biome.name.text(language.get()).to_owned(),
@@ -455,13 +435,7 @@ fn suggestions_for(
                         structures
                             .group_references()
                             .filter(|(_, structure, _)| structure.locatable)
-                            .filter(|(reference, _, _)| {
-                                let id = reference.to_ascii_lowercase();
-                                id.starts_with(&prefix)
-                                    || id
-                                        .strip_prefix("asteria:")
-                                        .is_some_and(|short| short.starts_with(&prefix))
-                            })
+                            .filter(|(reference, _, _)| id_matches_prefix(reference, &prefix))
                             .map(|(reference, structure, count)| Suggestion {
                                 value: reference.to_owned(),
                                 description: format!(
@@ -474,13 +448,7 @@ fn suggestions_for(
                         structure_sets
                             .iter()
                             .filter(|set| set.locatable)
-                            .filter(|set| {
-                                let id = set.id.to_ascii_lowercase();
-                                id.starts_with(&prefix)
-                                    || id
-                                        .strip_prefix("asteria:")
-                                        .is_some_and(|short| short.starts_with(&prefix))
-                            })
+                            .filter(|set| id_matches_prefix(&set.id, &prefix))
                             .map(|set| Suggestion {
                                 value: set.id.clone(),
                                 description: format!(
