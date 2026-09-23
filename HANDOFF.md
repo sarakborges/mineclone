@@ -408,7 +408,7 @@ descriptions e a regra opcional `locatable_only`. Isso também removeu o último
 matching inline que ainda não reutilizava `id_matches_prefix`. VERSION:
 `0.50.155`.
 
-CI de Q36: pendente neste checkpoint.
+CI de Q36: **verde** no run `35882339417` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
