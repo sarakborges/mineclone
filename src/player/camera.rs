@@ -122,18 +122,37 @@ const THIRD_PERSON_MIN_DISTANCE: f32 = 0.35;
 pub(crate) enum CameraPerspective {
     #[default]
     FirstPerson,
-    ThirdPerson,
+    ThirdPersonBack,
+    ThirdPersonFront,
 }
 
 impl CameraPerspective {
     pub(crate) const fn is_third_person(self) -> bool {
-        matches!(self, Self::ThirdPerson)
+        matches!(self, Self::ThirdPersonBack | Self::ThirdPersonFront)
     }
 
-    fn toggle(self) -> Self {
+    pub(crate) fn horizontal_movement_axes(self, yaw: f32) -> (Vec3, Vec3) {
+        let view_yaw = match self {
+            Self::ThirdPersonFront => yaw + std::f32::consts::PI,
+            Self::FirstPerson | Self::ThirdPersonBack => yaw,
+        };
+        let input_sign = if matches!(self, Self::ThirdPersonFront) {
+            -1.0
+        } else {
+            1.0
+        };
+        let rotation = Quat::from_rotation_y(view_yaw);
+        (
+            rotation * Vec3::NEG_Z * input_sign,
+            rotation * Vec3::X * input_sign,
+        )
+    }
+
+    fn next(self) -> Self {
         match self {
-            Self::FirstPerson => Self::ThirdPerson,
-            Self::ThirdPerson => Self::FirstPerson,
+            Self::FirstPerson => Self::ThirdPersonBack,
+            Self::ThirdPersonBack => Self::ThirdPersonFront,
+            Self::ThirdPersonFront => Self::FirstPerson,
         }
     }
 }
@@ -151,7 +170,7 @@ fn toggle_camera_perspective(
     mut perspective: ResMut<CameraPerspective>,
 ) {
     if keys.just_pressed(keybinds.key_code(KeybindAction::ChangePerspective)) {
-        *perspective = perspective.toggle();
+        *perspective = perspective.next();
     }
 }
 
@@ -164,30 +183,36 @@ fn sync_perspective_camera(
     let (player_transform, gameplay_camera) = *player;
     let mut camera_transform = camera.into_inner();
 
-    if !perspective.is_third_person() {
-        if camera_transform.translation != Vec3::ZERO {
-            camera_transform.translation = Vec3::ZERO;
+    let (local_direction, local_rotation) = match *perspective {
+        CameraPerspective::FirstPerson => {
+            if camera_transform.translation != Vec3::ZERO {
+                camera_transform.translation = Vec3::ZERO;
+            }
+            if camera_transform.rotation != Quat::IDENTITY {
+                camera_transform.rotation = Quat::IDENTITY;
+            }
+            return;
         }
-        if camera_transform.rotation != Quat::IDENTITY {
-            camera_transform.rotation = Quat::IDENTITY;
+        CameraPerspective::ThirdPersonBack => (Vec3::Z, Quat::IDENTITY),
+        CameraPerspective::ThirdPersonFront => {
+            (Vec3::NEG_Z, Quat::from_rotation_y(std::f32::consts::PI))
         }
-        return;
-    }
+    };
 
     let rotation = gameplay_camera.rotation();
-    let backward = rotation * Vec3::Z;
+    let world_direction = rotation * local_direction;
     let distance = unobstructed_camera_distance(
         &world,
         player_transform.translation,
-        backward,
+        world_direction,
         THIRD_PERSON_MAX_DISTANCE,
     );
-    let local_translation = Vec3::Z * distance;
+    let local_translation = local_direction * distance;
     if camera_transform.translation != local_translation {
         camera_transform.translation = local_translation;
     }
-    if camera_transform.rotation != Quat::IDENTITY {
-        camera_transform.rotation = Quat::IDENTITY;
+    if camera_transform.rotation != local_rotation {
+        camera_transform.rotation = local_rotation;
     }
 }
 
@@ -213,4 +238,39 @@ fn unobstructed_camera_distance(
     }
 
     maximum
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::CameraPerspective;
+    use bevy::prelude::*;
+
+    #[test]
+    fn perspective_cycles_first_back_front_first() {
+        assert_eq!(
+            CameraPerspective::FirstPerson.next(),
+            CameraPerspective::ThirdPersonBack
+        );
+        assert_eq!(
+            CameraPerspective::ThirdPersonBack.next(),
+            CameraPerspective::ThirdPersonFront
+        );
+        assert_eq!(
+            CameraPerspective::ThirdPersonFront.next(),
+            CameraPerspective::FirstPerson
+        );
+    }
+
+    #[test]
+    fn front_preview_keeps_world_movement_axes_stable() {
+        let yaw = 0.73;
+        let (back_forward, back_right) =
+            CameraPerspective::ThirdPersonBack.horizontal_movement_axes(yaw);
+        let (front_forward, front_right) =
+            CameraPerspective::ThirdPersonFront.horizontal_movement_axes(yaw);
+
+        assert!(back_forward.abs_diff_eq(front_forward, 1.0e-5));
+        assert!(back_right.abs_diff_eq(front_right, 1.0e-5));
+    }
 }
