@@ -479,6 +479,18 @@ possuem um único owner. VERSION: `0.50.160`.
 CI de Q40: **verde** no run `35883891200` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q41 — reutilizar contexto de tokens no autocomplete
+
+`suggestions_for` não reexecuta mais `split_whitespace` para recuperar
+repetidamente command, primeiro argumento e segundo argumento em branches
+diferentes. A linha é tokenizada uma única vez por resolução de autocomplete e
+os mesmos `first_argument`/`second_argument` alimentam variation e locate.
+Isso remove scans redundantes da string sem introduzir alocação ou novo context
+persistente. VERSION: `0.50.161`.
+
+CI de Q41: **verde** no run `35884382877` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
