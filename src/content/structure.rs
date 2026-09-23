@@ -307,10 +307,6 @@ impl StructureDefinition {
         )
     }
 
-    pub(crate) fn max_y_offset(&self) -> i32 {
-        self.runtime.max_y_offset
-    }
-
     pub(crate) fn effective_max_y_offset(&self) -> i32 {
         self.runtime.max_y_offset + self.clear_above as i32
     }
