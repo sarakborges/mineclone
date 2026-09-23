@@ -7,7 +7,7 @@ use crate::content::{
     structure_set::StructureSetDefinition,
 };
 
-use super::hash::{avalanche, string_hash, unit_interval};
+use super::{geometry::rectangles_overlap, hash::{avalanche, string_hash, unit_interval}};
 
 const ELEMENT_HASH_SALT: u64 = 0x9e37_79b1_85eb_ca87;
 const INSTANCE_HASH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
@@ -212,18 +212,6 @@ fn checked_add(left: IVec2, right: IVec2) -> Option<IVec2> {
         left.x.checked_add(right.x)?,
         left.y.checked_add(right.y)?,
     ))
-}
-
-fn rectangles_overlap(
-    left_min: IVec2,
-    left_max: IVec2,
-    right_min: IVec2,
-    right_max: IVec2,
-) -> bool {
-    left_min.x <= right_max.x
-        && left_max.x >= right_min.x
-        && left_min.y <= right_max.y
-        && left_max.y >= right_min.y
 }
 
 fn set_occurrence_hash(world_seed: u64, set_id: &str, anchor: IVec2) -> u64 {
