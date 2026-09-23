@@ -47,7 +47,7 @@ pub(super) struct InventoryItemContent<'w> {
 }
 
 impl InventoryItemContent<'_> {
-    fn view<'a>(
+    pub(super) fn view<'a>(
         &'a self,
         player_position: Vec2,
         icon_materials: &'a mut Assets<BlockIconMaterial>,
@@ -90,6 +90,34 @@ pub(super) struct InventoryPanelState<'w, 's> {
     player_view: Res<'w, PlayerInventoryView>,
     scroll_state: Res<'w, CreativeScrollState>,
     player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
+}
+
+impl InventoryPanelState<'_, '_> {
+    pub(super) fn player_position(&self) -> Vec2 {
+        Vec2::new(
+            self.player.0.translation.x,
+            self.player.0.translation.z,
+        )
+    }
+
+    pub(super) fn layout<'a>(
+        &'a self,
+        categories: &'a InventoryCategoryRegistry,
+        localization: &'a UiLocalization,
+        cursor_position: Option<Vec2>,
+    ) -> InventoryLayoutState<'a> {
+        InventoryLayoutState {
+            categories,
+            hotbar: &self.hotbar,
+            cursor: &self.cursor,
+            creative_view: &self.creative_view,
+            player_view: &self.player_view,
+            scroll_state: &self.scroll_state,
+            localization,
+            game_mode: *self.player.1,
+            cursor_position,
+        }
+    }
 }
 
 type InventoryRootQuery<'w, 's> = Query<
@@ -251,23 +279,8 @@ pub(super) fn spawn_inventory(
     window: Single<&Window>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let (player_transform, game_mode) = *state.player;
-    let player_position = Vec2::new(
-        player_transform.translation.x,
-        player_transform.translation.z,
-    );
-    let mut items = content.view(player_position, &mut icon_materials);
-    let layout = InventoryLayoutState {
-        categories: &categories,
-        hotbar: &state.hotbar,
-        cursor: &state.cursor,
-        creative_view: &state.creative_view,
-        player_view: &state.player_view,
-        scroll_state: &state.scroll_state,
-        localization: &localization,
-        game_mode: *game_mode,
-        cursor_position: window.cursor_position(),
-    };
+    let mut items = content.view(state.player_position(), &mut icon_materials);
+    let layout = state.layout(&categories, &localization, window.cursor_position());
 
     spawn_inventory_root(&mut commands, &layout, &mut items);
 }
@@ -352,23 +365,10 @@ pub(super) fn rebuild_inventory_when_changed(
         return;
     }
 
-    let (player_transform, game_mode) = *inputs.panel.player;
-    let player_position = Vec2::new(
-        player_transform.translation.x,
-        player_transform.translation.z,
-    );
-    let mut items = content.view(player_position, &mut icon_materials);
-    let layout = InventoryLayoutState {
-        categories: &inputs.categories,
-        hotbar: &inputs.panel.hotbar,
-        cursor: &inputs.panel.cursor,
-        creative_view: &inputs.panel.creative_view,
-        player_view: &inputs.panel.player_view,
-        scroll_state: &inputs.panel.scroll_state,
-        localization: &inputs.localization,
-        game_mode: *game_mode,
-        cursor_position: None,
-    };
+    let mut items = content.view(inputs.panel.player_position(), &mut icon_materials);
+    let layout = inputs
+        .panel
+        .layout(&inputs.categories, &inputs.localization, None);
 
     if language_changed {
         for entity in &view.roots {
