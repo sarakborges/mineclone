@@ -1,0 +1,51 @@
+{
+  "id": "asteria:slime_legacy",
+  "name": {
+    "english": "Legacy Slime",
+    "portuguese_brazil": "Slime Legado",
+    "spanish": "Slime Clásico"
+  },
+  "model": "models/creatures/slime/slime.glb",
+  "health": 10,
+  "maxPerType": 1,
+  "collider": {
+    "size": [
+      0.78,
+      0.84,
+      0.78
+    ],
+    "centerOffset": [
+      0,
+      0.42,
+      0
+    ]
+  },
+  "materialTints": {
+    "SlimeShell": {
+      "hue": 153,
+      "saturation": 0.62,
+      "intensity": 0.64
+    }
+  },
+  "unlitMaterials": [
+    "SlimeShell",
+    "SlimeFace"
+  ],
+  "animations": {
+    "idle": "Idle",
+    "anticipate": "Anticipate",
+    "airborne": "Airborne",
+    "land": "Land",
+    "hurt": "Hurt",
+    "death": "Death"
+  },
+  "jumpSpeed": 5,
+  "moveSpeed": 1.5,
+  "jumpInterval": 2,
+  "anticipationSeconds": 0.24,
+  "landingSeconds": 0.34,
+  "textures": {
+    "SlimeShell": "textures/creatures/slime/shell.png",
+    "SlimeFace": "textures/creatures/slime/face.png"
+  }
+}
