@@ -5,7 +5,7 @@ use crate::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
         fluid::FluidRegistry,
-        structure::StructureRegistry,
+        structure::{StructureDefinition, StructureRegistry, StructureRotation},
         structure_set::{StructureSetDefinition, StructureSetRegistry},
     },
     creatures::{CreatureInstance, spawn_creature_at},
@@ -257,6 +257,82 @@ fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64
     hash
 }
 
+fn structure_space_is_available(
+    world: &VoxelWorld,
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+    origin: IVec3,
+    existing: &ExistingCreatures<'_, '_>,
+    reserved: &[(Vec3, CreatureCollider)],
+) -> bool {
+    structure
+        .voxels()
+        .iter()
+        .map(|voxel| origin + rotation.rotate_offset(voxel.offset))
+        .chain(structure.clear_above_positions(rotation, origin))
+        .all(|position| {
+            let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
+            world.is_loaded_at(position)
+                && !existing.iter().any(|(other, collider)| {
+                    overlaps(voxel_bounds, collider.bounds(other.translation))
+                })
+                && !reserved
+                    .iter()
+                    .any(|(other, collider)| overlaps(voxel_bounds, collider.bounds(*other)))
+        })
+}
+
+fn apply_structure(
+    runtime: &mut VoxelTopologyRuntime<'_>,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    world_seed: u64,
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+    origin: IVec3,
+) {
+    for voxel in structure.voxels() {
+        let position = origin + rotation.rotate_offset(voxel.offset);
+        if let Some(block_id) = voxel.block_id {
+            let block = blocks.get(block_id).expect("validated structure block");
+            let texture_rotation =
+                TextureRotation::for_position(position, block.rotate_texture.any());
+            let cell = VoxelCell::oriented(
+                block_id,
+                texture_rotation,
+                rotation.rotate_orientation(voxel.orientation),
+            );
+            let _ = runtime.set_block(position, Some(cell));
+            for (face, layer) in
+                surface_layer_placements(world_seed, structure, rotation, voxel, position)
+            {
+                let _ = runtime.add_layer(position, face, layer);
+            }
+        } else if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
+            let fluid_id = fluids
+                .id_of(fluid_reference)
+                .expect("validated structure fluid");
+            let _ = runtime.set_block(position, None);
+            let _ = runtime.set_fluid(
+                position,
+                Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
+            );
+        } else {
+            debug_assert!(
+                structure.clears_voxel(voxel),
+                "validated structure voxel must reference block, fluid, or clear"
+            );
+            let _ = runtime.set_block(position, None);
+            let _ = runtime.set_fluid(position, None);
+        }
+    }
+
+    for position in structure.clear_above_positions(rotation, origin) {
+        let _ = runtime.set_block(position, None);
+        let _ = runtime.set_fluid(position, None);
+    }
+}
+
 impl ChatPlacementContext<'_, '_> {
     pub(super) fn player_block_position(&mut self) -> Option<IVec3> {
         let player = self.player.single_mut().ok()?;
@@ -375,21 +451,14 @@ impl ChatPlacementContext<'_, '_> {
         // Manual placement may replace terrain and fluids, but it still refuses
         // to touch unloaded chunks or place blocks through creatures requested
         // in this frame / already alive in the world.
-        let all_loaded_and_entity_clear = voxels
-            .iter()
-            .map(|voxel| origin + structure_rotation.rotate_offset(voxel.offset))
-            .chain(structure.clear_above_positions(structure_rotation, origin))
-            .all(|position| {
-                let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
-                world.is_loaded_at(position)
-                    && !self.existing.iter().any(|(other, collider)| {
-                        overlaps(voxel_bounds, collider.bounds(other.translation))
-                    })
-                    && !reserved.iter().any(|(other, collider)| {
-                        overlaps(voxel_bounds, collider.bounds(*other))
-                    })
-            });
-        if !all_loaded_and_entity_clear {
+        if !structure_space_is_available(
+            world,
+            structure,
+            structure_rotation,
+            origin,
+            &self.existing,
+            reserved,
+        ) {
             return format!("not enough loaded space to place {reference}");
         }
 
@@ -404,50 +473,15 @@ impl ChatPlacementContext<'_, '_> {
             return format!("not enough safe space to place {reference}");
         };
 
-        for voxel in voxels {
-            let position = origin + structure_rotation.rotate_offset(voxel.offset);
-            if let Some(block_id) = voxel.block_id {
-                let block = self.blocks.get(block_id).expect("validated structure block");
-                let texture_rotation =
-                    TextureRotation::for_position(position, block.rotate_texture.any());
-                let cell = VoxelCell::oriented(
-                    block_id,
-                    texture_rotation,
-                    structure_rotation.rotate_orientation(voxel.orientation),
-                );
-                let _ = self.runtime.set_block(position, Some(cell));
-                for (face, layer) in surface_layer_placements(
-                    self.seed.0,
-                    structure,
-                    structure_rotation,
-                    voxel,
-                    position,
-                ) {
-                    let _ = self.runtime.add_layer(position, face, layer);
-                }
-            } else if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
-                let fluid_id = self
-                    .fluids
-                    .id_of(fluid_reference)
-                    .expect("validated structure fluid");
-                let _ = self.runtime.set_block(position, None);
-                let _ = self.runtime.set_fluid(
-                    position,
-                    Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
-                );
-            } else {
-                debug_assert!(
-                    structure.clears_voxel(voxel),
-                    "validated structure voxel must reference block, fluid, or clear"
-                );
-                let _ = self.runtime.set_block(position, None);
-                let _ = self.runtime.set_fluid(position, None);
-            }
-        }
-        for position in structure.clear_above_positions(structure_rotation, origin) {
-            let _ = self.runtime.set_block(position, None);
-            let _ = self.runtime.set_fluid(position, None);
-        }
+        apply_structure(
+            &mut self.runtime,
+            &self.blocks,
+            &self.fluids,
+            self.seed.0,
+            structure,
+            structure_rotation,
+            origin,
+        );
         player.translation = destination;
         format!(
             "Placed {} ({}).",
@@ -487,22 +521,14 @@ impl ChatPlacementContext<'_, '_> {
         let blocked = pieces.iter().map(set_piece_bounds).collect::<Vec<_>>();
         let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
             let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
-            piece
-                .structure
-                .voxels()
-                .iter()
-                .map(|voxel| origin + piece.rotation.rotate_offset(voxel.offset))
-                .chain(piece.structure.clear_above_positions(piece.rotation, origin))
-                .all(|position| {
-                    let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
-                    world.is_loaded_at(position)
-                        && !self.existing.iter().any(|(other, collider)| {
-                            overlaps(voxel_bounds, collider.bounds(other.translation))
-                        })
-                        && !reserved.iter().any(|(other, collider)| {
-                            overlaps(voxel_bounds, collider.bounds(*other))
-                        })
-                })
+            structure_space_is_available(
+                world,
+                piece.structure,
+                piece.rotation,
+                origin,
+                &self.existing,
+                reserved,
+            )
         });
         if !all_loaded_and_entity_clear {
             return format!("not enough loaded space to place {}", set.id);
@@ -529,55 +555,15 @@ impl ChatPlacementContext<'_, '_> {
 
         for piece in &pieces {
             let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
-            for voxel in piece.structure.voxels() {
-                let position = origin + piece.rotation.rotate_offset(voxel.offset);
-                if let Some(block_id) = voxel.block_id {
-                    let block = self
-                        .blocks
-                        .get(block_id)
-                        .expect("validated structure block");
-                    let texture_rotation =
-                        TextureRotation::for_position(position, block.rotate_texture.any());
-                    let cell = VoxelCell::oriented(
-                        block_id,
-                        texture_rotation,
-                        piece.rotation.rotate_orientation(voxel.orientation),
-                    );
-                    let _ = self.runtime.set_block(position, Some(cell));
-                    for (face, layer) in surface_layer_placements(
-                        self.seed.0,
-                        piece.structure,
-                        piece.rotation,
-                        voxel,
-                        position,
-                    ) {
-                        let _ = self.runtime.add_layer(position, face, layer);
-                    }
-                } else if let Some(fluid_reference) =
-                    piece.structure.fluid_for_voxel(voxel)
-                {
-                    let fluid_id = self
-                        .fluids
-                        .id_of(fluid_reference)
-                        .expect("validated structure fluid");
-                    let _ = self.runtime.set_block(position, None);
-                    let _ = self.runtime.set_fluid(
-                        position,
-                        Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
-                    );
-                } else {
-                    debug_assert!(
-                        piece.structure.clears_voxel(voxel),
-                        "validated structure voxel must reference block, fluid, or clear"
-                    );
-                    let _ = self.runtime.set_block(position, None);
-                    let _ = self.runtime.set_fluid(position, None);
-                }
-            }
-            for position in piece.structure.clear_above_positions(piece.rotation, origin) {
-                let _ = self.runtime.set_block(position, None);
-                let _ = self.runtime.set_fluid(position, None);
-            }
+            apply_structure(
+                &mut self.runtime,
+                &self.blocks,
+                &self.fluids,
+                self.seed.0,
+                piece.structure,
+                piece.rotation,
+                origin,
+            );
         }
 
         player.translation = destination;
