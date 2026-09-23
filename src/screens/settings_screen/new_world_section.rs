@@ -101,20 +101,12 @@ impl WorldGenerationToggleView<'_, '_> {
     fn sync(&mut self, config_changed: bool, structures: bool, single: bool) {
         for (interaction, background, border) in &mut self.structure_toggles {
             if config_changed || interaction.is_changed() {
-                selectable::apply_colors(
-                    toggle::colors(structures, *interaction),
-                    background,
-                    border,
-                );
+                toggle::apply_control_colors(structures, *interaction, background, border);
             }
         }
         for (interaction, background, border) in &mut self.single_toggles {
             if config_changed || interaction.is_changed() {
-                selectable::apply_colors(
-                    toggle::colors(single, *interaction),
-                    background,
-                    border,
-                );
+                toggle::apply_control_colors(single, *interaction, background, border);
             }
         }
 
@@ -122,13 +114,11 @@ impl WorldGenerationToggleView<'_, '_> {
             return;
         }
 
-        let structures_left = px(toggle::thumb_left(structures));
         for mut thumb in &mut self.structure_thumbs {
-            thumb.left = structures_left;
+            toggle::apply_thumb_position(structures, &mut thumb);
         }
-        let single_left = px(toggle::thumb_left(single));
         for mut thumb in &mut self.single_thumbs {
-            thumb.left = single_left;
+            toggle::apply_thumb_position(single, &mut thumb);
         }
     }
 }
