@@ -397,7 +397,7 @@ creatures, structures, structure groups, structure sets e biomes. O helper
 para IDs sem o prefixo `asteria:`, mantendo a mesma semântica em todos os
 parâmetros de autocomplete. VERSION: `0.50.154`.
 
-CI de Q35: pendente neste checkpoint.
+CI de Q35: **verde** no run `35881879789` após a integração concorrente de entity contacts (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
