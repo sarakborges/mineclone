@@ -13298,3 +13298,27 @@ Arquivos:
 - `data/creatures/slime.json`
 
 VERSION: `0.50.176`.
+
+
+## 2026-09-23 — Slime candy v2: reconstrução visual por camadas/material
+
+A primeira tentativa do `slime_candy` foi descartada visualmente. O problema não era somente shape: ela continuava tratando o corpo como um blob com cor uniforme/shading decorativo. A v2 foi reconstruída para reproduzir a lógica visual da referência fornecida.
+
+Mudanças:
+- corpo refeito como **13 camadas horizontais explícitas**, com perfil largo/achatado e topo em degraus;
+- resolução reduzida para 19x13x17 para que os steps sejam legíveis como os blocos grandes da referência, em vez de microvoxelização ruidosa;
+- removida qualquer dependência de surface noise/microtexture;
+- shell dividido em sete materiais autorados: centro claro, rosa principal, rim lateral profundo, banda inferior saturada, tiers superiores, reflexão rosa-clara e reflexão branca;
+- as cores foram amostradas diretamente da referência e convertidas de sRGB para os fatores lineares do glTF;
+- o centro frontal recebe uma região ampla mais clara para simular o aspecto candy/gel interno sem transparência;
+- a lateral direita e a base recebem rosas mais profundos, criando o mesmo envelope de cor da referência;
+- o highlight superior esquerdo agora é uma composição escalonada de faces reais claras/brancas, não vertex shading nem textura;
+- shell deixa de ser `unlit`: os materiais PBR autorados usam roughness ~0.24–0.42 e emissive muito baixo, permitindo iluminação/specular real sobre os degraus sem sacrificar a paleta;
+- apenas olhos, highlights dos olhos, blush e boca permanecem unlit no runtime;
+- face reproporcionada para olhos baixos/sonolentos, catchlights brancos pequenos, blushes claros e boca W compacta;
+- dois gel cubes continuam presentes, agora usando exatamente a mesma família de materiais do corpo;
+- target/contact collider atualizado para o volume visível real de 1.425 x 0.975 x 1.275.
+
+O corpo continua 100% opaco. A sensação de gel vem de camadas de cor + PBR + highlights autorados, não de alpha/transmission.
+
+VERSION: `0.50.181`.

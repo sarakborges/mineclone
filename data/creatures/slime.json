@@ -21,9 +21,6 @@
     ]
   },
   "unlitMaterials": [
-    "SlimeShell",
-    "SlimeHighlightSoft",
-    "SlimeHighlightBright",
     "SlimeEye",
     "SlimeEyeHighlight",
     "SlimeBlush",
@@ -156,13 +153,13 @@
   },
   "targetCollider": {
     "size": [
-      1.44,
-      1.04,
-      1.36
+      1.425,
+      0.975,
+      1.275
     ],
     "centerOffset": [
       0,
-      0.52,
+      0.4875,
       0
     ]
   }
