@@ -586,7 +586,7 @@ mod tests {
         for layer in 0..4 {
             for y in 0..8 {
                 for x in 0..8 {
-                    half_mask.edit([x, y, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                    half_mask.edit([x, y, layer], crate::voxel::microblock::ArtisansKitResolution::ExtraThin, true);
                 }
             }
         }
@@ -602,7 +602,7 @@ mod tests {
         for layer in 0..4 {
             for y in 0..8 {
                 for x in 0..8 {
-                    half_mask.edit([x, y, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                    half_mask.edit([x, y, layer], crate::voxel::microblock::ArtisansKitResolution::ExtraThin, true);
                 }
             }
         }
