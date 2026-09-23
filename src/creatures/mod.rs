@@ -12,7 +12,7 @@ use crate::{
     entity::EntityHealth,
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
     content::{
-        biome::BiomeRegistry,
+        biome::{BiomeRegistry, CreatureSpawnRule},
         creature::{CreatureCollider, CreatureRegistry},
         dimension::DimensionRegistry,
     },
@@ -278,25 +278,15 @@ fn natural_spawn_creatures(
     );
     let Some(dimension_definition) = context.dimensions.get(&context.current_dimension.id) else { return; };
     let Some(biome_definition) = context.biomes.get(&context.biome.id) else { return; };
-    let candidates: Vec<_> = biome_definition
-        .creature_spawns
-        .iter()
-        .filter(|rule| rule.weight > 0.0 && context.definitions.get(&rule.creature).is_some())
-        .filter(|_| context.entity_counts.total < dimension_definition.max_entities)
-        .filter(|rule| {
-            let Some(creature) = context.definitions.get(&rule.creature) else { return false; };
-            context.entity_counts.count(&rule.creature) < creature.max_per_type
-        })
-        .collect();
-    if candidates.is_empty() { return; }
-    let total_weight: f32 = candidates.iter().map(|rule| rule.weight).sum();
-    if total_weight <= 0.0 { return; }
-    let roll = next_random(&mut state.1) as f32 / u32::MAX as f32 * total_weight;
-    let mut cursor = 0.0;
-    let rule = candidates
-        .into_iter()
-        .find(|rule| { cursor += rule.weight; roll <= cursor })
-        .unwrap_or_else(|| panic!("spawn candidate selection failed"));
+    let Some(rule) = select_natural_spawn_rule(
+        &biome_definition.creature_spawns,
+        &context.definitions,
+        &context.entity_counts,
+        dimension_definition.max_entities,
+        &mut state.1,
+    ) else {
+        return;
+    };
 
     for _ in 0..8 {
         let angle = next_random(&mut state.1) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
@@ -326,6 +316,48 @@ fn natural_spawn_creatures(
         );
         break;
     }
+}
+
+fn natural_spawn_rule_is_eligible(
+    rule: &CreatureSpawnRule,
+    definitions: &CreatureRegistry,
+    entity_counts: &DimensionEntityCounts,
+) -> bool {
+    rule.weight > 0.0
+        && definitions.get(&rule.creature).is_some_and(|creature| {
+            entity_counts.count(&rule.creature) < creature.max_per_type
+        })
+}
+
+fn select_natural_spawn_rule<'a>(
+    rules: &'a [CreatureSpawnRule],
+    definitions: &CreatureRegistry,
+    entity_counts: &DimensionEntityCounts,
+    max_entities: usize,
+    random_state: &mut u32,
+) -> Option<&'a CreatureSpawnRule> {
+    if entity_counts.total >= max_entities {
+        return None;
+    }
+
+    let total_weight = rules
+        .iter()
+        .filter(|rule| natural_spawn_rule_is_eligible(rule, definitions, entity_counts))
+        .map(|rule| rule.weight)
+        .sum::<f32>();
+    if total_weight <= 0.0 {
+        return None;
+    }
+
+    let roll = next_random(random_state) as f32 / u32::MAX as f32 * total_weight;
+    let mut cursor = 0.0;
+    rules
+        .iter()
+        .filter(|rule| natural_spawn_rule_is_eligible(rule, definitions, entity_counts))
+        .find(|rule| {
+            cursor += rule.weight;
+            roll <= cursor
+        })
 }
 
 fn natural_spawn_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
