@@ -522,7 +522,7 @@ impl ChatPlacementContext<'_, '_> {
                 .voxels()
                 .iter()
                 .map(|voxel| origin + piece.rotation.rotate_offset(voxel.offset))
-                .chain(clear_above_positions.into_iter())
+                .chain(clear_above_positions)
                 .all(|position| {
                     let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
                     world.is_loaded_at(position)
