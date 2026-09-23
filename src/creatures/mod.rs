@@ -4,6 +4,7 @@ mod motion;
 mod natural_spawn;
 mod particles;
 mod persistence;
+mod random;
 mod spawn;
 mod visual;
 use bevy::prelude::*;
