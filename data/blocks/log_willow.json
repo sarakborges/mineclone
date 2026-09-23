@@ -7,7 +7,8 @@
   },
   "category": "wooden_blocks",
   "tags": [
-    "fragmentable"
+    "fragmentable",
+    "log"
   ],
   "textures": {
     "top": "textures/blocks/trees/willow/top.png",
