@@ -3,11 +3,8 @@ use bevy::{input::mouse::MouseMotion, prelude::*};
 use crate::{
     app::game_state::GameState,
     entity::EntityHealth,
-    player::{
-        PLAYER_DISPLAY_NAME,
-        camera::GameplayCamera,
-        character_info::CharacterInfoState,
-    },
+    gameplay::modal::GameplayModalState,
+    player::{PLAYER_DISPLAY_NAME, camera::GameplayCamera},
     ui::{selectable, surface, theme, typography},
 };
 
@@ -55,18 +52,18 @@ impl Plugin for CharacterInfoHudPlugin {
         app.init_resource::<CharacterPreviewInteraction>()
             .init_resource::<CharacterPreviewOrbit>()
             .add_systems(
-                OnEnter(CharacterInfoState::Open),
+                OnEnter(GameplayModalState::CharacterInfo),
                 spawn_character_info.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
-                OnExit(CharacterInfoState::Open),
+                OnExit(GameplayModalState::CharacterInfo),
                 stop_character_preview_drag,
             )
             .add_systems(
                 Update,
                 (rotate_character_preview, sync_character_info_health)
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(CharacterInfoState::Open)),
+                    .run_if(in_state(GameplayModalState::CharacterInfo)),
             );
     }
 }
@@ -93,7 +90,7 @@ fn spawn_character_info(
             },
             GlobalZIndex(100),
             Pickable::IGNORE,
-            DespawnOnExit(CharacterInfoState::Open),
+            DespawnOnExit(GameplayModalState::CharacterInfo),
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
