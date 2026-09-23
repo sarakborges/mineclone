@@ -4,7 +4,8 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path, block::BlockTint, layer_id::intern_layer_id,
+    asset_path::is_safe_relative_asset_path, block::BlockTint,
+    inventory_category::InventoryCategoryRegistry, layer_id::intern_layer_id,
     registry::DefinitionMap,
 };
 
@@ -100,6 +101,15 @@ pub struct LayerDefinition {
 impl LayerDefinition {
     pub(crate) fn supports_face(&self, face: LayerFace) -> bool {
         self.faces.contains(&face)
+    }
+
+    pub(crate) fn validate_references(&self, inventory_categories: &InventoryCategoryRegistry) {
+        assert!(
+            inventory_categories.get(&self.category).is_some(),
+            "layer {} references missing inventory category {}",
+            self.id,
+            self.category
+        );
     }
 }
 
