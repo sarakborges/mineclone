@@ -23,42 +23,12 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a block and a layer",
             block.id
         );
-        assert!(
-            content.inventory_categories.get(&block.category).is_some(),
-            "block {} references missing inventory category {}",
-            block.id,
-            block.category
+        block.validate_references(
+            &content.inventory_categories,
+            &content.secondary_properties,
+            &content.tool_categories,
+            &content.tools,
         );
-        for property in &block.secondary_properties {
-            assert!(
-                content.secondary_properties.contains_property(property),
-                "block {} references missing secondary property {}",
-                block.id,
-                property
-            );
-        }
-        for category in block
-            .mining
-            .required_tools
-            .iter()
-            .chain(block.mining.preferred_tools.iter())
-        {
-            assert!(
-                content.tool_categories.get(category).is_some(),
-                "block {} mining references unknown tool category {}",
-                block.id,
-                category
-            );
-            assert!(
-                content
-                    .tools
-                    .iter()
-                    .any(|tool| tool.mining.matches_category(category)),
-                "block {} mining references tool category {} with no matching tool",
-                block.id,
-                category
-            );
-        }
     }
 
     for layer in content.layers.iter() {
