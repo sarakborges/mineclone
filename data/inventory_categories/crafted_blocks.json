@@ -6,5 +6,5 @@
     "spanish": "Bloques Fabricados"
   },
   "order": 50,
-  "icon": "textures/inventory/categories/crafted-blocks.png"
+  "icon": "textures/creative_categories/crafted_blocks.png"
 }

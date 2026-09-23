@@ -6,5 +6,5 @@
     "spanish": "Bloques de Piedra"
   },
   "order": 40,
-  "icon": "textures/inventory/categories/stone-blocks.png"
+  "icon": "textures/creative_categories/stone_blocks.png"
 }
