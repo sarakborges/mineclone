@@ -25,8 +25,6 @@ pub struct CreatureDefinition {
     #[serde(default)]
     pub material_tints: std::collections::HashMap<String, Hsi>,
     #[serde(default)]
-    pub material_alphas: std::collections::HashMap<String, f32>,
-    #[serde(default)]
     pub unlit_materials: std::collections::HashSet<String>,
     #[serde(default)]
     pub particle_effects: std::collections::HashMap<String, CreatureParticleEffect>,
@@ -230,13 +228,6 @@ impl CreatureRegistry {
             assert!(
                 !material.is_empty() && tint.is_valid(),
                 "creature {} has an invalid material tint for {material}",
-                definition.id
-            );
-        }
-        for (material, alpha) in &definition.material_alphas {
-            assert!(
-                !material.trim().is_empty() && alpha.is_finite() && (0.0..=1.0).contains(alpha),
-                "creature {} has an invalid material alpha for {material}",
                 definition.id
             );
         }
