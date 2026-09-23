@@ -36,7 +36,15 @@ const HURT_HOLD_SECONDS: f32 = 0.38;
 const MOVING_START_SPEED_SQUARED: f32 = 0.01;
 const MOVING_STOP_SPEED_SQUARED: f32 = 0.0025;
 const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
-pub(crate) const PLAYER_MODEL_PREVIEW_RENDER_LAYER: usize = 3;
+pub(crate) const PLAYER_MODEL_HUD_RENDER_LAYER: usize = 3;
+pub(crate) const PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER: usize = 4;
+
+fn player_ui_render_layers() -> RenderLayers {
+    RenderLayers::from_layers(&[
+        PLAYER_MODEL_HUD_RENDER_LAYER,
+        PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
+    ])
+}
 
 #[derive(Component)]
 pub(crate) struct PlayerModelRoot;
@@ -314,7 +322,7 @@ fn configure_loaded_player_scene(
         if visuals.mesh_entities.get(descendant).is_ok() {
             commands.entity(descendant).insert((
                 PlayerModelRenderable,
-                RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+                player_ui_render_layers(),
             ));
         }
 
@@ -452,7 +460,7 @@ fn sync_player_model(
     let layers = if perspective.is_third_person() {
         RenderLayers::from_layers(&[0, PLAYER_MODEL_PREVIEW_RENDER_LAYER])
     } else {
-        RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER)
+        player_ui_render_layers()
     };
     for mut render_layers in &mut renderables {
         if *render_layers != layers {
@@ -582,7 +590,7 @@ fn spawn_third_person_held_block(
                             visibility,
                             NotShadowCaster,
                             PlayerModelRenderable,
-                            RenderLayers::layer(PLAYER_MODEL_PREVIEW_RENDER_LAYER),
+                            player_ui_render_layers(),
                         ));
                     }
                 }
