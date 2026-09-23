@@ -38,7 +38,11 @@ impl Plugin for PlayerMovementPlugin {
         )
         .add_systems(
             PostUpdate,
-            entity_collision::resolve_player_creature_contacts
+            (
+                entity_collision::resolve_creature_creature_contacts,
+                entity_collision::resolve_player_creature_contacts,
+            )
+                .chain()
                 .run_if(entity_collision::contacts_enabled()),
         );
     }
