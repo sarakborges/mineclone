@@ -8,10 +8,8 @@ use bevy::{
 
 use crate::{
     app::keybinds::{KeybindAction, Keybinds},
-    player::{
-        hotbar::PlayerHotbar,
-        inventory::{InventoryCursor, InventoryState},
-    },
+    gameplay::modal::GameplayModalState,
+    player::{hotbar::PlayerHotbar, inventory::InventoryCursor},
     ui::text_input::editable_value,
 };
 
@@ -44,13 +42,13 @@ pub(super) fn handle_inventory_close_shortcut(
     keybinds: Res<Keybinds>,
     creative_view: Res<CreativeInventoryView>,
     player_view: Res<PlayerInventoryView>,
-    mut next_inventory: ResMut<NextState<InventoryState>>,
+    mut next_modal: ResMut<NextState<GameplayModalState>>,
 ) {
     if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory))
         && !creative_view.search_focused()
         && !player_view.search_focused()
     {
-        next_inventory.set(InventoryState::Closed);
+        next_modal.set(GameplayModalState::Closed);
     }
 }
 
