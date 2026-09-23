@@ -627,6 +627,18 @@ permanecem inalteradas, mas o algoritmo base possui um único owner. VERSION:
 CI de Q52: **verde** no run `35889910889` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q53 — unificar substeps do creature motion
+
+`creatures/motion.rs` não mantém mais caminhos separados para avanço
+horizontal e vertical. `advance` recebe um delta 3D, calcula os mesmos
+substeps de `COLLISION_STEP` e atende hop, queda e knockback. A validação de
+cada posição também reutiliza `voxel::collision::aabb_is_clear`, eliminando a
+cópia local de loaded-check + `collides_aabb` e alinhando creature motion ao
+mesmo contrato já usado por stepping e entity contacts. VERSION: `0.50.174`.
+
+CI de Q53: **verde** no run `35890258890` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
