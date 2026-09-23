@@ -7,10 +7,9 @@ use crate::{
     content::creature::{CreatureParticleEffect, CreatureRegistry},
 };
 
-use super::{
-    CreatureAnimationState, CreatureInstance,
-    random::{next_signed_f32, next_unit_f32},
-};
+use crate::gameplay::random::{next_signed_f32, next_unit_f32};
+
+use super::{CreatureAnimationState, CreatureInstance};
 
 const MAX_PARTICLE_FRAME_DELTA_SECONDS: f32 = 0.05;
 const INITIAL_RANDOM_STATE: u32 = 0xA5A5_1F3D;
