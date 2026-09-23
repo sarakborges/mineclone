@@ -1,3 +1,4 @@
+mod material;
 mod motion;
 mod particles;
 mod visual;
