@@ -33,6 +33,8 @@
     }
   },
   "unlitMaterials": [
+    "SlimeShell",
+    "SlimeCore",
     "SlimeFace"
   ],
   "animations": {
@@ -49,11 +51,8 @@
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
   "textures": {
-    "SlimeShell": "textures/creatures/slime_legacy/shell.png",
+    "SlimeShell": "textures/creatures/slime_legacy/shell_soft.png",
     "SlimeCore": "textures/creatures/slime_legacy/core.png",
     "SlimeFace": "textures/creatures/slime_legacy/face.png"
-  },
-  "materialAlphas": {
-    "SlimeShell": 0.76
   }
 }
