@@ -36,7 +36,7 @@ impl SavedCreature {
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingCreatureRestores {
-    pub(super) creatures: Vec<SavedCreature>,
+    creatures: Vec<SavedCreature>,
 }
 
 impl PendingCreatureRestores {
@@ -46,5 +46,17 @@ impl PendingCreatureRestores {
 
     pub(crate) fn saved(&self) -> &[SavedCreature] {
         &self.creatures
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.creatures.is_empty()
+    }
+
+    pub(super) fn take(&mut self) -> Vec<SavedCreature> {
+        std::mem::take(&mut self.creatures)
+    }
+
+    pub(super) fn defer(&mut self, creature: SavedCreature) {
+        self.creatures.push(creature);
     }
 }
