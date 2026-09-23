@@ -177,10 +177,10 @@ def material(name, color, alpha=1., rough=1.0, emission=None, alpha_mode=None, u
 
 
 materials = [
-    # Preserve the original cubic silhouette/core, but keep the body matte and
-    # lit so it receives world shade. The face remains unlit and transparent.
-    material('SlimeShell', [.50,.91,.78], alpha=.76),
-    material('SlimeCore', [.18,.70,.57]),
+    # Preserve the original cubic silhouette/core, but remove directional lighting.
+    # The shell is opaque; subtle stable shade comes from shell_soft.png.
+    material('SlimeShell', [.50,.91,.78], unlit=True),
+    material('SlimeCore', [.18,.70,.57], unlit=True),
     material('SlimeFace', [1.,1.,1.], alpha_mode='BLEND', unlit=True),
 ]
 shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
@@ -267,7 +267,7 @@ scene = {
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Preserved cubic legacy shell/core; lit matte body receives world shade; transparent face remains unlit; collider does not animate'},
+              'notes':'Preserved cubic legacy shell/core; opaque unlit shell avoids internal texture bleed; subtle stable shade comes from shell_soft.png; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
