@@ -65,7 +65,7 @@ pub(super) fn hud_section(
             hint_setting(HintKind::BreakOrPlaceBlock, settings, localization, language),
             hint_setting(HintKind::BrushPaint, settings, localization, language),
             hint_setting(HintKind::BrushClear, settings, localization, language),
-            hint_setting(HintKind::Chisel, settings, localization, language),
+            hint_setting(HintKind::ArtisansKit, settings, localization, language),
             hint_setting(HintKind::Shears, settings, localization, language),
             hint_setting(HintKind::StructureTool, settings, localization, language),
         ],
