@@ -15,10 +15,7 @@
     forward_io::{VertexOutput, FragmentOutput},
     lighting,
     mesh_view_bindings as view_bindings,
-    mesh_view_types,
     pbr_functions::main_pass_post_lighting_processing,
-    shadows,
-    view_transformations,
 }
 #endif
 
@@ -52,8 +49,11 @@ const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
 const BLOCK_LIGHT_INTENSITY_GAMMA: f32 = 0.50;
 const BLOCK_LIGHT_COLOR_STRENGTH: f32 = 0.72;
-const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
+const FACE_SHADE_TOP: f32 = 1.0;
+const FACE_SHADE_BOTTOM: f32 = 0.5;
+const FACE_SHADE_Z: f32 = 0.8;
+const FACE_SHADE_X: f32 = 0.6;
 const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 fn apply_layer_tint(source: vec3<f32>, tint: vec3<f32>) -> vec3<f32> {
@@ -70,42 +70,20 @@ fn apply_layer_tint(source: vec3<f32>, tint: vec3<f32>) -> vec3<f32> {
     );
 }
 
-#ifndef PREPASS_PIPELINE
-fn directional_sun_visibility(in: VertexOutput) -> f32 {
-    let view_z = view_transformations::position_world_to_view(in.world_position.xyz).z;
-    let surface_normal = normalize(in.world_normal);
-    let directional_light_count = view_bindings::lights.n_directional_lights;
+fn minecraft_face_shade(surface_normal: vec3<f32>) -> f32 {
+    let normal = normalize(surface_normal);
+    let axis = abs(normal);
 
-    for (var light_id: u32 = 0u; light_id < directional_light_count; light_id = light_id + 1u) {
-        let light = &view_bindings::lights.directional_lights[light_id];
-        let casts_shadows = ((*light).flags
-            & mesh_view_types::DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
-
-        if !casts_shadows {
-            continue;
-        }
-
-        let incidence = max(
-            dot(surface_normal, normalize((*light).direction_to_light)),
-            0.0,
-        );
-        if incidence <= 0.0 {
-            return SUN_AMBIENT_SHARE;
-        }
-
-        let shadow = shadows::fetch_directional_shadow(
-            light_id,
-            in.world_position,
-            surface_normal,
-            view_z,
-            in.position.xy,
-        );
-        return mix(SUN_AMBIENT_SHARE, 1.0, shadow * incidence);
+    if axis.y >= axis.x && axis.y >= axis.z {
+        return select(FACE_SHADE_BOTTOM, FACE_SHADE_TOP, normal.y >= 0.0);
     }
-
-    return 1.0;
+    if axis.z >= axis.x {
+        return FACE_SHADE_Z;
+    }
+    return FACE_SHADE_X;
 }
 
+#ifndef PREPASS_PIPELINE
 fn dynamic_point_lighting(
     in: VertexOutput,
     surface_normal: vec3<f32>,
@@ -148,23 +126,9 @@ fn dynamic_point_lighting(
             distance_squared,
             (*light).color_inverse_square_range.w,
         );
-        var visibility = 1.0;
-        let casts_shadows = ((*light).flags
-            & mesh_view_types::POINT_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
-
-        if casts_shadows {
-            visibility = shadows::fetch_point_shadow(
-                light_id,
-                in.world_position,
-                surface_normal,
-                in.position.xy,
-            );
-        }
-
         result += (*light).color_inverse_square_range.rgb
             * attenuation
             * incidence
-            * visibility
             * DYNAMIC_LIGHT_SCALE;
     }
 
@@ -248,39 +212,31 @@ fn fragment(
     let block_hue = block_levels / max(block_peak, 0.001);
     let block_intensity = pow(block_peak, BLOCK_LIGHT_INTENSITY_GAMMA);
 
+    let surface_normal = normalize(pbr_input.world_normal);
+    let face_shade = minecraft_face_shade(surface_normal);
+
 #ifdef PREPASS_PIPELINE
-    let sun_visibility = 1.0;
     let dynamic_light = vec3<f32>(0.0);
 #else
-    var sun_visibility = 1.0;
     var dynamic_light = vec3<f32>(0.0);
 
-    // Fluids are large blended surfaces and already receive propagated voxel
-    // lighting. Sampling directional shadow maps and clustered point lights for
-    // every transparent water fragment is disproportionately expensive and also
-    // introduces unstable shadow artifacts on moving/translucent surfaces.
-    if !is_fluid {
-        let surface_normal = normalize(pbr_input.world_normal);
-
-        // Shadow-map sampling cannot affect a surface with no propagated sky
-        // contribution, and is also irrelevant when the global sky light is
-        // effectively off. Avoid the cascade lookup entirely in caves/night.
-        if sky_level > 0.001 && terrain_global_lighting[0].x > 0.001 {
-            sun_visibility = directional_sun_visibility(in);
-        }
-
-        if terrain_global_lighting[0].y > 0.5 {
-            dynamic_light = dynamic_point_lighting(
-                in,
-                surface_normal,
-                pbr_input.is_orthographic,
-            );
-        }
+    // Terrain never samples projected shadow maps. Voxel light propagation
+    // supplies occlusion, while fixed face shading and per-vertex AO provide
+    // the blocky Minecraft-style depth cue.
+    if !is_fluid && terrain_global_lighting[0].y > 0.5 {
+        dynamic_light = dynamic_point_lighting(
+            in,
+            surface_normal,
+            pbr_input.is_orthographic,
+        );
     }
 #endif
 
-    let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
-    let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
+    let sky_local_light = mix(
+        AMBIENT_FLOOR,
+        1.0,
+        clamp(sky_light, 0.0, 1.0),
+    );
 
     // Sky light controls luminance, but it must not erase the hue of a strong
     // voxel light. Keep most of the propagated hue while leaving a small white
@@ -290,7 +246,8 @@ fn fragment(
     let block_hue_weight = smoothstep(0.08, 0.55, block_intensity);
     let color_weight = block_hue_weight * BLOCK_LIGHT_COLOR_STRENGTH;
     let combined_hue = mix(vec3<f32>(1.0), block_hue, color_weight);
-    let local_light = combined_hue * combined_intensity * ambient_occlusion;
+    let local_light =
+        combined_hue * combined_intensity * ambient_occlusion * face_shade;
 
     var base_rgb = texel.rgb;
     if base_tint_enabled {
