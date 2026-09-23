@@ -52,6 +52,7 @@ impl PreparedWorldActivation {
         let inventory = PlayerHotbar::from_saved_items_and_selection(
             &snapshot.inventory,
             snapshot.selected_hotbar_slot,
+            registries.items,
             registries.blocks,
             registries.layers,
             registries.tools,
