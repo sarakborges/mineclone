@@ -238,7 +238,7 @@ struct NaturalSpawnContext<'w, 's> {
     biomes: Res<'w, BiomeRegistry>,
     language: Res<'w, ActiveLanguage>,
     asset_server: Res<'w, AssetServer>,
-    player: Single<'w, &'static Transform, With<GameplayCamera>>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     creatures: Query<
         'w,
         's,
