@@ -15,14 +15,14 @@ use crate::{
         },
         secondary_property::SecondaryPropertyRegistry,
     },
-    gameplay::availability::world_interaction_available,
-    localization::{ActiveLanguage, UiLocalization},
-    player::{
-        hotbar::{PlayerHotbar, PlayerHotbarSet},
-        inventory::InventoryState,
+    gameplay::{
+        availability::world_interaction_available,
+        modal::GameplayModalState,
     },
+    localization::{ActiveLanguage, UiLocalization},
+    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
     targeting::block::{TargetedBlock, TargetedCreature},
-    tools::{BrushMode, BrushPaletteState},
+    tools::BrushMode,
     ui::{theme, typography, visibility::set_visibility},
     voxel::microblock::ChiselResolution,
 };
@@ -43,11 +43,7 @@ impl Plugin for CrosshairPlugin {
                 set_visibility::<CrosshairRoot, false>,
             )
             .add_systems(
-                OnEnter(BrushPaletteState::Open),
-                set_visibility::<CrosshairRoot, false>,
-            )
-            .add_systems(
-                OnEnter(InventoryState::Open),
+                OnExit(GameplayModalState::Closed),
                 set_visibility::<CrosshairRoot, false>.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
@@ -66,11 +62,7 @@ impl Plugin for CrosshairPlugin {
                 set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             )
             .add_systems(
-                OnEnter(InventoryState::Closed),
-                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
-            )
-            .add_systems(
-                OnEnter(BrushPaletteState::Closed),
+                OnEnter(GameplayModalState::Closed),
                 set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             );
     }
