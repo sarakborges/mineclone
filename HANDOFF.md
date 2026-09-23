@@ -180,7 +180,18 @@ derivação de posição do player e do layout; spawn normal, rebuild e Characte
 Info usam a mesma regra. Isso reduz dependências e elimina três montagens
 paralelas do estado de layout. VERSION: `0.50.125`.
 
-CI de Q15: pendente neste checkpoint.
+CI de Q15: **verde** no run `35819772038` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q16 — separar e nomear a view do tooltip do inventário
+
+`InventoryTooltipView` não suprime mais `type_complexity`. Os cinco
+`Single`s de texto/id/hint/stats foram nomeados por responsabilidade e
+agrupados em `InventoryTooltipCopyView`, enquanto a view externa mantém apenas
+window, slots, root do tooltip e a copy view. A descoberta do item em hover
+também passou a pertencer à própria view. O comportamento visual e de layout foi
+preservado. VERSION: `0.50.126`.
+
+CI de Q16: **verde** no run `35819981289` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
