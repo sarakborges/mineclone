@@ -63,6 +63,75 @@ impl BootstrapGenerationSettings {
     }
 }
 
+struct BootstrapSpawnContext<'a> {
+    load_mode: WorldLoadMode,
+    world_generation: WorldGenerationSettings,
+    forced_spawn_biome: bool,
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    biome_field: &'a BiomeField,
+    feature_fields: &'a WorldFeatureFields,
+}
+
+struct BootstrapSpawn {
+    column: IVec2,
+    initial_center: IVec3,
+}
+
+impl BootstrapSpawnContext<'_> {
+    fn resolve(self, saved_player_position: Option<Vec3>) -> BootstrapSpawn {
+        let restored_column = saved_player_position
+            .map(spawn_column_from_position)
+            .unwrap_or(DEFAULT_SPAWN_COLUMN);
+        let column = if self.load_mode == WorldLoadMode::New
+            && self.world_generation.mode() == WorldGenerationMode::Normal
+        {
+            find_initial_spawn_column(
+                self.dimension,
+                self.biomes,
+                self.biome_field,
+                self.feature_fields,
+                self.forced_spawn_biome && !self.world_generation.single_biome(),
+                self.world_generation,
+            )
+        } else {
+            restored_column
+        };
+
+        let initial_center = if self.world_generation.mode() == WorldGenerationMode::Void
+            && saved_player_position.is_none()
+        {
+            IVec3::ZERO
+        } else if self.load_mode == WorldLoadMode::Load {
+            saved_player_position
+                .map(restored_player_chunk)
+                .unwrap_or_else(|| {
+                    spawn_surface_chunk(
+                        column,
+                        surface_height(
+                            column,
+                            self.dimension,
+                            self.biomes,
+                            self.biome_field,
+                        ),
+                    )
+                })
+        } else {
+            let surface_y = if self.world_generation.mode() == WorldGenerationMode::Flat {
+                self.dimension.sea_level.max(1)
+            } else {
+                surface_height(column, self.dimension, self.biomes, self.biome_field)
+            };
+            spawn_surface_chunk(column, surface_y)
+        };
+
+        BootstrapSpawn {
+            column,
+            initial_center,
+        }
+    }
+}
+
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -167,44 +236,19 @@ pub(in crate::world) fn begin_world_loading(
         terrain_materials.texture_array_handle(),
     );
     let saved_player_position = persistence.save.player_position(LOCAL_PLAYER_ID);
-    let restored_spawn_column = saved_player_position
-        .map(spawn_column_from_position)
-        .unwrap_or(DEFAULT_SPAWN_COLUMN);
-    let spawn_column = if *persistence.load_mode == WorldLoadMode::New
-        && world_generation.mode() == WorldGenerationMode::Normal
-    {
-        find_initial_spawn_column(
-            dimension,
-            biomes,
-            &biome_field,
-            &feature_fields,
-            forced_spawn_biome.is_some() && !world_generation.single_biome(),
-            world_generation,
-        )
-    } else {
-        restored_spawn_column
-    };
-    let initial_center = if world_generation.mode() == WorldGenerationMode::Void
-        && saved_player_position.is_none()
-    {
-        IVec3::ZERO
-    } else if *persistence.load_mode == WorldLoadMode::Load {
-        saved_player_position
-            .map(restored_player_chunk)
-            .unwrap_or_else(|| {
-                spawn_surface_chunk(
-                    spawn_column,
-                    surface_height(spawn_column, dimension, biomes, &biome_field),
-                )
-            })
-    } else {
-        let surface_y = if world_generation.mode() == WorldGenerationMode::Flat {
-            dimension.sea_level.max(1)
-        } else {
-            surface_height(spawn_column, dimension, biomes, &biome_field)
-        };
-        spawn_surface_chunk(spawn_column, surface_y)
-    };
+    let BootstrapSpawn {
+        column: spawn_column,
+        initial_center,
+    } = BootstrapSpawnContext {
+        load_mode: *persistence.load_mode,
+        world_generation,
+        forced_spawn_biome: forced_spawn_biome.is_some(),
+        dimension,
+        biomes,
+        biome_field: &biome_field,
+        feature_fields: &feature_fields,
+    }
+    .resolve(saved_player_position);
     // Saves persist only modified chunks. Untouched terrain is intentionally absent and
     // must be regenerated from the pinned worldgen identity around the restored player.
     let coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
