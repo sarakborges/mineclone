@@ -358,6 +358,16 @@ VERSION: `0.50.149`.
 
 CI de Q31: **verde** no run `35876559148` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q32 — centralizar comportamento dos toggles de worldgen
+
+`WorldGenerationFeatureToggle` agora é o owner da leitura e alteração de
+caves/rivers/lakes/oceans. Input e sync visual não mantêm mais dois `match`
+paralelos sobre o mesmo enum; ambos reutilizam `enabled`/`toggle`. Isso
+reduz risco de um novo feature toggle ser adicionado em um caminho e esquecido
+no outro. VERSION: `0.50.151`.
+
+CI de Q32: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
