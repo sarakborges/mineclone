@@ -240,6 +240,12 @@ type NaturalSpawnCreatures<'w, 's> = Query<
     ),
 >;
 
+#[derive(Default)]
+struct NaturalSpawnState {
+    seconds_until_attempt: f32,
+    random_state: u32,
+}
+
 #[derive(SystemParam)]
 struct NaturalSpawnContext<'w, 's> {
     rules: Res<'w, GameRules>,
@@ -260,18 +266,22 @@ fn natural_spawn_creatures(
     time: Res<Time>,
     mut context: NaturalSpawnContext<'_, '_>,
     mut commands: Commands,
-    mut state: Local<(f32, u32)>,
+    mut state: Local<NaturalSpawnState>,
 ) {
     if !context.rules.spawn_creatures() {
         return;
     }
 
-    state.0 -= time.delta_secs();
-    if state.0 > 0.0 {
+    state.seconds_until_attempt -= time.delta_secs();
+    if state.seconds_until_attempt > 0.0 {
         return;
     }
-    state.0 = NATURAL_SPAWN_INTERVAL;
-    if state.1 == 0 { state.1 = context.player.translation.x.to_bits() ^ context.player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
+    state.seconds_until_attempt = NATURAL_SPAWN_INTERVAL;
+    if state.random_state == 0 {
+        state.random_state = context.player.translation.x.to_bits()
+            ^ context.player.translation.z.to_bits().rotate_left(13)
+            ^ 0x9E37_79B9;
+    }
 
     context.entity_counts.rebuild(
         context.creatures
@@ -286,7 +296,7 @@ fn natural_spawn_creatures(
         &context.definitions,
         &context.entity_counts,
         dimension_definition.max_entities,
-        &mut state.1,
+        &mut state.random_state,
     ) else {
         return;
     };
