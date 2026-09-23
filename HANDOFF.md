@@ -1,4 +1,13 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Held sprite first-person elevado para +0.24 [VERSION 0.61.3]
+
+O ajuste vertical do held sprite em first person foi triplicado conforme QA
+visual: o offset do anchor passou de `+0.08` para `+0.24` no eixo Y.
+
+X, Z e rotação permanecem inalterados. A mudança continua restrita a
+`src/player/viewmodel.rs::spawn_first_person_held_sprite`; third person, HUD
+preview e Character Info não foram alterados.
+
 ## 2026-09-23 — Anchor do held sprite first-person elevado [VERSION 0.61.2]
 
 Após centralizar o sprite no ponto da mão, o encaixe ainda ficou visualmente
