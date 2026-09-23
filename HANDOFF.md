@@ -548,6 +548,19 @@ privados usados na assinatura do system precisavam acompanhar a visibilidade
 Q46: **verde** no run `35887813428` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q47 — reutilizar validação de paths de creature assets
+
+`content/creature.rs` não mantém mais duas implementações paralelas para
+validar model e texture paths. `valid_creature_asset_path` concentra caminho
+relativo seguro, raiz `models|textures`, subdiretório `creatures` e extensão
+permitida; os wrappers de model/texture declaram apenas suas diferenças
+(`.glb/.gltf` vs `.png`). O helper permanece local ao domínio porque os
+demais conteúdos só compartilham a regra genérica de path relativo seguro.
+VERSION: `0.50.168`.
+
+CI acumulado de Q47: **verde** no run `35887972524` (localizações, Clippy
+com `-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
