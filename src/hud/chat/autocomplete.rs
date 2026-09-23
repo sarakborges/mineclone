@@ -338,7 +338,10 @@ fn suggestions_for(
             })
             .collect::<Vec<_>>()
     } else {
-        let command = text.split_whitespace().next()?;
+        let mut words = text.split_whitespace();
+        let command = words.next()?;
+        let first_argument = words.next();
+        let second_argument = words.next();
         let definition = COMMANDS
             .iter()
             .find(|item| command.strip_prefix('/') == Some(item.name))?;
@@ -362,10 +365,10 @@ fn suggestions_for(
                 .collect::<Vec<_>>(),
             ParameterKind::StructureId => catalog.structure_suggestions(&prefix, false),
             ParameterKind::StructureVariation => {
-                if text.split_whitespace().nth(1)? != "structure" {
+                if first_argument? != "structure" {
                     return Some((range, Vec::new()));
                 }
-                let reference = text.split_whitespace().nth(2)?;
+                let reference = second_argument?;
                 if catalog.structure_sets.get(reference).is_some() {
                     Vec::new()
                 } else {
@@ -395,7 +398,7 @@ fn suggestions_for(
                     },
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::LocateTargetId => match text.split_whitespace().nth(1)? {
+            ParameterKind::LocateTargetId => match first_argument? {
                 "biome" => catalog
                     .biomes
                     .iter()
