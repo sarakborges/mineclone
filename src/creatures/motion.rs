@@ -7,7 +7,7 @@ use crate::{
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
 
-use super::{CreatureInstance, visual::CreatureAnimationState};
+use super::{CreatureInstance, random::next_u32, visual::CreatureAnimationState};
 
 const GROUND_PROBE: f32 = 0.06;
 const DIRECTIONS: [(i32, i32); 8] = [
@@ -77,10 +77,8 @@ impl CreatureMotion {
                 self.random_state = 0x9E37_79B9;
             }
         }
-        self.random_state ^= self.random_state << 13;
-        self.random_state ^= self.random_state >> 17;
-        self.random_state ^= self.random_state << 5;
-        let (x, z) = DIRECTIONS[self.random_state as usize % DIRECTIONS.len()];
+        let random = next_u32(&mut self.random_state);
+        let (x, z) = DIRECTIONS[random as usize % DIRECTIONS.len()];
         self.direction = Vec2::new(x as f32, z as f32).normalize();
         // The shared slime model faces -Z. Rotate the visual wrapper only.
         self.facing_yaw = (-self.direction.x).atan2(-self.direction.y);
