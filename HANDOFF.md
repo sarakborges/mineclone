@@ -455,18 +455,6 @@ cobrir também variation inválida e zero no caminho de locate. VERSION:
 CI de Q39: **verde** no run `35883434923` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
-### Q40 — reutilizar clearance AABB no solver de contatos
-
-`player/movement/entity_collision.rs` não mantém mais um segundo scanner de
-voxels para decidir se um AABB pode ocupar uma posição. O helper já existente
-`voxel::collision::aabb_is_clear` foi exposto no boundary do módulo e é
-reutilizado pelo push de entidades, preservando a mesma regra de loaded chunks
-e colisão sólida usada pelo movimento voxel. O `clear_volume` duplicado foi
-removido. VERSION: `0.50.160`.
-
-CI de Q40: **verde** no run `35883899553` (localizações, Clippy com
-`-D warnings` e `cargo check`).
-
 ### Q40 — reutilizar clearance de AABB entre movimento e entity contacts
 
 `player/movement/entity_collision.rs` não mantém mais sua própria cópia da
@@ -477,6 +465,17 @@ checagem de chunks carregados, epsilon nas bordas e colisão com voxels/microblo
 possuem um único owner. VERSION: `0.50.160`.
 
 CI de Q40: **verde** no run `35883891200` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+### Q41 — reutilizar tokenização do comando no autocomplete
+
+`suggestions_for` não percorre mais `text.split_whitespace()` repetidamente
+para recuperar command, primeiro argumento e segundo argumento. A tokenização
+é feita uma única vez e os argumentos derivados são reutilizados pelos paths
+de variation e locate target, reduzindo trabalho duplicado e mantendo um único
+contexto léxico da linha em edição. VERSION: `0.50.161`.
+
+CI de Q41: **verde** no run `35884382877` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
 ### Q41 — reutilizar contexto de tokens no autocomplete
