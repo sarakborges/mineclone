@@ -5,7 +5,7 @@ use crate::{
     content::creature::CreatureCollider,
     creatures::CreatureInstance,
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity},
-    voxel::{collision::collides_aabb, world::VoxelWorld},
+    voxel::{collision::aabb_is_clear, world::VoxelWorld},
 };
 
 use super::config::COLLISION_STEP;
@@ -96,25 +96,6 @@ fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
     })
 }
 
-fn clear_volume(world: &VoxelWorld, bounds: Bounds) -> bool {
-    let min = (bounds.0 + Vec3::splat(CONTACT_EPSILON))
-        .floor()
-        .as_ivec3();
-    let max = (bounds.1 - Vec3::splat(CONTACT_EPSILON))
-        .floor()
-        .as_ivec3();
-    for y in min.y..=max.y {
-        for z in min.z..=max.z {
-            for x in min.x..=max.x {
-                if !world.is_loaded_at(IVec3::new(x, y, z)) {
-                    return false;
-                }
-            }
-        }
-    }
-    !collides_aabb(world, bounds.0, bounds.1)
-}
-
 /// Sweep small steps so the push cannot tunnel through a wall or unloaded chunk.
 /// Return the actual distance traveled, allowing the other participant to
 /// absorb any displacement that this one could not take.
@@ -138,7 +119,7 @@ fn push(
             HorizontalAxis::X => next.x += step,
             HorizontalAxis::Z => next.z += step,
         }
-        if !clear_volume(world, bounds_at(next)) {
+        if !aabb_is_clear(world, bounds_at(next)) {
             break;
         }
         *position = next;
