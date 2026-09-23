@@ -1,4 +1,14 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Anchor do held sprite first-person elevado [VERSION 0.61.2]
+
+Após centralizar o sprite no ponto da mão, o encaixe ainda ficou visualmente
+baixo em first person. O `HeldSpriteRoot` do viewmodel foi elevado em `+0.08`
+no eixo Y, mantendo X, Z e rotação inalterados.
+
+A mudança é específica do anchor first-person em
+`src/player/viewmodel.rs::spawn_first_person_held_sprite`. Third person, HUD
+preview e Character Info continuam usando seus anchors atuais.
+
 ## 2026-09-23 — Held sprites centralizados no ponto da mão [VERSION 0.61.1]
 
 O renderer genérico de items/tools segurados estava deslocando toda tool por um
