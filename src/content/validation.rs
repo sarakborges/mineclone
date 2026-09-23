@@ -56,20 +56,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a tool and a layer",
             tool.id
         );
-        assert!(
-            content.inventory_categories.get(&tool.category).is_some(),
-            "tool {} references missing inventory category {}",
-            tool.id,
-            tool.category
-        );
-        if let Some(category) = tool.mining.category() {
-            assert!(
-                content.tool_categories.get(category).is_some(),
-                "tool {} references missing tool category {}",
-                tool.id,
-                category
-            );
-        }
+        tool.validate_references(&content.inventory_categories, &content.tool_categories);
     }
 
     for structure in content.structures.iter() {
