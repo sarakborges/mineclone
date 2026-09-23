@@ -13565,3 +13565,25 @@ Creative Inventory chamam o mesmo primitive, garantindo posição e comportament
 idênticos para o botão de delete e evitando duplicação de UI/interação.
 
 VERSION: `0.50.193`.
+
+
+## 2026-09-23 — Character Info respeita o GameMode no painel de inventory
+
+O fluxo de Character Info foi corrigido para usar a mesma resolução de painel por
+`GameMode` usada pelo inventory principal. O problema era específico desse
+caminho: `spawn_character_info_inventory` chamava diretamente
+`spawn_player_inventory_panel`, então o atalho de inventory continuava
+mostrando o inventory de Survival à direita mesmo quando o jogador estava em
+Creative.
+
+Agora `spawn_game_mode_inventory_panel` é o único owner dessa escolha:
+- Creative → Creative Inventory;
+- Survival → player inventory normal.
+
+O Character Info continua sendo spawnado primeiro pelo root em
+`hud/character_info.rs`, portanto permanece à esquerda. Apenas o painel de
+inventory à direita varia conforme o modo de jogo. O Creative Inventory nesse
+contexto também reutiliza o footer compartilhado de hotbar real + botão de
+delete introduzido em `0.50.193`.
+
+VERSION: `0.50.194`.

@@ -65,7 +65,7 @@ pub(super) fn spawn_character_info_inventory(
     state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
 ) {
-    spawn_player_inventory_panel(root, state, items);
+    spawn_game_mode_inventory_panel(root, state, items);
     spawn_item_tooltip(root);
 
     let Some(item_id) = state.cursor.item() else {
@@ -77,6 +77,18 @@ pub(super) fn spawn_character_info_inventory(
         state.cursor_position.unwrap_or(Vec2::ZERO),
         items,
     );
+}
+
+fn spawn_game_mode_inventory_panel(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    if state.game_mode.has_creative_inventory() {
+        spawn_creative_panel(root, state, items);
+    } else {
+        spawn_player_inventory_panel(root, state, items);
+    }
 }
 
 pub(super) fn spawn_inventory_root(
@@ -105,11 +117,7 @@ pub(super) fn spawn_inventory_root(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            if state.game_mode.has_creative_inventory() {
-                spawn_creative_panel(root, state, items);
-            } else {
-                spawn_player_inventory_panel(root, state, items);
-            }
+            spawn_game_mode_inventory_panel(root, state, items);
             spawn_item_tooltip(root);
 
             let Some(item_id) = state.cursor.item() else {
