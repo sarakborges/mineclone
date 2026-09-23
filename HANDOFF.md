@@ -303,6 +303,17 @@ permanecem bit-a-bit no mesmo caminho. VERSION: `0.50.143`.
 
 CI de Q26: **verde** no run `35872529337` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q27 — isolar construção de biome/feature fields do bootstrap
+
+A montagem de `BiomeField` e `WorldFeatureFields` saiu de
+`begin_world_loading` para `BootstrapWorldFields::build`. O helper concentra
+as regras de spawn oceans, single biome/forced biome e cálculo do ocean weight,
+devolvendo os dois resources derivados juntos. `begin_world_loading` agora
+fica responsável por orquestrar os blocos já preparados, sem conhecer os
+detalhes internos de construção desses fields. VERSION: `0.50.144`.
+
+CI de Q27: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
