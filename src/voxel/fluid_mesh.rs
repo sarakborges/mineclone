@@ -277,8 +277,8 @@ where
             false,
         );
         let source_mask = source_block
-            .filter(|block| MicroblockMask::is_modified(*block))
-            .map(MicroblockMask::from_cell);
+            .filter(|block| MicroblockMask::has_partial_geometry(*block))
+            .map(MicroblockMask::geometry_for_cell);
         let fluid = fluid_buffer(&mut buffers, cell.fluid_id);
 
         for (index, (face, is_exposed)) in
@@ -311,8 +311,8 @@ where
             };
             let neighbor_mask = neighbor_samples[index]
                 .and_then(|(block, _)| block)
-                .filter(|block| MicroblockMask::is_modified(*block))
-                .map(MicroblockMask::from_cell);
+                .filter(|block| MicroblockMask::has_partial_geometry(*block))
+                .map(MicroblockMask::geometry_for_cell);
 
             if source_mask.is_some() || neighbor_mask.is_some() {
                 emit_fluid_openings(
@@ -458,12 +458,12 @@ fn emit_greedy_fluid_top_faces<W, F>(
             );
             let tint = tint_at(world_voxel, cell.fluid_id);
             let source_mask = source_block
-                .filter(|block| MicroblockMask::is_modified(*block))
-                .map(MicroblockMask::from_cell);
+                .filter(|block| MicroblockMask::has_partial_geometry(*block))
+                .map(MicroblockMask::geometry_for_cell);
             let neighbor_mask = top_sample
                 .and_then(|(block, _)| block)
-                .filter(|block| MicroblockMask::is_modified(*block))
-                .map(MicroblockMask::from_cell);
+                .filter(|block| MicroblockMask::has_partial_geometry(*block))
+                .map(MicroblockMask::geometry_for_cell);
 
             if source_mask.is_some() || neighbor_mask.is_some() {
                 emit_fluid_openings(
@@ -964,7 +964,7 @@ fn fluid_face_is_exposed(
     };
 
     if let Some(block) = block {
-        if !MicroblockMask::is_modified(block) {
+        if !MicroblockMask::has_partial_geometry(block) {
             return false;
         }
         if !partial_block_face_has_opening(block, face) {
@@ -979,7 +979,7 @@ fn fluid_face_is_exposed(
 }
 
 fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
-    let mask = crate::voxel::microblock::MicroblockMask::from_cell(cell);
+    let mask = crate::voxel::microblock::MicroblockMask::geometry_for_cell(cell);
     if mask == crate::voxel::microblock::MicroblockMask::FULL {
         return false;
     }
