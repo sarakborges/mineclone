@@ -356,7 +356,7 @@ e Escape) agora reutilizam `close_spawn_biome_dropdown`, que concentra
 `SpawnBiomeDropdownState`, que era lido apenas para uma variável sem efeito.
 VERSION: `0.50.149`.
 
-CI de Q31: pendente neste checkpoint.
+CI de Q31: **verde** no run `35876559148` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
