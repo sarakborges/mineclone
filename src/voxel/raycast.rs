@@ -13,7 +13,7 @@ pub struct VoxelHit {
 }
 
 /// Exact occupied cell in the fixed 8x8x8 precision grid. A macro block with
-/// no Chisel mask behaves as 512 occupied subcells without extra allocation.
+/// no Artisan's Kit mask behaves as 512 occupied subcells without extra allocation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MicroVoxelHit {
     pub(crate) voxel: IVec3,
