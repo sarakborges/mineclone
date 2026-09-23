@@ -164,6 +164,15 @@ struct PlayerSceneVisuals<'w, 's> {
 }
 
 #[derive(SystemParam)]
+struct PlayerSceneQueries<'w, 's> {
+    descendants: Query<'w, 's, &'static Children>,
+    names: Query<'w, 's, &'static Name>,
+    appearances: Query<'w, 's, &'static PlayerModelAppearance>,
+    scene_scopes: Query<'w, 's, &'static PlayerModelSceneScope>,
+    players: Query<'w, 's, (Entity, &'static mut AnimationPlayer)>,
+}
+
+#[derive(SystemParam)]
 struct ThirdPersonHeldBlockAssets<'w> {
     block_meshes: Res<'w, BlockModelMeshes>,
     block_materials: ResMut<'w, BlockModelMaterials>,
@@ -331,94 +340,133 @@ fn attach_loaded_player_model(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn configure_loaded_player_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
-    descendants: Query<&Children>,
-    names: Query<&Name>,
-    appearances: Query<&PlayerModelAppearance>,
-    scene_scopes: Query<&PlayerModelSceneScope>,
-    mut players: Query<(Entity, &mut AnimationPlayer)>,
+    mut scene: PlayerSceneQueries,
     mut visuals: PlayerSceneVisuals,
 ) {
-    let Ok(appearance) = appearances.get(ready.entity) else {
+    let Ok(appearance) = scene.appearances.get(ready.entity) else {
         return;
     };
-    let Ok(scene_scope) = scene_scopes.get(ready.entity) else {
+    let Ok(scene_scope) = scene.scene_scopes.get(ready.entity) else {
         return;
     };
     let scope = scene_scope.0;
 
-    for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok(mesh_handle) = visuals.mesh_entities.get(descendant)
-            && visuals
-                .meshes
-                .get(mesh_handle.id())
-                .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0)
-        {
-            commands
-                .entity(descendant)
-                .remove::<Mesh3d>()
-                .remove::<MeshMaterial3d<StandardMaterial>>();
+    for descendant in scene.descendants.iter_descendants(ready.entity) {
+        if configure_player_mesh(&mut commands, &visuals, descendant, scope) {
             continue;
         }
-
-        if visuals.mesh_entities.get(descendant).is_ok() {
-            commands.entity(descendant).insert((
-                PlayerModelRenderable(scope),
-                player_model_render_layers(scope, false),
-            ));
-        }
-
-        if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
-            if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
-                material.base_color = Color::WHITE;
-                material.base_color_texture =
-                    Some(visuals.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
-                material.unlit = true;
-                material.metallic = 0.0;
-                material.perceptual_roughness = 1.0;
-                material.reflectance = 0.0;
-                material.emissive = LinearRgba::BLACK;
-                material.emissive_texture = None;
-            }
-            commands.entity(descendant).insert(NotShadowCaster);
-        }
-
-        if let Ok(name) = names.get(descendant) {
-            match name.as_str() {
-                "HeadPivot" => {
-                    commands.entity(descendant).insert(PlayerModelHead);
-                }
-                "RightArmPivot" => {
-                    commands.entity(descendant).insert(PlayerModelHand(scope));
-                }
-                _ => {}
-            }
-        }
-
-        let Ok((player_entity, mut player)) = players.get_mut(descendant) else {
-            continue;
-        };
-        let Some(graph) = &appearance.graph else {
-            continue;
-        };
-
-        let mut transitions = AnimationTransitions::new();
-        if let Some(index) = appearance.nodes.get("idle").copied() {
-            transitions.play(&mut player, index, Duration::ZERO).repeat();
-        }
-        commands.entity(player_entity).insert((
-            AnimationGraphHandle(graph.clone()),
-            transitions,
-            PlayerModelAnimationLink {
-                nodes: appearance.nodes.clone(),
-                current_state: "idle".to_owned(),
-                current_revision: 0,
-            },
-        ));
+        configure_player_material(&mut commands, &mut visuals, descendant);
+        tag_player_model_part(&mut commands, &scene.names, descendant, scope);
+        configure_player_animation(
+            &mut commands,
+            &mut scene.players,
+            descendant,
+            appearance,
+        );
     }
+}
+
+fn configure_player_mesh(
+    commands: &mut Commands,
+    visuals: &PlayerSceneVisuals,
+    descendant: Entity,
+    scope: PlayerModelRenderScope,
+) -> bool {
+    let Ok(mesh_handle) = visuals.mesh_entities.get(descendant) else {
+        return false;
+    };
+
+    if visuals
+        .meshes
+        .get(mesh_handle.id())
+        .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0)
+    {
+        commands
+            .entity(descendant)
+            .remove::<Mesh3d>()
+            .remove::<MeshMaterial3d<StandardMaterial>>();
+        return true;
+    }
+
+    commands.entity(descendant).insert((
+        PlayerModelRenderable(scope),
+        player_model_render_layers(scope, false),
+    ));
+    false
+}
+
+fn configure_player_material(
+    commands: &mut Commands,
+    visuals: &mut PlayerSceneVisuals,
+    descendant: Entity,
+) {
+    let Ok(material_handle) = visuals.mesh_materials.get(descendant) else {
+        return;
+    };
+
+    if let Some(material) = visuals.materials.get_mut(material_handle.id()) {
+        material.base_color = Color::WHITE;
+        material.base_color_texture = Some(visuals.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
+        material.unlit = true;
+        material.metallic = 0.0;
+        material.perceptual_roughness = 1.0;
+        material.reflectance = 0.0;
+        material.emissive = LinearRgba::BLACK;
+        material.emissive_texture = None;
+    }
+    commands.entity(descendant).insert(NotShadowCaster);
+}
+
+fn tag_player_model_part(
+    commands: &mut Commands,
+    names: &Query<&Name>,
+    descendant: Entity,
+    scope: PlayerModelRenderScope,
+) {
+    let Ok(name) = names.get(descendant) else {
+        return;
+    };
+
+    match name.as_str() {
+        "HeadPivot" => {
+            commands.entity(descendant).insert(PlayerModelHead);
+        }
+        "RightArmPivot" => {
+            commands.entity(descendant).insert(PlayerModelHand(scope));
+        }
+        _ => {}
+    }
+}
+
+fn configure_player_animation(
+    commands: &mut Commands,
+    players: &mut Query<(Entity, &mut AnimationPlayer)>,
+    descendant: Entity,
+    appearance: &PlayerModelAppearance,
+) {
+    let Ok((player_entity, mut player)) = players.get_mut(descendant) else {
+        return;
+    };
+    let Some(graph) = &appearance.graph else {
+        return;
+    };
+
+    let mut transitions = AnimationTransitions::new();
+    if let Some(index) = appearance.nodes.get("idle").copied() {
+        transitions.play(&mut player, index, Duration::ZERO).repeat();
+    }
+    commands.entity(player_entity).insert((
+        AnimationGraphHandle(graph.clone()),
+        transitions,
+        PlayerModelAnimationLink {
+            nodes: appearance.nodes.clone(),
+            current_state: "idle".to_owned(),
+            current_revision: 0,
+        },
+    ));
 }
 
 fn sync_player_preview_model_visibility(
