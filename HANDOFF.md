@@ -429,6 +429,19 @@ A primeira validação do bloco, run `35882822138`, foi bloqueada por um
 reduziu a assinatura sem suppressão. CI acumulado de Q37: **verde** no run
 `35883024902` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q38 — reutilizar parsing de variation de structures
+
+`parse_line` não mantém mais duas implementações da validação de
+`[variation]` para `/place structure` e `/locate structure`.
+`parse_optional_variation` concentra a regra compartilhada: ausência é
+válida, valores presentes precisam ser `usize > 0`, e qualquer outro valor
+leva ao usage do comando chamador. Os testes de contrato do parser passaram a
+cobrir também variation inválida e zero no caminho de locate. VERSION:
+`0.50.159`.
+
+CI de Q38: **verde** no run `35883434923` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ### Q38 — reutilizar o solver de penetração entre entidades
 
 `player/movement/entity_collision.rs` não mantém mais duas implementações do
