@@ -1,3 +1,4 @@
+mod combat;
 mod lifecycle;
 mod material;
 mod motion;
@@ -12,6 +13,7 @@ use crate::{
     content::creature::CreatureCollider,
 };
 
+pub(crate) use combat::CreatureAttackRuntime;
 pub(crate) use lifecycle::CreatureDeathTimer;
 use lifecycle::despawn_dead_creatures;
 pub(crate) use material::apply_creature_material_overrides;
