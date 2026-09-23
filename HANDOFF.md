@@ -562,6 +562,20 @@ CI acumulado de Q47: **verde** no run `35887972524` (localizações, Clippy
 com `-D warnings` e `cargo check`).
 
 
+### Q48 — extrair criação e restauração de creatures
+
+A criação/restauração de entidades saiu de `creatures/mod.rs` para
+`creatures/spawn.rs`. O módulo novo concentra `spawn_creature_at`, o helper
+privado que restaura health e o system `restore_saved_creatures`; ele reutiliza
+os componentes de motion, particles e visual sem ampliar sua visibilidade além
+do domínio `creatures`. O módulo raiz mantém composição do plugin, tipos
+compartilhados e lifecycle de death, enquanto callers externos continuam usando
+o mesmo re-export `spawn_creature_at`. VERSION: `0.50.169`.
+
+CI de Q48: **verde** no run `35888263251` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
