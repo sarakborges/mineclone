@@ -35,13 +35,13 @@ type NaturalSpawnCreatures<'w, 's> = Query<
 >;
 
 #[derive(Default)]
-struct NaturalSpawnState {
+pub(super) struct NaturalSpawnState {
     seconds_until_attempt: f32,
     random_state: u32,
 }
 
 #[derive(SystemParam)]
-struct NaturalSpawnContext<'w, 's> {
+pub(super) struct NaturalSpawnContext<'w, 's> {
     rules: Res<'w, GameRules>,
     world: Res<'w, VoxelWorld>,
     biome: Res<'w, CurrentBiome>,
