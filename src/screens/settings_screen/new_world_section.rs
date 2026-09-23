@@ -101,6 +101,34 @@ pub(super) enum NewWorldFooterAction {
 }
 
 #[derive(SystemParam)]
+pub(super) struct NewWorldFooterInput<'w, 's> {
+    game_state: Res<'w, State<GameState>>,
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    interactions: Query<
+        'w,
+        's,
+        (&'static Interaction, &'static NewWorldFooterAction),
+        Changed<Interaction>,
+    >,
+}
+
+impl NewWorldFooterInput<'_, '_> {
+    fn is_new_world(&self) -> bool {
+        *self.game_state.get() == GameState::NewWorld
+    }
+
+    fn pressed_action(&self) -> Option<NewWorldFooterAction> {
+        self.interactions.iter().find_map(|(interaction, action)| {
+            (*interaction == Interaction::Pressed).then_some(*action)
+        })
+    }
+
+    fn escape_pressed(&self) -> bool {
+        self.keys.just_pressed(KeyCode::Escape)
+    }
+}
+
+#[derive(SystemParam)]
 pub(super) struct NewWorldDraft<'w, 's> {
     config: ResMut<'w, NewWorldConfig>,
     seed_input: Res<'w, SeedInputState>,
@@ -595,35 +623,30 @@ pub(super) fn handle_seed_keyboard(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_new_world_footer(
     mut commands: Commands,
-    game_state: Res<State<GameState>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    interactions: Query<(&Interaction, &NewWorldFooterAction), Changed<Interaction>>,
+    footer: NewWorldFooterInput,
     mut draft: NewWorldDraft,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut transition: ResMut<ScreenTransition>,
 ) {
-    if *game_state.get() != GameState::NewWorld || transition.is_active() {
+    if !footer.is_new_world() || transition.is_active() {
         return;
     }
 
-    let action = interactions.iter().find_map(|(interaction, action)| {
-        (*interaction == Interaction::Pressed).then_some(*action)
-    });
+    let action = footer.pressed_action();
     let active_name = draft
         .name_input
         .single()
         .ok()
         .is_some_and(|(entity, _)| draft.focus.get() == Some(entity));
-    if keys.just_pressed(KeyCode::Escape) && active_name {
+    if footer.escape_pressed() && active_name {
         draft.focus.clear();
         return;
     }
     if matches!(action, Some(NewWorldFooterAction::Return))
-        || (keys.just_pressed(KeyCode::Escape) && !draft.input_editing())
+        || (footer.escape_pressed() && !draft.input_editing())
     {
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
