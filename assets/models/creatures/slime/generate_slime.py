@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Generate Asteria's pixel-rounded shared slime GLB and standalone 64x64 skins.
+"""Generate Asteria's preserved legacy cubic slime GLB and standalone 64x64 skins.
 
-Uses only Python's standard library. The silhouette stays deliberately blocky: stepped
-cuboids carve the upper corners into a pixel-art dome without smooth geometry.
+Uses only Python's standard library. Never rounds corners or smooths face details.
 Creature JSON determines which PNG is loaded; GLB embeds no image data.
 Physics stays on SlimeRoot; named animation clips move only visual children.
 """
 from __future__ import annotations
 
 import json
+import math
 import struct
 import zlib
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
-TEXTURES = OUT.parents[2] / 'textures' / 'creatures' / 'slime'
+TEXTURES = OUT.parents[2] / 'textures' / 'creatures' / 'slime_legacy'
 binary = bytearray()
 views: list[dict] = []
 accessors: list[dict] = []
@@ -49,8 +49,9 @@ def accessor(values, kind='VEC3', component=5126, target=None, bounds=False):
     return len(accessors) - 1
 
 
-# Standalone grayscale skins for the shell and face. Each species keeps its own
-# PNG selection through creature JSON; the GLB embeds no image data.
+# Grayscale external atlas: shell, larger core and a pixel face on the front tile. Each
+# species keeps its own PNG, selected exclusively through its creature JSON.
+# Atlas tile positions must match the UV tile coordinates below. No face mesh.
 def png_chunk(kind: bytes, payload: bytes) -> bytes:
     content = kind + payload
     return (struct.pack('>I', len(payload)) + content
@@ -66,31 +67,30 @@ def make_skin(kind: str) -> bytes:
             if kind == 'shell':
                 border = min(u, v, 63-u, 63-v) < 4
                 gray = 229 if border else (247 if (u//8 + v//8) % 2 else 255)
+            elif kind == 'core':
+                border = min(u, v, 63-u, 63-v) < 3
+                gray = 222 if border else (246 if (u//8 + v//8) % 2 else 255)
             elif kind == 'face':
                 gray = 255
-                alpha = 0
                 if 20 <= v <= 29 and (16 <= u <= 23 or 40 <= u <= 47):
-                    gray, alpha = 15, 255
+                    gray = 15
                 if v == 20 and u in (16, 40):
-                    gray, alpha = 255, 255
+                    gray = 255
                 if 29 <= v <= 31 and (8 <= u <= 13 or 50 <= u <= 55):
-                    gray, alpha = 170, 255
+                    gray = 170
                 if (v == 38 and 24 <= u <= 39) or (v == 39 and 27 <= u <= 36):
-                    gray, alpha = 24, 255
+                    gray = 24
             else:
                 raise ValueError(f'unknown slime skin kind: {kind}')
             index = (y * 64 + x) * 4
-            if kind == 'face':
-                pixels[index:index + 4] = bytes((gray, gray, gray, alpha))
-            else:
-                pixels[index:index + 4] = bytes((gray, gray, gray, 255))
+            pixels[index:index + 4] = bytes((gray, gray, gray, 255))
     scanlines = b''.join(b'\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
     return (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
             + png_chunk(b'IDAT', zlib.compress(scanlines, 9)) + png_chunk(b'IEND', b''))
 
 
 TEXTURES.mkdir(parents=True, exist_ok=True)
-for kind in ('shell', 'face'):
+for kind in ('shell', 'core', 'face'):
     destination = TEXTURES / f'{kind}.png'
     # Only create missing default skins; never overwrite subsequent artist edits.
     if not destination.exists():
@@ -161,14 +161,11 @@ def make_front_quad(name, width, height, z, material):
     return len(meshes)-1
 
 
-def material(name, color, alpha=1., rough=.36, emission=None, alpha_mode=None):
+def material(name, color, alpha=1., rough=.36, emission=None):
     mat = {'name': name, 'pbrMetallicRoughness': {
         'baseColorFactor': [*color, alpha],
-        'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False,
-        'extensions': {'KHR_materials_unlit': {}}}
-    if alpha_mode is not None:
-        mat['alphaMode'] = alpha_mode
-    elif alpha < 1:
+        'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False}
+    if alpha < 1:
         mat['alphaMode'] = 'BLEND'
     if emission is not None:
         mat['emissiveFactor'] = emission
@@ -176,33 +173,13 @@ def material(name, color, alpha=1., rough=.36, emission=None, alpha_mode=None):
 
 
 materials = [
-    # The slime is a single shell plus a transparent face decal. Both source
-    # materials are fully rough/unlit so orientation never changes brightness.
-    material('SlimeShell', [.50,.91,.78], 1., 1.0),
-    material('SlimeFace', [1.,1.,1.], 1., 1.0, alpha_mode='BLEND'),
+    material('SlimeShell', [.50,.91,.78], 1., .85),
+    material('SlimeCore', [.18,.70,.57], 1., .85),
+    material('SlimeFace', [1.,1.,1.], 1., .30),
 ]
-# Higher-resolution voxel dome based on the approved reference. The model is
-# intentionally a little larger than before so the silhouette can use more,
-# smaller steps instead of ending in a broad flat cap. Height is 1.00 m and the
-# widest tier is 1.20 m; only the visible mesh is affected.
-shell_profile = [
-    ([.78, .04, .78], (0, -.480, 0)),
-    ([.90, .06, .90], (0, -.430, 0)),
-    ([1.00, .08, 1.00], (0, -.360, 0)),
-    ([1.10, .10, 1.10], (0, -.270, 0)),
-    ([1.16, .12, 1.16], (0, -.160, 0)),
-    ([1.20, .14, 1.20], (0, -.030, 0)),
-    ([1.20, .14, 1.20], (0,  .110, 0)),
-    ([1.16, .12, 1.16], (0,  .240, 0)),
-    ([1.08, .08, 1.08], (0,  .340, 0)),
-    ([.96, .05, .96], (0,  .405, 0)),
-    ([.82, .03, .82], (0,  .445, 0)),
-    ([.64, .02, .64], (0,  .470, 0)),
-    ([.44, .015, .44], (0, .4875, 0)),
-    ([.22, .005, .22], (0, .4975, 0)),
-]
-shell = make_mesh('pixel_rounded_shell', shell_profile, 0, (0,0))
-face = make_front_quad('square_pixel_face', .98, .60, -.606, 1)
+shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
+core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
+face = make_front_quad('square_pixel_face', .96, .90, -.50, 2)
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
@@ -222,7 +199,8 @@ root = node('SlimeRoot', children=[], extras={
     'collider_is_animated': False})
 visual = node('Visual', children=[])
 body = node('BodyPivot', children=[], translation=[0,.5,0])
-body_children = [node('Shell',mesh=shell), node('Face',mesh=face,translation=[0,-.10,0])]
+inner = node('InnerCore', mesh=core, translation=[0,-.025,0], scale=[1,1,1])
+body_children = [node('Shell',mesh=shell),inner,node('Face',mesh=face,translation=[0,0,0])]
 nodes[body]['children'] = body_children
 nodes[visual]['children'] = [body]
 collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
@@ -231,9 +209,11 @@ collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
 nodes[root]['children'] = [visual,collider_node]
 
 
-def tracks(clip, times, body_scale, center_y=None):
+def tracks(clip, times, body_scale, center_y=None, core_scale=None, core_angle=None):
     assert len(times) == len(body_scale)
     center_y = center_y if center_y is not None else [.5*s[1] for s in body_scale]
+    core_scale = core_scale if core_scale is not None else [[1,1,1]]*len(times)
+    core_angle = core_angle if core_angle is not None else [0]*len(times)
     t = accessor(times, kind='SCALAR', bounds=True)
     channels, samplers = [], []
     def add(target, path, values, kind):
@@ -242,34 +222,45 @@ def tracks(clip, times, body_scale, center_y=None):
         channels.append({'sampler':len(samplers)-1,'target':{'node':target,'path':path}})
     add(body,'scale',body_scale,'VEC3')
     add(body,'translation',[[0,y,0] for y in center_y],'VEC3')
+    add(inner,'scale',core_scale,'VEC3')
+    add(inner,'rotation',[[0,math.sin(a/2),0,math.cos(a/2)] for a in core_angle],'VEC4')
     animations.append({'name':clip,'channels':channels,'samplers':samplers,
                        'extras':{'loop_recommended':clip in ('Idle','Airborne')}})
 
 
 tracks('Idle',[0,.5,1,1.5,2],
-       [[1,1,1],[1.018,.974,1.018],[1,1,1],[.988,1.021,.988],[1,1,1]])
+       [[1,1,1],[1.018,.974,1.018],[1,1,1],[.988,1.021,.988],[1,1,1]],
+       core_scale=[[1,1,1],[1.065,.97,1.065],[1,1,1],[.96,1.04,.96],[1,1,1]],
+       core_angle=[0,.04,0,-.04,0])
 tracks('Anticipate',[0,.07,.17,.24],
-       [[1,1,1],[1.09,.845,1.09],[1.125,.76,1.125],[1.09,.83,1.09]])
+       [[1,1,1],[1.09,.845,1.09],[1.125,.76,1.125],[1.09,.83,1.09]],
+       core_scale=[[1,1,1],[1.05,.9,1.05],[1.10,.84,1.10],[1.05,.92,1.05]],
+       core_angle=[0,-.07,-.10,-.04])
 tracks('Airborne',[0,.12,.35,.55,.72],
-       [[1.09,.83,1.09],[.91,1.15,.91],[.96,1.085,.96],[.97,1.06,.97],[1,1,1]])
+       [[1.09,.83,1.09],[.91,1.15,.91],[.96,1.085,.96],[.97,1.06,.97],[1,1,1]],
+       core_scale=[[1,1,1],[.95,1.08,.95],[.98,1.035,.98],[1,1,1],[1,1,1]],
+       core_angle=[0,.13,.23,.11,0])
 tracks('Land',[0,.045,.12,.20,.34],
-       [[.97,1.055,.97],[1.17,.74,1.17],[1.12,.805,1.12],[.975,1.047,.975],[1,1,1]])
+       [[.97,1.055,.97],[1.17,.74,1.17],[1.12,.805,1.12],[.975,1.047,.975],[1,1,1]],
+       core_scale=[[1,1,1],[1.12,.85,1.12],[1.05,.94,1.05],[.98,1.025,.98],[1,1,1]])
 tracks('Hurt',[0,.085,.15,.24,.38],
-       [[1,1,1],[1.1,.88,1.1],[.94,1.08,.94],[1.025,.968,1.025],[1,1,1]])
+       [[1,1,1],[1.1,.88,1.1],[.94,1.08,.94],[1.025,.968,1.025],[1,1,1]],
+       core_angle=[0,-.22,.19,-.08,0])
 tracks('Death',[0,.12,.31,.55,.75],
        [[1,1,1],[1.13,.8,1.13],[1.2,.60,1.2],[1.12,.19,1.12],[.001,.001,.001]],
-       center_y=[.5,.4,.3,.095,.0005])
+       center_y=[.5,.4,.3,.095,.0005],
+       core_scale=[[1,1,1],[1.1,.88,1.1],[1.2,.7,1.2],[.95,.3,.95],[.001,.001,.001]],
+       core_angle=[0,.2,.5,.9,1.2])
 
 scene = {
-    'asset':{'version':'2.0','generator':'Asteria high-resolution rounded slime v7'},
+    'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v3'},
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
-    'extensionsUsed':['KHR_materials_unlit'],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
-    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeFace'],
+    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Single high-resolution pixel-rounded shell with transparent face decal; no core; unlit materials keep brightness direction-independent; collider does not animate'},
+              'notes':'Only cubic shell and enlarged core; face in species PNG front tile; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
