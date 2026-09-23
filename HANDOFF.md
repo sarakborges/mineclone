@@ -292,6 +292,17 @@ comportamento visual específico. VERSION: `0.50.141`.
 
 CI de Q25: **verde** no run `35871995004` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q26 — isolar inicialização de persistência do bootstrap
+
+O branch New/Load de persistência saiu de `begin_world_loading` para
+`initialize_bootstrap_persistence`. O helper reutiliza diretamente
+`WorldBootstrapConfig` e `WorldBootstrapPersistence`, em vez de criar outro
+contexto redundante, e mantém explícitos apenas spawn biome, biome multiplier e
+world-generation settings. As validações de load e o `begin_new_world`
+permanecem bit-a-bit no mesmo caminho. VERSION: `0.50.143`.
+
+CI de Q26: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
