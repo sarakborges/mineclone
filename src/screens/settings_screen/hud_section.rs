@@ -302,11 +302,8 @@ pub(super) fn sync_hide_hints_toggle(
         toggle::apply_control_colors(enabled, *interaction, background, border);
     }
     if settings_changed {
-        let next_left = px(toggle::thumb_left(enabled));
         for mut thumb in &mut thumbs {
-            if thumb.left != next_left {
-                thumb.left = next_left;
-            }
+            toggle::apply_thumb_position(enabled, &mut thumb);
         }
     }
 }
