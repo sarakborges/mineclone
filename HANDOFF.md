@@ -11918,3 +11918,31 @@ Commits:
   `56fb7ae7c93336b631d2f3ef5c28b6dd92bb3ccb`.
 
 CI funcional push `35805704238`: **verde**.
+
+
+## 2026-09-22 — Terceira perspectiva F5: câmera frontal
+
+O ciclo de perspectiva do jogador passa a ter três estados:
+- primeira pessoa;
+- terceira pessoa traseira;
+- terceira pessoa frontal;
+- próxima troca retorna à primeira pessoa.
+
+A câmera frontal:
+- usa a mesma `GameplayWorldCamera`; nenhuma câmera de gameplay adicional é criada;
+- é posicionada à frente do jogador usando o mesmo limite de distância e a mesma checagem de colisão da terceira pessoa traseira;
+- recebe rotação local de 180° para olhar de volta para o personagem.
+
+Movimento:
+- walking e flight usam `CameraPerspective::horizontal_movement_axes`;
+- na terceira pessoa frontal, os controles são invertidos em relação à visão frontal;
+- o resultado mundial de W/A/S/D permanece no mesmo eixo da perspectiva traseira, então trocar para a câmera frontal não faz o personagem inverter sua direção física;
+- há teste cobrindo o ciclo first -> back -> front -> first e a estabilidade dos eixos de movimento.
+
+Commits:
+- novo estado e câmera frontal: `ee877b34d49145aeb9d23559f76aacaba03bd0ca`;
+- walking preserva eixo mundial: `a54c68c7404e93ad41ba95888bb71c58613c66a8`;
+- flight preserva eixo mundial: `9546fc15d01cca1c566520edfe6a94bd8f23e134`;
+- correção de Clippy nos testes: `d4ac9530a2a9d69e4cb1aeb90055bfffacc09cef`.
+
+CI funcional push `35806322688`: **verde**.
