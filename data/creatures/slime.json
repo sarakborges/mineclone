@@ -28,7 +28,6 @@
     }
   },
   "unlitMaterials": [
-    "SlimeShell",
     "SlimeFace"
   ],
   "animations": {
