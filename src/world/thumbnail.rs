@@ -31,7 +31,6 @@ pub(crate) enum WorldThumbnailCompletion {
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
     completion: WorldThumbnailCompletion,
-    camera_states: Vec<(Entity, CameraOutputMode, bool)>,
     delay_frames: u8,
 }
 
@@ -41,10 +40,8 @@ pub(crate) fn begin_world_thumbnail_capture(
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    let mut camera_states = Vec::new();
     let mut world_camera_found = false;
-    for (entity, mut camera, world_camera) in cameras.iter_mut() {
-        camera_states.push((entity, camera.output_mode, camera.is_active));
+    for (_, mut camera, world_camera) in cameras.iter_mut() {
         if world_camera.is_some() {
             world_camera_found = true;
             camera.is_active = true;
@@ -65,7 +62,6 @@ pub(crate) fn begin_world_thumbnail_capture(
         .spawn(WorldThumbnailCapture {
             world_id: world_id.to_owned(),
             completion,
-            camera_states,
             delay_frames: 1,
         })
         .observe(finish_world_thumbnail_capture);
@@ -88,20 +84,12 @@ pub(crate) fn advance_world_thumbnail_capture(
 fn finish_world_thumbnail_capture(
     captured: On<ScreenshotCaptured>,
     captures: Query<&WorldThumbnailCapture>,
-    mut cameras: Query<&mut Camera>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     let Ok(capture) = captures.get(captured.entity) else {
         return;
     };
-
-    for (entity, output_mode, is_active) in &capture.camera_states {
-        if let Ok(mut camera) = cameras.get_mut(*entity) {
-            camera.output_mode = *output_mode;
-            camera.is_active = *is_active;
-        }
-    }
 
     if let Err(error) = write_world_thumbnail(&capture.world_id, &captured.image) {
         warn!(
