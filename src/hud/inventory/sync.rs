@@ -174,85 +174,120 @@ pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     ),
 >;
 
-#[allow(clippy::type_complexity)]
+type InventoryTooltipTextQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Text, &'static ComputedNode),
+    (
+        With<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStatsTitle>,
+        Without<InventoryItemTooltipStats>,
+    ),
+>;
+
+type InventoryTooltipIdQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Text, &'static ComputedNode),
+    (
+        With<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStatsTitle>,
+        Without<InventoryItemTooltipStats>,
+    ),
+>;
+
+type InventoryTooltipHintQuery<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut Text,
+        &'static ComputedNode,
+        &'static mut Visibility,
+    ),
+    (
+        With<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipStatsTitle>,
+        Without<InventoryItemTooltipStats>,
+    ),
+>;
+
+type InventoryTooltipStatsTitleQuery<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut Text,
+        &'static ComputedNode,
+        &'static mut Visibility,
+    ),
+    (
+        With<InventoryItemTooltipStatsTitle>,
+        Without<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStats>,
+    ),
+>;
+
+type InventoryTooltipStatsQuery<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut Text,
+        &'static ComputedNode,
+        &'static mut Visibility,
+    ),
+    (
+        With<InventoryItemTooltipStats>,
+        Without<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStatsTitle>,
+    ),
+>;
+
+#[derive(SystemParam)]
+struct InventoryTooltipCopyView<'w, 's> {
+    text: InventoryTooltipTextQuery<'w, 's>,
+    id: InventoryTooltipIdQuery<'w, 's>,
+    hint: InventoryTooltipHintQuery<'w, 's>,
+    stats_title: InventoryTooltipStatsTitleQuery<'w, 's>,
+    stats: InventoryTooltipStatsQuery<'w, 's>,
+}
+
 #[derive(SystemParam)]
 pub(super) struct InventoryTooltipView<'w, 's> {
     window: Single<'w, 's, &'static Window>,
     inventory_slots: Query<'w, 's, (&'static Interaction, &'static InventorySlot)>,
     creative_slots: Query<'w, 's, (&'static Interaction, &'static CreativeInventorySlot)>,
     tooltip: InventoryItemTooltipQuery<'w, 's>,
-    tooltip_text: Single<
-        'w,
-        's,
-        (&'static mut Text, &'static ComputedNode),
-        (
-            With<InventoryItemTooltipText>,
-            Without<InventoryItemTooltipId>,
-            Without<InventoryItemTooltipHint>,
-            Without<InventoryItemTooltipStatsTitle>,
-            Without<InventoryItemTooltipStats>,
-        ),
-    >,
-    tooltip_id: Single<
-        'w,
-        's,
-        (&'static mut Text, &'static ComputedNode),
-        (
-            With<InventoryItemTooltipId>,
-            Without<InventoryItemTooltipText>,
-            Without<InventoryItemTooltipHint>,
-            Without<InventoryItemTooltipStatsTitle>,
-            Without<InventoryItemTooltipStats>,
-        ),
-    >,
-    tooltip_hint: Single<
-        'w,
-        's,
-        (
-            &'static mut Text,
-            &'static ComputedNode,
-            &'static mut Visibility,
-        ),
-        (
-            With<InventoryItemTooltipHint>,
-            Without<InventoryItemTooltipText>,
-            Without<InventoryItemTooltipId>,
-            Without<InventoryItemTooltipStatsTitle>,
-            Without<InventoryItemTooltipStats>,
-        ),
-    >,
-    tooltip_stats_title: Single<
-        'w,
-        's,
-        (
-            &'static mut Text,
-            &'static ComputedNode,
-            &'static mut Visibility,
-        ),
-        (
-            With<InventoryItemTooltipStatsTitle>,
-            Without<InventoryItemTooltipText>,
-            Without<InventoryItemTooltipId>,
-            Without<InventoryItemTooltipHint>,
-            Without<InventoryItemTooltipStats>,
-        ),
-    >,
-    tooltip_stats: Single<
-        'w,
-        's,
-        (
-            &'static mut Text,
-            &'static ComputedNode,
-            &'static mut Visibility,
-        ),
-        (
-            With<InventoryItemTooltipStats>,
-            Without<InventoryItemTooltipText>,
-            Without<InventoryItemTooltipId>,
-            Without<InventoryItemTooltipHint>,
-            Without<InventoryItemTooltipStatsTitle>,
-        ),
-    >,
+    copy: InventoryTooltipCopyView<'w, 's>,
+}
+
+impl InventoryTooltipView<'_, '_> {
+    fn hovered_item(&self) -> Option<&'static str> {
+        self.inventory_slots
+            .iter()
+            .find_map(|(interaction, slot)| {
+                (*interaction != Interaction::None)
+                    .then_some(slot.item)
+                    .flatten()
+            })
+            .or_else(|| {
+                self.creative_slots.iter().find_map(|(interaction, slot)| {
+                    (*interaction != Interaction::None)
+                        .then_some(slot.item)
+                        .flatten()
+                })
+            })
+    }
+}
+
 }
 
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
@@ -433,33 +468,22 @@ pub(super) fn sync_inventory_item_tooltip(
     localization: Res<UiLocalization>,
     view: InventoryTooltipView,
 ) {
+    let hovered_item = view.hovered_item();
+    let cursor = view.window.cursor_position();
     let InventoryTooltipView {
         window,
-        inventory_slots,
-        creative_slots,
         tooltip,
-        tooltip_text,
-        tooltip_id,
-        tooltip_hint,
-        tooltip_stats_title,
-        tooltip_stats,
+        copy,
+        ..
     } = view;
+    let InventoryTooltipCopyView {
+        text: tooltip_text,
+        id: tooltip_id,
+        hint: tooltip_hint,
+        stats_title: tooltip_stats_title,
+        stats: tooltip_stats,
+    } = copy;
     let (mut node, mut visibility) = tooltip.into_inner();
-
-    let hovered_item = inventory_slots
-        .iter()
-        .find_map(|(interaction, slot)| {
-            (*interaction != Interaction::None)
-                .then_some(slot.item)
-                .flatten()
-        })
-        .or_else(|| {
-            creative_slots.iter().find_map(|(interaction, slot)| {
-                (*interaction != Interaction::None)
-                    .then_some(slot.item)
-                    .flatten()
-            })
-        });
 
     let Some(item_id) = hovered_item else {
         if *visibility != Visibility::Hidden {
@@ -467,7 +491,7 @@ pub(super) fn sync_inventory_item_tooltip(
         }
         return;
     };
-    let Some(cursor) = window.cursor_position() else {
+    let Some(cursor) = cursor else {
         if *visibility != Visibility::Hidden {
             *visibility = Visibility::Hidden;
         }
