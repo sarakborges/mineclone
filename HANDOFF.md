@@ -157,7 +157,18 @@ quatro queries que representam os dois controls + thumbs e reutiliza
 existentes. O system público fica responsável somente por ler
 `NewWorldConfig` e fornecer o estado semântico à view. VERSION: `0.50.123`.
 
-CI de Q13: pendente neste checkpoint.
+CI de Q13: **verde** no run `35819230762` após nomear os payloads/filtros das queries (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q14 — reutilizar isolamento de câmeras no thumbnail
+
+`world/thumbnail.rs` agora possui uma única política
+`isolate_world_thumbnail_cameras` para tornar a GameplayWorldCamera a única
+writer e desativar as câmeras auxiliares. O início da captura e o enforcement
+por frame reutilizam essa função. `WorldThumbnailCameraQuery` também virou o
+tipo compartilhado por thumbnail, pause menu e window-close save; o `Entity`
+que era carregado pelos call sites sem uso foi removido. VERSION: `0.50.124`.
+
+CI de Q14: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
