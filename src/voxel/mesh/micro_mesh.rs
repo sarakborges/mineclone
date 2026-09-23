@@ -22,6 +22,7 @@ use super::super::{
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
     },
+    log_state::texture_face,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     orientation::{orientation_rotation, source_face_for_oriented_face},
     read::VoxelRead,
@@ -156,7 +157,7 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
     blocks: &mut BlockLookup<'a>,
     buffers: &mut MicroMeshBuffers<'a>,
 ) {
-    let shape = MicroblockMask::from_cell(surface.cell);
+    let shape = MicroblockMask::geometry_for_cell(surface.cell);
     for face in BlockFace::ALL {
         let lighting =
             face_lighting_with_cache(
@@ -207,7 +208,7 @@ pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
     face: BlockFace,
     neighbor: VoxelCell,
 ) {
-    let neighbor_mask = MicroblockMask::from_cell(neighbor);
+    let neighbor_mask = MicroblockMask::geometry_for_cell(neighbor);
     let outward = face.offset();
     let depth = if outward.x + outward.y + outward.z > 0 {
         EDGE - 1
@@ -373,7 +374,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
             + inverse_orientation * (local - Vec3::splat(0.5));
         rotate_macro_uv(macro_uv(source_face, oriented), rotation)
     });
-    let material_face = block_face_material_face(source_face, surface.block);
+    let material_face = block_face_material_face(texture_face(surface.cell, source_face), surface.block);
     let material_code = surface
         .texture_table
         .encoded_layers(block_face_texture_layers(material_face, surface.block))
