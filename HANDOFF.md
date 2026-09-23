@@ -168,7 +168,19 @@ por frame reutilizam essa função. `WorldThumbnailCameraQuery` também virou o
 tipo compartilhado por thumbnail, pause menu e window-close save; o `Entity`
 que era carregado pelos call sites sem uso foi removido. VERSION: `0.50.124`.
 
-CI de Q14: pendente neste checkpoint.
+CI de Q14: **verde** no run `35819506211` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q15 — reutilizar contexts do inventário no Character Info
+
+`CharacterInfoInventorySpawn` deixou de carregar quase vinte resources e de
+reconstruir manualmente `InventoryItemView`/`InventoryLayoutState`. Ele
+reutiliza `InventoryItemContent` e `InventoryPanelState`, os mesmos contexts
+do inventário principal. `InventoryPanelState` passou a ser o owner da
+derivação de posição do player e do layout; spawn normal, rebuild e Character
+Info usam a mesma regra. Isso reduz dependências e elimina três montagens
+paralelas do estado de layout. VERSION: `0.50.125`.
+
+CI de Q15: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
