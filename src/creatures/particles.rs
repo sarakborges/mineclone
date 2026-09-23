@@ -37,7 +37,7 @@ pub(super) struct CreatureParticleAssets {
 }
 
 #[derive(SystemParam)]
-struct CreatureParticleSpawner<'w, 's> {
+pub(super) struct CreatureParticleSpawner<'w, 's> {
     commands: Commands<'w, 's>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
