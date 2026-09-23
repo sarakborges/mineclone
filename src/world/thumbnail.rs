@@ -31,7 +31,7 @@ pub(crate) enum WorldThumbnailCompletion {
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
     completion: WorldThumbnailCompletion,
-    camera_output_modes: Vec<(Entity, CameraOutputMode)>,
+    camera_states: Vec<(Entity, CameraOutputMode, bool)>,
     delay_frames: u8,
 }
 
@@ -41,17 +41,19 @@ pub(crate) fn begin_world_thumbnail_capture(
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    let mut camera_output_modes = Vec::new();
+    let mut camera_states = Vec::new();
     let mut world_camera_found = false;
     for (entity, mut camera, world_camera) in cameras.iter_mut() {
-        camera_output_modes.push((entity, camera.output_mode));
+        camera_states.push((entity, camera.output_mode, camera.is_active));
         if world_camera.is_some() {
             world_camera_found = true;
+            camera.is_active = true;
             camera.output_mode = CameraOutputMode::Write {
                 blend_state: None,
                 clear_color: ClearColorConfig::Default,
             };
         } else {
+            camera.is_active = false;
             camera.output_mode = CameraOutputMode::Skip;
         }
     }
@@ -63,7 +65,7 @@ pub(crate) fn begin_world_thumbnail_capture(
         .spawn(WorldThumbnailCapture {
             world_id: world_id.to_owned(),
             completion,
-            camera_output_modes,
+            camera_states,
             delay_frames: 1,
         })
         .observe(finish_world_thumbnail_capture);
@@ -94,9 +96,10 @@ fn finish_world_thumbnail_capture(
         return;
     };
 
-    for (entity, output_mode) in &capture.camera_output_modes {
+    for (entity, output_mode, is_active) in &capture.camera_states {
         if let Ok(mut camera) = cameras.get_mut(*entity) {
             camera.output_mode = *output_mode;
+            camera.is_active = *is_active;
         }
     }
 
@@ -170,13 +173,15 @@ pub(crate) fn enforce_world_thumbnail_camera_isolation(
     }
 
     for (mut camera, world_camera) in &mut cameras {
-        camera.output_mode = if world_camera.is_some() {
-            CameraOutputMode::Write {
+        if world_camera.is_some() {
+            camera.is_active = true;
+            camera.output_mode = CameraOutputMode::Write {
                 blend_state: None,
                 clear_color: ClearColorConfig::Default,
-            }
+            };
         } else {
-            CameraOutputMode::Skip
-        };
+            camera.is_active = false;
+            camera.output_mode = CameraOutputMode::Skip;
+        }
     }
 }
