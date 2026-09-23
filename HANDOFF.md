@@ -19,7 +19,21 @@ contexto coeso. O limite de delta compartilhado entre emissão e atualização
 também passou a uma constante única. Sem alteração intencional de comportamento.
 VERSION: `0.50.110`.
 
-CI: pendente neste checkpoint.
+CI de Q1: **verde** no run `35813865709` após a correção de visibilidade do
+SystemParam em `5ee6b4ed2ba3525eb7833121f120244ebe32c916`.
+
+### Q2 — separar configuração visual de material e animação
+
+`creatures/visual.rs` não suprime mais `too_many_arguments` no observer de cena.
+As queries que descrevem a cena carregada foram agrupadas em
+`CreatureSceneQueries`, enquanto Commands e assets continuam explícitos. A
+configuração por descendente foi dividida entre `configure_creature_material`
+e `configure_creature_animation`, deixando travessia/orquestração, material e
+animação com responsabilidades nomeadas e independentes. Nenhuma regra de
+material, cache ou animação foi intencionalmente alterada. VERSION:
+`0.50.111`.
+
+CI de Q2: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
