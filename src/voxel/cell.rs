@@ -32,6 +32,11 @@ impl VoxelCell {
         }
     }
 
+    pub(crate) fn with_block_id(mut self, block_id: &'static str) -> Self {
+        self.block_id = block_id;
+        self
+    }
+
     pub fn with_secondary_property(mut self, property: &str, value: &str) -> Self {
         self.secondary_properties.set(property, value);
         self
