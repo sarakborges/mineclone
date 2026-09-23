@@ -387,7 +387,7 @@ somente coleta do estado, cache/early-return, visibilidade e aplicação das
 mudanças. O snapshot é movido ao cache apenas depois de todos os cálculos que o
 consultam, sem clone adicional. VERSION: `0.50.153`.
 
-CI de Q34: pendente neste checkpoint.
+CI de Q34: **verde** no run `35880982707` após corrigir o uso do tint derivado (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
