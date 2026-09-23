@@ -1,9 +1,9 @@
 {
   "id": "asteria:carpenters_axe",
   "name": {
-    "english": "Carpenter's Axe",
-    "portuguese_brazil": "Machado de Carpinteiro",
-    "spanish": "Hacha de Carpintero"
+    "english": "Rustic Carpenter's Axe",
+    "portuguese_brazil": "Machado de Carpinteiro Rústico",
+    "spanish": "Hacha de Carpintero Rústica"
   },
   "hint": {
     "english": "Left click hollows logs; right click strips bark.",
@@ -11,5 +11,5 @@
     "spanish": "El clic izquierdo ahueca troncos; el derecho quita la corteza."
   },
   "category": "tools",
-  "icon": "textures/tools/carpenters-axe.png"
+  "icon": "textures/tools/carpenters-axe-rustic.png"
 }

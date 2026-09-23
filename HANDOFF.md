@@ -13652,3 +13652,18 @@ acessam a mesma entidade. Isso elimina o B0001 sem `ParamSet` desnecessário e
 sem silenciar validações do Bevy.
 
 VERSION: `0.50.197`.
+
+
+## 2026-09-23 — Carpenter's Axe alinhado à textura Rustic
+
+A definição visual/nome do Carpenter's Axe foi alinhada ao asset enviado
+`textures/tools/carpenters-axe-rustic.png`.
+
+O ID e o comportamento da tool permanecem inalterados
+(`asteria:carpenters_axe`). Apenas display names e o caminho do ícone foram
+ajustados para a variante Rustic:
+- English: `Rustic Carpenter's Axe`
+- Português: `Machado de Carpinteiro Rústico`
+- Español: `Hacha de Carpintero Rústica`
+
+VERSION: `0.50.198`.
