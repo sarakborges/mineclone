@@ -326,6 +326,17 @@ desabilitada em Void, continuam locais. VERSION: `0.50.146`.
 
 CI de Q28: **verde** no run `35874540721` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q29 — reutilizar renderer de item no inventário criativo
+
+`spawn_creative_slot` deixou de reimplementar os três caminhos de render de
+block/layer/tool. Depois de resolver o `item_id`, o creative inventory agora
+chama `spawn_inventory_item`, o mesmo primitive usado pelos slots do inventário
+do jogador. Tint de biome, material de block, layer icon e tool icon passam a
+ter um único owner, reduzindo risco de divergência visual entre os painéis.
+VERSION: `0.50.147`.
+
+CI de Q29: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
