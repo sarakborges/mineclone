@@ -366,7 +366,7 @@ paralelos sobre o mesmo enum; ambos reutilizam `enabled`/`toggle`. Isso
 reduz risco de um novo feature toggle ser adicionado em um caminho e esquecido
 no outro. VERSION: `0.50.151`.
 
-CI de Q32: pendente neste checkpoint.
+CI de Q32: **verde** no run `35879396036` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
