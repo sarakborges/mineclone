@@ -5,7 +5,7 @@ use crate::{
         attack::{AttackDefinition, AttackRegistry}, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
         player::PlayerDefinition, tool::ToolRegistry,
     },
-    gameplay::availability::world_interaction_available,
+    gameplay::{availability::world_interaction_available, random::next_unit_f32},
     creatures::{CreatureAnimationState, CreatureDeathTimer, CreatureInstance},
     creatures::CreatureMotion,
     entity::EntityHealth,
@@ -100,8 +100,7 @@ impl CreatureAttackRuntime<'_, '_> {
         let dead = health.damage(attack.damage);
         let direction = creature_transform.translation - player_position;
         for effect in &attack.effects {
-            if (effect.chance >= 1.0
-                || next_random(&mut self.random_state) as f32 / u32::MAX as f32 <= effect.chance)
+            if effect_applies(effect.chance, &mut self.random_state)
                 && effect.effect == "knockback"
             {
                 motion.apply_knockback(direction, effect.strength);
@@ -251,10 +250,12 @@ fn edit_targeted_block(
     input.targeted.0 = None;
 }
 
-fn next_random(state: &mut u32) -> u32 {
-    if *state == 0 { *state = 0x9E37_79B9; }
-    *state ^= *state << 13;
-    *state ^= *state >> 17;
-    *state ^= *state << 5;
-    *state
+fn effect_applies(chance: f32, random_state: &mut u32) -> bool {
+    if chance >= 1.0 {
+        return true;
+    }
+    if *random_state == 0 {
+        *random_state = 0x9E37_79B9;
+    }
+    next_unit_f32(random_state) <= chance
 }
