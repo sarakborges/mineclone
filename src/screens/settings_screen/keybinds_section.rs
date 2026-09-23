@@ -47,7 +47,6 @@ pub(super) fn keybinds_section(
             keybind_row(KeybindAction::Jump, keybinds, localization, language),
             keybind_row(KeybindAction::Descend, keybinds, localization, language),
             keybind_row(KeybindAction::Inventory, keybinds, localization, language),
-            keybind_row(KeybindAction::CharacterInfo, keybinds, localization, language),
             keybind_row(KeybindAction::Chat, keybinds, localization, language),
             keybind_row(KeybindAction::ToolAction, keybinds, localization, language),
             keybind_row(KeybindAction::ChangePerspective, keybinds, localization, language),

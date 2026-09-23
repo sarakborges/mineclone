@@ -28,6 +28,7 @@ const CHARACTER_PREVIEW_IMAGE_WIDTH: f32 = 216.0;
 const CHARACTER_PREVIEW_IMAGE_HEIGHT: f32 = 288.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
 const CHARACTER_NAME_HEALTH_GAP: f32 = 14.0;
+const CHARACTER_SECTION_LABEL_GAP: f32 = 8.0;
 const CHARACTER_HEALTH_EQUIPMENT_GAP: f32 = 18.0;
 const CHARACTER_HEALTH_BAR_HEIGHT: f32 = 22.0;
 const CHARACTER_HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
@@ -170,53 +171,69 @@ fn spawn_character_health_bar(parent: &mut ChildSpawnerCommands) {
     parent
         .spawn((
             Node {
-                position_type: PositionType::Relative,
                 width: percent(100),
-                height: px(CHARACTER_HEALTH_BAR_HEIGHT),
                 margin: UiRect::top(px(CHARACTER_NAME_HEALTH_GAP)),
-                border: UiRect::all(px(1)),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(CHARACTER_SECTION_LABEL_GAP),
                 ..default()
             },
-            BackgroundColor(theme::SLIDER_TRACK),
-            BorderColor::all(selectable::BORDER_COLOR),
             Pickable::IGNORE,
         ))
-        .with_children(|health| {
-            health.spawn((
-                CharacterInfoHealthFill,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    top: px(0),
-                    width: percent(100),
-                    height: percent(100),
-                    ..default()
-                },
-                BackgroundColor(CHARACTER_HEALTH_FILL_COLOR),
+        .with_children(|section| {
+            section.spawn((
+                typography::hud_subheading("Health"),
                 Pickable::IGNORE,
             ));
-            health
+            section
                 .spawn((
                     Node {
-                        position_type: PositionType::Absolute,
-                        left: px(0),
-                        top: px(0),
+                        position_type: PositionType::Relative,
                         width: percent(100),
-                        height: percent(100),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
+                        height: px(CHARACTER_HEALTH_BAR_HEIGHT),
+                        border: UiRect::all(px(1)),
                         ..default()
                     },
+                    BackgroundColor(theme::SLIDER_TRACK),
+                    BorderColor::all(selectable::BORDER_COLOR),
                     Pickable::IGNORE,
                 ))
-                .with_children(|label| {
-                    label.spawn((
-                        CharacterInfoHealthLabel,
-                        typography::inventory_category(""),
-                        typography::tooltip_shadow(),
-                        TextLayout::justify(Justify::Center),
+                .with_children(|health| {
+                    health.spawn((
+                        CharacterInfoHealthFill,
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(0),
+                            top: px(0),
+                            width: percent(100),
+                            height: percent(100),
+                            ..default()
+                        },
+                        BackgroundColor(CHARACTER_HEALTH_FILL_COLOR),
                         Pickable::IGNORE,
                     ));
+                    health
+                        .spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: px(0),
+                                top: px(0),
+                                width: percent(100),
+                                height: percent(100),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ))
+                        .with_children(|label| {
+                            label.spawn((
+                                CharacterInfoHealthLabel,
+                                typography::inventory_category(""),
+                                typography::tooltip_shadow(),
+                                TextLayout::justify(Justify::Center),
+                                Pickable::IGNORE,
+                            ));
+                        });
                 });
         });
 }
@@ -228,20 +245,36 @@ fn spawn_equipment_table(parent: &mut ChildSpawnerCommands) {
                 width: percent(100),
                 margin: UiRect::top(px(CHARACTER_HEALTH_EQUIPMENT_GAP)),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(INVENTORY_SLOT_GAP),
+                row_gap: px(CHARACTER_SECTION_LABEL_GAP),
                 ..default()
             },
             Pickable::IGNORE,
         ))
-        .with_children(|table| {
-            for label in [
-                "No helm equiped",
-                "No armor equiped",
-                "No leggings equiped",
-                "No boots equiped",
-            ] {
-                spawn_equipment_row(table, label);
-            }
+        .with_children(|section| {
+            section.spawn((
+                typography::hud_subheading("Armor"),
+                Pickable::IGNORE,
+            ));
+            section
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(INVENTORY_SLOT_GAP),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|table| {
+                    for label in [
+                        "No helm equiped",
+                        "No breastplate equiped",
+                        "No leggings equiped",
+                        "No boots equiped",
+                    ] {
+                        spawn_equipment_row(table, label);
+                    }
+                });
         });
 }
 

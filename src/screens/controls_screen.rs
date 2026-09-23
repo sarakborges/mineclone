@@ -87,10 +87,6 @@ const INTERFACE_CONTROLS: &[ControlSpec] = &[
         action_key: "settings.keybind.inventory",
     },
     ControlSpec {
-        binding: ControlBinding::Editable(KeybindAction::CharacterInfo),
-        action_key: "settings.keybind.characterInfo",
-    },
-    ControlSpec {
         binding: ControlBinding::Fixed("ESC"),
         action_key: "controls.pauseClose",
     },

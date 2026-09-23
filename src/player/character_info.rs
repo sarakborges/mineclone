@@ -64,7 +64,7 @@ struct CharacterInfoModalInput<'w, 's> {
     keybinds: Res<'w, Keybinds>,
     state: Res<'w, State<CharacterInfoState>>,
     chat: Res<'w, ChatState>,
-    focus: Res<'w, InputFocus>,
+    focus: ResMut<'w, InputFocus>,
     editable_text: Query<'w, 's, (), With<EditableText>>,
     input_state: ResMut<'w, CharacterInfoInputState>,
     next_state: ResMut<'w, NextState<CharacterInfoState>>,
@@ -73,9 +73,18 @@ struct CharacterInfoModalInput<'w, 's> {
 }
 
 fn toggle_character_info(mut input: CharacterInfoModalInput) {
-    if !input.keys.just_pressed(KeyCode::Escape) {
+    let escape_pressed = input.keys.just_pressed(KeyCode::Escape);
+    if !escape_pressed {
         input.input_state.escape_consumed = false;
     }
+
+    if *input.state.get() == CharacterInfoState::Open && escape_pressed {
+        input.input_state.escape_consumed = true;
+        input.focus.clear();
+        input.next_state.set(CharacterInfoState::Closed);
+        return;
+    }
+
     let typing = input
         .focus
         .get()
@@ -86,19 +95,14 @@ fn toggle_character_info(mut input: CharacterInfoModalInput) {
 
     let toggle_pressed = input
         .keys
-        .just_pressed(input.keybinds.key_code(KeybindAction::CharacterInfo));
+        .just_pressed(input.keybinds.key_code(KeybindAction::Inventory));
     match input.state.get() {
         CharacterInfoState::Closed if toggle_pressed => {
             input.next_inventory.set(InventoryState::Closed);
             input.next_brush_palette.set(BrushPaletteState::Closed);
             input.next_state.set(CharacterInfoState::Open);
         }
-        CharacterInfoState::Open
-            if toggle_pressed || input.keys.just_pressed(KeyCode::Escape) =>
-        {
-            if input.keys.just_pressed(KeyCode::Escape) {
-                input.input_state.escape_consumed = true;
-            }
+        CharacterInfoState::Open if toggle_pressed => {
             input.next_state.set(CharacterInfoState::Closed);
         }
         _ => {}

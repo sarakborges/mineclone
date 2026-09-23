@@ -52,7 +52,7 @@ pub(super) fn spawn_player_inventory_panel(
                 Pickable::IGNORE,
             ))
             .with_children(|header| {
-                header.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+                header.spawn((typography::hud_heading("Inventory"), Pickable::IGNORE));
 
                 header
                     .spawn((

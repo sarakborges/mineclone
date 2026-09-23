@@ -1,19 +1,8 @@
-use bevy::{
-    ecs::system::SystemParam,
-    input_focus::InputFocus,
-    prelude::*,
-    text::EditableText,
-};
+use bevy::prelude::*;
 
-use crate::{
-    app::{
-        keybinds::{KeybindAction, Keybinds},
-        game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
-        state_systems::reset_next_state,
-    },
-    hud::chat::ChatState,
-    player::character_info::CharacterInfoState,
-    tools::BrushPaletteState,
+use crate::app::{
+    game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
+    state_systems::reset_next_state,
 };
 
 use super::hotbar::PlayerHotbar;
@@ -55,12 +44,6 @@ impl Plugin for PlayerInventoryPlugin {
         app.init_state::<InventoryState>()
             .init_resource::<InventoryCursor>()
             .add_systems(
-                Update,
-                toggle_inventory
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
-            )
-            .add_systems(
                 OnExit(InventoryState::Open),
                 reset_resource::<InventoryCursor>,
             )
@@ -72,45 +55,5 @@ impl Plugin for PlayerInventoryPlugin {
                 OnExit(GameState::Gameplay),
                 reset_next_state::<InventoryState>,
             );
-    }
-}
-
-#[derive(SystemParam)]
-struct InventoryModalInput<'w, 's> {
-    keys: Res<'w, ButtonInput<KeyCode>>,
-    keybinds: Res<'w, Keybinds>,
-    inventory_state: Res<'w, State<InventoryState>>,
-    chat: Res<'w, ChatState>,
-    focus: Res<'w, InputFocus>,
-    editable_text: Query<'w, 's, (), With<EditableText>>,
-    next_inventory_state: ResMut<'w, NextState<InventoryState>>,
-    next_character_info: ResMut<'w, NextState<CharacterInfoState>>,
-    next_brush_palette: ResMut<'w, NextState<BrushPaletteState>>,
-}
-
-fn toggle_inventory(mut input: InventoryModalInput) {
-    let typing = input
-        .focus
-        .get()
-        .is_some_and(|entity| input.editable_text.get(entity).is_ok());
-    if input.chat.is_open() || typing {
-        return;
-    }
-    match input.inventory_state.get() {
-        InventoryState::Closed
-            if input
-                .keys
-                .just_pressed(input.keybinds.key_code(KeybindAction::Inventory)) =>
-        {
-            input
-                .next_character_info
-                .set(CharacterInfoState::Closed);
-            input.next_brush_palette.set(BrushPaletteState::Closed);
-            input.next_inventory_state.set(InventoryState::Open);
-        }
-        InventoryState::Open if input.keys.just_pressed(KeyCode::Escape) => {
-            input.next_inventory_state.set(InventoryState::Closed);
-        }
-        _ => {}
     }
 }
