@@ -19,7 +19,7 @@ use crate::{
     entity::EntityHealth,
     gameplay::modal::GameplayModalState,
     player::{
-        PLAYER_EYE_HEIGHT, PLAYER_SKIN_TEXTURE_PATH, PlayerEntity, apply_player_skin_material,
+        PLAYER_EYE_HEIGHT, PlayerEntity, apply_player_skin_material,
         camera::{CameraPerspective, GameplayCamera},
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
