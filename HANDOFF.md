@@ -312,7 +312,7 @@ devolvendo os dois resources derivados juntos. `begin_world_loading` agora
 fica responsável por orquestrar os blocos já preparados, sem conhecer os
 detalhes internos de construção desses fields. VERSION: `0.50.144`.
 
-CI de Q27: pendente neste checkpoint.
+CI de Q27: **verde** no run `35873589026` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
