@@ -376,7 +376,7 @@ dois caminhos paralelos. Spawn inicial e sync do held block reutilizam
 display shading. Tint permanece fora do helper porque depende da posição/célula
 e tem lifecycle próprio. VERSION: `0.50.152`.
 
-CI de Q33: pendente neste checkpoint.
+CI de Q33: **verde** no run `35880111845` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
