@@ -33,7 +33,18 @@ animação com responsabilidades nomeadas e independentes. Nenhuma regra de
 material, cache ou animação foi intencionalmente alterada. VERSION:
 `0.50.111`.
 
-CI de Q2: pendente neste checkpoint.
+CI de Q2: **verde** no run `35814037714` (localizações, Clippy com `-D warnings` e `cargo check`).
+
+### Q3 — deduplicar derivação do spawn no bootstrap
+
+`world/setup/bootstrap.rs` agora lê a posição persistida do jogador uma única
+vez. A conversão posição→coluna, posição→chunk restaurado e coluna/surface→chunk
+foi nomeada em helpers pequenos e reutilizada pelas ramificações de
+`WorldLoadMode`/`WorldGenerationMode`. A seleção continua procurando spawn
+novo apenas para mundo `New + Normal`; Flat/Void e loads preservam o mesmo
+fallback e o clamp vertical já existente. VERSION: `0.50.113`.
+
+CI de Q3: pendente neste checkpoint.
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
