@@ -8,8 +8,7 @@ use super::{
 };
 use crate::{
     app::game_state::GameState,
-    content::creature::CreatureCollider,
-    creatures::CreatureInstance,
+    creatures::{CreatureInstance, CreatureTargetCollider},
     entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayWorldCamera,
@@ -71,7 +70,7 @@ fn update_targets(
     camera: Single<&GlobalTransform, With<GameplayWorldCamera>>,
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
-    creatures: Query<(Entity, &Transform, &CreatureCollider, &EntityHealth), With<CreatureInstance>>,
+    creatures: Query<(Entity, &Transform, &CreatureTargetCollider, &EntityHealth), With<CreatureInstance>>,
     mut targeted_block: ResMut<TargetedBlock>,
     mut targeted_creature: ResMut<TargetedCreature>,
 ) {
@@ -105,7 +104,7 @@ fn update_targets(
             if health.is_dead() {
                 return None;
             }
-            let (min, max) = collider.bounds(transform.translation);
+            let (min, max) = collider.0.bounds(transform.translation);
             ray_box_distance(origin, direction, min, max)
                 .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
                 .map(|distance| (entity, distance))
