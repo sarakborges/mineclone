@@ -5,8 +5,14 @@ use serde::{Deserialize, Deserializer};
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path, block_id::intern_block_id,
-    block_orientation::BlockOrientation, registry::DefinitionMap,
+    asset_path::is_safe_relative_asset_path,
+    block_id::intern_block_id,
+    block_orientation::BlockOrientation,
+    inventory_category::InventoryCategoryRegistry,
+    registry::DefinitionMap,
+    secondary_property::SecondaryPropertyRegistry,
+    tool::ToolRegistry,
+    tool_category::ToolCategoryRegistry,
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
@@ -236,6 +242,52 @@ impl BlockDefinition {
         };
 
         self.orientations[(index + 1) % self.orientations.len()]
+    }
+
+    pub(crate) fn validate_references(
+        &self,
+        inventory_categories: &InventoryCategoryRegistry,
+        secondary_properties: &SecondaryPropertyRegistry,
+        tool_categories: &ToolCategoryRegistry,
+        tools: &ToolRegistry,
+    ) {
+        assert!(
+            inventory_categories.get(&self.category).is_some(),
+            "block {} references missing inventory category {}",
+            self.id,
+            self.category
+        );
+
+        for property in &self.secondary_properties {
+            assert!(
+                secondary_properties.contains_property(property),
+                "block {} references missing secondary property {}",
+                self.id,
+                property
+            );
+        }
+
+        for category in self
+            .mining
+            .required_tools
+            .iter()
+            .chain(self.mining.preferred_tools.iter())
+        {
+            assert!(
+                tool_categories.get(category).is_some(),
+                "block {} mining references unknown tool category {}",
+                self.id,
+                category
+            );
+            assert!(
+                tools
+                    .iter()
+                    .any(|tool| tool.mining.matches_category(category)),
+                "block {} mining references tool category {} with no matching tool",
+                self.id,
+                category
+            );
+        }
     }
 }
 
