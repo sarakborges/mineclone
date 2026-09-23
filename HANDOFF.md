@@ -58,6 +58,18 @@ genérico ou duplicar lógica de input. VERSION: `0.50.114`.
 
 CI de Q4: **verde** no run `35814592315` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q5 — reutilizar geometria clearAbove entre geração e /place
+
+`StructureDefinition` agora é o owner da derivação das posições de
+`clearAbove` por rotação/origem, exposta como iterador sem alocação. O
+`/place` simples, o `/place` de structure sets e a rasterização de chunks
+reutilizam exatamente a mesma regra geométrica. O helper local duplicado e o
+accessor público de `column_spans` deixaram de existir. Isso reduz divergência
+entre geração e colocação manual e elimina um `Vec` temporário por peça.
+VERSION: `0.50.115`.
+
+CI de Q5: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
