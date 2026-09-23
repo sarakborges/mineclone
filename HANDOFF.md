@@ -13022,3 +13022,44 @@ Commits:
 Rust validation for the functional state completed successfully on Actions run `35882475225` (Clippy + Check).
 
 VERSION: `0.50.156`, commit de versão `fea2283139fecc535accc0a3ecfb3f2a4c36370b`.
+
+
+## 2026-09-23 — Slime surface texture + visible entity contact separation
+
+Two regressions remained visible in-game: the slimes still read as almost uniform blobs, and entity contact separation was not visible because it used the smaller physics collider instead of the rendered body size.
+
+### Slime surface readability
+
+Both slime definitions were already pointing to `surface.png`, and the rounded GLB already had full object-space UVs. The previous grayscale texture was still too smooth/low-frequency to make the shell readable.
+
+The shared shell surface texture for both variants was replaced with a deterministic pixel-art microtexture:
+- 64x64 RGBA, fully opaque;
+- discrete 4x4 pixel clusters instead of a smooth cloud;
+- grayscale range approximately `239..254`;
+- average luminance remains high, so the tint stays dominant;
+- no per-voxel borders/grid;
+- the existing object-local ~5% vertex shade remains unchanged.
+
+Because the rounded model uses continuous object-space planar UVs, adjacent coplanar voxel faces sample the same texture field. The texture therefore adds surface distinction without recreating the previous "internal wall" or grid artifact.
+
+### Entity/entity pushing
+
+The contact solver already existed, but it resolved contacts using each creature's small **physics collider** (`0.78 x 0.84 x 0.78`). The rendered bodies are larger:
+- rounded slime visual/target bounds: `1.20 x 1.00 x 1.14`;
+- legacy slime visual/target bounds: `0.96 x 0.90 x 0.96`.
+
+As a result, two creatures could still visibly overlap even when their physics AABBs were separated.
+
+The contact solver now uses `CreatureTargetCollider` — the collider that matches the visible body — for:
+- creature ↔ creature separation;
+- player ↔ creature separation.
+
+World/block movement collision still uses the original smaller physics collider, so this change only affects entity contact separation and does not make slimes snag more aggressively on terrain.
+
+Functional commits:
+- visible-bounds entity pushing: `70d5364deb5112804b678da0e41b32eb03690bdf`;
+- stronger pixel surface texture for both slime variants: `1fe3e6139de1dfbe3c1d2c71408980faa9e3321e`.
+
+Rust validation for `1fe3e6139de1dfbe3c1d2c71408980faa9e3321e` completed successfully in Actions run `35885906071`: localization audit, Clippy and Check all passed.
+
+VERSION: `0.50.163`, commit de versão `9d353b6170b68690b9c18b53c2f9ef6e18e3d40a`.
