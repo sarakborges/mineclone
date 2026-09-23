@@ -1,5 +1,6 @@
 pub(crate) mod availability;
 pub(crate) mod modal;
+pub(crate) mod random;
 mod pause;
 
 use bevy::prelude::*;
