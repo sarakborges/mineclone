@@ -17,16 +17,10 @@
       "hue": 153.0,
       "saturation": 0.62,
       "intensity": 0.64
-    },
-    "SlimeCore": {
-      "hue": 153.0,
-      "saturation": 0.72,
-      "intensity": 0.34
     }
   },
   "unlitMaterials": [
     "SlimeShell",
-    "SlimeCore",
     "SlimeFace"
   ],
   "animations": {
@@ -44,7 +38,6 @@
   "landingSeconds": 0.34,
   "textures": {
     "SlimeShell": "textures/creatures/slime/shell.png",
-    "SlimeCore": "textures/creatures/slime/core.png",
     "SlimeFace": "textures/creatures/slime/face.png"
   }
 }
