@@ -13440,3 +13440,26 @@ Arquivos autoritativos novamente:
 - `data/creatures/slime_legacy.json`.
 
 VERSION: `0.50.186`.
+
+
+## 2026-09-23 — Correção do rosto do blob + suavização cromática do legacy
+
+Após QA visual do dual slime com cores fixas, foram corrigidos dois problemas objetivos.
+
+### Blob
+O rosto não aparecia porque o quad frontal havia herdado o winding do shell voxelado. Para a ordem específica dos quatro vértices da face, isso fazia os triângulos apontarem para +Z enquanto a normal declarada era -Z; com back-face culling, o decal era descartado. O `SlimeFace` agora usa winding frontal `0,1,2 / 0,2,3`, coerente com normal -Z, mantendo a textura da face como único override visual do JSON.
+
+### Legacy
+As regiões discretas de sete materiais introduzidas na tentativa anterior criavam manchas/blocos de cor estranhos sobre o cubo. O legacy volta a usar **um único material de shell**, branco/unlit, enquanto a cor final é autorada diretamente em `COLOR_0` linear.
+
+Cada face recebe uma malha interna 10x10 apenas para interpolação:
+- frente: centro levemente mais claro, bordas e base discretamente mais profundas e highlight upper-left suave;
+- lateral direita: um pouco mais escura;
+- lateral esquerda e topo: um pouco mais claros;
+- fundo e base mantêm contraste contido.
+
+Não existem bordas, tiles ou trocas de material no shell legacy: a profundidade agora é um gradiente fixo e contínuo. O core continua com verde fixo próprio. A face legacy também usa winding -Z correto.
+
+Nenhum `materialTint` foi reintroduzido; shell/core continuam sem textura runtime.
+
+VERSION: `0.50.189`.
