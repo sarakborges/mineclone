@@ -12534,3 +12534,26 @@ Commits funcionais:
 - GLBs com UVs projetados externamente: `47ddcda56fb37868e05d1fcdffc1f93266b4e34b`.
 
 VERSION: `0.50.133`, commit de versão `518d1b69c7c51fd80d0791d984e02b6a1ab5c7f8`.
+
+
+## 2026-09-23 — Slime shell color unclipped
+
+The remaining flat/overbright look was partly caused by the HSI tint itself, not only by shading.
+
+Previous shell tint:
+- HSI: `153 / 0.62 / 0.64`;
+- conversion produced approximately sRGB `[0.243, 1.013, 0.663]`;
+- the green channel therefore exceeded 1.0 and was clamped to `1.0`, visibly blowing out the dominant channel and reducing perceived shade variation.
+
+Both rounded and legacy shell tints now use:
+- HSI: `153 / 0.55 / 0.56`;
+- approximate sRGB: `[0.252, 0.850, 0.578]`;
+- no channel clipping.
+
+The existing ~5% exterior shading is unchanged; this change only lowers saturation/intensity so that shading has usable headroom and the slime reads less neon/flat.
+
+Commits:
+- rounded slime tint: `15f0d67bd114b38ea75652f4dd3b96668a3f5656`;
+- legacy slime tint: `bc239498ef4d3dafa033744edfef9ba102adb48f`.
+
+VERSION: `0.50.136`, commit de versão `a83a22eabd2b6fded817c118a2e1d8dc327013b2`.
