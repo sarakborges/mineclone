@@ -3,6 +3,7 @@ pub(crate) mod character_info;
 pub(crate) mod game_mode;
 pub(crate) mod hotbar;
 pub(crate) mod inventory;
+mod material;
 pub(crate) mod movement;
 pub(crate) mod model;
 pub(crate) mod player_id;
@@ -28,6 +29,8 @@ use movement::{
     flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
 };
 use player_id::LOCAL_PLAYER_ID;
+
+pub(crate) use material::apply_player_skin_material;
 
 pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
 pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
