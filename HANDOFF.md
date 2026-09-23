@@ -12625,3 +12625,34 @@ Definition commits removing shell textures:
 GLBs with baked `COLOR_0`: `f413e12ae88d10507606968dd645648d6c63bff4`.
 
 VERSION: `0.50.139`, commit de versão `cc3722a67115f44a568368ed131e7e8dc917404f`.
+
+
+## 2026-09-23 — Slime opacity diagnosis + highlight occlusion + perceptual 5% shading
+
+The apparent slime transparency was not coming from the slime shell material. Both active GLBs were verified with:
+- `SlimeShell.alphaMode = OPAQUE`;
+- shell base-color alpha = `1.0`;
+- runtime creature tint path forcing tinted materials to alpha 1 / `AlphaMode::Opaque`.
+
+The real x-ray artifact came from the block target highlight. `TargetHighlight` used `depth_bias = 100.0`, which could pull the translucent block highlight in front of otherwise opaque creature geometry. The highlight already uses a 1.02 scale and surface offset, so the large depth bias was unnecessary.
+
+Fix:
+- target-highlight `depth_bias` is now `0.0`;
+- opaque creatures now occlude the block highlight normally.
+
+The previous slime vertex-shading range also used `0.95..1.0` in LINEAR vertex colors. Because glTF vertex color multipliers are linear, this only reads as roughly a ~2% perceptual/sRGB difference. To achieve the requested ~5% visible shading while remaining unlit/stable:
+- shell vertex shade range is now approximately `0.89..1.0` linear;
+- this maps to approximately `0.95..1.0` sRGB;
+- shading is still baked from normalized outer 3D position, not face normals, so shared positions keep the same luminance and do not resemble internal walls;
+- both rounded and legacy shells remain fully opaque and unlit;
+- obsolete `shell_soft.png` files were removed because shell shading no longer uses textures.
+
+Commits:
+- highlight occlusion fix: `ac42489e6c0962a49890f376098a60d1ca678057`;
+- rounded generator perceptual shade: `ddf3475382f64380e3de01a0988b452228c20b77`;
+- legacy generator perceptual shade: `c4093c0e5a40001c22ea44cc93538603f2a7cd28`;
+- GLBs updated: `db9ca4d3f23b243f7e78d03c41606dda918106ce`;
+- obsolete rounded shell shade texture removed: `07e1d45167f36ea9e44000c30f19ed70a89b9f5e`;
+- obsolete legacy shell shade texture removed: `1fdf55f3f8c1708c037937197330be36192e71ef`.
+
+VERSION: `0.50.142`, commit de versão `5f5cd3674878fef1e51e9f713983929dcb689db7`.
