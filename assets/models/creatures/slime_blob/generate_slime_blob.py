@@ -131,7 +131,9 @@ def outer_shade(px: float, py: float, pz: float) -> float:
     light_len = (lx*lx + ly*ly + lz*lz) ** 0.5
     lx, ly, lz = lx/light_len, ly/light_len, lz/light_len
     half_lambert = ((nx*lx + ny*ly + nz*lz) + 1.0) * 0.5
-    return 0.95 + 0.05 * max(0.0, min(1.0, half_lambert))
+    # Vertex colors are linear. 0.89 linear maps to about 0.95 sRGB, so this
+    # reads as roughly a 5% perceptual shade instead of the ~2% produced by 0.95.
+    return 0.89 + 0.11 * max(0.0, min(1.0, half_lambert))
 
 
 def make_voxel_surface_mesh() -> int:
