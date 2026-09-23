@@ -190,6 +190,32 @@ pub(crate) fn structure_candidate_anchor(
     )
 }
 
+fn validated_structure_origin_y(
+    biome_id: &str,
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+    anchor: IVec2,
+    context: &ChunkGenerationContext<'_>,
+) -> Option<i32> {
+    context.feature_fields.structure_origin_y(
+        &structure.id,
+        rotation,
+        anchor,
+        || {
+            let origin_y = compute_structure_origin_y(anchor, structure, rotation, context)?;
+            candidate_satisfies_restrictions(
+                biome_id,
+                structure,
+                rotation,
+                anchor,
+                origin_y,
+                context,
+            )
+            .then_some(origin_y)
+        },
+    )
+}
+
 pub(crate) fn structure_candidate_probe(
     biome_id: &str,
     placement_id: &str,
@@ -213,24 +239,7 @@ pub(crate) fn structure_candidate_probe(
             placement_anchor,
             context.structures,
             |structure, rotation, anchor| {
-                context.feature_fields.structure_origin_y(
-                    &structure.id,
-                    rotation,
-                    anchor,
-                    || {
-                        let origin_y =
-                            compute_structure_origin_y(anchor, structure, rotation, context)?;
-                        candidate_satisfies_restrictions(
-                            biome_id,
-                            structure,
-                            rotation,
-                            anchor,
-                            origin_y,
-                            context,
-                        )
-                        .then_some(origin_y)
-                    },
-                )
+                validated_structure_origin_y(biome_id, structure, rotation, anchor, context)
             },
         )?;
 
@@ -533,24 +542,9 @@ fn collect_direct_structure_candidates<'a>(
                 return;
             }
 
-            let Some(origin_y) = context.feature_fields.structure_origin_y(
-                &structure.id,
-                rotation,
-                anchor,
-                || {
-                    let origin_y =
-                        compute_structure_origin_y(anchor, structure, rotation, context)?;
-                    candidate_satisfies_restrictions(
-                        biome_id,
-                        structure,
-                        rotation,
-                        anchor,
-                        origin_y,
-                        context,
-                    )
-                    .then_some(origin_y)
-                },
-            ) else {
+            let Some(origin_y) =
+                validated_structure_origin_y(biome_id, structure, rotation, anchor, context)
+            else {
                 return;
             };
 
@@ -611,24 +605,7 @@ fn collect_structure_set_candidates<'a>(
                 placement_anchor,
                 context.structures,
                 |structure, rotation, anchor| {
-                    context.feature_fields.structure_origin_y(
-                        &structure.id,
-                        rotation,
-                        anchor,
-                        || {
-                            let origin_y =
-                                compute_structure_origin_y(anchor, structure, rotation, context)?;
-                            candidate_satisfies_restrictions(
-                                biome_id,
-                                structure,
-                                rotation,
-                                anchor,
-                                origin_y,
-                                context,
-                            )
-                            .then_some(origin_y)
-                        },
-                    )
+                    validated_structure_origin_y(biome_id, structure, rotation, anchor, context)
                 },
             ) else {
                 return;
