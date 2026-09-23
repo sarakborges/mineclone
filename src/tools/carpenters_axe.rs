@@ -10,9 +10,7 @@ use crate::{
     },
     voxel::{
         edit::VoxelMutationRuntime,
-        log_state::{
-            HOLLOW_LOG_PROPERTY, LOG_STATE_ENABLED, STRIPPED_LOG_PROPERTY, is_hollow, is_stripped,
-        },
+        log_variant::{LogVariant, log_variant, transformed_log_id},
         microblock::MicroblockMask,
     },
 };
@@ -47,32 +45,38 @@ fn handle_carpenters_axe_use(
         if runtime.world().block_id_at(hit.voxel) != Some(hit.block_id) {
             continue;
         }
-        let Some(block) = blocks.get(hit.block_id) else {
-            continue;
-        };
-        if !block.is_log() {
-            continue;
-        }
         let Some(cell) = runtime.cell_at(hit.voxel) else {
             continue;
         };
-
-        let updated = match usage.button {
-            ToolUseButton::Left => {
-                if is_hollow(cell) || MicroblockMask::is_modified(cell) {
-                    continue;
-                }
-                cell.with_secondary_property(HOLLOW_LOG_PROPERTY, LOG_STATE_ENABLED)
-            }
-            ToolUseButton::Right => {
-                if is_stripped(cell) {
-                    continue;
-                }
-                cell.with_secondary_property(STRIPPED_LOG_PROPERTY, LOG_STATE_ENABLED)
-            }
+        let Some(current) = log_variant(cell.block_id) else {
+            continue;
         };
 
-        if runtime.set_block(hit.voxel, Some(updated)).is_some() {
+        let target = match usage.button {
+            ToolUseButton::Left => {
+                if MicroblockMask::is_modified(cell) {
+                    continue;
+                }
+                match current {
+                    LogVariant::Natural => LogVariant::Hollow,
+                    LogVariant::Stripped => LogVariant::StrippedHollow,
+                    LogVariant::Hollow | LogVariant::StrippedHollow => continue,
+                }
+            }
+            ToolUseButton::Right => match current {
+                LogVariant::Natural => LogVariant::Stripped,
+                LogVariant::Hollow => LogVariant::StrippedHollow,
+                LogVariant::Stripped | LogVariant::StrippedHollow => continue,
+            },
+        };
+        let Some(target_id) = transformed_log_id(cell.block_id, target, &blocks) else {
+            continue;
+        };
+
+        if runtime
+            .set_block(hit.voxel, Some(cell.with_block_id(target_id)))
+            .is_some()
+        {
             viewmodel.play_hit();
             targeted.0 = None;
         }
