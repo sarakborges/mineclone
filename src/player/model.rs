@@ -407,7 +407,7 @@ fn configure_player_material(
         return;
     };
 
-    if let Some(material) = visuals.materials.get_mut(material_handle.id()) {
+    if let Some(mut material) = visuals.materials.get_mut(material_handle.id()) {
         material.base_color = Color::WHITE;
         material.base_color_texture = Some(visuals.asset_server.load(PLAYER_SKIN_TEXTURE_PATH));
         material.unlit = true;
