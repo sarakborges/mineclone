@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::asset_path::is_safe_relative_asset_path;
+use super::{asset_path::is_safe_relative_asset_path, attack::AttackRegistry};
 
 /// Data-driven definition for the local player entity.
 #[derive(Resource, Clone, Default, Deserialize)]
@@ -38,5 +38,13 @@ impl PlayerDefinition {
                 "player animation mappings must use non-empty state and clip names"
             );
         }
+    }
+
+    pub(crate) fn validate_references(&self, attacks: &AttackRegistry) {
+        assert!(
+            attacks.get(&self.attack).is_some(),
+            "player references missing attack {}",
+            self.attack
+        );
     }
 }
