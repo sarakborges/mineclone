@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::{HashMap, HashSet}, time::Duration};
 
 use bevy::{
     animation::RepeatAnimation, asset::AssetId, ecs::system::SystemParam, gltf::GltfMaterialName,
@@ -21,6 +21,7 @@ pub(super) struct CreatureAppearance {
     owner: Entity,
     material_tints: HashMap<String, Hsi>,
     material_textures: HashMap<String, Handle<Image>>,
+    unlit_materials: HashSet<String>,
     graph: Option<Handle<AnimationGraph>>,
     nodes: HashMap<String, AnimationNodeIndex>,
 }
@@ -61,6 +62,7 @@ struct CreatureMaterialCacheKey {
     material: AssetId<StandardMaterial>,
     tint_bits: Option<[u32; 3]>,
     texture: Option<AssetId<Image>>,
+    unlit: bool,
 }
 
 #[derive(Resource, Default)]
@@ -121,6 +123,7 @@ pub(super) fn attach_loaded_models(
             )
         };
         let tints = definition.material_tints.clone();
+        let unlit_materials = definition.unlit_materials.clone();
         let textures = definition
             .textures
             .iter()
@@ -138,6 +141,7 @@ pub(super) fn attach_loaded_models(
                         owner: root,
                         material_tints: tints,
                         material_textures: textures,
+                        unlit_materials,
                         graph,
                         nodes,
                     },
@@ -171,12 +175,14 @@ fn configure_loaded_scene(
             let name = material_name.0.as_str();
             let tint = appearance.material_tints.get(name);
             let texture = appearance.material_textures.get(name);
-            if tint.is_some() || texture.is_some() {
+            let unlit = appearance.unlit_materials.contains(name);
+            if tint.is_some() || texture.is_some() || unlit {
                 let rgb = tint.map(|color| color.to_srgb());
                 let cache_key = CreatureMaterialCacheKey {
                     material: original.id(),
                     tint_bits: rgb.map(|color| color.map(f32::to_bits)),
                     texture: texture.map(|image| image.id()),
+                    unlit,
                 };
                 let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
                     Some(existing.clone())
@@ -203,6 +209,7 @@ fn configure_loaded_scene(
                             material.reflectance = 0.0;
                             material.specular_tint = Color::BLACK;
                             material.clearcoat = 0.0;
+                            material.unlit = unlit;
                             material.diffuse_transmission = 0.0;
                             material.specular_transmission = 0.0;
                             material.thickness = 0.0;
