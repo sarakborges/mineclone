@@ -12409,3 +12409,26 @@ Relevant commits:
 - restored legacy assets: `7033ba42aa3c49a9cea8f77b1b18357c25d322d2`
 - both variants in Plains: `61ced2cab7f3257cc6f8b3bf1a79b5b9b331e0d7`
 - VERSION: `0.50.112` (`7612fb331e7a11a0c3c3c3cd9a5be4c7f6101e15`)
+
+
+## 2026-09-23 — Slime shading refinado para leitura dos voxels
+
+O shading anterior ficou visualmente uniforme demais: como os materiais estavam unlit e o `shell_soft.png` era quase um gradiente único, o slime arredondado perdia a leitura dos voxels individuais e o legacy parecia um cubo completamente chapado.
+
+A correção mantém os materiais unlit para evitar o problema anterior de cada face escurecer agressivamente conforme a direção da luz, mas troca o shading por um atlas extremamente sutil e estável:
+
+- `shell_soft.png` agora possui quatro tiles de 16x16 para frente/trás, lados, topo e base;
+- a diferença de luminosidade entre os tiles é pequena, sem specular/reflexo;
+- cada tile possui uma borda de apenas 1 px com contraste baixo;
+- no slime arredondado, CADA face externa de CADA voxel recebe o tile completo, então os blocos que formam a silhueta voltam a ser legíveis;
+- o legacy cube usa o mesmo atlas por orientação de face, deixando topo/lados/frente levemente distintos sem iluminação dinâmica;
+- shell continua opaco, portanto não volta a aparecer textura/core interno;
+- face continua unlit e independente do shading do corpo.
+
+Commits:
+- novo atlas de shading suave: `47d8be5db2857c183ac9db52f83f8a154f3b3ef9`;
+- UVs por voxel no gerador do slime arredondado: `1dd453ecdaf72683bd0bcf027e3493ba53d2e578`;
+- UVs por orientação no gerador legacy: `791df30647e200e19be80b4ae1de0bc7cb25d7ce`;
+- GLBs atualizados: `c5405c29ba0d55c52d6aab5f559d5d5469f9dcfd`.
+
+VERSION: `0.50.128`, commit de versão `3d919f44027e989b016c0e71a7d7c6e8a10a4f85`.
