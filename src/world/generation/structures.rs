@@ -1,3 +1,4 @@
+mod hash;
 mod placement;
 mod restrictions;
 mod set;
@@ -31,6 +32,7 @@ use crate::{
 
 pub(crate) use self::set::{ResolvedSetPiece, resolve_set_pieces};
 
+use self::hash::{avalanche, unit_interval};
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
@@ -957,19 +959,6 @@ fn surface_layer_hash(
     hash ^= (position.z as i64 as u64).wrapping_mul(0x1656_67b1_9e37_79f9);
     hash ^= (face.index() as u64 + 1).wrapping_mul(0xd6e8_feb8_6659_fd93);
     avalanche(hash)
-}
-
-fn avalanche(mut value: u64) -> u64 {
-    value ^= value >> 30;
-    value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value ^= value >> 27;
-    value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
-}
-
-fn unit_interval(hash: u64) -> f32 {
-    let value = hash >> 11;
-    (value as f64 * (1.0 / (1_u64 << 53) as f64)) as f32
 }
 
 fn visit_structure_voxels_in_chunk(
