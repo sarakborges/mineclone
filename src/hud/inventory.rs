@@ -192,7 +192,7 @@ impl Plugin for InventoryHudPlugin {
                 (
                     sync_inventory_cursor_icon,
                     sync_inventory_slot_contents,
-                    rebuild_inventory_when_changed,
+                    rebuild_inventory_when_changed.run_if(in_state(InventoryState::Open)),
                 )
                     .chain()
                     .in_set(InventoryHudSet::Sync)
