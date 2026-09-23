@@ -271,6 +271,16 @@ roughness/metallic permanece no mesmo caminho e o bootstrap recebe um
 
 CI de Q23: **verde** no run `35870526833` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q24 — separar registration do SettingsScreenPlugin
+
+`SettingsScreenPlugin::build` deixou de concentrar resources, sets, lifecycle,
+input, sync e rebuild por idioma no mesmo builder chain. O plugin agora delega
+para cinco registrations nomeadas, preservando a ordem, `chain()`, system sets
+e `run_if` existentes. Isso deixa o wiring navegável sem alterar a semântica
+de execução dos sistemas de settings/new-world. VERSION: `0.50.140`.
+
+CI de Q24: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
