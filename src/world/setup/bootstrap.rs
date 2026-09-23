@@ -19,7 +19,7 @@ use super::{
     system_params::{WorldBootstrapConfig, WorldBootstrapContent, WorldBootstrapPersistence},
 };
 use crate::world::{
-    WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
+    InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     generation::authored_surface_fluid_id_for_position,
@@ -35,6 +35,33 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+
+struct BootstrapGenerationSettings {
+    forced_spawn_biome: Option<String>,
+    biome_size_multiplier: f32,
+    world_generation: WorldGenerationSettings,
+}
+
+impl BootstrapGenerationSettings {
+    fn resolve(
+        load_mode: WorldLoadMode,
+        new_world_config: &NewWorldConfig,
+        save: &InMemoryWorldSave,
+    ) -> Self {
+        match load_mode {
+            WorldLoadMode::New => Self {
+                forced_spawn_biome: new_world_config.spawn_biome().map(str::to_owned),
+                biome_size_multiplier: new_world_config.biome_size_multiplier(),
+                world_generation: new_world_config.world_generation(),
+            },
+            WorldLoadMode::Load => Self {
+                forced_spawn_biome: save.spawn_biome().map(str::to_owned),
+                biome_size_multiplier: save.biome_size_multiplier(),
+                world_generation: save.world_generation(),
+            },
+        }
+    }
+}
 
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
@@ -79,18 +106,15 @@ pub(in crate::world) fn begin_world_loading(
         .hydrology
         .validate_references(&dimension.id, biomes, fluids);
 
-    let forced_spawn_biome = match *persistence.load_mode {
-        WorldLoadMode::New => persistence.new_world_config.spawn_biome().map(str::to_owned),
-        WorldLoadMode::Load => persistence.save.spawn_biome().map(str::to_owned),
-    };
-    let biome_size_multiplier = match *persistence.load_mode {
-        WorldLoadMode::New => persistence.new_world_config.biome_size_multiplier(),
-        WorldLoadMode::Load => persistence.save.biome_size_multiplier(),
-    };
-    let world_generation = match *persistence.load_mode {
-        WorldLoadMode::New => persistence.new_world_config.world_generation(),
-        WorldLoadMode::Load => persistence.save.world_generation(),
-    };
+    let BootstrapGenerationSettings {
+        forced_spawn_biome,
+        biome_size_multiplier,
+        world_generation,
+    } = BootstrapGenerationSettings::resolve(
+        *persistence.load_mode,
+        &persistence.new_world_config,
+        &persistence.save,
+    );
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
