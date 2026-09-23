@@ -17,6 +17,7 @@ use super::config::COLLISION_STEP;
 // creature's animated visual wrapper participates in collision.
 const CONTACT_EPSILON: f32 = 0.0001;
 const PLAYER_PUSH_SHARE: f32 = 0.35;
+const CREATURE_PUSH_SHARE: f32 = 0.5;
 const MAX_CONTACT_PASSES: usize = 4;
 
 type Bounds = (Vec3, Vec3);
@@ -41,24 +42,24 @@ enum HorizontalAxis {
     Z,
 }
 
-fn contact(player: Bounds, creature: Bounds) -> Option<(HorizontalAxis, f32, f32)> {
-    let overlap_y = player.1.y.min(creature.1.y) - player.0.y.max(creature.0.y);
+fn contact(first: Bounds, second: Bounds) -> Option<(HorizontalAxis, f32, f32)> {
+    let overlap_y = first.1.y.min(second.1.y) - first.0.y.max(second.0.y);
     if overlap_y <= 0.0 {
         return None;
     }
-    let overlap_x = player.1.x.min(creature.1.x) - player.0.x.max(creature.0.x);
-    let overlap_z = player.1.z.min(creature.1.z) - player.0.z.max(creature.0.z);
+    let overlap_x = first.1.x.min(second.1.x) - first.0.x.max(second.0.x);
+    let overlap_z = first.1.z.min(second.1.z) - first.0.z.max(second.0.z);
     if overlap_x <= 0.0 || overlap_z <= 0.0 {
         return None;
     }
-    let (axis, penetration, player_center, creature_center) = if overlap_x <= overlap_z {
-        (HorizontalAxis::X, overlap_x, player.0.x + player.1.x, creature.0.x + creature.1.x)
+    let (axis, penetration, first_center, second_center) = if overlap_x <= overlap_z {
+        (HorizontalAxis::X, overlap_x, first.0.x + first.1.x, second.0.x + second.1.x)
     } else {
-        (HorizontalAxis::Z, overlap_z, player.0.z + player.1.z, creature.0.z + creature.1.z)
+        (HorizontalAxis::Z, overlap_z, first.0.z + first.1.z, second.0.z + second.1.z)
     };
     // When centers coincide, pick a stable side rather than producing NaN.
-    let creature_direction = if creature_center >= player_center { 1.0 } else { -1.0 };
-    Some((axis, penetration + CONTACT_EPSILON, creature_direction))
+    let second_direction = if second_center >= first_center { 1.0 } else { -1.0 };
+    Some((axis, penetration + CONTACT_EPSILON, second_direction))
 }
 
 fn clear_volume(world: &VoxelWorld, bounds: Bounds) -> bool {
@@ -116,13 +117,14 @@ pub(super) fn resolve_player_creature_contacts(
     mut creatures: CreatureContacts<'_, '_>,
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
-        let mut changed = false;
+        let mut had_contact = false;
         for (mut creature, collider) in &mut creatures {
             let Some((axis, penetration, direction)) =
                 contact(player_bounds(player.translation), collider.bounds(creature.translation))
             else {
                 continue;
             };
+            had_contact = true;
             let player_target = penetration * PLAYER_PUSH_SHARE;
             let creature_target = penetration - player_target;
             let player_moved = push(
@@ -158,9 +160,72 @@ pub(super) fn resolve_player_creature_contacts(
                     );
                 }
             }
-            changed |= contact(player_bounds(player.translation), collider.bounds(creature.translation)).is_none();
         }
-        if !changed {
+        if !had_contact {
+            break;
+        }
+    }
+}
+
+/// Share horizontal penetration between creature roots after their movement.
+/// Creature animation wrappers never participate; only gameplay colliders move.
+/// Terrain remains authoritative, and any displacement one creature cannot take
+/// is transferred to the other instead of pushing either through a wall.
+pub(super) fn resolve_creature_creature_contacts(
+    world: Res<VoxelWorld>,
+    mut creatures: CreatureContacts<'_, '_>,
+) {
+    for _ in 0..MAX_CONTACT_PASSES {
+        let mut had_contact = false;
+        let mut pairs = creatures.iter_combinations_mut::<2>();
+        while let Some([(mut first, first_collider), (mut second, second_collider)]) =
+            pairs.fetch_next()
+        {
+            let Some((axis, penetration, direction)) = contact(
+                first_collider.bounds(first.translation),
+                second_collider.bounds(second.translation),
+            ) else {
+                continue;
+            };
+            had_contact = true;
+
+            let first_target = penetration * CREATURE_PUSH_SHARE;
+            let second_target = penetration - first_target;
+            let first_moved = push(
+                &mut first.translation,
+                &world,
+                axis,
+                -direction * first_target,
+                |feet| first_collider.bounds(feet),
+            );
+            let second_moved = push(
+                &mut second.translation,
+                &world,
+                axis,
+                direction * second_target,
+                |feet| second_collider.bounds(feet),
+            );
+            let remainder = (penetration - first_moved - second_moved).max(0.0);
+            if remainder > 0.0 {
+                let extra_second = push(
+                    &mut second.translation,
+                    &world,
+                    axis,
+                    direction * remainder,
+                    |feet| second_collider.bounds(feet),
+                );
+                if extra_second < remainder {
+                    push(
+                        &mut first.translation,
+                        &world,
+                        axis,
+                        -direction * (remainder - extra_second),
+                        |feet| first_collider.bounds(feet),
+                    );
+                }
+            }
+        }
+        if !had_contact {
             break;
         }
     }
