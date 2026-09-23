@@ -299,7 +299,7 @@ pub(super) fn sync_hide_hints_toggle(
         if !settings_changed && !interaction.is_changed() {
             continue;
         }
-        selectable::apply_colors(toggle::colors(enabled, *interaction), background, border);
+        toggle::apply_control_colors(enabled, *interaction, background, border);
     }
     if settings_changed {
         let next_left = px(toggle::thumb_left(enabled));
@@ -321,18 +321,16 @@ pub(super) fn sync_hint_toggles(
         if !settings_changed && !interaction.is_changed() {
             continue;
         }
-        selectable::apply_colors(
-            toggle::colors(settings.hint_preference(hint.0), *interaction),
+        toggle::apply_control_colors(
+            settings.hint_preference(hint.0),
+            *interaction,
             background,
             border,
         );
     }
     if settings_changed {
         for (hint, mut node) in &mut thumbs {
-            let next_left = px(toggle::thumb_left(settings.hint_preference(hint.0)));
-            if node.left != next_left {
-                node.left = next_left;
-            }
+            toggle::apply_thumb_position(settings.hint_preference(hint.0), &mut node);
         }
     }
 }
