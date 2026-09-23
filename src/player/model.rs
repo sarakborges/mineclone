@@ -15,12 +15,18 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    content::player::PlayerDefinition,
+    content::{
+        item::ItemRegistry,
+        player::PlayerDefinition,
+        secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
+    },
     entity::EntityHealth,
     gameplay::modal::GameplayModalState,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity, apply_player_skin_material,
         camera::{CameraPerspective, GameplayCamera},
+        held_sprite::{HeldSpriteMesh, spawn_held_sprite},
         hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
         viewmodel::ViewModelAnimation,
@@ -34,6 +40,7 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::BlockTargetingSet,
+    tools::BrushMode,
     voxel::block_face::BlockFace,
 };
 
@@ -241,6 +248,7 @@ impl Plugin for PlayerModelPlugin {
                     attach_loaded_player_model,
                     sync_player_preview_model_visibility,
                     spawn_third_person_held_block,
+                    spawn_third_person_held_sprite,
                     sync_player_model,
                     sync_player_model_animations,
                     sync_third_person_held_block,
@@ -714,6 +722,48 @@ fn spawn_third_person_held_block(
                 }
             });
         });
+    }
+}
+
+fn spawn_third_person_held_sprite(
+    mut commands: Commands,
+    hands: Query<(Entity, &PlayerModelHand), Added<PlayerModelHand>>,
+    hotbar: Res<PlayerHotbar>,
+    items: Res<ItemRegistry>,
+    tools: Res<ToolRegistry>,
+    brush_mode: Res<BrushMode>,
+    properties: Res<SecondaryPropertyRegistry>,
+    asset_server: Res<AssetServer>,
+    mesh: Res<HeldSpriteMesh>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (hand_entity, hand_scope) in &hands {
+        let root_transform = Transform::from_translation(Vec3::new(0.0, -0.72, -0.06))
+            .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.35, 0.65, 0.18));
+        let render_layers = player_model_render_layers(hand_scope.0, false);
+        let mut renderables = [Entity::PLACEHOLDER; 2];
+
+        commands.entity(hand_entity).with_children(|hand| {
+            renderables = spawn_held_sprite(
+                hand,
+                root_transform,
+                render_layers,
+                &hotbar,
+                &items,
+                &tools,
+                &brush_mode,
+                &properties,
+                &asset_server,
+                &mesh.0,
+                &mut materials,
+            );
+        });
+
+        for renderable in renderables {
+            commands
+                .entity(renderable)
+                .insert(PlayerModelRenderable(hand_scope.0));
+        }
     }
 }
 

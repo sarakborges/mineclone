@@ -33,7 +33,7 @@ const MODEL_RIGHT_ARM_PIVOT: Vec3 = Vec3::new(-0.3375, 1.35, 0.0);
 pub(super) const VIEW_MODEL_ARM_LENGTH: f32 = 0.675;
 pub(super) const VIEW_MODEL_ARM_GRIP_Y: f32 = 0.52;
 const HELD_BLOCK_SCALE: f32 = 0.18;
-const VIEW_MODEL_RENDER_LAYER: usize = 1;
+pub(super) const VIEW_MODEL_RENDER_LAYER: usize = 1;
 
 #[derive(Component)]
 pub(super) struct ViewModelArm;
@@ -142,11 +142,10 @@ pub(super) fn spawn_viewmodel(
 
     for (camera, camera_transform) in &cameras {
         let selected_slot = selection.hotbar.selected_slot();
-        let selected_block_id = selection
-            .hotbar
-            .item_at(selected_slot)
+        let selected_item_id = selection.hotbar.item_at(selected_slot);
+        let selected_block_id = selected_item_id
             .filter(|block_id| definitions.blocks.get(block_id).is_some());
-        item_switch.initialize(selected_block_id);
+        item_switch.initialize(selected_item_id);
 
         let item_visibility = item_visibility(selected_block_id);
         let tint_position = Vec2::new(

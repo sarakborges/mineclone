@@ -1,14 +1,24 @@
 mod animation;
-mod held_brush;
-mod held_artisans_kit;
 mod model;
 
 use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
-    player::camera::CameraPerspective,
+    content::{
+        item::ItemRegistry,
+        secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
+    },
+    player::{
+        camera::CameraPerspective,
+        held_sprite::{
+            HeldSpriteMesh, setup_held_sprite_mesh, spawn_held_sprite, sync_held_sprites,
+        },
+        hotbar::PlayerHotbar,
+    },
     targeting::block::BlockTargetingSet,
+    tools::BrushMode,
 };
 
 pub(crate) use animation::ViewModelAnimation;
@@ -16,9 +26,10 @@ use animation::{
     PlayerViewModel, ViewModelItemSwitch, advance_item_switch, advance_viewmodel_animation,
     animate_viewmodel,
 };
-use held_brush::{setup_held_brush_assets, spawn_held_brush, sync_held_brush};
-use held_artisans_kit::{setup_held_artisans_kit_assets, spawn_held_artisans_kit, sync_held_artisans_kit};
-use model::{attach_viewmodel_arm_model, spawn_viewmodel, sync_held_block};
+use model::{
+    VIEW_MODEL_ARM_GRIP_Y, VIEW_MODEL_RENDER_LAYER, attach_viewmodel_arm_model, spawn_viewmodel,
+    sync_held_block,
+};
 
 pub struct PlayerViewModelPlugin;
 
@@ -31,8 +42,7 @@ impl Plugin for PlayerViewModelPlugin {
                 (
                     reset_resource::<ViewModelAnimation>,
                     reset_resource::<ViewModelItemSwitch>,
-                    setup_held_brush_assets,
-                    setup_held_artisans_kit_assets,
+                    setup_held_sprite_mesh,
                 )
                     .chain(),
             )
@@ -41,12 +51,10 @@ impl Plugin for PlayerViewModelPlugin {
                 (
                     spawn_viewmodel,
                     attach_viewmodel_arm_model,
-                    spawn_held_brush,
-                    spawn_held_artisans_kit,
+                    spawn_first_person_held_sprite,
                     advance_item_switch,
                     sync_held_block,
-                    sync_held_brush,
-                    sync_held_artisans_kit,
+                    sync_held_sprites,
                     animate_viewmodel,
                     sync_viewmodel_visibility,
                 )
@@ -78,5 +86,42 @@ fn sync_viewmodel_visibility(
         if *visibility != next_visibility {
             *visibility = next_visibility;
         }
+    }
+}
+
+
+fn spawn_first_person_held_sprite(
+    mut commands: Commands,
+    viewmodels: Query<Entity, Added<PlayerViewModel>>,
+    hotbar: Res<PlayerHotbar>,
+    items: Res<ItemRegistry>,
+    tools: Res<ToolRegistry>,
+    brush_mode: Res<BrushMode>,
+    properties: Res<SecondaryPropertyRegistry>,
+    asset_server: Res<AssetServer>,
+    mesh: Res<HeldSpriteMesh>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let rotation = animation::base_viewmodel_transform().rotation.inverse();
+    let root_transform =
+        Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y, 0.21))
+            .with_rotation(rotation);
+
+    for viewmodel in &viewmodels {
+        commands.entity(viewmodel).with_children(|hand| {
+            spawn_held_sprite(
+                hand,
+                root_transform,
+                bevy::camera::visibility::RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                &hotbar,
+                &items,
+                &tools,
+                &brush_mode,
+                &properties,
+                &asset_server,
+                &mesh.0,
+                &mut materials,
+            );
+        });
     }
 }

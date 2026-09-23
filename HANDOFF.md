@@ -13587,3 +13587,23 @@ contexto também reutiliza o footer compartilhado de hotbar real + botão de
 delete introduzido em `0.50.193`.
 
 VERSION: `0.50.194`.
+
+
+## 2026-09-23 — Renderer genérico para items/tools segurados
+
+A causa de tools inconsistentes na mão era arquitetural: blocos tinham renderer
+genérico, enquanto Brush e Artisan's Kit tinham renderers first-person
+hardcoded. Items não tinham renderer segurado algum. O third-person também
+renderizava apenas blocos.
+
+Foi criado `player/held_sprite.rs`, usado por first person, third person, HUD
+preview e Character Info preview. Qualquer item ou tool com `icon` agora usa
+esse renderer; blocos continuam no renderer 3D atual. Brush preserva
+`tintIcon` e a cor selecionada. Tools sem icon continuam sem visual até
+receberem um asset.
+
+Os sistemas especiais de held Brush/Artisan's Kit deixaram de ser registrados.
+A animação de troca agora observa qualquer item selecionado na hotbar, não apenas
+block IDs.
+
+VERSION: `0.50.195`.

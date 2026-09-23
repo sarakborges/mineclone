@@ -3,7 +3,6 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 
 use crate::{
-    content::block::BlockRegistry,
     player::hotbar::PlayerHotbar,
     world::tick::WorldTickClock,
 };
@@ -90,7 +89,7 @@ impl ViewModelAnimation {
 #[derive(Resource, Default)]
 pub(super) struct ViewModelItemSwitch {
     initialized: bool,
-    observed_block_id: Option<&'static str>,
+    observed_item_id: Option<&'static str>,
     elapsed_ticks: u64,
     active: bool,
 }
@@ -98,7 +97,7 @@ pub(super) struct ViewModelItemSwitch {
 impl ViewModelItemSwitch {
     pub(super) fn initialize(&mut self, block_id: Option<&'static str>) {
         self.initialized = true;
-        self.observed_block_id = block_id;
+        self.observed_item_id = block_id;
         self.elapsed_ticks = 0;
         self.active = false;
     }
@@ -115,20 +114,17 @@ impl ViewModelItemSwitch {
 pub(super) fn advance_item_switch(
     world_ticks: Res<WorldTickClock>,
     hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
     mut item_switch: ResMut<ViewModelItemSwitch>,
 ) {
-    let selected_block_id = hotbar
-        .item_at(hotbar.selected_slot())
-        .filter(|block_id| blocks.get(block_id).is_some());
+    let selected_item_id = hotbar.item_at(hotbar.selected_slot());
 
     if !item_switch.initialized {
-        item_switch.initialize(selected_block_id);
+        item_switch.initialize(selected_item_id);
         return;
     }
 
-    if selected_block_id != item_switch.observed_block_id {
-        item_switch.observed_block_id = selected_block_id;
+    if selected_item_id != item_switch.observed_item_id {
+        item_switch.observed_item_id = selected_item_id;
         item_switch.elapsed_ticks = 0;
         item_switch.active = true;
     }

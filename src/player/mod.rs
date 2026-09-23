@@ -2,6 +2,7 @@ pub(crate) mod camera;
 pub(crate) mod character_info;
 pub(crate) mod game_mode;
 pub(crate) mod hotbar;
+mod held_sprite;
 pub(crate) mod inventory;
 mod material;
 pub(crate) mod movement;
