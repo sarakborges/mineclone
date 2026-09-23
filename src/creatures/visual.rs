@@ -157,104 +157,150 @@ struct CreatureTintAssets<'w> {
     cache: ResMut<'w, TintedCreatureMaterials>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+struct CreatureSceneQueries<'w, 's> {
+    descendants: Query<'w, 's, &'static Children>,
+    appearances: Query<'w, 's, &'static CreatureAppearance>,
+    mesh_materials: Query<
+        'w,
+        's,
+        (
+            &'static MeshMaterial3d<StandardMaterial>,
+            &'static GltfMaterialName,
+        ),
+    >,
+    players: Query<'w, 's, (Entity, &'static mut AnimationPlayer)>,
+}
+
 fn configure_loaded_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
-    descendants: Query<&Children>,
-    appearances: Query<&CreatureAppearance>,
-    mesh_materials: Query<(&MeshMaterial3d<StandardMaterial>, &GltfMaterialName)>,
-    mut players: Query<(Entity, &mut AnimationPlayer)>,
+    mut scene: CreatureSceneQueries,
     mut tint_assets: CreatureTintAssets,
 ) {
-    let Ok(appearance) = appearances.get(ready.entity) else {
+    let Ok(appearance) = scene.appearances.get(ready.entity) else {
         return;
     };
-    for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok((original, material_name)) = mesh_materials.get(descendant) {
-            let name = material_name.0.as_str();
-            let tint = appearance.material_tints.get(name);
-            let texture = appearance.material_textures.get(name);
-            let unlit = appearance.unlit_materials.contains(name);
-            if tint.is_some() || texture.is_some() || unlit {
-                let rgb = tint.map(|color| color.to_srgb());
-                let cache_key = CreatureMaterialCacheKey {
-                    material: original.id(),
-                    tint_bits: rgb.map(|color| color.map(f32::to_bits)),
-                    texture: texture.map(|image| image.id()),
-                    unlit,
-                };
-                let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
-                    Some(existing.clone())
-                } else {
-                    tint_assets
-                        .materials
-                        .get(original.id())
-                        .cloned()
-                        .map(|mut material| {
-                            if let Some(color) = rgb {
-                                let alpha = material.base_color.to_srgba().alpha;
-                                material.base_color =
-                                    Color::srgba(color[0], color[1], color[2], alpha);
-                            }
-                            if let Some(image) = texture {
-                                material.base_color_texture = Some(image.clone());
-                            }
-                            // Creature override materials are intentionally fully matte.
-                            // Keep normal light/shadow response, but remove the PBR specular/
-                            // environment-reflection lobe instead of making creatures unlit.
-                            // This also neutralizes glossy settings accidentally authored in a GLB.
-                            material.metallic = 0.0;
-                            material.perceptual_roughness = 1.0;
-                            material.reflectance = 0.0;
-                            material.specular_tint = Color::BLACK;
-                            material.clearcoat = 0.0;
-                            material.unlit = unlit;
-                            material.diffuse_transmission = 0.0;
-                            material.specular_transmission = 0.0;
-                            material.thickness = 0.0;
-                            material.emissive = LinearRgba::BLACK;
-                            material.emissive_texture = None;
-                            // Tinted body materials are deliberately opaque. Texture-only
-                            // materials keep the GLB-authored alpha mode so decals/cutouts
-                            // such as a creature face can use transparent pixels.
-                            if tint.is_some() {
-                                material.base_color = material.base_color.with_alpha(1.0);
-                                material.alpha_mode = AlphaMode::Opaque;
-                            }
-                            let handle = tint_assets.materials.add(material);
-                            tint_assets.cache.0.insert(cache_key, handle.clone());
-                            handle
-                        })
-                };
-                if let Some(material) = replacement {
-                    commands.entity(descendant).insert(MeshMaterial3d(material));
-                }
-            }
-        }
 
-        if let Ok((player_entity, mut player)) = players.get_mut(descendant)
-            && let Some(graph) = &appearance.graph
-        {
-            let mut transitions = AnimationTransitions::new();
-            let initial = appearance.nodes.get("idle").copied();
-            if let Some(index) = initial {
-                transitions
-                    .play(&mut player, index, Duration::ZERO)
-                    .repeat();
-            }
-            commands.entity(player_entity).insert((
-                AnimationGraphHandle(graph.clone()),
-                transitions,
-                CreatureAnimationLink {
-                    owner: appearance.owner,
-                    nodes: appearance.nodes.clone(),
-                    current_state: "idle".to_owned(),
-                    current_revision: 0,
-                },
-            ));
-        }
+    for descendant in scene.descendants.iter_descendants(ready.entity) {
+        configure_creature_material(
+            &mut commands,
+            &scene.mesh_materials,
+            &mut tint_assets,
+            descendant,
+            appearance,
+        );
+        configure_creature_animation(
+            &mut commands,
+            &mut scene.players,
+            descendant,
+            appearance,
+        );
     }
+}
+
+fn configure_creature_material(
+    commands: &mut Commands,
+    mesh_materials: &Query<(&MeshMaterial3d<StandardMaterial>, &GltfMaterialName)>,
+    tint_assets: &mut CreatureTintAssets,
+    descendant: Entity,
+    appearance: &CreatureAppearance,
+) {
+    let Ok((original, material_name)) = mesh_materials.get(descendant) else {
+        return;
+    };
+
+    let name = material_name.0.as_str();
+    let tint = appearance.material_tints.get(name);
+    let texture = appearance.material_textures.get(name);
+    let unlit = appearance.unlit_materials.contains(name);
+    if tint.is_none() && texture.is_none() && !unlit {
+        return;
+    }
+
+    let rgb = tint.map(|color| color.to_srgb());
+    let cache_key = CreatureMaterialCacheKey {
+        material: original.id(),
+        tint_bits: rgb.map(|color| color.map(f32::to_bits)),
+        texture: texture.map(|image| image.id()),
+        unlit,
+    };
+    let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
+        Some(existing.clone())
+    } else {
+        tint_assets
+            .materials
+            .get(original.id())
+            .cloned()
+            .map(|mut material| {
+                if let Some(color) = rgb {
+                    let alpha = material.base_color.to_srgba().alpha;
+                    material.base_color = Color::srgba(color[0], color[1], color[2], alpha);
+                }
+                if let Some(image) = texture {
+                    material.base_color_texture = Some(image.clone());
+                }
+                // Creature override materials are intentionally fully matte.
+                // Keep normal light/shadow response, but remove the PBR specular/
+                // environment-reflection lobe instead of making creatures unlit.
+                // This also neutralizes glossy settings accidentally authored in a GLB.
+                material.metallic = 0.0;
+                material.perceptual_roughness = 1.0;
+                material.reflectance = 0.0;
+                material.specular_tint = Color::BLACK;
+                material.clearcoat = 0.0;
+                material.unlit = unlit;
+                material.diffuse_transmission = 0.0;
+                material.specular_transmission = 0.0;
+                material.thickness = 0.0;
+                material.emissive = LinearRgba::BLACK;
+                material.emissive_texture = None;
+                // Tinted body materials are deliberately opaque. Texture-only
+                // materials keep the GLB-authored alpha mode so decals/cutouts
+                // such as a creature face can use transparent pixels.
+                if tint.is_some() {
+                    material.base_color = material.base_color.with_alpha(1.0);
+                    material.alpha_mode = AlphaMode::Opaque;
+                }
+                let handle = tint_assets.materials.add(material);
+                tint_assets.cache.0.insert(cache_key, handle.clone());
+                handle
+            })
+    };
+    if let Some(material) = replacement {
+        commands.entity(descendant).insert(MeshMaterial3d(material));
+    }
+}
+
+fn configure_creature_animation(
+    commands: &mut Commands,
+    players: &mut Query<(Entity, &mut AnimationPlayer)>,
+    descendant: Entity,
+    appearance: &CreatureAppearance,
+) {
+    let Ok((player_entity, mut player)) = players.get_mut(descendant) else {
+        return;
+    };
+    let Some(graph) = &appearance.graph else {
+        return;
+    };
+
+    let mut transitions = AnimationTransitions::new();
+    if let Some(index) = appearance.nodes.get("idle").copied() {
+        transitions
+            .play(&mut player, index, Duration::ZERO)
+            .repeat();
+    }
+    commands.entity(player_entity).insert((
+        AnimationGraphHandle(graph.clone()),
+        transitions,
+        CreatureAnimationLink {
+            owner: appearance.owner,
+            nodes: appearance.nodes.clone(),
+            current_state: "idle".to_owned(),
+            current_revision: 0,
+        },
+    ));
 }
 
 /// Rotate only the glTF wrapper; the root transform and its world-space
