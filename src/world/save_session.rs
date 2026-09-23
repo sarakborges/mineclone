@@ -262,9 +262,8 @@ pub(crate) fn save_on_gameplay_window_close(
     mut close_requests: MessageReader<WindowCloseRequested>,
     session: Res<WorldSession>,
     snapshot: WorldSaveContext,
-    mut non_world_cameras: Query<
-        (Entity, &mut Camera),
-        Without<GameplayWorldCamera>,
+    mut thumbnail_cameras: Query<
+        (Entity, &mut Camera, Option<&GameplayWorldCamera>),
     >,
     thumbnail_captures: Query<(), With<WorldThumbnailCapture>>,
     mut app_exit: MessageWriter<AppExit>,
@@ -288,7 +287,7 @@ pub(crate) fn save_on_gameplay_window_close(
     };
     begin_world_thumbnail_capture(
         &mut commands,
-        &mut non_world_cameras,
+        &mut thumbnail_cameras,
         world_id,
         WorldThumbnailCompletion::ExitGame,
     );
