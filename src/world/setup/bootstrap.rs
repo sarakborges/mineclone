@@ -99,6 +99,53 @@ impl BootstrapGenerationSettings {
     }
 }
 
+struct BootstrapWorldFields {
+    biome_field: BiomeField,
+    feature_fields: WorldFeatureFields,
+}
+
+impl BootstrapWorldFields {
+    fn build(
+        dimension: &DimensionDefinition,
+        biomes: &BiomeRegistry,
+        seed: u64,
+        biome_size_multiplier: f32,
+        world_generation: WorldGenerationSettings,
+        forced_spawn_biome: Option<&str>,
+    ) -> Self {
+        let mut biome_field =
+            BiomeField::from_dimension(dimension, biomes, seed, biome_size_multiplier);
+        biome_field.set_spawn_oceans(world_generation.spawn_oceans());
+        if world_generation.single_biome() {
+            let biome_id =
+                forced_spawn_biome.expect("single-biome world requires a selected surface biome");
+            biome_field.set_single_surface_biome(biome_id);
+        } else if let Some(biome_id) = forced_spawn_biome {
+            biome_field.force_surface_biome(
+                biome_id,
+                DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
+            );
+        }
+
+        let ocean_weight = dimension
+            .hydrology
+            .ocean_biome
+            .as_deref()
+            .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
+        let feature_fields = WorldFeatureFields::new(
+            seed,
+            dimension.sea_level,
+            dimension.hydrology.clone(),
+            ocean_weight,
+        );
+
+        Self {
+            biome_field,
+            feature_fields,
+        }
+    }
+}
+
 struct BootstrapRenderingContext<'a> {
     dimension: &'a DimensionDefinition,
     biomes: &'a BiomeRegistry,
@@ -299,34 +346,16 @@ pub(in crate::world) fn begin_world_loading(
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
 
-    let mut biome_field = BiomeField::from_dimension(
+    let BootstrapWorldFields {
+        biome_field,
+        feature_fields,
+    } = BootstrapWorldFields::build(
         dimension,
         biomes,
         config.seed.0,
         biome_size_multiplier,
-    );
-    biome_field.set_spawn_oceans(world_generation.spawn_oceans());
-    if world_generation.single_biome() {
-        let biome_id = forced_spawn_biome
-            .as_deref()
-            .expect("single-biome world requires a selected surface biome");
-        biome_field.set_single_surface_biome(biome_id);
-    } else if let Some(biome_id) = forced_spawn_biome.as_deref() {
-        biome_field.force_surface_biome(
-            biome_id,
-            DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
-        );
-    }
-    let ocean_weight = dimension
-        .hydrology
-        .ocean_biome
-        .as_deref()
-        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
-    let feature_fields = WorldFeatureFields::new(
-        config.seed.0,
-        dimension.sea_level,
-        dimension.hydrology.clone(),
-        ocean_weight,
+        world_generation,
+        forced_spawn_biome.as_deref(),
     );
     let BootstrapRenderingResources {
         terrain_lighting,
