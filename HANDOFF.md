@@ -11845,3 +11845,34 @@ CI funcional push `35804014362`: **verde**.
 Commit de versão: `dd0e319016b025ee05eed420ec3b7da02f66e6b6`.
 CI de versão push `35804104493`: **verde**.
 VERSION: `0.50.99`.
+
+
+## 2026-09-22 — Character Info volta a ser o último preview da stack
+
+A investigação após a versão 0.50.99 mostrou que o Character HUD permanecia
+visível enquanto o modelo do Character Info seguia ausente. O histórico revelou
+uma regressão de ordenação que havia ficado mascarada por um problema diferente
+no HUD.
+
+Estado conhecido como funcional para Character Info:
+- HUD preview: `UI_CAMERA_ORDER + 1`;
+- Character Info preview: `UI_CAMERA_ORDER + 2`.
+
+A ordem foi invertida no commit `c11a7501` enquanto se tentava corrigir o HUD.
+Depois ficou claro que o defeito real do HUD era o anchor do viewport pequeno,
+corrigido independentemente em `bb52f3b6` ao mover o marker para o frame
+visível. Portanto o motivo original para manter o HUD como último preview deixou
+de existir.
+
+Correção:
+- HUD volta para `UI_CAMERA_ORDER + 1`;
+- Character Info volta para `UI_CAMERA_ORDER + 2`;
+- ambos continuam usando `CameraOutputMode::Write` quando possuem viewport
+  válido;
+- layers 3/4 continuam separadas;
+- o fix do anchor do Character HUD é preservado;
+- o Character Info volta a ocupar a posição final da preview stack, igual ao
+  último estado em que seu modelo era confirmado como visível.
+
+Commit funcional:
+- `dceda2aae701daa8ac06522465de58e194489ed1`.
