@@ -42,12 +42,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
             "content id {} cannot be both a layer and a tool",
             layer.id
         );
-        assert!(
-            content.inventory_categories.get(&layer.category).is_some(),
-            "layer {} references missing inventory category {}",
-            layer.id,
-            layer.category
-        );
+        layer.validate_references(&content.inventory_categories);
     }
 
     for tool in content.tools.iter() {
