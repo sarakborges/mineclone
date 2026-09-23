@@ -244,7 +244,7 @@ def material(name: str, color, *, alpha_mode=None, unlit=False):
 materials = [
     # Shell stays unlit so rotation never changes brightness. A 5% object-local
     # outer-volume shade is carried in vertex colors, not a surface texture.
-    material('SlimeShell', [.2793, .6883, .5024], unlit=True),
+    material('SlimeShell', [.2992, .5725, .4483], unlit=True),
     material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
 ]
 shell_mesh = make_voxel_surface_mesh()
