@@ -269,7 +269,7 @@ storages mutáveis continuam parâmetros explícitos do build. O cálculo de
 roughness/metallic permanece no mesmo caminho e o bootstrap recebe um
 `BootstrapRenderingResources` pronto para inserção. VERSION: `0.50.138`.
 
-CI de Q23: pendente neste checkpoint.
+CI de Q23: **verde** no run `35870526833` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
