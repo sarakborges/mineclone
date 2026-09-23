@@ -31,36 +31,62 @@ pub(crate) enum WorldThumbnailCompletion {
 pub(crate) struct WorldThumbnailCapture {
     world_id: String,
     completion: WorldThumbnailCompletion,
-    suppressed_cameras: Vec<(Entity, CameraOutputMode)>,
+    camera_output_modes: Vec<(Entity, CameraOutputMode)>,
+    delay_frames: u8,
 }
 
 pub(crate) fn begin_world_thumbnail_capture(
     commands: &mut Commands,
-    cameras: &mut Query<(Entity, &mut Camera), Without<GameplayWorldCamera>>,
+    cameras: &mut Query<(Entity, &mut Camera, Option<&GameplayWorldCamera>)>,
     world_id: &str,
     completion: WorldThumbnailCompletion,
 ) {
-    let mut suppressed_cameras = Vec::new();
-    for (entity, mut camera) in cameras.iter_mut() {
-        suppressed_cameras.push((entity, camera.output_mode));
-        camera.output_mode = CameraOutputMode::Skip;
+    let mut camera_output_modes = Vec::new();
+    let mut world_camera_found = false;
+    for (entity, mut camera, world_camera) in cameras.iter_mut() {
+        camera_output_modes.push((entity, camera.output_mode));
+        if world_camera.is_some() {
+            world_camera_found = true;
+            camera.output_mode = CameraOutputMode::Write {
+                blend_state: None,
+                clear_color: ClearColorConfig::Default,
+            };
+        } else {
+            camera.output_mode = CameraOutputMode::Skip;
+        }
     }
+    if !world_camera_found {
+        warn!("world thumbnail capture started without a GameplayWorldCamera");
+    }
+
     commands
-        .spawn((
-            Screenshot::primary_window(),
-            WorldThumbnailCapture {
-                world_id: world_id.to_owned(),
-                completion,
-                suppressed_cameras,
-            },
-        ))
+        .spawn(WorldThumbnailCapture {
+            world_id: world_id.to_owned(),
+            completion,
+            camera_output_modes,
+            delay_frames: 1,
+        })
         .observe(finish_world_thumbnail_capture);
+}
+
+pub(crate) fn advance_world_thumbnail_capture(
+    mut commands: Commands,
+    mut captures: Query<(Entity, &mut WorldThumbnailCapture), Without<Screenshot>>,
+) {
+    for (entity, mut capture) in &mut captures {
+        if capture.delay_frames > 0 {
+            capture.delay_frames -= 1;
+            continue;
+        }
+
+        commands.entity(entity).insert(Screenshot::primary_window());
+    }
 }
 
 fn finish_world_thumbnail_capture(
     captured: On<ScreenshotCaptured>,
     captures: Query<&WorldThumbnailCapture>,
-    mut cameras: Query<&mut Camera, Without<GameplayWorldCamera>>,
+    mut cameras: Query<&mut Camera>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -68,7 +94,7 @@ fn finish_world_thumbnail_capture(
         return;
     };
 
-    for (entity, output_mode) in &capture.suppressed_cameras {
+    for (entity, output_mode) in &capture.camera_output_modes {
         if let Ok(mut camera) = cameras.get_mut(*entity) {
             camera.output_mode = *output_mode;
         }
@@ -137,13 +163,20 @@ fn world_thumbnail_path(world_id: &str) -> io::Result<PathBuf> {
 
 pub(crate) fn enforce_world_thumbnail_camera_isolation(
     captures: Query<(), With<WorldThumbnailCapture>>,
-    mut cameras: Query<&mut Camera, Without<GameplayWorldCamera>>,
+    mut cameras: Query<(&mut Camera, Option<&GameplayWorldCamera>)>,
 ) {
     if captures.is_empty() {
         return;
     }
 
-    for mut camera in &mut cameras {
-        camera.output_mode = CameraOutputMode::Skip;
+    for (mut camera, world_camera) in &mut cameras {
+        camera.output_mode = if world_camera.is_some() {
+            CameraOutputMode::Write {
+                blend_state: None,
+                clear_color: ClearColorConfig::Default,
+            }
+        } else {
+            CameraOutputMode::Skip
+        };
     }
 }
