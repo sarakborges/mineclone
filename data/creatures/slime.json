@@ -5,7 +5,7 @@
     "portuguese_brazil": "Gosma",
     "spanish": "Limo"
   },
-  "model": "models/creatures/slime_candy/slime_candy.glb",
+  "model": "models/creatures/slime_blob/slime_blob.glb",
   "health": 10,
   "maxPerType": 4,
   "collider": {
@@ -21,10 +21,7 @@
     ]
   },
   "unlitMaterials": [
-    "SlimeEye",
-    "SlimeEyeHighlight",
-    "SlimeBlush",
-    "SlimeMouth"
+    "SlimeFace"
   ],
   "animations": {
     "idle": "Idle",
@@ -39,12 +36,15 @@
   "jumpInterval": 2,
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
+  "textures": {
+    "SlimeFace": "textures/creatures/slime/face.png"
+  },
   "particleEffects": {
     "idle": {
       "count": 1,
       "color": [
+        0.62,
         1,
-        0.7,
         0.82,
         0.58
       ],
@@ -62,9 +62,9 @@
     "anticipate": {
       "count": 5,
       "color": [
+        0.62,
         1,
-        0.67,
-        0.8,
+        0.82,
         0.72
       ],
       "size": 0.05,
@@ -80,9 +80,9 @@
     "airborne": {
       "count": 2,
       "color": [
+        0.67,
         1,
-        0.74,
-        0.85,
+        0.86,
         0.58
       ],
       "size": 0.042,
@@ -99,9 +99,9 @@
     "land": {
       "count": 10,
       "color": [
+        0.58,
         1,
-        0.64,
-        0.78,
+        0.8,
         0.76
       ],
       "size": 0.055,
@@ -117,9 +117,9 @@
     "hurt": {
       "count": 7,
       "color": [
-        1,
         0.78,
-        0.88,
+        1,
+        0.9,
         0.82
       ],
       "size": 0.052,
@@ -135,8 +135,8 @@
     "death": {
       "count": 18,
       "color": [
+        0.62,
         1,
-        0.69,
         0.82,
         0.82
       ],
@@ -150,17 +150,5 @@
       "gravity": -1.25,
       "endScale": 0
     }
-  },
-  "targetCollider": {
-    "size": [
-      1.425,
-      0.975,
-      1.275
-    ],
-    "centerOffset": [
-      0,
-      0.4875,
-      0
-    ]
   }
 }

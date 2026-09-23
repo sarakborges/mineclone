@@ -1,368 +1,89 @@
 #!/usr/bin/env python3
-"""Generate Asteria's second-generation rounded voxel slime.
+"""Generate the rounded slime with fixed authored green depth colors.
 
-This model is intentionally separate from the legacy slime assets. The body is
-sampled as a voxel volume and only exposed voxel faces are emitted, producing a
-continuous rounded blob silhouette with crisp pixel-art stepping in every axis.
+The shape/animations are the original slime_blob. Shell tinting and shell
+textures are intentionally not runtime data anymore. Seven opaque unlit shell
+materials encode center light, main body, rim, base, top and two highlight
+levels directly into the GLB.
 """
 from __future__ import annotations
-
-import json
-import struct
+import json,math,struct
 from pathlib import Path
-
-OUT = Path(__file__).resolve().parent
-binary = bytearray()
-views: list[dict] = []
-accessors: list[dict] = []
-meshes: list[dict] = []
-nodes: list[dict] = []
-animations: list[dict] = []
-
-BODY_WIDTH = 1.20
-BODY_HEIGHT = 1.00
-BODY_DEPTH = 1.14
-NX, NY, NZ = 24, 20, 22
-DX, DY, DZ = BODY_WIDTH / NX, BODY_HEIGHT / NY, BODY_DEPTH / NZ
-BODY_HALF_HEIGHT = BODY_HEIGHT * 0.5
-
-
-def store(data: bytes, target: int | None = None) -> int:
-    binary.extend(b'\0' * (-len(binary) % 4))
-    offset = len(binary)
-    binary.extend(data)
-    entry = {'buffer': 0, 'byteOffset': offset, 'byteLength': len(data)}
-    if target is not None:
-        entry['target'] = target
-    views.append(entry)
-    return len(views) - 1
-
-
-def accessor(values, kind='VEC3', component=5126, target=None, bounds=False):
-    width = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}[kind]
-    fmt = {5126: 'f', 5123: 'H'}[component]
-    payload = struct.pack('<' + fmt * len(values), *values)
-    entry = {
-        'bufferView': store(payload, target),
-        'componentType': component,
-        'count': len(values) // width,
-        'type': kind,
-    }
-    if bounds:
-        rows = [values[i:i + width] for i in range(0, len(values), width)]
-        entry['min'] = [float(min(row[j] for row in rows)) for j in range(width)]
-        entry['max'] = [float(max(row[j] for row in rows)) for j in range(width)]
-    accessors.append(entry)
-    return len(accessors) - 1
-
-
-def profile(t: float) -> float:
-    keys = (
-        (0.00, 0.66),
-        (0.06, 0.79),
-        (0.15, 0.91),
-        (0.28, 0.995),
-        (0.44, 1.00),
-        (0.58, 0.965),
-        (0.70, 0.89),
-        (0.80, 0.76),
-        (0.88, 0.60),
-        (0.94, 0.36),
-        (0.975, 0.14),
-        (1.00, 0.02),
-    )
-    for (a_t, a_r), (b_t, b_r) in zip(keys, keys[1:]):
-        if t <= b_t:
-            u = (t - a_t) / (b_t - a_t)
-            u = u * u * (3.0 - 2.0 * u)
-            return a_r + (b_r - a_r) * u
-    return keys[-1][1]
-
-
-def occupied(ix: int, iy: int, iz: int) -> bool:
-    x = (ix + 0.5) * DX - BODY_WIDTH * 0.5
-    y = (iy + 0.5) * DY - BODY_HEIGHT * 0.5
-    z = (iz + 0.5) * DZ - BODY_DEPTH * 0.5
-    t = (y + BODY_HALF_HEIGHT) / BODY_HEIGHT
-    radius = profile(t)
-
-    crown_shift = 0.032 * max(0.0, (t - 0.62) / 0.38) ** 1.7
-    x -= crown_shift
-    rx = BODY_WIDTH * 0.5 * radius
-    rz = BODY_DEPTH * 0.5 * radius
-    if rx <= 0.0 or rz <= 0.0:
-        return False
-
-    exponent = 2.35
-    return (abs(x / rx) ** exponent + abs(z / rz) ** exponent) <= 1.0
-
-
-voxels = {
-    (x, y, z)
-    for y in range(NY)
-    for z in range(NZ)
-    for x in range(NX)
-    if occupied(x, y, z)
-}
-
-top_y = max(y for _, y, _ in voxels)
-top_count = sum(1 for _, y, _ in voxels if y == top_y)
-assert top_count <= 12, f'crown became too flat: {top_count} voxels on top layer'
-
-FACE_SPECS = [
-    ((1, 0, 0), ((1, 0, 0), (1, 0, 1), (1, 1, 1), (1, 1, 0))),
-    ((-1, 0, 0), ((0, 0, 1), (0, 0, 0), (0, 1, 0), (0, 1, 1))),
-    ((0, 1, 0), ((0, 1, 0), (1, 1, 0), (1, 1, 1), (0, 1, 1))),
-    ((0, -1, 0), ((0, 0, 1), (1, 0, 1), (1, 0, 0), (0, 0, 0))),
-    ((0, 0, 1), ((1, 0, 1), (0, 0, 1), (0, 1, 1), (1, 1, 1))),
-    ((0, 0, -1), ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))),
-]
-
-
-def surface_uv(px: float, py: float, pz: float, normal) -> tuple[float, float]:
-    """Planar UVs that cover the full body instead of sampling one flat texel."""
-    if normal[0] != 0:
-        return (pz / BODY_DEPTH + 0.5, 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT))
-    if normal[1] != 0:
-        return (px / BODY_WIDTH + 0.5, pz / BODY_DEPTH + 0.5)
-    return (px / BODY_WIDTH + 0.5, 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT))
-
-
-def outer_shade(px: float, py: float, pz: float) -> float:
-    # Object-local soft light baked from the OUTER volume only. Equal positions
-    # get equal brightness even when they belong to different voxel faces.
-    nx = px / (BODY_WIDTH * 0.5)
-    ny = py / (BODY_HEIGHT * 0.5)
-    nz = pz / (BODY_DEPTH * 0.5)
-    length = max((nx*nx + ny*ny + nz*nz) ** 0.5, 1e-6)
-    nx, ny, nz = nx/length, ny/length, nz/length
-    lx, ly, lz = -0.35, 0.76, -0.55
-    light_len = (lx*lx + ly*ly + lz*lz) ** 0.5
-    lx, ly, lz = lx/light_len, ly/light_len, lz/light_len
-    half_lambert = ((nx*lx + ny*ly + nz*lz) + 1.0) * 0.5
-    # Vertex colors are linear. 0.89 linear maps to about 0.95 sRGB, so this
-    # reads as roughly a 5% perceptual shade instead of the ~2% produced by 0.95.
-    return 0.89 + 0.11 * max(0.0, min(1.0, half_lambert))
-
-
-def make_voxel_surface_mesh() -> int:
-    positions, normals, uvs, colors, indices = [], [], [], [], []
-    for ix, iy, iz in sorted(voxels, key=lambda value: (value[1], value[2], value[0])):
-        for normal, corners in FACE_SPECS:
-            neighbor = (ix + normal[0], iy + normal[1], iz + normal[2])
-            if neighbor in voxels:
-                continue
-            offset = len(positions) // 3
-            for cx, cy, cz in corners:
-                px = -BODY_WIDTH * 0.5 + (ix + cx) * DX
-                py = -BODY_HEIGHT * 0.5 + (iy + cy) * DY
-                pz = -BODY_DEPTH * 0.5 + (iz + cz) * DZ
-                positions.extend((px, py, pz))
-                normals.extend(normal)
-                uvs.extend(surface_uv(px, py, pz, normal))
-                shade = outer_shade(px, py, pz)
-                colors.extend((shade, shade, shade, 1.0))
-            # Keep rasterizer winding aligned with the declared outward normal.
-            # The old order pointed every triangle inward, causing the front shell
-            # to be back-face culled and making the slime look transparent.
-            indices.extend((offset, offset + 2, offset + 1, offset, offset + 3, offset + 2))
-
-    assert len(positions) // 3 < 65536
-    # All emitted triangles must wind outwards. Back-face culling is enabled,
-    # so an inward-wound shell makes the rear surface visible through the body.
-    for triangle in range(0, len(indices), 3):
-        ia, ib, ic = indices[triangle:triangle + 3]
-        a = positions[ia*3:ia*3+3]
-        b = positions[ib*3:ib*3+3]
-        c = positions[ic*3:ic*3+3]
-        normal = normals[ia*3:ia*3+3]
-        ab = [b[i] - a[i] for i in range(3)]
-        ac = [c[i] - a[i] for i in range(3)]
-        cross = [
-            ab[1]*ac[2] - ab[2]*ac[1],
-            ab[2]*ac[0] - ab[0]*ac[2],
-            ab[0]*ac[1] - ab[1]*ac[0],
-        ]
-        assert sum(cross[i] * normal[i] for i in range(3)) > 0.0
-    attrs = {
-        'POSITION': accessor(positions, bounds=True, target=34962),
-        'NORMAL': accessor(normals, target=34962),
-        'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962),
-        'COLOR_0': accessor(colors, kind='VEC4', target=34962),
-    }
-    meshes.append({
-        'name': 'rounded_voxel_blob',
-        'primitives': [{
-            'attributes': attrs,
-            'indices': accessor(indices, kind='SCALAR', component=5123, target=34963),
-            'material': 0,
-            'mode': 4,
-        }],
-    })
-    return len(meshes) - 1
-
-
-def make_front_quad() -> int:
-    width, height = 0.86, 0.48
-    z = -BODY_DEPTH * 0.5 - 0.006
-    half_w, half_h = width / 2, height / 2
-    y_center = -0.075
-    positions = [
-        half_w, y_center - half_h, z,
-        -half_w, y_center - half_h, z,
-        -half_w, y_center + half_h, z,
-        half_w, y_center + half_h, z,
-    ]
-    normals = [0, 0, -1] * 4
-    uvs = [0, 1, 1, 1, 1, 0, 0, 0]
-    indices = [0, 1, 2, 0, 2, 3]
-    attrs = {
-        'POSITION': accessor(positions, bounds=True, target=34962),
-        'NORMAL': accessor(normals, target=34962),
-        'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962),
-    }
-    meshes.append({
-        'name': 'pixel_face_decal',
-        'primitives': [{
-            'attributes': attrs,
-            'indices': accessor(indices, kind='SCALAR', component=5123, target=34963),
-            'material': 1,
-            'mode': 4,
-        }],
-    })
-    return len(meshes) - 1
-
-
-def material(name: str, color, *, alpha_mode=None, unlit=False):
-    result = {
-        'name': name,
-        'pbrMetallicRoughness': {
-            'baseColorFactor': [*color, 1.0],
-            'metallicFactor': 0.0,
-            'roughnessFactor': 1.0,
-        },
-        'doubleSided': False,
-    }
-    if unlit:
-        result['extensions'] = {'KHR_materials_unlit': {}}
-    if alpha_mode:
-        result['alphaMode'] = alpha_mode
-    return result
-
-
-materials = [
-    # Shell stays unlit so rotation never changes brightness. A 5% object-local
-    # outer-volume shade is carried in vertex colors, not a surface texture.
-    material('SlimeShell', [.2992, .5725, .4483], unlit=True),
-    material('SlimeFace', [1.0, 1.0, 1.0], alpha_mode='BLEND', unlit=True),
-]
-shell_mesh = make_voxel_surface_mesh()
-face_mesh = make_front_quad()
-
-
-def node(name, mesh=None, children=None, translation=None, extras=None):
-    entry = {'name': name}
-    if mesh is not None:
-        entry['mesh'] = mesh
-    if children is not None:
-        entry['children'] = children
-    if translation is not None:
-        entry['translation'] = translation
-    if extras is not None:
-        entry['extras'] = extras
-    nodes.append(entry)
-    return len(nodes) - 1
-
-
-root = node('SlimeRoot', children=[], extras={
-    'asteria_asset': 'creature/slime_blob',
-    'unit': 'meters',
-    'forward': '-Z',
-    'collider': {'shape': 'aabb', 'size': [.78, .84, .78], 'offset': [0, .42, 0]},
-    'collider_is_animated': False,
-})
-visual = node('Visual', children=[])
-body = node('BodyPivot', children=[], translation=[0, BODY_HALF_HEIGHT, 0])
-shell = node('Shell', mesh=shell_mesh)
-face = node('Face', mesh=face_mesh)
-nodes[body]['children'] = [shell, face]
-nodes[visual]['children'] = [body]
-collider_node = node('Hitbox_AABB', translation=[0, .42, 0], extras={
-    'asteria_collider': {
-        'shape': 'aabb',
-        'size': [.78, .84, .78],
-        'solid': True,
-        'targetable': True,
-    },
-    'debug_display': False,
-})
-nodes[root]['children'] = [visual, collider_node]
-
-
-def tracks(clip, times, body_scale, center_y=None):
-    center_y = center_y if center_y is not None else [BODY_HALF_HEIGHT * scale[1] for scale in body_scale]
-    time_accessor = accessor(times, kind='SCALAR', bounds=True)
-    channels, samplers = [], []
-
-    def add(target, path, values, kind):
-        output = accessor([value for row in values for value in row], kind=kind)
-        samplers.append({'input': time_accessor, 'output': output, 'interpolation': 'LINEAR'})
-        channels.append({'sampler': len(samplers) - 1, 'target': {'node': target, 'path': path}})
-
-    add(body, 'scale', body_scale, 'VEC3')
-    add(body, 'translation', [[0, y, 0] for y in center_y], 'VEC3')
-    animations.append({
-        'name': clip,
-        'channels': channels,
-        'samplers': samplers,
-        'extras': {'loop_recommended': clip in ('Idle', 'Airborne')},
-    })
-
-
-tracks('Idle', [0, .5, 1, 1.5, 2],
-       [[1,1,1], [1.018,.974,1.018], [1,1,1], [.988,1.021,.988], [1,1,1]])
-tracks('Anticipate', [0,.07,.17,.24],
-       [[1,1,1], [1.09,.845,1.09], [1.125,.76,1.125], [1.09,.83,1.09]])
-tracks('Airborne', [0,.12,.35,.55,.72],
-       [[1.09,.83,1.09], [.91,1.15,.91], [.96,1.085,.96], [.97,1.06,.97], [1,1,1]])
-tracks('Land', [0,.045,.12,.20,.34],
-       [[.97,1.055,.97], [1.17,.74,1.17], [1.12,.805,1.12], [.975,1.047,.975], [1,1,1]])
-tracks('Hurt', [0,.085,.15,.24,.38],
-       [[1,1,1], [1.1,.88,1.1], [.94,1.08,.94], [1.025,.968,1.025], [1,1,1]])
-tracks('Death', [0,.12,.31,.55,.75],
-       [[1,1,1], [1.13,.8,1.13], [1.2,.60,1.2], [1.12,.19,1.12], [.001,.001,.001]],
-       center_y=[BODY_HALF_HEIGHT, .4, .3, .095, .0005])
-
-scene = {
-    'asset': {'version': '2.0', 'generator': 'Asteria sampled voxel blob slime v1'},
-    'scene': 0,
-    'scenes': [{'name': 'SlimeBlob', 'nodes': [root]}],
-    'extensionsUsed': ['KHR_materials_unlit'],
-    'nodes': nodes,
-    'meshes': meshes,
-    'materials': materials,
-    'animations': animations,
-    'bufferViews': views,
-    'accessors': accessors,
-    'buffers': [{'byteLength': len(binary)}],
-    'extras': {
-        'asset_id': 'asteria:slime_blob',
-        'color_materials': ['SlimeShell', 'SlimeFace'],
-        'collision_source': 'slime_blob.collider.json',
-        'texture_source': 'creature JSON material textures under textures/creatures/',
-        'voxel_resolution': [NX, NY, NZ],
-        'occupied_voxels': len(voxels),
-        'top_layer_voxels': top_count,
-        'notes': 'Second-generation sampled voxel blob. Shell combines 5% object-local vertex shading with a subtle planar-mapped surface texture; legacy slime assets remain untouched.',
-    },
-}
-json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-json_chunk += b' ' * (-len(json_chunk) % 4)
-bin_chunk = bytes(binary) + b'\0' * (-len(binary) % 4)
-glb = (
-    struct.pack('<4sII', b'glTF', 2, 12 + 8 + len(json_chunk) + 8 + len(bin_chunk))
-    + struct.pack('<I4s', len(json_chunk), b'JSON') + json_chunk
-    + struct.pack('<I4s', len(bin_chunk), b'BIN\0') + bin_chunk
-)
-(OUT / 'slime_blob.glb').write_bytes(glb)
-print(f'Generated {OUT / "slime_blob.glb"}: {len(voxels)} voxels, {top_count} top-layer voxels')
+OUT=Path(__file__).resolve().parent
+BODY_WIDTH=1.20;BODY_HEIGHT=1.00;BODY_DEPTH=1.14
+NX,NY,NZ=24,20,22
+DX,DY,DZ=BODY_WIDTH/NX,BODY_HEIGHT/NY,BODY_DEPTH/NZ
+BODY_HALF_HEIGHT=BODY_HEIGHT*.5
+SRGB=(('SlimeShell',(.38,.64,.52)),('SlimeShellCenter',(.52,.74,.63)),('SlimeShellOuter',(.22,.43,.34)),('SlimeShellBottom',(.18,.37,.29)),('SlimeShellTop',(.46,.69,.58)),('SlimeShellLight',(.66,.84,.75)),('SlimeShellBright',(.86,.95,.90)))
+def lin(c):return c/12.92 if c<=.04045 else ((c+.055)/1.055)**2.4
+binary=bytearray();views=[];accessors=[];meshes=[];nodes=[];animations=[]
+def store(data,target=None):
+ binary.extend(b'\0'*(-len(binary)%4));o=len(binary);binary.extend(data);e={'buffer':0,'byteOffset':o,'byteLength':len(data)}
+ if target is not None:e['target']=target
+ views.append(e);return len(views)-1
+def acc(values,kind='VEC3',component=5126,target=None,bounds=False):
+ w={'SCALAR':1,'VEC2':2,'VEC3':3,'VEC4':4}[kind];fmt={5126:'f',5123:'H'}[component];e={'bufferView':store(struct.pack('<'+fmt*len(values),*values),target),'componentType':component,'count':len(values)//w,'type':kind}
+ if bounds:
+  rows=[values[i:i+w]for i in range(0,len(values),w)];e['min']=[float(min(r[j]for r in rows))for j in range(w)];e['max']=[float(max(r[j]for r in rows))for j in range(w)]
+ accessors.append(e);return len(accessors)-1
+def profile(t):
+ k=((0,.66),(.06,.79),(.15,.91),(.28,.995),(.44,1),(.58,.965),(.70,.89),(.80,.76),(.88,.60),(.94,.36),(.975,.14),(1,.02))
+ for(a,ar),(b,br)in zip(k,k[1:]):
+  if t<=b:u=(t-a)/(b-a);u=u*u*(3-2*u);return ar+(br-ar)*u
+ return .02
+def occupied(ix,iy,iz):
+ x=(ix+.5)*DX-BODY_WIDTH*.5;y=(iy+.5)*DY-BODY_HEIGHT*.5;z=(iz+.5)*DZ-BODY_DEPTH*.5;t=(y+BODY_HALF_HEIGHT)/BODY_HEIGHT;r=profile(t);x-=.032*max(0,(t-.62)/.38)**1.7;rx=BODY_WIDTH*.5*r;rz=BODY_DEPTH*.5*r
+ return rx>0 and rz>0 and abs(x/rx)**2.35+abs(z/rz)**2.35<=1
+vox={(x,y,z)for y in range(NY)for z in range(NZ)for x in range(NX)if occupied(x,y,z)}
+F=(((1,0,0),((1,0,0),(1,0,1),(1,1,1),(1,1,0))),((-1,0,0),((0,0,1),(0,0,0),(0,1,0),(0,1,1))),((0,1,0),((0,1,0),(1,1,0),(1,1,1),(0,1,1))),((0,-1,0),((0,0,1),(1,0,1),(1,0,0),(0,0,0))),((0,0,1),((1,0,1),(0,0,1),(0,1,1),(1,1,1))),((0,0,-1),((0,0,0),(1,0,0),(1,1,0),(0,1,0))))
+CX=(NX-1)/2;CZ=(NZ-1)/2
+def material_for(ix,iy,iz,n):
+ gx=(ix-CX)/(NX*.5);gy=iy/(NY-1);gz=(iz-CZ)/(NZ*.5)
+ if n==(0,0,-1):
+  if -.58<gx<-.24 and .63<gy<.86:return 6
+  if -.72<gx<-.10 and .50<gy<.88:return 5
+  if gy<.13:return 3
+  if abs(gx)>.72:return 2
+  if gy>.78:return 4
+  if abs(gx)<.58 and .20<gy<.72:return 1
+  return 0
+ if n==(0,1,0):return 5 if gy>.72 else 4
+ if n==(0,-1,0):return 3
+ if n==(1,0,0):return 2
+ if n==(-1,0,0):return 4 if gy>.62 else 0
+ if n==(0,0,1):return 2 if abs(gx)>.66 or abs(gz)>.66 else 0
+ return 0
+def bucket():return[[],[],[],[],[]]
+UV=((0,1),(1,1),(1,0),(0,0))
+def quad(b,pts,n):
+ p,no,u,c,i=b;o=len(p)//3
+ for j,pt in enumerate(pts):p.extend(pt);no.extend(n);u.extend(UV[j]);c.extend((1,1,1,1))
+ i.extend((o,o+2,o+1,o,o+3,o+2))
+def prim(b,m):
+ p,n,u,c,i=b
+ if not i:return None
+ return{'attributes':{'POSITION':acc(p,bounds=True,target=34962),'NORMAL':acc(n,target=34962),'TEXCOORD_0':acc(u,kind='VEC2',target=34962),'COLOR_0':acc(c,kind='VEC4',target=34962)},'indices':acc(i,kind='SCALAR',component=5123,target=34963),'material':m,'mode':4}
+bs=[bucket()for _ in range(7)]
+for ix,iy,iz in sorted(vox,key=lambda v:(v[1],v[2],v[0])):
+ for n,corners in F:
+  if(ix+n[0],iy+n[1],iz+n[2])in vox:continue
+  pts=[(-BODY_WIDTH*.5+(ix+cx)*DX,-BODY_HEIGHT*.5+(iy+cy)*DY,-BODY_DEPTH*.5+(iz+cz)*DZ)for cx,cy,cz in corners];quad(bs[material_for(ix,iy,iz,n)],pts,n)
+meshes.append({'name':'rounded_voxel_blob_fixed_color','primitives':[p for p in(prim(b,i)for i,b in enumerate(bs))if p]});shell_mesh=len(meshes)-1
+fb=bucket();z=-BODY_DEPTH*.5-.006;w=.86;h=.48;yc=-.075;quad(fb,((w/2,yc-h/2,z),(-w/2,yc-h/2,z),(-w/2,yc+h/2,z),(w/2,yc+h/2,z)),(0,0,-1));meshes.append({'name':'pixel_face_decal','primitives':[prim(fb,7)]});face_mesh=len(meshes)-1
+materials=[{'name':n,'pbrMetallicRoughness':{'baseColorFactor':[lin(c[0]),lin(c[1]),lin(c[2]),1],'metallicFactor':0,'roughnessFactor':1},'doubleSided':False,'extensions':{'KHR_materials_unlit':{}}}for n,c in SRGB]
+materials.append({'name':'SlimeFace','pbrMetallicRoughness':{'baseColorFactor':[1,1,1,1],'metallicFactor':0,'roughnessFactor':1},'doubleSided':False,'alphaMode':'BLEND','extensions':{'KHR_materials_unlit':{}}})
+def node(name,mesh=None,children=None,translation=None,extras=None):
+ e={'name':name}
+ if mesh is not None:e['mesh']=mesh
+ if children is not None:e['children']=children
+ if translation is not None:e['translation']=translation
+ if extras is not None:e['extras']=extras
+ nodes.append(e);return len(nodes)-1
+root=node('SlimeRoot',children=[],extras={'asteria_asset':'creature/slime_blob','unit':'meters','forward':'-Z','collider':{'shape':'aabb','size':[.78,.84,.78],'offset':[0,.42,0]},'collider_is_animated':False});visual=node('Visual',children=[]);body=node('BodyPivot',children=[],translation=[0,BODY_HALF_HEIGHT,0]);shell=node('Shell',mesh=shell_mesh);face=node('Face',mesh=face_mesh);nodes[body]['children']=[shell,face];nodes[visual]['children']=[body];hit=node('Hitbox_AABB',translation=[0,.42,0],extras={'asteria_collider':{'shape':'aabb','size':[.78,.84,.78],'solid':True,'targetable':True},'debug_display':False});nodes[root]['children']=[visual,hit]
+def track(name,times,scales,center=None):
+ center=center if center is not None else[BODY_HALF_HEIGHT*s[1]for s in scales];ta=acc(times,kind='SCALAR',bounds=True);ch=[];sa=[]
+ def add(target,path,vals,kind):out=acc([v for row in vals for v in row],kind=kind);sa.append({'input':ta,'output':out,'interpolation':'LINEAR'});ch.append({'sampler':len(sa)-1,'target':{'node':target,'path':path}})
+ add(body,'scale',scales,'VEC3');add(body,'translation',[[0,y,0]for y in center],'VEC3');animations.append({'name':name,'channels':ch,'samplers':sa,'extras':{'loop_recommended':name in('Idle','Airborne')}})
+track('Idle',[0,.5,1,1.5,2],[[1,1,1],[1.018,.974,1.018],[1,1,1],[.988,1.021,.988],[1,1,1]]);track('Anticipate',[0,.07,.17,.24],[[1,1,1],[1.09,.845,1.09],[1.125,.76,1.125],[1.09,.83,1.09]]);track('Airborne',[0,.12,.35,.55,.72],[[1.09,.83,1.09],[.91,1.15,.91],[.96,1.085,.96],[.97,1.06,.97],[1,1,1]]);track('Land',[0,.045,.12,.20,.34],[[.97,1.055,.97],[1.17,.74,1.17],[1.12,.805,1.12],[.975,1.047,.975],[1,1,1]]);track('Hurt',[0,.085,.15,.24,.38],[[1,1,1],[1.1,.88,1.1],[.94,1.08,.94],[1.025,.968,1.025],[1,1,1]]);track('Death',[0,.12,.31,.55,.75],[[1,1,1],[1.13,.8,1.13],[1.2,.60,1.2],[1.12,.19,1.12],[.001,.001,.001]],center=[BODY_HALF_HEIGHT,.4,.3,.095,.0005])
+scene={'asset':{'version':'2.0','generator':'Asteria fixed-color rounded slime v2'},'scene':0,'scenes':[{'name':'SlimeBlob','nodes':[root]}],'extensionsUsed':['KHR_materials_unlit'],'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],'extras':{'asset_id':'asteria:slime_blob','color_materials':[m['name']for m in materials],'collision_source':'slime_blob.collider.json','voxel_resolution':[NX,NY,NZ],'occupied_voxels':len(vox),'notes':'Original rounded shape with fixed authored green depth zones; no shell tint or shell texture override.'}}
+j=json.dumps(scene,separators=(',',':')).encode();j+=b' '*(-len(j)%4);bb=bytes(binary)+b'\0'*(-len(binary)%4);glb=struct.pack('<4sII',b'glTF',2,12+8+len(j)+8+len(bb))+struct.pack('<I4s',len(j),b'JSON')+j+struct.pack('<I4s',len(bb),b'BIN\0')+bb;(OUT/'slime_blob.glb').write_bytes(glb)

@@ -13384,3 +13384,37 @@ Mudanças:
 O corpo continua 100% opaco. A sensação de gel vem de camadas de cor + PBR + highlights autorados, não de alpha/transmission.
 
 VERSION: `0.50.181`.
+
+
+## 2026-09-23 — Retorno ao dual slime de Plains + profundidade por cores fixas
+
+O experimento `slime_candy` foi removido por completo. O baseline funcional volta a ser o checkpoint em que `asteria:slime` (rounded/blob) e `asteria:slime_legacy` (cúbico) coexistem e ambos têm spawn natural em Plains com o mesmo peso/luz/spacing. A tabela atual de Plains já continuava idêntica a esse checkpoint, então não foi necessário alterar o biome.
+
+A partir desse baseline, a identidade visual dos dois modelos deixa de depender de `materialTints` e de textura de shell/core no JSON. Os JSONs agora só aplicam a textura da face; toda a coloração volumétrica do corpo é autorada diretamente nos GLBs.
+
+Paleta fixa compartilhada, organizada por função visual:
+- `SlimeShell`: verde principal;
+- `SlimeShellCenter`: centro mais claro, simulando volume interno;
+- `SlimeShellOuter`: bordas/laterais profundas;
+- `SlimeShellBottom`: banda inferior mais escura;
+- `SlimeShellTop`: regiões superiores mais claras;
+- `SlimeShellLight`: highlight amplo;
+- `SlimeShellBright`: núcleo claro do highlight.
+
+No rounded slime, cada face de voxel é classificada pela posição no volume. A frente recebe centro claro, rim escuro, base, topo e highlight upper-left em níveis; laterais/top/bottom recebem materiais coerentes com essa mesma leitura. Não há surface noise, shell texture ou tint runtime.
+
+No legacy slime, a silhueta cúbica original e o core animado foram preservados. As seis faces do shell são subdivididas geometricamente sem gaps/bordas para permitir a mesma distribuição fixa de centro/rim/base/top/highlights. O core passa a ter verde escuro fixo no próprio GLB. A única textura runtime restante em ambos é `SlimeFace`.
+
+Foram removidos:
+- `assets/models/creatures/slime_candy/generate_slime_candy.py`;
+- `assets/models/creatures/slime_candy/slime_candy.glb`;
+- `assets/models/creatures/slime_candy/slime_candy.collider.json`;
+- os `surface.png` experimentais adicionados depois do baseline aos dois slimes.
+
+Arquivos autoritativos novamente:
+- `assets/models/creatures/slime_blob/generate_slime_blob.py` + `slime_blob.glb`;
+- `assets/models/creatures/slime/generate_slime.py` + `slime.glb`;
+- `data/creatures/slime.json`;
+- `data/creatures/slime_legacy.json`.
+
+VERSION: `0.50.186`.

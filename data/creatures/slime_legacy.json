@@ -20,21 +20,7 @@
       0
     ]
   },
-  "materialTints": {
-    "SlimeShell": {
-      "hue": 153,
-      "saturation": 0.32,
-      "intensity": 0.44
-    },
-    "SlimeCore": {
-      "hue": 153,
-      "saturation": 0.72,
-      "intensity": 0.34
-    }
-  },
   "unlitMaterials": [
-    "SlimeShell",
-    "SlimeCore",
     "SlimeFace"
   ],
   "animations": {
@@ -51,20 +37,6 @@
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
   "textures": {
-    "SlimeCore": "textures/creatures/slime_legacy/core.png",
-    "SlimeFace": "textures/creatures/slime_legacy/face.png",
-    "SlimeShell": "textures/creatures/slime_legacy/surface.png"
-  },
-  "targetCollider": {
-    "size": [
-      0.96,
-      0.9,
-      0.96
-    ],
-    "centerOffset": [
-      0,
-      0.45,
-      0
-    ]
+    "SlimeFace": "textures/creatures/slime_legacy/face.png"
   }
 }
