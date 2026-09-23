@@ -22,7 +22,7 @@ use super::super::{
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
     },
-    log_state::texture_face,
+    log_state::hollow_surface_texture_face,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     orientation::{orientation_rotation, source_face_for_oriented_face},
     read::VoxelRead,
@@ -374,7 +374,10 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
             + inverse_orientation * (local - Vec3::splat(0.5));
         rotate_macro_uv(macro_uv(source_face, oriented), rotation)
     });
-    let material_face = block_face_material_face(texture_face(surface.cell, source_face), surface.block);
+    let material_face = block_face_material_face(
+        hollow_surface_texture_face(surface.cell, source_face, !is_macro_boundary(face, depth)),
+        surface.block,
+    );
     let material_code = surface
         .texture_table
         .encoded_layers(block_face_texture_layers(material_face, surface.block))
@@ -393,6 +396,13 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         lighting,
         material_code,
     );
+}
+
+fn is_macro_boundary(face: BlockFace, depth: usize) -> bool {
+    match face {
+        BlockFace::Right | BlockFace::Top | BlockFace::Front => depth == EDGE - 1,
+        BlockFace::Left | BlockFace::Bottom | BlockFace::Back => depth == 0,
+    }
 }
 
 fn macro_uv(face: BlockFace, point: Vec3) -> [f32; 2] {
