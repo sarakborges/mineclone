@@ -455,6 +455,18 @@ cobrir também variation inválida e zero no caminho de locate. VERSION:
 CI de Q39: **verde** no run `35883434923` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q40 — reutilizar clearance AABB no solver de contatos
+
+`player/movement/entity_collision.rs` não mantém mais um segundo scanner de
+voxels para decidir se um AABB pode ocupar uma posição. O helper já existente
+`voxel::collision::aabb_is_clear` foi exposto no boundary do módulo e é
+reutilizado pelo push de entidades, preservando a mesma regra de loaded chunks
+e colisão sólida usada pelo movimento voxel. O `clear_volume` duplicado foi
+removido. VERSION: `0.50.160`.
+
+CI de Q40: **verde** no run `35883899553` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ### Q40 — reutilizar clearance de AABB entre movimento e entity contacts
 
 `player/movement/entity_collision.rs` não mantém mais sua própria cópia da
