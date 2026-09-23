@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::{
