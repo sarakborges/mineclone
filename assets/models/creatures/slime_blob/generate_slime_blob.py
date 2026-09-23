@@ -136,8 +136,10 @@ def make_voxel_surface_mesh() -> int:
                 # Project one continuous soft outer-volume gradient across the
                 # whole body. Neighboring voxel faces therefore agree on the
                 # same shade instead of looking like dark internal walls.
-                u = (px / BODY_WIDTH) + 0.5
-                v = 1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT)
+                shade_min = .5 / 64
+                shade_span = 63.0 / 64
+                u = shade_min + ((px / BODY_WIDTH) + 0.5) * shade_span
+                v = shade_min + (1.0 - ((py + BODY_HALF_HEIGHT) / BODY_HEIGHT)) * shade_span
                 uvs.extend((u, v))
             indices.extend((offset, offset + 1, offset + 2, offset, offset + 2, offset + 3))
 
