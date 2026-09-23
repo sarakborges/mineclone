@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::attack::AttackDefinition,
+    content::attack::{AttackDefinition, AttackEffectKind},
     entity::EntityHealth,
     gameplay::random::next_unit_f32,
 };
@@ -51,10 +51,13 @@ impl CreatureAttackRuntime<'_, '_> {
         let dead = health.damage(attack.damage);
         let direction = creature_transform.translation - player_position;
         for effect in &attack.effects {
-            if effect_applies(effect.chance, &mut self.random_state)
-                && effect.effect == "knockback"
-            {
-                motion.apply_knockback(direction, effect.strength);
+            if !effect_applies(effect.chance, &mut self.random_state) {
+                continue;
+            }
+            match effect.effect {
+                AttackEffectKind::Knockback => {
+                    motion.apply_knockback(direction, effect.strength);
+                }
             }
         }
         animation.trigger(if dead { "death" } else { "hurt" });
