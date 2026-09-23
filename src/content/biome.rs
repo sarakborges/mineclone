@@ -14,7 +14,7 @@ use super::{
     biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
     biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,
-    day_night_phase::DayNightPhases, registry::DefinitionMap,
+    day_night_phase::DayNightPhases, fluid::FluidRegistry, registry::DefinitionMap,
 };
 
 mod validation;
@@ -159,6 +159,17 @@ impl BiomeDefinition {
                 "biome {} references missing creature spawn: {}",
                 self.id,
                 spawn.creature
+            );
+        }
+    }
+
+    pub(crate) fn validate_surface_fluid_references(&self, fluids: &FluidRegistry) {
+        if let Some(surface_fluid) = &self.surface_fluid {
+            assert!(
+                fluids.id_of(surface_fluid.fluid_id()).is_some(),
+                "biome {} surfaceFluid references missing fluid {}",
+                self.id,
+                surface_fluid.fluid_id()
             );
         }
     }
