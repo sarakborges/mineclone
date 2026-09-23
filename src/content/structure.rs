@@ -343,6 +343,10 @@ impl StructureDefinition {
             .collect()
     }
 
+    pub(crate) fn column_spans(&self) -> &[StructureColumnSpan] {
+        &self.runtime.column_spans
+    }
+
     pub(crate) fn clear_above_positions(
         &self,
         rotation: StructureRotation,
