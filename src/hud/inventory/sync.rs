@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        inventory_category::InventoryCategoryRegistry, layer::LayerRegistry,
+        inventory_category::InventoryCategoryRegistry, item::display_name, layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
@@ -68,17 +68,13 @@ impl InventoryItemContent<'_> {
     }
 
     fn item_name<'a>(&'a self, item_id: &'a str) -> &'a str {
-        let language = self.language.get();
-        if let Some(block) = self.visual.blocks.get(item_id) {
-            return block.name.text(language);
-        }
-        if let Some(layer) = self.layers.get(item_id) {
-            return layer.name.text(language);
-        }
-        if let Some(tool) = self.tools.get(item_id) {
-            return tool.name.text(language);
-        }
-        item_id
+        display_name(
+            item_id,
+            &self.visual.blocks,
+            &self.layers,
+            &self.tools,
+            self.language.get(),
+        )
     }
 }
 
