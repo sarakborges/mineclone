@@ -36,17 +36,17 @@
       "id": "root_arches",
       "structure": "asteria:root_arch",
       "count": {
-        "min": 7,
-        "max": 10
+        "min": 10,
+        "max": 14
       },
       "chance": 1,
       "required": false,
       "placement": {
         "relativeTo": "origin",
-        "minDistance": 22,
-        "maxDistance": 86,
-        "minSeparation": 15,
-        "attempts": 384,
+        "minDistance": 12,
+        "maxDistance": 72,
+        "minSeparation": 12,
+        "attempts": 640,
         "allowOverlap": false
       }
     },
@@ -62,9 +62,9 @@
       "placement": {
         "relativeTo": "origin",
         "minDistance": 58,
-        "maxDistance": 124,
-        "minSeparation": 32,
-        "attempts": 256,
+        "maxDistance": 142,
+        "minSeparation": 50,
+        "attempts": 512,
         "allowOverlap": false
       }
     },
