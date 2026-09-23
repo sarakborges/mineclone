@@ -105,8 +105,8 @@ faces = [
 ]
 
 
-def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0),
-         front_tile=None, project_outer_shade=False):
+def cube(positions, normals, uvs, colors, indices, extent, center=(0,0,0), tile=(0,0),
+         front_tile=None, shade_outer_volume=False):
     half = [v/2 for v in extent]
     for normal, horizontal, vertical in faces:
         face_tile = front_tile if front_tile is not None and normal == (0,0,-1) else tile
@@ -119,27 +119,33 @@ def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0),
                      + b*vertical[i]*half[i] for i in range(3)]
             positions.extend(point)
             normals.extend(normal)
-            if project_outer_shade:
-                # The cubic legacy model uses the same continuous outer-volume
-                # shade as the rounded slime instead of face-specific darkening.
-                shade_min = .5 / 64
-                shade_span = 63.0 / 64
-                projected_u = shade_min + (point[0] / extent[0] + .5) * shade_span
-                projected_v = shade_min + (1.0 - (point[1] / extent[1] + .5)) * shade_span
-                uvs.extend((projected_u, projected_v))
+            uvs.extend(uv)
+            if shade_outer_volume:
+                nx = point[0] / max(extent[0] * .5, 1e-6)
+                ny = point[1] / max(extent[1] * .5, 1e-6)
+                nz = point[2] / max(extent[2] * .5, 1e-6)
+                nlen = max((nx*nx + ny*ny + nz*nz) ** .5, 1e-6)
+                nx, ny, nz = nx/nlen, ny/nlen, nz/nlen
+                lx, ly, lz = -.35, .76, -.55
+                llen = (lx*lx + ly*ly + lz*lz) ** .5
+                lx, ly, lz = lx/llen, ly/llen, lz/llen
+                half_lambert = ((nx*lx + ny*ly + nz*lz) + 1.0) * .5
+                shade = .95 + .05 * max(0.0, min(1.0, half_lambert))
             else:
-                uvs.extend(uv)
+                shade = 1.0
+            colors.extend((shade, shade, shade, 1.0))
         indices.extend([offset,offset+1,offset+2,offset,offset+2,offset+3])
 
 
-def make_mesh(name, cuboids, material, tile, front_tile=None, project_outer_shade=False):
-    positions, normals, uvs, indices = [], [], [], []
+def make_mesh(name, cuboids, material, tile, front_tile=None, shade_outer_volume=False):
+    positions, normals, uvs, colors, indices = [], [], [], [], []
     for extent, center in cuboids:
-        cube(positions, normals, uvs, indices, extent, center, tile, front_tile, project_outer_shade)
+        cube(positions, normals, uvs, colors, indices, extent, center, tile, front_tile, shade_outer_volume)
     assert len(positions)//3 < 65536
     attrs = {'POSITION': accessor(positions, bounds=True, target=34962),
              'NORMAL': accessor(normals, target=34962),
-             'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962)}
+             'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962),
+             'COLOR_0': accessor(colors, kind='VEC4', target=34962)}
     mesh = {'name': name, 'primitives': [{
         'attributes': attrs, 'indices': accessor(indices, kind='SCALAR', component=5123, target=34963),
         'material': material, 'mode': 4}]}
@@ -187,8 +193,8 @@ def material(name, color, alpha=1., rough=1.0, emission=None, alpha_mode=None, u
 
 
 materials = [
-    # Preserve the original cubic silhouette/core, but remove directional lighting.
-    # The shell is opaque; subtle stable shade comes from shell_soft.png.
+    # Preserve the original cubic silhouette/core. Shell shading is an object-local
+    # 5% outer-volume vertex gradient, so it stays soft and stable while rotating.
     material('SlimeShell', [.50,.91,.78], unlit=True),
     material('SlimeCore', [.18,.70,.57], unlit=True),
     material('SlimeFace', [1.,1.,1.], alpha_mode='BLEND', unlit=True),
@@ -198,7 +204,7 @@ shell = make_mesh(
     [([.96,.90,.96], (0,0,0))],
     0,
     (0,0),
-    project_outer_shade=True,
+    shade_outer_volume=True,
 )
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
 face = make_front_quad('square_pixel_face', .96, .90, -.50, 2)
@@ -283,7 +289,7 @@ scene = {
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Preserved cubic legacy shell/core; opaque unlit shell uses one continuous 5% outer-volume shade projection; collider does not animate'},
+              'notes':'Preserved cubic legacy shell/core; opaque unlit shell uses 5% object-local outer-volume vertex shading; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
