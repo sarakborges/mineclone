@@ -96,6 +96,23 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     position: Vec2,
     items: &mut InventoryItemView<'_>,
 ) {
+    if let Some(item) = items.items.get(item_id) {
+        root.spawn((
+            InventoryCursorIcon,
+            ImageNode::new(items.asset_server.load(item.icon.clone())),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
     if let Some(block) = items.blocks.get(item_id) {
         let tint = block_tint_at(
             block.tint,
@@ -210,6 +227,19 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
     item_id: &'static str,
     items: &mut InventoryItemView<'_>,
 ) {
+    if let Some(item) = items.items.get(item_id) {
+        slot.spawn((
+            ImageNode::new(items.asset_server.load(item.icon.clone())),
+            Node {
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
     if let Some(block) = items.blocks.get(item_id) {
         let tint = block_tint_at(
             block.tint,
