@@ -12578,3 +12578,29 @@ Commits:
 - legacy slime tint: `bc239498ef4d3dafa033744edfef9ba102adb48f`.
 
 VERSION: `0.50.136`, commit de versão `a83a22eabd2b6fded817c118a2e1d8dc327013b2`.
+
+
+## 2026-09-23 — Slime shading moved from texture projection to outer-volume vertex color
+
+The previous diagnosis that shell saturation alone was responsible for the flat look was not sufficient. More importantly, every texture-based shading attempt was still projecting a 2D pattern onto a voxel surface, which could read as internal walls or produce no useful depth.
+
+The shell shading path is now structural and no longer depends on `shell_soft.png`:
+- `SlimeShell` keeps an unlit material, so rotation never produces harsh world-light changes;
+- shell texture overrides were removed from both `asteria:slime` and `asteria:slime_legacy`;
+- each shell vertex receives a grayscale `COLOR_0` multiplier baked from its normalized OUTER 3D position;
+- the baked light direction is upper-left/front and the total brightness span is capped at 5% (`0.95..1.00`);
+- vertices at the same 3D position receive the same shade even if they belong to different voxel faces, removing the "internal wall shadow" effect;
+- face materials remain independent/unlit;
+- legacy core is unchanged and remains hidden by the opaque shell.
+
+Generator commits:
+- rounded: `ad1811c612af39062ebce83bad9c9854ac430251`;
+- legacy: `27c0a7384e24fda5a744fdb3574e695a11320a0b`.
+
+Definition commits removing shell textures:
+- rounded: `0d0b31a0c8788f7220f7cf233408ada0f97807be`;
+- legacy: `554dc3c280c25e58727d5935b93218620c62e6da`.
+
+GLBs with baked `COLOR_0`: `f413e12ae88d10507606968dd645648d6c63bff4`.
+
+VERSION: `0.50.139`, commit de versão `cc3722a67115f44a568368ed131e7e8dc917404f`.
