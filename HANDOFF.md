@@ -44,7 +44,7 @@ foi nomeada em helpers pequenos e reutilizada pelas ramificações de
 novo apenas para mundo `New + Normal`; Flat/Void e loads preservam o mesmo
 fallback e o clamp vertical já existente. VERSION: `0.50.113`.
 
-CI de Q3: pendente neste checkpoint.
+CI de Q3: **verde** no run `35814186142` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
