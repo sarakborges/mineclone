@@ -63,18 +63,18 @@ pub(super) struct SingleBiomeToggle;
 #[derive(Component)]
 pub(super) struct SingleBiomeToggleThumb;
 
+type WorldGenerationToggleVisuals = (
+    Ref<'static, Interaction>,
+    &'static mut BackgroundColor,
+    &'static mut BorderColor,
+);
+type SpawnStructuresToggleFilter = (With<SpawnStructuresToggle>, Without<SingleBiomeToggle>);
+type SingleBiomeToggleFilter = (With<SingleBiomeToggle>, Without<SpawnStructuresToggle>);
+
 #[derive(SystemParam)]
 pub(super) struct WorldGenerationToggleView<'w, 's> {
-    structure_toggles: Query<
-        'w,
-        's,
-        (
-            Ref<'static, Interaction>,
-            &'static mut BackgroundColor,
-            &'static mut BorderColor,
-        ),
-        (With<SpawnStructuresToggle>, Without<SingleBiomeToggle>),
-    >,
+    structure_toggles:
+        Query<'w, 's, WorldGenerationToggleVisuals, SpawnStructuresToggleFilter>,
     structure_thumbs: Query<
         'w,
         's,
@@ -84,16 +84,8 @@ pub(super) struct WorldGenerationToggleView<'w, 's> {
             Without<SingleBiomeToggleThumb>,
         ),
     >,
-    single_toggles: Query<
-        'w,
-        's,
-        (
-            Ref<'static, Interaction>,
-            &'static mut BackgroundColor,
-            &'static mut BorderColor,
-        ),
-        (With<SingleBiomeToggle>, Without<SpawnStructuresToggle>),
-    >,
+    single_toggles:
+        Query<'w, 's, WorldGenerationToggleVisuals, SingleBiomeToggleFilter>,
     single_thumbs: Query<
         'w,
         's,
