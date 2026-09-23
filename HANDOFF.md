@@ -218,6 +218,17 @@ apenas para coordenar Esc com pause, deixou de existir. VERSION: `0.50.129`.
 
 CI de Q18: **verde** no run `35865794175` após remover o helper obsoleto `reset_next_state_on_escape` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q19 — reutilizar conteúdo da hint do Player HUD
+
+`hud/player.rs` não suprime mais `too_many_arguments` em
+`spawn_player_hud`. O novo `InventoryHintContent` agrupa somente os cinco
+resources realmente compartilhados pela criação e sincronização da hint
+(settings, keybinds, localização, idioma e modal state) e centraliza texto,
+visibilidade e change detection. Pause/settings continuam explícitos no spawn
+por serem responsabilidade do root do HUD, não da hint. VERSION: `0.50.132`.
+
+CI de Q19: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
