@@ -165,7 +165,8 @@ def make_front_quad(name, width, height, z, material):
 def material(name, color, alpha=1., rough=.36, emission=None):
     mat = {'name': name, 'pbrMetallicRoughness': {
         'baseColorFactor': [*color, alpha],
-        'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False}
+        'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False,
+        'extensions': {'KHR_materials_unlit': {}}}
     if alpha < 1:
         mat['alphaMode'] = 'BLEND'
     if emission is not None:
@@ -275,12 +276,13 @@ tracks('Death',[0,.12,.31,.55,.75],
 scene = {
     'asset':{'version':'2.0','generator':'Asteria pixel-rounded slime v4'},
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
+    'extensionsUsed':['KHR_materials_unlit'],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
     'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Pixel-rounded stepped shell with enlarged core; face on lower front panel; collider does not animate'},
+              'notes':'Pixel-rounded stepped shell; all source materials are KHR_materials_unlit so rotation cannot change their brightness; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)
