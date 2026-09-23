@@ -150,6 +150,19 @@ fn spawn_option(
     ));
 }
 
+fn close_spawn_biome_dropdown(
+    state: &mut SpawnBiomeDropdownState,
+    focus: &mut InputFocus,
+    search_entity: Entity,
+    editor: &mut EditableText,
+) {
+    state.close();
+    editor.clear();
+    if focus.get() == Some(search_entity) {
+        focus.clear();
+    }
+}
+
 pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
     buttons: Query<&Interaction, (Changed<Interaction>, With<SpawnBiomeDropdownButton>)>,
     mut state: ResMut<SpawnBiomeDropdownState>,
@@ -163,11 +176,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
     }
     let (entity, editor) = &mut *search;
     if state.is_open() {
-        state.close();
-        editor.clear();
-        if focus.get() == Some(*entity) {
-            focus.clear();
-        }
+        close_spawn_biome_dropdown(&mut state, &mut focus, *entity, editor);
     } else {
         seed_input.reset();
         ticks_input.reset();
@@ -218,12 +227,8 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_option_buttons(
         if config.spawn_biome() != option.biome_id.as_deref() {
             config.set_spawn_biome(option.biome_id.clone());
         }
-        state.close();
         let (entity, editor) = &mut *search;
-        editor.clear();
-        if focus.get() == Some(*entity) {
-            focus.clear();
-        }
+        close_spawn_biome_dropdown(&mut state, &mut focus, *entity, editor);
         break;
     }
 }
@@ -242,11 +247,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_search_keyboard(
         return;
     }
     if keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
-        state.close();
-        editor.clear();
-        if focus.get() == Some(*entity) {
-            focus.clear();
-        }
+        close_spawn_biome_dropdown(&mut state, &mut focus, *entity, editor);
     }
 }
 
@@ -337,14 +338,8 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_option_labels(
     }
 }
 
-#[derive(SystemParam)]
-pub(in crate::screens::settings_screen) struct SpawnBiomeSearchContext<'w, 's> {
-    state: Res<'w, SpawnBiomeDropdownState>,
-    search: Query<'w, 's, &'static EditableText, With<SpawnBiomeSearchBar>>,
-}
-
 pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
-    search: SpawnBiomeSearchContext,
+    search: Query<&EditableText, With<SpawnBiomeSearchBar>>,
     config: Res<NewWorldConfig>,
     content: SpawnBiomeUiContent,
     changed_interactions: Query<(), (With<SpawnBiomeOption>, Changed<Interaction>)>,
@@ -358,12 +353,11 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
     mut scroll_positions: Query<&mut ScrollPosition, With<SpawnBiomeOptionsList>>,
     mut previous_query: Local<String>,
 ) {
-    let Ok(editor) = search.search.single() else {
+    let Ok(editor) = search.single() else {
         return;
     };
     let query = editable_value(editor);
     let query_changed = previous_query.as_str() != query;
-    let _dropdown_open = search.state.is_open();
     let filter_changed = query_changed || content.inputs_changed() || config.is_changed();
     let style_changed = config.is_changed() || !changed_interactions.is_empty();
     if !filter_changed && !style_changed {
