@@ -17,7 +17,9 @@ use crate::{
     },
 };
 
-use super::{CreatureInstance, random::next_u32, spawn_creature_at};
+use crate::gameplay::random::next_u32;
+
+use super::{CreatureInstance, spawn_creature_at};
 
 const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
