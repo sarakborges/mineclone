@@ -347,6 +347,17 @@ duas implementações idênticas em módulos de HUD distintos. VERSION:
 
 CI de Q30: **verde** no run `35875948606` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q31 — deduplicar cleanup do dropdown de spawn biome
+
+Os três caminhos que fecham o dropdown de spawn biome (botão, seleção de opção
+e Escape) agora reutilizam `close_spawn_biome_dropdown`, que concentra
+`state.close`, limpeza do editor e liberação condicional de `InputFocus`.
+`sync_spawn_biome_options` também deixou de depender de
+`SpawnBiomeDropdownState`, que era lido apenas para uma variável sem efeito.
+VERSION: `0.50.149`.
+
+CI de Q31: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
