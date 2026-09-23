@@ -455,6 +455,18 @@ cobrir também variation inválida e zero no caminho de locate. VERSION:
 CI de Q39: **verde** no run `35883434923` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
+### Q40 — reutilizar clearance de AABB entre movimento e entity contacts
+
+`player/movement/entity_collision.rs` não mantém mais sua própria cópia da
+regra que decide se um AABB pode ocupar uma posição do mundo. O helper
+`voxel/collision.rs::aabb_is_clear` passou a ter visibilidade interna ao crate
+e é reutilizado tanto pelo stepping quanto pelo push de entity contacts. Assim,
+checagem de chunks carregados, epsilon nas bordas e colisão com voxels/microblocks
+possuem um único owner. VERSION: `0.50.160`.
+
+CI de Q40: **verde** no run `35883891200` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
