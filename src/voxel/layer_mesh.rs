@@ -218,7 +218,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     // A layer attached to a sculpted face must follow every exposed microface
     // with that normal, exactly like the host block's own texture. Restricting
     // it to the macroblock boundary leaves the layer floating or missing after
-    // the Chisel recesses that surface.
+    // the Artisan's Kit recesses that surface.
     for depth in 0..MICRO_EDGE {
         let mut visible = [false; MICRO_EDGE * MICRO_EDGE];
 
