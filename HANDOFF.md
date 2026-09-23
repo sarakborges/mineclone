@@ -590,6 +590,19 @@ CI de Q49: **verde** no run `35888565600` (localizações, Clippy com
 `-D warnings` e `cargo check`).
 
 
+### Q50 — extrair persistência de creatures
+
+`SavedCreature` e `PendingCreatureRestores` saíram de `creatures/mod.rs`
+para `creatures/persistence.rs`, preservando os mesmos re-exports usados por
+save/load. A fila pendente também deixou de expor seu `Vec` internamente:
+`spawn.rs` usa `is_empty`, `take` e `defer`, mantendo a propriedade e a
+mutação da fila no módulo de persistência. O módulo raiz fica focado em
+componentes/runtime e composição do plugin. VERSION: `0.50.171`.
+
+CI de Q50: **verde** no run `35889054248` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
