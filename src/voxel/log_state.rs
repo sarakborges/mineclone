@@ -22,6 +22,18 @@ pub(crate) fn texture_face(cell: VoxelCell, source_face: BlockFace) -> BlockFace
     }
 }
 
+pub(crate) fn hollow_surface_texture_face(
+    cell: VoxelCell,
+    source_face: BlockFace,
+    interior_surface: bool,
+) -> BlockFace {
+    if interior_surface && is_hollow(cell) {
+        BlockFace::Top
+    } else {
+        texture_face(cell, source_face)
+    }
+}
+
 pub(crate) fn has_valid_log_state(cell: VoxelCell, block: &BlockDefinition) -> bool {
     let hollow = cell.secondary_property(HOLLOW_LOG_PROPERTY);
     let stripped = cell.secondary_property(STRIPPED_LOG_PROPERTY);
@@ -52,5 +64,17 @@ mod tests {
 
         assert_eq!(texture_face(cell, BlockFace::Front), BlockFace::Top);
         assert_eq!(texture_face(cell, BlockFace::Top), BlockFace::Top);
+    }
+
+    #[test]
+    fn hollow_interior_uses_exposed_wood_texture_without_stripping_outer_bark() {
+        let cell = VoxelCell::new("asteria:log", TextureRotation::default())
+            .with_secondary_property(HOLLOW_LOG_PROPERTY, LOG_STATE_ENABLED);
+
+        assert_eq!(texture_face(cell, BlockFace::Front), BlockFace::Front);
+        assert_eq!(
+            hollow_surface_texture_face(cell, BlockFace::Front, true),
+            BlockFace::Top
+        );
     }
 }
