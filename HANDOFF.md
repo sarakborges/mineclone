@@ -46,6 +46,18 @@ fallback e o clamp vertical já existente. VERSION: `0.50.113`.
 
 CI de Q3: **verde** no run `35814186142` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q4 — agrupar apenas os inputs do footer de novo mundo
+
+`handle_new_world_footer` não suprime mais `too_many_arguments`.
+`NewWorldFooterInput` reúne somente o estado de tela, teclado e interações dos
+botões do footer e expõe operações semânticas (`is_new_world`,
+`pressed_action` e `escape_pressed`). `Commands`, `NewWorldDraft`,
+localização e transição continuam explícitos porque pertencem a
+responsabilidades distintas. Isso reduz a assinatura sem criar um context
+genérico ou duplicar lógica de input. VERSION: `0.50.114`.
+
+CI de Q4: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
