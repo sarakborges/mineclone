@@ -493,6 +493,19 @@ incompleta de lifetimes de `Single` no Bevy 0.19. A correção permaneceu no
 mesmo bloco/version. CI de Q42: **verde** no run `35885223986` (localizações,
 Clippy com `-D warnings` e `cargo check`).
 
+### Q43 — separar seleção ponderada do natural spawn
+
+`natural_spawn_creatures` não constrói mais um `Vec` temporário de regras
+elegíveis nem concentra a política de caps/pesos no system. O helper
+`natural_spawn_rule_is_eligible` centraliza weight, existência da creature e
+`max_per_type`; `select_natural_spawn_rule` aplica o cap global da dimensão
+e faz a escolha ponderada diretamente sobre iteradores, em duas passagens sem
+alocação. O system fica responsável apenas pelo tick, rebuild das contagens e
+tentativa de posicionamento. VERSION: `0.50.164`.
+
+CI de Q43: **verde** no run `35886364834` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
