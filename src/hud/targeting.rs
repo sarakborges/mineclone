@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{
-        block::DEFAULT_BLOCK_BREAK_TICKS,
+        block::{BlockDefinition, DEFAULT_BLOCK_BREAK_TICKS},
         builtin_ids::DYED_PROPERTY_ID,
         layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
@@ -22,7 +22,7 @@ use crate::{
         block::{BlockTargetingSet, TargetedBlock},
     },
     ui::{selectable, typography, visibility::set_visibility},
-    voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
+    voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
 };
 
 use super::{HudSettings, TargetBlockPosition};
@@ -336,14 +336,57 @@ fn update_target_hud(
     }
 
     let mut target_text = target_text.into_inner();
-    let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
+    let next_text = target_hud_text(&snapshot, block, &state, &content);
+    if target_text.0 != next_text {
+        target_text.0 = next_text;
+    }
+
+    let icon_snapshot = target_hud_icon_snapshot(&snapshot, cell, block, &content);
+    let block_changed = cached_icon
+        .as_ref()
+        .is_none_or(|previous| previous.block_id != icon_snapshot.block_id);
+    let tint_changed = cached_icon
+        .as_ref()
+        .is_none_or(|previous| previous.tint != icon_snapshot.tint);
+
+    if !block_changed && !block_definitions_changed && !tint_changed {
+        return;
+    }
+
+    let (mut model, material_handle) = icon.into_inner();
+    let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
+        return;
+    };
+
+    if (model.set_block_id(Some(hit.block_id)) || block_definitions_changed)
+        && let Some(block) = block
+    {
+        material.set_block(block, &content.visual.asset_server);
+    }
+    if tint_changed {
+        material.set_tint(tint);
+    }
+    *cached_icon = Some(icon_snapshot);
+}
+
+
+fn target_hud_text(
+    snapshot: &TargetHudSnapshot,
+    block: Option<&BlockDefinition>,
+    state: &TargetHudState<'_>,
+    content: &TargetHudContent<'_>,
+) -> String {
+    let language = snapshot.language;
+    let block_name = block.map_or(snapshot.block_id, |block| block.name.text(language));
     let coordinates = state
         .localization
         .text(language, "hud.coordinates")
-        .replace("{x}", &hit.voxel.x.to_string())
-        .replace("{z}", &hit.voxel.z.to_string())
-        .replace("{y}", &hit.voxel.y.to_string());
-    let mut property_labels = properties
+        .replace("{x}", &snapshot.voxel.x.to_string())
+        .replace("{z}", &snapshot.voxel.z.to_string())
+        .replace("{y}", &snapshot.voxel.y.to_string());
+
+    let mut property_labels = snapshot
+        .properties
         .iter()
         .map(|(property, value)| {
             let property_name = match property {
@@ -363,20 +406,21 @@ fn update_target_hud(
     } else {
         format!("\n{}", property_labels.join("\n"))
     };
+
     let mut layer_lines = Vec::new();
     let mut index = 0;
-    while index < applied_layers.len() {
-        let layer_id = applied_layers[index].1;
+    while index < snapshot.layers.len() {
+        let layer_id = snapshot.layers[index].1;
         let layer_name = content
             .layers
             .get(layer_id)
             .map_or(layer_id, |layer| layer.name.text(language));
         let mut faces = Vec::new();
-        while index < applied_layers.len() && applied_layers[index].1 == layer_id {
+        while index < snapshot.layers.len() && snapshot.layers[index].1 == layer_id {
             faces.push(layer_face_name(
                 &state.localization,
                 language,
-                applied_layers[index].0,
+                snapshot.layers[index].0,
             ));
             index += 1;
         }
@@ -391,6 +435,7 @@ fn update_target_hud(
             layer_lines.join("\n")
         )
     };
+
     let mining_text = block.map_or_else(String::new, |block| {
         let mut lines = Vec::new();
         if !block.mining.required_tools.is_empty() {
@@ -421,7 +466,9 @@ fn update_target_hud(
             format!("\n{}", lines.join("\n"))
         }
     });
-    let breaking_text = breaking_progress
+
+    let breaking_text = snapshot
+        .breaking_progress
         .map(|progress| {
             format!(
                 "\n{}: {progress}%",
@@ -429,19 +476,25 @@ fn update_target_hud(
             )
         })
         .unwrap_or_default();
-    let next_text = format!(
-        "{block_name}{properties_text}{layers_text}{mining_text}{breaking_text}\n{}: {light_level}\n{coordinates}",
+
+    format!(
+        "{block_name}{properties_text}{layers_text}{mining_text}{breaking_text}\n{}: {}\n{coordinates}",
         state.localization.text(language, "hud.light"),
-    );
+        snapshot.light_level,
+    )
+}
 
-    if target_text.0 != next_text {
-        target_text.0 = next_text;
-    }
-
-    let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
+fn target_hud_icon_snapshot(
+    snapshot: &TargetHudSnapshot,
+    cell: Option<VoxelCell>,
+    block: Option<&BlockDefinition>,
+    content: &TargetHudContent<'_>,
+) -> TargetHudIconSnapshot {
+    let tint_position =
+        Vec2::new(snapshot.voxel.x as f32 + 0.5, snapshot.voxel.z as f32 + 0.5);
     let base_tint = content
         .visual
-        .tint_at(hit.block_id, tint_position)
+        .tint_at(snapshot.block_id, tint_position)
         .unwrap_or(Color::WHITE);
     let tint = match (block, cell) {
         (Some(block), Some(cell)) => apply_secondary_property_tint(
@@ -452,37 +505,12 @@ fn update_target_hud(
         ),
         _ => base_tint,
     };
-    let icon_snapshot = TargetHudIconSnapshot {
-        block_id: hit.block_id,
+
+    TargetHudIconSnapshot {
+        block_id: snapshot.block_id,
         tint,
-    };
-    let block_changed = cached_icon
-        .as_ref()
-        .is_none_or(|previous| previous.block_id != icon_snapshot.block_id);
-    let tint_changed = cached_icon
-        .as_ref()
-        .is_none_or(|previous| previous.tint != icon_snapshot.tint);
-
-    if !block_changed && !block_definitions_changed && !tint_changed {
-        return;
     }
-
-    let (mut model, material_handle) = icon.into_inner();
-    let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
-        return;
-    };
-
-    if (model.set_block_id(Some(hit.block_id)) || block_definitions_changed)
-        && let Some(block) = block
-    {
-        material.set_block(block, &content.visual.asset_server);
-    }
-    if tint_changed {
-        material.set_tint(tint);
-    }
-    *cached_icon = Some(icon_snapshot);
 }
-
 
 fn tool_category_names(
     category_ids: &[String],
