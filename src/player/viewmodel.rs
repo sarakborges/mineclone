@@ -92,7 +92,7 @@ fn spawn_first_person_held_sprite(
 ) {
     let rotation = animation::base_viewmodel_transform().rotation.inverse();
     let root_transform =
-        Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y, 0.21))
+        Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y + 0.08, 0.21))
             .with_rotation(rotation);
 
     for viewmodel in &viewmodels {
