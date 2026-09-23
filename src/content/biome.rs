@@ -13,8 +13,8 @@ use super::{
     biome_structure::{BiomeStructure, StructurePlacementRules},
     biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
     biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
-    biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, day_night_phase::DayNightPhases,
-    registry::DefinitionMap,
+    biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,
+    day_night_phase::DayNightPhases, registry::DefinitionMap,
 };
 
 mod validation;
@@ -150,6 +150,17 @@ impl BiomeDefinition {
         self.visuals
             .as_ref()
             .unwrap_or_else(|| panic!("biome {} does not define visuals", self.id))
+    }
+
+    pub(crate) fn validate_spawn_references(&self, creatures: &CreatureRegistry) {
+        for spawn in &self.creature_spawns {
+            assert!(
+                creatures.get(&spawn.creature).is_some(),
+                "biome {} references missing creature spawn: {}",
+                self.id,
+                spawn.creature
+            );
+        }
     }
 }
 
