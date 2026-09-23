@@ -14,7 +14,7 @@ use bevy::prelude::*;
 
 use super::{
     cell::VoxelCell,
-    log_state::is_hollow,
+    log_variant::is_hollow_log_id,
     read::VoxelRead,
 };
 
@@ -70,14 +70,14 @@ impl MicroblockMask {
     }
 
     pub(crate) fn has_partial_geometry(cell: VoxelCell) -> bool {
-        Self::is_modified(cell) || is_hollow(cell)
+        Self::is_modified(cell) || is_hollow_log_id(cell.block_id)
     }
 
     pub(crate) fn geometry_for_cell(cell: VoxelCell) -> Self {
         if Self::is_modified(cell) {
             return Self::from_cell(cell);
         }
-        if is_hollow(cell) {
+        if is_hollow_log_id(cell.block_id) {
             return Self::hollow_log(cell.orientation);
         }
         Self::FULL
