@@ -99,6 +99,55 @@ impl BootstrapGenerationSettings {
     }
 }
 
+struct BootstrapRenderingContext<'a> {
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    fluids: &'a FluidRegistry,
+    asset_server: &'a AssetServer,
+}
+
+struct BootstrapRenderingResources {
+    terrain_lighting: TerrainLightingBuffer,
+    terrain_materials: TerrainMaterials,
+    fluid_materials: FluidMaterials,
+}
+
+impl BootstrapRenderingContext<'_> {
+    fn build(
+        self,
+        images: &mut Assets<Image>,
+        material_assets: &mut Assets<TerrainMaterial>,
+        shader_buffers: &mut Assets<ShaderBuffer>,
+    ) -> BootstrapRenderingResources {
+        let (roughness, metallic) = average_terrain_material(self.dimension, self.biomes);
+        let terrain_lighting = TerrainLightingBuffer::new(shader_buffers);
+        let terrain_materials = TerrainMaterials::from_registry(
+            self.blocks,
+            self.layers,
+            self.asset_server,
+            images,
+            material_assets,
+            &terrain_lighting,
+            roughness,
+            metallic,
+        );
+        let fluid_materials = FluidMaterials::from_registry(
+            self.fluids,
+            material_assets,
+            &terrain_lighting,
+            terrain_materials.texture_array_handle(),
+        );
+
+        BootstrapRenderingResources {
+            terrain_lighting,
+            terrain_materials,
+            fluid_materials,
+        }
+    }
+}
+
 struct BootstrapSpawnContext<'a> {
     load_mode: WorldLoadMode,
     world_generation: WorldGenerationSettings,
@@ -245,23 +294,22 @@ pub(in crate::world) fn begin_world_loading(
         dimension.hydrology.clone(),
         ocean_weight,
     );
-    let (roughness, metallic) = average_terrain_material(dimension, biomes);
-    let terrain_lighting = TerrainLightingBuffer::new(&mut shader_buffers);
-    let terrain_materials = TerrainMaterials::from_registry(
+    let BootstrapRenderingResources {
+        terrain_lighting,
+        terrain_materials,
+        fluid_materials,
+    } = BootstrapRenderingContext {
+        dimension,
+        biomes,
         blocks,
         layers,
-        &content.asset_server,
+        fluids,
+        asset_server: &content.asset_server,
+    }
+    .build(
         &mut images,
         &mut terrain_material_assets,
-        &terrain_lighting,
-        roughness,
-        metallic,
-    );
-    let fluid_materials = FluidMaterials::from_registry(
-        fluids,
-        &mut terrain_material_assets,
-        &terrain_lighting,
-        terrain_materials.texture_array_handle(),
+        &mut shader_buffers,
     );
     let saved_player_position = persistence.save.player_position(LOCAL_PLAYER_ID);
     let BootstrapSpawn {
