@@ -7,7 +7,10 @@ use crate::{
     content::creature::{CreatureParticleEffect, CreatureRegistry},
 };
 
-use super::{CreatureAnimationState, CreatureInstance};
+use super::{
+    CreatureAnimationState, CreatureInstance,
+    random::{next_signed_f32, next_unit_f32},
+};
 
 const MAX_PARTICLE_FRAME_DELTA_SECONDS: f32 = 0.05;
 const INITIAL_RANDOM_STATE: u32 = 0xA5A5_1F3D;
@@ -91,18 +94,18 @@ impl CreatureParticleSpawner<'_, '_> {
         let material = self.material(effect.color);
 
         for _ in 0..effect.count {
-            let angle = random_01(&mut self.random_state) * std::f32::consts::TAU;
-            let radius = effect.spawn_radius * random_01(&mut self.random_state).sqrt();
+            let angle = next_unit_f32(&mut self.random_state) * std::f32::consts::TAU;
+            let radius = effect.spawn_radius * next_unit_f32(&mut self.random_state).sqrt();
             let horizontal = Vec2::new(angle.cos(), angle.sin());
-            let size = effect.size * (0.78 + random_01(&mut self.random_state) * 0.44);
-            let lifetime = effect.lifetime * (0.88 + random_01(&mut self.random_state) * 0.24);
+            let size = effect.size * (0.78 + next_unit_f32(&mut self.random_state) * 0.44);
+            let lifetime = effect.lifetime * (0.88 + next_unit_f32(&mut self.random_state) * 0.24);
             let vertical_jitter =
-                random_signed(&mut self.random_state) * effect.vertical_jitter;
+                next_signed_f32(&mut self.random_state) * effect.vertical_jitter;
             let position = origin
                 + Vec3::new(
                     horizontal.x * radius,
                     effect.y_offset
-                        + random_signed(&mut self.random_state)
+                        + next_signed_f32(&mut self.random_state)
                             * effect.spawn_radius
                             * 0.15,
                     horizontal.y * radius,
@@ -212,15 +215,4 @@ pub(super) fn update_creature_particles(
         let factor = 1.0 + (particle.end_scale - 1.0) * progress;
         transform.scale = Vec3::splat((particle.start_scale * factor).max(0.001));
     }
-}
-
-fn random_01(state: &mut u32) -> f32 {
-    *state ^= *state << 13;
-    *state ^= *state >> 17;
-    *state ^= *state << 5;
-    *state as f32 / u32::MAX as f32
-}
-
-fn random_signed(state: &mut u32) -> f32 {
-    random_01(state) * 2.0 - 1.0
 }
