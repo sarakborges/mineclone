@@ -237,7 +237,7 @@ para spawn biome, biome-size multiplier e world-generation settings.
 `NewWorldConfig` e `InMemoryWorldSave`, mantendo o restante do bootstrap
 independente da origem desses valores. VERSION: `0.50.134`.
 
-CI de Q20: pendente neste checkpoint.
+CI de Q20: **verde** no run `35868575932` (localizações, Clippy com `-D warnings` e `cargo check`).
 
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
