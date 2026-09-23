@@ -3,29 +3,17 @@ mod palette;
 use bevy::prelude::*;
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        resource_systems::reset_resource,
-        state_systems::{reset_next_state, reset_next_state_on_escape},
-    },
+    app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         block::BlockRegistry,
         builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
     },
-    gameplay::availability::world_interaction_available,
+    gameplay::{availability::world_interaction_available, modal::GameplayModalState},
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
     voxel::edit::VoxelMutationRuntime,
 };
 
 use self::palette::{handle_palette_selection, spawn_brush_palette};
-
-#[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) enum BrushPaletteState {
-    #[default]
-    Closed,
-    Open,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum BrushSelection {
@@ -59,8 +47,7 @@ pub(super) struct BrushPlugin;
 
 impl Plugin for BrushPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<BrushPaletteState>()
-            .init_resource::<BrushMode>()
+        app.init_resource::<BrushMode>()
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 reset_resource::<BrushMode>,
@@ -72,25 +59,14 @@ impl Plugin for BrushPlugin {
                     .run_if(world_interaction_available),
             )
             .add_systems(
-                OnEnter(BrushPaletteState::Open),
+                OnEnter(GameplayModalState::BrushPalette),
                 spawn_brush_palette.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,
-                (
-                    handle_palette_selection,
-                    reset_next_state_on_escape::<BrushPaletteState>,
-                )
+                handle_palette_selection
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(BrushPaletteState::Open)),
-            )
-            .add_systems(
-                OnEnter(PauseState::Paused),
-                reset_next_state::<BrushPaletteState>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnExit(GameState::Gameplay),
-                reset_next_state::<BrushPaletteState>,
+                    .run_if(in_state(GameplayModalState::BrushPalette)),
             );
     }
 }
@@ -100,7 +76,7 @@ fn handle_brush_use(
     blocks: Res<BlockRegistry>,
     mode: Res<BrushMode>,
     mut runtime: VoxelMutationRuntime,
-    mut next_palette: ResMut<NextState<BrushPaletteState>>,
+    mut next_modal: ResMut<NextState<GameplayModalState>>,
 ) {
     for usage in uses.read() {
         if usage.tool_id != BRUSH_TOOL_ID {
@@ -108,7 +84,7 @@ fn handle_brush_use(
         }
 
         if usage.button == ToolUseButton::Right {
-            next_palette.set(BrushPaletteState::Open);
+            next_modal.set(GameplayModalState::BrushPalette);
             continue;
         }
 
