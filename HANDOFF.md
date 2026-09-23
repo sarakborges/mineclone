@@ -260,6 +260,17 @@ crate para tornar essa fronteira explícita. VERSION: `0.50.137`.
 
 CI de Q22: **verde** no run `35870037840` (localizações, Clippy com `-D warnings` e `cargo check`).
 
+### Q23 — isolar criação de resources de rendering do bootstrap
+
+A criação de `TerrainLightingBuffer`, `TerrainMaterials` e `FluidMaterials`
+saiu de `begin_world_loading` para `BootstrapRenderingContext::build`.
+Registries e AssetServer ficam agrupados no contexto read-only; os três asset
+storages mutáveis continuam parâmetros explícitos do build. O cálculo de
+roughness/metallic permanece no mesmo caminho e o bootstrap recebe um
+`BootstrapRenderingResources` pronto para inserção. VERSION: `0.50.138`.
+
+CI de Q23: pendente neste checkpoint.
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
