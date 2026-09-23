@@ -682,6 +682,18 @@ ociosos; a correção permaneceu no mesmo bloco/version. CI de Q56: **verde** no
 run `35891909492` (localizações, Clippy com `-D warnings` e
 `cargo check`).
 
+### Q57 — tipar attack effects
+
+`AttackEffectDefinition.effect` deixou de ser `String` e passou a
+`AttackEffectKind`, desserializado diretamente do mesmo valor JSON
+(`"knockback"`). `creatures/combat.rs` faz match exaustivo no enum em vez
+de comparar strings, e effects desconhecidos/typos agora falham na
+desserialização do conteúdo antes de alcançar o runtime. Chance e strength
+mantêm as mesmas validações. VERSION: `0.50.179`.
+
+CI de Q57: **verde** no run `35892501151` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
