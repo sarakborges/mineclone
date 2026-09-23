@@ -532,6 +532,23 @@ mesmo bloco/version. CI de Q45: **verde** no run `35887319637` (localizações,
 Clippy com `-D warnings` e `cargo check`).
 
 
+### Q46 — extrair módulo de natural spawn
+
+A política completa de natural spawn saiu de `creatures/mod.rs` para
+`creatures/natural_spawn.rs`. O novo módulo é owner de scheduler local,
+SystemParam/context, seleção ponderada, busca espacial, regras de luz/spacing,
+surface scan e RNG; `creatures/mod.rs` mantém lifecycle/plugin, restore,
+spawn explícito e componentes compartilhados. A extração preserva a chamada
+`spawn_creature_at` como boundary de criação e reduz a mistura de
+responsabilidades no módulo raiz. VERSION: `0.50.167`.
+
+A primeira validação do bloco, run `35887708346`, apontou apenas que os tipos
+privados usados na assinatura do system precisavam acompanhar a visibilidade
+`pub(super)` da função. A correção permaneceu no mesmo bloco/version. CI de
+Q46: **verde** no run `35887813428` (localizações, Clippy com
+`-D warnings` e `cargo check`).
+
+
 ## Checkpoint 183 — 2026-09-22: auditoria de performance e recuperação do CI [EM ANDAMENTO]
 
 Base: `bd2c152702e37998d3dc4c12926982c8509b990c`, `develop`, VERSION inicial `0.50.14`.
