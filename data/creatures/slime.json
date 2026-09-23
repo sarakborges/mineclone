@@ -23,8 +23,8 @@
   "materialTints": {
     "SlimeShell": {
       "hue": 153,
-      "saturation": 0.62,
-      "intensity": 0.64
+      "saturation": 0.55,
+      "intensity": 0.56
     }
   },
   "unlitMaterials": [
