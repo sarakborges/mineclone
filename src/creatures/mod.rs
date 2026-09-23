@@ -5,13 +5,17 @@ mod visual;
 
 use std::io;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     entity::EntityHealth,
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
-    content::{biome::BiomeRegistry, creature::{CreatureCollider, CreatureRegistry}},
+    content::{
+        biome::BiomeRegistry,
+        creature::{CreatureCollider, CreatureRegistry},
+        dimension::DimensionRegistry,
+    },
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
     world::{
@@ -225,25 +229,37 @@ const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
 const NATURAL_SPAWN_MAX_DISTANCE: f32 = 32.0;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+struct NaturalSpawnContext<'w, 's> {
+    rules: Res<'w, GameRules>,
+    world: Res<'w, VoxelWorld>,
+    biome: Res<'w, CurrentBiome>,
+    definitions: Res<'w, CreatureRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    language: Res<'w, ActiveLanguage>,
+    asset_server: Res<'w, AssetServer>,
+    player: Single<'w, &'static Transform, With<GameplayCamera>>,
+    creatures: Query<
+        'w,
+        's,
+        (
+            &'static CreatureInstance,
+            &'static Transform,
+            &'static EntityHealth,
+        ),
+    >,
+    current_dimension: Res<'w, CurrentDimension>,
+    entity_counts: ResMut<'w, DimensionEntityCounts>,
+    dimensions: Res<'w, DimensionRegistry>,
+}
+
 fn natural_spawn_creatures(
     time: Res<Time>,
-    rules: Res<GameRules>,
-    world: Res<VoxelWorld>,
-    biome: Res<CurrentBiome>,
-    definitions: Res<CreatureRegistry>,
-    biomes: Res<BiomeRegistry>,
-    language: Res<ActiveLanguage>,
-    asset_server: Res<AssetServer>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    creatures: Query<(&CreatureInstance, &Transform, &EntityHealth)>,
-    current_dimension: Res<CurrentDimension>,
-    mut entity_counts: ResMut<DimensionEntityCounts>,
-    dimensions: Res<crate::content::dimension::DimensionRegistry>,
+    mut context: NaturalSpawnContext<'_, '_>,
     mut commands: Commands,
     mut state: Local<(f32, u32)>,
 ) {
-    if !rules.spawn_creatures() {
+    if !context.rules.spawn_creatures() {
         return;
     }
 
@@ -252,24 +268,24 @@ fn natural_spawn_creatures(
         return;
     }
     state.0 = NATURAL_SPAWN_INTERVAL;
-    if state.1 == 0 { state.1 = player.translation.x.to_bits() ^ player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
+    if state.1 == 0 { state.1 = context.player.translation.x.to_bits() ^ context.player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
 
-    entity_counts.rebuild(
-        creatures
+    context.entity_counts.rebuild(
+        context.creatures
             .iter()
             .filter(|(_, _, health)| !health.is_dead())
             .map(|(instance, _, _)| instance),
     );
-    let Some(dimension_definition) = dimensions.get(&current_dimension.id) else { return; };
-    let Some(biome_definition) = biomes.get(&biome.id) else { return; };
+    let Some(dimension_definition) = context.dimensions.get(&context.current_dimension.id) else { return; };
+    let Some(biome_definition) = context.biomes.get(&context.biome.id) else { return; };
     let candidates: Vec<_> = biome_definition
         .creature_spawns
         .iter()
-        .filter(|rule| rule.weight > 0.0 && definitions.get(&rule.creature).is_some())
-        .filter(|_| entity_counts.total < dimension_definition.max_entities)
+        .filter(|rule| rule.weight > 0.0 && context.definitions.get(&rule.creature).is_some())
+        .filter(|_| context.entity_counts.total < dimension_definition.max_entities)
         .filter(|rule| {
-            let Some(creature) = definitions.get(&rule.creature) else { return false; };
-            entity_counts.count(&rule.creature) < creature.max_per_type
+            let Some(creature) = context.definitions.get(&rule.creature) else { return false; };
+            context.entity_counts.count(&rule.creature) < creature.max_per_type
         })
         .collect();
     if candidates.is_empty() { return; }
@@ -285,22 +301,29 @@ fn natural_spawn_creatures(
     for _ in 0..8 {
         let angle = next_random(&mut state.1) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
         let distance = NATURAL_SPAWN_MIN_DISTANCE + (next_random(&mut state.1) as f32 / u32::MAX as f32) * (NATURAL_SPAWN_MAX_DISTANCE - NATURAL_SPAWN_MIN_DISTANCE);
-        let position = player.translation + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
+        let position = context.player.translation + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
         let column = IVec2::new(position.x.floor() as i32, position.z.floor() as i32);
-        let Some(feet_y) = natural_spawn_feet_y(&world, column) else { continue; };
+        let Some(feet_y) = natural_spawn_feet_y(&context.world, column) else { continue; };
         let feet = Vec3::new(column.x as f32 + 0.5, feet_y as f32, column.y as f32 + 0.5);
-        let light = world.light_at(feet.floor().as_ivec3());
+        let light = context.world.light_at(feet.floor().as_ivec3());
         let light_level = light.sky().max(light.block());
         if light_level < rule.light_min || light_level > rule.light_max { continue; }
-        if creatures.iter().any(|(instance, transform, health)| {
+        if context.creatures.iter().any(|(instance, transform, health)| {
             !health.is_dead()
                 && instance.definition_id == rule.creature
                 && transform.translation.distance(feet) < rule.spacing
         }) {
             continue;
         }
-        if !world.is_loaded_at(feet.floor().as_ivec3()) || world.fluid_at(feet.floor().as_ivec3()).is_some() { continue; }
-        let _ = spawn_creature_at(&mut commands, &definitions, &asset_server, language.get(), &rule.creature, feet);
+        if !context.world.is_loaded_at(feet.floor().as_ivec3()) || context.world.fluid_at(feet.floor().as_ivec3()).is_some() { continue; }
+        let _ = spawn_creature_at(
+            &mut commands,
+            &context.definitions,
+            &context.asset_server,
+            context.language.get(),
+            &rule.creature,
+            feet,
+        );
         break;
     }
 }
