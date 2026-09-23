@@ -18,7 +18,6 @@ use crate::{
 };
 
 const HELD_SPRITE_SIZE: f32 = 0.52;
-const HELD_TOOL_GRIP_OFFSET: Vec2 = Vec2::new(-0.36, -0.36);
 const HELD_TOOL_DISPLAY_ANGLE: f32 = 0.30;
 const HELD_TINT_DEPTH: f32 = 0.004;
 
@@ -148,12 +147,8 @@ pub(crate) fn setup_held_sprite_mesh(
 fn plane_transform(kind: HeldSpriteKind, depth: f32) -> Transform {
     match kind {
         HeldSpriteKind::Item => Transform::from_translation(Vec3::Z * depth),
-        HeldSpriteKind::Tool => {
-            let rotation = Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE);
-            let grip = HELD_TOOL_GRIP_OFFSET.extend(0.0) * HELD_SPRITE_SIZE;
-            Transform::from_translation(-(rotation * grip) + Vec3::Z * depth)
-                .with_rotation(rotation)
-        }
+        HeldSpriteKind::Tool => Transform::from_translation(Vec3::Z * depth)
+            .with_rotation(Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE)),
     }
 }
 
