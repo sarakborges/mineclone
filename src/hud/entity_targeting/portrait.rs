@@ -9,7 +9,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::creature::CreatureRegistry,
-    creatures::{material::apply_creature_material_overrides, CreatureInstance},
+    creatures::{apply_creature_material_overrides, CreatureInstance},
     hud::entity_card::{EntityCard, EntityCardSource},
 };
 
