@@ -12,8 +12,8 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
+    gameplay::modal::GameplayModalState,
     player::{
-        character_info::CharacterInfoState,
         model::{
             PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
             PLAYER_MODEL_HUD_RENDER_LAYER,
@@ -108,7 +108,7 @@ impl PlayerPreviewLayout<'_, '_> {
 pub(super) struct PlayerPreviewState<'w> {
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
-    character_info: Res<'w, State<CharacterInfoState>>,
+    modal: Res<'w, State<GameplayModalState>>,
     orbit: Res<'w, CharacterPreviewOrbit>,
 }
 
@@ -119,7 +119,7 @@ impl PlayerPreviewState<'_> {
     }
 
     fn character_visible(&self) -> bool {
-        *self.character_info.get() == CharacterInfoState::Open
+        *self.modal.get() == GameplayModalState::CharacterInfo
     }
 
     fn character_yaw(&self) -> f32 {
