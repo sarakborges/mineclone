@@ -7,6 +7,7 @@ use crate::world::{
         constants::{
             LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET,
             RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
+            RIVER_WATER_BODY_APPROACH_MARGIN,
         },
     math::{
         lerp, ocean_floor_is_submerged, ocean_strength, river_channel_profile, smoothstep,
@@ -146,6 +147,7 @@ impl HydrologyRegion {
         });
         let mut water_bodies = SmallVec::new();
         let mut water_body_opening = 0.0_f32;
+        let mut river_water_body_opening = 0.0_f32;
         let mut lake_shore_delta: Option<f32> = None;
 
         for body in &self.water_bodies {
@@ -160,6 +162,12 @@ impl HydrologyRegion {
             // for sin/cos and boundary noise a second time per water body.
             let distance = body.normalized_horizontal_distance(horizontal);
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
+            river_water_body_opening = river_water_body_opening.max(
+                body.approach_strength_with_margin(
+                    horizontal,
+                    RIVER_WATER_BODY_APPROACH_MARGIN,
+                ),
+            );
             // Reject the lake's inner carving and grading if the original
             // column lies below its bed. Keep outer, dry shore grading: it
             // does not create water, and can still blend a neighboring bank.
@@ -199,7 +207,7 @@ impl HydrologyRegion {
         }
 
         if let Some(channel) = river.as_mut() {
-            let lake_blend = 1.0 - water_body_opening.clamp(0.0, 1.0);
+            let lake_blend = 1.0 - river_water_body_opening.clamp(0.0, 1.0);
             channel.delta *= lake_blend;
             if lake_blend <= f32::EPSILON {
                 river = None;
@@ -211,7 +219,7 @@ impl HydrologyRegion {
             shore_density_delta(
                 river_shore_normalized_distance(sample.normalized_distance),
                 sample.height,
-                water_body_opening.max(ocean_strength_at_column),
+                river_water_body_opening.max(ocean_strength_at_column),
                 surface_elevation,
             )
         });

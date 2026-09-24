@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
-    constants::SHORE_STRENGTH,
+    constants::{RIVER_WATER_BODY_APPROACH_MARGIN, SHORE_STRENGTH},
     math::{lerp, ocean_floor_is_submerged, river_channel_profile},
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
@@ -66,11 +66,14 @@ impl HydrologyRegion {
             .water_bodies
             .iter()
             .filter_map(|body| {
-                let strength = body.horizontal_strength(position);
+                let strength = body.approach_strength_with_margin(
+                    position,
+                    RIVER_WATER_BODY_APPROACH_MARGIN,
+                );
                 if strength <= 0.0
                     || !bed_has_support(
                         surface_height,
-                        body.water_level - body.carve_depth * strength,
+                        body.water_level - body.carve_depth,
                     )
                 {
                     return None;

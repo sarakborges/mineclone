@@ -14,7 +14,10 @@ use self::{
         RiverSelection, build_flow_cache, connected_lake_cells, drainage_reaches_water_destination,
         selected_river_sources,
     },
-    water_bodies::{confluence_lake, mountain_spring_body, plunge_pool_for_waterfall},
+    water_bodies::{
+        confluence_lake, headwater_source_body, mountain_spring_body,
+        plunge_pool_for_waterfall,
+    },
 };
 use super::{
     constants::RIVER_EDGE_MARGIN_CELLS,
@@ -115,10 +118,6 @@ where
                 continue;
             }
 
-            let spring = selection
-                .springs
-                .contains(&cell)
-                .then(|| mountain_spring_body(cell, source, seed, sea_level, water_fluid));
             let lake = spawn_lakes
                 .then(|| {
                     selection
@@ -128,9 +127,21 @@ where
                         .cloned()
                 })
                 .flatten();
+            let spring = selection
+                .springs
+                .contains(&cell)
+                .then(|| mountain_spring_body(cell, source, seed, sea_level, water_fluid));
+            let is_headwater = selection.channels.contains(&cell)
+                && !confluences.contains_key(&cell)
+                && lake.is_none()
+                && spring.is_none();
+            let headwater = is_headwater
+                .then(|| headwater_source_body(cell, source, seed, sea_level, water_fluid));
+            let source_body = lake.or(spring).or(headwater);
+            let source_body_water_level = source_body.as_ref().map(|body| body.water_level);
 
-            if let Some(body) = spring
-                .or(lake)
+            if let Some(body) = source_body
+                .clone()
                 .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(body);
@@ -162,11 +173,7 @@ where
             }
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
-            let source_water_level = selection
-                .lakes
-                .get(&cell)
-                .filter(|_| connected_lakes.contains(&cell))
-                .map(|lake| lake.water_level)
+            let source_water_level = source_body_water_level
                 .or_else(|| confluence_water_levels.get(&cell).copied());
             let downstream_water_level = selection
                 .lakes
