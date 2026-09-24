@@ -15,7 +15,6 @@ use crate::{
         tool::ToolRegistry,
     },
     gameplay::availability::world_interaction_available,
-    hud::ui_image::load_smooth_image,
     player::{
         PLAYER_EYE_HEIGHT,
         camera::GameplayWorldCamera,
@@ -366,10 +365,9 @@ fn spawn_world_item_visual(
 
     if let Some(icon) = icon {
         let material = assets.standard.add(StandardMaterial {
-            base_color_texture: Some(load_smooth_image(
-                &content.block_content.asset_server,
-                icon.to_owned(),
-            )),
+            base_color_texture: Some(
+                content.block_content.asset_server.load(icon.to_owned()),
+            ),
             alpha_mode: AlphaMode::Blend,
             perceptual_roughness: 1.0,
             unlit: true,
