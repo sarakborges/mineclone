@@ -1,3 +1,26 @@
+## 2026-09-23 — First-class world objects + rebuilt grass [VERSION 0.67.0]
+
+A implementação experimental de custom-model block de 0.66.0 foi substituída.
+`asteria:grass` não é mais block/voxel de terrain: passa a ser conteúdo de
+`data/objects/`, resolvido por `ObjectDefinition/ObjectRegistry` e armazenado
+na célula de object separada do block dentro do chunk.
+
+World objects possuem placement/targeting/runtime próprios e podem ser usados
+por structures. O estado de objects acompanha a persistência do mundo/chunks;
+inventory, hotbar, held item, creative catalog, drops, loot resolution e save
+validation reconhecem object IDs sem convertê-los em blocks.
+
+O grass aceita placement apenas sobre a face superior, não participa de
+colisão/occlusion/terrain meshing e usa biome grass tint. O modelo
+`assets/models/objects/grass/grass.glb` foi reconstruído com 13 lâminas 3D
+bem mais finas e irregulares, footprint aproximado 0.58 x 0.48 m e altura
+máxima 0.58 m. O renderer usa `unlit: true`, `castsShadow: false` e
+`receivesShadow: false`, removendo a sombra pesada/aspecto plástico anterior.
+
+`assets/textures/objects/grass.png` é o ícone próprio usado por inventory,
+hotbar, held sprite e world-item drop. `asteria:grass_block` continua sendo
+o bloco cúbico de terreno. Esta seção substitui semanticamente a implementação
+de custom-model blocks descrita em 0.66.0.
 ## 2026-09-23 — Airborne drop physics with hard settle [VERSION 0.66.4]
 
 World items voltaram a ter física somente durante a fase aérea. Todo drop

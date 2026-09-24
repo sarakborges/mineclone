@@ -1,0 +1,31 @@
+{
+  "id": "asteria:grass",
+  "name": {
+    "english": "Grass",
+    "portuguese_brazil": "Grama",
+    "spanish": "Césped"
+  },
+  "category": "foliage",
+  "model": "models/objects/grass/grass.glb",
+  "icon": "textures/objects/grass.png",
+  "tint": "grass",
+  "placementFaces": [
+    "top"
+  ],
+  "target": {
+    "size": [
+      0.62,
+      0.6,
+      0.56
+    ],
+    "centerOffset": [
+      0,
+      0.29,
+      0
+    ]
+  },
+  "unlit": true,
+  "castsShadow": false,
+  "receivesShadow": false,
+  "dropSelf": true
+}
