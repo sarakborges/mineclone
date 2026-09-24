@@ -12,7 +12,11 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_visual_content::BlockVisualContent,
     },
-    voxel::{block_face::BlockFace, orientation::orientation_rotation},
+    voxel::{
+        block_face::BlockFace,
+        log_variant::is_hollow_log_id,
+        orientation::orientation_rotation,
+    },
 };
 
 use super::{
@@ -72,7 +76,6 @@ struct PlacementPreviewSpawnContent<'w> {
 
 #[derive(SystemParam)]
 struct PlacementPreviewSpawnAssets<'w> {
-    block_meshes: Res<'w, BlockModelMeshes>,
     block_materials: ResMut<'w, BlockModelMaterials>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
 }
@@ -83,7 +86,6 @@ fn spawn_placement_preview(
     assets: PlacementPreviewSpawnAssets,
 ) {
     let PlacementPreviewSpawnAssets {
-        block_meshes,
         mut block_materials,
         mut materials,
     } = assets;
@@ -137,7 +139,13 @@ fn spawn_placement_preview(
 
                     preview.spawn((
                         PlacementPreviewFace { face, layer_index },
-                        Mesh3d(content.block_meshes.world_face(face)),
+                        Mesh3d(if selected
+                            .is_some_and(|(block_id, _)| is_hollow_log_id(block_id))
+                        {
+                            content.block_meshes.hollow_world_face(face)
+                        } else {
+                            content.block_meshes.world_face(face)
+                        }),
                         MeshMaterial3d(material),
                         visibility,
                         NotShadowCaster,
@@ -155,6 +163,7 @@ struct PlacementPreviewSelection<'w, 's> {
 
 #[derive(SystemParam)]
 struct PlacementPreviewView<'w, 's> {
+    block_meshes: Res<'w, BlockModelMeshes>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
     root: PreviewRoot<'w, 's>,
     faces: Query<
@@ -190,6 +199,7 @@ fn update_placement_preview(
     *last_scene = Some(scene_snapshot);
 
     let PlacementPreviewView {
+        block_meshes,
         mut materials,
         mut root,
         mut faces,
@@ -210,7 +220,7 @@ fn update_placement_preview(
         reset_transform_if_needed(&mut root.1);
         hide_if_visible(&mut root.2);
         if block_changed {
-            for (_, _, mut visibility) in &mut faces {
+            for (_, _, _, mut visibility) in &mut faces {
                 hide_if_visible(&mut visibility);
             }
         }
@@ -230,7 +240,7 @@ fn update_placement_preview(
         }
         hide_if_visible(&mut root.2);
 
-        for (face, material_handle, mut visibility) in &mut faces {
+        for (face, material_handle, mut mesh, mut visibility) in &mut faces {
             if block_changed {
                 mesh.0 = if is_hollow_log_id(block_id) {
                     block_meshes.hollow_world_face(face.face)
@@ -302,7 +312,7 @@ fn update_placement_preview(
             )
             .unwrap_or(Color::WHITE);
 
-        for (_, material_handle, _) in &mut faces {
+        for (_, material_handle, _, _) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };
