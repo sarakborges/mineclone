@@ -16,6 +16,7 @@ use crate::{
         block::BlockRegistry,
         fluid::FluidRegistry,
         layer::LayerFace,
+        object::ObjectPlacementFace,
         structure::{StructureDefinition, StructureRotation, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
@@ -24,6 +25,7 @@ use crate::{
         chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkStructureMut},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         layer::LayerCell,
+        object::ObjectCell,
         texture_rotation::TextureRotation,
     },
     world::{
@@ -811,6 +813,29 @@ fn rasterize_structure(
                 return false;
             }
 
+            if let Some(object_id) = structure.object_for_voxel(voxel) {
+                let max_rise = structure.restrictions.max_slope.max(0) as usize;
+                let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
+                    .rev()
+                    .find(|&candidate_y| {
+                        candidate_y < CHUNK_SIZE
+                            && chunk.cell_at(local_x, candidate_y, local_z).is_some()
+                    })
+                else {
+                    return false;
+                };
+                let support_world_position =
+                    context.chunk_origin
+                        + IVec3::new(local_x as i32, support_y as i32, local_z as i32);
+                let object = ObjectCell::new(
+                    object_id,
+                    ObjectPlacementFace::Top,
+                    TextureRotation::for_position(support_world_position, true),
+                );
+                let _ = chunk.set_object(local_x, support_y, local_z, object);
+                return false;
+            }
+
             if structure.layers_only_voxel(voxel) {
                 let max_rise = structure.restrictions.max_slope.max(0) as usize;
                 let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
@@ -892,7 +917,7 @@ fn rasterize_structure(
             } else {
                 debug_assert!(
                     structure.clears_voxel(voxel),
-                    "validated structure voxel must reference block, fluid, or clear"
+                    "validated structure voxel must reference block, fluid, object, or clear"
                 );
                 chunk.clear_block(local_x, local_y, local_z);
                 chunk.clear_fluid(local_x, local_y, local_z);
