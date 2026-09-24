@@ -1,3 +1,49 @@
+## 2026-09-24 — Object rendering, placement, chunk residency e hydrology [VERSION 0.69.0]
+
+Este checkpoint supersede os pontos de pickup/rendering/hydrology de 0.68.0 quando houver conflito.
+
+World items e world objects:
+- drops naturais e itens arremessados voltaram a usar pickup por proximidade após o delay inicial; o pickup
+  usa a `GameplayWorldCamera` real e `GlobalTransform`, evitando depender de câmeras auxiliares;
+- right click continua coletando qualquer world item explicitamente mirado; left click não coleta;
+- generic item/tool/object sprites no mundo e na mão deixaram de ser planos matemáticos: usam um volume fino,
+  mantendo uma única textura visual sem retornar aos antigos crossed quads;
+- esses sprites usam o loader linear de UI para reduzir serrilhado/pixelização;
+- Pebble e Stick permanecem quatro cópias da mesma textura no mesmo X/Z/rotação. O espaçamento Y foi reduzido
+  para `0.00025`, enquanto o target ganhou espessura independente do espaçamento visual;
+- Grass continua com preload real do GLB, 20% de Plant Fiber em Survival, jitter de placement e clusters
+  data-driven somente em Plains;
+- todos os leaf blocks permanecem com hardness `0.25`;
+- Architect's Compass usa o ID canônico `asteria:architects_compass`, sem variante Rustic.
+
+Hollow logs e targeting:
+- objects podem ser colocados dentro de hollow logs clicando no próprio hollow ou no bloco adjacente abaixo/lado;
+- a lógica funciona para logs orientados em X, Y ou Z; o objeto repousa na parede interna que toca o chão e o
+  jitter é limitado pela cavidade;
+- o highlight do bloco não some enquanto Survival mining está em progresso;
+- o Target HUD central mantém o slot de ícone ancorado no centro independentemente da largura do texto;
+- a projeção de block icons foi reequilibrada para não aparecer achatada/esticada.
+
+Chunk rendering:
+- pressão de memória não pode mais escolher chunks atualmente visíveis como candidatos de eviction;
+- meshes anteriormente expulsos por pressão e que entram no show radius são priorizados para recuperação,
+  evitando buracos persistentes no terreno enquanto o chunk lógico continua carregado.
+
+Hydrology:
+- qualquer lake selecionado é um destino válido para um rio, inclusive lake terminal; somente a emissão de um
+  outlet do lake exige que exista destino hídrico downstream;
+- entrada/saída de lake não cria waterfall aleatório;
+- shore grading é exclusivamente subtractive: hydrology pode remover terreno alto, mas nunca fabricar densidade
+  positiva/blocos flutuantes acima do canal;
+- o bank reach do rio caiu de 2.5 para 1.55 raios para impedir que margens de rios próximos removam toda a faixa
+  de terreno entre os canais;
+- essas regras complementam a validação prévia de rotas downstream e os headwater source bodies.
+
+Validação:
+- commit de código `c9992f2644e247dfcd231e765e1acb2dbb71a905` passou localization audit,
+  structure content reference audit, Clippy `-D warnings` e `cargo check --locked`.
+- O CI continua no caminho rápido; não foi adicionado `cargo test` nem etapa de link de testes.
+
 ## 2026-09-24 — Object/UI consistency + hydrology continuity [VERSION 0.68.0]
 
 Este checkpoint fecha um pacote de regressões visuais, de interação e de worldgen.
