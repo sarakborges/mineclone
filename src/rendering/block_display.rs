@@ -10,10 +10,10 @@ pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] = [
 
 const DISPLAY_LEFT: f32 = 0.10;
 const DISPLAY_CENTER_X: f32 = 0.50;
-const DISPLAY_TOP_Y: f32 = 0.27;
+const DISPLAY_TOP_Y: f32 = 0.22;
 const DISPLAY_HALF_WIDTH: f32 = 0.40;
-const DISPLAY_SLOPE: f32 = 0.20;
-const DISPLAY_SIDE_HEIGHT: f32 = 0.50;
+const DISPLAY_SLOPE: f32 = 0.18;
+const DISPLAY_SIDE_HEIGHT: f32 = 0.46;
 
 #[derive(Clone, Copy)]
 struct BlockDisplayFaceGeometry {

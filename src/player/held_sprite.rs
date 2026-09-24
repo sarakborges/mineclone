@@ -7,15 +7,18 @@ use bevy::{
 
 use crate::{
     content::{
-        builtin_ids::DYED_PROPERTY_ID,
+        biome::BiomeRegistry,
+        builtin_ids::{BIOME_TINT_METADATA_KEY, DYED_PROPERTY_ID},
         item::ItemRegistry,
         object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
-    player::hotbar::PlayerHotbar,
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    rendering::block_tint::block_tint_at_with_override,
     tools::BrushMode,
+    world::biome_field::BiomeField,
 };
 
 const HELD_SPRITE_SIZE: f32 = 0.52;
@@ -30,6 +33,7 @@ enum HeldSpriteKind {
 
 struct HeldSpriteVisual<'a> {
     icon: &'a str,
+    base_color: Color,
     tint_icon: Option<&'a str>,
     tint: Option<Color>,
     kind: HeldSpriteKind,
@@ -48,31 +52,47 @@ struct HeldSpriteBase;
 struct HeldSpriteTint;
 
 #[derive(SystemParam)]
-pub(crate) struct HeldSpriteContent<'w> {
+pub(crate) struct HeldSpriteContent<'w, 's> {
     hotbar: Res<'w, PlayerHotbar>,
     items: Res<'w, ItemRegistry>,
     objects: Res<'w, ObjectRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    player: Single<'w, 's, Ref<'static, Transform>, With<GameplayCamera>>,
     tools: Res<'w, ToolRegistry>,
     brush_mode: Res<'w, BrushMode>,
     properties: Res<'w, SecondaryPropertyRegistry>,
     asset_server: Res<'w, AssetServer>,
 }
 
-impl HeldSpriteContent<'_> {
+impl HeldSpriteContent<'_, '_> {
     fn selected_visual(&self) -> Option<HeldSpriteVisual<'_>> {
         let item_id = self.hotbar.item_at(self.hotbar.selected_slot())?;
 
         if let Some(item) = self.items.get(item_id) {
             return Some(HeldSpriteVisual {
                 icon: &item.icon,
+                base_color: Color::WHITE,
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,
             });
         }
         if let Some(object) = self.objects.get(item_id) {
+            let biome_override = self
+                .hotbar
+                .stack_at(self.hotbar.selected_slot())
+                .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY));
+            let position = Vec2::new(self.player.translation.x, self.player.translation.z);
             return Some(HeldSpriteVisual {
                 icon: &object.icon,
+                base_color: block_tint_at_with_override(
+                    object.tint,
+                    position,
+                    biome_override,
+                    &self.biome_field,
+                    &self.biomes,
+                ),
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,
@@ -95,6 +115,7 @@ impl HeldSpriteContent<'_> {
 
         Some(HeldSpriteVisual {
             icon: &tool.icon,
+            base_color: Color::WHITE,
             tint_icon: tool.tint_icon.as_deref(),
             tint,
             kind: HeldSpriteKind::Tool,
@@ -105,6 +126,9 @@ impl HeldSpriteContent<'_> {
         self.hotbar.is_changed()
             || self.brush_mode.is_changed()
             || self.properties.is_changed()
+            || self.biomes.is_changed()
+            || self.biome_field.is_changed()
+            || self.player.is_changed()
     }
 }
 
@@ -167,6 +191,7 @@ fn base_material(
     asset_server: &AssetServer,
 ) -> StandardMaterial {
     StandardMaterial {
+        base_color: visual.map_or(Color::WHITE, |visual| visual.base_color),
         base_color_texture: visual.map(|visual| asset_server.load(visual.icon.to_owned())),
         alpha_mode: AlphaMode::Mask(0.5),
         unlit: true,
@@ -195,7 +220,7 @@ pub(crate) fn spawn_held_sprite(
     parent: &mut ChildSpawnerCommands,
     root_transform: Transform,
     render_layers: RenderLayers,
-    content: &HeldSpriteContent<'_>,
+    content: &HeldSpriteContent<'_, '_>,
     assets: &mut HeldSpriteAssets<'_>,
 ) -> [Entity; 2] {
     let visual = content.selected_visual();
@@ -293,7 +318,7 @@ pub(crate) fn sync_held_sprites(
             *transform = base_transform;
         }
         if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
-            material.base_color = Color::WHITE;
+            material.base_color = visual.base_color;
             material.base_color_texture =
                 Some(content.asset_server.load(visual.icon.to_owned()));
         }

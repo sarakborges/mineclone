@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     hud::item_stack_count::spawn_item_stack_count,
-    rendering::{block_model::BlockModel, block_tint::block_tint_at},
+    rendering::{
+        block_model::BlockModel,
+        block_tint::{block_tint_at, block_tint_at_with_override},
+    },
     ui::{surface, typography},
 };
 
@@ -95,6 +98,7 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     root: &mut ChildSpawnerCommands,
     item_id: &'static str,
     position: Vec2,
+    biome_override: Option<&str>,
     items: &mut InventoryItemView<'_>,
 ) {
     if let Some(item) = items.items.get(item_id) {
@@ -115,9 +119,16 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     }
 
     if let Some(object) = items.objects.get(item_id) {
+        let tint = block_tint_at_with_override(
+            object.tint,
+            items.player_position,
+            biome_override,
+            items.biome_field,
+            items.biomes,
+        );
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(items.asset_server.load(object.icon.clone())),
+            ImageNode::new(items.asset_server.load(object.icon.clone())).with_color(tint),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -269,6 +280,7 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
 pub(in crate::hud::inventory) fn spawn_inventory_item(
     slot: &mut ChildSpawnerCommands,
     item_id: &'static str,
+    biome_override: Option<&str>,
     items: &mut InventoryItemView<'_>,
 ) {
     if let Some(item) = items.items.get(item_id) {
@@ -285,8 +297,15 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
     }
 
     if let Some(object) = items.objects.get(item_id) {
+        let tint = block_tint_at_with_override(
+            object.tint,
+            items.player_position,
+            biome_override,
+            items.biome_field,
+            items.biomes,
+        );
         slot.spawn((
-            ImageNode::new(items.asset_server.load(object.icon.clone())),
+            ImageNode::new(items.asset_server.load(object.icon.clone())).with_color(tint),
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),

@@ -6,6 +6,7 @@ use crate::{
     content::{
         block::{BlockDefinition, DEFAULT_BLOCK_BREAK_TICKS},
         builtin_ids::DYED_PROPERTY_ID,
+        object::ObjectRegistry,
         layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
         tool_category::ToolCategoryRegistry,
@@ -14,7 +15,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
-        block_tint::apply_secondary_property_tint,
+        block_tint::{apply_secondary_property_tint, block_tint_at},
         block_visual_content::BlockVisualContent,
     },
     targeting::{
@@ -23,6 +24,7 @@ use crate::{
     },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
+    world_objects::{TargetedWorldObject, WorldObjectInstance},
 };
 
 use super::{HudSettings, TargetBlockPosition};
@@ -74,6 +76,9 @@ struct TargetBlockText;
 #[derive(Component)]
 struct TargetBlockModel;
 
+#[derive(Component)]
+struct TargetObjectIcon;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct TargetHudSnapshot {
     voxel: IVec3,
@@ -93,8 +98,10 @@ struct TargetHudIconSnapshot {
 }
 
 #[derive(SystemParam)]
-struct TargetHudState<'w> {
+struct TargetHudState<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
+    targeted_object: Res<'w, TargetedWorldObject>,
+    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -106,6 +113,7 @@ struct TargetHudState<'w> {
 struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
     layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     tool_categories: Res<'w, ToolCategoryRegistry>,
 }
@@ -117,8 +125,18 @@ struct TargetHudView<'w, 's> {
     icon: Single<
         'w,
         's,
-        (&'static mut BlockModel, &'static MaterialNode<BlockIconMaterial>),
-        With<TargetBlockModel>,
+        (
+            &'static mut BlockModel,
+            &'static MaterialNode<BlockIconMaterial>,
+            &'static mut Visibility,
+        ),
+        (With<TargetBlockModel>, Without<TargetObjectIcon>),
+    >,
+    object_icon: Single<
+        'w,
+        's,
+        (&'static mut ImageNode, &'static mut Visibility),
+        (With<TargetObjectIcon>, Without<TargetBlockModel>),
     >,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
@@ -174,6 +192,18 @@ fn spawn_target_hud(
                             height: px(TARGET_ICON_SIZE),
                             ..default()
                         },
+                        Visibility::Inherited,
+                        Pickable::IGNORE,
+                    ));
+                    slot.spawn((
+                        TargetObjectIcon,
+                        ImageNode::default(),
+                        Node {
+                            width: px(TARGET_ICON_SIZE),
+                            height: px(TARGET_ICON_SIZE),
+                            ..default()
+                        },
+                        Visibility::Hidden,
                         Pickable::IGNORE,
                     ));
                 });
@@ -250,9 +280,12 @@ fn update_target_hud(
         root_visibility,
         target_text,
         icon,
+        object_icon,
         mut icon_materials,
     } = view;
     let mut root_visibility = root_visibility.into_inner();
+    let (mut model, material_handle, mut block_icon_visibility) = icon.into_inner();
+    let (mut object_image, mut object_icon_visibility) = object_icon.into_inner();
 
     if state.settings.target_block_position() == TargetBlockPosition::Hidden {
         *cached_icon = None;
@@ -260,6 +293,58 @@ fn update_target_hud(
             *root_visibility = Visibility::Hidden;
         }
         return;
+    }
+
+    if let Some(entity) = state.targeted_object.0
+        && let Ok(instance) = state.object_instances.get(entity)
+        && let Some(definition) = content.objects.get(instance.object_id())
+    {
+        *cached = None;
+        *cached_icon = None;
+        if *root_visibility != Visibility::Visible {
+            *root_visibility = Visibility::Visible;
+        }
+        if *block_icon_visibility != Visibility::Hidden {
+            *block_icon_visibility = Visibility::Hidden;
+        }
+        if *object_icon_visibility != Visibility::Inherited {
+            *object_icon_visibility = Visibility::Inherited;
+        }
+        model.set_block_id(None);
+
+        let position = instance.support();
+        let horizontal = Vec2::new(position.x as f32 + 0.5, position.z as f32 + 0.5);
+        let tint = block_tint_at(
+            definition.tint,
+            horizontal,
+            &content.visual.biome_field,
+            &content.visual.biomes,
+        );
+        *object_image = ImageNode::new(
+            content.visual.asset_server.load(definition.icon.clone()),
+        )
+        .with_color(tint);
+
+        let language = state.language.get();
+        let coordinates = state
+            .localization
+            .text(language, "hud.coordinates")
+            .replace("{x}", &position.x.to_string())
+            .replace("{z}", &position.z.to_string())
+            .replace("{y}", &position.y.to_string());
+        let next_text = format!("{}\n{coordinates}", definition.name.text(language));
+        let mut target_text = target_text.into_inner();
+        if target_text.0 != next_text {
+            target_text.0 = next_text;
+        }
+        return;
+    }
+
+    if *object_icon_visibility != Visibility::Hidden {
+        *object_icon_visibility = Visibility::Hidden;
+    }
+    if *block_icon_visibility != Visibility::Inherited {
+        *block_icon_visibility = Visibility::Inherited;
     }
 
     let Some(hit) = state.targeted.0 else {
@@ -352,7 +437,6 @@ fn update_target_hud(
         return;
     }
 
-    let (mut model, material_handle) = icon.into_inner();
     let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
         return;
     };
@@ -372,7 +456,7 @@ fn update_target_hud(
 fn target_hud_text(
     snapshot: &TargetHudSnapshot,
     block: Option<&BlockDefinition>,
-    state: &TargetHudState<'_>,
+    state: &TargetHudState<'_, '_>,
     content: &TargetHudContent<'_>,
 ) -> String {
     let language = snapshot.language;

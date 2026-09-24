@@ -1,4 +1,5 @@
 use bevy::{
+    image::{ImageLoaderSettings, ImageSampler},
     prelude::*,
     text::{EditableText, FontWeight},
 };
@@ -376,7 +377,7 @@ fn spawn_category_button(
                 |category| category.icon.as_str(),
             );
             button.spawn((
-                ImageNode::new(items.asset_server.load(icon.to_owned())),
+                ImageNode::new(load_smooth_category_icon(items.asset_server, icon)),
                 Node {
                     width: px(CATEGORY_ICON_SIZE),
                     height: px(CATEGORY_ICON_SIZE),
@@ -469,7 +470,7 @@ fn spawn_creative_slot(
         ))
         .with_children(|slot| {
             if let Some(item_id) = item_id {
-                spawn_inventory_item(slot, item_id, items);
+                spawn_inventory_item(slot, item_id, None, items);
             }
         });
 }
@@ -525,4 +526,14 @@ fn creative_content_width() -> f32 {
         + SCROLLBAR_TOTAL_WIDTH
         + CATEGORY_GAP
         + super::player::player_panel_content_width()
+}
+
+
+fn load_smooth_category_icon(asset_server: &AssetServer, path: &str) -> Handle<Image> {
+    asset_server
+        .load_builder()
+        .with_settings(|settings: &mut ImageLoaderSettings| {
+            settings.sampler = ImageSampler::linear();
+        })
+        .load(path.to_owned())
 }
