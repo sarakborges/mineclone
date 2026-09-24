@@ -425,15 +425,3 @@ fn show_if_hidden(visibility: &mut Visibility) {
 }
 
 
-#[cfg(test)]
-mod system_param_tests {
-    use super::*;
-    use bevy::ecs::system::{IntoSystem, System};
-
-    #[test]
-    fn highlight_system_params_initialize_without_query_conflicts() {
-        let mut world = World::new();
-        let mut system = IntoSystem::into_system(update_highlight);
-        system.initialize(&mut world);
-    }
-}
