@@ -14059,3 +14059,30 @@ As quantidades foram escaladas pelo tamanho do boulder: poucos stacks no small,
 mais ocorrências progressivamente no medium, big e huge.
 
 VERSION corrente após mudanças concorrentes no mesmo branch: 0.66.2.
+
+
+## 2026-09-23 — Random biome agora sorteia o bioma inicial pela seed
+
+A opção `Random` de biome em New World estava apenas deixando `spawn_biome = None`.
+Na prática isso não sorteava um biome: o bootstrap mantinha a coluna inicial fixa em
+`(8, 8)` e aceitava o biome natural encontrado ali. Como Plains domina esse ponto
+em muitas seeds/configurações, mundos criados com Random aparentavam sempre começar
+em Plains.
+
+O bootstrap agora resolve explicitamente um biome inicial quando `spawn_biome` não
+foi escolhido pelo usuário:
+- a seleção é determinística pela world seed;
+- considera somente surface biomes ativos e que podem ser forçados isoladamente;
+- exclui o ocean biome, já que o spawn inicial exige uma coluna sem fluido;
+- a região inicial é forçada para o biome sorteado usando o mesmo mecanismo dos
+  biomes explicitamente selecionados;
+- o biome resolvido é persistido no save, preservando reprodutibilidade ao carregar
+  o mundo;
+- Single Biome com Random também recebe uma escolha determinística pela seed.
+
+Durante a validação do branch, o CI expôs integrações concorrentes incompletas do
+novo ObjectRegistry. Foram corrigidos o display/ícone de objects na hotbar, a
+validação de objects em saves e agrupamentos de SystemParam para manter Clippy sem
+`too_many_arguments`.
+
+VERSION: `0.66.5`.
