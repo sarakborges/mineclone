@@ -16,6 +16,7 @@ use crate::{
         block::BlockRegistry,
         fluid::FluidRegistry,
         layer::LayerRegistry,
+        object::ObjectRegistry,
     },
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
     world::storage_durability::{sync_directory, sync_directory_tree},
@@ -260,11 +261,12 @@ pub(crate) fn load_generation_world(
     generation: u64,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
+    objects: &ObjectRegistry,
     fluids: &FluidRegistry,
 ) -> io::Result<VoxelWorld> {
     let mut world = VoxelWorld::default();
     visit_generation_chunks(world_directory, generation, |_, chunk| {
-        world.insert_saved_chunk(chunk, blocks, layers, fluids)
+        world.insert_saved_chunk(chunk, blocks, layers, objects, fluids)
     })?;
     Ok(world)
 }
