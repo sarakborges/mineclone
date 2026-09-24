@@ -18,8 +18,10 @@ use crate::{
     },
     world::{
         generation::{
-            ResolvedConnectedPiece, resolve_connected_piece_forest, resolve_connected_pieces,
-            resolve_set_pieces, surface_layer_placements,
+            ResolvedConnectedPiece, fit_structure_to_ground,
+            resolve_connected_piece_forest_with_ground_fit,
+            resolve_connected_pieces_with_ground_fit, resolve_set_pieces,
+            surface_layer_placements,
         },
         WorldSeed,
     },
@@ -268,6 +270,26 @@ fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64
     hash
 }
 
+fn connected_ground_fit_y(
+    world: &VoxelWorld,
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+    geometric_origin: IVec3,
+) -> Option<i32> {
+    let support_offsets = structure.support_offsets_for_rotation(rotation);
+    let search_top = geometric_origin.y.saturating_add(64);
+    fit_structure_to_ground(
+        geometric_origin.xz(),
+        &support_offsets,
+        structure.ground_anchor_y_offset(),
+        structure.restrictions.max_slope,
+        |position| {
+            loaded_surface_level_at(world, position, search_top)
+                .map(|surface_y| surface_y - 1)
+        },
+    )
+}
+
 fn structure_space_is_available(
     world: &VoxelWorld,
     structure: &StructureDefinition,
@@ -448,12 +470,20 @@ impl ChatPlacementContext<'_, '_> {
         };
         let origin_y = surface_y - structure.ground_anchor_y_offset();
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
-        let pieces = resolve_connected_pieces(
+        let pieces = resolve_connected_pieces_with_ground_fit(
             self.seed.0,
             structure,
             structure_rotation,
             origin,
             &self.structures,
+            |child, child_rotation, geometric_origin| {
+                connected_ground_fit_y(
+                    world,
+                    child,
+                    child_rotation,
+                    geometric_origin,
+                )
+            },
         );
         let blocked = pieces
             .iter()
@@ -550,7 +580,7 @@ impl ChatPlacementContext<'_, '_> {
             return format!("could not resolve structure set {} in loaded terrain", set.id);
         };
 
-        let connected_pieces = resolve_connected_piece_forest(
+        let connected_pieces = resolve_connected_piece_forest_with_ground_fit(
             self.seed.0,
             pieces.iter().map(|piece| ResolvedConnectedPiece {
                 structure: piece.structure,
@@ -558,6 +588,14 @@ impl ChatPlacementContext<'_, '_> {
                 origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
             }),
             &self.structures,
+            |child, child_rotation, geometric_origin| {
+                connected_ground_fit_y(
+                    world,
+                    child,
+                    child_rotation,
+                    geometric_origin,
+                )
+            },
         );
         let blocked = connected_pieces
             .iter()

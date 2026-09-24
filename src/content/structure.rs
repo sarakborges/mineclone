@@ -485,6 +485,10 @@ impl StructureDefinition {
             .unwrap_or(self.runtime.min_y_offset)
     }
 
+    pub(crate) fn requires_ground_fit_when_connected(&self) -> bool {
+        self.ground_anchor_y.is_some() || !self.restrictions.ground_blocks.is_empty()
+    }
+
     pub(crate) fn support_offsets_for_rotation(
         &self,
         rotation: StructureRotation,

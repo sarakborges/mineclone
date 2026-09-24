@@ -37,8 +37,9 @@ pub(crate) use self::{
     fluids::authored_surface_fluid_id_for_position,
 };
 pub(crate) use self::structures::{
-    ResolvedConnectedPiece, located_structure_origins_in_chunk,
-    resolve_connected_piece_forest, resolve_connected_pieces, resolve_set_pieces,
+    ResolvedConnectedPiece, fit_structure_to_ground, located_structure_origins_in_chunk,
+    resolve_connected_piece_forest, resolve_connected_piece_forest_with_ground_fit,
+    resolve_connected_pieces, resolve_connected_pieces_with_ground_fit, resolve_set_pieces,
     structure_candidate_anchor, structure_candidate_probe, surface_layer_placements,
     volume_structure_candidate_probe,
 };

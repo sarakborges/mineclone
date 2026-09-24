@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 7D — Connected ground structures voltam a encaixar no terreno
+
+Corrigido o problema visual observado após migrar Root Arches para connectors: peças deslocadas 8–24 blocos mantinham o Y do output da World Tree, portanto podiam flutuar ou ficar enterradas quando o terreno mudava entre a raiz e a posição escolhida.
+
+A correção permanece genérica e não cria um subsistema de Root Arch:
+- uma Structure filha é considerada ground-fitted quando declara `groundAnchorY` ou `restrictions.groundBlocks`;
+- depois do connector resolver X/Z, face e rotação, apenas o Y dessa filha é recalculado pelo mesmo `fit_structure_to_ground` usado por placements normais;
+- no worldgen, o ground-fit conectado passa por `validated_structure_origin_y`, portanto `groundBlocks`, `maxSlope`, dry-ground, fluid policy e demais restrictions voltam a valer para a filha;
+- Structure Sets usam o mesmo caminho, então as Root Arches do Enchanted Heart são aterradas na posição final escolhida pelo connector;
+- volume chains como `cavern_tunnel_segment` continuam estritamente 3D porque não declaram `groundBlocks` nem `groundAnchorY`;
+- `/place` usa a mesma semântica em terreno já carregado, reaproveitando `fit_structure_to_ground`;
+- teste de regressão confirma que uma connected child marcada como ground structure recebe o Y fornecido pelo ground-fit, mantendo X/Z e rotação do connector.
+
+`WORLDGEN_VERSION` passou de 5 para 6 porque a posição vertical determinística das Root Arches mudou.
+
 ## 2026-09-24 — Parte 7C — World Tree migra Root Arches para Structure Connectors
 
 A composição independente de Root Arches foi removida do Enchanted Heart. As arches agora nascem exclusivamente de outputs authored nas próprias World Trees.

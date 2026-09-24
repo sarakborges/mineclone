@@ -13,7 +13,7 @@ use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 /// generate differently for the same world seed/configuration. Saved worlds
 /// pin this value in their immutable generation-zero manifest so a newer game
 /// never silently mixes two world-generation algorithms in one world.
-pub(crate) const WORLDGEN_VERSION: u32 = 5;
+pub(crate) const WORLDGEN_VERSION: u32 = 6;
 
 /// Persisted deterministic-generator identity. The transparent representation
 /// keeps manifests/snapshots human-readable while making it harder for save

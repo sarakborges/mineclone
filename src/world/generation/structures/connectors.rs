@@ -146,7 +146,25 @@ pub(crate) fn resolve_connected_pieces<'a>(
     root_origin: IVec3,
     structures: &'a StructureRegistry,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
-    resolve_connected_piece_forest(
+    resolve_connected_pieces_with_ground_fit(
+        world_seed,
+        root,
+        root_rotation,
+        root_origin,
+        structures,
+        |_, _, geometric_origin| Some(geometric_origin.y),
+    )
+}
+
+pub(crate) fn resolve_connected_pieces_with_ground_fit<'a>(
+    world_seed: u64,
+    root: &'a StructureDefinition,
+    root_rotation: StructureRotation,
+    root_origin: IVec3,
+    structures: &'a StructureRegistry,
+    fit_ground_y: impl FnMut(&StructureDefinition, StructureRotation, IVec3) -> Option<i32>,
+) -> Vec<ResolvedConnectedPiece<'a>> {
+    resolve_connected_piece_forest_with_ground_fit(
         world_seed,
         [ResolvedConnectedPiece {
             structure: root,
@@ -154,6 +172,7 @@ pub(crate) fn resolve_connected_pieces<'a>(
             origin: root_origin,
         }],
         structures,
+        fit_ground_y,
     )
 }
 
@@ -161,6 +180,24 @@ pub(crate) fn resolve_connected_piece_forest<'a>(
     world_seed: u64,
     roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
     structures: &'a StructureRegistry,
+) -> Vec<ResolvedConnectedPiece<'a>> {
+    resolve_connected_piece_forest_with_ground_fit(
+        world_seed,
+        roots,
+        structures,
+        |_, _, geometric_origin| Some(geometric_origin.y),
+    )
+}
+
+pub(crate) fn resolve_connected_piece_forest_with_ground_fit<'a>(
+    world_seed: u64,
+    roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
+    structures: &'a StructureRegistry,
+    mut fit_ground_y: impl FnMut(
+        &StructureDefinition,
+        StructureRotation,
+        IVec3,
+    ) -> Option<i32>,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
     let roots = roots.into_iter().collect::<Vec<_>>();
     if roots.is_empty() {
@@ -188,6 +225,7 @@ pub(crate) fn resolve_connected_piece_forest<'a>(
             root,
             structures,
             &mut occupied,
+            &mut fit_ground_y,
         ));
     }
     resolved
@@ -198,6 +236,11 @@ fn resolve_connected_branch<'a>(
     root: ResolvedConnectedPiece<'a>,
     structures: &'a StructureRegistry,
     occupied: &mut HashSet<IVec3>,
+    fit_ground_y: &mut impl FnMut(
+        &StructureDefinition,
+        StructureRotation,
+        IVec3,
+    ) -> Option<i32>,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
     let mut pieces = vec![root];
     let mut pending = VecDeque::from([PendingPiece {
@@ -246,12 +289,28 @@ fn resolve_connected_branch<'a>(
                 + parent.rotation.rotate_offset(output.offset)
                 + connector_face_offset(world_face) * distance as i32;
             let required_input_face = opposite_connector_face(world_face);
-            let Some((child_rotation, child_origin)) = child.resolve_input_attachment(
-                world_position,
-                required_input_face,
-                hash.rotate_left(23),
-            ) else {
+            let Some((child_rotation, geometric_child_origin)) =
+                child.resolve_input_attachment(
+                    world_position,
+                    required_input_face,
+                    hash.rotate_left(23),
+                )
+            else {
                 continue;
+            };
+            let child_origin = if child.requires_ground_fit_when_connected() {
+                let Some(origin_y) =
+                    fit_ground_y(child, child_rotation, geometric_child_origin)
+                else {
+                    continue;
+                };
+                IVec3::new(
+                    geometric_child_origin.x,
+                    origin_y,
+                    geometric_child_origin.z,
+                )
+            } else {
+                geometric_child_origin
             };
 
             let child_piece = ResolvedConnectedPiece {
@@ -535,6 +594,38 @@ mod tests {
         assert!((5..=10).contains(&first[1].origin.x));
         assert_eq!(first[1].origin.y, 0);
         assert_eq!(first[1].origin.z, 0);
+    }
+
+    #[test]
+    fn connected_ground_structure_uses_supplied_ground_fit() {
+        let mut child = segment_definition("test:grounded", None, false);
+        child["restrictions"] = json!({
+            "groundBlocks": ["test:block"],
+            "maxSlope": 0,
+            "requiresDryGround": true
+        });
+        let registry = registry(vec![
+            root_definition("test:grounded", 1.0),
+            child,
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+
+        let pieces = resolve_connected_pieces_with_ground_fit(
+            17,
+            root,
+            StructureRotation::Degrees0,
+            IVec3::ZERO,
+            &registry,
+            |structure, rotation, geometric_origin| {
+                assert_eq!(structure.id, "test:grounded");
+                assert_eq!(rotation, StructureRotation::Degrees0);
+                assert_eq!(geometric_origin, IVec3::new(2, 0, 0));
+                Some(9)
+            },
+        );
+
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[1].origin, IVec3::new(2, 9, 0));
     }
 
     #[test]

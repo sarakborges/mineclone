@@ -39,9 +39,12 @@ use crate::{
 
 pub(crate) use self::{
     connectors::{
-        ResolvedConnectedPiece, resolve_connected_piece_forest, resolve_connected_pieces,
+        ResolvedConnectedPiece, resolve_connected_piece_forest,
+        resolve_connected_piece_forest_with_ground_fit, resolve_connected_pieces,
+        resolve_connected_pieces_with_ground_fit,
     },
     set::resolve_set_pieces,
+    support::fit_structure_to_ground,
 };
 
 use self::{geometry::rectangles_overlap, hash::{avalanche, unit_interval}};
@@ -650,12 +653,21 @@ fn collect_direct_structure_candidates<'a>(
                 return;
             };
             let root_origin = IVec3::new(anchor.x, origin_y, anchor.y);
-            let pieces = connectors::resolve_connected_pieces(
+            let pieces = connectors::resolve_connected_pieces_with_ground_fit(
                 context.biome_field.seed(),
                 structure,
                 rotation,
                 root_origin,
                 context.structures,
+                |child, child_rotation, geometric_origin| {
+                    validated_structure_origin_y(
+                        biome_id,
+                        child,
+                        child_rotation,
+                        geometric_origin.xz(),
+                        context,
+                    )
+                },
             );
             let Some((minimum, maximum, minimum_y, maximum_y)) =
                 connected_piece_bounds(&pieces)
@@ -743,7 +755,7 @@ fn collect_structure_set_candidates<'a>(
                 return;
             };
 
-            let connected = connectors::resolve_connected_piece_forest(
+            let connected = connectors::resolve_connected_piece_forest_with_ground_fit(
                 context.biome_field.seed(),
                 pieces.iter().map(|piece| connectors::ResolvedConnectedPiece {
                     structure: piece.structure,
@@ -751,6 +763,15 @@ fn collect_structure_set_candidates<'a>(
                     origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
                 }),
                 context.structures,
+                |child, child_rotation, geometric_origin| {
+                    validated_structure_origin_y(
+                        biome_id,
+                        child,
+                        child_rotation,
+                        geometric_origin.xz(),
+                        context,
+                    )
+                },
             );
             let Some((minimum, maximum, minimum_y, maximum_y)) =
                 connected_piece_bounds(&connected)
@@ -941,12 +962,21 @@ fn collect_volume_structure_candidates<'a>(
             continue;
         }
 
-        let pieces = connectors::resolve_connected_pieces(
+        let pieces = connectors::resolve_connected_pieces_with_ground_fit(
             context.biome_field.seed(),
             structure,
             rotation,
             anchor,
             context.structures,
+            |child, child_rotation, geometric_origin| {
+                validated_structure_origin_y(
+                    biome_id,
+                    child,
+                    child_rotation,
+                    geometric_origin.xz(),
+                    context,
+                )
+            },
         );
         let Some((minimum, maximum, minimum_y, maximum_y)) =
             connected_piece_bounds(&pieces)
