@@ -259,9 +259,7 @@ pub(super) fn occludes(
     neighbor: &BlockDefinition,
 ) -> bool {
     (source_id == neighbor_id && (source.alpha_blend || source.alpha_cutoff.is_some()))
-        || (!neighbor.uses_custom_model()
-            && !neighbor.alpha_blend
-            && neighbor.alpha_cutoff.is_none())
+        || (!neighbor.alpha_blend && neighbor.alpha_cutoff.is_none())
 }
 
 fn position_for(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {

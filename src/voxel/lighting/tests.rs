@@ -432,7 +432,6 @@ fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
         loot_table: Default::default(),
         tags: Vec::new(),
         tint: BlockTint::None,
-        model: None,
         textures: BlockTextures::default(),
         rotate_texture: BlockTextureRotations::default(),
         orientations: Vec::new(),

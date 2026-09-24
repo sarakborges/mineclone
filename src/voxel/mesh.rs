@@ -87,9 +87,6 @@ where
     // scan to avoid bitset iteration overhead.
     let mut collect_source = |x: usize, y: usize, z: usize, cell: &VoxelCell| {
         let block = block_lookup.get(cell.block_id);
-        if block.uses_custom_model() {
-            return;
-        }
         let block_key = (cell.block_id.as_ptr() as usize, cell.block_id.len());
         let block_visual_index = if let Some((_, index)) = block_visual_indices
             .iter()
