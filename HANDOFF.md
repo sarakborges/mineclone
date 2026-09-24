@@ -1,3 +1,17 @@
+## 2026-09-24 — Parte 7B1 — Root Arches preparados como filhos de connector
+
+As quatro variações de `asteria:root_arch` agora possuem um input connector authored na extremidade esquerda da raiz.
+
+A alteração preserva geometricamente cada modelo:
+- foi adicionada uma coluna vazia à esquerda de todas as rows;
+- `anchor.x` foi incrementado pelo mesmo 1 bloco;
+- portanto todo voxel X/Y/Z existente mantém exatamente o mesmo offset relativo ao anchor;
+- o novo input ocupa somente a coluna nova e fica diretamente adjacente ao primeiro log da raiz no ground layer;
+- input `face=left` permite que qualquer output horizontal da World Tree rotacione a arch automaticamente para crescer para fora do tronco;
+- nenhuma Root Arch ganhou output: cada connector da World Tree produzirá exatamente uma arch, sem cadeia adicional.
+
+O Enchanted Heart ainda continua usando o elemento `root_arches` neste checkpoint. A troca para World Tree connectors será feita apenas depois deste estado compilar verde.
+
 ## 2026-09-24 — Parte 7A — Primeira cave entrance usando exclusivamente Structure Connectors
 
 Adicionado o primeiro conteúdo real sobre a infraestrutura nova, sem nenhum carver/connectivity paralelo.
