@@ -89,6 +89,15 @@ struct ObjectMaterialKey {
 #[derive(Resource, Default)]
 struct ObjectMaterialCache(HashMap<ObjectMaterialKey, Handle<StandardMaterial>>);
 
+#[derive(SystemParam)]
+struct WorldObjectSpawnContent<'w> {
+    world: Res<'w, VoxelWorld>,
+    objects: Res<'w, ObjectRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    asset_server: Res<'w, AssetServer>,
+}
+
 pub(crate) struct WorldObjectsPlugin;
 
 impl Plugin for WorldObjectsPlugin {
@@ -117,21 +126,17 @@ impl Plugin for WorldObjectsPlugin {
 fn spawn_requested_objects(
     mut commands: Commands,
     mut requests: MessageReader<WorldObjectPlaceRequest>,
-    world: Res<VoxelWorld>,
-    objects: Res<ObjectRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    asset_server: Res<AssetServer>,
+    content: WorldObjectSpawnContent,
     mut store: ResMut<WorldObjectStore>,
 ) {
     for request in requests.read() {
         if store.contains(request.anchor)
-            || !world.is_loaded_at(request.anchor)
-            || world.cell_at(request.anchor).is_some()
+            || !content.world.is_loaded_at(request.anchor)
+            || content.world.cell_at(request.anchor).is_some()
         {
             continue;
         }
-        let Some(definition) = objects.get(request.object_id) else {
+        let Some(definition) = content.objects.get(request.object_id) else {
             continue;
         };
 
@@ -139,10 +144,10 @@ fn spawn_requested_objects(
         let tint = block_tint_at(
             definition.tint,
             Vec2::new(position.x, position.z),
-            &biome_field,
-            &biomes,
+            &content.biome_field,
+            &content.biomes,
         );
-        let scene = asset_server.load(
+        let scene = content.asset_server.load(
             GltfAssetLabel::Scene(0).from_asset(definition.model.clone()),
         );
         let appearance = WorldObjectAppearance {
