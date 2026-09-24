@@ -20,6 +20,7 @@ use crate::{
         camera::{GameplayCamera, GameplayWorldCamera},
         hotbar::PlayerHotbar,
         item_stack::ItemStack,
+        movement::config::{COLLISION_STEP, GRAVITY},
     },
     rendering::{
         block_model::{
@@ -30,12 +31,18 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::BlockTargetingSet,
-    voxel::block_face::BlockFace,
+    voxel::{
+        block_face::BlockFace,
+        collision::aabb_is_clear,
+        world::VoxelWorld,
+    },
 };
 
 const ITEM_HALF_EXTENT: f32 = 0.18;
 const ITEM_SPRITE_SIZE: f32 = 0.46;
 const BLOCK_ITEM_SCALE: f32 = 0.36;
+const DROP_FORWARD_SPEED: f32 = 3.8;
+const DROP_UP_SPEED: f32 = 1.25;
 const DROP_SPAWN_DISTANCE: f32 = 0.9;
 const DROP_PICKUP_DELAY_SECONDS: f32 = 0.65;
 const PROXIMITY_PICKUP_RADIUS: f32 = 1.65;
@@ -65,6 +72,11 @@ struct ProximityPickup {
 }
 
 #[derive(Component)]
+struct WorldItemMotion {
+    velocity: Vec3,
+}
+
+#[derive(Component)]
 struct WorldItemVisual;
 
 #[derive(Resource, Default)]
@@ -81,6 +93,7 @@ pub(crate) enum WorldItemPickup {
 pub(crate) struct WorldItemSpawnRequest {
     pub(crate) stack: ItemStack,
     pub(crate) position: Vec3,
+    pub(crate) velocity: Vec3,
     pub(crate) pickup: WorldItemPickup,
 }
 
@@ -89,6 +102,16 @@ impl WorldItemSpawnRequest {
         Self {
             stack,
             position,
+            velocity: Vec3::ZERO,
+            pickup: WorldItemPickup::Proximity,
+        }
+    }
+
+    fn thrown(stack: ItemStack, position: Vec3, velocity: Vec3) -> Self {
+        Self {
+            stack,
+            position,
+            velocity,
             pickup: WorldItemPickup::Proximity,
         }
     }
@@ -129,7 +152,7 @@ impl Plugin for WorldItemsPlugin {
             )
             .add_systems(
                 Update,
-                (pickup_proximity_items, animate_world_item_visuals)
+                (move_world_items, pickup_proximity_items, animate_world_item_visuals)
                     .chain()
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
@@ -185,10 +208,12 @@ fn resolve_player_drop_requests(
 ) {
     let forward = camera.forward().as_vec3();
     let position = camera.translation() + forward * DROP_SPAWN_DISTANCE - Vec3::Y * 0.25;
+    let velocity = forward * DROP_FORWARD_SPEED + Vec3::Y * DROP_UP_SPEED;
     for request in requests.read() {
-        spawns.write(WorldItemSpawnRequest::dropped(
+        spawns.write(WorldItemSpawnRequest::thrown(
             request.stack.clone(),
             position,
+            velocity,
         ));
     }
 }
@@ -219,6 +244,9 @@ fn spawn_world_items(
     for request in requests.read() {
         let mut entity = commands.spawn((
             WorldItem::new(request.stack.clone()),
+            WorldItemMotion {
+                velocity: request.velocity,
+            },
             Transform::from_translation(request.position),
             Visibility::default(),
             DespawnOnExit(GameState::Gameplay),
@@ -366,6 +394,58 @@ fn spawn_world_item_visual(
         Transform::default(),
         NotShadowCaster,
     ));
+}
+
+fn move_world_items(
+    time: Res<Time>,
+    world: Res<VoxelWorld>,
+    mut commands: Commands,
+    mut items: Query<(Entity, &mut Transform, &mut WorldItemMotion)>,
+) {
+    let dt = time.delta_secs().min(0.05);
+    for (entity, mut transform, mut motion) in &mut items {
+        if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
+            continue;
+        }
+
+        motion.velocity.y += GRAVITY * dt;
+        let mut collided = false;
+        for axis in [0, 2, 1] {
+            let distance = motion.velocity[axis] * dt;
+            if distance == 0.0 {
+                continue;
+            }
+            if !advance_item_axis(&world, &mut transform.translation, axis, distance) {
+                collided = true;
+                break;
+            }
+        }
+
+        if collided {
+            commands.entity(entity).remove::<WorldItemMotion>();
+        }
+    }
+}
+
+fn advance_item_axis(
+    world: &VoxelWorld,
+    center: &mut Vec3,
+    axis: usize,
+    distance: f32,
+) -> bool {
+    let steps = (distance.abs() / COLLISION_STEP).ceil().max(1.0) as usize;
+    let step = distance / steps as f32;
+
+    for _ in 0..steps {
+        let mut next = *center;
+        next[axis] += step;
+        let (min, max) = target_bounds(next);
+        if !aabb_is_clear(world, (min, max)) {
+            return false;
+        }
+        *center = next;
+    }
+    true
 }
 
 fn pickup_proximity_items(

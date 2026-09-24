@@ -1,3 +1,17 @@
+## 2026-09-23 — Airborne drop physics with hard settle [VERSION 0.66.4]
+
+World items voltaram a ter física somente durante a fase aérea. Todo drop
+`Proximity` nasce com `WorldItemMotion`: gravidade e colisão voxel são
+processadas enquanto ele está no ar; no primeiro contato com qualquer
+superfície sólida, o componente de movimento é removido e o item passa a ser
+completamente estático. Assim não existe drift residual depois de assentar.
+
+Drops produzidos por mineração/world objects usam velocidade inicial zero,
+portanto caem verticalmente a partir do ponto onde nasceram. Drops feitos pelo
+jogador via Q ou descarte do inventory recebem novamente um pequeno impulso
+para frente e para cima, saindo do player antes de cair. O visual de generic
+items continua em plano único, sem retornar aos crossed quads.
+
 ## 2026-09-23 — Static world drops + single-plane item sprites [VERSION 0.66.3]
 
 World-item sprites for generic items/tools/layers no longer use two crossed
