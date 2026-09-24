@@ -14146,5 +14146,6 @@ snake_case. Os JSONs de Pebble e Stick já seguiam o contrato público camelCase
 documentado: `baseOffset`, `sliceSpacing` e `alphaCutoff`.
 
 O schema Rust agora mapeia explicitamente esses três campos para camelCase.
-Foi adicionado um teste de regressão que desserializa o formato real usado pelos
-objects, e o CI executa esse teste além de Clippy e `cargo check`.
+Foi adicionado um teste unitário de regressão que desserializa o formato real usado
+pelos objects. O workflow permanece com Clippy `--all-targets` e `cargo check`, sem
+forçar um relink completo do binário Bevy em todo commit.
