@@ -11,6 +11,8 @@ use crate::content::{
     fluid::FluidRegistry,
     layer::{LayerFace, LayerRegistry},
     layer_id::intern_layer_id,
+    object::{ObjectPlacementFace, ObjectRegistry},
+    object_id::intern_object_id,
 };
 
 use super::{
@@ -20,6 +22,7 @@ use super::{
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     log_variant::is_hollow_log_id,
+    object::ObjectCell,
     microblock::{ARTISANS_KIT_MASK_PROPERTY, LEGACY_ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
@@ -38,6 +41,8 @@ pub(crate) struct DiskChunk {
     block_runs: Vec<DiskRun>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     layers: Vec<DiskLayerState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    objects: Vec<DiskObjectState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fluid_palette: Vec<DiskFluidState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -58,6 +63,15 @@ struct DiskBlockState {
 struct DiskLayerState {
     voxel: u16,
     order: u8,
+    face: u8,
+    id: String,
+    rotation: u8,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DiskObjectState {
+    voxel: u16,
     face: u8,
     id: String,
     rotation: u8,
@@ -86,6 +100,7 @@ struct DiskChunkBuilder {
     runtime_block_palette: Vec<(VoxelCell, u16)>,
     block_runs: Vec<DiskRun>,
     layers: Vec<DiskLayerState>,
+    objects: Vec<DiskObjectState>,
     fluid_palette: Vec<DiskFluidState>,
     runtime_fluid_palette: Vec<(FluidCell, u16)>,
     fluid_runs: Vec<DiskRun>,
@@ -99,6 +114,7 @@ impl DiskChunkBuilder {
             runtime_block_palette: Vec::new(),
             block_runs: Vec::new(),
             layers: Vec::new(),
+            objects: Vec::new(),
             fluid_palette: Vec::new(),
             runtime_fluid_palette: Vec::new(),
             fluid_runs: Vec::new(),
@@ -153,6 +169,17 @@ impl DiskChunkBuilder {
         Ok(())
     }
 
+    fn push_object(&mut self, index: usize, object: ObjectCell) -> io::Result<()> {
+        self.objects.push(DiskObjectState {
+            voxel: u16::try_from(index)
+                .map_err(|_| invalid_data("chunk object voxel index overflow"))?,
+            face: object.face.index(),
+            id: object.object_id.to_owned(),
+            rotation: rotation_index(object.rotation),
+        });
+        Ok(())
+    }
+
     fn push_fluid(
         &mut self,
         index: usize,
@@ -185,11 +212,13 @@ impl DiskChunkBuilder {
     fn finish(mut self) -> DiskChunk {
         self.layers
             .sort_unstable_by_key(|layer| (layer.voxel, layer.order));
+        self.objects.sort_unstable_by_key(|object| object.voxel);
         DiskChunk {
             coord: self.coord,
             block_palette: self.block_palette,
             block_runs: self.block_runs,
             layers: self.layers,
+            objects: self.objects,
             fluid_palette: self.fluid_palette,
             fluid_runs: self.fluid_runs,
         }
@@ -231,6 +260,9 @@ impl DiskChunk {
                 builder.push_layer(index, order, attached)?;
             }
         }
+        for (index, object) in chunk.object_entries() {
+            builder.push_object(index, object)?;
+        }
 
         Ok(builder.finish())
     }
@@ -248,6 +280,9 @@ impl DiskChunk {
         for (index, order, attached) in chunk.layer_entries() {
             builder.push_layer(index, order, attached)?;
         }
+        for (index, object) in chunk.object_entries() {
+            builder.push_object(index, object)?;
+        }
         for (index, cell) in chunk.fluid_entries() {
             builder.push_fluid(index, cell, fluids)?;
         }
@@ -260,6 +295,7 @@ impl DiskChunk {
         self,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
+        objects: &ObjectRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<(IVec3, ArchivedChunk)> {
         let coord = self.coord()?;
@@ -268,10 +304,12 @@ impl DiskChunk {
             self.block_palette,
             self.block_runs,
             self.layers,
+            self.objects,
             self.fluid_palette,
             self.fluid_runs,
             blocks,
             layers,
+            objects,
             fluids,
         )
     }
@@ -317,10 +355,12 @@ fn decode_archived_compact(
     block_palette: Vec<DiskBlockState>,
     block_runs: Vec<DiskRun>,
     layer_states: Vec<DiskLayerState>,
+    object_states: Vec<DiskObjectState>,
     fluid_palette: Vec<DiskFluidState>,
     fluid_runs: Vec<DiskRun>,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
+    objects: &ObjectRegistry,
     fluids: &FluidRegistry,
 ) -> io::Result<(IVec3, ArchivedChunk)> {
     let block_states = block_palette
@@ -335,6 +375,7 @@ fn decode_archived_compact(
     validate_runs(&block_runs, block_states.len())?;
     validate_runs(&fluid_runs, fluid_states.len())?;
     let layer_entries = decode_layer_entries(&block_runs, layer_states, layers)?;
+    let object_entries = decode_object_entries(&block_runs, object_states, objects)?;
 
     let block_entries = block_runs.iter().flat_map(|run| {
         let cell = block_states[run.state as usize];
@@ -349,7 +390,7 @@ fn decode_archived_compact(
 
     Ok((
         coord,
-        ArchivedChunk::from_entries(block_entries, layer_entries, fluid_entries),
+        ArchivedChunk::from_entries(block_entries, layer_entries, object_entries, fluid_entries),
     ))
 }
 
@@ -431,6 +472,53 @@ fn decode_layer_entries(
             .order
             .checked_add(1)
             .ok_or_else(|| invalid_data("saved layer order overflow"))?;
+    }
+
+    Ok(entries)
+}
+
+fn decode_object_entries(
+    block_runs: &[DiskRun],
+    states: Vec<DiskObjectState>,
+    objects: &ObjectRegistry,
+) -> io::Result<Vec<(usize, ObjectCell)>> {
+    let mut previous_voxel = None;
+    let mut entries = Vec::with_capacity(states.len());
+
+    for state in states {
+        if state.voxel as usize >= CHUNK_VOLUME || state.rotation > 3 {
+            return Err(invalid_data("invalid saved object voxel or rotation"));
+        }
+        if previous_voxel.is_some_and(|previous| state.voxel <= previous) {
+            return Err(invalid_data("saved objects must be strictly ordered by voxel"));
+        }
+
+        let face = ObjectPlacementFace::from_index(state.face)
+            .ok_or_else(|| invalid_data("invalid saved object face"))?;
+        let definition = objects
+            .get(&state.id)
+            .ok_or_else(|| invalid_data(format!("missing object definition: {}", state.id)))?;
+        if !definition.supports_placement_face(face) {
+            return Err(invalid_data(format!(
+                "object {} does not support saved face {:?}",
+                state.id, face
+            )));
+        }
+
+        let voxel = state.voxel as usize;
+        if !run_contains_index(block_runs, voxel) {
+            return Err(invalid_data("saved object is missing its supporting block"));
+        }
+
+        entries.push((
+            voxel,
+            ObjectCell {
+                object_id: intern_object_id(&state.id),
+                face,
+                rotation: TextureRotation::from_quarter_turn(state.rotation),
+            },
+        ));
+        previous_voxel = Some(state.voxel);
     }
 
     Ok(entries)
