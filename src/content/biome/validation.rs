@@ -4,7 +4,6 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     match definition.kind {
         BiomeKind::Surface => validate_surface_biome(definition),
         BiomeKind::Volume => validate_volume_biome(definition),
-        BiomeKind::Hydrology => validate_hydrology_biome(definition),
     }
 
     if let Some(range) = definition.vertical_range {
@@ -23,7 +22,6 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     validate_climate(&definition.id, definition.climate);
     validate_distributions(definition);
     validate_creature_spawns(definition);
-    definition.hydrology.validate(&definition.id);
     validate_visuals(definition);
 
     if let Some(terrain) = &definition.terrain {
@@ -149,74 +147,6 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
     assert!(
         definition.surface_fluid.is_none(),
         "volume biome {} cannot define surfaceFluid",
-        definition.id
-    );
-}
-
-fn validate_hydrology_biome(definition: &BiomeDefinition) {
-    assert!(
-        definition.visuals.is_some(),
-        "hydrology biome {} must define visuals",
-        definition.id
-    );
-    assert!(
-        distributions_are_regional(definition),
-        "hydrology biome {} cannot define a surface distribution",
-        definition.id
-    );
-    assert!(
-        definition.terrain.is_none(),
-        "hydrology biome {} cannot define terrain",
-        definition.id
-    );
-    assert!(
-        definition.terrain_modifiers.is_empty(),
-        "hydrology biome {} cannot define terrainModifiers",
-        definition.id
-    );
-    assert!(
-        definition.surface_carvers.is_empty(),
-        "hydrology biome {} cannot define surfaceCarvers",
-        definition.id
-    );
-    assert!(
-        !definition.allow_surface_carvers,
-        "hydrology biome {} cannot enable allowSurfaceCarvers",
-        definition.id
-    );
-    assert!(
-        definition.surface_layers.is_empty(),
-        "hydrology biome {} cannot define surfaceLayers",
-        definition.id
-    );
-    assert!(
-        definition.surface_margin.is_none(),
-        "hydrology biome {} cannot define surfaceMargin",
-        definition.id
-    );
-    assert!(
-        definition.surface_fluid.is_none(),
-        "hydrology biome {} cannot define surfaceFluid",
-        definition.id
-    );
-    assert!(
-        definition.density_modifier.is_none(),
-        "hydrology biome {} cannot define densityModifier",
-        definition.id
-    );
-    assert!(
-        definition.solid_block.is_none(),
-        "hydrology biome {} cannot define solidBlock",
-        definition.id
-    );
-    assert!(
-        definition.vertical_range.is_none(),
-        "hydrology biome {} cannot define verticalRange",
-        definition.id
-    );
-    assert_eq!(
-        definition.priority, 0,
-        "hydrology biome {} cannot define volume overlap priority",
         definition.id
     );
 }

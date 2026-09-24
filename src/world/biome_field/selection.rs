@@ -446,7 +446,6 @@ mod tests {
             priority: 0,
             terrain: None,
             terrain_modifiers: Vec::new(),
-            hydrology: Default::default(),
             density_modifier: None,
             solid_block: None,
             density_seed: 0,

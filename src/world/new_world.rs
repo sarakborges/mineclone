@@ -109,10 +109,6 @@ pub(crate) struct WorldGenerationSettings {
     #[serde(default = "worldgen_feature_default")]
     spawn_caves: bool,
     #[serde(default = "worldgen_feature_default")]
-    spawn_rivers: bool,
-    #[serde(default = "worldgen_feature_default")]
-    spawn_lakes: bool,
-    #[serde(default = "worldgen_feature_default")]
     spawn_oceans: bool,
 }
 
@@ -123,8 +119,6 @@ impl Default for WorldGenerationSettings {
             spawn_structures: true,
             single_biome: false,
             spawn_caves: true,
-            spawn_rivers: true,
-            spawn_lakes: true,
             spawn_oceans: true,
         }
     }
@@ -147,13 +141,6 @@ impl WorldGenerationSettings {
         self.spawn_caves
     }
 
-    pub(crate) const fn spawn_rivers(self) -> bool {
-        self.spawn_rivers
-    }
-
-    pub(crate) const fn spawn_lakes(self) -> bool {
-        self.spawn_lakes
-    }
 
     pub(crate) const fn spawn_oceans(self) -> bool {
         self.spawn_oceans
@@ -175,28 +162,13 @@ impl WorldGenerationSettings {
         self.spawn_caves = spawn_caves;
     }
 
-    pub(crate) fn set_spawn_rivers(&mut self, spawn_rivers: bool) {
-        self.spawn_rivers = spawn_rivers;
-    }
-
-    pub(crate) fn set_spawn_lakes(&mut self, spawn_lakes: bool) {
-        self.spawn_lakes = spawn_lakes;
-    }
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
         self.spawn_oceans = spawn_oceans;
     }
 
-    pub(crate) fn set_hydrology_features(
-        &mut self,
-        spawn_caves: bool,
-        spawn_rivers: bool,
-        spawn_lakes: bool,
-        spawn_oceans: bool,
-    ) {
+    pub(crate) fn set_world_features(&mut self, spawn_caves: bool, spawn_oceans: bool) {
         self.spawn_caves = spawn_caves;
-        self.spawn_rivers = spawn_rivers;
-        self.spawn_lakes = spawn_lakes;
         self.spawn_oceans = spawn_oceans;
     }
 }
@@ -273,31 +245,14 @@ impl NewWorldConfig {
         self.world_generation.set_spawn_caves(spawn_caves);
     }
 
-    pub(crate) fn set_spawn_rivers(&mut self, spawn_rivers: bool) {
-        self.world_generation.set_spawn_rivers(spawn_rivers);
-    }
-
-    pub(crate) fn set_spawn_lakes(&mut self, spawn_lakes: bool) {
-        self.world_generation.set_spawn_lakes(spawn_lakes);
-    }
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
         self.world_generation.set_spawn_oceans(spawn_oceans);
     }
 
-    pub(crate) fn set_worldgen_hydrology(
-        &mut self,
-        spawn_caves: bool,
-        spawn_rivers: bool,
-        spawn_lakes: bool,
-        spawn_oceans: bool,
-    ) {
-        self.world_generation.set_hydrology_features(
-            spawn_caves,
-            spawn_rivers,
-            spawn_lakes,
-            spawn_oceans,
-        );
+    pub(crate) fn set_worldgen_features(&mut self, spawn_caves: bool, spawn_oceans: bool) {
+        self.world_generation
+            .set_world_features(spawn_caves, spawn_oceans);
     }
 
     pub(crate) const fn world_generation(&self) -> WorldGenerationSettings {

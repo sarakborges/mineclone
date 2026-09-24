@@ -14434,3 +14434,18 @@ Próxima parte: remover os consumidores restantes, schemas/toggles/dados de Hydr
 deletar fisicamente o módulo `src/world/hydrology` e o helper
 `density_sampling/hydrology.rs`.
 
+### Parte 2 — Schema/runtime de Hydrology removido
+
+Removidos os conceitos de Hydrology do schema e dos modelos centrais:
+- `BiomeKind::Hydrology` não existe mais; biomes são Surface ou Volume.
+- removido `BiomeDefinition.hydrology` e suas regras/materiais.
+- removidos os módulos `biome_hydrology` e `dimension_hydrology` do content model.
+- `DimensionDefinition` agora possui `seaFluid` diretamente, separado de qualquer Hydrology.
+- CurrentBiome e BiomeField não carregam mais identidade/regras de Hydrology.
+- WorldGenerationSettings não possui mais flags de rivers/lakes; essas features voltarão
+  futuramente como Structures conectáveis.
+- corrigido o último uso do construtor de DensitySampleContext deixado pela parte 1.
+
+Ainda faltam nesta remoção: limpar JSON/UI/commands/bootstrap remanescentes e então deletar
+fisicamente o módulo runtime de Hydrology. Nenhuma infraestrutura nova de connector foi iniciada.
+

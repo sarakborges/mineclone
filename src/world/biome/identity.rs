@@ -10,8 +10,6 @@ pub(super) struct VolumeBiomeIdentity<'a> {
 pub(super) fn resolve_surface_identity(
     surface: &BiomeFieldSample<'_>,
     influences: &mut Vec<CurrentBiomeInfluence>,
-    hydrology_influences: &mut Vec<CurrentBiomeInfluence>,
-    hydrology_id: &mut Option<String>,
 ) -> usize {
     let influence_count = if surface.identity_surface_index != surface.primary_surface_index {
         replace_single_influence(influences, surface.primary_id, 1.0);
@@ -19,9 +17,6 @@ pub(super) fn resolve_surface_identity(
     } else {
         copy_influences(influences, &surface.influences)
     };
-    hydrology_influences.clear();
-    replace_optional_string(hydrology_id, None);
-
     influence_count
 }
 
@@ -188,15 +183,7 @@ mod tests {
             .collect(),
         };
         let mut influences = Vec::new();
-        let mut hydrology_influences = Vec::new();
-        let mut hydrology_id = None;
-
-        let count = resolve_surface_identity(
-            &surface,
-            &mut influences,
-            &mut hydrology_influences,
-            &mut hydrology_id,
-        );
+        let count = resolve_surface_identity(&surface, &mut influences);
         influences.truncate(count);
 
         assert_eq!(influences.len(), 1);

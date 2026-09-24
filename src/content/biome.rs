@@ -8,7 +8,7 @@ use crate::localization::LocalizedText;
 use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
-    biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
+    biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, StructurePlacementRules},
     biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
@@ -26,7 +26,6 @@ pub enum BiomeKind {
     #[default]
     Surface,
     Volume,
-    Hydrology,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -184,8 +183,6 @@ pub struct BiomeDefinition {
     pub density_modifier: Option<BiomeDensityModifier>,
     #[serde(default)]
     pub solid_block: Option<String>,
-    #[serde(default)]
-    pub hydrology: BiomeHydrology,
     #[serde(default)]
     pub structures: Vec<BiomeStructure>,
     #[serde(default)]

@@ -31,8 +31,6 @@ pub struct CurrentBiome {
     pub influences: Vec<CurrentBiomeInfluence>,
     pub surface_id: String,
     pub surface_influences: Vec<CurrentBiomeInfluence>,
-    pub hydrology_id: Option<String>,
-    pub hydrology_influences: Vec<CurrentBiomeInfluence>,
     pub volume_id: Option<String>,
     pub volume_influences: Vec<CurrentBiomeInfluence>,
     pub volume_strength: f32,
@@ -50,8 +48,6 @@ impl Default for CurrentBiome {
             influences: vec![default_influence.clone()],
             surface_id: DEFAULT_BIOME_ID.to_owned(),
             surface_influences: vec![default_influence],
-            hydrology_id: None,
-            hydrology_influences: Vec::new(),
             volume_id: None,
             volume_influences: Vec::new(),
             volume_strength: 0.0,
@@ -106,12 +102,7 @@ pub fn track_current_biome(
         replace_influences(&mut next.surface_influences, &surface.influences);
     }
 
-    let resolved_surface_count = resolve_surface_identity(
-        &surface,
-        &mut next.influences,
-        &mut next.hydrology_influences,
-        &mut next.hydrology_id,
-    );
+    let resolved_surface_count = resolve_surface_identity(&surface, &mut next.influences);
     apply_volume_identity(
         &mut next.influences,
         resolved_surface_count,

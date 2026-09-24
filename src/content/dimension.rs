@@ -7,7 +7,8 @@ use crate::localization::LocalizedText;
 
 use super::{
     biome::{BiomeKind, BiomeRegistry},
-    dimension_hydrology::DimensionHydrology,
+    builtin_ids::WATER_FLUID_ID,
+    fluid::FluidRegistry,
     registry::DefinitionMap,
 };
 
@@ -52,12 +53,12 @@ pub struct DimensionDefinition {
     pub day_night_cycle: String,
     pub sky: String,
     pub sea_level: i32,
+    #[serde(default = "default_sea_fluid")]
+    pub sea_fluid: String,
     #[serde(default)]
     pub ocean_biome: Option<String>,
     #[serde(default = "default_max_entities")]
     pub max_entities: usize,
-    #[serde(default)]
-    pub hydrology: DimensionHydrology,
 }
 
 fn default_max_entities() -> usize { 128 }
@@ -140,14 +141,6 @@ impl DimensionDefinition {
                         )
                     });
                     validate_size_axis(&self.id, &entry.id, "y", vertical_size);
-                }
-                BiomeKind::Hydrology => {
-                    assert!(
-                        entry.size.is_none(),
-                        "dimension {} hydrology biome {} cannot define size",
-                        self.id,
-                        entry.id
-                    );
                 }
             }
         }
@@ -292,6 +285,18 @@ impl DimensionDefinition {
         }
     }
 
+    pub(crate) fn validate_fluid_references(&self, fluids: &FluidRegistry) {
+        assert!(
+            fluids.id_of(&self.sea_fluid).is_some(),
+            "dimension {} seaFluid references missing fluid: {}",
+            self.id,
+            self.sea_fluid
+        );
+    }
+}
+
+fn default_sea_fluid() -> String {
+    WATER_FLUID_ID.to_owned()
 }
 
 #[derive(Resource, Default)]

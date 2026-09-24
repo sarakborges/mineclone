@@ -167,8 +167,6 @@ pub(super) fn validate_content(content: &LoadedContent) {
             dimension.id,
             dimension.sky
         );
-        dimension
-            .hydrology
-            .validate_references(&dimension.id, &content.fluids);
+        dimension.validate_fluid_references(&content.fluids);
     }
 }

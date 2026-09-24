@@ -168,7 +168,7 @@ fn supported_surface_ground_y(
             },
         );
     }
-    let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field)
+    let density_context = DensitySampleContext::new(anchored_caves, context.biome_field)
         .with_volume_rules(
             context.world_generation.spawn_caves(),
             context.world_generation.mode() == WorldGenerationMode::Normal,
