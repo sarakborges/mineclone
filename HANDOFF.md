@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 5E — Conteúdo legado de cave entrances removido por completo
+
+Removido o último bloco authored do sistema antigo: `surfaceCarvers` saiu de `data/dimensions/overworld/biomes/caverns.json`.
+
+Estado após esta parte:
+- nenhum `allowSurfaceCarvers` permanece nos surface biomes;
+- nenhum `surfaceCarvers` permanece no cavern biome;
+- não existe mais schema Rust de surface carver;
+- não existe mais runtime de surface tunnel/cave entrance;
+- não existe mais `cave_connectivity`, connector graph, underground cave water ou seus caches;
+- Caverns continua existindo exclusivamente como volume biome com `densityModifier.type = "cavern"`;
+- nenhum connector novo foi implementado ainda.
+
+Com isso, a remoção do sistema legado de caves/connectivity está concluída. A próxima etapa pode iniciar a infraestrutura nova de connectors/structures.
+
 ## 2026-09-24 — Parte 5D — Flags authored de surface carvers removidas
 
 Removidas de todos os surface biomes as chaves `allowSurfaceCarvers`. Como o schema já não aceita nem usa esse conceito, os arquivos de conteúdo agora também não carregam configuração morta para entradas/túneis legados.
