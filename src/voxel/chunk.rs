@@ -714,6 +714,10 @@ impl VoxelChunk {
             .map(|(&index, layers)| (index as usize, layers.as_slice()))
     }
 
+    #[allow(
+        dead_code,
+        reason = "voxel-backed world-object runtime migration is still in progress"
+    )]
     pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
         if !in_bounds(x, y, z) {
             return None;
@@ -1039,6 +1043,10 @@ impl VoxelChunk {
         set_object_in_storage(self.blocks.as_ref(), objects, x, y, z, object)
     }
 
+    #[allow(
+        dead_code,
+        reason = "voxel-backed world-object runtime migration is still in progress"
+    )]
     pub(crate) fn remove_object(&mut self, x: usize, y: usize, z: usize) -> Option<ObjectCell> {
         Arc::make_mut(&mut self.objects).remove(&(index(x, y, z) as u16))
     }
