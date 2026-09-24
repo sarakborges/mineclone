@@ -9,6 +9,8 @@ use crate::{
         item_id::intern_item_id,
         layer::LayerRegistry,
         layer_id::intern_layer_id,
+        object::ObjectRegistry,
+        object_id::intern_object_id,
         tool::{ToolDefinition, ToolRegistry},
         tool_id::intern_tool_id,
         tool_behavior::MINE_TOOL_BEHAVIOR_ID,
@@ -52,6 +54,7 @@ struct MiningContent<'w> {
     blocks: Res<'w, BlockRegistry>,
     items: Res<'w, ItemRegistry>,
     layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
 }
 
@@ -239,6 +242,8 @@ fn resolve_loot_item_id(item_id: &str, content: &MiningContent<'_>) -> &'static 
         intern_block_id(item_id)
     } else if content.layers.get(item_id).is_some() {
         intern_layer_id(item_id)
+    } else if content.objects.get(item_id).is_some() {
+        intern_object_id(item_id)
     } else if content.tools.get(item_id).is_some() {
         intern_tool_id(item_id)
     } else {

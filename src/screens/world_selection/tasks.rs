@@ -11,7 +11,8 @@ use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
+        object::{ObjectDefinition, ObjectRegistry}, tool::ToolRegistry,
     },
     voxel::world::VoxelWorld,
     world::save_catalog::{
@@ -83,6 +84,7 @@ struct OwnedLoadContent {
     blocks: BlockRegistry,
     items: ItemRegistry,
     layers: LayerRegistry,
+    objects: ObjectRegistry,
     fluids: FluidRegistry,
     tools: ToolRegistry,
     creatures: CreatureRegistry,
@@ -95,6 +97,23 @@ impl OwnedLoadContent {
         let mut items = ItemRegistry::default();
         for definition in registries.items.iter() {
             items.insert(definition.clone());
+        }
+        let mut objects = ObjectRegistry::default();
+        for definition in registries.objects.iter() {
+            objects.insert(ObjectDefinition {
+                id: definition.id.clone(),
+                name: definition.name.clone(),
+                category: definition.category.clone(),
+                model: definition.model.clone(),
+                icon: definition.icon.clone(),
+                tint: definition.tint,
+                placement_faces: definition.placement_faces.clone(),
+                target: definition.target,
+                unlit: definition.unlit,
+                casts_shadow: definition.casts_shadow,
+                receives_shadow: definition.receives_shadow,
+                drop_self: definition.drop_self,
+            });
         }
         let mut tools = ToolRegistry::default();
         for definition in registries.tools.iter() {
@@ -118,6 +137,7 @@ impl OwnedLoadContent {
             blocks: registries.blocks.clone(),
             items,
             layers: registries.layers.clone(),
+            objects,
             fluids: registries.fluids.clone(),
             tools,
             creatures,
@@ -132,6 +152,7 @@ impl OwnedLoadContent {
             blocks: &self.blocks,
             items: &self.items,
             layers: &self.layers,
+            objects: &self.objects,
             fluids: &self.fluids,
             tools: &self.tools,
             creatures: &self.creatures,

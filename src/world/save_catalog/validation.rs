@@ -11,6 +11,7 @@ use crate::{
         fluid::FluidRegistry,
         item::ItemRegistry,
         layer::LayerRegistry,
+        object::ObjectRegistry,
         tool::ToolRegistry,
     },
     player::hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
@@ -28,6 +29,7 @@ pub(crate) struct SaveRegistries<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) items: &'a ItemRegistry,
     pub(crate) layers: &'a LayerRegistry,
+    pub(crate) objects: &'a ObjectRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) tools: &'a ToolRegistry,
     pub(crate) creatures: &'a CreatureRegistry,
@@ -64,6 +66,7 @@ impl SaveRegistries<'_> {
                 self.items.get(id).is_some()
                     || self.blocks.get(id).is_some()
                     || self.layers.get(id).is_some()
+                    || self.objects.get(id).is_some()
                     || self.tools.get(id).is_some()
             },
             |id| self.biomes.get(id).is_some(),
@@ -82,6 +85,7 @@ impl SaveRegistries<'_> {
             .map(|item| item.id.clone())
             .chain(self.blocks.iter().map(|block| block.id.clone()))
             .chain(self.layers.iter().map(|layer| layer.id.clone()))
+            .chain(self.objects.iter().map(|object| object.id.clone()))
             .chain(self.tools.iter().map(|tool| tool.id.clone()))
             .collect();
         let valid_biomes = self

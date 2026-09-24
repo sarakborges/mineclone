@@ -6,6 +6,7 @@ use crate::{
     content::{
         block::BlockRegistry, block_id::intern_block_id, item::ItemRegistry,
         item_id::intern_item_id, layer::LayerRegistry, layer_id::intern_layer_id,
+        object::ObjectRegistry, object_id::intern_object_id,
         tool::ToolRegistry, tool_id::intern_tool_id,
     },
     gameplay::availability::world_interaction_available,
@@ -121,6 +122,7 @@ impl PlayerHotbar {
         items: &ItemRegistry,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
+        objects: &ObjectRegistry,
         tools: &ToolRegistry,
     ) -> io::Result<Self> {
         if saved_items.len() != INVENTORY_SLOT_COUNT {
@@ -148,6 +150,8 @@ impl PlayerHotbar {
                             Some(intern_block_id(id))
                         } else if layers.get(id).is_some() {
                             Some(intern_layer_id(id))
+                        } else if objects.get(id).is_some() {
+                            Some(intern_object_id(id))
                         } else if tools.get(id).is_some() {
                             Some(intern_tool_id(id))
                         } else {

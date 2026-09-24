@@ -55,6 +55,7 @@ impl PreparedWorldActivation {
             registries.items,
             registries.blocks,
             registries.layers,
+            registries.objects,
             registries.tools,
         )
         .map_err(WorldActivationError::Inventory)?;
