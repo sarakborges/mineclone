@@ -50,7 +50,8 @@ perda ou duplicação.
 O botão de organizar o inventory agora ordena e também consolida stacks
 compatíveis no backpack até 64. Clicar um stack sobre outro compatível também
 faz merge até o limite, mantendo eventual restante no cursor. O catálogo
-Creative entrega inicialmente um stack cheio de 64.
+Creative mantém o comportamento anterior e entrega uma unidade; 64 é apenas o
+limite máximo inicial do stack.
 
 Hotbar, inventory e cursor exibem contador no canto inferior direito para
 quantidades maiores que 1. A renderização do contador é compartilhada em

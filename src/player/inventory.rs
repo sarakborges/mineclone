@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     hotbar::PlayerHotbar,
-    item_stack::{ItemStack, MAX_STACK_SIZE},
+    item_stack::ItemStack,
 };
 
 #[derive(Resource, Default)]
@@ -47,7 +47,7 @@ impl InventoryCursor {
     }
 
     pub(crate) fn pick_creative_item(&mut self, item: &'static str) {
-        self.item = Some(ItemStack::new(item).with_quantity(MAX_STACK_SIZE));
+        self.item = Some(ItemStack::new(item));
     }
 
     pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {

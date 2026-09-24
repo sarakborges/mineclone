@@ -53,10 +53,6 @@ impl PlayerHotbar {
         self.slots.get(slot).and_then(Option::as_ref)
     }
 
-    pub(crate) fn inventory_item_at(&self, index: usize) -> Option<&'static str> {
-        self.inventory_stack_at(index).map(ItemStack::id)
-    }
-
     pub(crate) fn inventory_stack_at(&self, index: usize) -> Option<&ItemStack> {
         if index < BACKPACK_SLOT_COUNT {
             return self.backpack[index].as_ref();
