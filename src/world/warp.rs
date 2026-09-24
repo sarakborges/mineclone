@@ -1,3 +1,8 @@
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
+
 use bevy::prelude::*;
 
 use crate::{
@@ -19,16 +24,55 @@ const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
 const WARP_STREAMING_RADIUS_CHUNKS: i32 = 3;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
-const SLOW_WARP_SEARCH_WARNING: std::time::Duration = std::time::Duration::from_millis(4);
+const SLOW_WARP_SEARCH_WARNING: Duration = Duration::from_millis(4);
+const WARP_SEARCH_FRAME_BUDGET: Duration = Duration::from_millis(1);
+const WARP_SEARCH_BUDGET_CHECK_INTERVAL: usize = 64;
+
+#[derive(Default)]
+struct WarpSearchState {
+    radius: i32,
+    remaining: VecDeque<IVec3>,
+    unloaded: Vec<IVec3>,
+    best: Option<(i32, Vec3)>,
+}
+
+impl WarpSearchState {
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn prepare_current_shell(&mut self) {
+        debug_assert!(self.remaining.is_empty());
+        debug_assert!(self.unloaded.is_empty());
+        let radius = self.radius;
+        for y in -radius..=radius {
+            for z in -radius..=radius {
+                for x in -radius..=radius {
+                    if radius > 0 && x.abs().max(y.abs()).max(z.abs()) != radius {
+                        continue;
+                    }
+                    self.remaining.push_back(IVec3::new(x, y, z));
+                }
+            }
+        }
+    }
+
+    fn prepare_unloaded_retry(&mut self) {
+        debug_assert!(self.remaining.is_empty());
+        self.remaining.extend(self.unloaded.drain(..));
+    }
+}
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingWarp {
     target: Option<IVec3>,
+    search: WarpSearchState,
 }
 
 impl PendingWarp {
     pub(crate) fn request(&mut self, target: IVec3) {
         self.target = Some(target);
+        self.search.reset();
     }
 
     pub(super) fn streaming_center(&self) -> Option<IVec3> {
@@ -77,8 +121,8 @@ pub(super) fn resolve_pending_warp(
         return;
     };
 
-    let search_started = std::time::Instant::now();
-    let result = find_nearest_safe_eye_position(&world, target);
+    let search_started = Instant::now();
+    let result = advance_safe_eye_position_search(&world, target, &mut pending.search);
     let search_elapsed = search_started.elapsed();
     if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
         warn!(
@@ -98,6 +142,7 @@ pub(super) fn resolve_pending_warp(
             gravity.reset_motion();
             swimming.reset_motion();
             pending.target = None;
+            pending.search.reset();
             *slow_search_warned = false;
         }
         WarpSearchResult::Exhausted => {
@@ -107,67 +152,80 @@ pub(super) fn resolve_pending_warp(
                 target
             );
             pending.target = None;
+            pending.search.reset();
             *slow_search_warned = false;
         }
     }
 }
 
-fn find_nearest_safe_eye_position(world: &VoxelWorld, target: IVec3) -> WarpSearchResult {
-    let mut best: Option<(i32, Vec3)> = None;
+fn advance_safe_eye_position_search(
+    world: &VoxelWorld,
+    target: IVec3,
+    search: &mut WarpSearchState,
+) -> WarpSearchResult {
+    let frame_started = Instant::now();
+    let mut candidates_since_budget_check = 0_usize;
 
-    for radius in 0..=WARP_SEARCH_RADIUS_BLOCKS {
-        let mut shell_unloaded = false;
+    loop {
+        if search.remaining.is_empty() {
+            if !search.unloaded.is_empty() {
+                search.prepare_unloaded_retry();
+            } else if search.radius > WARP_SEARCH_RADIUS_BLOCKS {
+                return search.best.map_or(WarpSearchResult::Exhausted, |(_, eye)| {
+                    WarpSearchResult::Found(eye)
+                });
+            } else {
+                search.prepare_current_shell();
+            }
+        }
 
-        for y in -radius..=radius {
-            for z in -radius..=radius {
-                for x in -radius..=radius {
-                    if radius > 0 && x.abs().max(y.abs()).max(z.abs()) != radius {
-                        continue;
+        while let Some(offset) = search.remaining.pop_front() {
+            let Some(feet) = target
+                .x
+                .checked_add(offset.x)
+                .zip(target.y.checked_add(offset.y))
+                .zip(target.z.checked_add(offset.z))
+                .map(|((x, y), z)| IVec3::new(x, y, z))
+            else {
+                continue;
+            };
+
+            match candidate_state(world, feet) {
+                CandidateState::Unloaded => search.unloaded.push(offset),
+                CandidateState::Invalid => {}
+                CandidateState::Valid(eye) => {
+                    let distance_squared = offset.length_squared();
+                    if search
+                        .best
+                        .as_ref()
+                        .is_none_or(|(best_distance, _)| distance_squared < *best_distance)
+                    {
+                        search.best = Some((distance_squared, eye));
                     }
+                }
+            }
 
-                    let offset = IVec3::new(x, y, z);
-                    let Some(feet) = target
-                        .x
-                        .checked_add(offset.x)
-                        .zip(target.y.checked_add(offset.y))
-                        .zip(target.z.checked_add(offset.z))
-                        .map(|((x, y), z)| IVec3::new(x, y, z))
-                    else {
-                        continue;
-                    };
-                    match candidate_state(world, feet) {
-                        CandidateState::Unloaded => {
-                            shell_unloaded = true;
-                        }
-                        CandidateState::Invalid => {}
-                        CandidateState::Valid(eye) => {
-                            let distance_squared = offset.length_squared();
-                            if best
-                                .as_ref()
-                                .is_none_or(|(best_distance, _)| distance_squared < *best_distance)
-                            {
-                                best = Some((distance_squared, eye));
-                            }
-                        }
-                    }
+            candidates_since_budget_check += 1;
+            if candidates_since_budget_check >= WARP_SEARCH_BUDGET_CHECK_INTERVAL {
+                candidates_since_budget_check = 0;
+                if frame_started.elapsed() >= WARP_SEARCH_FRAME_BUDGET {
+                    return WarpSearchResult::Pending;
                 }
             }
         }
 
-        if let Some((distance_squared, eye)) = best
-            && distance_squared <= (radius + 1).pow(2)
+        if let Some((distance_squared, eye)) = search.best
+            && distance_squared <= (search.radius + 1).pow(2)
         {
             return WarpSearchResult::Found(eye);
         }
 
-        if shell_unloaded {
+        if !search.unloaded.is_empty() {
             return WarpSearchResult::Pending;
         }
-    }
 
-    best.map_or(WarpSearchResult::Exhausted, |(_, eye)| {
-        WarpSearchResult::Found(eye)
-    })
+        search.radius += 1;
+    }
 }
 
 fn candidate_state(world: &VoxelWorld, feet: IVec3) -> CandidateState {
@@ -233,4 +291,56 @@ fn candidate_state(world: &VoxelWorld, feet: IVec3) -> CandidateState {
     }
 
     CandidateState::Valid(eye)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn warp_shell_contains_only_the_requested_chebyshev_radius() {
+        let mut search = WarpSearchState {
+            radius: 2,
+            ..default()
+        };
+        search.prepare_current_shell();
+
+        assert!(!search.remaining.is_empty());
+        assert!(search.remaining.iter().all(|offset| {
+            offset.x.abs().max(offset.y.abs()).max(offset.z.abs()) == 2
+        }));
+        assert_eq!(search.remaining.len(), 5_usize.pow(3) - 3_usize.pow(3));
+    }
+
+    #[test]
+    fn warp_search_retries_only_offsets_that_were_unloaded() {
+        let mut search = WarpSearchState {
+            radius: 3,
+            unloaded: vec![IVec3::new(1, 2, 3), IVec3::new(-2, 0, 3)],
+            ..default()
+        };
+        search.prepare_unloaded_retry();
+
+        assert!(search.unloaded.is_empty());
+        assert_eq!(search.remaining.len(), 2);
+        assert_eq!(search.remaining.pop_front(), Some(IVec3::new(1, 2, 3)));
+        assert_eq!(search.remaining.pop_front(), Some(IVec3::new(-2, 0, 3)));
+    }
+
+    #[test]
+    fn requesting_a_new_warp_resets_previous_search_progress() {
+        let mut pending = PendingWarp::default();
+        pending.request(IVec3::new(10, 20, 30));
+        pending.search.radius = 8;
+        pending.search.unloaded.push(IVec3::ONE);
+
+        pending.request(IVec3::new(-4, 7, 9));
+
+        assert_eq!(pending.target, Some(IVec3::new(-4, 7, 9)));
+        assert_eq!(pending.search.radius, 0);
+        assert!(pending.search.remaining.is_empty());
+        assert!(pending.search.unloaded.is_empty());
+        assert!(pending.search.best.is_none());
+    }
 }

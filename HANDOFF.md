@@ -1,3 +1,22 @@
+## 2026-09-24 — Warp safe-position search agora é incremental e time-budgeted
+
+A busca de destino seguro do warp não reinicia mais em radius 0 a cada frame.
+
+- `PendingWarp` mantém `WarpSearchState` com shell atual, candidatos restantes, offsets que
+  estavam unloaded e melhor destino já encontrado;
+- candidatos Invalid/Valid resolvidos saem definitivamente da fila;
+- se uma shell toca chunks ainda não carregados, no próximo frame somente esses offsets são
+  revisitados; todo o resto da shell não é reavaliado;
+- uma nova solicitação de warp reseta integralmente o progresso anterior;
+- a busca possui budget de 1 ms por frame, verificado a cada 64 candidatos, impedindo uma
+  região sem destino seguro de monopolizar a main thread;
+- a regra existente de escolha por distância dentro das shells e o raio máximo de 32 blocos
+  permanecem;
+- testes cobrem composição da shell, retry apenas de unloaded e reset em novo warp.
+
+Isso remove o último loop de trabalho repetido conhecido no warp e transforma uma busca
+patológica em trabalho incremental com limite explícito de frame.
+
 ### CI follow-up — preserve loaded chunk diagnostic count
 
 O diagnóstico de world objects agora salva `loaded_chunk_count` antes de consumir
