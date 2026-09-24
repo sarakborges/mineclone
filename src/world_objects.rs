@@ -1,5 +1,6 @@
 use bevy::{
     asset::AssetId,
+    ecs::system::SystemParam,
     gltf::GltfAssetLabel,
     light::{NotShadowCaster, NotShadowReceiver},
     platform::collections::HashMap,
