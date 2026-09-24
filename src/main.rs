@@ -18,6 +18,7 @@ mod tools;
 mod ui;
 mod voxel;
 mod world;
+mod world_items;
 
 #[cfg(debug_assertions)]
 #[expect(
@@ -56,6 +57,7 @@ use targeting::block::BlockTargetingPlugin;
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
+use world_items::WorldItemsPlugin;
 
 fn main() {
     install_crash_logger();
@@ -110,6 +112,7 @@ fn run_game() {
             GameplayPlugin,
             CreaturesPlugin,
             RenderingPlugin,
+            WorldItemsPlugin,
             BlockTargetingPlugin,
             ToolsPlugin,
             HudPlugin,

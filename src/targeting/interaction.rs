@@ -18,6 +18,7 @@ use crate::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, raycast::VoxelHit,
         texture_rotation::TextureRotation,
     },
+    world_items::TargetedWorldItem,
 };
 
 use super::{
@@ -53,6 +54,7 @@ struct BlockEditInput<'w, 's> {
     player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
     targeted: ResMut<'w, TargetedBlock>,
     creature_target: Res<'w, super::block::TargetedCreature>,
+    world_item_target: Res<'w, TargetedWorldItem>,
 }
 
 #[derive(SystemParam)]
@@ -101,6 +103,9 @@ fn edit_targeted_block(
     }
 
     let (player_transform, game_mode) = input.player.into_inner();
+    if right_pressed && input.world_item_target.0.is_some() {
+        return;
+    }
     if middle_pressed && game_mode.has_creative_inventory() {
         if let Some(hit) = input.targeted.0
             && definitions.blocks.get(hit.block_id).is_some()

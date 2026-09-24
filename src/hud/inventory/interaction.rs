@@ -11,6 +11,7 @@ use crate::{
     gameplay::modal::GameplayModalState,
     player::{hotbar::PlayerHotbar, inventory::InventoryCursor},
     ui::text_input::editable_value,
+    world_items::PlayerDropRequest,
 };
 
 use super::state::{
@@ -311,13 +312,16 @@ pub(super) fn handle_empty_inventory_click(
     mouse: Res<ButtonInput<MouseButton>>,
     controls: InventoryControlInteractions,
     mut cursor: ResMut<InventoryCursor>,
+    mut drops: MessageWriter<PlayerDropRequest>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) || cursor.item().is_none() {
         return;
     }
 
-    if !controls.pointer_is_over_control() {
-        cursor.discard();
+    if !controls.pointer_is_over_control()
+        && let Some(stack) = cursor.take_stack()
+    {
+        drops.write(PlayerDropRequest::new(stack));
     }
 }
 

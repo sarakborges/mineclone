@@ -1,0 +1,10 @@
+{
+  "id": "asteria:stick",
+  "name": {
+    "english": "Stick",
+    "portuguese_brazil": "Graveto",
+    "spanish": "Ramita"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/stick.png"
+}

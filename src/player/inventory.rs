@@ -28,6 +28,10 @@ impl InventoryCursor {
         self.item = Some(ItemStack::new(item));
     }
 
+    pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {
+        self.item.take()
+    }
+
     pub(crate) fn discard(&mut self) {
         self.item = None;
     }

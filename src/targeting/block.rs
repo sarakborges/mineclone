@@ -13,6 +13,7 @@ use crate::{
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayWorldCamera,
     voxel::{raycast::{VoxelHit, raycast_voxels}, world::VoxelWorld},
+    world_items::{InteractPickup, TargetedWorldItem, WorldItem, target_bounds},
 };
 
 const TARGET_RANGE: f32 = 8.0;
@@ -71,8 +72,10 @@ fn update_targets(
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
     creatures: Query<(Entity, &Transform, &CreatureTargetCollider, &EntityHealth), With<CreatureInstance>>,
+    world_items: Query<(Entity, &Transform), (With<WorldItem>, With<InteractPickup>)>,
     mut targeted_block: ResMut<TargetedBlock>,
     mut targeted_creature: ResMut<TargetedCreature>,
+    mut targeted_world_item: ResMut<TargetedWorldItem>,
 ) {
     if !interaction.available() {
         if targeted_block.0.is_some() {
@@ -80,6 +83,9 @@ fn update_targets(
         }
         if targeted_creature.0.is_some() {
             targeted_creature.0 = None;
+        }
+        if targeted_world_item.0.is_some() {
+            targeted_world_item.0 = None;
         }
         return;
     }
@@ -110,13 +116,41 @@ fn update_targets(
                 .map(|distance| (entity, distance))
         })
         .min_by(|left, right| left.1.total_cmp(&right.1));
-    let next_creature = creature_hit.map(|(entity, _)| entity);
-    let next_block = if next_creature.is_some() { None } else { block_hit };
+    let world_item_hit = world_items
+        .iter()
+        .filter_map(|(entity, transform)| {
+            let (min, max) = target_bounds(transform.translation);
+            ray_box_distance(origin, direction, min, max)
+                .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
+                .map(|distance| (entity, distance))
+        })
+        .min_by(|left, right| left.1.total_cmp(&right.1));
+
+    let (next_creature, next_world_item) = match (creature_hit, world_item_hit) {
+        (Some((creature, creature_distance)), Some((item, item_distance))) => {
+            if creature_distance <= item_distance {
+                (Some(creature), None)
+            } else {
+                (None, Some(item))
+            }
+        }
+        (Some((creature, _)), None) => (Some(creature), None),
+        (None, Some((item, _))) => (None, Some(item)),
+        (None, None) => (None, None),
+    };
+    let next_block = if next_creature.is_none() && next_world_item.is_none() {
+        block_hit
+    } else {
+        None
+    };
     if targeted_block.0 != next_block {
         targeted_block.0 = next_block;
     }
     if targeted_creature.0 != next_creature {
         targeted_creature.0 = next_creature;
+    }
+    if targeted_world_item.0 != next_world_item {
+        targeted_world_item.0 = next_world_item;
     }
 }
 

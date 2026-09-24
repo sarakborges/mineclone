@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::{
         block::{BlockDefinition, BlockRegistry, DEFAULT_BLOCK_BREAK_TICKS},
+        builtin_ids::BIOME_TINT_METADATA_KEY,
         tool::{ToolDefinition, ToolRegistry},
         tool_behavior::MINE_TOOL_BEHAVIOR_ID,
     },
@@ -11,10 +12,12 @@ use crate::{
         camera::GameplayCamera,
         game_mode::GameMode,
         hotbar::PlayerHotbar,
+        item_stack::ItemStack,
         viewmodel::ViewModelAnimation,
     },
     voxel::edit::VoxelTopologyRuntime,
     world::tick::WorldTickClock,
+    world_items::WorldItemSpawnRequest,
 };
 
 use super::block::{BlockTargetingSet, TargetedBlock};
@@ -88,6 +91,7 @@ fn advance_survival_mining(
     mut runtime: VoxelTopologyRuntime,
     mut mining: ResMut<BlockMiningState>,
     mut viewmodel: ResMut<ViewModelAnimation>,
+    mut item_spawns: MessageWriter<WorldItemSpawnRequest>,
 ) {
     if *player.into_inner() != GameMode::Survival || !buttons.pressed(MouseButton::Left) {
         mining.reset();
@@ -151,7 +155,19 @@ fn advance_survival_mining(
         }
     }
 
+    let mut dropped_stack = ItemStack::new(hit.block_id);
+    if let Some(cell) = runtime.world().cell_at(hit.voxel)
+        && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
+    {
+        dropped_stack = dropped_stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
+    }
+
     if runtime.set_block(hit.voxel, None).is_some() {
+        item_spawns.write(WorldItemSpawnRequest::dropped(
+            dropped_stack,
+            hit.voxel.as_vec3() + Vec3::splat(0.5),
+            Vec3::Y * 1.2,
+        ));
         targeted.0 = None;
         viewmodel.play_break_fast();
     }

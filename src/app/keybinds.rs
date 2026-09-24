@@ -8,16 +8,18 @@ pub(crate) enum KeybindAction {
     Inventory,
     Chat,
     ToolAction,
+    DropItem,
     ChangePerspective,
 }
 
 impl KeybindAction {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::Jump,
         Self::Descend,
         Self::Inventory,
         Self::Chat,
         Self::ToolAction,
+        Self::DropItem,
         Self::ChangePerspective,
     ];
 
@@ -28,6 +30,7 @@ impl KeybindAction {
             Self::Inventory => "settings.keybind.inventory",
             Self::Chat => "settings.keybind.chat",
             Self::ToolAction => "settings.keybind.toolAction",
+            Self::DropItem => "settings.keybind.dropItem",
             Self::ChangePerspective => "settings.keybind.changePerspective",
         }
     }
@@ -351,6 +354,7 @@ pub(crate) struct Keybinds {
     inventory: KeyboardKey,
     chat: KeyboardKey,
     tool_action: KeyboardKey,
+    drop_item: KeyboardKey,
     change_perspective: KeyboardKey,
 }
 
@@ -362,6 +366,7 @@ impl Default for Keybinds {
             inventory: KeyboardKey::KeyE,
             chat: KeyboardKey::KeyT,
             tool_action: KeyboardKey::KeyR,
+            drop_item: KeyboardKey::KeyQ,
             change_perspective: KeyboardKey::F5,
         }
     }
@@ -381,6 +386,7 @@ impl Keybinds {
             KeybindAction::Inventory => self.inventory,
             KeybindAction::Chat => self.chat,
             KeybindAction::ToolAction => self.tool_action,
+            KeybindAction::DropItem => self.drop_item,
             KeybindAction::ChangePerspective => self.change_perspective,
         }
     }
@@ -414,6 +420,7 @@ impl Keybinds {
             KeybindAction::Inventory => self.inventory = key,
             KeybindAction::Chat => self.chat = key,
             KeybindAction::ToolAction => self.tool_action = key,
+            KeybindAction::DropItem => self.drop_item = key,
             KeybindAction::ChangePerspective => self.change_perspective = key,
         }
         Ok(())

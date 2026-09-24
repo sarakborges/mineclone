@@ -157,6 +157,22 @@ impl PlayerHotbar {
         self.slots[self.selected_slot] = item;
     }
 
+    pub(crate) fn take_selected_stack(&mut self) -> Option<ItemStack> {
+        self.slots[self.selected_slot].take()
+    }
+
+    pub(crate) fn try_insert_stack(&mut self, stack: ItemStack) -> Result<(), ItemStack> {
+        if let Some(slot) = self.slots.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(stack);
+            return Ok(());
+        }
+        if let Some(slot) = self.backpack.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(stack);
+            return Ok(());
+        }
+        Err(stack)
+    }
+
     fn select(&mut self, slot: usize) {
         assert!(
             slot < HOTBAR_SLOT_COUNT,
