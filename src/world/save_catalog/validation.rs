@@ -128,6 +128,7 @@ impl SaveRegistries<'_> {
         PruneRegistries {
             blocks: self.blocks.clone(),
             layers: self.layers.clone(),
+            objects: self.objects.clone(),
             fluids: self.fluids.clone(),
             creatures,
             valid_items,
@@ -141,6 +142,7 @@ impl SaveRegistries<'_> {
 pub(crate) struct PruneRegistries {
     pub(super) blocks: BlockRegistry,
     pub(super) layers: LayerRegistry,
+    pub(super) objects: ObjectRegistry,
     pub(super) fluids: FluidRegistry,
     creatures: CreatureRegistry,
     valid_items: HashSet<String>,
