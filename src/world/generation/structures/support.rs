@@ -27,7 +27,6 @@ use super::super::{
 };
 
 pub(super) const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
-const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 
 /// Both world generation and /place use the exact same bottom-voxel footprint
 /// and terrain-variation rule. The caller supplies ground samples from either
@@ -83,9 +82,8 @@ pub(super) fn compute_structure_origin_y(
         structure.ground_anchor_y_offset(),
         structure.restrictions.max_slope,
         |position| {
-            let sample_position = position.as_vec2() + Vec2::splat(0.5);
             if structure.restrictions.requires_dry_ground
-                && region.hydrology.water_at(sample_position).is_some()
+                && super::restrictions::surface_has_fluid(position, context)
             {
                 return None;
             }
@@ -147,13 +145,9 @@ fn supported_surface_ground_y(
         .iter()
         .map(|influence| (influence.surface_index, influence.weight))
         .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
-    let surface_carver_allowed = region
-        .hydrology
-        .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
-        .is_none();
     let mut surface_carvers = SurfaceCarverColumn::default();
     let surface_carver_cache = region.surface_carvers.as_ref();
-    if surface_carver_allowed && context.world_generation.spawn_caves() {
+    if context.world_generation.spawn_caves() {
         resolve_surface_carver_column(
             &mut surface_carvers,
             surface_carver_cache,
@@ -184,18 +178,13 @@ fn supported_surface_ground_y(
         let sample_position = Vec3::new(horizontal.x, world_y as f32 + 0.5, horizontal.y);
         let base_density = terrain_density(raw_surface_height, world_y);
         let sampled_density = sample_density(base_density, sample_position, None, &density_context);
-        let carver_delta = if surface_carver_allowed {
-            surface_carver_density_delta(
+        sampled_density
+            + surface_carver_density_delta(
                 sampled_density,
                 sample_position,
                 raw_surface_height as f32,
                 &surface_carvers,
             )
-        } else {
-            0.0
-        };
-
-        sampled_density + carver_delta
     };
 
     if density_at(raw_ground_y) <= 0.0 {

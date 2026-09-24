@@ -16,7 +16,6 @@ use super::super::{
     cave_connectivity::CaveConnectivityRegion,
     generation::GenerationColumnSample,
     generation_region::{GenerationRegion, generation_region_coord},
-    hydrology::HydrologyRegion,
 };
 
 const CACHE_REGION_MARGIN: i32 = 1;
@@ -168,11 +167,9 @@ struct RetentionScratch {
     horizontal_chunks: HashSet<IVec2>,
     generation_regions: HashSet<IVec3>,
     retained_regions: HashSet<IVec3>,
-    retained_hydrology: HashSet<IVec2>,
 }
 
 pub(super) struct FeatureCaches {
-    hydrology: ConcurrentCache<IVec2, Arc<HydrologyRegion>>,
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
     caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
@@ -186,7 +183,6 @@ pub(super) struct FeatureCaches {
 impl FeatureCaches {
     pub(super) fn new() -> Self {
         Self {
-            hydrology: ConcurrentCache::new("hydrology region cache"),
             generation_columns: ConcurrentCache::new("generation column cache"),
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             caves: ConcurrentCache::new("cave region cache"),
@@ -259,15 +255,6 @@ impl FeatureCaches {
             .get_or_insert_with(structure_id, rotation, anchor, factory)
     }
 
-    pub(super) fn hydrology_region(
-        &self,
-        coord: IVec2,
-        factory: impl FnOnce() -> HydrologyRegion,
-    ) -> Arc<HydrologyRegion> {
-        self.hydrology
-            .get_or_insert_with(coord, || Arc::new(factory()))
-    }
-
     pub(super) fn generation_region(
         &self,
         coord: IVec3,
@@ -289,7 +276,6 @@ impl FeatureCaches {
             horizontal_chunks,
             generation_regions,
             retained_regions,
-            retained_hydrology,
         } = &mut *scratch;
 
         horizontal_chunks.clear();
@@ -312,8 +298,6 @@ impl FeatureCaches {
             }
         }
 
-        retained_hydrology.clear();
-        retained_hydrology.extend(retained_regions.iter().map(|coord| coord.xz()));
 
         self.generation_columns
             .retain(|coord| horizontal_chunks.contains(coord));
@@ -327,8 +311,6 @@ impl FeatureCaches {
             .retain(|coord| retained_regions.contains(coord));
         self.regions
             .retain(|coord| retained_regions.contains(coord));
-        self.hydrology
-            .retain(|coord| retained_hydrology.contains(coord));
         self.structure_origins.retain(|anchor| {
             let chunk_size = CHUNK_SIZE as i32;
             let chunk = IVec2::new(
@@ -342,11 +324,6 @@ impl FeatureCaches {
     #[cfg(test)]
     pub(super) fn region_count(&self) -> usize {
         self.regions.len()
-    }
-
-    #[cfg(test)]
-    pub(super) fn hydrology_region_count(&self) -> usize {
-        self.hydrology.len()
     }
 
     #[cfg(test)]

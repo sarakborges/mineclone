@@ -1,4 +1,3 @@
-mod hydrology;
 mod volume;
 
 use bevy::prelude::*;
@@ -6,15 +5,9 @@ use bevy::prelude::*;
 use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
-    generation_region::GenerationRegion,
     math::smoothstep,
 };
-use self::{
-    hydrology::{cave_water_clearance, enforce_hydrology_water_volume},
-    volume::volume_biome_density_delta,
-};
-
-pub(crate) use hydrology::{DensityColumnHydrology, sample_density_column_hydrology};
+use self::volume::volume_biome_density_delta;
 
 const CAVE_CONNECTOR_AIR_MARGIN: f32 = 5.5;
 const CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH: f32 = -2.0;
@@ -23,7 +16,6 @@ const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
 const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 
 pub(crate) struct DensitySampleContext<'a> {
-    region: &'a GenerationRegion,
     anchored_caves: Option<&'a CaveConnectivityRegion>,
     biome_field: &'a BiomeField,
     allow_caverns: bool,
@@ -32,12 +24,10 @@ pub(crate) struct DensitySampleContext<'a> {
 
 impl<'a> DensitySampleContext<'a> {
     pub(crate) fn new(
-        region: &'a GenerationRegion,
         anchored_caves: Option<&'a CaveConnectivityRegion>,
         biome_field: &'a BiomeField,
     ) -> Self {
         Self {
-            region,
             anchored_caves,
             biome_field,
             allow_caverns: true,
@@ -62,40 +52,12 @@ pub(crate) fn sample_density(
     volume: Option<VolumeBiomeSelection>,
     context: &DensitySampleContext<'_>,
 ) -> f32 {
-    // Generic point samples do not carry the generation column's original
-    // surface height; preserve their existing unfiltered hydrology contract.
-    let column_hydrology = sample_density_column_hydrology(
-        Vec2::new(position.x, position.z),
-        context.region,
-        None,
-    );
-    let hydrology_delta = context.region.hydrology.density_delta(position);
-
-    sample_density_with_hydrology(
-        base_density,
-        position,
-        volume,
-        column_hydrology,
-        hydrology_delta,
-        context,
-    )
-}
-
-pub(crate) fn sample_density_with_hydrology(
-    base_density: f32,
-    position: Vec3,
-    volume: Option<VolumeBiomeSelection>,
-    column_hydrology: DensityColumnHydrology,
-    hydrology_delta: f32,
-    context: &DensitySampleContext<'_>,
-) -> f32 {
-    let mut density = base_density + hydrology_delta;
-    let water_clearance = cave_water_clearance(position.y, column_hydrology);
+    let mut density = base_density;
     let connector_depth_strength = depth_strength(
         base_density,
         CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH,
         CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH,
-    ) * water_clearance;
+    );
 
     if connector_depth_strength > 0.0
         && let Some(connector) = context
@@ -110,9 +72,9 @@ pub(crate) fn sample_density_with_hydrology(
         base_density,
         CAVERN_MINIMUM_SURFACE_DEPTH,
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
-    ) * water_clearance;
+    );
 
-    density += volume_biome_density_delta(
+    density + volume_biome_density_delta(
         density,
         position,
         volume,
@@ -120,14 +82,6 @@ pub(crate) fn sample_density_with_hydrology(
         cavern_depth_strength,
         context.allow_caverns,
         context.allow_solid_volume,
-    );
-
-    enforce_hydrology_water_volume(
-        density,
-        base_density,
-        position,
-        column_hydrology,
-        context.biome_field.seed(),
     )
 }
 
@@ -135,7 +89,6 @@ fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f3
     if base_density <= minimum_depth {
         return 0.0;
     }
-
     if base_density >= full_strength_depth {
         return 1.0;
     }
@@ -160,34 +113,18 @@ mod tests {
     fn full_explicit_cave_strength_opens_deep_solid_density() {
         let density = 80.0;
         let carved = density + carve_density_delta(density, 1.0, 4.0);
-
         assert!(carved < 0.0);
     }
 
     #[test]
     fn cavern_carving_stays_suppressed_close_to_the_surface() {
         assert_eq!(
-            depth_strength(
-                0.0,
-                CAVERN_MINIMUM_SURFACE_DEPTH,
-                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
-            ),
-            0.0
-        );
-        assert_eq!(
-            depth_strength(
-                CAVERN_MINIMUM_SURFACE_DEPTH,
-                CAVERN_MINIMUM_SURFACE_DEPTH,
-                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
-            ),
+            depth_strength(0.0, CAVERN_MINIMUM_SURFACE_DEPTH, CAVERN_FULL_STRENGTH_SURFACE_DEPTH),
             0.0
         );
         assert!(
-            depth_strength(
-                16.0,
-                CAVERN_MINIMUM_SURFACE_DEPTH,
-                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
-            ) > 0.0
+            depth_strength(16.0, CAVERN_MINIMUM_SURFACE_DEPTH, CAVERN_FULL_STRENGTH_SURFACE_DEPTH)
+                > 0.0
         );
         assert_eq!(
             depth_strength(
@@ -208,7 +145,6 @@ mod tests {
         );
         let density = 0.5;
         let carved = density + carve_density_delta(density, strength, CAVE_CONNECTOR_AIR_MARGIN);
-
         assert!(strength > 0.0);
         assert!(carved < 0.0);
     }

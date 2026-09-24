@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use bevy::prelude::*;
 
 use crate::{
@@ -10,11 +8,8 @@ use crate::{
             StructureProximityTarget,
         },
     },
-    voxel::coordinates::chunk_coord_from_world,
     world::{
         biome_field::BiomeFieldSample,
-        generation_region::{GenerationRegion, generation_region_coord},
-        hydrology::HydrologyWaterKind,
         new_world::WorldGenerationMode,
         terrain::surface_height_from_sample,
     },
@@ -23,10 +18,8 @@ use crate::{
 use super::super::{ChunkGenerationContext, fluids::authored_surface_fluid_id_at};
 
 struct NormalSurfaceProbe<'a> {
-    horizontal: Vec2,
     surface: BiomeFieldSample<'a>,
     surface_height: i32,
-    region: Arc<GenerationRegion>,
 }
 
 fn normal_surface_probe<'a>(
@@ -37,16 +30,9 @@ fn normal_surface_probe<'a>(
     let surface = context.biome_field.sample_surface(horizontal);
     let surface_height =
         surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
-    let mut chunk_coord =
-        chunk_coord_from_world(IVec3::new(position.x, (surface_height - 1).max(0), position.y));
-    chunk_coord.y = chunk_coord.y.max(0);
-    let region = context.region(generation_region_coord(chunk_coord));
-
     NormalSurfaceProbe {
-        horizontal,
         surface,
         surface_height,
-        region,
     }
 }
 
@@ -146,35 +132,6 @@ fn surface_block_matches(
     }
 
     let probe = normal_surface_probe(position, context);
-
-    if let Some(water) = probe
-        .region
-        .hydrology
-        .supported_water_at(probe.horizontal, probe.surface_height as f32)
-    {
-        let surface_biome_id = context
-            .biome_field
-            .surface_biome_id(probe.surface.identity_surface_index);
-        let surface_biome = context
-            .biomes
-            .get(surface_biome_id)
-            .unwrap_or_else(|| panic!("missing surface biome definition: {surface_biome_id}"));
-        let hydrology_block = match water.kind {
-            HydrologyWaterKind::River => surface_biome
-                .hydrology
-                .river_bed_block
-                .as_deref()
-                .or(surface_biome.hydrology.shore_block.as_deref()),
-            HydrologyWaterKind::Lake => surface_biome
-                .hydrology
-                .lake_bed_block
-                .as_deref()
-                .or(surface_biome.hydrology.shore_block.as_deref()),
-        };
-        if hydrology_block.is_some_and(&matches) {
-            return true;
-        }
-    }
 
     if let Some(margin_index) = probe.surface.surface_margin_index {
         let biome_id = context.biome_field.surface_biome_id(margin_index);
@@ -301,6 +258,21 @@ fn proximity_target_matches(
     unreachable!("validated proximity target must define block or fluid")
 }
 
+pub(super) fn surface_has_fluid(
+    position: IVec2,
+    context: &ChunkGenerationContext<'_>,
+) -> bool {
+    if context.world_generation.mode() != WorldGenerationMode::Normal {
+        return false;
+    }
+    if authored_surface_fluid_id_at(position, context).is_some() {
+        return true;
+    }
+
+    let probe = normal_surface_probe(position, context);
+    ocean_surface_water_at(&probe, context)
+}
+
 fn surface_fluid_matches(
     position: IVec2,
     target_fluid: &str,
@@ -314,17 +286,7 @@ fn surface_fluid_matches(
     }
 
     let probe = normal_surface_probe(position, context);
-    if ocean_surface_water_at(&probe, context)
-        && context.dimension.hydrology.water_fluid == target_fluid
-    {
-        return true;
-    }
-
-    probe
-        .region
-        .hydrology
-        .supported_water_at(probe.horizontal, probe.surface_height as f32)
-        .is_some_and(|water| water.fluid_id == target_fluid)
+    ocean_surface_water_at(&probe, context) && context.dimension.sea_fluid == target_fluid
 }
 
 fn ocean_surface_water_at(
@@ -369,15 +331,7 @@ fn intersects_surface_fluid(
                 && (structure_min as f32) < context.dimension.sea_level as f32;
         }
 
-        let Some(water) = probe
-            .region
-            .hydrology
-            .supported_water_at(probe.horizontal, probe.surface_height as f32)
-        else {
-            return false;
-        };
-
-        structure_max as f32 + 1.0 > water.bed_level
-            && (structure_min as f32) < water.water_level
+        authored_surface_fluid_id_at(position, context).is_some()
+            && structure_max >= probe.surface_height
     })
 }

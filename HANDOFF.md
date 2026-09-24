@@ -14415,3 +14415,22 @@ Regra de execução deste refactor: cada parte funcional commitada deve atualiza
 HANDOFF.md no mesmo commit. Não deixar código legado desativado, aliases de compatibilidade
 ou implementações antigas coexistindo com a substituição final.
 
+### Parte 1 — Hydrology desacoplado do pipeline de geração
+
+Iniciada a remoção executável do Hydrology legado. O pipeline de chunk não usa mais
+Hydrology para density carving, material override, fluid placement, structure ground/
+proximity checks ou cache de GenerationRegion.
+
+- GenerationRegion agora contém somente estado genérico de geração (surface-carver cache).
+- WorldFeatureFields deixou de possuir HydrologyField/HydrologyRegion cache.
+- density/material/fluid passes deixaram de receber HydrologyRegion.
+- rivers/lakes não escavam, não substituem materiais e não colocam água por esse pipeline.
+- o fluid pass preserva apenas fluidos authored, Ocean e temporariamente a água subterrânea
+  pertencente ao cave-connectivity legado (que será removido na etapa própria).
+- restrictions de structures agora consultam somente fluidos reais authored/Ocean.
+- nenhum connector novo foi implementado nesta etapa.
+
+Próxima parte: remover os consumidores restantes, schemas/toggles/dados de Hydrology e
+deletar fisicamente o módulo `src/world/hydrology` e o helper
+`density_sampling/hydrology.rs`.
+

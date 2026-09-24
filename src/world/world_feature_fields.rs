@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::content::{dimension_hydrology::DimensionHydrology, structure::StructureRotation};
+use crate::content::structure::StructureRotation;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CachedStructureCandidate {
@@ -25,24 +25,17 @@ use super::{
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation::{GenerationColumnSample, surface_carvers::SurfaceCarverResolveCache},
     generation_region::GenerationRegion,
-    hydrology::{HydrologyField, HydrologyRegion},
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
-    hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
     caches: Arc<FeatureCaches>,
 }
 
 impl WorldFeatureFields {
-    pub(crate) fn new(
-        seed: u64,
-        sea_level: i32,
-        hydrology: DimensionHydrology,
-    ) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         Self {
-            hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             caches: Arc::new(FeatureCaches::new()),
         }
@@ -50,7 +43,6 @@ impl WorldFeatureFields {
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
-            hydrology: self.hydrology.clone(),
             cave_connectivity: self.cave_connectivity,
             caches: Arc::new(FeatureCaches::new()),
         }
@@ -113,22 +105,10 @@ impl WorldFeatureFields {
         self.caches.structure_candidates(coord, factory)
     }
 
-    pub(crate) fn region_with_hydrology(
-        &self,
-        coord: IVec3,
-        hydrology_factory: impl FnOnce(&HydrologyField) -> HydrologyRegion,
-    ) -> Arc<GenerationRegion> {
-        self.caches.generation_region(coord, || {
-            let hydrology_coord = coord.xz();
-            let hydrology = self.caches.hydrology_region(hydrology_coord, || {
-                hydrology_factory(&self.hydrology)
-            });
-
-            GenerationRegion {
-                coord,
-                hydrology,
-                surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
-            }
+    pub(crate) fn region(&self, coord: IVec3) -> Arc<GenerationRegion> {
+        self.caches.generation_region(coord, || GenerationRegion {
+            coord,
+            surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
         })
     }
 
@@ -142,11 +122,6 @@ impl WorldFeatureFields {
     #[cfg(test)]
     fn cached_region_count(&self) -> usize {
         self.caches.region_count()
-    }
-
-    #[cfg(test)]
-    fn cached_hydrology_region_count(&self) -> usize {
-        self.caches.hydrology_region_count()
     }
 
     #[cfg(test)]
@@ -179,38 +154,18 @@ mod tests {
     };
 
     fn test_fields() -> WorldFeatureFields {
-        WorldFeatureFields::new(42, 64, DimensionHydrology::default())
+        WorldFeatureFields::new(42)
     }
 
     #[test]
-    fn region_cache_reuses_hydrology_across_vertical_regions() {
+    fn generation_region_cache_reuses_the_same_region() {
         let fields = test_fields();
         let coord = IVec3::new(2, 0, -1);
-        let first = fields.region_with_hydrology(coord, |hydrology| {
-            hydrology.region_from_macro_terrain(
-                IVec2::new(coord.x, coord.z),
-                true,
-                true,
-                |_| {
-                super::super::hydrology::HydrologySurfaceSample {
-                    elevation: 64.0,
-                    ocean_weight: 0.0,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
-                }
-            })
-        });
-        let second = fields.region_with_hydrology(coord, |_| {
-            panic!("cached generation region should not rebuild hydrology")
-        });
-        let vertical_coord = coord + IVec3::Y;
-        let vertical = fields.region_with_hydrology(vertical_coord, |_| {
-            panic!("vertical generation region should reuse cached 2D hydrology")
-        });
+        let first = fields.region(coord);
+        let second = fields.region(coord);
 
         assert!(Arc::ptr_eq(&first, &second));
-        assert!(Arc::ptr_eq(&first.hydrology, &vertical.hydrology));
-        assert_eq!(fields.cached_region_count(), 2);
-        assert_eq!(fields.cached_hydrology_region_count(), 1);
+        assert_eq!(fields.cached_region_count(), 1);
     }
 
     #[test]
@@ -298,32 +253,8 @@ mod tests {
         fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
         fields.cave_region(near_region, |_| Some(CaveConnectivityRegion::default()));
         fields.cave_region(far_region, |_| Some(CaveConnectivityRegion::default()));
-        fields.region_with_hydrology(near_region, |hydrology| {
-            hydrology.region_from_macro_terrain(
-                near_region.xz(),
-                true,
-                true,
-                |_| {
-                super::super::hydrology::HydrologySurfaceSample {
-                    elevation: 64.0,
-                    ocean_weight: 0.0,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
-                }
-            })
-        });
-        fields.region_with_hydrology(far_region, |hydrology| {
-            hydrology.region_from_macro_terrain(
-                far_region.xz(),
-                true,
-                true,
-                |_| {
-                super::super::hydrology::HydrologySurfaceSample {
-                    elevation: 64.0,
-                    ocean_weight: 0.0,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
-                }
-            })
-        });
+        fields.region(near_region);
+        fields.region(far_region);
         fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || Some(64));
         fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
 
@@ -334,7 +265,6 @@ mod tests {
         assert_eq!(fields.cached_volume_biome_region_count(), 1);
         assert_eq!(fields.cached_cave_region_count(), 1);
         assert_eq!(fields.cached_region_count(), 1);
-        assert_eq!(fields.cached_hydrology_region_count(), 1);
         assert_eq!(fields.cached_structure_origin_count(), 1);
     }
 }

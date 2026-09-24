@@ -4,17 +4,13 @@ use bevy::prelude::*;
 
 use crate::voxel::chunk::CHUNK_SIZE;
 
-use super::{
-    generation::surface_carvers::SurfaceCarverResolveCache,
-    hydrology::HydrologyRegion,
-};
+use super::generation::surface_carvers::SurfaceCarverResolveCache;
 
 pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
 
 #[derive(Clone, Debug)]
 pub struct GenerationRegion {
     pub coord: IVec3,
-    pub hydrology: Arc<HydrologyRegion>,
     pub(crate) surface_carvers: Arc<SurfaceCarverResolveCache>,
 }
 

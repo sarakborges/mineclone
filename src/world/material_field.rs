@@ -58,7 +58,6 @@ pub(crate) fn solid_block_id(
     position: Vec3,
     surface_depth: u32,
     volume: Option<VolumeBiomeSelection>,
-    hydrology_block: Option<&str>,
     surface_materials: &SurfaceMaterialColumn<'_>,
     biome_field: &BiomeField,
 ) -> &'static str {
@@ -66,9 +65,6 @@ pub(crate) fn solid_block_id(
         return intern_block_id(block_id);
     }
 
-    if let Some(block_id) = hydrology_block {
-        return intern_block_id(block_id);
-    }
 
     let base_material = strongest_surface_material(surface_materials, surface_depth);
     let resolved_material = if surface_depth > 0 {

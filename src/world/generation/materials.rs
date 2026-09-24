@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-    },
+    content::{biome::BiomeRegistry, block::BlockRegistry},
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -12,8 +9,6 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        generation_region::GenerationRegion,
-        hydrology::HydrologyMaterialSet,
         material_field::{SurfaceMaterialColumn, resolve_surface_material_column, solid_block_id},
     },
 };
@@ -28,28 +23,6 @@ pub(super) struct MaterialPassContext<'a> {
     pub blocks: &'a BlockRegistry,
     pub biomes: &'a BiomeRegistry,
     pub biome_field: &'a BiomeField,
-    pub region: &'a GenerationRegion,
-}
-
-fn hydrology_materials<'a>(
-    column: &GenerationColumnSample,
-    context: &'a MaterialPassContext<'a>,
-) -> HydrologyMaterialSet<'a> {
-    let surface_biome_id = context
-        .biome_field
-        .surface_biome_id(column.identity_surface_index);
-    let surface = Some(
-        context
-            .biomes
-            .get(surface_biome_id)
-            .unwrap_or_else(|| panic!("missing surface biome definition: {surface_biome_id}")),
-    );
-
-    HydrologyMaterialSet {
-        river_bed_block: surface.and_then(|biome| biome.hydrology.river_bed_block.as_deref()),
-        lake_bed_block: surface.and_then(|biome| biome.hydrology.lake_bed_block.as_deref()),
-        inland_shore_block: surface.and_then(|biome| biome.hydrology.shore_block.as_deref()),
-    }
 }
 
 pub(super) fn rasterize_material_pass(
@@ -65,19 +38,6 @@ pub(super) fn rasterize_material_pass(
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
                 let column = &columns[column_index(local_x, local_z)];
-                let horizontal = Vec2::new(
-                    chunk_origin.x as f32 + local_x as f32 + 0.5,
-                    chunk_origin.z as f32 + local_z as f32 + 0.5,
-                );
-                let hydrology_materials = hydrology_materials(column, context);
-                let hydrology_blocks = context
-                    .region
-                    .hydrology
-                    .solid_blocks_for_column::<CHUNK_SIZE>(
-                        horizontal,
-                        chunk_origin.y as f32 + 0.5,
-                        hydrology_materials,
-                    );
                 resolve_surface_material_column(
                     &column.surface_influences,
                     column.surface_margin_index,
@@ -86,7 +46,7 @@ pub(super) fn rasterize_material_pass(
                     &mut surface_materials,
                 );
 
-                for (local_y, hydrology_block) in hydrology_blocks.iter().copied().enumerate() {
+                for local_y in 0..CHUNK_SIZE {
                     let index = voxel_index(local_x, local_y, local_z);
                     if density.values[index] <= 0.0 {
                         continue;
@@ -103,7 +63,6 @@ pub(super) fn rasterize_material_pass(
                         sample_position,
                         surface_depth,
                         density.volume_at(index),
-                        hydrology_block,
                         &surface_materials,
                         context.biome_field,
                     );

@@ -30,7 +30,6 @@ use crate::{
         generation_region::{
             GenerationRegion, generation_region_coord, generation_region_world_bounds,
         },
-        hydrology::HydrologySurfaceSample,
         new_world::{WorldGenerationMode, WorldGenerationSettings},
         terrain::{chunk_y_bounds, surface_height, surface_height_from_sample},
         world_feature_fields::WorldFeatureFields,
@@ -74,40 +73,7 @@ pub(crate) struct ChunkGenerationContext<'a> {
 
 impl ChunkGenerationContext<'_> {
     pub(crate) fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
-        self.feature_fields
-            .region_with_hydrology(region_coord, |hydrology| {
-                hydrology.region_from_macro_terrain(
-                    region_coord.xz(),
-                    self.world_generation.spawn_rivers(),
-                    self.world_generation.spawn_lakes(),
-                    |position| {
-                    let surface_position = position.floor().as_ivec2();
-                    let surface = self
-                        .biome_field
-                        .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
-                    let elevation = match self.world_generation.mode() {
-                        WorldGenerationMode::Flat => flat_surface_height(self.dimension) as f32,
-                        WorldGenerationMode::Normal | WorldGenerationMode::Void => {
-                            surface_height_from_sample(
-                                surface_position,
-                                self.dimension,
-                                self.biome_field,
-                                &surface,
-                            ) as f32
-                        }
-                    };
-                    let biome_hydrology = self
-                        .biome_field
-                        .surface_biome_hydrology(surface.identity_surface_index);
-
-                    HydrologySurfaceSample {
-                        elevation,
-                        ocean_weight: ocean_weight_from_surface(&surface, self.biome_field),
-                        biome_hydrology,
-                    }
-                },
-                )
-            })
+        self.feature_fields.region(region_coord)
     }
 
     fn anchored_caves(&self, region: &GenerationRegion) -> Option<Arc<CaveConnectivityRegion>> {
@@ -180,7 +146,7 @@ pub(crate) fn generate_chunk(
         .div_euclid(CHUNK_SIZE as i32);
 
     // Most volume modifiers only carve existing terrain. Avoid constructing a
-    // hydrology/cave/volume region for chunks that are well above any local
+    // cave/volume region for chunks that are well above any local
     // surface, while retaining two full chunks of headroom for high lake water,
     // biome transitions and structures reaching in from neighboring columns.
     if chunk_coord.y
@@ -229,7 +195,6 @@ pub(crate) fn generate_chunk(
             blocks: context.blocks,
             biomes: context.biomes,
             biome_field: context.biome_field,
-            region: region.as_ref(),
         },
     );
     rasterize_fluid_pass(
@@ -242,9 +207,8 @@ pub(crate) fn generate_chunk(
             biomes: context.biomes,
             biome_field: context.biome_field,
             sea_level: context.dimension.sea_level,
-            region: region.as_ref(),
             anchored_caves: anchored_caves.as_deref(),
-            water_fluid: &context.dimension.hydrology.water_fluid,
+            sea_fluid: &context.dimension.sea_fluid,
         },
     );
     if context.world_generation.spawn_structures() {
