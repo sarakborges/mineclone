@@ -139,23 +139,6 @@ fn extend_bounds(
     });
 }
 
-pub(crate) fn resolve_connected_pieces<'a>(
-    world_seed: u64,
-    root: &'a StructureDefinition,
-    root_rotation: StructureRotation,
-    root_origin: IVec3,
-    structures: &'a StructureRegistry,
-) -> Vec<ResolvedConnectedPiece<'a>> {
-    resolve_connected_pieces_with_ground_fit(
-        world_seed,
-        root,
-        root_rotation,
-        root_origin,
-        structures,
-        |_, _, geometric_origin| Some(geometric_origin.y),
-    )
-}
-
 pub(crate) fn resolve_connected_pieces_with_ground_fit<'a>(
     world_seed: u64,
     root: &'a StructureDefinition,
@@ -173,19 +156,6 @@ pub(crate) fn resolve_connected_pieces_with_ground_fit<'a>(
         }],
         structures,
         fit_ground_y,
-    )
-}
-
-pub(crate) fn resolve_connected_piece_forest<'a>(
-    world_seed: u64,
-    roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
-    structures: &'a StructureRegistry,
-) -> Vec<ResolvedConnectedPiece<'a>> {
-    resolve_connected_piece_forest_with_ground_fit(
-        world_seed,
-        roots,
-        structures,
-        |_, _, geometric_origin| Some(geometric_origin.y),
     )
 }
 
@@ -574,19 +544,21 @@ mod tests {
         let registry = registry(vec![root, child]);
         let root = registry.get("test:distance_root").expect("root must exist");
 
-        let first = resolve_connected_pieces(
+        let first = resolve_connected_pieces_with_ground_fit(
             41,
             root,
             StructureRotation::Degrees0,
             IVec3::ZERO,
             &registry,
+            |_, _, geometric_origin| Some(geometric_origin.y),
         );
-        let second = resolve_connected_pieces(
+        let second = resolve_connected_pieces_with_ground_fit(
             41,
             root,
             StructureRotation::Degrees0,
             IVec3::ZERO,
             &registry,
+            |_, _, geometric_origin| Some(geometric_origin.y),
         );
 
         assert_eq!(first.len(), 2);
@@ -636,12 +608,13 @@ mod tests {
         ]);
         let root = registry.get("test:root").expect("root must exist");
 
-        let pieces = resolve_connected_pieces(
+        let pieces = resolve_connected_pieces_with_ground_fit(
             7,
             root,
             StructureRotation::Degrees0,
             IVec3::ZERO,
             &registry,
+            |_, _, geometric_origin| Some(geometric_origin.y),
         );
 
         assert_eq!(pieces.len(), 5);
@@ -659,12 +632,13 @@ mod tests {
         ]);
         let root = registry.get("test:root").expect("root must exist");
 
-        let pieces = resolve_connected_pieces(
+        let pieces = resolve_connected_pieces_with_ground_fit(
             11,
             root,
             StructureRotation::Degrees90,
             IVec3::ZERO,
             &registry,
+            |_, _, geometric_origin| Some(geometric_origin.y),
         );
 
         assert_eq!(pieces.len(), 2);
@@ -696,14 +670,14 @@ mod tests {
         let mut selected = HashSet::new();
 
         for seed in 0..64 {
-            let first = resolve_connected_pieces(
+            let first = resolve_connected_pieces_with_ground_fit(
                 seed,
                 root,
                 StructureRotation::Degrees0,
                 IVec3::ZERO,
                 &registry,
             );
-            let second = resolve_connected_pieces(
+            let second = resolve_connected_pieces_with_ground_fit(
                 seed,
                 root,
                 StructureRotation::Degrees0,
@@ -746,12 +720,13 @@ mod tests {
         ]);
         let root = registry.get("test:root").expect("root must exist");
 
-        let pieces = resolve_connected_pieces(
+        let pieces = resolve_connected_pieces_with_ground_fit(
             3,
             root,
             StructureRotation::Degrees0,
             IVec3::ZERO,
             &registry,
+            |_, _, geometric_origin| Some(geometric_origin.y),
         );
 
         assert_eq!(pieces.len(), 1);

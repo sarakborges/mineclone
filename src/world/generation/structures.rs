@@ -39,8 +39,7 @@ use crate::{
 
 pub(crate) use self::{
     connectors::{
-        ResolvedConnectedPiece, resolve_connected_piece_forest,
-        resolve_connected_piece_forest_with_ground_fit, resolve_connected_pieces,
+        ResolvedConnectedPiece, resolve_connected_piece_forest_with_ground_fit,
         resolve_connected_pieces_with_ground_fit,
     },
     set::resolve_set_pieces,

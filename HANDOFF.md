@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 7D — Wrappers antigos do connector resolver removidos
+
+O CI da correção de ground-fit mostrou que os wrappers antigos sem callback de ground-fit ficaram órfãos. Eles foram removidos em vez de mantidos com suppressions. Produção e testes agora exercitam diretamente `resolve_connected_pieces_with_ground_fit` / `resolve_connected_piece_forest_with_ground_fit`; testes puramente geométricos usam uma callback identidade que preserva o Y authored.
+
 ## 2026-09-24 — Parte 7D — Connected ground structures voltam a encaixar no terreno
 
 Corrigido o problema visual observado após migrar Root Arches para connectors: peças deslocadas 8–24 blocos mantinham o Y do output da World Tree, portanto podiam flutuar ou ficar enterradas quando o terreno mudava entre a raiz e a posição escolhida.
