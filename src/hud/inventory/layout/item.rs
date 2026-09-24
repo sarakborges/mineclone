@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    hud::item_stack_count::spawn_item_stack_count,
+    hud::{item_stack_count::spawn_item_stack_count, ui_image::load_smooth_image},
     rendering::{
         block_model::BlockModel,
         block_tint::{block_tint_at, block_tint_at_with_override},
@@ -104,7 +104,7 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     if let Some(item) = items.items.get(item_id) {
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(items.asset_server.load(item.icon.clone())),
+            ImageNode::new(load_smooth_image(items.asset_server, item.icon.clone())),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -128,7 +128,7 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
         );
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(items.asset_server.load(object.icon.clone())).with_color(tint),
+            ImageNode::new(load_smooth_image(items.asset_server, object.icon.clone())).with_color(tint),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -285,7 +285,7 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
 ) {
     if let Some(item) = items.items.get(item_id) {
         slot.spawn((
-            ImageNode::new(items.asset_server.load(item.icon.clone())),
+            ImageNode::new(load_smooth_image(items.asset_server, item.icon.clone())),
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),
@@ -305,7 +305,7 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
             items.biomes,
         );
         slot.spawn((
-            ImageNode::new(items.asset_server.load(object.icon.clone())).with_color(tint),
+            ImageNode::new(load_smooth_image(items.asset_server, object.icon.clone())).with_color(tint),
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),

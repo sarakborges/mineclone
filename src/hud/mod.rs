@@ -13,6 +13,7 @@ mod player;
 mod targeting;
 mod time;
 mod tool_icon;
+mod ui_image;
 mod underwater;
 mod world;
 

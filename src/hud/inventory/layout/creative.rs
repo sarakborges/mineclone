@@ -1,5 +1,4 @@
 use bevy::{
-    image::{ImageLoaderSettings, ImageSampler},
     prelude::*,
     text::{EditableText, FontWeight},
 };
@@ -18,6 +17,7 @@ use crate::{
         tool::{ToolDefinition, ToolRegistry},
         tool_id::intern_tool_id,
     },
+    hud::ui_image::load_smooth_image,
     localization::{Language, UiLocalization},
     ui::{scrollbar, selectable, surface, text_input, typography},
 };
@@ -377,7 +377,7 @@ fn spawn_category_button(
                 |category| category.icon.as_str(),
             );
             button.spawn((
-                ImageNode::new(load_smooth_category_icon(items.asset_server, icon)),
+                ImageNode::new(load_smooth_image(items.asset_server, icon.to_owned())),
                 Node {
                     width: px(CATEGORY_ICON_SIZE),
                     height: px(CATEGORY_ICON_SIZE),
@@ -529,11 +529,3 @@ fn creative_content_width() -> f32 {
 }
 
 
-fn load_smooth_category_icon(asset_server: &AssetServer, path: &str) -> Handle<Image> {
-    asset_server
-        .load_builder()
-        .with_settings(|settings: &mut ImageLoaderSettings| {
-            settings.sampler = ImageSampler::linear();
-        })
-        .load(path.to_owned())
-}

@@ -14,7 +14,8 @@ use super::{
     biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
     biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,
-    day_night_phase::DayNightPhases, fluid::FluidRegistry, registry::DefinitionMap,
+    day_night_phase::DayNightPhases, fluid::FluidRegistry, object::ObjectRegistry,
+    block::BlockRegistry, registry::DefinitionMap,
 };
 
 mod validation;
@@ -98,6 +99,54 @@ pub struct CreatureSpawnRule {
     pub spacing: f32,
 }
 
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiomeObjectSpawnRule {
+    pub object: String,
+    pub spacing: i32,
+    pub chance: f32,
+    #[serde(default)]
+    pub jitter: i32,
+    #[serde(default = "default_object_cluster_min")]
+    pub cluster_min: u8,
+    #[serde(default = "default_object_cluster_max")]
+    pub cluster_max: u8,
+    #[serde(default)]
+    pub cluster_radius: i32,
+    #[serde(default)]
+    pub ground_blocks: Vec<String>,
+}
+
+fn default_object_cluster_min() -> u8 { 1 }
+fn default_object_cluster_max() -> u8 { 1 }
+
+impl BiomeObjectSpawnRule {
+    fn validate(&self, biome_id: &str) {
+        assert!(self.spacing > 0, "biome {biome_id} object spawn {} spacing must be positive", self.object);
+        assert!(
+            self.chance.is_finite() && (0.0..=1.0).contains(&self.chance),
+            "biome {biome_id} object spawn {} chance must be between 0 and 1",
+            self.object
+        );
+        assert!(
+            self.jitter >= 0 && (self.jitter as i64) * 2 < self.spacing as i64,
+            "biome {biome_id} object spawn {} jitter must be smaller than half its spacing",
+            self.object
+        );
+        assert!(
+            self.cluster_min > 0 && self.cluster_max >= self.cluster_min,
+            "biome {biome_id} object spawn {} cluster range is invalid",
+            self.object
+        );
+        assert!(
+            self.cluster_radius >= 0 && self.cluster_radius < self.spacing,
+            "biome {biome_id} object spawn {} clusterRadius must be non-negative and smaller than spacing",
+            self.object
+        );
+    }
+}
+
 fn default_spawn_weight() -> f32 { 1.0 }
 fn default_spawn_light_max() -> u8 { 15 }
 fn default_spawn_spacing() -> f32 { 16.0 }
@@ -142,6 +191,8 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub creature_spawns: Vec<CreatureSpawnRule>,
     #[serde(default)]
+    pub object_spawns: Vec<BiomeObjectSpawnRule>,
+    #[serde(default)]
     pub visuals: Option<BiomeVisuals>,
 }
 
@@ -160,6 +211,31 @@ impl BiomeDefinition {
                 self.id,
                 spawn.creature
             );
+        }
+    }
+
+    pub(crate) fn validate_object_spawn_references(
+        &self,
+        objects: &ObjectRegistry,
+        blocks: &BlockRegistry,
+    ) {
+        for spawn in &self.object_spawns {
+            spawn.validate(&self.id);
+            assert!(
+                objects.get(&spawn.object).is_some(),
+                "biome {} references missing object spawn: {}",
+                self.id,
+                spawn.object
+            );
+            for block in &spawn.ground_blocks {
+                assert!(
+                    blocks.get(block).is_some(),
+                    "biome {} object spawn {} references missing ground block: {}",
+                    self.id,
+                    spawn.object,
+                    block
+                );
+            }
         }
     }
 

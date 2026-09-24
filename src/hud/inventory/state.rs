@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 pub(super) const SLOT_SIZE: f32 = 40.0;
-pub(super) const ITEM_ICON_SIZE: f32 = 30.0;
+pub(super) const ITEM_ICON_SIZE: f32 = 34.0;
 pub(super) const SLOT_GAP: f32 = 4.0;
 pub(super) const SECTION_GAP: f32 = 18.0;
 pub(super) const PANEL_GAP: f32 = 24.0;

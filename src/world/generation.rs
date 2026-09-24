@@ -5,6 +5,7 @@ mod fluids;
 mod index;
 mod materials;
 mod structures;
+mod surface_objects;
 pub(crate) mod surface_carvers;
 
 use std::sync::Arc;
@@ -53,6 +54,7 @@ use self::{
     fluids::{FluidPassContext, rasterize_fluid_pass},
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
+    surface_objects::rasterize_surface_objects,
 };
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
@@ -260,6 +262,7 @@ pub(crate) fn generate_chunk(
     if context.world_generation.spawn_structures() {
         rasterize_structures(&mut chunk, chunk_origin, context);
     }
+    rasterize_surface_objects(&mut chunk, chunk_origin, columns.as_ref(), context);
 
     chunk
 }

@@ -187,5 +187,19 @@
       "min": 0.36,
       "max": 1
     }
-  }
+  },
+  "objectSpawns": [
+    {
+      "object": "asteria:grass",
+      "spacing": 26,
+      "chance": 0.72,
+      "jitter": 7,
+      "clusterMin": 4,
+      "clusterMax": 9,
+      "clusterRadius": 5,
+      "groundBlocks": [
+        "asteria:grass_block"
+      ]
+    }
+  ]
 }

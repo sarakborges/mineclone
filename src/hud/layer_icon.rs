@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::content::layer::LayerDefinition;
+use crate::{content::layer::LayerDefinition, hud::ui_image::load_smooth_image};
 
 pub(crate) fn spawn_layer_icon(
     parent: &mut ChildSpawnerCommands,
@@ -12,7 +12,7 @@ pub(crate) fn spawn_layer_icon(
     parent.spawn((
         ImageNode {
             color: tint,
-            ..ImageNode::new(asset_server.load(layer.texture.clone()))
+            ..ImageNode::new(load_smooth_image(asset_server, layer.texture.clone()))
         },
         Node {
             width: px(size),

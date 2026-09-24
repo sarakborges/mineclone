@@ -124,6 +124,11 @@ struct ObjectMaterialKey {
 }
 
 #[derive(Resource, Default)]
+struct ObjectModelPreloads {
+    _scenes: Vec<Handle<Scene>>,
+}
+
+#[derive(Resource, Default)]
 struct ObjectMaterialCache(HashMap<ObjectMaterialKey, Handle<StandardMaterial>>);
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -169,11 +174,13 @@ impl Plugin for WorldObjectsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldObjectStore>()
             .init_resource::<TargetedWorldObject>()
+            .init_resource::<ObjectModelPreloads>()
             .init_resource::<ObjectMaterialCache>()
             .init_resource::<StackedSpriteMeshCache>()
             .init_resource::<StackedSpriteMaterialCache>()
             .add_message::<WorldObjectPlaceRequest>()
             .add_message::<WorldObjectRemoveRequest>()
+            .add_systems(PostStartup, preload_object_models)
             .add_systems(
                 PostUpdate,
                 (
@@ -192,6 +199,23 @@ impl Plugin for WorldObjectsPlugin {
                 ),
             );
     }
+}
+
+
+fn preload_object_models(
+    objects: Res<ObjectRegistry>,
+    asset_server: Res<AssetServer>,
+    mut preloads: ResMut<ObjectModelPreloads>,
+) {
+    preloads._scenes = objects
+        .iter()
+        .filter_map(|definition| match &definition.visual {
+            ObjectVisualDefinition::Model { path } => Some(
+                asset_server.load(GltfAssetLabel::Scene(0).from_asset(path.clone())),
+            ),
+            ObjectVisualDefinition::StackedSprites { .. } => None,
+        })
+        .collect();
 }
 
 fn apply_object_placement_requests(

@@ -148,6 +148,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
     for biome in content.biomes.iter() {
         biome.validate_material_references(&content.blocks);
         biome.validate_spawn_references(&content.creatures);
+        biome.validate_object_spawn_references(&content.objects, &content.blocks);
         biome.validate_structure_references(&content.structures, &content.structure_sets);
         biome.validate_surface_fluid_references(&content.fluids);
     }
