@@ -1,3 +1,10 @@
+### CI follow-up 2 — appearance data mínima
+
+Após mover shadow flags para o próprio render entity, `WorldObjectAppearance` ainda mantinha
+`casts_shadow` e `receives_shadow` sem leitores. Esses campos foram removidos; o componente
+pendente carrega somente tint/unlit, que são os únicos dados necessários para materializar o
+StandardMaterial achatado.
+
 ### CI follow-up — world-object flattening
 
 O primeiro CI do achatamento falhou apenas porque `texture_rotation_radians` ainda usa

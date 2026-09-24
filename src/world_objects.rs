@@ -171,8 +171,6 @@ struct WorldObjectRemovalContent<'w> {
 struct WorldObjectAppearance {
     tint: Color,
     unlit: bool,
-    casts_shadow: bool,
-    receives_shadow: bool,
 }
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -466,8 +464,6 @@ fn spawn_world_object(
                 WorldObjectAppearance {
                     tint,
                     unlit: definition.unlit,
-                    casts_shadow: definition.casts_shadow,
-                    receives_shadow: definition.receives_shadow,
                 },
                 PendingObjectModelMaterial {
                     source: source_material,
