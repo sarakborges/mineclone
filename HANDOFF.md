@@ -1,3 +1,14 @@
+## 2026-09-24 — Parte 5A — Correção de integração após detach de caves
+
+O CI do primeiro detach encontrou consumidores indiretos do sistema antigo e eles foram limpos antes de avançar:
+
+- structure support não constrói mais cave regions nem surface-carver columns para decidir o chão procedural; sem o gerador legado de entrances, o suporte usa diretamente a superfície procedural autoritativa;
+- o helper genérico `carve_density_delta` foi preservado porque ainda pertence ao `BiomeDensityModifier::Cavern`, não ao cave-connectivity;
+- o módulo de anchors legado foi ajustado apenas para compilar até sua deleção física na Parte 5B;
+- removidos os últimos campos obsoletos do `DensityPassContext` no call site principal.
+
+Nenhuma infraestrutura nova foi adicionada.
+
 ## 2026-09-24 — Parte 5A — Cave connectivity desligado do chunk generation
 
 A remoção do segundo subsistema legado começou pelos consumidores executáveis.

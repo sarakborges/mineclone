@@ -148,8 +148,6 @@ pub(crate) fn generate_chunk(
         &DensityPassContext {
             volume_region: &chunk_volume_region,
             biome_field: context.biome_field,
-            biomes: context.biomes,
-            dimension: context.dimension,
             allow_caverns: context.world_generation.spawn_caves(),
             allow_solid_volume,
         },

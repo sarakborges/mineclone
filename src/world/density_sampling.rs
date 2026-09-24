@@ -60,6 +60,14 @@ pub(crate) fn sample_density(
     )
 }
 
+fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
+    if strength <= 0.0 {
+        return 0.0;
+    }
+
+    -(density.max(0.0) + air_margin) * strength.clamp(0.0, 1.0)
+}
+
 fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f32) -> f32 {
     if base_density <= minimum_depth {
         return 0.0;

@@ -140,7 +140,7 @@ fn cavern_density_is_open(
     let surface_y = surface_height(horizontal, dimension, biomes, biome_field);
     let world_y = position.y.floor() as i32;
     let base_density = terrain_density(surface_y, world_y);
-    let context = DensitySampleContext::new(None, biome_field);
+    let context = DensitySampleContext::new(biome_field);
 
     sample_density(base_density, position, Some(volume), &context) < 0.0
 }
