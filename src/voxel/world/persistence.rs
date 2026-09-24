@@ -2,7 +2,9 @@ use std::{io, sync::Arc};
 
 use bevy::prelude::IVec3;
 
-use crate::content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry};
+use crate::content::{
+    block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, object::ObjectRegistry,
+};
 use crate::voxel::chunk_disk::DiskChunk;
 
 use super::VoxelWorld;
@@ -44,6 +46,7 @@ impl VoxelWorld {
         entry: DiskChunk,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
+        objects: &ObjectRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<()> {
         let coord = entry.coord()?;
@@ -54,7 +57,7 @@ impl VoxelWorld {
             ));
         }
 
-        let (coord, archived) = entry.into_archived_chunk(blocks, layers, fluids)?;
+        let (coord, archived) = entry.into_archived_chunk(blocks, layers, objects, fluids)?;
         self.persistent_chunks.insert(coord);
         self.archived_chunks.insert(coord, Arc::new(archived));
         Ok(())
