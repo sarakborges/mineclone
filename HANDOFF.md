@@ -14449,3 +14449,13 @@ Removidos os conceitos de Hydrology do schema e dos modelos centrais:
 Ainda faltam nesta remoção: limpar JSON/UI/commands/bootstrap remanescentes e então deletar
 fisicamente o módulo runtime de Hydrology. Nenhuma infraestrutura nova de connector foi iniciada.
 
+### Parte 3 — Dados authored de Hydrology removidos
+
+Todos os JSONs de biomes do Overworld deixaram de definir `hydrology`. O
+`dimension.json` também deixou de ter o objeto `hydrology`; o fluido do mar agora é
+`seaFluid: "asteria:water"` diretamente na dimensão.
+
+Com isso, river/lake weights, geração permitida por biome, river/lake bed blocks e shore
+blocks do sistema antigo deixaram de existir no conteúdo. Esses comportamentos não recebem
+compatibilidade ou fallback legado.
+

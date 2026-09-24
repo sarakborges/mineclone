@@ -17,12 +17,6 @@
     "noiseScale": 0.045,
     "openness": 0.34
   },
-  "hydrology": {
-    "canGenerateLake": true,
-    "canGenerateRiver": true,
-    "lakeChanceMultiplier": 1,
-    "riverWidthMultiplier": 1
-  },
   "visuals": {
     "skyColor": {
       "dawn": {

@@ -31,15 +31,6 @@
       "block": "asteria:stone"
     }
   ],
-  "hydrology": {
-    "canGenerateLake": true,
-    "canGenerateRiver": true,
-    "lakeChanceMultiplier": 0.8,
-    "riverWidthMultiplier": 0.75,
-    "shoreBlock": "asteria:sand",
-    "riverBedBlock": "asteria:sand",
-    "lakeBedBlock": "asteria:sand"
-  },
   "structures": [
     {
       "id": "asteria:boulder_small",

@@ -40,12 +40,6 @@
       "block": "asteria:stone"
     }
   ],
-  "hydrology": {
-    "canGenerateLake": false,
-    "canGenerateRiver": false,
-    "lakeChanceMultiplier": 0,
-    "riverWidthMultiplier": 0
-  },
   "structures": [],
   "visuals": {
     "skyColor": {

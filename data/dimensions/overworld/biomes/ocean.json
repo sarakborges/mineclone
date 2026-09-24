@@ -6,13 +6,6 @@
     "spanish": "Océano"
   },
   "kind": "surface",
-  "hydrology": {
-    "canGenerateLake": false,
-    "canGenerateRiver": false,
-    "lakeChanceMultiplier": 0,
-    "riverWidthMultiplier": 1,
-    "shoreBlock": "asteria:sand"
-  },
   "visuals": {
     "skyColor": {
       "dawn": {

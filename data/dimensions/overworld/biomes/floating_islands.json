@@ -18,12 +18,6 @@
     "coverage": 0.52
   },
   "solidBlock": "asteria:stone",
-  "hydrology": {
-    "canGenerateLake": false,
-    "canGenerateRiver": false,
-    "lakeChanceMultiplier": 1,
-    "riverWidthMultiplier": 1
-  },
   "visuals": {
     "skyColor": {
       "dawn": {

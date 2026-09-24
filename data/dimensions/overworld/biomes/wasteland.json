@@ -27,12 +27,6 @@
       "block": "asteria:stone"
     }
   ],
-  "hydrology": {
-    "canGenerateLake": false,
-    "canGenerateRiver": false,
-    "lakeChanceMultiplier": 1,
-    "riverWidthMultiplier": 1
-  },
   "structures": [
     {
       "id": "asteria:boulder_small",
