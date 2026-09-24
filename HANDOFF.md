@@ -14345,3 +14345,26 @@ profiling now uses the actual endpoint water levels even for lake-connected edge
 clipping a path to a lake boundary only discards a waterfall if its landing is actually
 inside the lake. This restores mountain waterfalls leaving high lakes or entering lower
 water bodies without changing the authoritative endpoint levels.
+
+## 2026-09-24 — Object Target HUD, middle click e ocean water
+
+Targeting de objects:
+- o Target HUD agora reconhece `TargetedWorldObject` além de `TargetedBlock`, sem voltar a tratar object como block;
+- Grass, Pebble, Stick e demais world objects mostram nome localizado, ícone com tint, nível de luz e coordenadas do suporte;
+- em Creative, middle click sobre um world object seleciona o próprio object/item na hotbar, seguindo o mesmo fluxo já usado para block pick;
+- o HUD alterna explicitamente entre o preview 3D de blocks e o ícone 2D de objects, preservando o rollback recente de inventory/held-item.
+
+Ocean hydrology:
+- a causa dos oceans secos era um double gate: a continentalness climática já participava da seleção do ocean biome e depois era multiplicada novamente pelo peso visual do ocean no `BiomeFieldSample`;
+- a força física do oceano agora é derivada diretamente do peso efetivo do ocean biome na superfície, mantendo terreno e água sob a mesma fonte de verdade;
+- a conversão de surface weight para hydrology continentalness é compartilhada pelo chunk generation e pelo bootstrap, evitando que o cache inicial de hydrology discorde da geração posterior;
+- o bootstrap também usa o `identity_surface_index` para permissões de hydrology, igualando o effective biome usado pelo restante do worldgen;
+- single-biome Ocean passa a produzir ocean water de forma consistente quando oceans estão habilitados, enquanto posições sem influência de ocean continuam secas.
+
+Validação:
+- localization audit: passou;
+- structure content reference audit: passou;
+- `cargo clippy --locked --all-targets --all-features -- -D warnings`: passou;
+- `cargo check --locked`: passou;
+- os workflows de push e pull request do commit de código `9a7be089dc7f3d9c21b35baf01bb844f96e0b4ef` concluíram com sucesso.
+
