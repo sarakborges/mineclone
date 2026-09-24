@@ -58,7 +58,7 @@ pub(crate) struct HeldSpriteContent<'w, 's> {
     objects: Res<'w, ObjectRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
-    player: Single<'w, 's, Ref<'static, Transform>, With<GameplayCamera>>,
+    player: Single<'w, 's, Ref<'static, GlobalTransform>, With<GameplayCamera>>,
     tools: Res<'w, ToolRegistry>,
     brush_mode: Res<'w, BrushMode>,
     properties: Res<'w, SecondaryPropertyRegistry>,
@@ -83,7 +83,8 @@ impl HeldSpriteContent<'_, '_> {
                 .hotbar
                 .stack_at(self.hotbar.selected_slot())
                 .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY));
-            let position = Vec2::new(self.player.translation.x, self.player.translation.z);
+            let player_position = self.player.translation();
+            let position = Vec2::new(player_position.x, player_position.z);
             return Some(HeldSpriteVisual {
                 icon: &object.icon,
                 base_color: block_tint_at_with_override(
