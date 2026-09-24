@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6G — Iteração sobre connector cache ajustada
+
+Após `connector_points()` passar de `Vec` reconstruído para slice pré-compilada, quatro call sites ainda usavam `.into_iter()`. Foram convertidos para `.iter()` conforme o lint autoritativo; nenhuma semântica mudou e nenhum warning foi suprimido.
+
 ## 2026-09-24 — Parte 6G — Connector points pré-compilados no StructureRuntime
 
 Connector resolution não revarre mais `layers[].rows` a cada candidate/branch.

@@ -284,7 +284,7 @@ impl StructureDefinition {
     ) -> Vec<(StructureRotation, IVec3)> {
         let inputs = self
             .connector_points()
-            .into_iter()
+            .iter()
             .filter(|connector| connector.target.is_none())
             .collect::<Vec<_>>();
         let mut candidates = Vec::new();
@@ -386,7 +386,7 @@ impl StructureDefinition {
     pub(crate) fn validate_connector_references(&self, structures: &StructureRegistry) {
         for output in self
             .connector_points()
-            .into_iter()
+            .iter()
             .filter(|connector| connector.target.is_some())
         {
             let maximum_steps =

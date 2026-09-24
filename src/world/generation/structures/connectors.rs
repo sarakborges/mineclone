@@ -74,7 +74,7 @@ fn connected_horizontal_bounds_for_piece<'a>(
 
     for output in structure
         .connector_points()
-        .into_iter()
+        .iter()
         .filter(|connector| connector.target.is_some())
     {
         let effective_strength = remaining_strength
@@ -211,7 +211,7 @@ fn resolve_connected_branch<'a>(
         for (connector_index, output) in parent
             .structure
             .connector_points()
-            .into_iter()
+            .iter()
             .enumerate()
             .filter(|(_, connector)| connector.target.is_some())
         {
