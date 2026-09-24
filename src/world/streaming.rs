@@ -15,14 +15,7 @@ use bevy::{
 };
 
 use crate::{
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        dimension::DimensionDefinition,
-        fluid::FluidRegistry,
-        structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
-    },
+    content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::{chunk_coord_from_position, chunk_coord_from_world},
@@ -351,6 +344,43 @@ impl ChunkStreamingState {
         self.staged_generated_chunks.contains(&coord) || self.fluid_settling.contains(coord)
     }
 
+    fn adopt_structure_top_chunk(&mut self, horizontal: IVec2, top_chunk: i32) {
+        let previous_top = self
+            .structure_top_chunks
+            .get(&horizontal)
+            .copied()
+            .unwrap_or(-1);
+        if top_chunk <= previous_top {
+            return;
+        }
+        self.structure_top_chunks.insert(horizontal, top_chunk);
+
+        let surface_top_chunk = self
+            .surface_ranges
+            .get(&horizontal)
+            .map(|(_, maximum)| maximum.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32))
+            .unwrap_or(-1);
+        let start_y = previous_top.max(surface_top_chunk).saturating_add(1).max(0);
+        let mut changed = false;
+        for y in start_y..=top_chunk {
+            let coord = IVec3::new(horizontal.x, y, horizontal.y);
+            if !self.desired.insert(coord) {
+                continue;
+            }
+            changed = true;
+            if !self.pending.contains(coord)
+                && !self.ready.contains(coord)
+                && !self.generated_chunk_is_unpublished(coord)
+                && !self.mesh_is_pressure_evicted(coord)
+            {
+                self.pending.enqueue(coord);
+            }
+        }
+        if changed {
+            self.mark_selection_rebuilt();
+        }
+    }
+
     fn mark_ready(&mut self, coord: IVec3) {
         assert!(
             !self.resident_generated_chunk_is_unpublished(coord),
@@ -518,15 +548,10 @@ fn chunk_is_inside_render_radius(center: IVec3, coord: IVec3, horizontal_radius:
 
 struct QueueRebuildContext<'a> {
     render_pool: &'a ChunkRenderPool,
-    blocks: &'a BlockRegistry,
-    fluids: &'a FluidRegistry,
     dimension: &'a DimensionDefinition,
     biomes: &'a BiomeRegistry,
-    structures: &'a StructureRegistry,
-    structure_sets: &'a StructureSetRegistry,
     biome_field: &'a BiomeField,
     feature_fields: &'a WorldFeatureFields,
-    world_generation: super::WorldGenerationSettings,
 }
 
 #[derive(SystemParam)]
@@ -586,15 +611,10 @@ pub(super) fn stream_chunks(
     {
         let rebuild_context = QueueRebuildContext {
             render_pool: &renderer.pool,
-            blocks: content.blocks(),
-            fluids: content.fluids(),
             dimension: generation.dimension(),
             biomes: &content.biomes,
-            structures: &generation.structures,
-            structure_sets: &generation.structure_sets,
             biome_field: &content.biome_field,
             feature_fields: &generation.feature_fields,
-            world_generation: *generation.world_generation,
         };
         let rebuild_started = Instant::now();
         rebuild_queue(

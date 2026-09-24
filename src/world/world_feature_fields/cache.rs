@@ -62,13 +62,18 @@ where
         entry.get_or_init(factory).clone()
     }
 
-    #[cfg(test)]
-    fn is_initialized(&self, key: &K) -> bool {
+    fn get_if_initialized(&self, key: &K) -> Option<V> {
         self.entries
             .read()
             .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
             .get(key)
-            .is_some_and(|entry| entry.get().is_some())
+            .and_then(|entry| entry.get())
+            .cloned()
+    }
+
+    #[cfg(test)]
+    fn is_initialized(&self, key: &K) -> bool {
+        self.get_if_initialized(key).is_some()
     }
 
     fn retain(&self, mut predicate: impl FnMut(&K) -> bool) {
@@ -221,6 +226,10 @@ impl FeatureCaches {
     ) -> i32 {
         self.structure_top_ys
             .get_or_insert_with(coord, factory)
+    }
+
+    pub(super) fn structure_top_y_if_ready(&self, coord: IVec2) -> Option<i32> {
+        self.structure_top_ys.get_if_initialized(&coord)
     }
 
     pub(super) fn structure_candidates(

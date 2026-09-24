@@ -77,6 +77,14 @@ pub(super) fn collect_generated_chunks(
         };
         budget.record(1);
 
+        if let Some(structure_top_chunk) = work
+            .generation_tasks
+            .structure_top_chunk_if_ready(completed.coord.xz())
+        {
+            work.state
+                .adopt_structure_top_chunk(completed.coord.xz(), structure_top_chunk);
+        }
+
         if completed.revision != current_revision {
             if work.state.keeps_loaded(completed.coord)
                 && work.state.generation_wave_targets.contains(&completed.coord)

@@ -1,3 +1,30 @@
+## 2026-09-24 — Structure top deixa a main thread; streaming usa mapa lazy dos workers
+
+A investigação confirmou que o streaming estava executando o mesmo preflight pesado de
+structures que pertence ao worldgen: cada rebuild de seleção podia chamar
+`maximum_structure_top_chunk_for_horizontal_chunk`, resolver candidates, ground-fit,
+conflicts e connector forests de até 64 níveis na main thread.
+
+A arquitetura agora é invertida:
+- o rebuild de streaming não cria mais `ChunkGenerationContext` nem resolve structures;
+- a seleção usa somente tops de structures já conhecidos;
+- o worker de chunk generation continua calculando o top exato da coluna antes de gerar,
+  mas o cache ganhou leitura não bloqueante (`structure_top_y_if_ready`);
+- quando um resultado de geração volta, a main thread lê somente o valor já pronto no
+  snapshot compartilhado; ela nunca chama `OnceLock::get_or_init` nesse caminho;
+- se a structure real ultrapassa o topo de superfície já selecionado, a coluna desejada é
+  expandida dinamicamente e os chunks superiores entram na fila normal;
+- isso preserva World Trees/connector chains altos sem obrigar cada movimento/warp a
+  resolver forests de structures sincronamente;
+- `QueueRebuildContext` deixou de carregar blocks, fluids, StructureRegistry,
+  StructureSetRegistry e WorldGenerationSettings, pois eram dependências exclusivas do
+  preflight indevido.
+
+Esse cache passa a funcionar como um mapa lazy de estrutura resolvida por coluna: workers
+materializam a informação pesada; streaming apenas consulta informação pronta. A próxima
+evolução é separar também o mapa barato de anchors/seeds (StructureField) do resolver
+pesado, análogo ao BiomeField.
+
 ## 2026-09-24 — Performance investigation: warp bootstrap e world-object broadphase
 
 A investigação de FPS/hitches encontrou dois custos determinísticos e eles já foram

@@ -6,9 +6,6 @@ use bevy::{
 use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::{
-        generation::{
-            ChunkGenerationContext, maximum_structure_top_chunk_for_horizontal_chunk,
-        },
         generation_region::generation_region_coord,
         render_distance::chunk_is_in_volume,
     },
@@ -396,17 +393,6 @@ fn rebuild_desired_chunk_coords(
         };
     let horizontal_radius_squared = horizontal_radius * horizontal_radius;
     let center_horizontal = center.xz();
-    let generation_context = ChunkGenerationContext {
-        blocks: context.blocks,
-        fluids: context.fluids,
-        dimension: context.dimension,
-        biomes: context.biomes,
-        structures: context.structures,
-        structure_sets: context.structure_sets,
-        world_generation: context.world_generation,
-        biome_field: context.biome_field,
-        feature_fields: context.feature_fields,
-    };
 
     for z in -search_radius..=search_radius {
         for x in -search_radius..=search_radius {
@@ -428,14 +414,10 @@ fn rebuild_desired_chunk_coords(
                 context.biome_field,
                 context.feature_fields,
             );
-            let structure_top_chunk = *structure_top_chunks
-                .entry(horizontal)
-                .or_insert_with(|| {
-                    maximum_structure_top_chunk_for_horizontal_chunk(
-                        horizontal,
-                        &generation_context,
-                    )
-                });
+            let structure_top_chunk = structure_top_chunks
+                .get(&horizontal)
+                .copied()
+                .unwrap_or(-1);
             let surrounding_minimum = *surface_support_minimums
                 .entry(horizontal)
                 .or_insert_with(|| {

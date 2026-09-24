@@ -74,6 +74,10 @@ impl WorldFeatureFields {
         self.caches.structure_top_y(coord, factory)
     }
 
+    pub(crate) fn structure_top_y_if_ready(&self, coord: IVec2) -> Option<i32> {
+        self.caches.structure_top_y_if_ready(coord)
+    }
+
     pub(crate) fn structure_placement_bounds(
         &self,
         reference: &str,

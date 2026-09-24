@@ -113,6 +113,14 @@ impl ChunkGenerationTasks {
         self.pending.len()
     }
 
+    pub(crate) fn structure_top_chunk_if_ready(&self, horizontal: IVec2) -> Option<i32> {
+        self.snapshot
+            .as_ref()?
+            .feature_fields
+            .structure_top_y_if_ready(horizontal)
+            .map(|top_y| top_y.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32))
+    }
+
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
         self.pending.contains(coord)
     }
