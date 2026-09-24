@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6H — Import duplicado removido
+
+O segundo CI de volume placement encontrou somente a importação duplicada de `BiomeStructurePlacementRules` em `biome.rs`. A duplicata foi removida; nenhum comportamento foi alterado.
+
 ## 2026-09-24 — Parte 6H — Correção de parsing/imports do volume placement
 
 O primeiro CI do volume placement encontrou um parse ambíguo do Rust em comparações logo após `as f32` e um import surface antigo em `biome.rs`. As comparações foram parentetizadas e o import consolidado. Nenhum comportamento foi alterado.

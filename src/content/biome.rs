@@ -9,7 +9,6 @@ use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_material::BiomeMaterialLayer,
-    biome_structure::BiomeStructurePlacementRules,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, BiomeStructurePlacementRules},
     biome_surface_fluid::BiomeSurfaceFluid,
