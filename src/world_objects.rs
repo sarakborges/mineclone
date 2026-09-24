@@ -12,7 +12,7 @@ use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         biome::BiomeRegistry,
-        object::{ObjectDefinition, ObjectRegistry},
+        object::{ObjectDefinition, ObjectRegistry, ObjectVisualDefinition},
     },
     player::item_stack::ItemStack,
     rendering::block_tint::block_tint_at,
@@ -148,29 +148,30 @@ fn spawn_requested_objects(
             &content.biome_field,
             &content.biomes,
         );
-        let scene = content.asset_server.load(
-            GltfAssetLabel::Scene(0).from_asset(definition.model.clone()),
-        );
         let appearance = WorldObjectAppearance {
             tint,
             unlit: definition.unlit,
             casts_shadow: definition.casts_shadow,
             receives_shadow: definition.receives_shadow,
         };
-        let entity = commands
-            .spawn((
-                Name::new(format!("World Object ({})", definition.id)),
-                WorldObjectInstance::new(request.object_id, request.anchor, definition),
-                Transform::from_translation(position),
-                Visibility::Hidden,
-                ChunkRenderCoord(chunk_coord_from_world(request.anchor)),
-                DespawnOnExit(GameState::Gameplay),
-            ))
-            .with_children(|root| {
+        let mut entity = commands.spawn((
+            Name::new(format!("World Object ({})", definition.id)),
+            WorldObjectInstance::new(request.object_id, request.anchor, definition),
+            Transform::from_translation(position),
+            Visibility::Hidden,
+            ChunkRenderCoord(chunk_coord_from_world(request.anchor)),
+            DespawnOnExit(GameState::Gameplay),
+        ));
+        if let ObjectVisualDefinition::Model { path } = &definition.visual {
+            let scene = content
+                .asset_server
+                .load(GltfAssetLabel::Scene(0).from_asset(path.clone()));
+            entity.with_children(|root| {
                 root.spawn((WorldAssetRoot(scene), appearance))
                     .observe(configure_loaded_object_scene);
-            })
-            .id();
+            });
+        }
+        let entity = entity.id();
         store.by_anchor.insert(request.anchor, entity);
     }
 }
