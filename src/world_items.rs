@@ -1,4 +1,4 @@
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::{
@@ -209,17 +209,27 @@ fn resolve_player_drop_requests(
     }
 }
 
+#[derive(SystemParam)]
+struct WorldItemSpawnContent<'w> {
+    visual_assets: Res<'w, WorldItemVisualAssets>,
+    block_meshes: Res<'w, BlockModelMeshes>,
+    block_content: BlockVisualContent<'w>,
+    items: Res<'w, ItemRegistry>,
+    layers: Res<'w, LayerRegistry>,
+    tools: Res<'w, ToolRegistry>,
+}
+
+#[derive(SystemParam)]
+struct WorldItemSpawnAssets<'w> {
+    standard_materials: ResMut<'w, Assets<StandardMaterial>>,
+    block_materials: ResMut<'w, Assets<BlockModelMaterial>>,
+}
+
 fn spawn_world_items(
     mut commands: Commands,
     mut requests: MessageReader<WorldItemSpawnRequest>,
-    visual_assets: Res<WorldItemVisualAssets>,
-    block_meshes: Res<BlockModelMeshes>,
-    block_content: BlockVisualContent,
-    items: Res<ItemRegistry>,
-    layers: Res<LayerRegistry>,
-    tools: Res<ToolRegistry>,
-    mut standard_materials: ResMut<Assets<StandardMaterial>>,
-    mut block_materials: ResMut<Assets<BlockModelMaterial>>,
+    content: WorldItemSpawnContent,
+    mut assets: WorldItemSpawnAssets,
 ) {
     for request in requests.read() {
         let mut entity = commands.spawn((
@@ -248,14 +258,14 @@ fn spawn_world_items(
             spawn_world_item_visual(
                 root,
                 request,
-                &visual_assets,
-                &block_meshes,
-                &block_content,
-                &items,
-                &layers,
-                &tools,
-                &mut standard_materials,
-                &mut block_materials,
+                &content.visual_assets,
+                &content.block_meshes,
+                &content.block_content,
+                &content.items,
+                &content.layers,
+                &content.tools,
+                &mut assets.standard_materials,
+                &mut assets.block_materials,
             );
         });
     }
@@ -292,13 +302,13 @@ fn spawn_world_item_visual(
         ))
         .with_children(|model| {
             for face in BlockFace::ALL {
-                let layer_count = maximum_block_model_layers(&block_content.blocks, face);
+                let layer_count = maximum_block_model_layers(&content.block_content.blocks, face);
                 for layer_index in 0..layer_count {
                     let Some(mut material) = block_face_material_data(
                         face,
                         layer_index,
                         block,
-                        &block_content.asset_server,
+                        &content.block_content.asset_server,
                         1.0,
                     ) else {
                         continue;

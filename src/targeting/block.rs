@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use super::{
     highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
@@ -67,25 +67,54 @@ pub struct TargetedBlock(pub Option<VoxelHit>);
 #[derive(Resource, Default)]
 pub(crate) struct TargetedCreature(pub Option<Entity>);
 
+type TargetedCreatureQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static CreatureTargetCollider,
+        &'static EntityHealth,
+    ),
+    With<CreatureInstance>,
+>;
+
+type InteractWorldItemQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<WorldItem>, With<InteractPickup>),
+>;
+
+#[derive(SystemParam)]
+struct TargetCandidates<'w, 's> {
+    creatures: TargetedCreatureQuery<'w, 's>,
+    world_items: InteractWorldItemQuery<'w, 's>,
+}
+
+#[derive(SystemParam)]
+struct TargetSelection<'w> {
+    block: ResMut<'w, TargetedBlock>,
+    creature: ResMut<'w, TargetedCreature>,
+    world_item: ResMut<'w, TargetedWorldItem>,
+}
+
 fn update_targets(
     camera: Single<&GlobalTransform, With<GameplayWorldCamera>>,
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
-    creatures: Query<(Entity, &Transform, &CreatureTargetCollider, &EntityHealth), With<CreatureInstance>>,
-    world_items: Query<(Entity, &Transform), (With<WorldItem>, With<InteractPickup>)>,
-    mut targeted_block: ResMut<TargetedBlock>,
-    mut targeted_creature: ResMut<TargetedCreature>,
-    mut targeted_world_item: ResMut<TargetedWorldItem>,
+    candidates: TargetCandidates,
+    mut targets: TargetSelection,
 ) {
     if !interaction.available() {
-        if targeted_block.0.is_some() {
-            targeted_block.0 = None;
+        if targets.block.0.is_some() {
+            targets.block.0 = None;
         }
-        if targeted_creature.0.is_some() {
-            targeted_creature.0 = None;
+        if targets.creature.0.is_some() {
+            targets.creature.0 = None;
         }
-        if targeted_world_item.0.is_some() {
-            targeted_world_item.0 = None;
+        if targets.world_item.0.is_some() {
+            targets.world_item.0 = None;
         }
         return;
     }
@@ -104,7 +133,7 @@ fn update_targets(
     });
     // Re-evaluate moving creature colliders every frame; camera/voxel caching
     // alone would leave stale targets when only a creature moves.
-    let creature_hit = creatures
+    let creature_hit = candidates.creatures
         .iter()
         .filter_map(|(entity, transform, collider, health)| {
             if health.is_dead() {
@@ -116,7 +145,7 @@ fn update_targets(
                 .map(|distance| (entity, distance))
         })
         .min_by(|left, right| left.1.total_cmp(&right.1));
-    let world_item_hit = world_items
+    let world_item_hit = candidates.world_items
         .iter()
         .filter_map(|(entity, transform)| {
             let (min, max) = target_bounds(transform.translation);
@@ -143,14 +172,14 @@ fn update_targets(
     } else {
         None
     };
-    if targeted_block.0 != next_block {
-        targeted_block.0 = next_block;
+    if targets.block.0 != next_block {
+        targets.block.0 = next_block;
     }
-    if targeted_creature.0 != next_creature {
-        targeted_creature.0 = next_creature;
+    if targets.creature.0 != next_creature {
+        targets.creature.0 = next_creature;
     }
-    if targeted_world_item.0 != next_world_item {
-        targeted_world_item.0 = next_world_item;
+    if targets.world_item.0 != next_world_item {
+        targets.world_item.0 = next_world_item;
     }
 }
 
