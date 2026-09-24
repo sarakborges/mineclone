@@ -1,3 +1,34 @@
+## 2026-09-23 — Custom-model blocks + Grass/Grass Block split [VERSION 0.66.0]
+
+Blocos agora podem declarar `model` com caminho seguro relativo a `assets/`.
+Blocos com modelo customizado continuam ocupando um voxel lógico, mas sua
+geometria cúbica não entra no terrain mesher e também não oclui faces de blocos
+vizinhos.
+
+O visual é mantido por um pool separado por chunk visível. O pool acompanha
+`chunk_content_revision`, portanto só reconstrói as instâncias quando o
+conteúdo daquele chunk muda, e as entidades usam o mesmo
+`ChunkRenderCoord`/visibility lifecycle do terrain. O GLB é instanciado por
+`WorldAssetRoot`; após `WorldInstanceReady`, o block tint é aplicado aos
+materiais. Materiais tintados são cacheados por material original + cor e o
+override de `biome_tint` do voxel também é respeitado.
+
+A nomenclatura foi separada sem preservar compatibilidade com saves antigos,
+por decisão explícita deste checkpoint:
+- `asteria:grass_block` é o antigo bloco cúbico de terreno, exibido como
+  **Grass Block**;
+- `asteria:grass` agora é o tufo 3D, categoria Creative `foliage`, usando
+  `models/objects/grass/grass.glb`;
+- surface layers dos biomas e todas as referências de terreno encontradas nas
+  structures foram migradas para `asteria:grass_block`.
+
+O grass 3D usa `tint: grass`, light dampening 0, hardness 0.1 e self-drop.
+As texturas de grass permanecem como representação fallback para UI/preview,
+enquanto o mundo renderiza o GLB.
+
+CI do renderer no commit `a4928579aef305246b76e9cb2e146e64bea29f82`:
+localization, Clippy com `-D warnings` e `cargo check` verdes.
+
 ## 2026-09-23 — Item stacks com quantidade e limite 64 [VERSION 0.65.0]
 
 `ItemStack` agora possui `quantity` persistida e um limite central
