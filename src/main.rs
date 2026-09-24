@@ -85,10 +85,7 @@ fn run_game() {
             // World exit owns durability. The OS close button must not
             // destroy the window before the active world is saved.
             close_when_requested: false,
-            primary_window: Some(Window {
-                title: "Asteria".into(),
-                ..default()
-            }),
+            primary_window: Some(primary_window()),
             ..default()
         });
     #[cfg(target_os = "windows")]
@@ -136,6 +133,16 @@ fn windows_wgpu_settings() -> WgpuSettings {
     }
 
     settings
+}
+
+fn primary_window() -> Window {
+    let mut window = Window {
+        title: "Asteria".into(),
+        mode: bevy::window::WindowMode::Windowed,
+        ..default()
+    };
+    window.set_maximized(true);
+    window
 }
 
 fn voxel_task_pool_options() -> TaskPoolOptions {
