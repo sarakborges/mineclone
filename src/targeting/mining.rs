@@ -78,6 +78,12 @@ impl BlockMiningState {
         *self = Self::default();
     }
 
+    pub(crate) fn is_actively_mining(&self, voxel: IVec3, block_id: &'static str) -> bool {
+        self.target
+            .is_some_and(|target| target.voxel == voxel && target.block_id == block_id)
+            && self.accumulated_work > 0.0
+    }
+
     pub(crate) fn progress_for(
         &self,
         voxel: IVec3,

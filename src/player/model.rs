@@ -37,7 +37,7 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::BlockTargetingSet,
-    voxel::block_face::BlockFace,
+    voxel::{block_face::BlockFace, log_variant::is_hollow_log_id},
 };
 
 const HURT_HOLD_SECONDS: f32 = 0.38;
@@ -184,6 +184,7 @@ struct ThirdPersonHeldBlockAssets<'w> {
 
 #[derive(SystemParam)]
 struct ThirdPersonHeldBlockView<'w, 's> {
+    block_meshes: Res<'w, BlockModelMeshes>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
     roots: ThirdPersonHeldBlockRootQuery<'w, 's>,
     faces: Query<
@@ -192,6 +193,7 @@ struct ThirdPersonHeldBlockView<'w, 's> {
         (
             &'static ThirdPersonHeldBlockFace,
             &'static MeshMaterial3d<BlockModelMaterial>,
+            &'static mut Mesh3d,
             &'static mut Visibility,
         ),
         Without<ThirdPersonHeldBlockRoot>,
@@ -707,7 +709,11 @@ fn spawn_third_person_held_block(
 
                         held.spawn((
                             ThirdPersonHeldBlockFace { face, layer_index },
-                            Mesh3d(block_meshes.world_face(face)),
+                            Mesh3d(if selected_block_id.is_some_and(is_hollow_log_id) {
+                                block_meshes.hollow_world_face(face)
+                            } else {
+                                block_meshes.world_face(face)
+                            }),
                             MeshMaterial3d(material),
                             visibility,
                             NotShadowCaster,
@@ -759,6 +765,7 @@ fn sync_third_person_held_block(
     view: ThirdPersonHeldBlockView,
 ) {
     let ThirdPersonHeldBlockView {
+        block_meshes,
         mut materials,
         mut roots,
         mut faces,
@@ -793,7 +800,7 @@ fn sync_third_person_held_block(
 
         let Some(block_id) = selected_block_id else {
             if block_changed {
-                for (_, _, mut layer_visibility) in &mut faces {
+                for (_, _, _, mut layer_visibility) in &mut faces {
                     if *layer_visibility != Visibility::Hidden {
                         *layer_visibility = Visibility::Hidden;
                     }
@@ -808,9 +815,14 @@ fn sync_third_person_held_block(
 
         let materials_changed = block_changed || definitions_changed;
         if materials_changed {
-            for (face, material_handle, mut layer_visibility) in &mut faces {
+            for (face, material_handle, mut mesh, mut layer_visibility) in &mut faces {
                 let Some(mut material) = materials.get_mut(&material_handle.0) else {
                     continue;
+                };
+                mesh.0 = if is_hollow_log_id(block_id) {
+                    block_meshes.hollow_world_face(face.face)
+                } else {
+                    block_meshes.world_face(face.face)
                 };
                 let Some(face_material) = block_face_material_data(
                     face.face,
@@ -837,7 +849,7 @@ fn sync_third_person_held_block(
                 .tint_at(block_id, tint_position)
                 .unwrap_or(Color::WHITE);
             if materials_changed || cache.tint != Some(tint) {
-                for (_, material_handle, _) in &mut faces {
+                for (_, material_handle, _, _) in &mut faces {
                     if let Some(mut material) = materials.get_mut(&material_handle.0) {
                         set_block_model_tint(&mut material, tint);
                     }

@@ -31,6 +31,8 @@ use crate::{
     voxel::{
         chunk::CHUNK_SIZE,
         coordinates::chunk_coord_from_world,
+        log_variant::is_hollow_log_id,
+        microblock::HOLLOW_LOG_WALL_THICKNESS,
         object::ObjectCell,
         texture_rotation::TextureRotation,
         world::VoxelWorld,
@@ -212,6 +214,7 @@ impl Plugin for WorldObjectsPlugin {
 
 
 fn preload_object_models(
+    mut commands: Commands,
     objects: Res<ObjectRegistry>,
     asset_server: Res<AssetServer>,
     mut preloads: ResMut<ObjectModelPreloads>,
@@ -225,6 +228,15 @@ fn preload_object_models(
             ObjectVisualDefinition::StackedSprites { .. } => None,
         })
         .collect();
+
+    for scene in &preloads._scenes {
+        commands.spawn((
+            Name::new("Object Model Preload"),
+            WorldAssetRoot(scene.clone()),
+            Transform::from_translation(Vec3::splat(-1_000_000.0)),
+            Visibility::Hidden,
+        ));
+    }
 }
 
 fn apply_object_placement_requests(
@@ -349,10 +361,22 @@ fn spawn_world_object(
     content: &WorldObjectSceneContent<'_>,
     assets: &mut WorldObjectSceneAssets<'_>,
 ) -> Entity {
-    let position = support.as_vec3()
-        + Vec3::splat(0.5)
-        + object.face.normal().as_vec3() * 0.5
-        + object_position_jitter(definition, support);
+    let support_cell = content.world.cell_at(support);
+    let inside_vertical_hollow = support_cell.is_some_and(|cell| {
+        is_hollow_log_id(cell.block_id)
+            && cell.orientation == crate::content::block_orientation::BlockOrientation::Y
+            && object.face == crate::content::object::ObjectPlacementFace::Top
+    });
+    let base_position = if inside_vertical_hollow {
+        support.as_vec3()
+            + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
+    } else {
+        support.as_vec3()
+            + Vec3::splat(0.5)
+            + object.face.normal().as_vec3() * 0.5
+    };
+    let position = base_position
+        + object_position_jitter(definition, support, inside_vertical_hollow);
     let tint = block_tint_at(
         definition.tint,
         Vec2::new(position.x, position.z),
@@ -464,15 +488,26 @@ fn spawn_world_object(
 }
 
 
-fn object_position_jitter(definition: &ObjectDefinition, support: IVec3) -> Vec3 {
+fn object_position_jitter(
+    definition: &ObjectDefinition,
+    support: IVec3,
+    inside_vertical_hollow: bool,
+) -> Vec3 {
     let seed = mix_u32_components(
         hash_string(&definition.id),
         [support.x as u32, support.y as u32, support.z as u32],
     );
+    let mut maximum = Vec2::from_array(definition.position_jitter);
+    if inside_vertical_hollow {
+        let half = Vec2::new(definition.target.size[0], definition.target.size[2]) * 0.5;
+        let cavity_half = 0.5 - HOLLOW_LOG_WALL_THICKNESS;
+        let room = Vec2::splat(cavity_half) - half;
+        maximum = maximum.min(room.max(Vec2::ZERO));
+    }
     Vec3::new(
-        hash_signed(seed.rotate_left(17)) * definition.position_jitter[0],
+        hash_signed(seed.rotate_left(17)) * maximum.x,
         0.0,
-        hash_signed(seed.rotate_left(43)) * definition.position_jitter[1],
+        hash_signed(seed.rotate_left(43)) * maximum.y,
     )
 }
 

@@ -450,12 +450,12 @@ fn advance_item_axis(
 
 fn pickup_proximity_items(
     time: Res<Time>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    player: Single<&GlobalTransform, With<GameplayCamera>>,
     mut hotbar: ResMut<PlayerHotbar>,
     mut commands: Commands,
     mut items: Query<(Entity, &Transform, &mut WorldItem, &mut ProximityPickup)>,
 ) {
-    let pickup_center = player.translation - Vec3::Y * (PLAYER_EYE_HEIGHT * 0.5);
+    let pickup_center = player.translation() - Vec3::Y * (PLAYER_EYE_HEIGHT * 0.5);
     let radius_squared = PROXIMITY_PICKUP_RADIUS * PROXIMITY_PICKUP_RADIUS;
 
     for (entity, transform, mut world_item, mut pickup) in &mut items {
@@ -477,7 +477,7 @@ fn pickup_interact_item(
     mut targeted: ResMut<TargetedWorldItem>,
     mut hotbar: ResMut<PlayerHotbar>,
     mut commands: Commands,
-    mut items: Query<&mut WorldItem, With<InteractPickup>>,
+    mut items: Query<&mut WorldItem>,
 ) {
     if !buttons.just_pressed(MouseButton::Right) {
         return;

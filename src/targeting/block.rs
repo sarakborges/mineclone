@@ -13,7 +13,7 @@ use crate::{
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayWorldCamera,
     voxel::{raycast::{VoxelHit, raycast_voxels}, world::VoxelWorld},
-    world_items::{InteractPickup, TargetedWorldItem, WorldItem, target_bounds},
+    world_items::{TargetedWorldItem, WorldItem, target_bounds},
     world_objects::{TargetedWorldObject, WorldObjectInstance},
 };
 
@@ -86,12 +86,8 @@ type WorldObjectQuery<'w, 's> = Query<
     (Entity, &'static Transform, &'static WorldObjectInstance),
 >;
 
-type InteractWorldItemQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<WorldItem>, With<InteractPickup>),
->;
+type InteractWorldItemQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), With<WorldItem>>;
 
 #[derive(SystemParam)]
 struct TargetCandidates<'w, 's> {

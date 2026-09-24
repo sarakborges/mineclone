@@ -11,7 +11,7 @@ use crate::{
         secondary_property::SecondaryPropertyRegistry,
         tool_category::ToolCategoryRegistry,
     },
-    hud::block_icon::BlockIconMaterial,
+    hud::{block_icon::BlockIconMaterial, ui_image::load_smooth_image},
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
@@ -30,7 +30,7 @@ use crate::{
 use super::{HudSettings, TargetBlockPosition};
 
 const TARGET_SLOT_SIZE: f32 = 44.0;
-const TARGET_ICON_SIZE: f32 = 34.0;
+const TARGET_ICON_SIZE: f32 = 38.0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 const TARGET_CORNER_MARGIN: f32 = 18.0;
 
@@ -344,7 +344,7 @@ fn update_target_hud(
             &content.visual.biomes,
         );
         *object_image = ImageNode::new(
-            content.visual.asset_server.load(definition.icon.clone()),
+            load_smooth_image(&content.visual.asset_server, definition.icon.clone()),
         )
         .with_color(tint);
 

@@ -17,6 +17,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, object::ObjectCell,
+        log_variant::is_hollow_log_id,
         raycast::VoxelHit, texture_rotation::TextureRotation,
     },
     world_items::TargetedWorldItem,
@@ -379,6 +380,15 @@ fn object_placement_attachment(
     definition: &crate::content::object::ObjectDefinition,
     world: &crate::voxel::world::VoxelWorld,
 ) -> Option<(IVec3, ObjectPlacementFace)> {
+    let support_cell = world.cell_at(hit.voxel)?;
+    if is_hollow_log_id(support_cell.block_id)
+        && support_cell.orientation == crate::content::block_orientation::BlockOrientation::Y
+        && definition.supports_placement_face(ObjectPlacementFace::Top)
+        && world.object_at(hit.voxel).is_none()
+    {
+        return Some((hit.voxel, ObjectPlacementFace::Top));
+    }
+
     let face = ObjectPlacementFace::from_normal(hit.normal)?;
     if !definition.supports_placement_face(face) {
         return None;

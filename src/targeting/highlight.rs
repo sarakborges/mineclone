@@ -23,6 +23,7 @@ use crate::{
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
+    targeting::BlockMiningState,
     world_objects::{TargetedWorldObject, WorldObjectInstance},
     voxel::{
         log_variant::is_hollow_log_id,
@@ -113,6 +114,7 @@ struct TargetHighlightInput<'w, 's> {
     world_objects: Query<'w, 's, (&'static WorldObjectInstance, &'static GlobalTransform)>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
+    mining: Res<'w, BlockMiningState>,
 }
 
 #[derive(SystemParam)]
@@ -382,6 +384,11 @@ fn update_highlight(
     }
 
     hide_if_visible(&mut view.brush_ghost.1);
+
+    if input.mining.is_actively_mining(hit.voxel, hit.block_id) {
+        hide_if_visible(&mut view.highlight.1);
+        return;
+    }
 
     let selected_block = selected_item.filter(|item_id| content.blocks.get(item_id).is_some());
     let placement_preview_visible = selected_block.is_some()

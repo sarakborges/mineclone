@@ -10,8 +10,8 @@
     "type": "stackedSprites",
     "texture": "textures/items/pebble.png",
     "slices": 4,
-    "baseOffset": 0.006,
-    "sliceSpacing": 0.008,
+    "baseOffset": 0.001,
+    "sliceSpacing": 0.001,
     "size": [
       0.42,
       0.42
@@ -25,16 +25,20 @@
   "target": {
     "size": [
       0.42,
-      0.1,
+      0.04,
       0.42
     ],
     "centerOffset": [
       0,
-      0.05,
+      0.02,
       0
     ]
   },
   "castsShadow": false,
   "dropSelf": true,
-  "interaction": "pickup"
+  "interaction": "pickup",
+  "positionJitter": [
+    0.2,
+    0.2
+  ]
 }
