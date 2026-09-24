@@ -131,13 +131,18 @@ impl HydrologyRegion {
         let (mut river, river_opening) = river_core.map_or((None, 0.0), |sample| {
             let profile = river_channel_profile(sample.normalized_distance);
             let bed = sample.height - self.river_carve_depth * profile;
+            let carve_surface = actual_surface_height
+                .unwrap_or(sample.height + 1.5)
+                .max(sample.height + 1.5);
+            // A fixed subtraction is not enough when a meander crosses a
+            // locally tall column: solid density can survive above the river
+            // and become a detached roof/island. Scale the full-strength carve
+            // to the actual column relief while preserving the profile fade.
+            let required_carve = (carve_surface - bed + 1.0).max(RIVER_CARVE_STRENGTH);
             let river = Some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
-                maximum_y: actual_surface_height
-                    .unwrap_or(sample.height + 1.5)
-                    .max(sample.height + 1.5)
-                    + 0.5,
-                delta: -RIVER_CARVE_STRENGTH * profile,
+                maximum_y: carve_surface + 0.5,
+                delta: -required_carve * profile,
             });
             let opening = smoothstep((profile * 2.0).clamp(0.0, 1.0));
 
