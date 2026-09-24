@@ -11,7 +11,11 @@ use super::{
     registry::DefinitionMap,
 };
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+const MAX_STACKED_SPRITE_SLICES: u8 = 32;
+const MAX_STACKED_SPRITE_SIZE: f32 = 4.0;
+const MAX_STACKED_SPRITE_OFFSET: f32 = 2.0;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ObjectPlacementFace {
     Right,
@@ -34,6 +38,40 @@ impl ObjectPlacementFace {
             _ => None,
         }
     }
+
+    pub(crate) fn normal(self) -> IVec3 {
+        match self {
+            Self::Right => IVec3::X,
+            Self::Left => IVec3::NEG_X,
+            Self::Top => IVec3::Y,
+            Self::Bottom => IVec3::NEG_Y,
+            Self::Front => IVec3::Z,
+            Self::Back => IVec3::NEG_Z,
+        }
+    }
+
+    pub(crate) fn index(self) -> u8 {
+        match self {
+            Self::Right => 0,
+            Self::Left => 1,
+            Self::Top => 2,
+            Self::Bottom => 3,
+            Self::Front => 4,
+            Self::Back => 5,
+        }
+    }
+
+    pub(crate) fn from_index(index: u8) -> Option<Self> {
+        match index {
+            0 => Some(Self::Right),
+            1 => Some(Self::Left),
+            2 => Some(Self::Top),
+            3 => Some(Self::Bottom),
+            4 => Some(Self::Front),
+            5 => Some(Self::Back),
+            _ => None,
+        }
+    }
 }
 
 fn default_placement_faces() -> Vec<ObjectPlacementFace> {
@@ -50,6 +88,85 @@ fn default_target_center_offset() -> [f32; 3] {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_stacked_sprite_size() -> [f32; 2] {
+    [0.75, 0.75]
+}
+
+fn default_alpha_cutoff() -> f32 {
+    0.5
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ObjectVisualDefinition {
+    Model {
+        path: String,
+    },
+    StackedSprites {
+        texture: String,
+        slices: u8,
+        #[serde(default)]
+        base_offset: f32,
+        slice_spacing: f32,
+        #[serde(default = "default_stacked_sprite_size")]
+        size: [f32; 2],
+        #[serde(default = "default_alpha_cutoff")]
+        alpha_cutoff: f32,
+    },
+}
+
+impl ObjectVisualDefinition {
+    fn normalize_and_validate(&mut self, object_id: &str) {
+        match self {
+            Self::Model { path } => {
+                *path = path.trim().to_owned();
+                assert!(
+                    is_safe_relative_asset_path(path),
+                    "object {object_id} model path must be a safe relative asset path: {path}"
+                );
+            }
+            Self::StackedSprites {
+                texture,
+                slices,
+                base_offset,
+                slice_spacing,
+                size,
+                alpha_cutoff,
+            } => {
+                *texture = texture.trim().to_owned();
+                assert!(
+                    is_safe_relative_asset_path(texture),
+                    "object {object_id} stacked sprite texture must be a safe relative asset path: {texture}"
+                );
+                assert!(
+                    (1..=MAX_STACKED_SPRITE_SLICES).contains(slices),
+                    "object {object_id} stackedSprites slices must be between 1 and {MAX_STACKED_SPRITE_SLICES}"
+                );
+                assert!(
+                    base_offset.is_finite()
+                        && (0.0..=MAX_STACKED_SPRITE_OFFSET).contains(base_offset),
+                    "object {object_id} stackedSprites baseOffset must be finite and between 0 and {MAX_STACKED_SPRITE_OFFSET}"
+                );
+                assert!(
+                    slice_spacing.is_finite()
+                        && (0.0..=MAX_STACKED_SPRITE_OFFSET).contains(slice_spacing),
+                    "object {object_id} stackedSprites sliceSpacing must be finite and between 0 and {MAX_STACKED_SPRITE_OFFSET}"
+                );
+                assert!(
+                    size.iter().all(|value| {
+                        value.is_finite() && *value > 0.0 && *value <= MAX_STACKED_SPRITE_SIZE
+                    }),
+                    "object {object_id} stackedSprites size must be positive, finite and <= {MAX_STACKED_SPRITE_SIZE}"
+                );
+                assert!(
+                    alpha_cutoff.is_finite() && (0.0..=1.0).contains(alpha_cutoff),
+                    "object {object_id} stackedSprites alphaCutoff must be between 0 and 1"
+                );
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -89,7 +206,7 @@ pub struct ObjectDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub category: String,
-    pub model: String,
+    pub visual: ObjectVisualDefinition,
     pub icon: String,
     #[serde(default)]
     pub tint: BlockTint,
@@ -131,20 +248,16 @@ impl ObjectRegistry {
     pub fn insert(&mut self, mut definition: ObjectDefinition) {
         definition.id = definition.id.trim().to_owned();
         definition.category = definition.category.trim().to_owned();
-        definition.model = definition.model.trim().to_owned();
         definition.icon = definition.icon.trim().to_owned();
+        definition
+            .visual
+            .normalize_and_validate(definition.id.as_str());
 
         assert!(!definition.id.is_empty(), "object id cannot be empty");
         assert!(
             !definition.category.is_empty(),
             "object {} category cannot be empty",
             definition.id
-        );
-        assert!(
-            is_safe_relative_asset_path(&definition.model),
-            "object {} model must be a safe relative asset path: {}",
-            definition.id,
-            definition.model
         );
         assert!(
             is_safe_relative_asset_path(&definition.icon),
