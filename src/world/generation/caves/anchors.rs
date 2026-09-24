@@ -116,7 +116,7 @@ fn cavern_space_is_open(
 
 fn cavern_density_is_open(
     position: Vec3,
-    region: &GenerationRegion,
+    _region: &GenerationRegion,
     volume_region: &VolumeBiomeRegion,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,

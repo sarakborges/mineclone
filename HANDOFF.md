@@ -1,3 +1,13 @@
+## 2026-09-24 — CI cleanup após remoção de Hydrology
+
+O CI seguinte ao fix de lifecycle do Target HUD expôs três resíduos de Clippy que já estavam no develop após a remoção de Hydrology, sem relação com o HUD:
+
+- o parâmetro de GenerationRegion ainda presente no cave-connectivity legado foi marcado como intencionalmente não usado até a remoção desse subsistema;
+- normalized_distance do FeatureGraphHorizontalSample agora só existe em builds de teste, onde ainda valida invariantes do sampler;
+- resolve_surface_identity retorna diretamente o resultado da seleção, removendo o let-and-return apontado pelo Clippy.
+
+Esta correção não reintroduz Hydrology nem altera worldgen em runtime.
+
 ## 2026-09-24 — Target HUD stale preview lifecycle fix
 
 Corrigido o Target HUD que podia manter o último preview de bloco visível quando o restante do HUD já deveria estar oculto.

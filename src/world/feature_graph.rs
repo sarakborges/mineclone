@@ -24,6 +24,7 @@ pub(crate) struct FeatureGraphSample {
 pub(crate) struct FeatureGraphHorizontalSample {
     pub(crate) height: f32,
     pub(crate) strength: f32,
+    #[cfg(test)]
     pub(crate) normalized_distance: f32,
 }
 
@@ -226,6 +227,7 @@ impl FeatureGraph {
             let candidate = FeatureGraphHorizontalSample {
                 height: from.y + (to.y - from.y) * progress,
                 strength,
+                #[cfg(test)]
                 normalized_distance: distance / base_radius,
             };
             if accepts(candidate)

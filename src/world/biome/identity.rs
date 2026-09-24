@@ -11,13 +11,12 @@ pub(super) fn resolve_surface_identity(
     surface: &BiomeFieldSample<'_>,
     influences: &mut Vec<CurrentBiomeInfluence>,
 ) -> usize {
-    let influence_count = if surface.identity_surface_index != surface.primary_surface_index {
+    if surface.identity_surface_index != surface.primary_surface_index {
         replace_single_influence(influences, surface.primary_id, 1.0);
         1
     } else {
         copy_influences(influences, &surface.influences)
-    };
-    influence_count
+    }
 }
 
 pub(super) fn apply_volume_identity(
