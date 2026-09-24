@@ -176,7 +176,7 @@ struct WorldObjectAppearance {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct ObjectMaterialKey {
     material: AssetId<StandardMaterial>,
-    tint: [u32; 4],
+    tint: [u8; 4],
     unlit: bool,
 }
 
@@ -209,7 +209,7 @@ struct StackedSpriteMeshCache(HashMap<StackedSpriteMeshKey, Handle<Mesh>>);
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct StackedSpriteMaterialKey {
     object_id: &'static str,
-    tint: [u32; 4],
+    tint: [u8; 4],
     unlit: bool,
     alpha_cutoff: u32,
 }
@@ -499,15 +499,10 @@ fn spawn_world_object(
                 handle
             };
 
-            let rgba = tint.to_srgba();
+            let (tint, tint_key) = quantized_object_tint(tint);
             let material_key = StackedSpriteMaterialKey {
                 object_id: object.object_id,
-                tint: [
-                    rgba.red.to_bits(),
-                    rgba.green.to_bits(),
-                    rgba.blue.to_bits(),
-                    rgba.alpha.to_bits(),
-                ],
+                tint: tint_key,
                 unlit: definition.unlit,
                 alpha_cutoff: alpha_cutoff.to_bits(),
             };
@@ -651,15 +646,10 @@ fn configure_pending_object_model_materials(
     mut cache: ResMut<ObjectMaterialCache>,
 ) {
     for (entity, pending, appearance) in &pending {
-        let rgba = appearance.tint.to_srgba();
+        let (tint, tint_key) = quantized_object_tint(appearance.tint);
         let key = ObjectMaterialKey {
             material: pending.source.id(),
-            tint: [
-                rgba.red.to_bits(),
-                rgba.green.to_bits(),
-                rgba.blue.to_bits(),
-                rgba.alpha.to_bits(),
-            ],
+            tint: tint_key,
             unlit: appearance.unlit,
         };
         let replacement = if let Some(existing) = cache.0.get(&key) {
@@ -668,7 +658,7 @@ fn configure_pending_object_model_materials(
             let Some(mut material) = materials.get(&pending.source).cloned() else {
                 continue;
             };
-            material.base_color = appearance.tint;
+            material.base_color = tint;
             material.unlit = appearance.unlit;
             let handle = materials.add(material);
             cache.0.insert(key, handle.clone());
@@ -681,6 +671,29 @@ fn configure_pending_object_model_materials(
             .remove::<PendingObjectModelMaterial>()
             .remove::<WorldObjectAppearance>();
     }
+}
+
+const OBJECT_TINT_RGB_LEVELS: f32 = 31.0;
+
+fn quantized_object_tint(color: Color) -> (Color, [u8; 4]) {
+    let rgba = color.to_srgba();
+    let quantize_rgb = |value: f32| {
+        (value.clamp(0.0, 1.0) * OBJECT_TINT_RGB_LEVELS).round() as u8
+    };
+    let red = quantize_rgb(rgba.red);
+    let green = quantize_rgb(rgba.green);
+    let blue = quantize_rgb(rgba.blue);
+    let alpha = (rgba.alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
+
+    (
+        Color::srgba(
+            f32::from(red) / OBJECT_TINT_RGB_LEVELS,
+            f32::from(green) / OBJECT_TINT_RGB_LEVELS,
+            f32::from(blue) / OBJECT_TINT_RGB_LEVELS,
+            f32::from(alpha) / 255.0,
+        ),
+        [red, green, blue, alpha],
+    )
 }
 
 fn apply_shadow_flags(root: &mut EntityCommands<'_>, definition: &ObjectDefinition) {

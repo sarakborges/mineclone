@@ -1,3 +1,20 @@
+## 2026-09-24 — World-object tint cache deixa de fragmentar batching por float
+
+O cache de material dos world objects usava os bits exatos de quatro `f32` como parte da
+chave. Como grass tint é interpolado continuamente pelo BiomeField, isso podia produzir um
+StandardMaterial praticamente único por tufo e impedir batching mesmo com mesh compartilhado.
+
+- RGB de object tint agora é quantizado em 32 níveis por canal antes de materialização;
+- alpha continua em 8 bits;
+- a mesma cor quantizada é usada tanto na cache key quanto no StandardMaterial final;
+- Model e stackedSprites compartilham a mesma política;
+- a resolução máxima por canal muda em ~3,2%, pequena para foliage orgânico, mas converte
+  milhares de valores float quase-idênticos em um conjunto muito menor de materiais reutilizáveis;
+- mesh, transform, target e biome sampling permanecem intactos.
+
+Esse passo é deliberadamente anterior ao batching por chunk: primeiro garante que o
+renderer automático do Bevy tenha condições reais de agrupar entidades de mesmo mesh/material.
+
 ### CI follow-up 2 — appearance data mínima
 
 Após mover shadow flags para o próprio render entity, `WorldObjectAppearance` ainda mantinha
