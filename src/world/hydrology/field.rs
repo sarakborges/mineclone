@@ -70,7 +70,7 @@ impl HydrologyField {
             }
         }
 
-        let drainage_ocean_weight = self.ocean_weight;
+        let drainage_ocean_weight = if spawn_oceans { self.ocean_weight } else { 0.0 };
         let ocean_threshold = ocean_continentalness_threshold(drainage_ocean_weight);
         let mut drainage = DrainageNetwork::new(
             self.seed,
