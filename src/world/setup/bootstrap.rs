@@ -31,6 +31,7 @@ use crate::world::{
     hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::{surface_height, surface_height_from_sample},
+    deterministic::mix_hash_u64,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -39,6 +40,7 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+const RANDOM_SPAWN_BIOME_SALT: u64 = 0x8f3f_73b5_cf1c_9ade;
 
 struct BootstrapRegistries<'a> {
     dimensions: &'a DimensionRegistry,
@@ -83,13 +85,24 @@ impl BootstrapGenerationSettings {
         load_mode: WorldLoadMode,
         new_world_config: &NewWorldConfig,
         save: &InMemoryWorldSave,
+        dimension: &DimensionDefinition,
+        biomes: &BiomeRegistry,
+        seed: u64,
     ) -> Self {
         match load_mode {
-            WorldLoadMode::New => Self {
-                forced_spawn_biome: new_world_config.spawn_biome().map(str::to_owned),
-                biome_size_multiplier: new_world_config.biome_size_multiplier(),
-                world_generation: new_world_config.world_generation(),
-            },
+            WorldLoadMode::New => {
+                let world_generation = new_world_config.world_generation();
+                let forced_spawn_biome = new_world_config
+                    .spawn_biome()
+                    .map(str::to_owned)
+                    .or_else(|| Some(random_spawn_biome_id(dimension, biomes, seed).to_owned()));
+
+                Self {
+                    forced_spawn_biome,
+                    biome_size_multiplier: new_world_config.biome_size_multiplier(),
+                    world_generation,
+                }
+            }
             WorldLoadMode::Load => Self {
                 forced_spawn_biome: save.spawn_biome().map(str::to_owned),
                 biome_size_multiplier: save.biome_size_multiplier(),
@@ -341,6 +354,9 @@ pub(in crate::world) fn begin_world_loading(
         *persistence.load_mode,
         &persistence.new_world_config,
         &persistence.save,
+        dimension,
+        biomes,
+        config.seed.0,
     );
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         validate_forced_spawn_biome(dimension, biomes, biome_id);
@@ -454,6 +470,38 @@ fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSetting
         BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS.min(render_distance.chunks()),
         BOOTSTRAP_VERTICAL_RADIUS_CHUNKS.min(render_distance.vertical_chunks()),
     )
+}
+
+fn random_spawn_biome_id<'a>(
+    dimension: &'a DimensionDefinition,
+    biomes: &BiomeRegistry,
+    seed: u64,
+) -> &'a str {
+    let ocean_biome = dimension.hydrology.ocean_biome.as_deref();
+    let is_candidate = |entry: &&crate::content::dimension::DimensionBiome| {
+        entry.weight > f32::EPSILON
+            && entry.require_near.is_empty()
+            && ocean_biome != Some(entry.id.as_str())
+            && biomes
+                .get(&entry.id)
+                .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+    };
+
+    let candidate_count = dimension.biomes.iter().filter(is_candidate).count();
+    assert!(
+        candidate_count > 0,
+        "dimension {} must define at least one forceable non-ocean surface biome for random spawn",
+        dimension.id
+    );
+
+    let selected = (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) % candidate_count as u64) as usize;
+    dimension
+        .biomes
+        .iter()
+        .filter(is_candidate)
+        .nth(selected)
+        .map(|entry| entry.id.as_str())
+        .expect("random spawn biome index must resolve")
 }
 
 fn validate_forced_spawn_biome(
