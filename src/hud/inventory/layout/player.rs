@@ -4,7 +4,6 @@ use bevy::{
 };
 
 use crate::{
-    content::builtin_ids::BIOME_TINT_METADATA_KEY,
     hud::item_stack_count::spawn_item_stack_count,
     player::hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
     ui::{
@@ -359,8 +358,7 @@ fn spawn_slot(
         ))
         .with_children(|slot| {
             if let Some(item_id) = item {
-                let biome_override = stack.and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY));
-                spawn_inventory_item(slot, item_id, biome_override, items);
+                spawn_inventory_item(slot, item_id, items);
                 spawn_item_stack_count(slot, quantity);
             }
         });

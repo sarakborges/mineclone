@@ -76,10 +76,7 @@ pub(super) fn spawn_character_info_inventory(
         return;
     };
     let position = state.cursor_position.unwrap_or(Vec2::ZERO);
-    let biome_override = state.cursor.stack().and_then(|stack| {
-        stack.metadata().get(crate::content::builtin_ids::BIOME_TINT_METADATA_KEY)
-    });
-    spawn_cursor_icon(root, item_id, position, biome_override, items);
+    spawn_cursor_icon(root, item_id, position, items);
     spawn_cursor_stack_count(
         root,
         state
@@ -135,12 +132,7 @@ pub(super) fn spawn_inventory_root(
                 return;
             };
             let position = state.cursor_position.unwrap_or(Vec2::ZERO);
-            let biome_override = state.cursor.stack().and_then(|stack| {
-                stack
-                    .metadata()
-                    .get(crate::content::builtin_ids::BIOME_TINT_METADATA_KEY)
-            });
-            spawn_cursor_icon(root, item_id, position, biome_override, items);
+            spawn_cursor_icon(root, item_id, position, items);
             spawn_cursor_stack_count(
                 root,
                 state

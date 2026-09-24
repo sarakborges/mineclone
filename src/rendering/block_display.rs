@@ -8,12 +8,12 @@ pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] = [
     BlockFace::Right,
 ];
 
-const DISPLAY_LEFT: f32 = 0.09;
+const DISPLAY_LEFT: f32 = 0.10;
 const DISPLAY_CENTER_X: f32 = 0.50;
-const DISPLAY_TOP_Y: f32 = 0.24;
-const DISPLAY_HALF_WIDTH: f32 = 0.41;
-const DISPLAY_SLOPE: f32 = 0.17;
-const DISPLAY_SIDE_HEIGHT: f32 = 0.48;
+const DISPLAY_TOP_Y: f32 = 0.27;
+const DISPLAY_HALF_WIDTH: f32 = 0.40;
+const DISPLAY_SLOPE: f32 = 0.20;
+const DISPLAY_SIDE_HEIGHT: f32 = 0.50;
 
 #[derive(Clone, Copy)]
 struct BlockDisplayFaceGeometry {

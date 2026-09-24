@@ -7,7 +7,6 @@ use crate::{
         tool::ToolDefinition,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
-    hud::ui_image::load_smooth_image,
     localization::Language,
     tools::BrushMode,
     ui::typography,
@@ -61,7 +60,7 @@ pub(crate) fn spawn_tool_icon(
                 ..default()
             };
             icon.spawn((
-                ImageNode::new(load_smooth_image(asset_server, tool.icon.clone())),
+                ImageNode::new(asset_server.load(tool.icon.clone())),
                 full_size.clone(),
                 Pickable::IGNORE,
             ));
@@ -74,7 +73,7 @@ pub(crate) fn spawn_tool_icon(
                     BrushTintIcon,
                     ImageNode {
                         color: tint.unwrap_or(Color::WHITE),
-                        ..ImageNode::new(load_smooth_image(asset_server, tint_icon.clone()))
+                        ..ImageNode::new(asset_server.load(tint_icon.clone()))
                     },
                     full_size,
                     if tint.is_some() {

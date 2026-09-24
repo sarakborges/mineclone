@@ -17,7 +17,6 @@ use crate::{
         tool::{ToolDefinition, ToolRegistry},
         tool_id::intern_tool_id,
     },
-    hud::ui_image::load_smooth_image,
     localization::{Language, UiLocalization},
     ui::{scrollbar, selectable, surface, text_input, typography},
 };
@@ -377,7 +376,7 @@ fn spawn_category_button(
                 |category| category.icon.as_str(),
             );
             button.spawn((
-                ImageNode::new(load_smooth_image(items.asset_server, icon.to_owned())),
+                ImageNode::new(items.asset_server.load(icon.to_owned())),
                 Node {
                     width: px(CATEGORY_ICON_SIZE),
                     height: px(CATEGORY_ICON_SIZE),
@@ -470,7 +469,7 @@ fn spawn_creative_slot(
         ))
         .with_children(|slot| {
             if let Some(item_id) = item_id {
-                spawn_inventory_item(slot, item_id, None, items);
+                spawn_inventory_item(slot, item_id, items);
             }
         });
 }
@@ -527,5 +526,3 @@ fn creative_content_width() -> f32 {
         + CATEGORY_GAP
         + super::player::player_panel_content_width()
 }
-
-

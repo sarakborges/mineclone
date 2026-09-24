@@ -6,16 +6,15 @@ use crate::{
     content::{
         block::{BlockDefinition, DEFAULT_BLOCK_BREAK_TICKS},
         builtin_ids::DYED_PROPERTY_ID,
-        object::ObjectRegistry,
         layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
         tool_category::ToolCategoryRegistry,
     },
-    hud::{block_icon::BlockIconMaterial, ui_image::load_smooth_image},
+    hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
-        block_tint::{apply_secondary_property_tint, block_tint_at},
+        block_tint::apply_secondary_property_tint,
         block_visual_content::BlockVisualContent,
     },
     targeting::{
@@ -24,13 +23,12 @@ use crate::{
     },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
-    world_objects::{TargetedWorldObject, WorldObjectInstance},
 };
 
 use super::{HudSettings, TargetBlockPosition};
 
 const TARGET_SLOT_SIZE: f32 = 44.0;
-const TARGET_ICON_SIZE: f32 = 38.0;
+const TARGET_ICON_SIZE: f32 = 34.0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 const TARGET_CORNER_MARGIN: f32 = 18.0;
 
@@ -67,11 +65,7 @@ type TargetHudRootLayout<'w, 's> = Single<
     'w,
     's,
     (&'static mut Node, &'static mut AppliedTargetHudPosition),
-    (
-        With<TargetHudRoot>,
-        Without<TargetHudRow>,
-        Without<TargetBlockText>,
-    ),
+    (With<TargetHudRoot>, Without<TargetHudRow>),
 >;
 
 #[derive(Component)]
@@ -79,9 +73,6 @@ struct TargetBlockText;
 
 #[derive(Component)]
 struct TargetBlockModel;
-
-#[derive(Component)]
-struct TargetObjectIcon;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct TargetHudSnapshot {
@@ -102,10 +93,8 @@ struct TargetHudIconSnapshot {
 }
 
 #[derive(SystemParam)]
-struct TargetHudState<'w, 's> {
+struct TargetHudState<'w> {
     targeted: Res<'w, TargetedBlock>,
-    targeted_object: Res<'w, TargetedWorldObject>,
-    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -117,54 +106,20 @@ struct TargetHudState<'w, 's> {
 struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
     layers: Res<'w, LayerRegistry>,
-    objects: Res<'w, ObjectRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     tool_categories: Res<'w, ToolCategoryRegistry>,
 }
 
-type TargetBlockIconQuery<'w, 's> = Single<
-    'w,
-    's,
-    (
-        &'static mut BlockModel,
-        &'static MaterialNode<BlockIconMaterial>,
-        &'static mut Visibility,
-    ),
-    (
-        With<TargetBlockModel>,
-        Without<TargetObjectIcon>,
-        Without<TargetHudRoot>,
-    ),
->;
-
-type TargetObjectIconQuery<'w, 's> = Single<
-    'w,
-    's,
-    (&'static mut ImageNode, &'static mut Visibility),
-    (
-        With<TargetObjectIcon>,
-        Without<TargetBlockModel>,
-        Without<TargetHudRoot>,
-    ),
->;
-
-type TargetHudRootVisibility<'w, 's> = Single<
-    'w,
-    's,
-    &'static mut Visibility,
-    (
-        With<TargetHudRoot>,
-        Without<TargetBlockModel>,
-        Without<TargetObjectIcon>,
-    ),
->;
-
 #[derive(SystemParam)]
 struct TargetHudView<'w, 's> {
-    root_visibility: TargetHudRootVisibility<'w, 's>,
+    root_visibility: Single<'w, 's, &'static mut Visibility, With<TargetHudRoot>>,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
-    icon: TargetBlockIconQuery<'w, 's>,
-    object_icon: TargetObjectIconQuery<'w, 's>,
+    icon: Single<
+        'w,
+        's,
+        (&'static mut BlockModel, &'static MaterialNode<BlockIconMaterial>),
+        With<TargetBlockModel>,
+    >,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
 
@@ -219,18 +174,6 @@ fn spawn_target_hud(
                             height: px(TARGET_ICON_SIZE),
                             ..default()
                         },
-                        Visibility::Inherited,
-                        Pickable::IGNORE,
-                    ));
-                    slot.spawn((
-                        TargetObjectIcon,
-                        ImageNode::default(),
-                        Node {
-                            width: px(TARGET_ICON_SIZE),
-                            height: px(TARGET_ICON_SIZE),
-                            ..default()
-                        },
-                        Visibility::Hidden,
                         Pickable::IGNORE,
                     ));
                 });
@@ -239,40 +182,16 @@ fn spawn_target_hud(
                     typography::hud(""),
                     typography::tooltip_shadow(),
                     TargetBlockText,
-                    target_hud_text_node(position),
                     Pickable::IGNORE,
                 ));
             });
         });
 }
 
-type TargetHudRowLayout<'w, 's> = Single<
-    'w,
-    's,
-    &'static mut Node,
-    (
-        With<TargetHudRow>,
-        Without<TargetHudRoot>,
-        Without<TargetBlockText>,
-    ),
->;
-
-type TargetHudTextLayout<'w, 's> = Single<
-    'w,
-    's,
-    &'static mut Node,
-    (
-        With<TargetBlockText>,
-        Without<TargetHudRoot>,
-        Without<TargetHudRow>,
-    ),
->;
-
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
     root: TargetHudRootLayout,
-    mut row: TargetHudRowLayout,
-    mut text: TargetHudTextLayout,
+    mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
 ) {
     let position = settings.target_block_position();
     let (mut root_node, mut applied_position) = root.into_inner();
@@ -282,7 +201,6 @@ fn sync_target_hud_layout(
 
     *root_node = target_hud_root_node(position);
     **row = target_hud_row_node(position);
-    **text = target_hud_text_node(position);
     applied_position.0 = position;
 }
 
@@ -315,36 +233,9 @@ fn target_hud_row_node(position: TargetBlockPosition) -> Node {
         } else {
             Val::Auto
         },
-        width: if position == TargetBlockPosition::Center {
-            px(TARGET_SLOT_SIZE)
-        } else {
-            Val::Auto
-        },
-        height: if position == TargetBlockPosition::Center {
-            px(TARGET_SLOT_SIZE)
-        } else {
-            Val::Auto
-        },
         align_items: AlignItems::Center,
-        column_gap: if position == TargetBlockPosition::Center {
-            Val::ZERO
-        } else {
-            px(10)
-        },
+        column_gap: px(10),
         ..default()
-    }
-}
-
-fn target_hud_text_node(position: TargetBlockPosition) -> Node {
-    if position == TargetBlockPosition::Center {
-        Node {
-            position_type: PositionType::Absolute,
-            left: px(TARGET_SLOT_SIZE + 10.0),
-            top: px(0),
-            ..default()
-        }
-    } else {
-        Node::default()
     }
 }
 
@@ -359,12 +250,9 @@ fn update_target_hud(
         root_visibility,
         target_text,
         icon,
-        object_icon,
         mut icon_materials,
     } = view;
     let mut root_visibility = root_visibility.into_inner();
-    let (mut model, material_handle, mut block_icon_visibility) = icon.into_inner();
-    let (mut object_image, mut object_icon_visibility) = object_icon.into_inner();
 
     if state.settings.target_block_position() == TargetBlockPosition::Hidden {
         *cached_icon = None;
@@ -372,58 +260,6 @@ fn update_target_hud(
             *root_visibility = Visibility::Hidden;
         }
         return;
-    }
-
-    if let Some(entity) = state.targeted_object.0
-        && let Ok(instance) = state.object_instances.get(entity)
-        && let Some(definition) = content.objects.get(instance.object_id())
-    {
-        *cached = None;
-        *cached_icon = None;
-        if *root_visibility != Visibility::Visible {
-            *root_visibility = Visibility::Visible;
-        }
-        if *block_icon_visibility != Visibility::Hidden {
-            *block_icon_visibility = Visibility::Hidden;
-        }
-        if *object_icon_visibility != Visibility::Inherited {
-            *object_icon_visibility = Visibility::Inherited;
-        }
-        model.set_block_id(None);
-
-        let position = instance.support();
-        let horizontal = Vec2::new(position.x as f32 + 0.5, position.z as f32 + 0.5);
-        let tint = block_tint_at(
-            definition.tint,
-            horizontal,
-            &content.visual.biome_field,
-            &content.visual.biomes,
-        );
-        *object_image = ImageNode::new(
-            load_smooth_image(&content.visual.asset_server, definition.icon.clone()),
-        )
-        .with_color(tint);
-
-        let language = state.language.get();
-        let coordinates = state
-            .localization
-            .text(language, "hud.coordinates")
-            .replace("{x}", &position.x.to_string())
-            .replace("{z}", &position.z.to_string())
-            .replace("{y}", &position.y.to_string());
-        let next_text = format!("{}\n{coordinates}", definition.name.text(language));
-        let mut target_text = target_text.into_inner();
-        if target_text.0 != next_text {
-            target_text.0 = next_text;
-        }
-        return;
-    }
-
-    if *object_icon_visibility != Visibility::Hidden {
-        *object_icon_visibility = Visibility::Hidden;
-    }
-    if *block_icon_visibility != Visibility::Inherited {
-        *block_icon_visibility = Visibility::Inherited;
     }
 
     let Some(hit) = state.targeted.0 else {
@@ -516,6 +352,7 @@ fn update_target_hud(
         return;
     }
 
+    let (mut model, material_handle) = icon.into_inner();
     let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
         return;
     };
@@ -535,7 +372,7 @@ fn update_target_hud(
 fn target_hud_text(
     snapshot: &TargetHudSnapshot,
     block: Option<&BlockDefinition>,
-    state: &TargetHudState<'_, '_>,
+    state: &TargetHudState<'_>,
     content: &TargetHudContent<'_>,
 ) -> String {
     let language = snapshot.language;

@@ -1,11 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    hud::{item_stack_count::spawn_item_stack_count, ui_image::load_smooth_image},
-    rendering::{
-        block_model::BlockModel,
-        block_tint::{block_tint_at, block_tint_at_with_override},
-    },
+    hud::item_stack_count::spawn_item_stack_count,
+    rendering::{block_model::BlockModel, block_tint::block_tint_at},
     ui::{surface, typography},
 };
 
@@ -98,13 +95,12 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     root: &mut ChildSpawnerCommands,
     item_id: &'static str,
     position: Vec2,
-    biome_override: Option<&str>,
     items: &mut InventoryItemView<'_>,
 ) {
     if let Some(item) = items.items.get(item_id) {
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(load_smooth_image(items.asset_server, item.icon.clone())),
+            ImageNode::new(items.asset_server.load(item.icon.clone())),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -119,16 +115,9 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     }
 
     if let Some(object) = items.objects.get(item_id) {
-        let tint = block_tint_at_with_override(
-            object.tint,
-            items.player_position,
-            biome_override,
-            items.biome_field,
-            items.biomes,
-        );
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(load_smooth_image(items.asset_server, object.icon.clone())).with_color(tint),
+            ImageNode::new(items.asset_server.load(object.icon.clone())),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -280,12 +269,11 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
 pub(in crate::hud::inventory) fn spawn_inventory_item(
     slot: &mut ChildSpawnerCommands,
     item_id: &'static str,
-    biome_override: Option<&str>,
     items: &mut InventoryItemView<'_>,
 ) {
     if let Some(item) = items.items.get(item_id) {
         slot.spawn((
-            ImageNode::new(load_smooth_image(items.asset_server, item.icon.clone())),
+            ImageNode::new(items.asset_server.load(item.icon.clone())),
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),
@@ -297,15 +285,8 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
     }
 
     if let Some(object) = items.objects.get(item_id) {
-        let tint = block_tint_at_with_override(
-            object.tint,
-            items.player_position,
-            biome_override,
-            items.biome_field,
-            items.biomes,
-        );
         slot.spawn((
-            ImageNode::new(load_smooth_image(items.asset_server, object.icon.clone())).with_color(tint),
+            ImageNode::new(items.asset_server.load(object.icon.clone())),
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),

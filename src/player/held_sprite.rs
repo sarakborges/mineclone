@@ -7,24 +7,18 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
-        builtin_ids::{BIOME_TINT_METADATA_KEY, DYED_PROPERTY_ID},
+        builtin_ids::DYED_PROPERTY_ID,
         item::ItemRegistry,
         object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
-    hud::ui_image::load_smooth_image,
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    rendering::block_tint::block_tint_at_with_override,
+    player::hotbar::PlayerHotbar,
     tools::BrushMode,
-    world::biome_field::BiomeField,
 };
 
 const HELD_SPRITE_SIZE: f32 = 0.52;
-const HELD_SPRITE_THICKNESS: f32 = 0.028;
-const HELD_SPRITE_YAW: f32 = 0.10;
 const HELD_TOOL_DISPLAY_ANGLE: f32 = 0.30;
 const HELD_TINT_DEPTH: f32 = 0.004;
 
@@ -36,7 +30,6 @@ enum HeldSpriteKind {
 
 struct HeldSpriteVisual<'a> {
     icon: &'a str,
-    base_color: Color,
     tint_icon: Option<&'a str>,
     tint: Option<Color>,
     kind: HeldSpriteKind,
@@ -55,48 +48,31 @@ struct HeldSpriteBase;
 struct HeldSpriteTint;
 
 #[derive(SystemParam)]
-pub(crate) struct HeldSpriteContent<'w, 's> {
+pub(crate) struct HeldSpriteContent<'w> {
     hotbar: Res<'w, PlayerHotbar>,
     items: Res<'w, ItemRegistry>,
     objects: Res<'w, ObjectRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
-    player: Single<'w, 's, Ref<'static, GlobalTransform>, With<GameplayCamera>>,
     tools: Res<'w, ToolRegistry>,
     brush_mode: Res<'w, BrushMode>,
     properties: Res<'w, SecondaryPropertyRegistry>,
     asset_server: Res<'w, AssetServer>,
 }
 
-impl HeldSpriteContent<'_, '_> {
+impl HeldSpriteContent<'_> {
     fn selected_visual(&self) -> Option<HeldSpriteVisual<'_>> {
         let item_id = self.hotbar.item_at(self.hotbar.selected_slot())?;
 
         if let Some(item) = self.items.get(item_id) {
             return Some(HeldSpriteVisual {
                 icon: &item.icon,
-                base_color: Color::WHITE,
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,
             });
         }
         if let Some(object) = self.objects.get(item_id) {
-            let biome_override = self
-                .hotbar
-                .stack_at(self.hotbar.selected_slot())
-                .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY));
-            let player_position = self.player.translation();
-            let position = Vec2::new(player_position.x, player_position.z);
             return Some(HeldSpriteVisual {
                 icon: &object.icon,
-                base_color: block_tint_at_with_override(
-                    object.tint,
-                    position,
-                    biome_override,
-                    &self.biome_field,
-                    &self.biomes,
-                ),
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,
@@ -119,7 +95,6 @@ impl HeldSpriteContent<'_, '_> {
 
         Some(HeldSpriteVisual {
             icon: &tool.icon,
-            base_color: Color::WHITE,
             tint_icon: tool.tint_icon.as_deref(),
             tint,
             kind: HeldSpriteKind::Tool,
@@ -130,9 +105,6 @@ impl HeldSpriteContent<'_, '_> {
         self.hotbar.is_changed()
             || self.brush_mode.is_changed()
             || self.properties.is_changed()
-            || self.biomes.is_changed()
-            || self.biome_field.is_changed()
-            || self.player.is_changed()
     }
 }
 
@@ -177,22 +149,16 @@ pub(crate) fn setup_held_sprite_mesh(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    commands.insert_resource(HeldSpriteMesh(meshes.add(Cuboid::new(
-        HELD_SPRITE_SIZE,
-        HELD_SPRITE_SIZE,
-        HELD_SPRITE_THICKNESS,
-    ))));
+    commands.insert_resource(HeldSpriteMesh(
+        meshes.add(Rectangle::new(HELD_SPRITE_SIZE, HELD_SPRITE_SIZE)),
+    ));
 }
 
 fn plane_transform(kind: HeldSpriteKind, depth: f32) -> Transform {
     match kind {
-        HeldSpriteKind::Item => Transform::from_translation(Vec3::Z * depth)
-            .with_rotation(Quat::from_rotation_y(HELD_SPRITE_YAW)),
+        HeldSpriteKind::Item => Transform::from_translation(Vec3::Z * depth),
         HeldSpriteKind::Tool => Transform::from_translation(Vec3::Z * depth)
-            .with_rotation(
-                Quat::from_rotation_y(HELD_SPRITE_YAW)
-                    * Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE),
-            ),
+            .with_rotation(Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE)),
     }
 }
 
@@ -201,10 +167,8 @@ fn base_material(
     asset_server: &AssetServer,
 ) -> StandardMaterial {
     StandardMaterial {
-        base_color: visual.map_or(Color::WHITE, |visual| visual.base_color),
-        base_color_texture: visual
-            .map(|visual| load_smooth_image(asset_server, visual.icon.to_owned())),
-        alpha_mode: AlphaMode::Blend,
+        base_color_texture: visual.map(|visual| asset_server.load(visual.icon.to_owned())),
+        alpha_mode: AlphaMode::Mask(0.5),
         unlit: true,
         double_sided: true,
         ..default()
@@ -219,7 +183,7 @@ fn tint_material(
         base_color: visual.and_then(|visual| visual.tint).unwrap_or(Color::WHITE),
         base_color_texture: visual
             .and_then(|visual| visual.tint_icon)
-            .map(|path| load_smooth_image(asset_server, path.to_owned())),
+            .map(|path| asset_server.load(path.to_owned())),
         alpha_mode: AlphaMode::Blend,
         unlit: true,
         double_sided: true,
@@ -231,7 +195,7 @@ pub(crate) fn spawn_held_sprite(
     parent: &mut ChildSpawnerCommands,
     root_transform: Transform,
     render_layers: RenderLayers,
-    content: &HeldSpriteContent<'_, '_>,
+    content: &HeldSpriteContent<'_>,
     assets: &mut HeldSpriteAssets<'_>,
 ) -> [Entity; 2] {
     let visual = content.selected_visual();
@@ -329,9 +293,9 @@ pub(crate) fn sync_held_sprites(
             *transform = base_transform;
         }
         if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
-            material.base_color = visual.base_color;
+            material.base_color = Color::WHITE;
             material.base_color_texture =
-                Some(load_smooth_image(&content.asset_server, visual.icon.to_owned()));
+                Some(content.asset_server.load(visual.icon.to_owned()));
         }
     }
 
@@ -352,9 +316,7 @@ pub(crate) fn sync_held_sprites(
             material.base_color = visual.tint.unwrap_or(Color::WHITE);
             material.base_color_texture = visual
                 .tint_icon
-                .map(|path| load_smooth_image(&content.asset_server, path.to_owned()));
+                .map(|path| content.asset_server.load(path.to_owned()));
         }
     }
 }
-
-

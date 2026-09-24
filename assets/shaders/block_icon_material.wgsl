@@ -47,79 +47,6 @@ fn inside_face(uv: vec2<f32>) -> bool {
     return uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
 }
 
-
-fn sample_top_texture(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(top_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(top_texture, top_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(top_texture, top_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(top_texture, top_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(top_texture, top_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-fn sample_front_texture(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(front_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(front_texture, front_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(front_texture, front_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(front_texture, front_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(front_texture, front_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-fn sample_right_texture(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(right_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(right_texture, right_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(right_texture, right_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(right_texture, right_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(right_texture, right_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-fn sample_top_overlay(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(top_overlay_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(top_overlay_texture, top_overlay_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(top_overlay_texture, top_overlay_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(top_overlay_texture, top_overlay_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(top_overlay_texture, top_overlay_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-fn sample_front_overlay(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(front_overlay_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(front_overlay_texture, front_overlay_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(front_overlay_texture, front_overlay_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(front_overlay_texture, front_overlay_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(front_overlay_texture, front_overlay_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-fn sample_right_overlay(uv: vec2<f32>) -> vec4<f32> {
-    let size = vec2<f32>(textureDimensions(right_overlay_texture, 0));
-    let texel = uv * size - vec2<f32>(0.5);
-    let base = floor(texel);
-    let f = fract(texel);
-    let a = textureSampleLevel(right_overlay_texture, right_overlay_sampler, (base + vec2<f32>(0.5, 0.5)) / size, 0.0);
-    let b = textureSampleLevel(right_overlay_texture, right_overlay_sampler, (base + vec2<f32>(1.5, 0.5)) / size, 0.0);
-    let c = textureSampleLevel(right_overlay_texture, right_overlay_sampler, (base + vec2<f32>(0.5, 1.5)) / size, 0.0);
-    let d = textureSampleLevel(right_overlay_texture, right_overlay_sampler, (base + vec2<f32>(1.5, 1.5)) / size, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
 fn apply_layer_tint(texel: vec4<f32>, enabled: f32) -> vec4<f32> {
     if enabled <= 0.5 {
         return texel;
@@ -165,13 +92,13 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let top_uv = parallelogram_uv(point, top_origin_axis_u, top_axis_v);
     if inside_face(top_uv) {
         let base = apply_layer_tint(
-            sample_top_texture(top_uv),
+            textureSampleLevel(top_texture, top_sampler, top_uv, 0.0),
             base_tint_flags.x,
         );
         var colored = base;
         if overlay_present_flags.x > 0.5 {
             let overlay = apply_layer_tint(
-                sample_top_overlay(top_uv),
+                textureSampleLevel(top_overlay_texture, top_overlay_sampler, top_uv, 0.0),
                 overlay_tint_flags.x,
             );
             colored = compose_layers(base, overlay, overlay_present_flags.x);
@@ -182,13 +109,13 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let front_uv = parallelogram_uv(point, front_origin_axis_u, front_axis_v);
     if inside_face(front_uv) {
         let base = apply_layer_tint(
-            sample_front_texture(front_uv),
+            textureSampleLevel(front_texture, front_sampler, front_uv, 0.0),
             base_tint_flags.y,
         );
         var colored = base;
         if overlay_present_flags.y > 0.5 {
             let overlay = apply_layer_tint(
-                sample_front_overlay(front_uv),
+                textureSampleLevel(front_overlay_texture, front_overlay_sampler, front_uv, 0.0),
                 overlay_tint_flags.y,
             );
             colored = compose_layers(base, overlay, overlay_present_flags.y);
@@ -199,13 +126,13 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let right_uv = parallelogram_uv(point, right_origin_axis_u, right_axis_v);
     if inside_face(right_uv) {
         let base = apply_layer_tint(
-            sample_right_texture(right_uv),
+            textureSampleLevel(right_texture, right_sampler, right_uv, 0.0),
             base_tint_flags.z,
         );
         var colored = base;
         if overlay_present_flags.z > 0.5 {
             let overlay = apply_layer_tint(
-                sample_right_overlay(right_uv),
+                textureSampleLevel(right_overlay_texture, right_overlay_sampler, right_uv, 0.0),
                 overlay_tint_flags.z,
             );
             colored = compose_layers(base, overlay, overlay_present_flags.z);

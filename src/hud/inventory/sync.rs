@@ -347,10 +347,7 @@ pub(super) fn sync_inventory_cursor_icon(
     let mut items = content.view(player_position, &mut icon_materials);
 
     commands.entity(root_entity).with_children(|root| {
-        let biome_override = context.cursor.stack().and_then(|stack| {
-            stack.metadata().get(crate::content::builtin_ids::BIOME_TINT_METADATA_KEY)
-        });
-        spawn_cursor_icon(root, item_id, position, biome_override, &mut items);
+        spawn_cursor_icon(root, item_id, position, &mut items);
         spawn_cursor_stack_count(
             root,
             context
@@ -398,10 +395,7 @@ pub(super) fn sync_inventory_slot_contents(
         };
 
         commands.entity(entity).with_children(|slot_node| {
-            let biome_override = stack.and_then(|stack| {
-                stack.metadata().get(crate::content::builtin_ids::BIOME_TINT_METADATA_KEY)
-            });
-            spawn_inventory_item(slot_node, item_id, biome_override, &mut items);
+            spawn_inventory_item(slot_node, item_id, &mut items);
             crate::hud::item_stack_count::spawn_item_stack_count(slot_node, quantity);
         });
     }
