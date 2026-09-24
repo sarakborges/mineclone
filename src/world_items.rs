@@ -15,6 +15,7 @@ use crate::{
         tool::ToolRegistry,
     },
     gameplay::availability::world_interaction_available,
+    hud::ui_image::load_smooth_image,
     player::{
         PLAYER_EYE_HEIGHT,
         camera::{GameplayCamera, GameplayWorldCamera},
@@ -40,6 +41,7 @@ use crate::{
 
 const ITEM_HALF_EXTENT: f32 = 0.18;
 const ITEM_SPRITE_SIZE: f32 = 0.46;
+const ITEM_SPRITE_THICKNESS: f32 = 0.024;
 const BLOCK_ITEM_SCALE: f32 = 0.36;
 const DROP_FORWARD_SPEED: f32 = 3.8;
 const DROP_UP_SPEED: f32 = 1.25;
@@ -177,7 +179,11 @@ fn setup_world_item_visual_assets(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     commands.insert_resource(WorldItemVisualAssets {
-        sprite_mesh: meshes.add(Rectangle::new(ITEM_SPRITE_SIZE, ITEM_SPRITE_SIZE)),
+        sprite_mesh: meshes.add(Cuboid::new(
+            ITEM_SPRITE_SIZE,
+            ITEM_SPRITE_SIZE,
+            ITEM_SPRITE_THICKNESS,
+        )),
         fallback_mesh: meshes.add(Cuboid::new(
             ITEM_HALF_EXTENT * 2.0,
             ITEM_HALF_EXTENT * 2.0,
@@ -360,8 +366,11 @@ fn spawn_world_item_visual(
 
     if let Some(icon) = icon {
         let material = assets.standard.add(StandardMaterial {
-            base_color_texture: Some(content.block_content.asset_server.load(icon.to_owned())),
-            alpha_mode: AlphaMode::Mask(0.5),
+            base_color_texture: Some(load_smooth_image(
+                &content.block_content.asset_server,
+                icon.to_owned(),
+            )),
+            alpha_mode: AlphaMode::Blend,
             perceptual_roughness: 1.0,
             unlit: true,
             double_sided: true,
@@ -450,7 +459,7 @@ fn advance_item_axis(
 
 fn pickup_proximity_items(
     time: Res<Time>,
-    player: Single<&GlobalTransform, With<GameplayCamera>>,
+    player: Single<&GlobalTransform, With<GameplayWorldCamera>>,
     mut hotbar: ResMut<PlayerHotbar>,
     mut commands: Commands,
     mut items: Query<(Entity, &Transform, &mut WorldItem, &mut ProximityPickup)>,

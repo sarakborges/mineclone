@@ -67,7 +67,11 @@ type TargetHudRootLayout<'w, 's> = Single<
     'w,
     's,
     (&'static mut Node, &'static mut AppliedTargetHudPosition),
-    (With<TargetHudRoot>, Without<TargetHudRow>),
+    (
+        With<TargetHudRoot>,
+        Without<TargetHudRow>,
+        Without<TargetBlockText>,
+    ),
 >;
 
 #[derive(Component)]
@@ -235,6 +239,7 @@ fn spawn_target_hud(
                     typography::hud(""),
                     typography::tooltip_shadow(),
                     TargetBlockText,
+                    target_hud_text_node(position),
                     Pickable::IGNORE,
                 ));
             });
@@ -244,7 +249,14 @@ fn spawn_target_hud(
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
     root: TargetHudRootLayout,
-    mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
+    mut row: Single<
+        &mut Node,
+        (With<TargetHudRow>, Without<TargetHudRoot>, Without<TargetBlockText>),
+    >,
+    mut text: Single<
+        &mut Node,
+        (With<TargetBlockText>, Without<TargetHudRoot>, Without<TargetHudRow>),
+    >,
 ) {
     let position = settings.target_block_position();
     let (mut root_node, mut applied_position) = root.into_inner();
@@ -254,6 +266,7 @@ fn sync_target_hud_layout(
 
     *root_node = target_hud_root_node(position);
     **row = target_hud_row_node(position);
+    **text = target_hud_text_node(position);
     applied_position.0 = position;
 }
 
@@ -286,9 +299,36 @@ fn target_hud_row_node(position: TargetBlockPosition) -> Node {
         } else {
             Val::Auto
         },
+        width: if position == TargetBlockPosition::Center {
+            px(TARGET_SLOT_SIZE)
+        } else {
+            Val::Auto
+        },
+        height: if position == TargetBlockPosition::Center {
+            px(TARGET_SLOT_SIZE)
+        } else {
+            Val::Auto
+        },
         align_items: AlignItems::Center,
-        column_gap: px(10),
+        column_gap: if position == TargetBlockPosition::Center {
+            Val::ZERO
+        } else {
+            px(10)
+        },
         ..default()
+    }
+}
+
+fn target_hud_text_node(position: TargetBlockPosition) -> Node {
+    if position == TargetBlockPosition::Center {
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(TARGET_SLOT_SIZE + 10.0),
+            top: px(0),
+            ..default()
+        }
+    } else {
+        Node::default()
     }
 }
 

@@ -149,21 +149,22 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let visible_radius = i64::from(hide_radius.max(1));
     let visible_radius_squared = visible_radius * visible_radius;
 
-    if before <= recovery_bytes {
-        recovery.clear();
-        recovery.extend(
-            runtime
-                .streaming
-                .mesh_pressure_evicted_coords()
-                .filter(|coord| {
-                    if !runtime.streaming.keeps_loaded(*coord) || renderer.pool.contains(*coord) {
-                        return false;
-                    }
-                    let dx = i64::from(coord.x) - i64::from(center.x);
-                    let dz = i64::from(coord.z) - i64::from(center.z);
-                    dx * dx + dz * dz <= recovery_radius_squared
-                }),
-        );
+    recovery.clear();
+    recovery.extend(
+        runtime
+            .streaming
+            .mesh_pressure_evicted_coords()
+            .filter(|coord| {
+                if !runtime.streaming.keeps_loaded(*coord) || renderer.pool.contains(*coord) {
+                    return false;
+                }
+                let dx = i64::from(coord.x) - i64::from(center.x);
+                let dz = i64::from(coord.z) - i64::from(center.z);
+                dx * dx + dz * dz <= recovery_radius_squared
+            }),
+    );
+
+    if !recovery.is_empty() {
         recovery.sort_unstable_by_key(|coord| {
             let delta = *coord - center;
             let alignment = i64::from(delta.x) * i64::from(movement_direction.x)
@@ -177,6 +178,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             )
         });
 
+        let force_visible_recovery = before > recovery_bytes;
         let mut planned_bytes = before;
         let mut recovered = 0_usize;
         for coord in recovery.iter().copied() {
@@ -187,7 +189,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
                 .streaming
                 .mesh_pressure_evicted_bytes(coord)
                 .unwrap_or_default();
-            if planned_bytes.saturating_add(estimated_bytes) > target_bytes {
+            if !force_visible_recovery
+                && planned_bytes.saturating_add(estimated_bytes) > target_bytes
+            {
                 continue;
             }
             if runtime.streaming.recover_mesh_after_pressure(coord) {
@@ -195,6 +199,10 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
                 recovered += 1;
             }
         }
+    }
+
+    if before <= recovery_bytes {
+
     }
 
     if before <= high_bytes {
@@ -220,10 +228,15 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             dx * i64::from(movement_direction.x)
                 + dz * i64::from(movement_direction.y);
 
+        let visible = horizontal_distance_squared <= visible_radius_squared;
+        if visible {
+            return None;
+        }
+
         Some(MeshResidencyCandidate {
             coord,
             bytes,
-            visible: horizontal_distance_squared <= visible_radius_squared,
+            visible,
             critical: dx.abs() <= 1 && dy.abs() <= 1 && dz.abs() <= 1,
             horizontal_distance_squared,
             total_distance_squared,

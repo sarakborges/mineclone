@@ -11,7 +11,7 @@
     "texture": "textures/items/stick.png",
     "slices": 4,
     "baseOffset": 0.001,
-    "sliceSpacing": 0.001,
+    "sliceSpacing": 0.00025,
     "size": [
       0.68,
       0.68
@@ -25,12 +25,12 @@
   "target": {
     "size": [
       0.68,
-      0.05,
+      0.12,
       0.68
     ],
     "centerOffset": [
       0,
-      0.025,
+      0.06,
       0
     ]
   },

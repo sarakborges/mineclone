@@ -380,13 +380,15 @@ fn object_placement_attachment(
     definition: &crate::content::object::ObjectDefinition,
     world: &crate::voxel::world::VoxelWorld,
 ) -> Option<(IVec3, ObjectPlacementFace)> {
-    let support_cell = world.cell_at(hit.voxel)?;
-    if is_hollow_log_id(support_cell.block_id)
-        && support_cell.orientation == crate::content::block_orientation::BlockOrientation::Y
-        && definition.supports_placement_face(ObjectPlacementFace::Top)
-        && world.object_at(hit.voxel).is_none()
-    {
-        return Some((hit.voxel, ObjectPlacementFace::Top));
+    if definition.supports_placement_face(ObjectPlacementFace::Top) {
+        if hollow_log_accepts_object(hit.voxel, definition, world) {
+            return Some((hit.voxel, ObjectPlacementFace::Top));
+        }
+
+        let adjacent = hit.voxel + hit.normal;
+        if adjacent.y >= 0 && hollow_log_accepts_object(adjacent, definition, world) {
+            return Some((adjacent, ObjectPlacementFace::Top));
+        }
     }
 
     let face = ObjectPlacementFace::from_normal(hit.normal)?;
@@ -401,4 +403,31 @@ fn object_placement_attachment(
         && world.cell_at(object_space).is_none()
         && world.object_at(hit.voxel).is_none())
     .then_some((hit.voxel, face))
+}
+
+fn hollow_log_accepts_object(
+    voxel: IVec3,
+    definition: &crate::content::object::ObjectDefinition,
+    world: &crate::voxel::world::VoxelWorld,
+) -> bool {
+    let Some(cell) = world.cell_at(voxel) else {
+        return false;
+    };
+    if !is_hollow_log_id(cell.block_id)
+        || world.object_at(voxel).is_some()
+        || !world.is_loaded_at(voxel)
+    {
+        return false;
+    }
+
+    let cavity_diameter = 1.0 - crate::voxel::microblock::HOLLOW_LOG_WALL_THICKNESS * 2.0;
+    let width = definition.target.size[0];
+    let depth = definition.target.size[2];
+    match cell.orientation {
+        crate::content::block_orientation::BlockOrientation::X => depth <= cavity_diameter,
+        crate::content::block_orientation::BlockOrientation::Y => {
+            width <= cavity_diameter && depth <= cavity_diameter
+        }
+        crate::content::block_orientation::BlockOrientation::Z => width <= cavity_diameter,
+    }
 }

@@ -16,6 +16,7 @@ use crate::{
         biome::BiomeRegistry,
         block::BlockRegistry,
         block_id::intern_block_id,
+        block_orientation::BlockOrientation,
         item::ItemRegistry,
         item_id::intern_item_id,
         layer::LayerRegistry,
@@ -362,12 +363,11 @@ fn spawn_world_object(
     assets: &mut WorldObjectSceneAssets<'_>,
 ) -> Entity {
     let support_cell = content.world.cell_at(support);
-    let inside_vertical_hollow = support_cell.is_some_and(|cell| {
-        is_hollow_log_id(cell.block_id)
-            && cell.orientation == crate::content::block_orientation::BlockOrientation::Y
-            && object.face == crate::content::object::ObjectPlacementFace::Top
-    });
-    let base_position = if inside_vertical_hollow {
+    let hollow_orientation = support_cell
+        .filter(|cell| is_hollow_log_id(cell.block_id))
+        .filter(|_| object.face == crate::content::object::ObjectPlacementFace::Top)
+        .map(|cell| cell.orientation);
+    let base_position = if hollow_orientation.is_some() {
         support.as_vec3()
             + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
     } else {
@@ -375,8 +375,8 @@ fn spawn_world_object(
             + Vec3::splat(0.5)
             + object.face.normal().as_vec3() * 0.5
     };
-    let position = base_position
-        + object_position_jitter(definition, support, inside_vertical_hollow);
+    let position =
+        base_position + object_position_jitter(definition, support, hollow_orientation);
     let tint = block_tint_at(
         definition.tint,
         Vec2::new(position.x, position.z),
@@ -491,18 +491,23 @@ fn spawn_world_object(
 fn object_position_jitter(
     definition: &ObjectDefinition,
     support: IVec3,
-    inside_vertical_hollow: bool,
+    hollow_orientation: Option<BlockOrientation>,
 ) -> Vec3 {
     let seed = mix_u32_components(
         hash_string(&definition.id),
         [support.x as u32, support.y as u32, support.z as u32],
     );
     let mut maximum = Vec2::from_array(definition.position_jitter);
-    if inside_vertical_hollow {
+    if let Some(orientation) = hollow_orientation {
         let half = Vec2::new(definition.target.size[0], definition.target.size[2]) * 0.5;
         let cavity_half = 0.5 - HOLLOW_LOG_WALL_THICKNESS;
-        let room = Vec2::splat(cavity_half) - half;
-        maximum = maximum.min(room.max(Vec2::ZERO));
+        let full_half = Vec2::splat(0.5);
+        let available_half = match orientation {
+            BlockOrientation::X => Vec2::new(full_half.x, cavity_half),
+            BlockOrientation::Y => Vec2::splat(cavity_half),
+            BlockOrientation::Z => Vec2::new(cavity_half, full_half.y),
+        };
+        maximum = maximum.min((available_half - half).max(Vec2::ZERO));
     }
     Vec3::new(
         hash_signed(seed.rotate_left(17)) * maximum.x,

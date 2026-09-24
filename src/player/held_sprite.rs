@@ -15,6 +15,7 @@ use crate::{
         tool::ToolRegistry,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
+    hud::ui_image::load_smooth_image,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::block_tint::block_tint_at_with_override,
     tools::BrushMode,
@@ -22,6 +23,8 @@ use crate::{
 };
 
 const HELD_SPRITE_SIZE: f32 = 0.52;
+const HELD_SPRITE_THICKNESS: f32 = 0.028;
+const HELD_SPRITE_YAW: f32 = 0.10;
 const HELD_TOOL_DISPLAY_ANGLE: f32 = 0.30;
 const HELD_TINT_DEPTH: f32 = 0.004;
 
@@ -174,16 +177,22 @@ pub(crate) fn setup_held_sprite_mesh(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    commands.insert_resource(HeldSpriteMesh(
-        meshes.add(Rectangle::new(HELD_SPRITE_SIZE, HELD_SPRITE_SIZE)),
-    ));
+    commands.insert_resource(HeldSpriteMesh(meshes.add(Cuboid::new(
+        HELD_SPRITE_SIZE,
+        HELD_SPRITE_SIZE,
+        HELD_SPRITE_THICKNESS,
+    ))));
 }
 
 fn plane_transform(kind: HeldSpriteKind, depth: f32) -> Transform {
     match kind {
-        HeldSpriteKind::Item => Transform::from_translation(Vec3::Z * depth),
+        HeldSpriteKind::Item => Transform::from_translation(Vec3::Z * depth)
+            .with_rotation(Quat::from_rotation_y(HELD_SPRITE_YAW)),
         HeldSpriteKind::Tool => Transform::from_translation(Vec3::Z * depth)
-            .with_rotation(Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE)),
+            .with_rotation(
+                Quat::from_rotation_y(HELD_SPRITE_YAW)
+                    * Quat::from_rotation_z(HELD_TOOL_DISPLAY_ANGLE),
+            ),
     }
 }
 
@@ -193,8 +202,9 @@ fn base_material(
 ) -> StandardMaterial {
     StandardMaterial {
         base_color: visual.map_or(Color::WHITE, |visual| visual.base_color),
-        base_color_texture: visual.map(|visual| asset_server.load(visual.icon.to_owned())),
-        alpha_mode: AlphaMode::Mask(0.5),
+        base_color_texture: visual
+            .map(|visual| load_smooth_image(asset_server, visual.icon.to_owned())),
+        alpha_mode: AlphaMode::Blend,
         unlit: true,
         double_sided: true,
         ..default()
@@ -209,7 +219,7 @@ fn tint_material(
         base_color: visual.and_then(|visual| visual.tint).unwrap_or(Color::WHITE),
         base_color_texture: visual
             .and_then(|visual| visual.tint_icon)
-            .map(|path| asset_server.load(path.to_owned())),
+            .map(|path| load_smooth_image(asset_server, path.to_owned())),
         alpha_mode: AlphaMode::Blend,
         unlit: true,
         double_sided: true,
@@ -321,7 +331,7 @@ pub(crate) fn sync_held_sprites(
         if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = visual.base_color;
             material.base_color_texture =
-                Some(content.asset_server.load(visual.icon.to_owned()));
+                Some(load_smooth_image(&content.asset_server, visual.icon.to_owned()));
         }
     }
 
@@ -342,7 +352,7 @@ pub(crate) fn sync_held_sprites(
             material.base_color = visual.tint.unwrap_or(Color::WHITE);
             material.base_color_texture = visual
                 .tint_icon
-                .map(|path| content.asset_server.load(path.to_owned()));
+                .map(|path| load_smooth_image(&content.asset_server, path.to_owned()));
         }
     }
 }
