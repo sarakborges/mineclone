@@ -196,6 +196,7 @@ struct StructureRuntime {
     connectors: Vec<StructureConnectorPoint>,
     min_y_offset: i32,
     max_y_offset: i32,
+    max_added_y_offset: Option<i32>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -464,6 +465,10 @@ impl StructureDefinition {
         self.runtime.max_y_offset + self.clear_above as i32
     }
 
+    pub(crate) fn max_added_y_offset(&self) -> Option<i32> {
+        self.runtime.max_added_y_offset
+    }
+
     pub(crate) fn min_y_offset(&self) -> i32 {
         self.runtime.min_y_offset
     }
@@ -574,6 +579,7 @@ impl StructureDefinition {
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
         let mut horizontal_maximum = IVec2::splat(i32::MIN);
         let mut max_y_offset = i32::MIN;
+        let mut max_added_y_offset = None;
 
         for layer in &self.layers {
             for (z, row) in layer.rows.iter().enumerate() {
@@ -608,6 +614,11 @@ impl StructureDefinition {
                     horizontal_minimum = horizontal_minimum.min(horizontal);
                     horizontal_maximum = horizontal_maximum.max(horizontal);
                     max_y_offset = max_y_offset.max(offset.y);
+                    if !entry.clear {
+                        max_added_y_offset = Some(
+                            max_added_y_offset.map_or(offset.y, |current: i32| current.max(offset.y)),
+                        );
+                    }
                     voxels.push(StructureVoxel {
                         offset,
                         block_id: entry.block.as_deref().map(intern_block_id),
@@ -694,6 +705,7 @@ impl StructureDefinition {
             connectors,
             min_y_offset,
             max_y_offset,
+            max_added_y_offset,
         };
     }
 

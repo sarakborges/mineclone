@@ -528,8 +528,12 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
                 structure.horizontal_bounds_for_rotation(candidate.rotation);
             let minimum = candidate.anchor + minimum_offset;
             let maximum = candidate.anchor + maximum_offset;
-            rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum)
-                .then_some(candidate.origin_y + structure.effective_max_y_offset())
+            if !rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum) {
+                return None;
+            }
+            structure
+                .max_added_y_offset()
+                .map(|offset| candidate.origin_y + offset)
         })
         .max()
         .unwrap_or(0)

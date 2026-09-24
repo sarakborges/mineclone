@@ -1,3 +1,14 @@
+## 2026-09-24 — Parte 6K — Clear-only connector chains não inflam altura de chunk
+
+Preparação para tunnels authored: Structures que apenas removem terreno não devem criar demanda vertical de chunks acima do terrain.
+
+- `StructureRuntime` pré-calcula `max_added_y_offset` apenas para voxels que adicionam conteúdo (block/fluid/object/layers);
+- voxels `clear` e `clearAbove` continuam participando dos bounds/conflitos/rasterização, mas não elevam `maximum_potential_structure_top_y_for_chunk`;
+- uma chain de tunnel pode portanto continuar acima da superfície para garantir abertura física sem fazer o streaming materializar colunas vazias até o topo teórico da chain;
+- Structures que realmente adicionam conteúdo preservam o comportamento vertical existente.
+
+Nenhum conteúdo de cave entrance foi adicionado neste commit.
+
 ## 2026-09-24 — Parte 6J — /locate suporta Structure roots em volume biomes
 
 O último consumidor que ainda assumia placements exclusivamente 2D foi migrado.
