@@ -1,3 +1,17 @@
+## 2026-09-24 — Chat command autocomplete agora usa substring
+
+O matching do autocomplete deixou de exigir prefixo. O texto digitado pode aparecer em qualquer posição da sugestão, sempre case-insensitive.
+
+Isso se aplica a:
+- nomes de comandos;
+- literals de parâmetros como `structure`, `biome`;
+- creature IDs;
+- biome IDs;
+- structure IDs, Structure Groups e Structure Sets;
+- números de variation.
+
+Para comandos, a barra inicial é ignorada no matching: por exemplo, `/ar` pode sugerir `/warp`. IDs como `asteria:world_tree` podem ser encontrados digitando `world`, `tree` ou qualquer outro trecho contíguo do ID.
+
 ## 2026-09-24 — Parte 6A — Connector face validado no schema
 
 A orientação `face` do connector agora participa explicitamente da validação authored, mantendo o campo vivo sob `-D warnings` antes da implementação do resolver 6B. Nenhum lint foi suprimido.

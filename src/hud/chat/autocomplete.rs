@@ -260,12 +260,12 @@ fn active_token(text: &str, cursor: usize) -> Option<(Range<usize>, usize)> {
     Some((start..end, parameter))
 }
 
-fn id_matches_prefix(id: &str, prefix: &str) -> bool {
-    let id = id.to_ascii_lowercase();
-    id.starts_with(prefix)
-        || id
-            .strip_prefix("asteria:")
-            .is_some_and(|short| short.starts_with(prefix))
+fn text_matches_query(value: &str, query: &str) -> bool {
+    value.to_ascii_lowercase().contains(query)
+}
+
+fn id_matches_query(id: &str, query: &str) -> bool {
+    text_matches_query(id, query)
 }
 
 struct AutocompleteCatalog<'a> {
@@ -283,7 +283,7 @@ impl AutocompleteCatalog<'_> {
             .iter()
             .filter(|structure| structure.group_id.is_none())
             .filter(|structure| !locatable_only || structure.locatable)
-            .filter(|structure| id_matches_prefix(&structure.id, prefix))
+            .filter(|structure| id_matches_query(&structure.id, prefix))
             .map(|structure| Suggestion {
                 value: structure.id.clone(),
                 description: structure.name.text(self.language.get()).to_owned(),
@@ -294,7 +294,7 @@ impl AutocompleteCatalog<'_> {
             self.structures
                 .group_references()
                 .filter(|(_, structure, _)| !locatable_only || structure.locatable)
-                .filter(|(reference, _, _)| id_matches_prefix(reference, prefix))
+                .filter(|(reference, _, _)| id_matches_query(reference, prefix))
                 .map(|(reference, structure, count)| Suggestion {
                     value: reference.to_owned(),
                     description: format!(
@@ -307,7 +307,7 @@ impl AutocompleteCatalog<'_> {
             self.structure_sets
                 .iter()
                 .filter(|set| !locatable_only || set.locatable)
-                .filter(|set| id_matches_prefix(&set.id, prefix))
+                .filter(|set| id_matches_query(&set.id, prefix))
                 .map(|set| Suggestion {
                     value: set.id.clone(),
                     description: format!(
@@ -331,7 +331,9 @@ fn suggestions_for(
     let mut suggestions = if word_index == 0 {
         COMMANDS
             .iter()
-            .filter(|command| format!("/{}", command.name).starts_with(&prefix))
+            .filter(|command| {
+                text_matches_query(command.name, prefix.strip_prefix('/').unwrap_or(&prefix))
+            })
             .map(|command| Suggestion {
                 value: format!("/{}", command.name),
                 description: command.description.to_owned(),
@@ -348,7 +350,7 @@ fn suggestions_for(
         match definition.parameters.get(word_index - 1)? {
             ParameterKind::StructureLiteral => ["structure"]
                 .into_iter()
-                .filter(|value| value.starts_with(&prefix))
+                .filter(|value| text_matches_query(value, &prefix))
                 .map(|value| Suggestion {
                     value: value.to_owned(),
                     description: "Structure".to_owned(),
@@ -357,7 +359,7 @@ fn suggestions_for(
             ParameterKind::CreatureId => catalog
                 .creatures
                 .iter()
-                .filter(|creature| id_matches_prefix(&creature.id, &prefix))
+                .filter(|creature| id_matches_query(&creature.id, &prefix))
                 .map(|creature| Suggestion {
                     value: creature.id.clone(),
                     description: creature.name.text(catalog.language.get()).to_owned(),
@@ -374,7 +376,7 @@ fn suggestions_for(
                 } else {
                     let count = catalog.structures.variation_count(reference)?;
                     (1..=count)
-                        .filter(|variation| variation.to_string().starts_with(&prefix))
+                        .filter(|variation| text_matches_query(&variation.to_string(), &prefix))
                         .filter_map(|variation| {
                             let structure = catalog.structures.variation(reference, variation)?;
                             Some(Suggestion {
@@ -387,7 +389,7 @@ fn suggestions_for(
             },
             ParameterKind::LocateKind => ["biome", "structure"]
                 .into_iter()
-                .filter(|value| value.starts_with(&prefix))
+                .filter(|value| text_matches_query(value, &prefix))
                 .map(|value| Suggestion {
                     value: value.to_owned(),
                     description: match value {
@@ -401,7 +403,7 @@ fn suggestions_for(
                 "biome" => catalog
                     .biomes
                     .iter()
-                    .filter(|biome| id_matches_prefix(&biome.id, &prefix))
+                    .filter(|biome| id_matches_query(&biome.id, &prefix))
                     .map(|biome| Suggestion {
                         value: biome.id.clone(),
                         description: biome.name.text(catalog.language.get()).to_owned(),
@@ -554,6 +556,16 @@ mod tests {
         );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
+    }
+
+    #[test]
+    fn autocomplete_matching_accepts_substrings_anywhere() {
+        assert!(text_matches_query("warp", "ar"));
+        assert!(text_matches_query("structure", "ruc"));
+        assert!(id_matches_query("asteria:world_tree", "world"));
+        assert!(id_matches_query("asteria:world_tree", "tree"));
+        assert!(id_matches_query("asteria:world_tree", "STERIA"));
+        assert!(!id_matches_query("asteria:world_tree", "slime"));
     }
 
     #[test]
