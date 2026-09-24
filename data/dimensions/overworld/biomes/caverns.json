@@ -98,5 +98,13 @@
     },
     "terrainRoughness": 0.98,
     "terrainMetallic": 0
-  }
+  },
+  "structures": [
+    {
+      "id": "asteria:cavern_entrance_start",
+      "volumePlacement": {
+        "chance": 0.25
+      }
+    }
+  ]
 }

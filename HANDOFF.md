@@ -1,3 +1,26 @@
+## 2026-09-24 — Parte 7A — Primeira cave entrance usando exclusivamente Structure Connectors
+
+Adicionado o primeiro conteúdo real sobre a infraestrutura nova, sem nenhum carver/connectivity paralelo.
+
+Conteúdo:
+- `asteria:cavern_entrance_start`: root locatable, iniciada diretamente por um volume site de `asteria:overworld/caverns`;
+- Structure Group `asteria:cavern_tunnel_segment` com três variações authored;
+- cada peça é um carve modelado por voxels `clear`, não ruído/procedural path;
+- a root e todos os segmentos sobem 8 blocos a cada 8 blocos horizontais, formando uma escada natural caminhável de 1 bloco por passo;
+- connectors ficam no teto/fora do corredor transitável, portanto a célula metadata não deixa um bloco residual no túnel;
+- as três variações preservam exatamente os mesmos input/output transforms e variam apenas o perfil lateral, então a chain nunca cria gap ou desvio acidental;
+- `strength=1.0` e `strengthLossOnEachLoop=0.04` produzem até 25 peças totais, cobrindo aproximadamente 200 blocos de subida desde o volume root;
+- o Overworld authored atual possui teto superficial teórico abaixo desse alcance, então a chain atravessa a superfície mesmo partindo do mínimo vertical de Caverns;
+- a chance de root é 25% por volume site, evitando uma entrada para cada cavern region enquanto o comportamento visual é validado;
+- `spawnCaves=false` já desativa esta placement pela regra genérica implementada na Parte 6I;
+- `/locate structure asteria:cavern_entrance_start` usa o locate 3D da Parte 6J.
+
+A chain é clear-only e, graças à Parte 6K, o trecho que continua no ar acima da superfície não aumenta o teto de chunks nem materializa chunks vazios.
+
+`WORLDGEN_VERSION` passou de 3 para 4 porque Caverns agora gera deterministicamente structures novas.
+
+Próximo passo: validar o comportamento do carve authored no pipeline e, se o CI permanecer verde, migrar a primeira composição real da World Tree para connectors sem remover ainda os elementos independentes do Enchanted Heart.
+
 ## 2026-09-24 — Parte 6K — Clear-only connector chains não inflam altura de chunk
 
 Preparação para tunnels authored: Structures que apenas removem terreno não devem criar demanda vertical de chunks acima do terrain.
