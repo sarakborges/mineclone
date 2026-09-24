@@ -77,6 +77,10 @@ fn default_offset() -> f32 {
     DEFAULT_LAYER_OFFSET
 }
 
+fn default_creative_visible() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LayerDefinition {
@@ -84,6 +88,8 @@ pub struct LayerDefinition {
     pub name: LocalizedText,
     pub category: String,
     pub texture: String,
+    #[serde(default = "default_creative_visible")]
+    pub creative_visible: bool,
     #[serde(default)]
     pub tint: BlockTint,
     #[serde(default = "default_faces")]
@@ -195,6 +201,7 @@ mod tests {
             .unwrap(),
             category: "natural_blocks".to_owned(),
             texture: "textures/test.png".to_owned(),
+            creative_visible: true,
             tint: BlockTint::None,
             faces: vec![LayerFace::Top, LayerFace::Front],
             offset: DEFAULT_LAYER_OFFSET,
