@@ -478,15 +478,14 @@ mod tests {
 
         // The graph alone is not enough: a seam may share path height yet lose
         // physical water or carving when the two regions select their sources.
-        let physical_region = |coord, graph| HydrologyRegion {
-            coord,
+        let physical_region = |graph| HydrologyRegion {
             river_graph: graph,
             river_carve_depth: 7.0,
             water_bodies: Vec::new(),
             settings: Default::default(),
         };
-        let left = physical_region(IVec2::ZERO, left);
-        let right = physical_region(IVec2::X, right);
+        let left = physical_region(left);
+        let right = physical_region(right);
         let original_surface = 120.0;
         for x in [127.5, 128.0, 128.5] {
             let point = Vec2::new(x, crossing.y);

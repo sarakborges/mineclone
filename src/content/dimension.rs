@@ -292,18 +292,6 @@ impl DimensionDefinition {
         }
     }
 
-    pub fn biome_weight(&self, biome_id: &str) -> f32 {
-        self.biomes
-            .iter()
-            .find(|entry| entry.id == biome_id)
-            .map(|entry| entry.weight)
-            .unwrap_or_else(|| {
-                panic!(
-                    "dimension {} does not define biome weight for {biome_id}",
-                    self.id
-                )
-            })
-    }
 }
 
 #[derive(Resource, Default)]

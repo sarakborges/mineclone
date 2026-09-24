@@ -47,7 +47,6 @@ impl HydrologyField {
         );
 
         HydrologyRegion {
-            coord,
             river_graph: rivers.graph,
             river_carve_depth: RIVER_CARVE_DEPTH,
             water_bodies: rivers.water_bodies,

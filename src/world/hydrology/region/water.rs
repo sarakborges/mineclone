@@ -190,7 +190,6 @@ mod tests {
 
     fn region(graph: FeatureGraph) -> HydrologyRegion {
         HydrologyRegion {
-            coord: IVec2::ZERO,
             river_graph: graph,
             river_carve_depth: 7.0,
             water_bodies: Vec::new(),

@@ -317,7 +317,6 @@ mod tests {
 
     fn test_region(river_graph: FeatureGraph, water_bodies: Vec<WaterBody>) -> HydrologyRegion {
         HydrologyRegion {
-            coord: IVec2::ZERO,
             river_graph,
             river_carve_depth: 7.0,
             water_bodies,

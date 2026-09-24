@@ -4,7 +4,6 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         block::BlockRegistry,
-        dimension::DimensionDefinition,
     },
     voxel::{
         cell::VoxelCell,
@@ -28,7 +27,6 @@ use super::{
 pub(super) struct MaterialPassContext<'a> {
     pub blocks: &'a BlockRegistry,
     pub biomes: &'a BiomeRegistry,
-    pub dimension: &'a DimensionDefinition,
     pub biome_field: &'a BiomeField,
     pub region: &'a GenerationRegion,
 }

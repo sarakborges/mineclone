@@ -183,6 +183,32 @@ pub(crate) struct HeldSpriteSyncView<'w, 's> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
+#[derive(SystemParam)]
+pub(crate) struct HeldObjectModelSyncView<'w, 's> {
+    roots: Query<'w, 's, (&'static HeldObjectModelRoot, &'static mut Visibility)>,
+    model_materials: Query<
+        'w,
+        's,
+        (
+            &'static HeldObjectModelMaterial,
+            &'static MeshMaterial3d<StandardMaterial>,
+        ),
+    >,
+    biome_field: Res<'w, BiomeField>,
+    biomes: Res<'w, BiomeRegistry>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct HeldObjectDynamicRenderView<'w, 's> {
+    renderables: Query<
+        'w,
+        's,
+        &'static mut RenderLayers,
+        With<HeldObjectDynamicRenderLayer>,
+    >,
+}
+
 pub(crate) fn setup_held_sprite_mesh(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -412,18 +438,11 @@ fn configure_loaded_held_object_scene(
 pub(crate) fn sync_held_object_models(
     content: HeldSpriteContent,
     player: Single<&Transform, With<GameplayCamera>>,
-    mut roots: Query<(&HeldObjectModelRoot, &mut Visibility)>,
-    model_materials: Query<(
-        &HeldObjectModelMaterial,
-        &MeshMaterial3d<StandardMaterial>,
-    )>,
-    biome_field: Res<BiomeField>,
-    biomes: Res<BiomeRegistry>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut view: HeldObjectModelSyncView,
     mut tint_cell: Local<Option<IVec2>>,
 ) {
     let selected = content.hotbar.item_at(content.hotbar.selected_slot());
-    for (root, mut visibility) in &mut roots {
+    for (root, mut visibility) in &mut view.roots {
         let next = if selected == Some(root.object_id) {
             Visibility::Inherited
         } else {
@@ -437,8 +456,8 @@ pub(crate) fn sync_held_object_models(
     let current_cell = player.translation.xz().floor().as_ivec2();
     let inputs_changed = content.hotbar.is_changed()
         || content.objects.is_changed()
-        || biome_field.is_changed()
-        || biomes.is_changed()
+        || view.biome_field.is_changed()
+        || view.biomes.is_changed()
         || *tint_cell != Some(current_cell);
     if !inputs_changed {
         return;
@@ -458,14 +477,14 @@ pub(crate) fn sync_held_object_models(
     let tint = block_tint_at(
         object.tint,
         current_cell.as_vec2() + Vec2::splat(0.5),
-        &biome_field,
-        &biomes,
+        &view.biome_field,
+        &view.biomes,
     );
-    for (marker, handle) in &model_materials {
+    for (marker, handle) in &view.model_materials {
         if marker.object_id != object_id {
             continue;
         }
-        if let Some(mut material) = materials.get_mut(&handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&handle.0) {
             material.base_color = tint;
             material.unlit = object.unlit;
         }
@@ -474,14 +493,14 @@ pub(crate) fn sync_held_object_models(
 
 pub(crate) fn sync_held_object_dynamic_render_layers(
     perspective: Res<CameraPerspective>,
-    mut renderables: Query<&mut RenderLayers, With<HeldObjectDynamicRenderLayer>>,
+    mut view: HeldObjectDynamicRenderView,
 ) {
     let layers = if perspective.is_third_person() {
         RenderLayers::layer(0)
     } else {
         RenderLayers::from_layers(&[])
     };
-    for mut render_layers in &mut renderables {
+    for mut render_layers in &mut view.renderables {
         if *render_layers != layers {
             *render_layers = layers.clone();
         }

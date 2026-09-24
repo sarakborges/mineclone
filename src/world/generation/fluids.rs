@@ -523,7 +523,6 @@ mod tests {
                 hydrology: Arc::new(hydrology),
                 surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
             };
-            assert_eq!(region.coord.xz(), region.hydrology.coord);
             let density = sample_density_field(
                 chunk_origin,
                 &columns,
