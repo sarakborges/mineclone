@@ -16,13 +16,11 @@ use crate::{
         item_stack::ItemStack, viewmodel::ViewModelAnimation,
     },
     voxel::{
-        cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, raycast::VoxelHit,
-        texture_rotation::TextureRotation,
+        cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, object::ObjectCell,
+        raycast::VoxelHit, texture_rotation::TextureRotation,
     },
     world_items::TargetedWorldItem,
-    world_objects::{
-        TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest, WorldObjectStore,
-    },
+    world_objects::{TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest},
 };
 
 use super::{
@@ -74,7 +72,6 @@ struct BlockEditDefinitions<'w> {
 
 #[derive(SystemParam)]
 struct BlockEditActions<'w> {
-    object_store: Res<'w, WorldObjectStore>,
     object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
     object_removals: MessageWriter<'w, WorldObjectRemoveRequest>,
     tool_uses: MessageWriter<'w, ToolUse>,
@@ -202,13 +199,17 @@ fn edit_targeted_block(
             .objects
             .get(object_id)
             .expect("selected object definition must exist");
-        if let Some(anchor) = object_placement_anchor(
-            hit,
-            definition,
-            runtime.world(),
-            &actions.object_store,
-        ) {
-            actions.object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
+        if let Some((support, face)) =
+            object_placement_attachment(hit, definition, runtime.world())
+        {
+            actions.object_placements.write(WorldObjectPlaceRequest {
+                support,
+                object: ObjectCell::new(
+                    object_id,
+                    face,
+                    TextureRotation::for_position(support, true),
+                ),
+            });
             actions.viewmodel_animation.play_place();
         }
         return;
@@ -346,21 +347,21 @@ fn edit_targeted_voxel(
 
 
 
-fn object_placement_anchor(
+fn object_placement_attachment(
     hit: VoxelHit,
     definition: &crate::content::object::ObjectDefinition,
     world: &crate::voxel::world::VoxelWorld,
-    objects: &WorldObjectStore,
-) -> Option<IVec3> {
+) -> Option<(IVec3, ObjectPlacementFace)> {
     let face = ObjectPlacementFace::from_normal(hit.normal)?;
     if !definition.supports_placement_face(face) {
         return None;
     }
 
-    let anchor = hit.voxel + hit.normal;
-    (anchor.y >= 0
-        && world.is_loaded_at(anchor)
-        && world.cell_at(anchor).is_none()
-        && !objects.contains(anchor))
-    .then_some(anchor)
+    let object_space = hit.voxel + hit.normal;
+    (object_space.y >= 0
+        && world.is_loaded_at(hit.voxel)
+        && world.is_loaded_at(object_space)
+        && world.cell_at(object_space).is_none()
+        && world.object_at(hit.voxel).is_none())
+    .then_some((hit.voxel, face))
 }
