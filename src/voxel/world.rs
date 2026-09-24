@@ -676,6 +676,7 @@ mod tests {
             .unwrap(),
             category: "natural_blocks".to_owned(),
             texture: "textures/test.png".to_owned(),
+            creative_visible: true,
             tint: crate::content::block::BlockTint::None,
             faces: vec![LayerFace::Top],
             offset: 1.0 / 1024.0,
