@@ -100,6 +100,15 @@ pub(crate) struct WorldObjectRemoveRequest {
 
 
 #[derive(SystemParam)]
+struct WorldObjectRemovalRuntime<'w, 's> {
+    world: ResMut<'w, VoxelWorld>,
+    store: ResMut<'w, WorldObjectStore>,
+    world_ticks: Res<'w, WorldTickClock>,
+    instances: Query<'w, 's, (&'static WorldObjectInstance, &'static Transform)>,
+    drops: MessageWriter<'w, WorldItemSpawnRequest>,
+}
+
+#[derive(SystemParam)]
 struct WorldObjectRemovalContent<'w> {
     blocks: Res<'w, BlockRegistry>,
     items: Res<'w, ItemRegistry>,
@@ -231,22 +240,18 @@ fn apply_object_placement_requests(
 fn apply_object_removal_requests(
     mut commands: Commands,
     mut requests: MessageReader<WorldObjectRemoveRequest>,
-    mut world: ResMut<VoxelWorld>,
-    mut store: ResMut<WorldObjectStore>,
     content: WorldObjectRemovalContent,
-    world_ticks: Res<WorldTickClock>,
-    instances: Query<(&WorldObjectInstance, &Transform)>,
-    mut drops: MessageWriter<WorldItemSpawnRequest>,
+    mut runtime: WorldObjectRemovalRuntime,
 ) {
     for request in requests.read() {
-        let Ok((instance, transform)) = instances.get(request.entity) else {
+        let Ok((instance, transform)) = runtime.instances.get(request.entity) else {
             continue;
         };
-        let Some((_chunk, removed)) = world.remove_object_at(instance.support) else {
+        let Some((_chunk, removed)) = runtime.world.remove_object_at(instance.support) else {
             continue;
         };
 
-        store.by_support.remove(&instance.support);
+        runtime.store.by_support.remove(&instance.support);
         if request.drop_loot
             && let Some(definition) = content.objects.get(removed.object_id)
         {
@@ -254,9 +259,9 @@ fn apply_object_removal_requests(
                 definition,
                 instance.support,
                 transform.translation + Vec3::Y * 0.25,
-                world_ticks.current_tick(),
+                runtime.world_ticks.current_tick(),
                 &content,
-                &mut drops,
+                &mut runtime.drops,
             );
         }
         commands.entity(request.entity).despawn();
