@@ -14204,3 +14204,26 @@ compilação. A auditoria valida as mesmas classes principais de referências de
 structure que o runtime valida: ground blocks, proximity block/fluid, palette
 block/fluid/object e surface layers. Isso cobre inclusive structures grandes que
 não aparecem em diffs pequenos durante migrações de IDs.
+
+## 2026-09-24 — Object pickup, Grass population e inventory visuals
+
+- World-item drops voltaram ao pickup automático por proximidade após o delay de drop.
+- World objects agora têm interação data-driven: `pickup` para Pebble/Stick e `break` para Grass.
+  Pebble e Stick são coletados com botão direito quando colocados no mundo; left click não os remove.
+  Grass continua quebrando com botão esquerdo como um bloco.
+- Object loot tables são suportadas. Grass não dropa a si mesmo e, em Survival, tem 20% de chance
+  de dropar 1 Plant Fiber ao ser quebrado. Creative continua sem drops.
+- Pebble/Stick usam quatro slices empilhados com `sliceSpacing = 0.008`, mantendo espessura visual
+  sem separar as lâminas; o target deixou de usar a altura achatada de 0.02.
+- Object definitions ganharam `positionJitter`; Grass usa jitter X/Z determinístico para não ficar
+  sempre centralizado no bloco.
+- Oak, Willow, Enchanted e World Tree leaves usam mining hardness 0.25.
+- Model-backed objects são pré-carregados em PostStartup; isso evita o primeiro posicionamento de
+  Grass aparecer atrasado enquanto o GLB carrega.
+- Biomes agora aceitam `objectSpawns` data-driven com spacing/chance/jitter/cluster range/radius e
+  groundBlocks. Plains é o único biome configurado por enquanto, gerando clusters espaçados de Grass
+  apenas sobre `asteria:grass_block`.
+- Sprites usados no inventory/hotbar/creative UI passam por sampler linear dedicado. O icon size foi
+  aumentado e o preview isométrico de blocks ocupa mais pixels sem voltar a cortar nas bordas.
+- O CI permanece no caminho rápido: localization audit, structure reference audit, Clippy e cargo check;
+  nenhum `cargo test` foi adicionado.
