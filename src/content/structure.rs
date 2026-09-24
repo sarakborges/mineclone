@@ -607,6 +607,13 @@ impl StructureDefinition {
                             strength: connector.strength,
                             strength_loss_on_each_loop: connector.strength_loss_on_each_loop,
                         });
+                    }
+                    let has_persistent_payload = entry.block.is_some()
+                        || entry.fluid.is_some()
+                        || entry.object.is_some()
+                        || entry.clear
+                        || entry.layers_only;
+                    if !has_persistent_payload {
                         continue;
                     }
 
@@ -754,15 +761,14 @@ impl StructureDefinition {
                 "structure {} palette keys must be exactly one non-dot character",
                 self.id
             );
-            let content_count = usize::from(entry.block.is_some())
+            let payload_count = usize::from(entry.block.is_some())
                 + usize::from(entry.fluid.is_some())
                 + usize::from(entry.object.is_some())
                 + usize::from(entry.clear)
-                + usize::from(entry.layers_only)
-                + usize::from(entry.connector.is_some());
-            assert_eq!(
-                content_count, 1,
-                "structure {} palette symbol {symbol} must define exactly one of block, fluid, object, clear, layersOnly, or connector",
+                + usize::from(entry.layers_only);
+            assert!(
+                payload_count == 1 || (payload_count == 0 && entry.connector.is_some()),
+                "structure {} palette symbol {symbol} must define exactly one persistent payload or be connector-only",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -807,11 +813,18 @@ impl StructureDefinition {
             }
 
             if let Some(connector) = entry.connector.as_ref() {
-                assert!(
-                    entry.surface_layers.is_empty(),
-                    "structure {} palette symbol {symbol} connector entries cannot define surfaceLayers",
-                    self.id
-                );
+                if connector.target.is_none() {
+                    assert_eq!(
+                        payload_count, 0,
+                        "structure {} palette symbol {symbol} input connectors must be connector-only",
+                        self.id
+                    );
+                    assert!(
+                        entry.surface_layers.is_empty(),
+                        "structure {} palette symbol {symbol} connector-only inputs cannot define surfaceLayers",
+                        self.id
+                    );
+                }
                 assert!(
                     LayerFace::ALL.contains(&connector.face),
                     "structure {} palette symbol {symbol} connector face must be valid",
@@ -936,7 +949,12 @@ impl StructureDefinition {
                     let entry = self.palette_entry(symbol).unwrap_or_else(|| {
                         panic!("structure {} uses undefined palette symbol: {symbol}", self.id)
                     });
-                    if entry.connector.is_none() {
+                    if entry.block.is_some()
+                        || entry.fluid.is_some()
+                        || entry.object.is_some()
+                        || entry.clear
+                        || entry.layers_only
+                    {
                         voxel_count += 1;
                     }
                 }

@@ -403,6 +403,38 @@ mod tests {
     }
 
     #[test]
+    fn output_connector_can_decorate_a_persistent_voxel() {
+        let definition = json!({
+            "id": "test:decorated_output",
+            "name": localized("Decorated Output"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "P": {
+                    "block": "test:block",
+                    "connector": {
+                        "target": "test:child",
+                        "face": "right",
+                        "strength": 1.0,
+                        "strengthLossOnEachLoop": 1.0
+                    }
+                }
+            },
+            "layers": [{"y": 0, "rows": ["P"]}]
+        });
+        let mut structure: StructureDefinition =
+            serde_json::from_value(definition).expect("decorated output must deserialize");
+        structure.validate_layout();
+        structure.rebuild_runtime();
+
+        assert_eq!(structure.voxels().len(), 1);
+        assert_eq!(structure.connector_points().len(), 1);
+        assert_eq!(structure.voxels()[0].offset, IVec3::ZERO);
+        assert_eq!(structure.connector_points()[0].offset, IVec3::ZERO);
+    }
+
+    #[test]
     fn straight_chain_terminates_from_strength_loss() {
         let registry = registry(vec![
             root_definition("test:segment", 0.25),

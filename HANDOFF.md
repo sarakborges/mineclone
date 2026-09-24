@@ -1,3 +1,17 @@
+## 2026-09-24 — Parte 7B2 — Output connector pode decorar voxel persistente
+
+O contrato de connector foi refinado para representar literalmente metadata sobre uma célula authored.
+
+- uma palette entry continua permitindo no máximo um payload persistente entre block/fluid/object/clear/layersOnly;
+- um **output connector** pode coexistir com esse payload;
+- o voxel continua sendo rasterizado normalmente e a mesma posição também é registrada como connector point;
+- connector-only continua suportado;
+- **input connectors permanecem connector-only**, evitando overlap ambíguo no attachment compartilhado;
+- surfaceLayers continuam válidas quando pertencem ao payload block/layersOnly; connector metadata não as invalida;
+- teste de regressão confirma que uma célula block+output aparece simultaneamente em `voxels()` e `connector_points()`.
+
+Isso permite colocar outputs da World Tree diretamente nos logs de borda existentes. O log permanece no mundo; a Root Arch usa um input marker não persistente no mesmo ponto e seu primeiro log nasce imediatamente no voxel seguinte, sem gap.
+
 ## 2026-09-24 — Parte 7B1 — Root Arches preparados como filhos de connector
 
 As quatro variações de `asteria:root_arch` agora possuem um input connector authored na extremidade esquerda da raiz.
