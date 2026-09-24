@@ -139,7 +139,11 @@ fn clip_path_out_of_water_body(path: &mut RiverPath, body: &WaterBody) {
     clipped.push(boundary);
     clipped.extend_from_slice(&path.points[segment_index + 1..]);
     path.points = clipped;
-    path.waterfall = None;
+    if path.waterfall.is_some_and(|waterfall| {
+        point_inside_water_body(waterfall.position, body)
+    }) {
+        path.waterfall = None;
+    }
 }
 
 fn clip_path_into_water_body(path: &mut RiverPath, body: &WaterBody) {
@@ -164,7 +168,11 @@ fn clip_path_into_water_body(path: &mut RiverPath, body: &WaterBody) {
     );
     path.points.truncate(segment_index + 1);
     path.points.push(boundary);
-    path.waterfall = None;
+    if path.waterfall.is_some_and(|waterfall| {
+        point_inside_water_body(waterfall.position, body)
+    }) {
+        path.waterfall = None;
+    }
 }
 
 fn point_inside_water_body(point: Vec3, body: &WaterBody) -> bool {

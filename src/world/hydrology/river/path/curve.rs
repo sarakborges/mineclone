@@ -32,11 +32,11 @@ pub(super) fn river_path(
     // Applying an independent minimum drop here made the incoming edge end
     // below the outgoing edge's start whenever local relief was small.
     let end_height = downstream_water_level.unwrap_or_else(|| river_height(downstream, sea_level));
-    let waterfall_profile = if source_water_level.is_none() && downstream_water_level.is_none() {
-        waterfall_profile(source_cell, seed, distance, start_height, end_height)
-    } else {
-        None
-    };
+    // Water-body endpoints still preserve their exact authored water levels.
+    // They must not disable waterfall detection: mountain rivers commonly
+    // leave a high lake or enter a lower lake/ocean across a steep drop.
+    let waterfall_profile =
+        waterfall_profile(source_cell, seed, distance, start_height, end_height);
     let points = (0..=segment_count)
         .map(|index| {
             let t = index as f32 / segment_count as f32;

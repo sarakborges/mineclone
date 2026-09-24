@@ -14324,3 +14324,24 @@ Hydrology fixes:
 - river headroom carving reaches the original terrain surface, eliminating detached terrain slabs above channels;
 - river bank grading is restricted to the dry outer bank, avoiding extra cuts inside overlapping river footprints;
 - a curved river edge that excursions into a disabled biome is straightened rather than deleted, because downstream selection already validates the direct route. This preserves physical continuity to the selected lake/ocean destination.
+
+## 2026-09-24 — Hydrology: rivers only connect real water bodies
+
+River topology no longer invents hydrology springs or headwater pools. Springs remain
+exclusively authored structures and are unrelated to river generation.
+
+River channels are now materialized only from a real hydrology lake whose downstream
+drainage reaches another lake or a physically wet ocean. Flow-threshold cells no longer
+become standalone river sources, which removes channels that visually begin or end in
+dry terrain. Ocean is a first-class river destination under the same corridor rule as
+lakes.
+
+River carving and physical river headroom now fade before entering a lake and also fade
+through the ocean approach, so lake/ocean mouths do not keep a full-width river trench
+right up to a hard boundary.
+
+Waterfalls were also being suppressed whenever an edge touched a water body. Waterfall
+profiling now uses the actual endpoint water levels even for lake-connected edges, and
+clipping a path to a lake boundary only discards a waterfall if its landing is actually
+inside the lake. This restores mountain waterfalls leaving high lakes or entering lower
+water bodies without changing the authoritative endpoint levels.
