@@ -64,7 +64,7 @@ where
     let destination_lakes = selection.lakes.keys().copied().collect::<HashSet<_>>();
     let ocean_threshold = network.ocean_threshold();
     let mut destination_cache = HashMap::new();
-    let mut confluence_water_levels = HashMap::new();
+    let mut confluence_bodies = HashMap::new();
 
     for (&cell, &incoming_rivers) in &confluences {
         if !spawn_lakes
@@ -92,7 +92,7 @@ where
             sea_level,
             water_fluid,
         );
-        confluence_water_levels.insert(cell, body.water_level);
+        confluence_bodies.insert(cell, body.clone());
 
         if water_body_intersects_region(coord, &body) {
             water_bodies.push(body);
@@ -120,12 +120,7 @@ where
             }
 
             let lake = spawn_lakes
-                .then(|| {
-                    selection
-                        .lakes
-                        .get(&cell)
-                        .cloned()
-                })
+                .then(|| selection.lakes.get(&cell).cloned())
                 .flatten();
             let spring = selection
                 .springs
@@ -137,11 +132,13 @@ where
                 && spring.is_none();
             let headwater = is_headwater
                 .then(|| headwater_source_body(cell, source, seed, sea_level, water_fluid));
-            let source_body = lake.or(spring).or(headwater);
+            let generated_source_body = lake.or(spring).or(headwater);
+            let source_body = generated_source_body
+                .clone()
+                .or_else(|| confluence_bodies.get(&cell).cloned());
             let source_body_water_level = source_body.as_ref().map(|body| body.water_level);
 
-            if let Some(body) = source_body
-                .clone()
+            if let Some(body) = generated_source_body
                 .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(body);
@@ -176,11 +173,12 @@ where
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
             let source_water_level = source_body_water_level
                 .or_else(|| confluence_water_levels.get(&cell).copied());
-            let downstream_water_level = selection
+            let downstream_body = selection
                 .lakes
                 .get(&downstream_cell)
-                .map(|lake| lake.water_level)
-                .or_else(|| confluence_water_levels.get(&downstream_cell).copied());
+                .cloned()
+                .or_else(|| confluence_bodies.get(&downstream_cell).cloned());
+            let downstream_water_level = downstream_body.as_ref().map(|body| body.water_level);
 
             // Every incoming edge ends at the same authoritative drainage node
             // that starts the outgoing edge. Never aim tributaries at a straight
@@ -194,6 +192,8 @@ where
                     downstream,
                     source_water_level,
                     downstream_water_level,
+                    source_water_body: source_body,
+                    downstream_water_body: downstream_body,
                     flow,
                     downstream_flow,
                     seed,

@@ -7,7 +7,7 @@ use bevy::prelude::*;
 
 use crate::world::{
     feature_graph::FeatureGraph,
-    hydrology::types::HydrologySurfaceSample,
+    hydrology::types::{HydrologySurfaceSample, WaterBody},
 };
 
 use self::{
@@ -28,7 +28,7 @@ use super::super::{
 
 pub(super) const RIVER_WATER_SURFACE_OFFSET: f32 = 2.0;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct RiverEdgeSpec {
     pub(super) region_coord: IVec2,
     pub(super) source_cell: IVec2,
@@ -36,6 +36,8 @@ pub(super) struct RiverEdgeSpec {
     pub(super) downstream: DrainageNode,
     pub(super) source_water_level: Option<f32>,
     pub(super) downstream_water_level: Option<f32>,
+    pub(super) source_water_body: Option<WaterBody>,
+    pub(super) downstream_water_body: Option<WaterBody>,
     pub(super) flow: u32,
     pub(super) downstream_flow: u32,
     pub(super) seed: u64,
@@ -76,6 +78,15 @@ where
         spec.source_water_level,
         spec.downstream_water_level,
     );
+    if let Some(body) = spec.source_water_body.as_ref() {
+        clip_path_out_of_water_body(&mut path, body);
+    }
+    if let Some(body) = spec.downstream_water_body.as_ref() {
+        clip_path_into_water_body(&mut path, body);
+    }
+    if path.points.len() < 2 {
+        return None;
+    }
     truncate_river_at_ocean_mouth(
         &mut path,
         spec.sea_level,
@@ -102,6 +113,88 @@ where
     add_path_to_graph(graph, spec.region_coord, &mut path, start_radius, end_radius);
 
     path.waterfall
+}
+
+fn clip_path_out_of_water_body(path: &mut RiverPath, body: &WaterBody) {
+    let Some(segment_index) = path.points.windows(2).position(|segment| {
+        point_inside_water_body(segment[0], body) && !point_inside_water_body(segment[1], body)
+    }) else {
+        if path
+            .points
+            .first()
+            .is_some_and(|point| point_inside_water_body(*point, body))
+        {
+            path.points.clear();
+        }
+        return;
+    };
+
+    let boundary = water_body_boundary_point(
+        path.points[segment_index],
+        path.points[segment_index + 1],
+        body,
+        true,
+    );
+    let mut clipped = Vec::with_capacity(path.points.len() - segment_index);
+    clipped.push(boundary);
+    clipped.extend_from_slice(&path.points[segment_index + 1..]);
+    path.points = clipped;
+    path.waterfall = None;
+}
+
+fn clip_path_into_water_body(path: &mut RiverPath, body: &WaterBody) {
+    let Some(segment_index) = path.points.windows(2).position(|segment| {
+        !point_inside_water_body(segment[0], body) && point_inside_water_body(segment[1], body)
+    }) else {
+        if path
+            .points
+            .last()
+            .is_some_and(|point| point_inside_water_body(*point, body))
+        {
+            path.points.clear();
+        }
+        return;
+    };
+
+    let boundary = water_body_boundary_point(
+        path.points[segment_index],
+        path.points[segment_index + 1],
+        body,
+        false,
+    );
+    path.points.truncate(segment_index + 1);
+    path.points.push(boundary);
+    path.waterfall = None;
+}
+
+fn point_inside_water_body(point: Vec3, body: &WaterBody) -> bool {
+    body.normalized_horizontal_distance(Vec2::new(point.x, point.z)) <= 1.0
+}
+
+fn water_body_boundary_point(
+    from: Vec3,
+    to: Vec3,
+    body: &WaterBody,
+    from_inside: bool,
+) -> Vec3 {
+    const REFINEMENT_STEPS: usize = 10;
+
+    let mut inside_t = if from_inside { 0.0 } else { 1.0 };
+    let mut outside_t = if from_inside { 1.0 } else { 0.0 };
+
+    for _ in 0..REFINEMENT_STEPS {
+        let midpoint_t = (inside_t + outside_t) * 0.5;
+        let midpoint = from.lerp(to, midpoint_t);
+        if point_inside_water_body(midpoint, body) {
+            inside_t = midpoint_t;
+        } else {
+            outside_t = midpoint_t;
+        }
+    }
+
+    let mut boundary = from.lerp(to, (inside_t + outside_t) * 0.5);
+    boundary.y = body.water_level;
+    boundary
 }
 
 fn truncate_river_at_ocean_mouth(
@@ -368,6 +461,8 @@ mod tests {
                     downstream,
                     source_water_level: None,
                     downstream_water_level: None,
+                    source_water_body: None,
+                    downstream_water_body: None,
                     flow: 4,
                     downstream_flow: 4,
                     seed: 42,

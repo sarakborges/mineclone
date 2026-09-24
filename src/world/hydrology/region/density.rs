@@ -81,37 +81,57 @@ impl HydrologyRegion {
         horizontal: Vec2,
         actual_surface_height: Option<f32>,
     ) -> DensityColumnProfile {
-        // The graph scan must use the same radius-relative outer bank as
-        // region culling. A fixed world-space margin truncated wide rivers.
-        // Carve only inside the actual water footprint, not the full bank.
-        // Filter unsupported physical channels PER EDGE before selecting the
-        // strongest: a suspended edge must not hide a supported crossing.
-        let river_graph_sample = match actual_surface_height {
+        // Physical channel and dry-bank grading are separate queries.
+        // An expanded bank sample must never outrank a real channel from a
+        // neighboring/crossing edge, otherwise density can cut dry terrain
+        // while the fluid pass follows a different river.
+        let river_core = match actual_surface_height {
             Some(surface) => self.river_graph.sample_horizontal_filtered(
                 horizontal,
                 0.0,
-                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+                1.0,
                 |sample| {
                     let profile = river_channel_profile(sample.normalized_distance);
-                    profile <= 0.0
-                        || bed_has_support(
+                    profile > 0.0
+                        && bed_has_support(
                             Some(surface),
                             sample.height - self.river_carve_depth * profile,
                         )
                 },
             ),
-            None => self.river_graph.sample_horizontal_with_radius_multiplier(
+            None => self.river_graph.sample_horizontal_filtered(
                 horizontal,
-                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+                0.0,
+                1.0,
+                |sample| river_channel_profile(sample.normalized_distance) > 0.0,
             ),
         };
-        let river_core = river_graph_sample.filter(|sample| {
-            sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
-        });
+        let river_bank = match actual_surface_height {
+            Some(surface) => self.river_graph.sample_horizontal_filtered(
+                horizontal,
+                0.0,
+                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+                |sample| {
+                    sample.normalized_distance > RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
+                        && bed_has_support(
+                            Some(surface),
+                            sample.height - self.river_carve_depth,
+                        )
+                },
+            ),
+            None => self.river_graph.sample_horizontal_filtered(
+                horizontal,
+                0.0,
+                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+                |sample| {
+                    sample.normalized_distance > RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
+                },
+            ),
+        };
         let (mut river, river_opening) = river_core.map_or((None, 0.0), |sample| {
             let profile = river_channel_profile(sample.normalized_distance);
             let bed = sample.height - self.river_carve_depth * profile;
-            let river = (profile > 0.0).then_some(VerticalDensityDelta {
+            let river = Some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
                 maximum_y: actual_surface_height
                     .unwrap_or(sample.height + 1.5)
@@ -148,7 +168,6 @@ impl HydrologyRegion {
             }
         });
         let mut water_bodies = SmallVec::new();
-        let mut water_body_opening = 0.0_f32;
         let mut river_water_body_opening = 0.0_f32;
         let mut lake_shore_delta: Option<f32> = None;
 
@@ -176,11 +195,10 @@ impl HydrologyRegion {
             {
                 continue;
             }
-            water_body_opening = water_body_opening.max(strength);
             let shore = shore_density_delta(
                 distance,
                 body.water_level,
-                if distance < 1.0 { 0.0 } else { river_opening },
+                river_opening,
                 surface_elevation,
             );
             // Iterator::max_by selects the last item when magnitudes tie.
@@ -212,19 +230,18 @@ impl HydrologyRegion {
         }
 
         let lake_shore_delta = lake_shore_delta.unwrap_or(0.0);
-        let river_shore_delta = river_graph_sample.map_or(0.0, |sample| {
-            if sample.normalized_distance
-                <= RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
-            {
-                return 0.0;
-            }
-            shore_density_delta(
-                river_shore_normalized_distance(sample.normalized_distance),
-                sample.height,
-                river_water_body_opening.max(ocean_strength_at_column),
-                surface_elevation,
-            )
-        });
+        let river_shore_delta = if river_core.is_some() {
+            0.0
+        } else {
+            river_bank.map_or(0.0, |sample| {
+                shore_density_delta(
+                    river_shore_normalized_distance(sample.normalized_distance),
+                    sample.height,
+                    river_water_body_opening.max(ocean_strength_at_column),
+                    surface_elevation,
+                )
+            })
+        };
         let shore_delta = if lake_shore_delta.abs() >= river_shore_delta.abs() {
             lake_shore_delta
         } else {
