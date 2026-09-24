@@ -28,11 +28,14 @@ use crate::{
         tool_id::intern_tool_id,
     },
     gameplay::random::next_unit_f32,
-    player::item_stack::{ItemStack, MAX_STACK_SIZE},
+    player::{
+        camera::GameplayCamera,
+        item_stack::{ItemStack, MAX_STACK_SIZE},
+    },
     rendering::block_tint::block_tint_at,
     voxel::{
         chunk::CHUNK_SIZE,
-        coordinates::chunk_coord_from_world,
+        coordinates::{chunk_coord_from_position, chunk_coord_from_world},
         log_variant::is_hollow_log_id,
         microblock::HOLLOW_LOG_WALL_THICKNESS,
         object::ObjectCell,
@@ -43,6 +46,7 @@ use crate::{
         biome_field::BiomeField,
         chunk_rendering::ChunkRenderCoord,
         deterministic::{hash_signed, hash_string, mix_u32_components},
+        render_distance::{RenderDistanceSettings, chunk_visibility_radii},
         tick::WorldTickClock,
     },
     world_items::WorldItemSpawnRequest,
@@ -87,6 +91,9 @@ pub(crate) struct WorldObjectStore {
     by_chunk: HashMap<IVec3, HashSet<IVec3>>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
     synced_world_revision: u64,
+    materialized_center: Option<IVec2>,
+    materialized_show_radius: i32,
+    materialized_hide_radius: i32,
 }
 
 impl WorldObjectStore {
@@ -340,26 +347,48 @@ fn sync_world_objects(
     mut commands: Commands,
     content: WorldObjectSceneContent,
     mut assets: WorldObjectSceneAssets,
+    player: Single<&Transform, With<GameplayCamera>>,
+    render_distance: Res<RenderDistanceSettings>,
     mut store: ResMut<WorldObjectStore>,
 ) {
     let world_revision = content.world.object_scene_revision();
-    if store.synced_world_revision == world_revision {
+    let player_chunk = chunk_coord_from_position(player.translation);
+    let center = IVec2::new(player_chunk.x, player_chunk.z);
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance.chunks());
+    if store.synced_world_revision == world_revision
+        && store.materialized_center == Some(center)
+        && store.materialized_show_radius == show_radius
+        && store.materialized_hide_radius == hide_radius
+    {
         return;
     }
 
     let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
-    let unloaded = store
+    let retired = store
         .synced_chunk_revisions
         .keys()
         .copied()
-        .filter(|coord| content.world.chunk(*coord).is_none())
+        .filter(|coord| {
+            content.world.chunk(*coord).is_none()
+                || !chunk_inside_object_radius(*coord, center, hide_radius)
+        })
         .collect::<Vec<_>>();
-    for coord in unloaded {
+    for coord in retired {
         despawn_chunk_objects(&mut commands, coord, &mut store);
         store.synced_chunk_revisions.remove(&coord);
     }
 
     for coord in loaded_coords {
+        let already_materialized = store.synced_chunk_revisions.contains_key(&coord);
+        let radius = if already_materialized {
+            hide_radius
+        } else {
+            show_radius
+        };
+        if !chunk_inside_object_radius(coord, center, radius) {
+            continue;
+        }
+
         let revision = content
             .world
             .chunk_object_revision(coord)
@@ -394,6 +423,17 @@ fn sync_world_objects(
     }
 
     store.synced_world_revision = world_revision;
+    store.materialized_center = Some(center);
+    store.materialized_show_radius = show_radius;
+    store.materialized_hide_radius = hide_radius;
+}
+
+fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool {
+    if radius < 0 {
+        return false;
+    }
+    let delta = IVec2::new(coord.x, coord.z) - center;
+    delta.length_squared() <= radius * radius
 }
 
 fn despawn_chunk_objects(

@@ -1,3 +1,24 @@
+## 2026-09-24 — World objects deixam de materializar chunks de preload
+
+O VoxelWorld continua autoritativo para todos os objects carregados, mas entities ECS/render
+agora existem somente na faixa visual ao redor do player.
+
+- `sync_world_objects` acompanha player chunk e os mesmos show/hide radii usados por chunk
+  visibility;
+- chunks que existem apenas por streaming preload/forward preload não recebem grass/stick/
+  pebble entities;
+- ao entrar no show radius, o chunk materializa seus objects;
+- objects já materializados permanecem até sair do hide radius, preservando hysteresis e
+  evitando churn na borda;
+- mudança de player chunk/render distance reavalia materialização mesmo sem alteração no
+  VoxelWorld;
+- se nem world revision nem centro/radii mudaram, o system continua retornando imediatamente;
+- targeting permanece correto porque o range de interação é muito menor que o show radius e
+  qualquer object alcançável está necessariamente materializado.
+
+Isso separa de vez "chunk necessário para geração/preload" de "object necessário no ECS/render",
+reduzindo transform propagation, visibility extraction e entity count durante exploração e warp.
+
 ## 2026-09-24 — World-object tint cache deixa de fragmentar batching por float
 
 O cache de material dos world objects usava os bits exatos de quatro `f32` como parte da
