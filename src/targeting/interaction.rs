@@ -248,6 +248,7 @@ fn edit_targeted_block(
                     TextureRotation::for_position(support, true),
                 ),
             });
+            consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
         }
         return;
@@ -273,9 +274,11 @@ fn edit_targeted_block(
     match outcome {
         VoxelEditOutcome::Consumed => {}
         VoxelEditOutcome::LayerPlaced => {
+            consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
         }
         VoxelEditOutcome::BlockPlaced => {
+            consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
             input.targeted.0 = None;
         }
@@ -284,6 +287,18 @@ fn edit_targeted_block(
             input.targeted.0 = None;
         }
     }
+}
+
+fn consume_survival_placement(hotbar: &mut PlayerHotbar, game_mode: GameMode) {
+    if game_mode != GameMode::Survival {
+        return;
+    }
+
+    let consumed = hotbar.consume_selected_item();
+    debug_assert!(
+        consumed,
+        "successful survival placement must consume the selected hotbar item"
+    );
 }
 
 fn dispatch_selected_tool(

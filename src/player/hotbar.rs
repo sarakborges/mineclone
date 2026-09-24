@@ -179,6 +179,22 @@ impl PlayerHotbar {
         self.slots[self.selected_slot].take()
     }
 
+    pub(crate) fn consume_selected_item(&mut self) -> bool {
+        let slot = &mut self.slots[self.selected_slot];
+        let Some(quantity) = slot.as_ref().map(ItemStack::quantity) else {
+            return false;
+        };
+
+        if quantity == 1 {
+            *slot = None;
+        } else {
+            slot.as_mut()
+                .expect("selected stack must still exist")
+                .decrement_quantity();
+        }
+        true
+    }
+
     pub(crate) fn try_insert_stack(&mut self, stack: ItemStack) -> Result<(), ItemStack> {
         let mut remaining = Some(stack);
         merge_into_existing(&mut self.slots, &mut remaining);
@@ -253,5 +269,23 @@ fn select_hotbar_slot(keys: Res<ButtonInput<KeyCode>>, mut hotbar: ResMut<Player
             hotbar.select(slot);
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consuming_selected_stack_decrements_then_clears_the_slot() {
+        let mut hotbar = PlayerHotbar::default();
+        hotbar.set_selected_stack(Some(ItemStack::new("asteria:stone").with_quantity(2)));
+
+        assert!(hotbar.consume_selected_item());
+        assert_eq!(hotbar.stack_at(hotbar.selected_slot()).unwrap().quantity(), 1);
+
+        assert!(hotbar.consume_selected_item());
+        assert!(hotbar.stack_at(hotbar.selected_slot()).is_none());
+        assert!(!hotbar.consume_selected_item());
     }
 }

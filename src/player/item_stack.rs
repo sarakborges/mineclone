@@ -68,6 +68,14 @@ impl ItemStack {
         self.quantity
     }
 
+    pub(crate) fn decrement_quantity(&mut self) {
+        assert!(
+            self.quantity > 1,
+            "cannot decrement an item stack below one"
+        );
+        self.quantity -= 1;
+    }
+
     pub(crate) fn metadata(&self) -> &ItemMetadata {
         &self.metadata
     }

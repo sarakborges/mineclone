@@ -1,3 +1,15 @@
+## 2026-09-24 — Survival placement consome stacks do inventário
+
+Placement em Survival agora usa o stack real do hotbar como recurso consumível.
+
+- `PlayerHotbar::consume_selected_item` centraliza o decremento do item selecionado;
+- stacks com quantidade maior que 1 perdem exatamente uma unidade;
+- quando a quantidade chega a 0, o slot é limpo em vez de manter um stack inválido;
+- placements bem-sucedidos de blocks e layers consomem uma unidade somente após o runtime confirmar o edit;
+- placements de world objects consomem uma unidade quando a colocação validada é enviada ao runtime;
+- Creative permanece sem qualquer consumo;
+- foi adicionado teste cobrindo a transição `2 -> 1 -> slot vazio` e a tentativa de consumir slot vazio.
+
 ## 2026-09-24 — Parte 7G — Cave tunnels unificados em um único Structure Group aleatório
 
 A seleção de rota deixou de ficar presa em famílias reta/curva/espiral.
