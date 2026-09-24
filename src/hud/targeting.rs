@@ -11,7 +11,7 @@ use crate::{
         secondary_property::SecondaryPropertyRegistry,
         tool_category::ToolCategoryRegistry,
     },
-    hud::{block_icon::BlockIconMaterial, ui_image::load_smooth_image},
+    hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
@@ -355,7 +355,7 @@ fn update_target_hud(
         if *object_visibility != Visibility::Visible {
             *object_visibility = Visibility::Visible;
         }
-        image.image = load_smooth_image(&content.visual.asset_server, snapshot.icon.clone());
+        image.image = content.visual.asset_server.load(snapshot.icon.clone());
         image.color = snapshot.tint;
 
         *cached = None;
