@@ -1,3 +1,9 @@
+### CI follow-up — world-object flattening
+
+O primeiro CI do achatamento falhou apenas porque `texture_rotation_radians` ainda usa
+`FRAC_PI_2`; a importação havia sido removida junto com a rotação antiga das child slices.
+A constante foi restaurada para a rotação authored dos próprios objects.
+
 ## 2026-09-24 — World-object render hierarchy achatada
 
 O runtime de world objects deixou de criar hierarquias ECS por objeto estático.
