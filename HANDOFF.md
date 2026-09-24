@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6B — Connector attachment budget consumido na validação
+
+O CI da primeira versão do resolver apontou `strength` e `strengthLossOnEachLoop` como metadata resolvida ainda não consumida. A validação de connector points agora recalcula o budget máximo de passos a partir desses valores e garante novamente o limite de 1..=64 no objeto geométrico que o resolver efetivamente usa. Nenhum `allow(dead_code)` foi adicionado.
+
 ## 2026-09-24 — Parte 6B — Resolver geométrico de connector attachments
 
 A infraestrutura de connectors agora resolve a transformação da peça filha sem depender de terrain/ground fitting.

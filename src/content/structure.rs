@@ -403,6 +403,15 @@ impl StructureDefinition {
             .into_iter()
             .filter(|connector| connector.target.is_some())
         {
+            let maximum_steps =
+                (output.strength / output.strength_loss_on_each_loop).ceil() as u32;
+            assert!(
+                (1..=64).contains(&maximum_steps),
+                "structure {} connector target {:?} has invalid chain budget",
+                self.id,
+                output.target
+            );
+
             let target = output
                 .target
                 .as_deref()
