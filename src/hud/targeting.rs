@@ -144,18 +144,20 @@ type TargetObjectIconQuery<'w, 's> = Single<
     ),
 >;
 
+type TargetHudRootVisibility<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Visibility,
+    (
+        With<TargetHudRoot>,
+        Without<TargetBlockModel>,
+        Without<TargetObjectIcon>,
+    ),
+>;
+
 #[derive(SystemParam)]
 struct TargetHudView<'w, 's> {
-    root_visibility: Single<
-        'w,
-        's,
-        &'static mut Visibility,
-        (
-            With<TargetHudRoot>,
-            Without<TargetBlockModel>,
-            Without<TargetObjectIcon>,
-        ),
-    >,
+    root_visibility: TargetHudRootVisibility<'w, 's>,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
     icon: TargetBlockIconQuery<'w, 's>,
     object_icon: TargetObjectIconQuery<'w, 's>,
