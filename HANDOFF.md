@@ -14368,3 +14368,17 @@ Validação:
 - `cargo check --locked`: passou;
 - os workflows de push e pull request do commit de código `9a7be089dc7f3d9c21b35baf01bb844f96e0b4ef` concluíram com sucesso.
 
+## 2026-09-24 — Target HUD Visibility B0001 + Ocean removido do spawn picker
+
+- Corrigido o panic Bevy `B0001` em `hud::targeting::update_target_hud`: o root do Target HUD,
+  o preview de block e o ícone de object mutavam `Visibility` em queries que eram logicamente
+  separadas, mas não estavam declaradas como disjuntas para o ECS.
+- As três queries agora possuem filtros `With/Without` mutuamente exclusivos, incluindo
+  `Without<TargetHudRoot>` nos ícones e `Without<TargetBlockModel/TargetObjectIcon>` no root.
+  Isso preserva a alternância block/object sem `ParamSet` e sem conflito de acesso.
+- Os filtros foram extraídos para aliases de query para manter Clippy sem `type_complexity`.
+- Ocean continua sendo um surface biome válido para worldgen/hydrology, mas foi removido das
+  opções do dropdown de Spawn Biome. O sorteio Random já excluía Ocean e continua assim.
+- Commit de código validado: `4e5f6aebea3c77042b5dbb8facd86e6fd7a04613`.
+- CI push e PR: localization audit, content reference audit, Clippy `-D warnings` e
+  `cargo check --locked` passaram.
