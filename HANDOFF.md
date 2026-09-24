@@ -1,3 +1,9 @@
+### CI follow-up 2 — import horizontal coordinate
+
+O follow-up anterior removeu a necessidade de `Vec3Swizzles`, mas o módulo importava
+somente `IVec3`. `IVec2` agora é importado explicitamente para a coordenada horizontal
+usada na leitura não bloqueante do structure-top cache.
+
 ### CI follow-up — nonblocking structure top
 
 O primeiro CI da remoção do preflight síncrono falhou apenas porque

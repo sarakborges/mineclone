@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{
     platform::collections::HashSet,
-    prelude::IVec3,
+    prelude::{IVec2, IVec3},
 };
 
 use crate::{
