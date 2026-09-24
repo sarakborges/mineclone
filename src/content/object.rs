@@ -23,6 +23,10 @@ pub enum ObjectPlacementFace {
 }
 
 impl ObjectPlacementFace {
+    #[expect(
+        dead_code,
+        reason = "object placement faces are part of the authored schema before runtime placement is wired"
+    )]
     pub(crate) fn from_normal(normal: IVec3) -> Option<Self> {
         match normal {
             IVec3::X => Some(Self::Right),
@@ -92,22 +96,46 @@ pub struct ObjectDefinition {
     pub model: String,
     pub icon: String,
     #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "object rendering fields are authored before runtime object rendering is wired"
+    )]
     pub tint: BlockTint,
     #[serde(default = "default_placement_faces")]
     pub placement_faces: Vec<ObjectPlacementFace>,
     #[serde(default)]
     pub target: ObjectTargetDefinition,
     #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "object rendering fields are authored before runtime object rendering is wired"
+    )]
     pub unlit: bool,
     #[serde(default = "default_true")]
+    #[expect(
+        dead_code,
+        reason = "object runtime fields are authored before their consuming pipeline is wired"
+    )]
     pub casts_shadow: bool,
     #[serde(default = "default_true")]
+    #[expect(
+        dead_code,
+        reason = "object runtime fields are authored before their consuming pipeline is wired"
+    )]
     pub receives_shadow: bool,
     #[serde(default = "default_true")]
+    #[expect(
+        dead_code,
+        reason = "object runtime fields are authored before their consuming pipeline is wired"
+    )]
     pub drop_self: bool,
 }
 
 impl ObjectDefinition {
+    #[expect(
+        dead_code,
+        reason = "object placement rules are authored before runtime placement is wired"
+    )]
     pub(crate) fn supports_placement_face(&self, face: ObjectPlacementFace) -> bool {
         self.placement_faces.contains(&face)
     }
