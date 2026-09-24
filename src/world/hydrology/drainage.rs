@@ -104,8 +104,10 @@ where
         // depression. Dry ocean-transition fringes remain ineligible because
         // ocean_outlet_cell checks the interpolated physical ocean floor.
         let downstream = self
-            .ocean_outlet_cell(cell, 1)
-            .or_else(|| self.ocean_outlet_cell(cell, RIVER_OCEAN_OUTLET_RADIUS_CELLS))
+            .ocean_outlet_cell(cell, source, 1)
+            .or_else(|| {
+                self.ocean_outlet_cell(cell, source, RIVER_OCEAN_OUTLET_RADIUS_CELLS)
+            })
             .or_else(|| self.best_lower_cell(cell, source, 1))
             .or_else(|| self.best_lower_cell(cell, source, RIVER_BASIN_ESCAPE_RADIUS_CELLS));
 
@@ -113,7 +115,12 @@ where
         downstream
     }
 
-    fn ocean_outlet_cell(&mut self, source_cell: IVec2, radius: i32) -> Option<IVec2> {
+    fn ocean_outlet_cell(
+        &mut self,
+        source_cell: IVec2,
+        source: DrainageNode,
+        radius: i32,
+    ) -> Option<IVec2> {
         let mut best: Option<(IVec2, f32)> = None;
 
         for dz in -radius..=radius {
