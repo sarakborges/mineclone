@@ -134,34 +134,46 @@ impl ChatLocateContext<'_> {
                     id.to_owned(),
                 )
             }
-            "hydrology" => {
-                let (kind, name, enabled) = match id {
-                    "ocean" => (
-                        HydrologyWaterKind::Ocean,
-                        "Ocean",
-                        dimension.hydrology.ocean_biome.is_some(),
-                    ),
-                    "river" => (
-                        HydrologyWaterKind::River,
-                        "River",
-                        dimension.hydrology.river_weight > 0.0,
-                    ),
-                    "lake" => (
-                        HydrologyWaterKind::Lake,
-                        "Lake",
-                        dimension.hydrology.lake_weight > 0.0,
-                    ),
-                    _ => return "Usage: /locate hydrology <ocean|river|lake>".to_owned(),
-                };
-                if !enabled {
-                    return format!("{name} hydrology is disabled in this dimension.");
+            "hydrology" => match id {
+                "ocean" => {
+                    let Some(ocean_biome) = dimension.ocean_biome.as_deref() else {
+                        return "Ocean is disabled in this dimension.".to_owned();
+                    };
+                    if !self.world_generation.spawn_oceans() {
+                        return "Ocean is disabled in this world.".to_owned();
+                    }
+                    (
+                        LocateTargetKind::SurfaceBiome,
+                        "Ocean".to_owned(),
+                        ocean_biome.to_owned(),
+                    )
                 }
-                (
-                    LocateTargetKind::Hydrology(kind),
-                    name.to_owned(),
-                    id.to_owned(),
-                )
-            }
+                "river" => {
+                    if dimension.hydrology.river_weight <= 0.0
+                        || !self.world_generation.spawn_rivers()
+                    {
+                        return "River hydrology is disabled in this world.".to_owned();
+                    }
+                    (
+                        LocateTargetKind::Hydrology(HydrologyWaterKind::River),
+                        "River".to_owned(),
+                        id.to_owned(),
+                    )
+                }
+                "lake" => {
+                    if dimension.hydrology.lake_weight <= 0.0
+                        || !self.world_generation.spawn_lakes()
+                    {
+                        return "Lake hydrology is disabled in this world.".to_owned();
+                    }
+                    (
+                        LocateTargetKind::Hydrology(HydrologyWaterKind::Lake),
+                        "Lake".to_owned(),
+                        id.to_owned(),
+                    )
+                }
+                _ => return "Usage: /locate hydrology <ocean|river|lake>".to_owned(),
+            },
             "structure" => {
                 if let Some(set) = self.structure_sets.get(id) {
                     if variation.is_some() {

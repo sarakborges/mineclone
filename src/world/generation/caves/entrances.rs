@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 
-use crate::world::{
-    biome_field::BiomeField,
-    generation_region::GenerationRegion,
-    hydrology::HydrologyWaterKind,
-    math::lerp,
+use crate::{
+    content::dimension::DimensionDefinition,
+    world::{
+        biome_field::BiomeField,
+        generation::ocean_weight_from_surface,
+        math::lerp,
+        terrain::surface_height_from_sample,
+    },
 };
 
 const OCEAN_CAVE_ENTRANCE_CHANCE: f32 = 0.34;
@@ -15,11 +18,11 @@ const OCEAN_CAVE_MINIMUM_STRENGTH: f32 = 0.35;
 const OCEAN_CAVE_MINIMUM_DROP: f32 = 5.0;
 
 pub(super) fn ocean_cave_entrance(
-    region: &GenerationRegion,
     anchors: &[Vec3],
     minimum: Vec3,
     maximum: Vec3,
     biome_field: &BiomeField,
+    dimension: &DimensionDefinition,
 ) -> Option<Vec3> {
     let seed = biome_field.seed() ^ 0x3c6e_f372_fe94_f82b;
     let mut candidates = anchors
@@ -38,14 +41,24 @@ pub(super) fn ocean_cave_entrance(
             }
 
             let horizontal = cave_entrance_horizontal(anchor, minimum, maximum, seed);
-            let water = region.hydrology.water_at(horizontal)?;
-            if water.kind != HydrologyWaterKind::Ocean
-                || water.strength < OCEAN_CAVE_MINIMUM_STRENGTH
-            {
+            let surface_position = horizontal.floor().as_ivec2();
+            let surface = biome_field.sample_surface(horizontal);
+            let ocean_strength = ocean_weight_from_surface(&surface, biome_field);
+            if ocean_strength < OCEAN_CAVE_MINIMUM_STRENGTH {
                 return None;
             }
 
-            let opening_y = (water.bed_level + 0.5).max(1.5);
+            let ocean_floor = surface_height_from_sample(
+                surface_position,
+                dimension,
+                biome_field,
+                &surface,
+            ) as f32;
+            if ocean_floor >= dimension.sea_level as f32 {
+                return None;
+            }
+
+            let opening_y = (ocean_floor + 0.5).max(1.5);
             let drop = opening_y - anchor.y;
             if drop < OCEAN_CAVE_MINIMUM_DROP {
                 return None;
@@ -53,7 +66,7 @@ pub(super) fn ocean_cave_entrance(
 
             Some((
                 drop,
-                water.strength,
+                ocean_strength,
                 Vec3::new(horizontal.x, opening_y, horizontal.y),
             ))
         })

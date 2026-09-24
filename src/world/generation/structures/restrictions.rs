@@ -170,19 +170,6 @@ fn surface_block_matches(
                 .lake_bed_block
                 .as_deref()
                 .or(surface_biome.hydrology.shore_block.as_deref()),
-            HydrologyWaterKind::Ocean => context
-                .dimension
-                .hydrology
-                .ocean_biome
-                .as_deref()
-                .and_then(|id| context.biomes.get(id))
-                .and_then(|biome| {
-                    biome
-                        .hydrology
-                        .ocean_bed_block
-                        .as_deref()
-                        .or(biome.hydrology.shore_block.as_deref())
-                }),
         };
         if hydrology_block.is_some_and(&matches) {
             return true;
@@ -327,12 +314,37 @@ fn surface_fluid_matches(
     }
 
     let probe = normal_surface_probe(position, context);
+    if ocean_surface_water_at(&probe, context)
+        && context.dimension.hydrology.water_fluid == target_fluid
+    {
+        return true;
+    }
 
     probe
         .region
         .hydrology
         .supported_water_at(probe.horizontal, probe.surface_height as f32)
         .is_some_and(|water| water.fluid_id == target_fluid)
+}
+
+fn ocean_surface_water_at(
+    probe: &NormalSurfaceProbe<'_>,
+    context: &ChunkGenerationContext<'_>,
+) -> bool {
+    if !context.world_generation.spawn_oceans()
+        || probe.surface_height >= context.dimension.sea_level
+    {
+        return false;
+    }
+
+    let Some(ocean_index) = context.biome_field.ocean_surface_index() else {
+        return false;
+    };
+    probe
+        .surface
+        .influences
+        .iter()
+        .any(|influence| influence.surface_index == ocean_index && influence.weight > f32::EPSILON)
 }
 
 fn intersects_surface_fluid(
@@ -349,6 +361,14 @@ fn intersects_surface_fluid(
     structure.column_spans().iter().any(|span| {
         let position = anchor + rotation.rotate_horizontal(span.offset);
         let probe = normal_surface_probe(position, context);
+        let structure_min = origin_y + span.min_y_offset;
+        let structure_max = origin_y + span.max_y_offset;
+
+        if ocean_surface_water_at(&probe, context) {
+            return structure_max as f32 + 1.0 > probe.surface_height as f32
+                && (structure_min as f32) < context.dimension.sea_level as f32;
+        }
+
         let Some(water) = probe
             .region
             .hydrology
@@ -357,8 +377,6 @@ fn intersects_surface_fluid(
             return false;
         };
 
-        let structure_min = origin_y + span.min_y_offset;
-        let structure_max = origin_y + span.max_y_offset;
         structure_max as f32 + 1.0 > water.bed_level
             && (structure_min as f32) < water.water_level
     })

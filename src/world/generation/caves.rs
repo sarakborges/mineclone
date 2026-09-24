@@ -60,11 +60,11 @@ pub(super) fn anchored_cave_region(
 
         if region.coord.y == 0
             && let Some(ocean_opening) = ocean_cave_entrance(
-                region,
                 &underground_anchors,
                 minimum,
                 maximum,
                 biome_field,
+                dimension,
             )
         {
             anchors.push(ocean_opening);

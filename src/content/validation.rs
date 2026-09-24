@@ -169,6 +169,6 @@ pub(super) fn validate_content(content: &LoadedContent) {
         );
         dimension
             .hydrology
-            .validate_references(&dimension.id, &content.biomes, &content.fluids);
+            .validate_references(&dimension.id, &content.fluids);
     }
 }
