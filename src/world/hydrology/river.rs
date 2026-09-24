@@ -171,8 +171,7 @@ where
             }
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
-            let source_water_level = source_body_water_level
-                .or_else(|| confluence_water_levels.get(&cell).copied());
+            let source_water_level = source_body_water_level;
             let downstream_body = selection
                 .lakes
                 .get(&downstream_cell)
