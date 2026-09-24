@@ -824,6 +824,14 @@ fn rasterize_structure(
                 else {
                     return false;
                 };
+                let object_y = support_y + 1;
+                if object_y >= CHUNK_SIZE
+                    || chunk.fluid_at(local_x, support_y, local_z).is_some()
+                    || chunk.fluid_at(local_x, object_y, local_z).is_some()
+                {
+                    return false;
+                }
+
                 let support_world_position =
                     context.chunk_origin
                         + IVec3::new(local_x as i32, support_y as i32, local_z as i32);

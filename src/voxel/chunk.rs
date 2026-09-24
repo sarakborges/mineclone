@@ -263,6 +263,10 @@ impl VoxelChunkStructureMut<'_> {
         self.blocks.get(index(x, y, z))
     }
 
+    pub(crate) fn fluid_at(&self, x: usize, y: usize, z: usize) -> Option<FluidCell> {
+        self.fluids.get(index(x, y, z))
+    }
+
     pub(crate) fn set_block(
         &mut self,
         x: usize,
