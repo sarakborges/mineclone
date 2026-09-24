@@ -171,6 +171,16 @@ pub struct StructureConnector {
     pub strength_loss_on_each_loop: f32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct StructureConnectorPoint {
+    pub(crate) offset: IVec3,
+    pub(crate) face: LayerFace,
+    pub(crate) target: Option<String>,
+    pub(crate) strength: f32,
+    pub(crate) strength_loss_on_each_loop: f32,
+}
+
+
 
 
 #[derive(Clone, Debug, Default)]
@@ -262,6 +272,76 @@ impl StructureDefinition {
         }
     }
 
+    pub(crate) fn connector_points(&self) -> Vec<StructureConnectorPoint> {
+        let mut connectors = Vec::new();
+
+        for layer in &self.layers {
+            for (z, row) in layer.rows.iter().enumerate() {
+                for (x, symbol) in row.chars().enumerate() {
+                    if symbol == '.' {
+                        continue;
+                    }
+                    let Some(connector) = self
+                        .palette_entry(symbol)
+                        .and_then(|entry| entry.connector.as_ref())
+                    else {
+                        continue;
+                    };
+                    connectors.push(StructureConnectorPoint {
+                        offset: IVec3::new(
+                            x as i32 - self.anchor.x,
+                            layer.y - self.anchor.y,
+                            z as i32 - self.anchor.z,
+                        ),
+                        face: connector.face,
+                        target: connector.target.clone(),
+                        strength: connector.strength,
+                        strength_loss_on_each_loop: connector.strength_loss_on_each_loop,
+                    });
+                }
+            }
+        }
+
+        connectors
+    }
+
+    pub(crate) fn resolve_input_attachment(
+        &self,
+        world_position: IVec3,
+        required_world_face: LayerFace,
+        hash: u64,
+    ) -> Option<(StructureRotation, IVec3)> {
+        let inputs = self
+            .connector_points()
+            .into_iter()
+            .filter(|connector| connector.target.is_none())
+            .collect::<Vec<_>>();
+        let mut candidates = Vec::new();
+
+        for &rotation in self.supported_rotations() {
+            for (input_index, input) in inputs.iter().enumerate() {
+                if rotation.rotate_face(input.face) != required_world_face {
+                    continue;
+                }
+                let origin = world_position - rotation.rotate_offset(input.offset);
+                candidates.push((rotation, origin, input_index));
+            }
+        }
+
+        candidates.sort_unstable_by_key(|(rotation, origin, input_index)| {
+            (
+                structure_rotation_index(*rotation),
+                origin.x,
+                origin.y,
+                origin.z,
+                *input_index,
+            )
+        });
+        let index = (hash as usize) % candidates.len();
+        let (rotation, origin, _) = candidates[index];
+        Some((rotation, origin))
+    }
+
     pub(crate) fn validate_references(
         &self,
         blocks: &BlockRegistry,
@@ -318,32 +398,42 @@ impl StructureDefinition {
     }
 
     pub(crate) fn validate_connector_references(&self, structures: &StructureRegistry) {
-        for entry in self.palette.values() {
-            let Some(connector) = entry.connector.as_ref() else {
-                continue;
-            };
-            let Some(target) = connector.target.as_deref() else {
-                continue;
-            };
+        for output in self
+            .connector_points()
+            .into_iter()
+            .filter(|connector| connector.target.is_some())
+        {
+            let target = output
+                .target
+                .as_deref()
+                .expect("filtered connector target must exist");
             let members = structures.reference_members(target).unwrap_or_else(|| {
                 panic!(
                     "structure {} connector references missing structure or structure group: {}",
                     self.id, target
                 )
             });
-            assert!(
-                members.iter().all(|member| {
-                    member.palette.values().any(|entry| {
-                        entry
-                            .connector
-                            .as_ref()
-                            .is_some_and(|connector| connector.target.is_none())
-                    })
-                }),
-                "structure {} connector target {} contains a structure without an input connector",
-                self.id,
-                target
-            );
+
+            for member in members {
+                for &parent_rotation in self.supported_rotations() {
+                    let world_face = parent_rotation.rotate_face(output.face);
+                    let required_input_face = opposite_connector_face(world_face);
+                    assert!(
+                        member
+                            .resolve_input_attachment(
+                                parent_rotation.rotate_offset(output.offset),
+                                required_input_face,
+                                self.runtime_hash(),
+                            )
+                            .is_some(),
+                        "structure {} connector target {} member {} cannot align an input connector against {:?}",
+                        self.id,
+                        target,
+                        member.id,
+                        world_face
+                    );
+                }
+            }
         }
     }
 
@@ -1047,6 +1137,26 @@ fn stable_structure_hash(value: &str) -> u64 {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+fn opposite_connector_face(face: LayerFace) -> LayerFace {
+    match face {
+        LayerFace::Right => LayerFace::Left,
+        LayerFace::Left => LayerFace::Right,
+        LayerFace::Top => LayerFace::Bottom,
+        LayerFace::Bottom => LayerFace::Top,
+        LayerFace::Front => LayerFace::Back,
+        LayerFace::Back => LayerFace::Front,
+    }
+}
+
+fn structure_rotation_index(rotation: StructureRotation) -> u8 {
+    match rotation {
+        StructureRotation::Degrees0 => 0,
+        StructureRotation::Degrees90 => 1,
+        StructureRotation::Degrees180 => 2,
+        StructureRotation::Degrees270 => 3,
+    }
 }
 
 fn default_connector_strength() -> f32 {

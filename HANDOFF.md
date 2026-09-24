@@ -1,3 +1,17 @@
+## 2026-09-24 — Parte 6B — Resolver geométrico de connector attachments
+
+A infraestrutura de connectors agora resolve a transformação da peça filha sem depender de terrain/ground fitting.
+
+- Structure expõe os connector points authored como offsets locais em relação ao anchor;
+- cada output é transformado pela rotação da peça pai;
+- o input da peça filha precisa apontar para a face mundial oposta à do output;
+- todas as rotações suportadas pela peça filha são consideradas;
+- entre múltiplos inputs/rotações compatíveis a seleção é determinística por hash;
+- o origin 3D da filha é derivado diretamente do ponto de conexão compartilhado, garantindo alinhamento exato;
+- validação de conteúdo agora exige que cada membro de um Structure Group alvo consiga alinhar um input em todas as rotações permitidas da peça pai.
+
+Neste checkpoint o resolver cobre uma conexão pai→filho. A próxima parte encadeia essas conexões com budget de strength, produz a lista plana de peças e calcula bounds da cadeia para streaming/chunk selection.
+
 ## 2026-09-24 — Autocomplete substring normaliza ambos os lados
 
 O helper compartilhado de matching agora normaliza tanto o valor quanto a query, garantindo comparação case-insensitive mesmo quando chamado fora do fluxo normal que já lowercasa o token do editor.
