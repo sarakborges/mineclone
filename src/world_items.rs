@@ -440,7 +440,7 @@ fn pickup_proximity_items(
     let pickup_center = player.translation - Vec3::Y * (PLAYER_EYE_HEIGHT * 0.5);
     let radius_squared = PROXIMITY_PICKUP_RADIUS * PROXIMITY_PICKUP_RADIUS;
 
-    for (entity, transform, world_item, mut pickup) in &mut items {
+    for (entity, transform, mut world_item, mut pickup) in &mut items {
         if pickup.delay_seconds > 0.0 {
             pickup.delay_seconds = (pickup.delay_seconds - time.delta_secs()).max(0.0);
             continue;
