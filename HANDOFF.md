@@ -1,3 +1,19 @@
+## 2026-09-24 — Warp streaming bootstrap agora cresce sob demanda
+
+O warp não usa mais um bootstrap fixo de 3 chunks em todas as direções.
+
+- a busca começa com streaming radius 1;
+- enquanto a safe-position search permanece dentro de 16 blocos do target, somente esse
+  pequeno volume é solicitado;
+- quando a busca realmente cruza um chunk boundary (>16 blocos), o radius sobe para 2;
+- como o raio máximo authored da busca é 32 blocos, não existe motivo para pré-carregar radius 3;
+- horizontal e vertical crescem juntos para manter player body/support disponíveis;
+- forward preload continua desativado durante warp;
+- teste garante a transição 1 → 2 somente após cruzar CHUNK_SIZE.
+
+Isso reduz drasticamente o número de chunks que um warp comum precisa gerar/meshar antes de
+encontrar um destino seguro, sem diminuir o raio máximo de fallback.
+
 ## 2026-09-24 — Warp safe-position search agora é incremental e time-budgeted
 
 A busca de destino seguro do warp não reinicia mais em radius 0 a cada frame.

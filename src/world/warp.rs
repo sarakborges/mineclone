@@ -14,6 +14,7 @@ use crate::{
         },
     },
     voxel::{
+        chunk::CHUNK_SIZE,
         collision::collides_aabb,
         coordinates::chunk_coord_from_world,
         world::VoxelWorld,
@@ -21,7 +22,7 @@ use crate::{
 };
 
 const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
-const WARP_STREAMING_RADIUS_CHUNKS: i32 = 3;
+const WARP_STREAMING_MIN_RADIUS_CHUNKS: i32 = 1;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
 const SLOW_WARP_SEARCH_WARNING: Duration = Duration::from_millis(4);
@@ -84,8 +85,16 @@ impl PendingWarp {
     }
 
     pub(super) fn streaming_radii(&self) -> Option<(i32, i32)> {
-        self.target
-            .map(|_| (WARP_STREAMING_RADIUS_CHUNKS, WARP_STREAMING_RADIUS_CHUNKS))
+        self.target.map(|_| {
+            let chunk_size = CHUNK_SIZE as i32;
+            let search_radius_chunks = self
+                .search
+                .radius
+                .max(0)
+                .div_ceil(chunk_size)
+                .max(WARP_STREAMING_MIN_RADIUS_CHUNKS);
+            (search_radius_chunks, search_radius_chunks)
+        })
     }
 }
 
@@ -326,6 +335,20 @@ mod tests {
         assert_eq!(search.remaining.len(), 2);
         assert_eq!(search.remaining.pop_front(), Some(IVec3::new(1, 2, 3)));
         assert_eq!(search.remaining.pop_front(), Some(IVec3::new(-2, 0, 3)));
+    }
+
+    #[test]
+    fn warp_streaming_radius_grows_only_when_search_crosses_a_chunk() {
+        let mut pending = PendingWarp::default();
+        pending.request(IVec3::new(15, 64, 15));
+
+        assert_eq!(pending.streaming_radii(), Some((1, 1)));
+
+        pending.search.radius = CHUNK_SIZE as i32;
+        assert_eq!(pending.streaming_radii(), Some((1, 1)));
+
+        pending.search.radius = CHUNK_SIZE as i32 + 1;
+        assert_eq!(pending.streaming_radii(), Some((2, 2)));
     }
 
     #[test]
