@@ -1,7 +1,10 @@
 use std::io;
 
 use crate::{
-    content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry},
+    content::{
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        object::ObjectRegistry,
+    },
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
@@ -17,9 +20,10 @@ impl SavedChunkCatalog {
         self,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
+        objects: &ObjectRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<VoxelWorld> {
-        VoxelWorld::from_saved_chunks(self.0, blocks, layers, fluids)
+        VoxelWorld::from_saved_chunks(self.0, blocks, layers, objects, fluids)
     }
 }
 
