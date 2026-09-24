@@ -1,3 +1,18 @@
+## 2026-09-23 — Static world drops + single-plane item sprites [VERSION 0.66.3]
+
+World-item sprites for generic items/tools/layers no longer use two crossed
+quads at ±45°. That crossed-plane renderer was the reason a single stick drop
+looked like two sticks forming an X. Sprite drops now use one textured plane;
+the existing visual rotation remains purely local to the model.
+
+World items also no longer have translational physics. The previous
+`WorldItemMotion` pipeline applied horizontal launch velocity, gravity and
+voxel collision every frame; Survival loot additionally received random X/Z
+impulse, which made drops drift away from the block that spawned them.
+`WorldItemSpawnRequest` no longer carries velocity, Q/inventory drops spawn
+at their resolved drop position, and mining loot stays exactly at the broken
+voxel center. Pickup delay/proximity behavior is unchanged.
+
 ## 2026-09-23 — Creative Inventory filter/search lifecycle fix [VERSION 0.66.2]
 
 Creative Inventory filtering no longer depends specifically on

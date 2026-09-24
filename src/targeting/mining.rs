@@ -15,7 +15,7 @@ use crate::{
     },
     gameplay::{
         availability::world_interaction_available,
-        random::{next_signed_f32, next_unit_f32},
+        random::next_unit_f32,
     },
     player::{
         camera::GameplayCamera,
@@ -227,12 +227,7 @@ fn spawn_survival_loot(
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
             }
 
-            let velocity = Vec3::new(
-                next_signed_f32(&mut random_state) * 0.65,
-                1.1 + next_unit_f32(&mut random_state) * 0.4,
-                next_signed_f32(&mut random_state) * 0.65,
-            );
-            item_spawns.write(WorldItemSpawnRequest::dropped(stack, position, velocity));
+            item_spawns.write(WorldItemSpawnRequest::dropped(stack, position));
         }
     }
 }
