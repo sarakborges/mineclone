@@ -125,6 +125,8 @@ pub struct StructurePaletteEntry {
     #[serde(default)]
     pub clear: bool,
     #[serde(default)]
+    pub layers_only: bool,
+    #[serde(default)]
     pub orientation: BlockOrientation,
     #[serde(default)]
     pub surface_layers: Vec<StructureSurfaceLayer>,
@@ -137,8 +139,12 @@ pub struct StructureSurfaceLayer {
     pub faces: Vec<LayerFace>,
     #[serde(default = "default_surface_layer_chance")]
     pub chance: f32,
+    #[serde(default)]
+    pub rotation_group: Option<String>,
     #[serde(skip)]
     runtime_hash: u64,
+    #[serde(skip)]
+    runtime_rotation_hash: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -209,6 +215,10 @@ pub(crate) struct StructureColumnSpan {
 impl StructureSurfaceLayer {
     pub(crate) fn runtime_hash(&self) -> u64 {
         self.runtime_hash
+    }
+
+    pub(crate) fn runtime_rotation_hash(&self) -> u64 {
+        self.runtime_rotation_hash
     }
 }
 
@@ -383,6 +393,11 @@ impl StructureDefinition {
             .is_some_and(|entry| entry.clear)
     }
 
+    pub(crate) fn layers_only_voxel(&self, voxel: &StructureVoxel) -> bool {
+        self.palette_entry(voxel.palette_symbol)
+            .is_some_and(|entry| entry.layers_only)
+    }
+
     pub(crate) fn surface_layers_for_voxel(
         &self,
         voxel: &StructureVoxel,
@@ -398,6 +413,12 @@ impl StructureDefinition {
         for entry in self.palette.values_mut() {
             for surface in &mut entry.surface_layers {
                 surface.runtime_hash = stable_structure_hash(&surface.layer);
+                surface.runtime_rotation_hash = stable_structure_hash(
+                    surface
+                        .rotation_group
+                        .as_deref()
+                        .unwrap_or(surface.layer.as_str()),
+                );
             }
         }
         let mut voxels = Vec::new();
@@ -558,10 +579,11 @@ impl StructureDefinition {
             );
             let content_count = usize::from(entry.block.is_some())
                 + usize::from(entry.fluid.is_some())
-                + usize::from(entry.clear);
+                + usize::from(entry.clear)
+                + usize::from(entry.layers_only);
             assert_eq!(
                 content_count, 1,
-                "structure {} palette symbol {symbol} must define exactly one of block, fluid, or clear",
+                "structure {} palette symbol {symbol} must define exactly one of block, fluid, clear, or layersOnly",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -590,6 +612,13 @@ impl StructureDefinition {
                     self.id
                 );
             }
+            if entry.layers_only {
+                assert!(
+                    !entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} layersOnly entries must define surfaceLayers",
+                    self.id
+                );
+            }
 
             for (surface_index, surface) in entry.surface_layers.iter().enumerate() {
                 assert!(
@@ -607,6 +636,13 @@ impl StructureDefinition {
                     "structure {} palette symbol {symbol} surfaceLayers[{surface_index}] must define at least one face",
                     self.id
                 );
+                if let Some(rotation_group) = surface.rotation_group.as_deref() {
+                    assert!(
+                        !rotation_group.trim().is_empty(),
+                        "structure {} palette symbol {symbol} surfaceLayers[{surface_index}].rotationGroup cannot be empty",
+                        self.id
+                    );
+                }
                 for (face_index, face) in surface.faces.iter().enumerate() {
                     assert!(
                         !surface.faces[..face_index].contains(face),
