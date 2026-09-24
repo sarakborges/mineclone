@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 5B — Helpers determinísticos órfãos removidos
+
+O CI após deletar cave-connectivity identificou três helpers compartilhados que só eram usados por esse subsistema: `compare_vec3`, `sorted_unique_vec3s` e `avalanche_u64`. Eles foram removidos de `world/deterministic.rs` em vez de receber allowances de dead code. Os demais helpers determinísticos continuam em uso.
+
 ## 2026-09-24 — Parte 5B — Módulos e caches legados de caves removidos
 
 Após o detach executável, os módulos agora órfãos foram fisicamente removidos em vez de serem silenciados com allowances.
