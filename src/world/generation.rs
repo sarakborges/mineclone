@@ -8,8 +8,6 @@ mod structures;
 mod surface_objects;
 pub(crate) mod surface_carvers;
 
-use std::sync::Arc;
-
 use bevy::prelude::*;
 
 use crate::{
@@ -26,10 +24,7 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        cave_connectivity::CaveConnectivityRegion,
-        generation_region::{
-            GenerationRegion, generation_region_coord, generation_region_world_bounds,
-        },
+        generation_region::{generation_region_coord, generation_region_world_bounds},
         new_world::{WorldGenerationMode, WorldGenerationSettings},
         terrain::{chunk_y_bounds, surface_height},
         world_feature_fields::WorldFeatureFields,
@@ -49,7 +44,6 @@ pub(crate) use self::structures::{
     surface_layer_placements,
 };
 use self::{
-    caves::anchored_cave_region,
     density::{DensityPassContext, sample_density_field},
     fluids::{FluidPassContext, rasterize_fluid_pass},
     materials::{MaterialPassContext, rasterize_material_pass},
@@ -70,26 +64,6 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) biome_field: &'a BiomeField,
     pub(crate) feature_fields: &'a WorldFeatureFields,
 }
-
-impl ChunkGenerationContext<'_> {
-    pub(crate) fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
-        self.feature_fields.region(region_coord)
-    }
-
-    fn anchored_caves(&self, region: &GenerationRegion) -> Option<Arc<CaveConnectivityRegion>> {
-        if !self.world_generation.spawn_caves() {
-            return None;
-        }
-        anchored_cave_region(
-            region,
-            self.biome_field,
-            self.biomes,
-            self.dimension,
-            self.feature_fields,
-        )
-    }
-}
-
 
 pub(crate) fn generate_chunk(
     chunk_coord: IVec3,
@@ -157,7 +131,6 @@ pub(crate) fn generate_chunk(
     }
 
     let region_coord = generation_region_coord(chunk_coord);
-    let region = context.region(region_coord);
     let volume_region = context
         .feature_fields
         .volume_biome_region(region_coord, || {
@@ -169,14 +142,11 @@ pub(crate) fn generate_chunk(
     let chunk_minimum = chunk_origin.as_vec3();
     let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
     let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
-    let anchored_caves = context.anchored_caves(region.as_ref());
     let density = sample_density_field(
         chunk_origin,
         columns.as_ref(),
         &DensityPassContext {
-            region: region.as_ref(),
             volume_region: &chunk_volume_region,
-            anchored_caves: anchored_caves.as_deref(),
             biome_field: context.biome_field,
             biomes: context.biomes,
             dimension: context.dimension,
@@ -207,7 +177,6 @@ pub(crate) fn generate_chunk(
             biomes: context.biomes,
             biome_field: context.biome_field,
             sea_level: context.dimension.sea_level,
-            anchored_caves: anchored_caves.as_deref(),
             sea_fluid: &context.dimension.sea_fluid,
         },
     );

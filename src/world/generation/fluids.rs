@@ -11,7 +11,7 @@ use crate::{
         fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
     world::{
-        biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
+        biome_field::BiomeField,
         deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
         noise::fractal_noise_2d, terrain::surface_height_from_sample,
     },
@@ -27,7 +27,6 @@ pub(super) struct FluidPassContext<'a> {
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) biome_field: &'a BiomeField,
     pub(super) sea_level: i32,
-    pub(super) anchored_caves: Option<&'a CaveConnectivityRegion>,
     pub(super) sea_fluid: &'a str,
 }
 
@@ -69,7 +68,6 @@ pub(super) fn rasterize_fluid_pass(
         .fluids
         .id_of(pass.sea_fluid)
         .unwrap_or_else(|| panic!("dimension references missing seaFluid: {}", pass.sea_fluid));
-    let underground_fluid_id = pass.anchored_caves.map(|_| sea_fluid_id);
     let mut placements = Vec::<([u8; 3], FluidCell, bool)>::new();
 
     for local_z in 0..CHUNK_SIZE {
@@ -101,23 +99,6 @@ pub(super) fn rasterize_fluid_pass(
                     sea_surface.and_then(|surface| fluid_level_for_surface(surface, world_y))
                 {
                     (Some(FluidCell::source(sea_fluid_id, level)), true)
-                } else if let (Some(caves), Some(fluid_id)) =
-                    (pass.anchored_caves, underground_fluid_id)
-                {
-                    let position = Vec3::new(
-                        world_x as f32 + 0.5,
-                        world_y as f32 + 0.5,
-                        world_z as f32 + 0.5,
-                    );
-                    (
-                        caves.underground_water_at(position).and_then(|water| {
-                            (world_y as f32 + 1.0 > water.bed_level)
-                                .then(|| fluid_level_for_surface(water.water_level, world_y))
-                                .flatten()
-                                .map(|level| FluidCell::source(fluid_id, level))
-                        }),
-                        false,
-                    )
                 } else {
                     (None, false)
                 };

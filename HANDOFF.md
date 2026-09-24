@@ -1,3 +1,16 @@
+## 2026-09-24 — Parte 5A — Cave connectivity desligado do chunk generation
+
+A remoção do segundo subsistema legado começou pelos consumidores executáveis.
+
+- chunk generation não constrói mais `anchored_cave_region`;
+- density sampling não recebe nem consulta `CaveConnectivityRegion` e não aplica mais carve de connector graph;
+- o antigo surface tunnel carver deixou de participar do density pass;
+- o fluid pass não consulta mais underground water do cave-connectivity; permanecem somente sea fluid e surface fluids authored;
+- cavern biomes continuam sendo gerados normalmente por `BiomeDensityModifier::Cavern` e continuam respeitando `spawnCaves`;
+- `WORLDGEN_VERSION` foi incrementado de 2 para 3 porque a remoção muda deterministicamente chunks ainda não gerados.
+
+Os módulos/caches agora órfãos serão fisicamente deletados na próxima parte; nenhum connector novo foi implementado.
+
 ## 2026-09-24 — Corrigido head-of-line blocking de chunk meshes
 
 A investigação dos chunks que continuavam sem aparecer confirmou que Hydrology não era a causa. O problema estava no estágio assíncrono de publicação de meshes.
