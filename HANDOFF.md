@@ -1,3 +1,21 @@
+## 2026-09-24 — World-object chunk sync agora é diff incremental
+
+Alterar um object ou seu support block não reconstrói mais todos os objects do chunk.
+
+- `WorldObjectStore` mantém, por support, o entity, `ObjectCell` materializado e o
+  `VoxelCell` de suporte usado para calcular posicionamento;
+- quando `chunk_object_revision` muda, o runtime compara o estado authored atual por support;
+- object id/face/rotation iguais + support block igual preservam a entity existente;
+- object novo materializa somente aquela entity;
+- object removido despawna somente aquela entity;
+- object alterado ou support block/orientation alterado respawna somente o support afetado;
+- o support cell já calculado é repassado a `spawn_world_object`, evitando lookup duplicado;
+- unload/saída da faixa visual continua removendo o chunk inteiro, que é o comportamento correto
+  para uma mudança de residency.
+
+Isso elimina spikes de interação em chunks com muitos grass objects: colher/colocar um item não
+causa mais despawn + spawn + material setup de toda a vegetação daquele chunk.
+
 ## 2026-09-24 — World objects deixam de materializar chunks de preload
 
 O VoxelWorld continua autoritativo para todos os objects carregados, mas entities ECS/render

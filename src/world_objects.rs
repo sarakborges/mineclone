@@ -34,6 +34,7 @@ use crate::{
     },
     rendering::block_tint::block_tint_at,
     voxel::{
+        cell::VoxelCell,
         chunk::CHUNK_SIZE,
         coordinates::{chunk_coord_from_position, chunk_coord_from_world},
         log_variant::is_hollow_log_id,
@@ -85,9 +86,16 @@ impl WorldObjectInstance {
     }
 }
 
+#[derive(Clone, Copy)]
+struct MaterializedWorldObject {
+    entity: Entity,
+    object: ObjectCell,
+    support_cell: Option<VoxelCell>,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct WorldObjectStore {
-    by_support: HashMap<IVec3, Entity>,
+    by_support: HashMap<IVec3, MaterializedWorldObject>,
     by_chunk: HashMap<IVec3, HashSet<IVec3>>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
     synced_world_revision: u64,
@@ -102,11 +110,24 @@ impl WorldObjectStore {
             .get(&coord)
             .into_iter()
             .flatten()
-            .filter_map(|support| self.by_support.get(support).copied())
+            .filter_map(|support| self.by_support.get(support).map(|entry| entry.entity))
     }
 
-    fn insert(&mut self, support: IVec3, entity: Entity) {
-        let previous = self.by_support.insert(support, entity);
+    fn insert(
+        &mut self,
+        support: IVec3,
+        object: ObjectCell,
+        support_cell: Option<VoxelCell>,
+        entity: Entity,
+    ) {
+        let previous = self.by_support.insert(
+            support,
+            MaterializedWorldObject {
+                entity,
+                object,
+                support_cell,
+            },
+        );
         debug_assert!(previous.is_none(), "world object support must be unique");
         self.by_chunk
             .entry(chunk_coord_from_world(support))
@@ -115,7 +136,7 @@ impl WorldObjectStore {
     }
 
     fn remove_support(&mut self, support: IVec3) -> Option<Entity> {
-        let entity = self.by_support.remove(&support)?;
+        let entity = self.by_support.remove(&support)?.entity;
         let coord = chunk_coord_from_world(support);
         let remove_chunk_entry = if let Some(supports) = self.by_chunk.get_mut(&coord) {
             supports.remove(&support);
@@ -135,7 +156,7 @@ impl WorldObjectStore {
         };
         supports
             .into_iter()
-            .filter_map(|support| self.by_support.remove(&support))
+            .filter_map(|support| self.by_support.remove(&support).map(|entry| entry.entity))
             .collect()
     }
 }
@@ -397,26 +418,52 @@ fn sync_world_objects(
             continue;
         }
 
-        despawn_chunk_objects(&mut commands, coord, &mut store);
         let Some(chunk) = content.world.chunk(coord) else {
             continue;
         };
         let chunk_origin = coord * CHUNK_SIZE as i32;
+        let existing_supports = store
+            .by_chunk
+            .get(&coord)
+            .cloned()
+            .unwrap_or_default();
+        let mut desired_supports = HashSet::new();
 
         for (x, y, z, object) in chunk.object_voxels() {
             let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+            desired_supports.insert(support);
+            let support_cell = content.world.cell_at(support);
+            if store.by_support.get(&support).is_some_and(|existing| {
+                existing.object == object && existing.support_cell == support_cell
+            }) {
+                continue;
+            }
+
+            if let Some(entity) = store.remove_support(support) {
+                commands.entity(entity).despawn();
+            }
             let Some(definition) = content.objects.get(object.object_id) else {
                 continue;
             };
             let entity = spawn_world_object(
                 &mut commands,
                 support,
+                support_cell,
                 object,
                 definition,
                 &content,
                 &mut assets,
             );
-            store.insert(support, entity);
+            store.insert(support, object, support_cell, entity);
+        }
+
+        for support in existing_supports {
+            if desired_supports.contains(&support) {
+                continue;
+            }
+            if let Some(entity) = store.remove_support(support) {
+                commands.entity(entity).despawn();
+            }
         }
 
         store.synced_chunk_revisions.insert(coord, revision);
@@ -449,12 +496,12 @@ fn despawn_chunk_objects(
 fn spawn_world_object(
     commands: &mut Commands,
     support: IVec3,
+    support_cell: Option<VoxelCell>,
     object: ObjectCell,
     definition: &ObjectDefinition,
     content: &WorldObjectSceneContent<'_>,
     assets: &mut WorldObjectSceneAssets<'_>,
 ) -> Entity {
-    let support_cell = content.world.cell_at(support);
     let hollow_orientation = support_cell
         .filter(|cell| is_hollow_log_id(cell.block_id))
         .filter(|_| object.face == crate::content::object::ObjectPlacementFace::Top)
