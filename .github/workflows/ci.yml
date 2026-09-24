@@ -64,3 +64,9 @@ jobs:
       - name: Check
         run: cargo check --locked
 
+      # Bevy B0001 query conflicts are runtime system-initialization errors and
+      # are invisible to cargo check/Clippy. Keep these focused regression tests
+      # executable in CI so a conflicting SystemParam cannot ship green again.
+      - name: Runtime ECS query validation
+        run: cargo test --locked system_param_tests -- --nocapture
+
