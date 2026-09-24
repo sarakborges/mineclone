@@ -4,7 +4,8 @@ use crate::{
     content::{
         attack::AttackRegistry, block::BlockRegistry,
         builtin_ids::BIOME_TINT_METADATA_KEY,
-        layer::{LayerFace, LayerRegistry}, player::PlayerDefinition,
+        layer::{LayerFace, LayerRegistry},
+        object::{ObjectPlacementFace, ObjectRegistry}, player::PlayerDefinition,
         tool::ToolRegistry,
         tool_behavior::{MINE_TOOL_BEHAVIOR_ID, NONE_TOOL_BEHAVIOR_ID},
     },
@@ -19,6 +20,9 @@ use crate::{
         texture_rotation::TextureRotation,
     },
     world_items::TargetedWorldItem,
+    world_objects::{
+        TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest, WorldObjectStore,
+    },
 };
 
 use super::{
@@ -55,12 +59,14 @@ struct BlockEditInput<'w, 's> {
     targeted: ResMut<'w, TargetedBlock>,
     creature_target: Res<'w, super::block::TargetedCreature>,
     world_item_target: Res<'w, TargetedWorldItem>,
+    object_target: ResMut<'w, TargetedWorldObject>,
 }
 
 #[derive(SystemParam)]
 struct BlockEditDefinitions<'w> {
     blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
     attacks: Res<'w, AttackRegistry>,
     player: Res<'w, PlayerDefinition>,
@@ -90,6 +96,9 @@ fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
     mut runtime: VoxelTopologyRuntime,
+    object_store: Res<WorldObjectStore>,
+    mut object_placements: MessageWriter<WorldObjectPlaceRequest>,
+    mut object_removals: MessageWriter<WorldObjectRemoveRequest>,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut creature_attack: CreatureAttackRuntime,
@@ -103,7 +112,9 @@ fn edit_targeted_block(
     }
 
     let (player_transform, game_mode) = input.player.into_inner();
-    if right_pressed && input.world_item_target.0.is_some() {
+    if right_pressed
+        && (input.world_item_target.0.is_some() || input.object_target.0.is_some())
+    {
         return;
     }
     if middle_pressed && game_mode.has_creative_inventory() {
@@ -128,6 +139,16 @@ fn edit_targeted_block(
         .stack_at(selected_slot)
         .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
+
+    if left_pressed && let Some(entity) = input.object_target.0 {
+        object_removals.write(WorldObjectRemoveRequest {
+            entity,
+            drop_self: *game_mode == GameMode::Survival,
+        });
+        input.object_target.0 = None;
+        viewmodel_animation.play_break();
+        return;
+    }
 
     // Left-clicking empty space still swings the player's arm. Mining tools use
     // the break swing; everything else uses the generic hit swing. World edits
@@ -167,6 +188,27 @@ fn edit_targeted_block(
     let Some(hit) = input.targeted.0 else {
         return;
     };
+
+    if right_pressed
+        && let Some(object_id) = selected_item
+            .filter(|item_id| definitions.objects.get(item_id).is_some())
+    {
+        let definition = definitions
+            .objects
+            .get(object_id)
+            .expect("selected object definition must exist");
+        if let Some(anchor) = object_placement_anchor(
+            hit,
+            definition,
+            runtime.world(),
+            &object_store,
+        ) {
+            object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
+            viewmodel_animation.play_place();
+        }
+        return;
+    }
+
     let outcome = edit_targeted_voxel(
         TargetedVoxelEdit {
             left_pressed,
@@ -297,3 +339,23 @@ fn edit_targeted_voxel(
     }
 }
 
+
+
+fn object_placement_anchor(
+    hit: VoxelHit,
+    definition: &crate::content::object::ObjectDefinition,
+    world: &crate::voxel::world::VoxelWorld,
+    objects: &WorldObjectStore,
+) -> Option<IVec3> {
+    let face = ObjectPlacementFace::from_normal(hit.normal)?;
+    if !definition.supports_placement_face(face) {
+        return None;
+    }
+
+    let anchor = hit.voxel + hit.normal;
+    (anchor.y >= 0
+        && world.is_loaded_at(anchor)
+        && world.cell_at(anchor).is_none()
+        && !objects.contains(anchor))
+    .then_some(anchor)
+}
