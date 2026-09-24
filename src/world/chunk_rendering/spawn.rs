@@ -5,8 +5,8 @@ use bevy::{
 
 use crate::{
     app::game_state::GameState,
-    content::{block::BlockTint, fluid::FluidId},
-    rendering::block_tint::{block_tint_at, block_vertex_tint},
+    content::{block::BlockTint, builtin_ids::BIOME_TINT_METADATA_KEY, fluid::FluidId},
+    rendering::block_tint::{block_tint_at, block_tint_for_biome, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::{ChunkFluidMesh, build_fluid_meshlets},
@@ -202,6 +202,11 @@ fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
         |voxel, cell, block| {
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
+            } else if let Some(tint) = cell
+                .secondary_property(BIOME_TINT_METADATA_KEY)
+                .and_then(|biome_id| block_tint_for_biome(block.tint, biome_id, context.biomes))
+            {
+                tint
             } else {
                 column_tints.get_or_insert_with(voxel, block.tint, || {
                     let position =

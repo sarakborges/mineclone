@@ -3,6 +3,7 @@ use std::{collections::{HashMap, HashSet}, io};
 use crate::{
     content::{
         biome::{BiomeKind, BiomeRegistry},
+        builtin_ids::BIOME_TINT_METADATA_KEY,
         block::BlockRegistry,
         creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry,
@@ -65,6 +66,7 @@ impl SaveRegistries<'_> {
                     || self.layers.get(id).is_some()
                     || self.tools.get(id).is_some()
             },
+            |id| self.biomes.get(id).is_some(),
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
         for creature in &snapshot.creatures {
@@ -160,6 +162,7 @@ impl PruneRegistries {
             spawn_biome_valid,
             current_biome_valid,
             |id| self.valid_items.contains(id),
+            |id| self.valid_biomes.contains(id),
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
         for creature in &snapshot.creatures {
@@ -175,6 +178,7 @@ fn validate_playable(
     spawn_biome_valid: bool,
     current_biome_valid: bool,
     valid_item: impl Fn(&str) -> bool,
+    valid_biome: impl Fn(&str) -> bool,
 ) -> io::Result<()> {
     if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) {
         return Err(invalid_data("saved dimension or world clock is invalid"));
@@ -205,9 +209,22 @@ fn validate_playable(
     if snapshot.selected_hotbar_slot >= HOTBAR_SLOT_COUNT {
         return Err(invalid_data("invalid selected hotbar slot"));
     }
-    for id in snapshot.inventory.iter().flatten() {
-        if !valid_item(id) {
-            return Err(invalid_data(format!("unknown inventory item ID: {id}")));
+    for stack in snapshot.inventory.iter().flatten() {
+        if !valid_item(stack.id()) {
+            return Err(invalid_data(format!(
+                "unknown inventory item ID: {}",
+                stack.id()
+            )));
+        }
+        if !stack.metadata_is_valid() {
+            return Err(invalid_data("saved inventory item metadata is invalid"));
+        }
+        if let Some(biome_id) = stack.metadata_value(BIOME_TINT_METADATA_KEY)
+            && !valid_biome(biome_id)
+        {
+            return Err(invalid_data(format!(
+                "saved inventory biome tint references missing biome: {biome_id}"
+            )));
         }
     }
     Ok(())

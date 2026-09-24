@@ -5,7 +5,7 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-use super::block_tint::block_tint_at;
+use super::block_tint::block_tint_at_with_override;
 
 #[derive(SystemParam)]
 pub(crate) struct BlockVisualContent<'w> {
@@ -25,10 +25,20 @@ impl BlockVisualContent<'_> {
     }
 
     pub(crate) fn tint_at(&self, block_id: &str, position: Vec2) -> Option<Color> {
+        self.tint_at_with_override(block_id, position, None)
+    }
+
+    pub(crate) fn tint_at_with_override(
+        &self,
+        block_id: &str,
+        position: Vec2,
+        biome_override: Option<&str>,
+    ) -> Option<Color> {
         let block = self.blocks.get(block_id)?;
-        Some(block_tint_at(
+        Some(block_tint_at_with_override(
             block.tint,
             position,
+            biome_override,
             &self.biome_field,
             &self.biomes,
         ))

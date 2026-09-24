@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    content::builtin_ids::BIOME_TINT_METADATA_KEY,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     voxel::{raycast::VoxelHit, world::VoxelWorld},
 };
@@ -35,6 +36,16 @@ impl BlockTargetingScene<'_, '_> {
 
     pub(crate) fn selected_item(&self) -> Option<&'static str> {
         self.hotbar.item_at(self.hotbar.selected_slot())
+    }
+
+    pub(crate) fn selected_biome_tint(&self) -> Option<&str> {
+        self.hotbar
+            .stack_at(self.hotbar.selected_slot())
+            .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
+    }
+
+    pub(crate) fn selected_stack_changed(&self) -> bool {
+        self.hotbar.is_changed()
     }
 
     pub(crate) fn world(&self) -> &VoxelWorld {

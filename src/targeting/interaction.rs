@@ -2,14 +2,18 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        attack::AttackRegistry, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
-        player::PlayerDefinition,
+        attack::AttackRegistry, block::BlockRegistry,
+        builtin_ids::BIOME_TINT_METADATA_KEY,
+        layer::{LayerFace, LayerRegistry}, player::PlayerDefinition,
         tool::ToolRegistry,
         tool_behavior::{MINE_TOOL_BEHAVIOR_ID, NONE_TOOL_BEHAVIOR_ID},
     },
     creatures::CreatureAttackRuntime,
     gameplay::availability::world_interaction_available,
-    player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
+    player::{
+        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
+        item_stack::ItemStack, viewmodel::ViewModelAnimation,
+    },
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, raycast::VoxelHit,
         texture_rotation::TextureRotation,
@@ -66,6 +70,7 @@ struct TargetedVoxelEdit<'a> {
     right_pressed: bool,
     selected_slot: usize,
     selected_item: Option<&'static str>,
+    biome_tint: Option<&'a str>,
     hit: VoxelHit,
     player_position: Vec3,
     game_mode: &'a GameMode,
@@ -100,13 +105,24 @@ fn edit_targeted_block(
         if let Some(hit) = input.targeted.0
             && definitions.blocks.get(hit.block_id).is_some()
         {
-            input.hotbar.set_selected_item(Some(hit.block_id));
+            let mut stack = ItemStack::new(hit.block_id);
+            if let Some(cell) = runtime.world().cell_at(hit.voxel)
+                && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
+            {
+                stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
+            }
+            input.hotbar.set_selected_stack(Some(stack));
         }
         return;
     }
 
     let selected_slot = input.hotbar.selected_slot();
     let selected_item = input.hotbar.item_at(selected_slot);
+    let selected_biome_tint = input
+        .hotbar
+        .stack_at(selected_slot)
+        .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
+        .map(str::to_owned);
 
     // Left-clicking empty space still swings the player's arm. Mining tools use
     // the break swing; everything else uses the generic hit swing. World edits
@@ -152,6 +168,7 @@ fn edit_targeted_block(
             right_pressed,
             selected_slot,
             selected_item,
+            biome_tint: selected_biome_tint.as_deref(),
             hit,
             player_position: player_transform.translation,
             game_mode,
@@ -263,7 +280,10 @@ fn edit_targeted_voxel(
     };
     let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
     let orientation = placement_orientation.for_block(request.selected_slot, block);
-    let cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
+    let mut cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
+    if let Some(biome_id) = request.biome_tint {
+        cell = cell.with_secondary_property(BIOME_TINT_METADATA_KEY, biome_id);
+    }
 
     if runtime.set_block(voxel, Some(cell)).is_some() {
         VoxelEditOutcome::BlockPlaced

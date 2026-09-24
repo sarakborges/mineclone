@@ -4,13 +4,14 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        block::BlockRegistry, block_id::intern_block_id,
-        item::ItemRegistry, item_id::intern_item_id,
-        layer::LayerRegistry, layer_id::intern_layer_id, tool::ToolRegistry,
-        tool_id::intern_tool_id,
+        block::BlockRegistry, block_id::intern_block_id, item::ItemRegistry,
+        item_id::intern_item_id, layer::LayerRegistry, layer_id::intern_layer_id,
+        tool::ToolRegistry, tool_id::intern_tool_id,
     },
     gameplay::availability::world_interaction_available,
 };
+
+use super::item_stack::{ItemStack, SavedItemStack};
 
 pub const BACKPACK_SLOT_COUNT: usize = 27;
 pub const HOTBAR_SLOT_COUNT: usize = 9;
@@ -25,16 +26,16 @@ pub(crate) enum PlayerHotbarSet {
 #[derive(Resource)]
 pub struct PlayerHotbar {
     selected_slot: usize,
-    backpack: [Option<&'static str>; BACKPACK_SLOT_COUNT],
-    slots: [Option<&'static str>; HOTBAR_SLOT_COUNT],
+    backpack: [Option<ItemStack>; BACKPACK_SLOT_COUNT],
+    slots: [Option<ItemStack>; HOTBAR_SLOT_COUNT],
 }
 
 impl Default for PlayerHotbar {
     fn default() -> Self {
         Self {
             selected_slot: 0,
-            backpack: [None; BACKPACK_SLOT_COUNT],
-            slots: [None; HOTBAR_SLOT_COUNT],
+            backpack: std::array::from_fn(|_| None),
+            slots: std::array::from_fn(|_| None),
         }
     }
 }
@@ -45,22 +46,30 @@ impl PlayerHotbar {
     }
 
     pub fn item_at(&self, slot: usize) -> Option<&'static str> {
-        self.slots.get(slot).copied().flatten()
+        self.stack_at(slot).map(ItemStack::id)
+    }
+
+    pub(crate) fn stack_at(&self, slot: usize) -> Option<&ItemStack> {
+        self.slots.get(slot).and_then(Option::as_ref)
     }
 
     pub(crate) fn inventory_item_at(&self, index: usize) -> Option<&'static str> {
+        self.inventory_stack_at(index).map(ItemStack::id)
+    }
+
+    pub(crate) fn inventory_stack_at(&self, index: usize) -> Option<&ItemStack> {
         if index < BACKPACK_SLOT_COUNT {
-            return self.backpack[index];
+            return self.backpack[index].as_ref();
         }
 
-        self.item_at(index - HOTBAR_INVENTORY_OFFSET)
+        self.stack_at(index - HOTBAR_INVENTORY_OFFSET)
     }
 
     pub(crate) fn replace_inventory_item(
         &mut self,
         index: usize,
-        item: Option<&'static str>,
-    ) -> Option<&'static str> {
+        item: Option<ItemStack>,
+    ) -> Option<ItemStack> {
         if index < BACKPACK_SLOT_COUNT {
             return std::mem::replace(&mut self.backpack[index], item);
         }
@@ -84,16 +93,16 @@ impl PlayerHotbar {
         });
     }
 
-    pub(crate) fn saved_items(&self) -> Vec<Option<String>> {
+    pub(crate) fn saved_items(&self) -> Vec<Option<SavedItemStack>> {
         self.backpack
             .iter()
             .chain(self.slots.iter())
-            .map(|item| item.map(str::to_owned))
+            .map(|item| item.as_ref().map(ItemStack::saved))
             .collect()
     }
 
     pub(crate) fn from_saved_items_and_selection(
-        saved_items: &[Option<String>],
+        saved_items: &[Option<SavedItemStack>],
         selected_slot: usize,
         items: &ItemRegistry,
         blocks: &BlockRegistry,
@@ -101,7 +110,10 @@ impl PlayerHotbar {
         tools: &ToolRegistry,
     ) -> io::Result<Self> {
         if saved_items.len() != INVENTORY_SLOT_COUNT {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid inventory length"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid inventory length",
+            ));
         }
         if selected_slot >= HOTBAR_SLOT_COUNT {
             return Err(io::Error::new(
@@ -112,25 +124,24 @@ impl PlayerHotbar {
 
         let mut restored = Self::default();
         for (index, item) in saved_items.iter().enumerate() {
-            let resolved = match item {
-                None => None,
-                Some(id) => {
-                    if items.get(id).is_some() {
-                        Some(intern_item_id(id))
-                    } else if blocks.get(id).is_some() {
-                        Some(intern_block_id(id))
-                    } else if layers.get(id).is_some() {
-                        Some(intern_layer_id(id))
-                    } else if tools.get(id).is_some() {
-                        Some(intern_tool_id(id))
-                    } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("unknown inventory item ID: {id}"),
-                        ));
-                    }
-                }
-            };
+            let resolved = item
+                .as_ref()
+                .map(|saved| {
+                    saved.restore(|id| {
+                        if items.get(id).is_some() {
+                            Some(intern_item_id(id))
+                        } else if blocks.get(id).is_some() {
+                            Some(intern_block_id(id))
+                        } else if layers.get(id).is_some() {
+                            Some(intern_layer_id(id))
+                        } else if tools.get(id).is_some() {
+                            Some(intern_tool_id(id))
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .transpose()?;
 
             if index < BACKPACK_SLOT_COUNT {
                 restored.backpack[index] = resolved;
@@ -143,6 +154,10 @@ impl PlayerHotbar {
     }
 
     pub(crate) fn set_selected_item(&mut self, item: Option<&'static str>) {
+        self.set_selected_stack(item.map(ItemStack::new));
+    }
+
+    pub(crate) fn set_selected_stack(&mut self, item: Option<ItemStack>) {
         self.slots[self.selected_slot] = item;
     }
 

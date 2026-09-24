@@ -175,8 +175,13 @@ fn update_placement_preview(
 ) {
     let scene_snapshot = selection.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
+    let stack_changed = selection.scene.selected_stack_changed();
     let content_changed = content.inputs_changed();
-    if !scene_changed && !selection.placement_orientation.is_changed() && !content_changed {
+    if !scene_changed
+        && !stack_changed
+        && !selection.placement_orientation.is_changed()
+        && !content_changed
+    {
         return;
     }
     *last_scene = Some(scene_snapshot);
@@ -277,9 +282,15 @@ fn update_placement_preview(
         .is_none_or(|(cached_block_id, cached_horizontal)| {
             *cached_block_id != block_id || *cached_horizontal != horizontal
         });
-    if block_changed || content_changed || tint_target_changed {
+    if block_changed || stack_changed || content_changed || tint_target_changed {
         let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-        let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
+        let tint = content
+            .tint_at_with_override(
+                block_id,
+                tint_position,
+                selection.scene.selected_biome_tint(),
+            )
+            .unwrap_or(Color::WHITE);
 
         for (_, material_handle, _) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {

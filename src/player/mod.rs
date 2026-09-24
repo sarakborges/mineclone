@@ -4,6 +4,7 @@ pub(crate) mod game_mode;
 pub(crate) mod hotbar;
 mod held_sprite;
 pub(crate) mod inventory;
+pub(crate) mod item_stack;
 mod material;
 pub(crate) mod movement;
 pub(crate) mod model;

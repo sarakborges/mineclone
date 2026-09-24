@@ -2,7 +2,11 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{content::fluid::FluidRegistry, creatures::SavedCreature};
+use crate::{
+    content::fluid::FluidRegistry,
+    creatures::SavedCreature,
+    player::item_stack::SavedItemStack,
+};
 
 use super::invalid_data;
 use crate::world::{
@@ -59,7 +63,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
-    pub(crate) inventory: Vec<Option<String>>,
+    pub(crate) inventory: Vec<Option<SavedItemStack>>,
     pub(crate) selected_hotbar_slot: usize,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
@@ -83,7 +87,7 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) player: Option<SavedPlayer>,
     pub(super) day: u64,
     pub(super) tick_in_day: u64,
-    pub(super) inventory: Vec<Option<String>>,
+    pub(super) inventory: Vec<Option<SavedItemStack>>,
     pub(super) selected_hotbar_slot: usize,
     pub(super) fluid_updates: SavedFluidUpdates,
     pub(super) creatures: Vec<SavedCreature>,
@@ -105,7 +109,7 @@ pub(super) struct DiskWorldSnapshot<'a> {
     player: &'a Option<SavedPlayer>,
     day: u64,
     tick_in_day: u64,
-    inventory: &'a [Option<String>],
+    inventory: &'a [Option<SavedItemStack>],
     selected_hotbar_slot: usize,
     fluid_updates: &'a SavedFluidUpdates,
     creatures: &'a [SavedCreature],
@@ -148,7 +152,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
-    pub(crate) inventory: Vec<Option<String>>,
+    pub(crate) inventory: Vec<Option<SavedItemStack>>,
     pub(crate) selected_hotbar_slot: usize,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) pending_fluids: &'a PendingFluidUpdates,

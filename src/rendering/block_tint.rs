@@ -33,6 +33,32 @@ pub(crate) fn block_tint_at(
     }
 }
 
+pub(crate) fn block_tint_for_biome(
+    tint: BlockTint,
+    biome_id: &str,
+    biomes: &BiomeRegistry,
+) -> Option<Color> {
+    let visuals = biomes.get(biome_id)?.visuals.as_ref()?;
+    Some(match tint {
+        BlockTint::None => Color::WHITE,
+        BlockTint::Grass => visuals.grass_color.to_color(),
+        BlockTint::Leaf => visuals.leaf_color.to_color(),
+        BlockTint::Foliage => visuals.foliage_color.to_color(),
+    })
+}
+
+pub(crate) fn block_tint_at_with_override(
+    tint: BlockTint,
+    position: Vec2,
+    biome_override: Option<&str>,
+    biome_field: &BiomeField,
+    biomes: &BiomeRegistry,
+) -> Color {
+    biome_override
+        .and_then(|biome_id| block_tint_for_biome(tint, biome_id, biomes))
+        .unwrap_or_else(|| block_tint_at(tint, position, biome_field, biomes))
+}
+
 pub(crate) fn secondary_property_dye_tint(
     block: &BlockDefinition,
     cell: VoxelCell,

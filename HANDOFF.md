@@ -1,4 +1,29 @@
 # HANDOFF — Asteria / Mineclone
+## 2026-09-23 — Base de metadata de item + biome tint override [VERSION 0.62.0]
+
+Foi criada a fundação para itens manterem metadata persistente sem multiplicar IDs de conteúdo.
+Slots de backpack/hotbar e o cursor do inventário agora carregam `ItemStack`, composto pelo ID
+base e por metadata chave/valor. A identidade do stack inclui a metadata: dois itens com o mesmo
+ID e metadata diferente são estados distintos.
+
+O save permanece retrocompatível com o formato atual: stacks sem metadata continuam serializados
+como a string histórica (`"asteria:grass"`); stacks com metadata usam um objeto
+`{ "id": ..., "metadata": {...} }`. O loader aceita ambas as formas.
+
+O primeiro consumidor é `biome_tint`. Ao colocar um bloco cujo ItemStack possui
+`biome_tint = <biome id>`, a metadata é transferida para o `VoxelCell` usando a infraestrutura
+compacta de secondary properties já persistida por chunk. O mesher resolve grass/leaf/foliage
+pela paleta visual do bioma referenciado, sem alterar o biome map real. Metadata inválida de
+inventário que referencia um bioma inexistente é recusada na validação do save.
+
+Middle-click em Creative também preserva o `biome_tint` do voxel copiado, e o placement preview
+usa o override do stack selecionado. Foi adicionado `asteria:enchanted_forest_spores` como
+material de crafting de teste; enquanto não existe crafting, ele apenas estabelece o conteúdo
+que futuramente aplicará essa metadata.
+
+Fluidos/containers ainda não transferem `biome_tint`: a metadata do ItemStack é genérica e já
+permite essa extensão quando existir o primeiro container/tanque e o sistema de crafting.
+
 ## 2026-09-23 — Held sprite first-person movido +0.12 à direita [VERSION 0.61.4]
 
 O anchor do held sprite em first person foi deslocado em `+0.12` no eixo X,

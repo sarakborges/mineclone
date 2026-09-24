@@ -5,24 +5,27 @@ use crate::{
     gameplay::modal::GameplayModalState,
 };
 
-use super::hotbar::PlayerHotbar;
+use super::{
+    hotbar::PlayerHotbar,
+    item_stack::ItemStack,
+};
 
 #[derive(Resource, Default)]
 pub(crate) struct InventoryCursor {
-    item: Option<&'static str>,
+    item: Option<ItemStack>,
 }
 
 impl InventoryCursor {
     pub(crate) fn item(&self) -> Option<&'static str> {
-        self.item
+        self.item.as_ref().map(ItemStack::id)
     }
 
     pub(crate) fn click_slot(&mut self, inventory: &mut PlayerHotbar, index: usize) {
-        self.item = inventory.replace_inventory_item(index, self.item);
+        self.item = inventory.replace_inventory_item(index, self.item.take());
     }
 
     pub(crate) fn pick_creative_item(&mut self, item: &'static str) {
-        self.item = Some(item);
+        self.item = Some(ItemStack::new(item));
     }
 
     pub(crate) fn discard(&mut self) {
