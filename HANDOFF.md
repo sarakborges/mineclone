@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 7B2 — Regression test usa o caminho público do registry
+
+O CI do output connector em voxel persistente falhou somente porque o teste chamava diretamente `StructureDefinition::validate_layout` e `rebuild_runtime`, que são privados ao módulo de conteúdo. O teste agora monta um registry real com pai + filho e valida o objeto já inserido/precompilado, cobrindo exatamente o caminho de produção sem ampliar visibilidade interna.
+
 ## 2026-09-24 — Parte 7B2 — Output connector pode decorar voxel persistente
 
 O contrato de connector foi refinado para representar literalmente metadata sobre uma célula authored.

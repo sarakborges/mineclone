@@ -423,10 +423,22 @@ mod tests {
             },
             "layers": [{"y": 0, "rows": ["P"]}]
         });
-        let mut structure: StructureDefinition =
-            serde_json::from_value(definition).expect("decorated output must deserialize");
-        structure.validate_layout();
-        structure.rebuild_runtime();
+        let child = json!({
+            "id": "test:child",
+            "name": localized("Child"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "I": {"connector": {"face": "left"}},
+                "S": {"block": "test:block"}
+            },
+            "layers": [{"y": 0, "rows": ["IS"]}]
+        });
+        let registry = registry(vec![definition, child]);
+        let structure = registry
+            .get("test:decorated_output")
+            .expect("decorated output must exist");
 
         assert_eq!(structure.voxels().len(), 1);
         assert_eq!(structure.connector_points().len(), 1);
