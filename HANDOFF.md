@@ -1,3 +1,17 @@
+## 2026-09-24 — Corrigido head-of-line blocking de chunk meshes
+
+A investigação dos chunks que continuavam sem aparecer confirmou que Hydrology não era a causa. O problema estava no estágio assíncrono de publicação de meshes.
+
+`ChunkTaskQueue::poll_ready_by_key` escolhia primeiro a task de maior prioridade e consultava somente ela. Se o mesh mais próximo ainda estivesse calculando, o coletor retornava sem publicar nada, mesmo quando outras tasks já tinham terminado. Com até oito mesh tasks ocupando os slots, uma única task lenta podia bloquear a integração das demais, impedir liberação de capacidade e deixar buracos visíveis no mundo.
+
+A fila agora:
+- ordena os pending meshes pela prioridade existente;
+- procura o primeiro mesh já concluído nessa ordem;
+- publica o mais próximo entre os concluídos, sem esperar uma task anterior ainda em execução;
+- preserva a prioridade nearest-first entre resultados disponíveis, mas elimina head-of-line blocking.
+
+Esta correção é independente de Hydrology e não altera geração de terreno, seleção de chunks ou render distance.
+
 ## 2026-09-24 — CI cleanup após remoção de Hydrology
 
 O CI seguinte ao fix de lifecycle do Target HUD expôs três resíduos de Clippy que já estavam no develop após a remoção de Hydrology, sem relação com o HUD:

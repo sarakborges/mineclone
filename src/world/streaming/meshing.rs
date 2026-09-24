@@ -155,11 +155,10 @@ pub(super) fn collect_built_chunk_meshes(
             continue;
         }
 
-        // Keep nearest-first strict within the mesh stage, but do not let a
-        // closer chunk that is still in generation/settling block publication
-        // of already-built meshes. The selected pending mesh remains the
-        // nearest mesh-stage candidate and must be ready before any farther
-        // pending mesh can publish.
+        // Publish the nearest mesh that has actually finished. A slower
+        // higher-priority task must not head-of-line block other completed
+        // meshes, otherwise all worker slots can remain occupied while visible
+        // chunks wait indefinitely for publication.
         let Some(completed) = work.mesh_tasks.poll_ready_by_key(|coord| {
             chunk_load_priority(coord, center, movement_direction)
         }) else {

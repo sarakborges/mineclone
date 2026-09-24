@@ -114,23 +114,27 @@ impl<T> ChunkTaskQueue<T> {
         &mut self,
         mut key: impl FnMut(IVec3) -> K,
     ) -> Option<CompletedChunkTask<T>> {
-        let coord = self
-            .pending
-            .keys()
-            .copied()
-            .min_by_key(|coord| key(*coord))?;
-        let pending = self
-            .pending
-            .get_mut(&coord)
-            .expect("selected chunk task must remain pending");
-        let output = check_ready(&mut pending.task)?;
-        let revision = pending.revision;
-        self.pending.remove(&coord);
+        let mut coords = self.pending.keys().copied().collect::<Vec<_>>();
+        coords.sort_unstable_by_key(|coord| key(*coord));
 
-        Some(CompletedChunkTask {
-            coord,
-            revision,
-            output,
-        })
+        for coord in coords {
+            let pending = self
+                .pending
+                .get_mut(&coord)
+                .expect("selected chunk task must remain pending");
+            let Some(output) = check_ready(&mut pending.task) else {
+                continue;
+            };
+            let revision = pending.revision;
+            self.pending.remove(&coord);
+
+            return Some(CompletedChunkTask {
+                coord,
+                revision,
+                output,
+            });
+        }
+
+        None
     }
 }
