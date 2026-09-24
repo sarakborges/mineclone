@@ -33,24 +33,6 @@
       }
     },
     {
-      "id": "root_arches",
-      "structure": "asteria:root_arch",
-      "count": {
-        "min": 10,
-        "max": 14
-      },
-      "chance": 1,
-      "required": false,
-      "placement": {
-        "relativeTo": "origin",
-        "minDistance": 12,
-        "maxDistance": 72,
-        "minSeparation": 12,
-        "attempts": 640,
-        "allowOverlap": false
-      }
-    },
-    {
       "id": "enchanted_springs",
       "structure": "asteria:enchanted_spring",
       "count": {

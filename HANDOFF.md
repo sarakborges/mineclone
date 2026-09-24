@@ -1,3 +1,19 @@
+## 2026-09-24 — Parte 7C — World Tree migra Root Arches para Structure Connectors
+
+A composição independente de Root Arches foi removida do Enchanted Heart. As arches agora nascem exclusivamente de outputs authored nas próprias World Trees.
+
+- as cinco variações de `asteria:world_tree` receberam outputs em logs reais nas pontas das raízes da camada base;
+- foram escolhidas apenas posições com face externa livre e geometria compatível com todas as quatro variações de `asteria:root_arch`;
+- cada output preserva o bloco/log e sua orientação original; o connector é apenas metadata adicional;
+- target: `asteria:root_arch`;
+- `strength=1` e `strengthLossOnEachLoop=1`: cada output produz no máximo uma arch;
+- `minDistance=8` e `maxDistance=24`: a arch permanece vinculada à raiz correta sem nascer grudada no log da World Tree;
+- número de outputs acompanha a morfologia de cada árvore: 8, 12, 8, 8 e 9 respectivamente, evitando múltiplas arches paralelas no mesmo root tip;
+- o elemento `root_arches` foi removido de `asteria:enchanted_heart`; não existe mais segundo sistema de placement para essas arches;
+- `WORLDGEN_VERSION` passou de 4 para 5 porque a composição determinística do Enchanted Heart mudou.
+
+Próximo passo: validar CI/conteúdo e então revisar visualmente a distribuição; ajustes futuros de densidade/distância serão apenas authored connector metadata, sem alterar infraestrutura.
+
 ## 2026-09-24 — Parte 7B3 — Connector distance protegido contra overflow
 
 `minDistance/maxDistance` usam `u32` no conteúdo, mas o voxel world usa coordenadas `i32`. A validação agora rejeita `maxDistance > i32::MAX` antes de compilar o connector runtime, evitando wrap ao converter o deslocamento para a face do connector.
