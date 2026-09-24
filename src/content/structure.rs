@@ -171,14 +171,6 @@ pub struct StructureConnector {
     pub strength_loss_on_each_loop: f32,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct StructureConnectorPoint {
-    pub(crate) offset: IVec3,
-    pub(crate) face: LayerFace,
-    pub(crate) target: Option<String>,
-    pub(crate) strength: f32,
-    pub(crate) strength_loss_on_each_loop: f32,
-}
 
 
 #[derive(Clone, Debug, Default)]
@@ -191,7 +183,6 @@ struct StructureRuntime {
     support_offsets: Vec<IVec2>,
     column_spans: Vec<StructureColumnSpan>,
     column_voxels: HashMap<(i32, i32), Vec<StructureVoxel>>,
-    connectors: Vec<StructureConnectorPoint>,
     min_y_offset: i32,
     max_y_offset: i32,
 }
@@ -327,11 +318,13 @@ impl StructureDefinition {
     }
 
     pub(crate) fn validate_connector_references(&self, structures: &StructureRegistry) {
-        for connector in self.connectors().iter().filter(|connector| connector.target.is_some()) {
-            let target = connector
-                .target
-                .as_deref()
-                .expect("filtered connector target must exist");
+        for entry in self.palette.values() {
+            let Some(connector) = entry.connector.as_ref() else {
+                continue;
+            };
+            let Some(target) = connector.target.as_deref() else {
+                continue;
+            };
             let members = structures.reference_members(target).unwrap_or_else(|| {
                 panic!(
                     "structure {} connector references missing structure or structure group: {}",
@@ -340,10 +333,12 @@ impl StructureDefinition {
             });
             assert!(
                 members.iter().all(|member| {
-                    member
-                        .connectors()
-                        .iter()
-                        .any(|connector| connector.target.is_none())
+                    member.palette.values().any(|entry| {
+                        entry
+                            .connector
+                            .as_ref()
+                            .is_some_and(|connector| connector.target.is_none())
+                    })
                 }),
                 "structure {} connector target {} contains a structure without an input connector",
                 self.id,
@@ -476,10 +471,6 @@ impl StructureDefinition {
             .as_slice()
     }
 
-    pub(crate) fn connectors(&self) -> &[StructureConnectorPoint] {
-        self.runtime.connectors.as_slice()
-    }
-
     fn rebuild_runtime(&mut self) {
         let id_hash = stable_structure_hash(&self.id);
         for entry in self.palette.values_mut() {
@@ -494,7 +485,6 @@ impl StructureDefinition {
             }
         }
         let mut voxels = Vec::new();
-        let mut connectors = Vec::new();
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
         let mut horizontal_maximum = IVec2::splat(i32::MIN);
         let mut max_y_offset = i32::MIN;
@@ -517,14 +507,7 @@ impl StructureDefinition {
                         layer.y - self.anchor.y,
                         z as i32 - self.anchor.z,
                     );
-                    if let Some(connector) = entry.connector.as_ref() {
-                        connectors.push(StructureConnectorPoint {
-                            offset,
-                            face: connector.face,
-                            target: connector.target.clone(),
-                            strength: connector.strength,
-                            strength_loss_on_each_loop: connector.strength_loss_on_each_loop,
-                        });
+                    if entry.connector.is_some() {
                         continue;
                     }
 
@@ -545,7 +528,7 @@ impl StructureDefinition {
         if voxels.is_empty() {
             self.runtime = StructureRuntime {
                 id_hash,
-                connectors,
+
                 ..Default::default()
             };
             return;
@@ -615,7 +598,6 @@ impl StructureDefinition {
             support_offsets,
             column_spans,
             column_voxels,
-            connectors,
             min_y_offset,
             max_y_offset,
         };

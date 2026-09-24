@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6A — Ajuste do schema de connectors para CI limpo
+
+O primeiro schema de connectors pré-compilava posição/face/strength em uma estrutura runtime antes do resolver existir, o que gerava dead-code sob `-D warnings`. O estado intermediário foi corrigido sem suppressions: enquanto o resolver da Parte 6B ainda não existe, a metadata permanece no palette authored e a validação de targets trabalha diretamente sobre ela. Connector cells continuam excluídas dos voxels persistentes.
+
 ## 2026-09-24 — Parte 6A — Schema genérico de Structure Connectors
 
 Iniciada a infraestrutura nova somente após a remoção completa dos subsistemas legados.
@@ -10,7 +14,7 @@ Structures agora podem declarar uma célula de palette com `connector`. Essa cé
 - outputs possuem `strength` e `strengthLossOnEachLoop`, ambos normalizados em 0..1, com perda obrigatoriamente positiva;
 - o schema rejeita chains cujo budget teórico ultrapasse 64 loops, evitando definição authored capaz de produzir recursão sem limite.
 
-O runtime de Structure pré-compila as posições dos connectors separadamente dos voxels, portanto connector não participa de meshing/rasterização/support footprint.
+Connector cells are intentionally excluded from the persistent voxel runtime, so they do not participate in meshing/rasterization/support footprint. Their resolved positions will be compiled by the deterministic chain resolver in the next checkpoint.
 
 A validação global garante que todo target exista e que todos os membros de um Structure Group usado como target tenham pelo menos um input connector.
 
