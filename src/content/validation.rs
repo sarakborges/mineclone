@@ -118,7 +118,12 @@ pub(super) fn validate_content(content: &LoadedContent) {
     }
 
     for structure in content.structures.iter() {
-        structure.validate_references(&content.blocks, &content.layers, &content.fluids);
+        structure.validate_references(
+            &content.blocks,
+            &content.layers,
+            &content.objects,
+            &content.fluids,
+        );
     }
 
     for structure_set in content.structure_sets.iter() {
