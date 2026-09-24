@@ -16,7 +16,8 @@ use crate::{
     },
     gameplay::availability::world_interaction_available,
     player::{
-        camera::GameplayWorldCamera,
+        PLAYER_EYE_HEIGHT,
+        camera::{GameplayCamera, GameplayWorldCamera},
         hotbar::PlayerHotbar,
         item_stack::ItemStack,
         movement::config::{COLLISION_STEP, GRAVITY},
@@ -43,6 +44,8 @@ const BLOCK_ITEM_SCALE: f32 = 0.36;
 const DROP_FORWARD_SPEED: f32 = 3.8;
 const DROP_UP_SPEED: f32 = 1.25;
 const DROP_SPAWN_DISTANCE: f32 = 0.9;
+const DROP_PICKUP_DELAY_SECONDS: f32 = 0.65;
+const PROXIMITY_PICKUP_RADIUS: f32 = 1.65;
 const VISUAL_SPIN_SPEED: f32 = 0.9;
 
 #[derive(Component)]
@@ -64,6 +67,11 @@ impl WorldItem {
 pub(crate) struct InteractPickup;
 
 #[derive(Component)]
+struct ProximityPickup {
+    delay_seconds: f32,
+}
+
+#[derive(Component)]
 struct WorldItemMotion {
     velocity: Vec3,
 }
@@ -78,6 +86,7 @@ pub(crate) struct TargetedWorldItem(pub(crate) Option<Entity>);
 pub(crate) enum WorldItemPickup {
     #[default]
     Interact,
+    Proximity,
 }
 
 #[derive(Message)]
@@ -94,7 +103,7 @@ impl WorldItemSpawnRequest {
             stack,
             position,
             velocity: Vec3::ZERO,
-            pickup: WorldItemPickup::Interact,
+            pickup: WorldItemPickup::Proximity,
         }
     }
 
@@ -103,7 +112,7 @@ impl WorldItemSpawnRequest {
             stack,
             position,
             velocity,
-            pickup: WorldItemPickup::Interact,
+            pickup: WorldItemPickup::Proximity,
         }
     }
 }
@@ -143,7 +152,7 @@ impl Plugin for WorldItemsPlugin {
             )
             .add_systems(
                 Update,
-                (move_world_items, animate_world_item_visuals).chain()
+                (move_world_items, pickup_proximity_items, animate_world_item_visuals).chain()
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             )
@@ -246,6 +255,11 @@ fn spawn_world_items(
         match request.pickup {
             WorldItemPickup::Interact => {
                 entity.insert(InteractPickup);
+            }
+            WorldItemPickup::Proximity => {
+                entity.insert(ProximityPickup {
+                    delay_seconds: DROP_PICKUP_DELAY_SECONDS,
+                });
             }
         }
 
@@ -431,6 +445,31 @@ fn advance_item_axis(
         *center = next;
     }
     true
+}
+
+
+fn pickup_proximity_items(
+    time: Res<Time>,
+    player: Single<&Transform, With<GameplayCamera>>,
+    mut hotbar: ResMut<PlayerHotbar>,
+    mut commands: Commands,
+    mut items: Query<(Entity, &Transform, &mut WorldItem, &mut ProximityPickup)>,
+) {
+    let pickup_center = player.translation - Vec3::Y * (PLAYER_EYE_HEIGHT * 0.5);
+    let radius_squared = PROXIMITY_PICKUP_RADIUS * PROXIMITY_PICKUP_RADIUS;
+
+    for (entity, transform, mut world_item, mut pickup) in &mut items {
+        if pickup.delay_seconds > 0.0 {
+            pickup.delay_seconds = (pickup.delay_seconds - time.delta_secs()).max(0.0);
+            continue;
+        }
+        if transform.translation.distance_squared(pickup_center) > radius_squared {
+            continue;
+        }
+        if collect_world_item(&mut hotbar, &mut world_item) {
+            commands.entity(entity).despawn();
+        }
+    }
 }
 
 fn pickup_interact_item(

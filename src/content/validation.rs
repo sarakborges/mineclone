@@ -58,6 +58,16 @@ pub(super) fn validate_content(content: &LoadedContent) {
             object.id
         );
         object.validate_references(&content.inventory_categories);
+        object.loot_table.validate_references(
+            &format!("object {}", object.id),
+            |item_id| {
+                content.blocks.get(item_id).is_some()
+                    || content.items.get(item_id).is_some()
+                    || content.layers.get(item_id).is_some()
+                    || content.objects.get(item_id).is_some()
+                    || content.tools.get(item_id).is_some()
+            },
+        );
     }
 
     for layer in content.layers.iter() {

@@ -5,7 +5,7 @@ use crate::{
         attack::AttackRegistry, block::BlockRegistry,
         builtin_ids::BIOME_TINT_METADATA_KEY,
         layer::{LayerFace, LayerRegistry},
-        object::{ObjectPlacementFace, ObjectRegistry}, player::PlayerDefinition,
+        object::{ObjectInteraction, ObjectPlacementFace, ObjectRegistry}, player::PlayerDefinition,
         tool::ToolRegistry,
         tool_behavior::{MINE_TOOL_BEHAVIOR_ID, NONE_TOOL_BEHAVIOR_ID},
     },
@@ -20,7 +20,10 @@ use crate::{
         raycast::VoxelHit, texture_rotation::TextureRotation,
     },
     world_items::TargetedWorldItem,
-    world_objects::{TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest},
+    world_objects::{
+        TargetedWorldObject, WorldObjectInstance, WorldObjectPlaceRequest,
+        WorldObjectRemoveRequest,
+    },
 };
 
 use super::{
@@ -58,6 +61,7 @@ struct BlockEditInput<'w, 's> {
     creature_target: Res<'w, super::block::TargetedCreature>,
     world_item_target: Res<'w, TargetedWorldItem>,
     object_target: ResMut<'w, TargetedWorldObject>,
+    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
 }
 
 #[derive(SystemParam)]
@@ -117,9 +121,6 @@ fn edit_targeted_block(
     if input.world_item_target.0.is_some() {
         return;
     }
-    if right_pressed && input.object_target.0.is_some() {
-        return;
-    }
     if middle_pressed && game_mode.has_creative_inventory() {
         if let Some(hit) = input.targeted.0
             && definitions.blocks.get(hit.block_id).is_some()
@@ -143,14 +144,39 @@ fn edit_targeted_block(
         .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
-    if left_pressed && let Some(entity) = input.object_target.0 {
-        actions.object_removals.write(WorldObjectRemoveRequest {
-            entity,
-            drop_self: *game_mode == GameMode::Survival,
-        });
-        input.object_target.0 = None;
-        actions.viewmodel_animation.play_break();
-        return;
+    if let Some(entity) = input.object_target.0
+        && let Ok(instance) = input.object_instances.get(entity)
+        && let Some(definition) = definitions.objects.get(instance.object_id())
+    {
+        match definition.interaction {
+            ObjectInteraction::Pickup if right_pressed => {
+                if input
+                    .hotbar
+                    .try_insert_stack(ItemStack::new(instance.object_id()))
+                    .is_ok()
+                {
+                    actions.object_removals.write(WorldObjectRemoveRequest {
+                        entity,
+                        drop_loot: false,
+                    });
+                    input.object_target.0 = None;
+                    actions.viewmodel_animation.play_place();
+                }
+                return;
+            }
+            ObjectInteraction::Pickup if left_pressed => return,
+            ObjectInteraction::Break if left_pressed => {
+                actions.object_removals.write(WorldObjectRemoveRequest {
+                    entity,
+                    drop_loot: *game_mode == GameMode::Survival,
+                });
+                input.object_target.0 = None;
+                actions.viewmodel_animation.play_break();
+                return;
+            }
+            ObjectInteraction::Break if right_pressed => return,
+            _ => {}
+        }
     }
 
     // Left-clicking empty space still swings the player's arm. Mining tools use

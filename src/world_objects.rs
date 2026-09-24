@@ -14,9 +14,19 @@ use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         biome::BiomeRegistry,
+        block::BlockRegistry,
+        block_id::intern_block_id,
+        item::ItemRegistry,
+        item_id::intern_item_id,
+        layer::LayerRegistry,
+        layer_id::intern_layer_id,
         object::{ObjectDefinition, ObjectRegistry, ObjectVisualDefinition},
+        object_id::intern_object_id,
+        tool::ToolRegistry,
+        tool_id::intern_tool_id,
     },
-    player::item_stack::ItemStack,
+    gameplay::random::next_unit_f32,
+    player::item_stack::{ItemStack, MAX_STACK_SIZE},
     rendering::block_tint::block_tint_at,
     voxel::{
         chunk::CHUNK_SIZE,
@@ -25,7 +35,12 @@ use crate::{
         texture_rotation::TextureRotation,
         world::VoxelWorld,
     },
-    world::{biome_field::BiomeField, chunk_rendering::ChunkRenderCoord},
+    world::{
+        biome_field::BiomeField,
+        chunk_rendering::ChunkRenderCoord,
+        deterministic::{hash_signed, hash_string, mix_u32_components},
+        tick::WorldTickClock,
+    },
     world_items::WorldItemSpawnRequest,
 };
 
@@ -80,7 +95,17 @@ pub(crate) struct WorldObjectPlaceRequest {
 #[derive(Message)]
 pub(crate) struct WorldObjectRemoveRequest {
     pub(crate) entity: Entity,
-    pub(crate) drop_self: bool,
+    pub(crate) drop_loot: bool,
+}
+
+
+#[derive(SystemParam)]
+struct WorldObjectRemovalContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    items: Res<'w, ItemRegistry>,
+    layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
+    tools: Res<'w, ToolRegistry>,
 }
 
 #[derive(Component)]
@@ -184,7 +209,8 @@ fn apply_object_removal_requests(
     mut requests: MessageReader<WorldObjectRemoveRequest>,
     mut world: ResMut<VoxelWorld>,
     mut store: ResMut<WorldObjectStore>,
-    objects: Res<ObjectRegistry>,
+    content: WorldObjectRemovalContent,
+    world_ticks: Res<WorldTickClock>,
     instances: Query<(&WorldObjectInstance, &Transform)>,
     mut drops: MessageWriter<WorldItemSpawnRequest>,
 ) {
@@ -197,15 +223,17 @@ fn apply_object_removal_requests(
         };
 
         store.by_support.remove(&instance.support);
-        if request.drop_self
-            && objects
-                .get(removed.object_id)
-                .is_some_and(|definition| definition.drop_self)
+        if request.drop_loot
+            && let Some(definition) = content.objects.get(removed.object_id)
         {
-            drops.write(WorldItemSpawnRequest::dropped(
-                ItemStack::new(removed.object_id),
+            spawn_object_loot(
+                definition,
+                instance.support,
                 transform.translation + Vec3::Y * 0.25,
-            ));
+                world_ticks.current_tick(),
+                &content,
+                &mut drops,
+            );
         }
         commands.entity(request.entity).despawn();
     }
@@ -294,7 +322,8 @@ fn spawn_world_object(
 ) -> Entity {
     let position = support.as_vec3()
         + Vec3::splat(0.5)
-        + object.face.normal().as_vec3() * 0.5;
+        + object.face.normal().as_vec3() * 0.5
+        + object_position_jitter(definition, support);
     let tint = block_tint_at(
         definition.tint,
         Vec2::new(position.x, position.z),
@@ -403,6 +432,82 @@ fn spawn_world_object(
     }
 
     root.id()
+}
+
+
+fn object_position_jitter(definition: &ObjectDefinition, support: IVec3) -> Vec3 {
+    let seed = mix_u32_components(
+        hash_string(&definition.id),
+        [support.x as u32, support.y as u32, support.z as u32],
+    );
+    Vec3::new(
+        hash_signed(seed.rotate_left(17)) * definition.position_jitter[0],
+        0.0,
+        hash_signed(seed.rotate_left(43)) * definition.position_jitter[1],
+    )
+}
+
+fn spawn_object_loot(
+    definition: &ObjectDefinition,
+    support: IVec3,
+    position: Vec3,
+    current_tick: u64,
+    content: &WorldObjectRemovalContent<'_>,
+    drops: &mut MessageWriter<WorldItemSpawnRequest>,
+) {
+    if definition.loot_table.entries().is_empty() {
+        if definition.drop_self {
+            drops.write(WorldItemSpawnRequest::dropped(
+                ItemStack::new(intern_object_id(&definition.id)),
+                position,
+            ));
+        }
+        return;
+    }
+
+    let mut random_state = object_loot_random_seed(support, current_tick);
+    for entry in definition.loot_table.entries() {
+        if entry.chance < 1.0 && next_unit_f32(&mut random_state) >= entry.chance {
+            continue;
+        }
+        let item_id = resolve_object_loot_item_id(&entry.item, content);
+        let mut remaining = entry.quantity;
+        while remaining > 0 {
+            let quantity = remaining.min(MAX_STACK_SIZE);
+            remaining -= quantity;
+            drops.write(WorldItemSpawnRequest::dropped(
+                ItemStack::new(item_id).with_quantity(quantity),
+                position,
+            ));
+        }
+    }
+}
+
+fn resolve_object_loot_item_id(
+    item_id: &str,
+    content: &WorldObjectRemovalContent<'_>,
+) -> &'static str {
+    if content.items.get(item_id).is_some() {
+        intern_item_id(item_id)
+    } else if content.blocks.get(item_id).is_some() {
+        intern_block_id(item_id)
+    } else if content.layers.get(item_id).is_some() {
+        intern_layer_id(item_id)
+    } else if content.objects.get(item_id).is_some() {
+        intern_object_id(item_id)
+    } else if content.tools.get(item_id).is_some() {
+        intern_tool_id(item_id)
+    } else {
+        unreachable!("object loot references are validated during content loading: {item_id}")
+    }
+}
+
+fn object_loot_random_seed(support: IVec3, current_tick: u64) -> u32 {
+    let mut seed = (current_tick as u32) ^ ((current_tick >> 32) as u32).rotate_left(11);
+    seed ^= (support.x as u32).wrapping_mul(0x9E37_79B9);
+    seed ^= (support.y as u32).wrapping_mul(0x85EB_CA6B);
+    seed ^= (support.z as u32).wrapping_mul(0xC2B2_AE35);
+    if seed == 0 { 0xA341_316C } else { seed }
 }
 
 fn texture_rotation_radians(rotation: TextureRotation) -> f32 {

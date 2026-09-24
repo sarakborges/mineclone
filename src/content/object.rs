@@ -7,6 +7,7 @@ use super::{
     asset_path::is_safe_relative_asset_path,
     block::BlockTint,
     inventory_category::InventoryCategoryRegistry,
+    loot::LootTableDefinition,
     object_id::intern_object_id,
     registry::DefinitionMap,
 };
@@ -93,6 +94,19 @@ fn default_target_center_offset() -> [f32; 3] {
 fn default_true() -> bool {
     true
 }
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ObjectInteraction {
+    #[default]
+    Break,
+    Pickup,
+}
+
+fn default_position_jitter() -> [f32; 2] {
+    [0.0, 0.0]
+}
+
 
 fn default_stacked_sprite_size() -> [f32; 2] {
     [0.75, 0.75]
@@ -220,6 +234,12 @@ pub struct ObjectDefinition {
     #[serde(default)]
     pub target: ObjectTargetDefinition,
     #[serde(default)]
+    pub interaction: ObjectInteraction,
+    #[serde(default = "default_position_jitter")]
+    pub position_jitter: [f32; 2],
+    #[serde(default)]
+    pub(crate) loot_table: LootTableDefinition,
+    #[serde(default)]
     pub unlit: bool,
     #[serde(default = "default_true")]
     pub casts_shadow: bool,
@@ -282,6 +302,16 @@ impl ObjectRegistry {
                 definition.id
             );
         }
+        assert!(
+            definition.position_jitter.iter().all(|value| {
+                value.is_finite() && (0.0..=0.45).contains(value)
+            }),
+            "object {} positionJitter values must be finite and between 0 and 0.45",
+            definition.id
+        );
+        definition
+            .loot_table
+            .validate(&format!("object {}", definition.id));
         definition.target.validate(&definition.id);
         definition
             .name

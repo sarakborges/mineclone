@@ -26,9 +26,21 @@
   "unlit": true,
   "castsShadow": false,
   "receivesShadow": false,
-  "dropSelf": true,
+  "dropSelf": false,
   "visual": {
     "type": "model",
     "path": "models/objects/grass/grass.glb"
-  }
+  },
+  "interaction": "break",
+  "positionJitter": [
+    0.28,
+    0.28
+  ],
+  "lootTable": [
+    {
+      "item": "asteria:plant_fiber",
+      "chance": 0.2,
+      "quantity": 1
+    }
+  ]
 }

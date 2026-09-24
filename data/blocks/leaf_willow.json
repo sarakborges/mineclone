@@ -54,5 +54,8 @@
       "chance": 0.6,
       "quantity": 1
     }
-  ]
+  ],
+  "mining": {
+    "hardness": 0.25
+  }
 }

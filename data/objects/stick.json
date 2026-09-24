@@ -10,17 +10,31 @@
     "type": "stackedSprites",
     "texture": "textures/items/stick.png",
     "slices": 4,
-    "baseOffset": 0.001,
-    "sliceSpacing": 0.002,
-    "size": [0.68, 0.68],
+    "baseOffset": 0.006,
+    "sliceSpacing": 0.008,
+    "size": [
+      0.68,
+      0.68
+    ],
     "alphaCutoff": 0.5
   },
   "icon": "textures/items/stick.png",
-  "placementFaces": ["top"],
+  "placementFaces": [
+    "top"
+  ],
   "target": {
-    "size": [0.68, 0.02, 0.68],
-    "centerOffset": [0.0, 0.01, 0.0]
+    "size": [
+      0.68,
+      0.1,
+      0.68
+    ],
+    "centerOffset": [
+      0,
+      0.05,
+      0
+    ]
   },
   "castsShadow": false,
-  "dropSelf": true
+  "dropSelf": true,
+  "interaction": "pickup"
 }
