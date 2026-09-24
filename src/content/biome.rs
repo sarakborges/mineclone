@@ -11,7 +11,7 @@ use super::{
     biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, StructurePlacementRules},
-    biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
+    biome_surface_fluid::BiomeSurfaceFluid,
     biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,
     day_night_phase::DayNightPhases, fluid::FluidRegistry, object::ObjectRegistry,
@@ -169,10 +169,6 @@ pub struct BiomeDefinition {
     pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
     pub terrain_modifiers: Vec<BiomeTerrainModifier>,
-    #[serde(default)]
-    pub allow_surface_carvers: bool,
-    #[serde(default)]
-    pub surface_carvers: Vec<BiomeSurfaceCarver>,
     #[serde(default)]
     pub surface_fluid: Option<BiomeSurfaceFluid>,
     #[serde(default)]

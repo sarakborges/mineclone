@@ -6,7 +6,6 @@ pub(crate) mod biome_distribution;
 pub(crate) mod biome_material;
 pub(crate) mod biome_sky_layer;
 pub(crate) mod biome_structure;
-pub(crate) mod biome_surface_carver;
 pub(crate) mod biome_surface_fluid;
 pub(crate) mod biome_surface_margin;
 pub(crate) mod biome_terrain;

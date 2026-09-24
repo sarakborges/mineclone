@@ -1,3 +1,14 @@
+## 2026-09-24 — Parte 5C — Schema legado de surface carvers removido
+
+O contrato de conteúdo do antigo sistema de entrances/tunnels também foi removido, sem manter aliases ou campos ignorados.
+
+- `BiomeDefinition` não possui mais `allow_surface_carvers` nem `surface_carvers`;
+- validação de biomes não conhece mais `allowSurfaceCarvers` / `surfaceCarvers`;
+- `src/content/biome_surface_carver.rs` foi deletado;
+- `content/mod.rs` não registra mais esse módulo.
+
+Os JSONs authored ainda serão limpos na próxima parte para que nenhum conteúdo legado permaneça no projeto. Caverns continua sendo um volume biome normal com `densityModifier.type = "cavern"`.
+
 ## 2026-09-24 — Parte 5B — Helpers determinísticos órfãos removidos
 
 O CI após deletar cave-connectivity identificou três helpers compartilhados que só eram usados por esse subsistema: `compare_vec3`, `sorted_unique_vec3s` e `avalanche_u64`. Eles foram removidos de `world/deterministic.rs` em vez de receber allowances de dead code. Os demais helpers determinísticos continuam em uso.

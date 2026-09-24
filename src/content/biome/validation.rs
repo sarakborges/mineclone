@@ -30,9 +30,6 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     for modifier in &definition.terrain_modifiers {
         modifier.validate(&definition.id);
     }
-    for carver in &definition.surface_carvers {
-        carver.validate(&definition.id);
-    }
     if let Some(surface_fluid) = &definition.surface_fluid {
         surface_fluid.validate(&definition.id);
     }
@@ -70,12 +67,6 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         "surface biome {} cannot define volume overlap priority",
         definition.id
     );
-    assert!(
-        definition.surface_carvers.is_empty(),
-        "surface biome {} cannot define surfaceCarvers; use allowSurfaceCarvers to permit cavern entrances",
-        definition.id
-    );
-
     if let Some(surface_fluid) = &definition.surface_fluid {
         let Some(crate::content::biome_terrain::BiomeTerrain::Volcano {
             crater_depth,
@@ -118,20 +109,6 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
     assert!(
         definition.terrain_modifiers.is_empty(),
         "volume biome {} cannot define terrainModifiers",
-        definition.id
-    );
-    assert!(
-        !definition.allow_surface_carvers,
-        "volume biome {} cannot enable allowSurfaceCarvers",
-        definition.id
-    );
-    assert!(
-        definition.surface_carvers.is_empty()
-            || matches!(
-                definition.density_modifier,
-                Some(crate::content::biome_density::BiomeDensityModifier::Cavern { .. })
-            ),
-        "volume biome {} can define surfaceCarvers only with a cavern densityModifier",
         definition.id
     );
     assert!(
