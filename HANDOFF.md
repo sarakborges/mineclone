@@ -1,3 +1,22 @@
+## 2026-09-24 — Performance diagnostics agora cobrem world objects
+
+O diagnóstico periódico de render foi ampliado para medir o subsystem que estava invisível nos
+logs anteriores.
+
+Novos campos em `render assets`:
+- `world_objects`: número de object entities materializadas;
+- `world_object_chunks`: chunks atualmente materializados no ECS;
+- `object_material_cache`: variantes de material de Model;
+- `stacked_object_mesh_cache`: meshes compostos reutilizáveis de stackedSprites;
+- `stacked_object_material_cache`: variantes de material de stackedSprites.
+
+Além disso, `sync_world_objects` emite warning quando uma sincronização acionada por residency,
+player chunk ou object revision ultrapassa 4 ms, incluindo loaded/materialized chunks e object
+count. O fast path sem mudanças continua sem timer/log e retorna imediatamente.
+
+Esses números permitem separar, no runtime real, custo de chunk render, worldgen e object ECS/
+material pressure após as otimizações desta investigação.
+
 ## 2026-09-24 — World-object chunk sync agora é diff incremental
 
 Alterar um object ou seu support block não reconstrói mais todos os objects do chunk.

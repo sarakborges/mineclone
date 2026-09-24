@@ -1,4 +1,7 @@
-use std::f32::consts::FRAC_PI_2;
+use std::{
+    f32::consts::FRAC_PI_2,
+    time::{Duration, Instant},
+};
 
 use bevy::{
     asset::{AssetId, RenderAssetUsages},
@@ -105,6 +108,14 @@ pub(crate) struct WorldObjectStore {
 }
 
 impl WorldObjectStore {
+    pub(crate) fn materialized_object_count(&self) -> usize {
+        self.by_support.len()
+    }
+
+    pub(crate) fn materialized_chunk_count(&self) -> usize {
+        self.synced_chunk_revisions.len()
+    }
+
     pub(crate) fn entities_in_chunk(&self, coord: IVec3) -> impl Iterator<Item = Entity> + '_ {
         self.by_chunk
             .get(&coord)
@@ -220,7 +231,13 @@ struct PendingObjectModelMaterial {
 }
 
 #[derive(Resource, Default)]
-struct ObjectMaterialCache(HashMap<ObjectMaterialKey, Handle<StandardMaterial>>);
+pub(crate) struct ObjectMaterialCache(HashMap<ObjectMaterialKey, Handle<StandardMaterial>>);
+
+impl ObjectMaterialCache {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct StackedSpriteMeshKey {
@@ -232,7 +249,13 @@ struct StackedSpriteMeshKey {
 }
 
 #[derive(Resource, Default)]
-struct StackedSpriteMeshCache(HashMap<StackedSpriteMeshKey, Handle<Mesh>>);
+pub(crate) struct StackedSpriteMeshCache(HashMap<StackedSpriteMeshKey, Handle<Mesh>>);
+
+impl StackedSpriteMeshCache {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct StackedSpriteMaterialKey {
@@ -243,7 +266,15 @@ struct StackedSpriteMaterialKey {
 }
 
 #[derive(Resource, Default)]
-struct StackedSpriteMaterialCache(HashMap<StackedSpriteMaterialKey, Handle<StandardMaterial>>);
+pub(crate) struct StackedSpriteMaterialCache(
+    HashMap<StackedSpriteMaterialKey, Handle<StandardMaterial>>,
+);
+
+impl StackedSpriteMaterialCache {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
 
 #[derive(SystemParam)]
 struct WorldObjectSceneContent<'w> {
@@ -364,6 +395,8 @@ fn apply_object_removal_requests(
     }
 }
 
+const SLOW_WORLD_OBJECT_SYNC_WARNING: Duration = Duration::from_millis(4);
+
 fn sync_world_objects(
     mut commands: Commands,
     content: WorldObjectSceneContent,
@@ -384,6 +417,7 @@ fn sync_world_objects(
         return;
     }
 
+    let sync_started = Instant::now();
     let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
     let retired = store
         .synced_chunk_revisions
@@ -473,6 +507,17 @@ fn sync_world_objects(
     store.materialized_center = Some(center);
     store.materialized_show_radius = show_radius;
     store.materialized_hide_radius = hide_radius;
+
+    let elapsed = sync_started.elapsed();
+    if elapsed >= SLOW_WORLD_OBJECT_SYNC_WARNING {
+        warn!(
+            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} loaded_chunks={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
+            loaded_coords.len(),
+            store.materialized_chunk_count(),
+            store.materialized_object_count(),
+            elapsed.as_secs_f64() * 1_000.0,
+        );
+    }
 }
 
 fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool {
