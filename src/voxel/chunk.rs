@@ -727,6 +727,15 @@ impl VoxelChunk {
             .map(|(&index, &object)| (index as usize, object))
     }
 
+    pub(crate) fn object_voxels(
+        &self,
+    ) -> impl Iterator<Item = (usize, usize, usize, ObjectCell)> + '_ {
+        self.object_entries().map(|(voxel_index, object)| {
+            let (x, y, z) = coordinates(voxel_index);
+            (x, y, z, object)
+        })
+    }
+
     pub fn fluid_at(&self, x: i32, y: i32, z: i32) -> Option<FluidCell> {
         if !in_bounds(x, y, z) {
             return None;
