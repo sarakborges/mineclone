@@ -14473,3 +14473,12 @@ Remoção do Hydrology legado concluída no runtime:
 Neste ponto rivers/lakes do sistema antigo não existem mais nem como schema, dados, UI,
 cache, generator ou comando. A próxima limpeza independente é cave connectivity/entrances.
 
+### Correção da remoção de Hydrology — CI
+
+Corrigidos os dois resíduos apontados pelo Clippy após a remoção:
+- import não utilizado de `surface_height_from_sample` em `generation.rs`;
+- chamada antiga de `DensitySampleContext::new` em `generation/caves/anchors.rs`.
+
+Esses resíduos pertenciam ao código de cave connectivity que será removido na próxima etapa,
+mas foram corrigidos primeiro para manter a regra de CI verde entre partes.
+

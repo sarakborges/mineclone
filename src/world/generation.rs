@@ -31,7 +31,7 @@ use crate::{
             GenerationRegion, generation_region_coord, generation_region_world_bounds,
         },
         new_world::{WorldGenerationMode, WorldGenerationSettings},
-        terrain::{chunk_y_bounds, surface_height, surface_height_from_sample},
+        terrain::{chunk_y_bounds, surface_height},
         world_feature_fields::WorldFeatureFields,
     },
 };
