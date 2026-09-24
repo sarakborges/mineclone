@@ -127,6 +127,17 @@ struct TargetHudContent<'w> {
     tool_categories: Res<'w, ToolCategoryRegistry>,
 }
 
+type TargetHudRootVisibility<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Visibility,
+    (
+        With<TargetHudRoot>,
+        Without<TargetBlockModel>,
+        Without<TargetObjectIcon>,
+    ),
+>;
+
 type TargetBlockIconView<'w, 's> = Single<
     'w,
     's,
@@ -155,16 +166,7 @@ type TargetObjectIconView<'w, 's> = Single<
 
 #[derive(SystemParam)]
 struct TargetHudView<'w, 's> {
-    root_visibility: Single<
-        'w,
-        's,
-        &'static mut Visibility,
-        (
-            With<TargetHudRoot>,
-            Without<TargetBlockModel>,
-            Without<TargetObjectIcon>,
-        ),
-    >,
+    root_visibility: TargetHudRootVisibility<'w, 's>,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
     block_icon: TargetBlockIconView<'w, 's>,
     object_icon: TargetObjectIconView<'w, 's>,
