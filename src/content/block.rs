@@ -189,6 +189,8 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub tint: BlockTint,
     #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
     pub textures: BlockTextures,
     #[serde(default)]
     pub rotate_texture: BlockTextureRotations,
@@ -213,6 +215,9 @@ impl BlockDefinition {
         self.tags.iter().any(|tag| tag == FRAGMENTABLE_BLOCK_TAG)
     }
 
+    pub fn uses_custom_model(&self) -> bool {
+        self.model.is_some()
+    }
 
     pub fn alpha_mode(&self, opacity: f32) -> AlphaMode {
         if opacity < 1.0 || self.alpha_blend {
@@ -366,6 +371,15 @@ impl BlockRegistry {
                 definition.id
             );
         }
+        if let Some(model) = &definition.model {
+            assert!(
+                is_safe_relative_asset_path(model),
+                "block {} model must be a safe relative asset path: {}",
+                definition.id,
+                model
+            );
+        }
+
         for (face, layers) in [
             ("top", &definition.textures.top),
             ("bottom", &definition.textures.bottom),
@@ -459,6 +473,7 @@ mod tests {
             loot_table: LootTableDefinition::default(),
             tags: Vec::new(),
             tint: BlockTint::None,
+            model: None,
             textures: BlockTextures::default(),
             rotate_texture: BlockTextureRotations::default(),
             orientations: Vec::new(),

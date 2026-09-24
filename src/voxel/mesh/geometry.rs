@@ -31,7 +31,9 @@ pub(super) fn is_face_exposed_against_neighbor(
         return true;
     };
     let definition = blocks.get(neighbor.block_id);
-    let neighbor_occludes = !definition.alpha_blend && definition.alpha_cutoff.is_none();
+    let neighbor_occludes = !definition.uses_custom_model()
+        && !definition.alpha_blend
+        && definition.alpha_cutoff.is_none();
 
     !face_is_occluded(
         block_id,

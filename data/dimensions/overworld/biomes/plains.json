@@ -16,7 +16,7 @@
   "allowSurfaceCarvers": true,
   "surfaceLayers": [
     {
-      "block": "asteria:grass",
+      "block": "asteria:grass_block",
       "depth": 1
     },
     {

@@ -5,11 +5,9 @@
     "portuguese_brazil": "Grama",
     "spanish": "Césped"
   },
-  "category": "natural_blocks",
-  "tags": [
-    "fragmentable"
-  ],
+  "category": "foliage",
   "tint": "grass",
+  "model": "models/objects/grass/grass.glb",
   "textures": {
     "top": [
       {
@@ -19,70 +17,43 @@
     ],
     "bottom": [
       {
-        "texture": "textures/blocks/dirt.png",
-        "dyable": false
+        "texture": "textures/blocks/grass/top.png",
+        "dyable": true
       }
     ],
     "left": [
       {
-        "texture": "textures/blocks/grass/side.png",
-        "dyable": false
-      },
-      {
-        "texture": "textures/blocks/grass/side_overlay.png",
+        "texture": "textures/blocks/grass/top.png",
         "dyable": true
       }
     ],
     "right": [
       {
-        "texture": "textures/blocks/grass/side.png",
-        "dyable": false
-      },
-      {
-        "texture": "textures/blocks/grass/side_overlay.png",
+        "texture": "textures/blocks/grass/top.png",
         "dyable": true
       }
     ],
     "front": [
       {
-        "texture": "textures/blocks/grass/side.png",
-        "dyable": false
-      },
-      {
-        "texture": "textures/blocks/grass/side_overlay.png",
+        "texture": "textures/blocks/grass/top.png",
         "dyable": true
       }
     ],
     "back": [
       {
-        "texture": "textures/blocks/grass/side.png",
-        "dyable": false
-      },
-      {
-        "texture": "textures/blocks/grass/side_overlay.png",
+        "texture": "textures/blocks/grass/top.png",
         "dyable": true
       }
     ]
   },
-  "rotateTexture": {
-    "top": true,
-    "bottom": true,
-    "left": false,
-    "right": false,
-    "front": false,
-    "back": false
-  },
-  "lightDampening": 15,
+  "lightDampening": 0,
   "castsShadow": true,
   "mining": {
-    "hardness": 1,
-    "preferredTools": [
-      "shovel"
-    ]
+    "hardness": 0.1
   },
   "lootTable": [
     {
-      "item": "asteria:dirt",
+      "item": "asteria:grass",
       "chance": 1,
       "quantity": 1
     }

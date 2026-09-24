@@ -1,3 +1,4 @@
+mod custom_models;
 mod materials;
 mod pool;
 mod refresh;
@@ -19,6 +20,10 @@ use crate::{
 
 use super::biome_field::BiomeField;
 
+pub(crate) use custom_models::{
+    CustomBlockModelMaterials, CustomBlockModelRenderPool,
+    clear_custom_block_model_render_pool, sync_custom_block_models,
+};
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
 pub(crate) use pool::{
     ChunkRenderPool, DeferredMeshAssetRetirements, advance_deferred_mesh_asset_retirements,
