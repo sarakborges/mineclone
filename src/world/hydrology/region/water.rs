@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::SHORE_STRENGTH,
-    math::{lerp, river_channel_profile},
+    math::{lerp, ocean_floor_is_submerged, river_channel_profile},
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
 
@@ -166,7 +166,7 @@ impl HydrologyRegion {
             // The first continentalness threshold can still leave terrain above
             // sea level. Such a dry ocean sample must not supersede an actual
             // river mouth merely because the ocean's nominal water level is high.
-            if bed_level < self.sea_level - 0.5 {
+            if ocean_floor_is_submerged(bed_level, self.sea_level) {
                 choose_water(
                     &mut selected,
                     HydrologyWaterSample {
@@ -331,7 +331,7 @@ mod tests {
             macro_samples: vec![
                 HydrologyMacroSample {
                     elevation: 120.0,
-                    continentalness: 0.39,
+                    continentalness: 0.32,
                 };
                 MACRO_SAMPLE_GRID * MACRO_SAMPLE_GRID
             ],

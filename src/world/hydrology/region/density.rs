@@ -9,7 +9,7 @@ use crate::world::{
             RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
         },
     math::{
-        lerp, ocean_strength, river_channel_profile, smoothstep,
+        lerp, ocean_floor_is_submerged, ocean_strength, river_channel_profile, smoothstep,
         RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
     },
         types::WaterBody,
@@ -138,7 +138,11 @@ impl HydrologyRegion {
             // reaches full amplitude only in open water.
             let base = surface_elevation.unwrap_or(sample.elevation);
             let floor = lerp(base, target_floor, strength);
-            floor - base
+            if ocean_floor_is_submerged(floor, self.sea_level) {
+                floor - base
+            } else {
+                0.0
+            }
         });
         let mut water_bodies = SmallVec::new();
         let mut water_body_opening = 0.0_f32;

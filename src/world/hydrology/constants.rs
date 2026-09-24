@@ -1,7 +1,10 @@
 pub(super) const HYDROLOGY_REGION_SIZE: f32 = 128.0;
 pub(super) const MACRO_SAMPLE_GRID: usize = 5;
 
-pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.45;
+// Keep hydrology's ocean boundary aligned with the authored ocean biome.
+// Ocean climate ends at 0.38; extending hydrology farther inland can carve
+// narrow dry trenches inside biomes such as Plains.
+pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.38;
 pub(super) const OCEAN_TRANSITION_WIDTH: f32 = 0.11;
 pub(super) const OCEAN_MINIMUM_DEPTH: f32 = 8.0;
 pub(super) const OCEAN_EXTRA_DEPTH: f32 = 18.0;

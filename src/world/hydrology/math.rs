@@ -30,6 +30,10 @@ pub(crate) fn ocean_strength(continentalness: f32, ocean_weight: f32) -> f32 {
     smoothstep(raw.clamp(0.0, 1.0))
 }
 
+pub(super) fn ocean_floor_is_submerged(floor: f32, sea_level: f32) -> bool {
+    floor < sea_level - 0.5
+}
+
 pub(crate) fn suppress_ocean_continentalness(
     continentalness: f32,
     ocean_weight: f32,
@@ -87,6 +91,20 @@ pub(super) fn cell_hash(cell: IVec2, seed: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ocean_strength_stops_at_the_authored_ocean_boundary() {
+        assert_eq!(ocean_strength(0.38, 1.0), 0.0);
+        assert_eq!(ocean_strength(0.45, 1.0), 0.0);
+        assert!(ocean_strength(0.36, 1.0) > 0.0);
+        assert!(ocean_strength(0.20, 1.0) > ocean_strength(0.36, 1.0));
+    }
+
+    #[test]
+    fn dry_ocean_floor_is_not_submerged() {
+        assert!(!ocean_floor_is_submerged(89.5, 90.0));
+        assert!(ocean_floor_is_submerged(89.49, 90.0));
+    }
 
     #[test]
     fn river_bed_profile_ends_at_the_actual_water_boundary() {
