@@ -16,7 +16,7 @@ use crate::{
     },
     gameplay::availability::world_interaction_available,
     player::{
-        camera::{GameplayCamera, GameplayWorldCamera},
+        camera::GameplayWorldCamera,
         hotbar::PlayerHotbar,
         item_stack::ItemStack,
         movement::config::{COLLISION_STEP, GRAVITY},
