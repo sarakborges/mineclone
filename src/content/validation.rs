@@ -30,9 +30,34 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 content.blocks.get(item_id).is_some()
                     || content.items.get(item_id).is_some()
                     || content.layers.get(item_id).is_some()
+                    || content.objects.get(item_id).is_some()
                     || content.tools.get(item_id).is_some()
             },
         );
+    }
+
+    for object in content.objects.iter() {
+        assert!(
+            content.blocks.get(&object.id).is_none(),
+            "content id {} cannot be both an object and a block",
+            object.id
+        );
+        assert!(
+            content.layers.get(&object.id).is_none(),
+            "content id {} cannot be both an object and a layer",
+            object.id
+        );
+        assert!(
+            content.items.get(&object.id).is_none(),
+            "content id {} cannot be both an object and an item",
+            object.id
+        );
+        assert!(
+            content.tools.get(&object.id).is_none(),
+            "content id {} cannot be both an object and a tool",
+            object.id
+        );
+        object.validate_references(&content.inventory_categories);
     }
 
     for layer in content.layers.iter() {

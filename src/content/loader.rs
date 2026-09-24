@@ -17,6 +17,7 @@ use super::{
     item::{ItemDefinition, ItemRegistry},
     json_file::{collect_json_files, read_json_definition},
     layer::{LayerDefinition, LayerRegistry},
+    object::{ObjectDefinition, ObjectRegistry},
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
@@ -39,6 +40,7 @@ pub(crate) struct LoadedContent {
     pub inventory_categories: InventoryCategoryRegistry,
     pub items: ItemRegistry,
     pub layers: LayerRegistry,
+    pub objects: ObjectRegistry,
     pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
@@ -60,6 +62,7 @@ impl LoadedContent {
         commands.insert_resource(self.inventory_categories);
         commands.insert_resource(self.items);
         commands.insert_resource(self.layers);
+        commands.insert_resource(self.objects);
         commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
@@ -121,6 +124,8 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content.items.insert(read_json_definition::<ItemDefinition>(path));
     } else if path_has_component(path, "layers") {
         content.layers.insert(read_json_definition::<LayerDefinition>(path));
+    } else if path_has_component(path, "objects") {
+        content.objects.insert(read_json_definition::<ObjectDefinition>(path));
     } else if path_has_component(path, "secondary_properties") {
         let property = secondary_property_group(path).unwrap_or_else(|| {
             panic!(
