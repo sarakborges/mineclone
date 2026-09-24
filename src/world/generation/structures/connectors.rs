@@ -14,10 +14,10 @@ const CONNECTOR_DEPTH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
 const CONNECTOR_ROTATION_SALT: u64 = 0x1656_67b1_9e37_79f9;
 
 #[derive(Clone, Copy)]
-pub(super) struct ResolvedConnectedPiece<'a> {
-    pub(super) structure: &'a StructureDefinition,
-    pub(super) rotation: StructureRotation,
-    pub(super) origin: IVec3,
+pub(crate) struct ResolvedConnectedPiece<'a> {
+    pub(crate) structure: &'a StructureDefinition,
+    pub(crate) rotation: StructureRotation,
+    pub(crate) origin: IVec3,
 }
 
 #[derive(Clone, Copy)]
@@ -135,7 +135,7 @@ fn extend_bounds(
     });
 }
 
-pub(super) fn resolve_connected_pieces<'a>(
+pub(crate) fn resolve_connected_pieces<'a>(
     world_seed: u64,
     root: &'a StructureDefinition,
     root_rotation: StructureRotation,
@@ -153,7 +153,7 @@ pub(super) fn resolve_connected_pieces<'a>(
     )
 }
 
-pub(super) fn resolve_connected_piece_forest<'a>(
+pub(crate) fn resolve_connected_piece_forest<'a>(
     world_seed: u64,
     roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
     structures: &'a StructureRegistry,

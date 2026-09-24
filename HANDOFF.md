@@ -1,3 +1,17 @@
+## 2026-09-24 — Parte 6F — /place usa o mesmo resolver de Structure Connectors
+
+Placement manual deixou de tratar uma Structure conectável como apenas sua peça raiz.
+
+- `/place structure <id>` resolve a mesma chain determinística usada pelo worldgen;
+- Structure Groups continuam escolhendo a raiz pelo hash manual existente, e os connectors seguintes usam o resolver compartilhado;
+- todas as peças conectadas precisam estar em chunks carregados e livres de entities antes de qualquer edição;
+- player displacement considera o volume combinado de toda a chain, mantendo a semântica segura do /place antigo;
+- Structure Sets resolvem primeiro seus elementos no terreno carregado e depois passam todas as roots pelo mesmo connector forest resolver do worldgen;
+- overlap entre connector chains e outras roots do mesmo set usa a mesma ocupação compartilhada;
+- nenhuma peça conectada faz ground-fit independente: apenas roots são ancoradas ao terreno; filhas herdam posição exclusivamente pelo connector.
+
+Architect's Compass não coloca structures; ele apenas exporta seleções para JSON, então não havia um segundo placement path para migrar.
+
 ## 2026-09-24 — Parte 6E — Regression harness e audit de connector targets
 
 Adicionada cobertura de regressão focada no resolver genérico, sem criar conteúdo artificial no jogo.

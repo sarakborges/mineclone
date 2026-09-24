@@ -17,7 +17,10 @@ use crate::{
         world::VoxelWorld,
     },
     world::{
-        generation::{ResolvedSetPiece, resolve_set_pieces, surface_layer_placements},
+        generation::{
+            ResolvedConnectedPiece, resolve_connected_piece_forest, resolve_connected_pieces,
+            resolve_set_pieces, surface_layer_placements,
+        },
         WorldSeed,
     },
 };
@@ -228,18 +231,26 @@ fn displaced_eye_for_set(
     None
 }
 
-fn set_piece_bounds(piece: &ResolvedSetPiece<'_>) -> (Vec3, Vec3) {
+fn connected_piece_bounds(piece: &ResolvedConnectedPiece<'_>) -> (Vec3, Vec3) {
+    let (minimum_offset, maximum_offset) =
+        piece.structure.horizontal_bounds_for_rotation(piece.rotation);
     let minimum = IVec3::new(
-        piece.minimum.x,
-        piece.origin_y + piece.structure.min_y_offset(),
-        piece.minimum.y,
+        piece.origin.x + minimum_offset.x,
+        piece.origin.y + piece.structure.min_y_offset(),
+        piece.origin.z + minimum_offset.y,
     );
     let maximum = IVec3::new(
-        piece.maximum.x,
-        piece.origin_y + piece.structure.effective_max_y_offset(),
-        piece.maximum.y,
+        piece.origin.x + maximum_offset.x,
+        piece.origin.y + piece.structure.effective_max_y_offset(),
+        piece.origin.z + maximum_offset.y,
     );
     (minimum.as_vec3(), (maximum + IVec3::ONE).as_vec3())
+}
+
+fn combined_bounds(bounds: &[(Vec3, Vec3)]) -> Option<(Vec3, Vec3)> {
+    bounds.iter().copied().reduce(|left, right| {
+        (left.0.min(right.0), left.1.max(right.1))
+    })
 }
 
 fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64 {
@@ -426,7 +437,6 @@ impl ChatPlacementContext<'_, '_> {
             .select_for_manual_placement(reference, variation, hash)
             .expect("validated manual structure reference must resolve");
         let structure_rotation = structure.rotation_for_hash(hash);
-        let voxels = structure.voxels();
         let world = self.runtime.world();
 
         // /place is an explicit manual override. It does not apply biome,
@@ -438,56 +448,78 @@ impl ChatPlacementContext<'_, '_> {
         };
         let origin_y = surface_y - structure.ground_anchor_y_offset();
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
-        let min = voxels.iter().fold(IVec3::splat(i32::MAX), |min, voxel| {
-            min.min(origin + structure_rotation.rotate_offset(voxel.offset))
-        });
-        let max = voxels
-            .iter()
-            .fold(IVec3::splat(i32::MIN), |max, voxel| {
-                max.max(origin + structure_rotation.rotate_offset(voxel.offset))
-            })
-            + IVec3::Y * structure.clear_above as i32;
-        let blocked = (min.as_vec3(), (max + IVec3::ONE).as_vec3());
-        // Manual placement may replace terrain and fluids, but it still refuses
-        // to touch unloaded chunks or place blocks through creatures requested
-        // in this frame / already alive in the world.
-        if !structure_space_is_available(
-            world,
+        let pieces = resolve_connected_pieces(
+            self.seed.0,
             structure,
             structure_rotation,
             origin,
-            &self.existing,
-            reserved,
-        ) {
+            &self.structures,
+        );
+        let blocked = pieces
+            .iter()
+            .map(connected_piece_bounds)
+            .collect::<Vec<_>>();
+        let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
+            structure_space_is_available(
+                world,
+                piece.structure,
+                piece.rotation,
+                piece.origin,
+                &self.existing,
+                reserved,
+            )
+        });
+        // Manual placement may replace terrain and fluids, but it still refuses
+        // to touch unloaded chunks or place blocks through creatures requested
+        // in this frame / already alive in the world.
+        if !all_loaded_and_entity_clear {
             return format!("not enough loaded space to place {reference}");
         }
 
-        let destination = if !overlaps(player_bounds(player.translation), blocked) {
+        let blocked_union =
+            combined_bounds(&blocked).expect("resolved structure must contain at least one piece");
+        let destination = if !overlaps(player_bounds(player.translation), blocked_union) {
             Some(player.translation)
         } else {
             displaced_eye(
-                world, player.translation, blocked, &self.existing, reserved, true,
+                world,
+                player.translation,
+                blocked_union,
+                &self.existing,
+                reserved,
+                true,
             )
         };
         let Some(destination) = destination else {
             return format!("not enough safe space to place {reference}");
         };
 
-        apply_structure(
-            &mut self.runtime,
-            &self.blocks,
-            &self.fluids,
-            self.seed.0,
-            structure,
-            structure_rotation,
-            origin,
-        );
+        for piece in &pieces {
+            apply_structure(
+                &mut self.runtime,
+                &self.blocks,
+                &self.fluids,
+                self.seed.0,
+                piece.structure,
+                piece.rotation,
+                piece.origin,
+            );
+        }
         player.translation = destination;
-        format!(
-            "Placed {} ({}).",
-            structure.name.text(self.language.get()),
-            structure.id
-        )
+        if pieces.len() == 1 {
+            format!(
+                "Placed {} ({}).",
+                structure.name.text(self.language.get()),
+                structure.id
+            )
+        } else {
+            format!(
+                "Placed {} ({}) with {} connected structures.",
+                structure.name.text(self.language.get()),
+                structure.id,
+                pieces.len()
+            )
+        }
     }
 
     fn place_set(
@@ -518,14 +550,25 @@ impl ChatPlacementContext<'_, '_> {
             return format!("could not resolve structure set {} in loaded terrain", set.id);
         };
 
-        let blocked = pieces.iter().map(set_piece_bounds).collect::<Vec<_>>();
-        let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
-            let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
+        let connected_pieces = resolve_connected_piece_forest(
+            self.seed.0,
+            pieces.iter().map(|piece| ResolvedConnectedPiece {
+                structure: piece.structure,
+                rotation: piece.rotation,
+                origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
+            }),
+            &self.structures,
+        );
+        let blocked = connected_pieces
+            .iter()
+            .map(connected_piece_bounds)
+            .collect::<Vec<_>>();
+        let all_loaded_and_entity_clear = connected_pieces.iter().all(|piece| {
             structure_space_is_available(
                 world,
                 piece.structure,
                 piece.rotation,
-                origin,
+                piece.origin,
                 &self.existing,
                 reserved,
             )
@@ -553,8 +596,7 @@ impl ChatPlacementContext<'_, '_> {
             return format!("not enough safe space to place {}", set.id);
         };
 
-        for piece in &pieces {
-            let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
+        for piece in &connected_pieces {
             apply_structure(
                 &mut self.runtime,
                 &self.blocks,
@@ -562,7 +604,7 @@ impl ChatPlacementContext<'_, '_> {
                 self.seed.0,
                 piece.structure,
                 piece.rotation,
-                origin,
+                piece.origin,
             );
         }
 
@@ -571,7 +613,7 @@ impl ChatPlacementContext<'_, '_> {
             "Placed {} ({}) with {} structures.",
             set.name.text(self.language.get()),
             set.id,
-            pieces.len()
+            connected_pieces.len()
         )
     }
 }
