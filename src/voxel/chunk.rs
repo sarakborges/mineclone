@@ -251,6 +251,10 @@ pub(crate) struct VoxelChunkStructureMut<'a> {
 }
 
 impl VoxelChunkStructureMut<'_> {
+    pub(crate) fn cell_at(&self, x: usize, y: usize, z: usize) -> Option<VoxelCell> {
+        self.blocks.get(index(x, y, z))
+    }
+
     pub(crate) fn set_block(
         &mut self,
         x: usize,
