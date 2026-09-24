@@ -30,6 +30,14 @@ pub(crate) fn ocean_strength(continentalness: f32, ocean_weight: f32) -> f32 {
     smoothstep(raw.clamp(0.0, 1.0))
 }
 
+pub(crate) fn ocean_continentalness_for_surface_weight(
+    surface_weight: f32,
+    ocean_weight: f32,
+) -> f32 {
+    let threshold = ocean_continentalness_threshold(ocean_weight);
+    threshold - OCEAN_TRANSITION_WIDTH * surface_weight.clamp(0.0, 1.0)
+}
+
 pub(super) fn ocean_floor_is_submerged(floor: f32, sea_level: f32) -> bool {
     floor < sea_level - 0.5
 }
@@ -91,6 +99,18 @@ pub(super) fn cell_hash(cell: IVec2, seed: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ocean_surface_weight_maps_back_to_physical_ocean_strength() {
+        for surface_weight in [0.0_f32, 0.25, 0.5, 0.75, 1.0] {
+            let continentalness =
+                ocean_continentalness_for_surface_weight(surface_weight, 1.0);
+            let expected = smoothstep(surface_weight);
+            assert!(
+                (ocean_strength(continentalness, 1.0) - expected).abs() < 0.0001
+            );
+        }
+    }
 
     #[test]
     fn ocean_strength_stops_at_the_authored_ocean_boundary() {

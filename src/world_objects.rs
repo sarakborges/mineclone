@@ -69,6 +69,9 @@ impl WorldObjectInstance {
         self.object_id
     }
 
+    pub(crate) fn support(&self) -> IVec3 {
+        self.support
+    }
 
     pub(crate) fn target_bounds(&self, origin: Vec3) -> (Vec3, Vec3) {
         let center = origin + self.target_center_offset;

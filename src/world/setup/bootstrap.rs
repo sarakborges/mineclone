@@ -26,7 +26,9 @@ use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
-    generation::authored_surface_fluid_id_for_position,
+    generation::{
+        authored_surface_fluid_id_for_position, hydrology_continentalness_for_surface,
+    },
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
@@ -610,15 +612,15 @@ fn spawn_column_has_surface_fluid(
                 biome_field,
                 &surface,
             ) as f32;
-            let continentalness = biome_field.climate_at(position).continentalness;
-            let primary = biomes
-                .get(surface.primary_id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", surface.primary_id));
+            let continentalness =
+                hydrology_continentalness_for_surface(&surface, dimension);
+            let biome_hydrology =
+                biome_field.surface_biome_hydrology(surface.identity_surface_index);
 
             HydrologySurfaceSample {
                 elevation,
                 continentalness,
-                biome_hydrology: primary.hydrology.rules(),
+                biome_hydrology,
             }
         },
         )

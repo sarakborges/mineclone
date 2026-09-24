@@ -7,14 +7,15 @@ use crate::{
         block::{BlockDefinition, DEFAULT_BLOCK_BREAK_TICKS},
         builtin_ids::DYED_PROPERTY_ID,
         layer::{LayerFace, LayerRegistry},
+        object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool_category::ToolCategoryRegistry,
     },
-    hud::block_icon::BlockIconMaterial,
+    hud::{block_icon::BlockIconMaterial, ui_image::load_smooth_image},
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
-        block_tint::apply_secondary_property_tint,
+        block_tint::{apply_secondary_property_tint, block_tint_at},
         block_visual_content::BlockVisualContent,
     },
     targeting::{
@@ -23,6 +24,7 @@ use crate::{
     },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
+    world_objects::{TargetedWorldObject, WorldObjectInstance},
 };
 
 use super::{HudSettings, TargetBlockPosition};
@@ -74,6 +76,9 @@ struct TargetBlockText;
 #[derive(Component)]
 struct TargetBlockModel;
 
+#[derive(Component)]
+struct TargetObjectIcon;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct TargetHudSnapshot {
     voxel: IVec3,
@@ -92,9 +97,22 @@ struct TargetHudIconSnapshot {
     tint: Color,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct TargetObjectHudSnapshot {
+    entity: Entity,
+    object_id: &'static str,
+    support: IVec3,
+    light_level: u8,
+    language: Language,
+    icon: String,
+    tint: Color,
+}
+
 #[derive(SystemParam)]
-struct TargetHudState<'w> {
+struct TargetHudState<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
+    object_target: Res<'w, TargetedWorldObject>,
+    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -105,6 +123,7 @@ struct TargetHudState<'w> {
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
+    objects: Res<'w, ObjectRegistry>,
     layers: Res<'w, LayerRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     tool_categories: Res<'w, ToolCategoryRegistry>,
@@ -114,11 +133,21 @@ struct TargetHudContent<'w> {
 struct TargetHudView<'w, 's> {
     root_visibility: Single<'w, 's, &'static mut Visibility, With<TargetHudRoot>>,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
-    icon: Single<
+    block_icon: Single<
         'w,
         's,
-        (&'static mut BlockModel, &'static MaterialNode<BlockIconMaterial>),
-        With<TargetBlockModel>,
+        (
+            &'static mut BlockModel,
+            &'static MaterialNode<BlockIconMaterial>,
+            &'static mut Visibility,
+        ),
+        (With<TargetBlockModel>, Without<TargetObjectIcon>),
+    >,
+    object_icon: Single<
+        'w,
+        's,
+        (&'static mut ImageNode, &'static mut Visibility),
+        (With<TargetObjectIcon>, Without<TargetBlockModel>),
     >,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
@@ -174,6 +203,17 @@ fn spawn_target_hud(
                             height: px(TARGET_ICON_SIZE),
                             ..default()
                         },
+                        Pickable::IGNORE,
+                    ));
+                    slot.spawn((
+                        TargetObjectIcon,
+                        ImageNode::default(),
+                        Node {
+                            width: px(TARGET_ICON_SIZE),
+                            height: px(TARGET_ICON_SIZE),
+                            ..default()
+                        },
+                        Visibility::Hidden,
                         Pickable::IGNORE,
                     ));
                 });
@@ -245,31 +285,99 @@ fn update_target_hud(
     view: TargetHudView,
     mut cached: Local<Option<TargetHudSnapshot>>,
     mut cached_icon: Local<Option<TargetHudIconSnapshot>>,
+    mut cached_object: Local<Option<TargetObjectHudSnapshot>>,
 ) {
     let TargetHudView {
         root_visibility,
         target_text,
-        icon,
+        block_icon,
+        object_icon,
         mut icon_materials,
     } = view;
     let mut root_visibility = root_visibility.into_inner();
 
     if state.settings.target_block_position() == TargetBlockPosition::Hidden {
+        *cached = None;
         *cached_icon = None;
+        *cached_object = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
         return;
     }
 
+    if let Some(entity) = state.object_target.0
+        && let Ok(instance) = state.object_instances.get(entity)
+        && let Some(object) = content.objects.get(instance.object_id())
+    {
+        let language = state.language.get();
+        let support = instance.support();
+        let light = state.world.light_at(support + IVec3::Y);
+        let light_level = light.sky().max(light.block());
+        let tint_position = Vec2::new(support.x as f32 + 0.5, support.z as f32 + 0.5);
+        let tint = block_tint_at(
+            object.tint,
+            tint_position,
+            &content.visual.biome_field,
+            &content.visual.biomes,
+        );
+        let snapshot = TargetObjectHudSnapshot {
+            entity,
+            object_id: instance.object_id(),
+            support,
+            light_level,
+            language,
+            icon: object.icon.clone(),
+            tint,
+        };
+        let definitions_changed = content.objects.is_changed()
+            || content.visual.biomes.is_changed()
+            || content.visual.biome_field.is_changed()
+            || state.language.is_changed();
+
+        if cached_object.as_ref() == Some(&snapshot)
+            && !definitions_changed
+            && *root_visibility == Visibility::Visible
+        {
+            return;
+        }
+        if *root_visibility != Visibility::Visible {
+            *root_visibility = Visibility::Visible;
+        }
+
+        let mut target_text = target_text.into_inner();
+        let next_text = target_object_hud_text(&snapshot, object, &state);
+        if target_text.0 != next_text {
+            target_text.0 = next_text;
+        }
+
+        let (_, _, mut block_visibility) = block_icon.into_inner();
+        if *block_visibility != Visibility::Hidden {
+            *block_visibility = Visibility::Hidden;
+        }
+        let (mut image, mut object_visibility) = object_icon.into_inner();
+        if *object_visibility != Visibility::Visible {
+            *object_visibility = Visibility::Visible;
+        }
+        image.image = load_smooth_image(&content.visual.asset_server, snapshot.icon.clone());
+        image.color = snapshot.tint;
+
+        *cached = None;
+        *cached_icon = None;
+        *cached_object = Some(snapshot);
+        return;
+    }
+
     let Some(hit) = state.targeted.0 else {
         *cached = None;
         *cached_icon = None;
+        *cached_object = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
         return;
     };
+    *cached_object = None;
 
     let language = state.language.get();
     let cell = state.world.cell_at(hit.voxel);
@@ -339,6 +447,12 @@ fn update_target_hud(
         target_text.0 = next_text;
     }
 
+    let (mut object_image, mut object_visibility) = object_icon.into_inner();
+    if *object_visibility != Visibility::Hidden {
+        *object_visibility = Visibility::Hidden;
+    }
+    object_image.color = Color::WHITE;
+
     let icon_snapshot = target_hud_icon_snapshot(&snapshot, cell, block, &content);
     *cached = Some(snapshot);
     let block_changed = cached_icon
@@ -348,11 +462,15 @@ fn update_target_hud(
         .as_ref()
         .is_none_or(|previous| previous.tint != icon_snapshot.tint);
 
+    let (mut model, material_handle, mut block_visibility) = block_icon.into_inner();
+    if *block_visibility != Visibility::Visible {
+        *block_visibility = Visibility::Visible;
+    }
+
     if !block_changed && !block_definitions_changed && !tint_changed {
         return;
     }
 
-    let (mut model, material_handle) = icon.into_inner();
     let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
         return;
     };
@@ -368,11 +486,31 @@ fn update_target_hud(
     *cached_icon = Some(icon_snapshot);
 }
 
+fn target_object_hud_text(
+    snapshot: &TargetObjectHudSnapshot,
+    object: &crate::content::object::ObjectDefinition,
+    state: &TargetHudState<'_, '_>,
+) -> String {
+    let language = snapshot.language;
+    let coordinates = state
+        .localization
+        .text(language, "hud.coordinates")
+        .replace("{x}", &snapshot.support.x.to_string())
+        .replace("{z}", &snapshot.support.z.to_string())
+        .replace("{y}", &snapshot.support.y.to_string());
+
+    format!(
+        "{}\n{}: {}\n{coordinates}",
+        object.name.text(language),
+        state.localization.text(language, "hud.light"),
+        snapshot.light_level,
+    )
+}
 
 fn target_hud_text(
     snapshot: &TargetHudSnapshot,
     block: Option<&BlockDefinition>,
-    state: &TargetHudState<'_>,
+    state: &TargetHudState<'_, '_>,
     content: &TargetHudContent<'_>,
 ) -> String {
     let language = snapshot.language;

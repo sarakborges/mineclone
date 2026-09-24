@@ -123,6 +123,16 @@ fn edit_targeted_block(
         return;
     }
     if middle_pressed && game_mode.has_creative_inventory() {
+        if let Some(entity) = input.object_target.0
+            && let Ok(instance) = input.object_instances.get(entity)
+            && definitions.objects.get(instance.object_id()).is_some()
+        {
+            input
+                .hotbar
+                .set_selected_stack(Some(ItemStack::new(instance.object_id())));
+            return;
+        }
+
         if let Some(hit) = input.targeted.0
             && definitions.blocks.get(hit.block_id).is_some()
         {

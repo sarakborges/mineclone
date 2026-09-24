@@ -25,12 +25,14 @@ use crate::{
         texture_rotation::TextureRotation,
     },
     world::{
-        biome_field::BiomeField,
+        biome_field::{BiomeField, BiomeFieldSample},
         cave_connectivity::CaveConnectivityRegion,
         generation_region::{
             GenerationRegion, generation_region_coord, generation_region_world_bounds,
         },
-        hydrology::HydrologySurfaceSample,
+        hydrology::{
+            HydrologySurfaceSample, ocean_continentalness_for_surface_weight,
+        },
         new_world::{WorldGenerationMode, WorldGenerationSettings},
         terrain::{chunk_y_bounds, surface_height, surface_height_from_sample},
         world_feature_fields::WorldFeatureFields,
@@ -96,18 +98,8 @@ impl ChunkGenerationContext<'_> {
                             ) as f32
                         }
                     };
-                    let raw_continentalness =
-                        self.biome_field.climate_at(position).continentalness;
-                    let ocean_id = self.dimension.hydrology.ocean_biome.as_deref();
-                    let ocean_surface_factor = surface
-                        .influences
-                        .iter()
-                        .filter(|influence| Some(influence.id) == ocean_id)
-                        .map(|influence| influence.weight)
-                        .sum::<f32>()
-                        .clamp(0.0, 1.0);
-                    let continentalness = 1.0
-                        + (raw_continentalness - 1.0) * ocean_surface_factor;
+                    let continentalness =
+                        hydrology_continentalness_for_surface(&surface, self.dimension);
                     let biome_hydrology = self
                         .biome_field
                         .surface_biome_hydrology(surface.identity_surface_index);
@@ -136,6 +128,23 @@ impl ChunkGenerationContext<'_> {
     }
 }
 
+
+pub(crate) fn hydrology_continentalness_for_surface(
+    surface: &BiomeFieldSample<'_>,
+    dimension: &DimensionDefinition,
+) -> f32 {
+    let ocean_id = dimension.hydrology.ocean_biome.as_deref();
+    let ocean_surface_weight = surface
+        .influences
+        .iter()
+        .filter(|influence| Some(influence.id) == ocean_id)
+        .map(|influence| influence.weight)
+        .sum::<f32>()
+        .clamp(0.0, 1.0);
+    let ocean_weight = ocean_id.map_or(0.0, |id| dimension.biome_weight(id));
+
+    ocean_continentalness_for_surface_weight(ocean_surface_weight, ocean_weight)
+}
 pub(crate) fn generate_chunk(
     chunk_coord: IVec3,
     context: &ChunkGenerationContext<'_>,
