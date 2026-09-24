@@ -176,6 +176,7 @@ fn advance_survival_mining(
     }
 
     let biome_tint = runtime
+        .world
         .world()
         .cell_at(hit.voxel)
         .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
@@ -216,7 +217,7 @@ fn spawn_survival_loot(
         let item_id = resolve_loot_item_id(&entry.item, content);
         for _ in 0..entry.quantity {
             let mut stack = ItemStack::new(item_id);
-            if item_id == block.id
+            if item_id == block.id.as_str()
                 && let Some(biome_id) = biome_tint
             {
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
