@@ -10,10 +10,10 @@
   "textures": {
     "top": "textures/blocks/trees/willow/top.png",
     "bottom": "textures/blocks/trees/willow/top.png",
-    "left": "textures/blocks/trees/willow/top.png",
-    "right": "textures/blocks/trees/willow/top.png",
-    "front": "textures/blocks/trees/willow/top.png",
-    "back": "textures/blocks/trees/willow/top.png"
+    "left": "textures/blocks/trees/willow/side-stripped.png",
+    "right": "textures/blocks/trees/willow/side-stripped.png",
+    "front": "textures/blocks/trees/willow/side-stripped.png",
+    "back": "textures/blocks/trees/willow/side-stripped.png"
   },
   "rotateTexture": {
     "top": false,
@@ -23,17 +23,11 @@
     "front": false,
     "back": false
   },
-  "orientations": [
-    "y",
-    "z",
-    "x"
-  ],
+  "orientations": ["y", "z", "x"],
   "lightDampening": 15,
   "castsShadow": true,
   "mining": {
     "hardness": 1,
-    "requiredTools": [
-      "hatchet"
-    ]
+    "requiredTools": ["hatchet"]
   }
 }
