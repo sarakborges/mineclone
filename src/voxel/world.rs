@@ -7,7 +7,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::content::layer::{LayerFace, LayerRegistry};
+use crate::content::{
+    layer::{LayerFace, LayerRegistry},
+    object::ObjectRegistry,
+};
 
 use super::{
     cell::VoxelCell,
@@ -17,6 +20,7 @@ use super::{
     fluid::FluidCell,
     layer::LayerCell,
     light::VoxelLight,
+    object::ObjectCell,
 };
 
 #[derive(Resource, Default, Clone)]
@@ -157,6 +161,19 @@ impl VoxelWorld {
         self.chunks
             .get(&chunk_coord)?
             .cell_at(local_position.x, local_position.y, local_position.z)
+    }
+
+    pub(crate) fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        self.chunks.get(&chunk_coord)?.object_at(
+            local_position.x,
+            local_position.y,
+            local_position.z,
+        )
     }
 
     pub(crate) fn layers_at(
@@ -445,6 +462,62 @@ impl VoxelWorld {
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
+    }
+
+    pub(crate) fn set_object_at(
+        &mut self,
+        support_position: IVec3,
+        object: ObjectCell,
+        registry: &ObjectRegistry,
+    ) -> Option<IVec3> {
+        if support_position.y < 0 {
+            return None;
+        }
+        let definition = registry.get(object.object_id)?;
+        if !definition.supports_placement_face(object.face) {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(support_position);
+        let changed = {
+            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            chunk.set_object(
+                local_position.x as usize,
+                local_position.y as usize,
+                local_position.z as usize,
+                object,
+            )
+        };
+        if !changed {
+            return None;
+        }
+
+        self.persistent_chunks.insert(chunk_coord);
+        self.bump_chunk_content_revision(chunk_coord);
+        Some(chunk_coord)
+    }
+
+    pub(crate) fn remove_object_at(
+        &mut self,
+        support_position: IVec3,
+    ) -> Option<(IVec3, ObjectCell)> {
+        if support_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(support_position);
+        let removed = {
+            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            chunk.remove_object(
+                local_position.x as usize,
+                local_position.y as usize,
+                local_position.z as usize,
+            )?
+        };
+
+        self.persistent_chunks.insert(chunk_coord);
+        self.bump_chunk_content_revision(chunk_coord);
+        Some((chunk_coord, removed))
     }
 
     pub(crate) fn set_fluid_at(
