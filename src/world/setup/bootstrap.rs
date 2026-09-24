@@ -494,7 +494,7 @@ fn random_spawn_biome_id<'a>(
         dimension.id
     );
 
-    let selected = (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) % candidate_count as u64) as usize;
+    let selected = random_spawn_candidate_index(seed, candidate_count);
     dimension
         .biomes
         .iter()
@@ -502,6 +502,11 @@ fn random_spawn_biome_id<'a>(
         .nth(selected)
         .map(|entry| entry.id.as_str())
         .expect("random spawn biome index must resolve")
+}
+
+fn random_spawn_candidate_index(seed: u64, candidate_count: usize) -> usize {
+    assert!(candidate_count > 0, "random spawn requires at least one biome candidate");
+    (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) % candidate_count as u64) as usize
 }
 
 fn validate_forced_spawn_biome(
@@ -654,4 +659,27 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
     );
 
     (roughness / count, metallic / count)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::random_spawn_candidate_index;
+
+    #[test]
+    fn random_spawn_candidate_is_deterministic_for_same_seed() {
+        assert_eq!(
+            random_spawn_candidate_index(42, 7),
+            random_spawn_candidate_index(42, 7)
+        );
+    }
+
+    #[test]
+    fn random_spawn_candidate_changes_across_seeds() {
+        let first = random_spawn_candidate_index(0, 7);
+        assert!(
+            (1..64).any(|seed| random_spawn_candidate_index(seed, 7) != first),
+            "random spawn candidate must not collapse every seed to one biome"
+        );
+    }
 }
