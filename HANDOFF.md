@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 6G — Connector points pré-compilados no StructureRuntime
+
+Connector resolution não revarre mais `layers[].rows` a cada candidate/branch.
+
+Durante `StructureRegistry::insert`, `rebuild_runtime` agora extrai uma única vez:
+- offset local do connector;
+- face;
+- target;
+- strength;
+- strengthLossOnEachLoop.
+
+`connector_points()` passa a devolver apenas a slice runtime pré-compilada. Isso é especialmente importante antes de usar connectors em structures monumentais como World Tree, cujos arquivos possuem dezenas de milhares de voxels e não podem pagar um scan textual completo por resolução.
+
+Connector cells continuam fora de `voxels`, footprint, support e meshing.
+
 ## 2026-09-24 — Parte 6F — Re-export do resolver manual corrigido
 
 O CI da integração de `/place` encontrou apenas o wiring de visibilidade entre `generation::structures` e `generation`. O resolver compartilhado e `ResolvedConnectedPiece` agora são reexportados pelo módulo público interno correto. `ResolvedSetPiece` deixou de ser exposto porque o chat não depende mais desse tipo após migrar para connected pieces.
