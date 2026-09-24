@@ -14149,3 +14149,19 @@ O schema Rust agora mapeia explicitamente esses três campos para camelCase.
 Foi adicionado um teste unitário de regressão que desserializa o formato real usado
 pelos objects. O workflow permanece com Clippy `--all-targets` e `cargo check`, sem
 forçar um relink completo do binário Bevy em todo commit.
+
+## 2026-09-24 — World Trees retargeted para Grass Block
+
+A migração de terrain grass para `asteria:grass_block` havia corrigido springs,
+root arches e árvores comuns, mas os cinco arquivos grandes de World Tree ficaram
+fora do retargeting. `world_tree_01..05` ainda declaravam
+`restrictions.groundBlocks: ["asteria:grass", ...]`; como `asteria:grass`
+agora é um world object, o loader rejeitava a referência como block inexistente.
+
+Os cinco World Trees agora usam `asteria:grass_block` em `groundBlocks`.
+
+Foi adicionado `tools/check_content_references.py`, executado pelo CI antes da
+compilação. A auditoria valida as mesmas classes principais de referências de
+structure que o runtime valida: ground blocks, proximity block/fluid, palette
+block/fluid/object e surface layers. Isso cobre inclusive structures grandes que
+não aparecem em diffs pequenos durante migrações de IDs.

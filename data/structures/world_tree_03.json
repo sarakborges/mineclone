@@ -15,7 +15,7 @@
   ],
   "restrictions": {
     "groundBlocks": [
-      "asteria:grass",
+      "asteria:grass_block",
       "asteria:dirt"
     ],
     "maxSlope": 3,

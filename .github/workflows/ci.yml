@@ -29,6 +29,9 @@ jobs:
       - name: Audit localizations
         run: python3 tools/check_localizations.py
 
+      - name: Audit structure content references
+        run: python3 tools/check_content_references.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
