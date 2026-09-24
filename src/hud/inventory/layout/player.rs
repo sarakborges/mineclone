@@ -4,6 +4,7 @@ use bevy::{
 };
 
 use crate::{
+    hud::item_stack_count::spawn_item_stack_count,
     player::hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
     ui::{
         button::{self, ButtonVariant},
@@ -332,12 +333,18 @@ fn spawn_slot(
     items: &mut InventoryItemView<'_>,
 ) {
     let (background, border) = selectable::static_colors(selected);
-    let item = hotbar.inventory_item_at(index);
+    let stack = hotbar.inventory_stack_at(index);
+    let item = stack.map(crate::player::item_stack::ItemStack::id);
+    let quantity = stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
 
     parent
         .spawn((
             Button,
-            InventorySlot { index, item },
+            InventorySlot {
+                index,
+                item,
+                quantity,
+            },
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
@@ -352,6 +359,7 @@ fn spawn_slot(
         .with_children(|slot| {
             if let Some(item_id) = item {
                 spawn_inventory_item(slot, item_id, items);
+                spawn_item_stack_count(slot, quantity);
             }
         });
 }

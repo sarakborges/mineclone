@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    hud::item_stack_count::spawn_item_stack_count,
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     ui::{surface, typography},
 };
@@ -220,6 +221,32 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     }
 
     panic!("inventory cursor references missing item: {item_id}");
+}
+
+pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
+    root: &mut ChildSpawnerCommands,
+    quantity: u32,
+    position: Vec2,
+) {
+    if quantity <= 1 {
+        return;
+    }
+
+    root.spawn((
+        InventoryCursorIcon,
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(position.x - ITEM_ICON_SIZE * 0.5),
+            top: px(position.y - ITEM_ICON_SIZE * 0.5),
+            width: px(ITEM_ICON_SIZE),
+            height: px(ITEM_ICON_SIZE),
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
+    .with_children(|overlay| {
+        spawn_item_stack_count(overlay, quantity);
+    });
 }
 
 pub(in crate::hud::inventory) fn spawn_inventory_item(

@@ -216,6 +216,9 @@ fn validate_playable(
                 stack.id()
             )));
         }
+        if !stack.quantity_is_valid() {
+            return Err(invalid_data("saved inventory item quantity is invalid"));
+        }
         if !stack.metadata_is_valid() {
             return Err(invalid_data("saved inventory item metadata is invalid"));
         }

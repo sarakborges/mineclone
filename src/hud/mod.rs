@@ -7,6 +7,7 @@ mod entity_targeting;
 mod fps;
 mod hotbar;
 mod inventory;
+mod item_stack_count;
 mod layer_icon;
 mod player;
 mod targeting;

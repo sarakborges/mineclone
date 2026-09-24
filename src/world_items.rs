@@ -435,7 +435,7 @@ fn pickup_proximity_items(
     player: Single<&Transform, With<GameplayCamera>>,
     mut hotbar: ResMut<PlayerHotbar>,
     mut commands: Commands,
-    mut items: Query<(Entity, &Transform, &WorldItem, &mut ProximityPickup)>,
+    mut items: Query<(Entity, &Transform, &mut WorldItem, &mut ProximityPickup)>,
 ) {
     let pickup_center = player.translation - Vec3::Y * (PLAYER_EYE_HEIGHT * 0.5);
     let radius_squared = PROXIMITY_PICKUP_RADIUS * PROXIMITY_PICKUP_RADIUS;
@@ -448,7 +448,7 @@ fn pickup_proximity_items(
         if transform.translation.distance_squared(pickup_center) > radius_squared {
             continue;
         }
-        if hotbar.try_insert_stack(world_item.stack().clone()).is_ok() {
+        if collect_world_item(&mut hotbar, &mut world_item) {
             commands.entity(entity).despawn();
         }
     }
@@ -459,7 +459,7 @@ fn pickup_interact_item(
     mut targeted: ResMut<TargetedWorldItem>,
     mut hotbar: ResMut<PlayerHotbar>,
     mut commands: Commands,
-    items: Query<&WorldItem, With<InteractPickup>>,
+    mut items: Query<&mut WorldItem, With<InteractPickup>>,
 ) {
     if !buttons.just_pressed(MouseButton::Right) {
         return;
@@ -467,13 +467,23 @@ fn pickup_interact_item(
     let Some(entity) = targeted.0 else {
         return;
     };
-    let Ok(world_item) = items.get(entity) else {
+    let Ok(mut world_item) = items.get_mut(entity) else {
         targeted.0 = None;
         return;
     };
-    if hotbar.try_insert_stack(world_item.stack().clone()).is_ok() {
+    if collect_world_item(&mut hotbar, &mut world_item) {
         commands.entity(entity).despawn();
         targeted.0 = None;
+    }
+}
+
+fn collect_world_item(hotbar: &mut PlayerHotbar, world_item: &mut WorldItem) -> bool {
+    match hotbar.try_insert_stack(world_item.stack().clone()) {
+        Ok(()) => true,
+        Err(remaining) => {
+            world_item.stack = remaining;
+            false
+        }
     }
 }
 

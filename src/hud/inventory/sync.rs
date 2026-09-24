@@ -25,7 +25,7 @@ use super::{
     CharacterInfoInventoryRoot,
     layout::{
         InventoryItemView, InventoryLayoutState, spawn_creative_catalog_rows, spawn_cursor_icon,
-        spawn_inventory_item, spawn_inventory_root,
+        spawn_cursor_stack_count, spawn_inventory_item, spawn_inventory_root,
     },
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
@@ -345,6 +345,14 @@ pub(super) fn sync_inventory_cursor_icon(
 
     commands.entity(root_entity).with_children(|root| {
         spawn_cursor_icon(root, item_id, position, &mut items);
+        spawn_cursor_stack_count(
+            root,
+            context
+                .cursor
+                .stack()
+                .map_or(0, crate::player::item_stack::ItemStack::quantity),
+            position,
+        );
     });
 }
 
@@ -364,8 +372,10 @@ pub(super) fn sync_inventory_slot_contents(
     let mut items = content.view(player_position, &mut icon_materials);
 
     for (entity, mut slot, children) in &mut slots {
-        let item = hotbar.inventory_item_at(slot.index);
-        if slot.item == item {
+        let stack = hotbar.inventory_stack_at(slot.index);
+        let item = stack.map(crate::player::item_stack::ItemStack::id);
+        let quantity = stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
+        if slot.item == item && slot.quantity == quantity {
             continue;
         }
 
@@ -376,12 +386,14 @@ pub(super) fn sync_inventory_slot_contents(
         }
 
         slot.item = item;
+        slot.quantity = quantity;
         let Some(item_id) = item else {
             continue;
         };
 
         commands.entity(entity).with_children(|slot_node| {
             spawn_inventory_item(slot_node, item_id, &mut items);
+            crate::hud::item_stack_count::spawn_item_stack_count(slot_node, quantity);
         });
     }
 }

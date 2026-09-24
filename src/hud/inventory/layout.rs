@@ -28,7 +28,9 @@ use crate::hud::block_icon::BlockIconMaterial;
 
 pub(super) use self::{
     creative::spawn_creative_catalog_rows,
-    item::{spawn_cursor_icon, spawn_inventory_item, spawn_item_tooltip},
+    item::{
+        spawn_cursor_icon, spawn_cursor_stack_count, spawn_inventory_item, spawn_item_tooltip,
+    },
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
 use super::state::{InventoryHudRoot, PANEL_GAP};
@@ -71,11 +73,15 @@ pub(super) fn spawn_character_info_inventory(
     let Some(item_id) = state.cursor.item() else {
         return;
     };
-    spawn_cursor_icon(
+    let position = state.cursor_position.unwrap_or(Vec2::ZERO);
+    spawn_cursor_icon(root, item_id, position, items);
+    spawn_cursor_stack_count(
         root,
-        item_id,
-        state.cursor_position.unwrap_or(Vec2::ZERO),
-        items,
+        state
+            .cursor
+            .stack()
+            .map_or(0, crate::player::item_stack::ItemStack::quantity),
+        position,
     );
 }
 
@@ -123,11 +129,15 @@ pub(super) fn spawn_inventory_root(
             let Some(item_id) = state.cursor.item() else {
                 return;
             };
-            spawn_cursor_icon(
+            let position = state.cursor_position.unwrap_or(Vec2::ZERO);
+            spawn_cursor_icon(root, item_id, position, items);
+            spawn_cursor_stack_count(
                 root,
-                item_id,
-                state.cursor_position.unwrap_or(Vec2::ZERO),
-                items,
+                state
+                    .cursor
+                    .stack()
+                    .map_or(0, crate::player::item_stack::ItemStack::quantity),
+                position,
             );
         });
 }

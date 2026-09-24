@@ -8,7 +8,8 @@ use crate::{
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
     hud::{
-        block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
+        block_icon::BlockIconMaterial, item_stack_count::spawn_item_stack_count,
+        layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
     },
     localization::{ActiveLanguage, Language},
     player::{
@@ -35,6 +36,7 @@ struct HotbarSelectedName;
 struct HotbarSlot {
     index: usize,
     item: Option<&'static str>,
+    quantity: u32,
 }
 
 #[derive(Component)]
@@ -188,10 +190,17 @@ fn spawn_hotbar(
                 for index in 0..HOTBAR_SLOT_COUNT {
                     let selected = index == content.hotbar.selected_slot();
                     let (background, border) = selectable::static_colors(selected);
-                    let item = content.hotbar.item_at(index);
+                    let stack = content.hotbar.stack_at(index);
+                    let item = stack.map(crate::player::item_stack::ItemStack::id);
+                    let quantity =
+                        stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
 
                     row.spawn((
-                        HotbarSlot { index, item },
+                        HotbarSlot {
+                            index,
+                            item,
+                            quantity,
+                        },
                         Node {
                             width: px(SLOT_SIZE),
                             height: px(SLOT_SIZE),
@@ -207,6 +216,7 @@ fn spawn_hotbar(
                     .with_children(|slot| {
                         if let Some(item_id) = item {
                             spawn_hotbar_item(slot, index, item_id, &mut items);
+                            spawn_item_stack_count(slot, quantity);
                         }
                     });
                 }
@@ -288,8 +298,11 @@ fn sync_hotbar(
         let selected = slot.index == content.hotbar.selected_slot();
         selectable::apply_colors(selectable::static_colors(selected), background, border);
 
-        let next_item = content.hotbar.item_at(slot.index);
-        if slot.item == next_item && !language_changed {
+        let next_stack = content.hotbar.stack_at(slot.index);
+        let next_item = next_stack.map(crate::player::item_stack::ItemStack::id);
+        let next_quantity =
+            next_stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
+        if slot.item == next_item && slot.quantity == next_quantity && !language_changed {
             continue;
         }
 
@@ -299,12 +312,14 @@ fn sync_hotbar(
             }
         }
         slot.item = next_item;
+        slot.quantity = next_quantity;
 
         let Some(item_id) = next_item else {
             continue;
         };
         commands.entity(entity).with_children(|slot_node| {
             spawn_hotbar_item(slot_node, slot.index, item_id, &mut items);
+            spawn_item_stack_count(slot_node, next_quantity);
         });
     }
 }

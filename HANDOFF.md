@@ -1,3 +1,37 @@
+## 2026-09-23 — Item stacks com quantidade e limite 64 [VERSION 0.65.0]
+
+`ItemStack` agora possui `quantity` persistida e um limite central
+`MAX_STACK_SIZE = 64`. A compatibilidade para agrupamento é definida por
+ID + metadata; quantidade não participa da identidade de stacking. Portanto
+stacks com `biome_tint` diferente continuam separados.
+
+O save continua retrocompatível. Stack unitário sem metadata preserva a forma
+histórica de string. Stacks com quantidade > 1 ou metadata usam a forma
+detalhada `{ id, quantity?, metadata? }`; saves detalhados antigos sem
+`quantity` carregam como quantidade 1. Quantidades fora de 1..64 são
+rejeitadas na restauração/validação.
+
+Pickup de world items primeiro completa stacks compatíveis existentes na
+hotbar/backpack e só depois ocupa um slot vazio. Se apenas parte do world item
+couber, a entidade permanece no mundo com a quantidade restante, evitando
+perda ou duplicação.
+
+O botão de organizar o inventory agora ordena e também consolida stacks
+compatíveis no backpack até 64. Clicar um stack sobre outro compatível também
+faz merge até o limite, mantendo eventual restante no cursor. O catálogo
+Creative entrega inicialmente um stack cheio de 64.
+
+Hotbar, inventory e cursor exibem contador no canto inferior direito para
+quantidades maiores que 1. A renderização do contador é compartilhada em
+`hud/item_stack_count.rs`.
+
+Loot tables passaram a materializar `quantity` como um único stack quando
+<=64; quantidades maiores são divididas em chunks de até 64. Assim stone -> 4
+pebbles gera uma entidade com stack de 4, e não quatro entidades unitárias.
+
+`Q` e drop por clique fora do inventory continuam soltando o stack inteiro
+selecionado/carregado.
+
 ## 2026-09-23 — 3D grass world-object model [VERSION 0.64.1]
 
 Foi criado o primeiro asset da nova família `assets/models/objects/`: `assets/models/objects/grass/grass.glb`, com fonte reproduzível em `generate_grass.py`.

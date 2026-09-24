@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, io};
+use std::io;
 
 use bevy::prelude::*;
 
@@ -85,12 +85,30 @@ impl PlayerHotbar {
     }
 
     pub(crate) fn sort_backpack_by_id(&mut self) {
-        self.backpack.sort_by(|left, right| match (left, right) {
-            (Some(left), Some(right)) => left.cmp(right),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        });
+        let mut stacks = self
+            .backpack
+            .iter_mut()
+            .filter_map(Option::take)
+            .collect::<Vec<_>>();
+        stacks.sort_by(ItemStack::stacking_cmp);
+
+        let mut compacted: Vec<ItemStack> = Vec::with_capacity(stacks.len());
+        for stack in stacks {
+            let remainder = if let Some(last) = compacted.last_mut()
+                && last.can_stack_with(&stack)
+            {
+                last.merge_from(stack)
+            } else {
+                Some(stack)
+            };
+            if let Some(remainder) = remainder {
+                compacted.push(remainder);
+            }
+        }
+
+        for (slot, stack) in self.backpack.iter_mut().zip(compacted) {
+            *slot = Some(stack);
+        }
     }
 
     pub(crate) fn saved_items(&self) -> Vec<Option<SavedItemStack>> {
@@ -162,6 +180,13 @@ impl PlayerHotbar {
     }
 
     pub(crate) fn try_insert_stack(&mut self, stack: ItemStack) -> Result<(), ItemStack> {
+        let mut remaining = Some(stack);
+        merge_into_existing(&mut self.slots, &mut remaining);
+        merge_into_existing(&mut self.backpack, &mut remaining);
+        let Some(stack) = remaining else {
+            return Ok(());
+        };
+
         if let Some(slot) = self.slots.iter_mut().find(|slot| slot.is_none()) {
             *slot = Some(stack);
             return Ok(());
@@ -179,6 +204,21 @@ impl PlayerHotbar {
             "hotbar slot must be between 0 and 8"
         );
         self.selected_slot = slot;
+    }
+}
+
+fn merge_into_existing(slots: &mut [Option<ItemStack>], remaining: &mut Option<ItemStack>) {
+    for existing in slots.iter_mut().flatten() {
+        let Some(incoming) = remaining.as_ref() else {
+            break;
+        };
+        if !existing.can_stack_with(incoming) {
+            continue;
+        }
+        let incoming = remaining
+            .take()
+            .expect("remaining stack must exist after compatibility check");
+        *remaining = existing.merge_from(incoming);
     }
 }
 

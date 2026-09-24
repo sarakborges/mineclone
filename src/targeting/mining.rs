@@ -21,7 +21,7 @@ use crate::{
         camera::GameplayCamera,
         game_mode::GameMode,
         hotbar::PlayerHotbar,
-        item_stack::ItemStack,
+        item_stack::{ItemStack, MAX_STACK_SIZE},
         viewmodel::ViewModelAnimation,
     },
     voxel::edit::VoxelTopologyRuntime,
@@ -215,8 +215,12 @@ fn spawn_survival_loot(
         }
 
         let item_id = resolve_loot_item_id(&entry.item, content);
-        for _ in 0..entry.quantity {
-            let mut stack = ItemStack::new(item_id);
+        let mut remaining_quantity = entry.quantity;
+        while remaining_quantity > 0 {
+            let stack_quantity = remaining_quantity.min(MAX_STACK_SIZE);
+            remaining_quantity -= stack_quantity;
+
+            let mut stack = ItemStack::new(item_id).with_quantity(stack_quantity);
             if item_id == block.id.as_str()
                 && let Some(biome_id) = biome_tint
             {

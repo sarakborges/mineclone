@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     hotbar::PlayerHotbar,
-    item_stack::ItemStack,
+    item_stack::{ItemStack, MAX_STACK_SIZE},
 };
 
 #[derive(Resource, Default)]
@@ -20,12 +20,34 @@ impl InventoryCursor {
         self.item.as_ref().map(ItemStack::id)
     }
 
+    pub(crate) fn stack(&self) -> Option<&ItemStack> {
+        self.item.as_ref()
+    }
+
     pub(crate) fn click_slot(&mut self, inventory: &mut PlayerHotbar, index: usize) {
-        self.item = inventory.replace_inventory_item(index, self.item.take());
+        let cursor = self.item.take();
+        let slot = inventory.replace_inventory_item(index, None);
+
+        match (cursor, slot) {
+            (None, slot) => {
+                self.item = slot;
+            }
+            (Some(cursor), None) => {
+                inventory.replace_inventory_item(index, Some(cursor));
+            }
+            (Some(cursor), Some(mut slot)) if slot.can_stack_with(&cursor) => {
+                self.item = slot.merge_from(cursor);
+                inventory.replace_inventory_item(index, Some(slot));
+            }
+            (Some(cursor), Some(slot)) => {
+                inventory.replace_inventory_item(index, Some(cursor));
+                self.item = Some(slot);
+            }
+        }
     }
 
     pub(crate) fn pick_creative_item(&mut self, item: &'static str) {
-        self.item = Some(ItemStack::new(item));
+        self.item = Some(ItemStack::new(item).with_quantity(MAX_STACK_SIZE));
     }
 
     pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {
