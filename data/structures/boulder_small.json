@@ -17,37 +17,7 @@
       "block": "asteria:stone"
     },
     "P": {
-      "layersOnly": true,
-      "surfaceLayers": [
-        {
-          "layer": "asteria:pebble_slice_1",
-          "faces": [
-            "top"
-          ],
-          "rotationGroup": "pebble_stack"
-        },
-        {
-          "layer": "asteria:pebble_slice_2",
-          "faces": [
-            "top"
-          ],
-          "rotationGroup": "pebble_stack"
-        },
-        {
-          "layer": "asteria:pebble_slice_3",
-          "faces": [
-            "top"
-          ],
-          "rotationGroup": "pebble_stack"
-        },
-        {
-          "layer": "asteria:pebble_slice_4",
-          "faces": [
-            "top"
-          ],
-          "rotationGroup": "pebble_stack"
-        }
-      ]
+      "object": "asteria:pebble"
     }
   },
   "layers": [
