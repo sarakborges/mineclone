@@ -130,6 +130,8 @@ pub struct StructurePaletteEntry {
     #[serde(default)]
     pub layers_only: bool,
     #[serde(default)]
+    pub connector: Option<StructureConnector>,
+    #[serde(default)]
     pub orientation: BlockOrientation,
     #[serde(default)]
     pub surface_layers: Vec<StructureSurfaceLayer>,
@@ -157,6 +159,28 @@ pub struct StructureLayer {
     pub rows: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StructureConnector {
+    #[serde(default)]
+    pub target: Option<String>,
+    pub face: LayerFace,
+    #[serde(default = "default_connector_strength")]
+    pub strength: f32,
+    #[serde(default = "default_connector_strength_loss")]
+    pub strength_loss_on_each_loop: f32,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct StructureConnectorPoint {
+    pub(crate) offset: IVec3,
+    pub(crate) face: LayerFace,
+    pub(crate) target: Option<String>,
+    pub(crate) strength: f32,
+    pub(crate) strength_loss_on_each_loop: f32,
+}
+
+
 #[derive(Clone, Debug, Default)]
 struct StructureRuntime {
     id_hash: u64,
@@ -167,6 +191,7 @@ struct StructureRuntime {
     support_offsets: Vec<IVec2>,
     column_spans: Vec<StructureColumnSpan>,
     column_voxels: HashMap<(i32, i32), Vec<StructureVoxel>>,
+    connectors: Vec<StructureConnectorPoint>,
     min_y_offset: i32,
     max_y_offset: i32,
 }
@@ -301,6 +326,32 @@ impl StructureDefinition {
         }
     }
 
+    pub(crate) fn validate_connector_references(&self, structures: &StructureRegistry) {
+        for connector in self.connectors().iter().filter(|connector| connector.target.is_some()) {
+            let target = connector
+                .target
+                .as_deref()
+                .expect("filtered connector target must exist");
+            let members = structures.reference_members(target).unwrap_or_else(|| {
+                panic!(
+                    "structure {} connector references missing structure or structure group: {}",
+                    self.id, target
+                )
+            });
+            assert!(
+                members.iter().all(|member| {
+                    member
+                        .connectors()
+                        .iter()
+                        .any(|connector| connector.target.is_none())
+                }),
+                "structure {} connector target {} contains a structure without an input connector",
+                self.id,
+                target
+            );
+        }
+    }
+
     pub(crate) fn voxels(&self) -> &[StructureVoxel] {
         &self.runtime.voxels
     }
@@ -425,6 +476,10 @@ impl StructureDefinition {
             .as_slice()
     }
 
+    pub(crate) fn connectors(&self) -> &[StructureConnectorPoint] {
+        self.runtime.connectors.as_slice()
+    }
+
     fn rebuild_runtime(&mut self) {
         let id_hash = stable_structure_hash(&self.id);
         for entry in self.palette.values_mut() {
@@ -439,6 +494,7 @@ impl StructureDefinition {
             }
         }
         let mut voxels = Vec::new();
+        let mut connectors = Vec::new();
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
         let mut horizontal_maximum = IVec2::splat(i32::MIN);
         let mut max_y_offset = i32::MIN;
@@ -461,6 +517,17 @@ impl StructureDefinition {
                         layer.y - self.anchor.y,
                         z as i32 - self.anchor.z,
                     );
+                    if let Some(connector) = entry.connector.as_ref() {
+                        connectors.push(StructureConnectorPoint {
+                            offset,
+                            face: connector.face,
+                            target: connector.target.clone(),
+                            strength: connector.strength,
+                            strength_loss_on_each_loop: connector.strength_loss_on_each_loop,
+                        });
+                        continue;
+                    }
+
                     let horizontal = IVec2::new(offset.x, offset.z);
                     horizontal_minimum = horizontal_minimum.min(horizontal);
                     horizontal_maximum = horizontal_maximum.max(horizontal);
@@ -478,6 +545,7 @@ impl StructureDefinition {
         if voxels.is_empty() {
             self.runtime = StructureRuntime {
                 id_hash,
+                connectors,
                 ..Default::default()
             };
             return;
@@ -547,6 +615,7 @@ impl StructureDefinition {
             support_offsets,
             column_spans,
             column_voxels,
+            connectors,
             min_y_offset,
             max_y_offset,
         };
@@ -601,10 +670,11 @@ impl StructureDefinition {
                 + usize::from(entry.fluid.is_some())
                 + usize::from(entry.object.is_some())
                 + usize::from(entry.clear)
-                + usize::from(entry.layers_only);
+                + usize::from(entry.layers_only)
+                + usize::from(entry.connector.is_some());
             assert_eq!(
                 content_count, 1,
-                "structure {} palette symbol {symbol} must define exactly one of block, fluid, object, clear, or layersOnly",
+                "structure {} palette symbol {symbol} must define exactly one of block, fluid, object, clear, layersOnly, or connector",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -646,6 +716,42 @@ impl StructureDefinition {
                     "structure {} palette symbol {symbol} layersOnly entries must define surfaceLayers",
                     self.id
                 );
+            }
+
+            if let Some(connector) = entry.connector.as_ref() {
+                assert!(
+                    entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} connector entries cannot define surfaceLayers",
+                    self.id
+                );
+                if let Some(target) = connector.target.as_deref() {
+                    assert!(
+                        !target.trim().is_empty(),
+                        "structure {} palette symbol {symbol} connector target cannot be empty",
+                        self.id
+                    );
+                    assert!(
+                        connector.strength.is_finite()
+                            && connector.strength > 0.0
+                            && connector.strength <= 1.0,
+                        "structure {} palette symbol {symbol} connector strength must be > 0 and <= 1",
+                        self.id
+                    );
+                    assert!(
+                        connector.strength_loss_on_each_loop.is_finite()
+                            && connector.strength_loss_on_each_loop > 0.0
+                            && connector.strength_loss_on_each_loop <= 1.0,
+                        "structure {} palette symbol {symbol} connector strengthLossOnEachLoop must be > 0 and <= 1",
+                        self.id
+                    );
+                    let maximum_loops =
+                        (connector.strength / connector.strength_loss_on_each_loop).ceil() as u32;
+                    assert!(
+                        maximum_loops <= 64,
+                        "structure {} palette symbol {symbol} connector chain exceeds the maximum 64 loops",
+                        self.id
+                    );
+                }
             }
 
             for (surface_index, surface) in entry.surface_layers.iter().enumerate() {
@@ -734,19 +840,19 @@ impl StructureDefinition {
                 );
 
                 for symbol in row.chars().filter(|symbol| *symbol != '.') {
-                    assert!(
-                        self.palette_entry(symbol).is_some(),
-                        "structure {} uses undefined palette symbol: {symbol}",
-                        self.id
-                    );
-                    voxel_count += 1;
+                    let entry = self.palette_entry(symbol).unwrap_or_else(|| {
+                        panic!("structure {} uses undefined palette symbol: {symbol}", self.id)
+                    });
+                    if entry.connector.is_none() {
+                        voxel_count += 1;
+                    }
                 }
             }
         }
 
         assert!(
             voxel_count > 0,
-            "structure {} must contain at least one voxel",
+            "structure {} must contain at least one persistent voxel",
             self.id
         );
     }
@@ -798,6 +904,26 @@ impl StructureRegistry {
 
     pub(crate) fn resolves_reference(&self, reference: &str) -> bool {
         self.get(reference).is_some() || self.groups.contains_key(reference)
+    }
+
+    pub(crate) fn reference_members(
+        &self,
+        reference: &str,
+    ) -> Option<Vec<&StructureDefinition>> {
+        if let Some(structure) = self.get(reference) {
+            return Some(vec![structure]);
+        }
+
+        let members = self.groups.get(reference)?;
+        Some(
+            members
+                .iter()
+                .map(|id| {
+                    self.get(id)
+                        .expect("group index references registered structures")
+                })
+                .collect(),
+        )
     }
 
     pub(crate) fn reference_contains_structure(
@@ -934,6 +1060,14 @@ fn stable_structure_hash(value: &str) -> u64 {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+fn default_connector_strength() -> f32 {
+    1.0
+}
+
+fn default_connector_strength_loss() -> f32 {
+    1.0
 }
 
 fn default_surface_layer_chance() -> f32 {

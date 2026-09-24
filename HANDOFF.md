@@ -1,3 +1,21 @@
+## 2026-09-24 — Parte 6A — Schema genérico de Structure Connectors
+
+Iniciada a infraestrutura nova somente após a remoção completa dos subsistemas legados.
+
+Structures agora podem declarar uma célula de palette com `connector`. Essa célula:
+- existe apenas como metadata authored dentro da Structure e nunca vira block/object/fluid persistente;
+- possui `face`, usada futuramente para alinhamento espacial;
+- sem `target` funciona como input connector da peça;
+- com `target` funciona como output connector e pode referenciar uma Structure ou Structure Group existente;
+- outputs possuem `strength` e `strengthLossOnEachLoop`, ambos normalizados em 0..1, com perda obrigatoriamente positiva;
+- o schema rejeita chains cujo budget teórico ultrapasse 64 loops, evitando definição authored capaz de produzir recursão sem limite.
+
+O runtime de Structure pré-compila as posições dos connectors separadamente dos voxels, portanto connector não participa de meshing/rasterização/support footprint.
+
+A validação global garante que todo target exista e que todos os membros de um Structure Group usado como target tenham pelo menos um input connector.
+
+Ainda não há expansão/placement de peças conectadas neste checkpoint; a próxima parte implementa o resolver determinístico e o alinhamento por posição/face.
+
 ## 2026-09-24 — Parte 5E — Conteúdo legado de cave entrances removido por completo
 
 Removido o último bloco authored do sistema antigo: `surfaceCarvers` saiu de `data/dimensions/overworld/biomes/caverns.json`.

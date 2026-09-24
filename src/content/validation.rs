@@ -134,6 +134,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
             &content.objects,
             &content.fluids,
         );
+        structure.validate_connector_references(&content.structures);
     }
 
     for structure_set in content.structure_sets.iter() {
