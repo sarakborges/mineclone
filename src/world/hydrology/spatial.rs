@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::{
-    constants::{HYDROLOGY_REGION_SIZE, LAKE_SHORE_OUTER_DISTANCE, MACRO_SAMPLE_GRID},
+    constants::{HYDROLOGY_REGION_SIZE, LAKE_SHORE_OUTER_DISTANCE},
     types::WaterBody,
 };
 
@@ -41,13 +41,6 @@ pub(super) fn water_body_intersects_region(coord: IVec2, body: &WaterBody) -> bo
 fn region_bounds(coord: IVec2) -> (Vec2, Vec2) {
     let minimum = coord.as_vec2() * HYDROLOGY_REGION_SIZE;
     (minimum, minimum + Vec2::splat(HYDROLOGY_REGION_SIZE))
-}
-
-pub(super) fn macro_sample_position(coord: IVec2, x: usize, z: usize) -> Vec2 {
-    let origin = coord.as_vec2() * HYDROLOGY_REGION_SIZE;
-    let step = HYDROLOGY_REGION_SIZE / (MACRO_SAMPLE_GRID - 1) as f32;
-
-    origin + Vec2::new(x as f32 * step, z as f32 * step)
 }
 
 #[cfg(test)]

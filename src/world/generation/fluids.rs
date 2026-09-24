@@ -30,7 +30,7 @@ pub(super) struct FluidPassContext<'a> {
     pub(super) sea_level: i32,
     pub(super) region: &'a GenerationRegion,
     pub(super) anchored_caves: Option<&'a CaveConnectivityRegion>,
-    pub(super) underground_water_fluid: &'a str,
+    pub(super) water_fluid: &'a str,
 }
 
 #[derive(Clone, Copy)]
@@ -67,17 +67,12 @@ pub(super) fn rasterize_fluid_pass(
     density: &[f32],
     pass: &FluidPassContext<'_>,
 ) {
-    let underground_fluid_id = pass.anchored_caves.map(|_| {
-        pass.fluids
-            .id_of(pass.underground_water_fluid)
-            .unwrap_or_else(|| {
-                panic!(
-                    "underground hydrology references missing fluid: {}",
-                    pass.underground_water_fluid
-                )
-            })
-    });
-    let mut placements = Vec::<([u8; 3], FluidCell)>::new();
+    let water_fluid_id = pass
+        .fluids
+        .id_of(pass.water_fluid)
+        .unwrap_or_else(|| panic!("world hydrology references missing fluid: {}", pass.water_fluid));
+    let underground_fluid_id = pass.anchored_caves.map(|_| water_fluid_id);
+    let mut placements = Vec::<([u8; 3], FluidCell, bool)>::new();
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -99,6 +94,9 @@ pub(super) fn rasterize_fluid_pass(
                     panic!("hydrology references missing fluid: {}", water.fluid_id)
                 })
             });
+            let sea_surface = (column.ocean_weight > f32::EPSILON
+                && surface_height < pass.sea_level as f32)
+                .then_some(pass.sea_level as f32);
             let maximum_world_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
             let authored_surface_fluid = (maximum_world_y >= column.surface_height)
                 .then(|| authored_surface_fluid_column(horizontal, column, pass))
@@ -110,16 +108,20 @@ pub(super) fn rasterize_fluid_pass(
                 }
 
                 let world_y = chunk_origin.y + local_y as i32;
-                let fluid = if let Some(authored) =
+                let (fluid, static_sea) = if let Some(authored) =
                     authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
                 {
-                    Some(authored)
+                    (Some(authored), false)
+                } else if let Some(level) =
+                    sea_surface.and_then(|surface| fluid_level_for_surface(surface, world_y))
+                {
+                    (Some(FluidCell::source(water_fluid_id, level)), true)
                 } else if let (Some(water), Some(fluid_id)) =
                     (surface_water.as_ref(), surface_fluid_id)
                     && world_y as f32 + 1.0 > water.bed_level
                     && let Some(level) = fluid_level_for_surface(water.water_level, world_y)
                 {
-                    Some(FluidCell::source(fluid_id, level))
+                    (Some(FluidCell::source(fluid_id, level)), false)
                 } else if let (Some(caves), Some(fluid_id)) =
                     (pass.anchored_caves, underground_fluid_id)
                 {
@@ -128,20 +130,24 @@ pub(super) fn rasterize_fluid_pass(
                         world_y as f32 + 0.5,
                         world_z as f32 + 0.5,
                     );
-                    caves.underground_water_at(position).and_then(|water| {
-                        (world_y as f32 + 1.0 > water.bed_level)
-                            .then(|| fluid_level_for_surface(water.water_level, world_y))
-                            .flatten()
-                            .map(|level| FluidCell::source(fluid_id, level))
-                    })
+                    (
+                        caves.underground_water_at(position).and_then(|water| {
+                            (world_y as f32 + 1.0 > water.bed_level)
+                                .then(|| fluid_level_for_surface(water.water_level, world_y))
+                                .flatten()
+                                .map(|level| FluidCell::source(fluid_id, level))
+                        }),
+                        false,
+                    )
                 } else {
-                    None
+                    (None, false)
                 };
 
                 if let Some(fluid) = fluid {
                     placements.push((
                         [local_x as u8, local_y as u8, local_z as u8],
                         fluid,
+                        static_sea,
                     ));
                 }
             }
@@ -152,11 +158,17 @@ pub(super) fn rasterize_fluid_pass(
         return;
     }
 
+    let static_sea_positions = placements
+        .iter()
+        .filter_map(|(position, _, static_sea)| static_sea.then_some(*position))
+        .collect::<Vec<_>>();
+
     chunk.edit_initial_fluids(|chunk| {
-        for ([x, y, z], fluid) in placements {
+        for ([x, y, z], fluid, _) in placements {
             chunk.set_fluid(x as usize, y as usize, z as usize, fluid);
         }
     });
+    chunk.suppress_generated_fluid_frontiers(&static_sea_positions);
 }
 
 pub(super) fn authored_surface_fluid_id_at<'a>(
@@ -416,20 +428,20 @@ mod tests {
         // synthetic slope. Search only inside each region's own Z bounds:
         // scanning distant coordinates against a region at Z=0 would test
         // the wrong region and could produce a false seam regression.
-        let field = HydrologyField::new(42, 64, DimensionHydrology::default(), 1.0);
+        let field = HydrologyField::new(42, 64, DimensionHydrology::default());
         let terrain = |position: Vec2| HydrologySurfaceSample {
             elevation: if position.x >= 256.0 {
                 40.0
             } else {
                 110.0 - position.x * 0.04
             },
-            continentalness: if position.x >= 256.0 { 0.0 } else { 0.8 },
+            ocean_weight: if position.x >= 256.0 { 1.0 } else { 0.0 },
             biome_hydrology: BiomeHydrologyRules::default(),
         };
         let original_surface = 104.0;
         let crossing = (-2..=2).find_map(|region_z: i32| {
-            let left = field.region_from_macro_terrain(IVec2::new(0, region_z), true, true, true, terrain);
-            let right = field.region_from_macro_terrain(IVec2::new(1, region_z), true, true, true, terrain);
+            let left = field.region_from_macro_terrain(IVec2::new(0, region_z), true, true, terrain);
+            let right = field.region_from_macro_terrain(IVec2::new(1, region_z), true, true, terrain);
             (region_z * 128..(region_z + 1) * 128)
                 .find_map(|world_z| {
                     let z = world_z as f32 + 0.5;
@@ -466,7 +478,7 @@ mod tests {
         ))
         .unwrap();
         dimension.biomes.retain(|biome| biome.id == "asteria:overworld/plains");
-        dimension.hydrology.ocean_biome = None;
+        dimension.ocean_biome = None;
         dimension.sea_level = 64;
         let mut biomes = BiomeRegistry::default();
         let plains: BiomeDefinition = serde_json::from_str(include_str!(
@@ -490,6 +502,7 @@ mod tests {
                     surface_height: original_surface as i32,
                     identity_surface_index: 0,
                     primary_terrain_strength: 1.0,
+                    ocean_weight: 0.0,
                     surface_margin_index: None,
                     surface_influences,
                 }
@@ -545,7 +558,7 @@ mod tests {
                     sea_level: dimension.sea_level,
                     region: &region,
                     anchored_caves: None,
-                    underground_water_fluid: WATER_FLUID_ID,
+                    water_fluid: WATER_FLUID_ID,
                 },
             );
             assert_eq!(

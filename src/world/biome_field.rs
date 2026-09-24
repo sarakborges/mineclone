@@ -31,8 +31,7 @@ use self::{
     spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
 };
 use super::{
-    hydrology::suppress_ocean_continentalness,
-    macro_climate::{MacroClimateField, MacroClimateSample},
+    macro_climate::MacroClimateField,
     new_world::biome_size_multiplier_tenths,
 };
 
@@ -88,7 +87,6 @@ pub struct BiomeField {
     single_surface_biome: Option<usize>,
     ocean_surface_index: Option<usize>,
     spawn_oceans: bool,
-    pub(super) ocean_weight: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -302,12 +300,8 @@ impl BiomeField {
         let surface_site_spacing = surface_minimum_spacing(surface_minimum_radius);
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
-        let ocean_biome_id = dimension.hydrology.ocean_biome.clone();
-        let ocean_weight = ocean_biome_id
-            .as_deref()
-            .map(|id| dimension.biome_weight(id))
-            .unwrap_or(0.0);
-        let ocean_surface_index = ocean_biome_id
+        let ocean_surface_index = dimension
+            .ocean_biome
             .as_deref()
             .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
         Self {
@@ -322,26 +316,11 @@ impl BiomeField {
             single_surface_biome: None,
             ocean_surface_index,
             spawn_oceans: true,
-            ocean_weight,
         }
     }
 
     pub fn seed(&self) -> u64 {
         self.seed
-    }
-
-    pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
-        let mut climate = self.climate.sample(position);
-        if let Some((index, weight)) = self.forced_surface_biome_at(position)
-            && Some(index) != self.ocean_surface_index
-        {
-            climate.continentalness = suppress_ocean_continentalness(
-                climate.continentalness,
-                self.ocean_weight,
-                weight,
-            );
-        }
-        climate
     }
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
@@ -410,6 +389,10 @@ impl BiomeField {
         let forced = self.forced_surface_biome?;
         let weight = forced.weight(position);
         (weight > 0.0).then_some((forced.biome_index, weight))
+    }
+
+    pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
+        self.ocean_surface_index
     }
 
     pub(crate) fn surface_biome_id(&self, index: usize) -> &str {

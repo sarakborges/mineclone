@@ -19,8 +19,8 @@ use self::{
 pub(super) use self::waterfall::{WATERFALL_MINIMUM_DROP, WaterfallLanding};
 use super::super::{
     constants::{
-        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_FLOW_FOR_MAX_WIDTH, RIVER_MAXIMUM_RADIUS,
-        RIVER_MINIMUM_FLOW, RIVER_MINIMUM_RADIUS,
+        RIVER_FLOW_FOR_MAX_WIDTH, RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW,
+        RIVER_MINIMUM_RADIUS,
     },
     drainage::{DrainageNode, surface_sample_is_wet_ocean},
     math::lerp,
@@ -42,8 +42,6 @@ pub(super) struct RiverEdgeSpec {
     pub(super) downstream_flow: u32,
     pub(super) seed: u64,
     pub(super) sea_level: f32,
-    pub(super) ocean_threshold: f32,
-    pub(super) ocean_weight: f32,
 }
 
 pub(super) struct RiverPath {
@@ -90,12 +88,10 @@ where
     truncate_river_at_ocean_mouth(
         &mut path,
         spec.sea_level,
-        spec.ocean_weight,
         &mut surface_sample_at,
     );
     if river_path_crosses_disabled_biome(
         &path.points,
-        spec.ocean_threshold,
         &mut surface_sample_at,
     ) {
         // Downstream selection validates the direct route. A rejected curved
@@ -208,7 +204,6 @@ fn water_body_boundary_point(
 fn truncate_river_at_ocean_mouth(
     path: &mut RiverPath,
     sea_level: f32,
-    ocean_weight: f32,
     sample_at: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
 ) {
     const SAMPLES_PER_SEGMENT: usize = 8;
@@ -243,7 +238,7 @@ fn truncate_river_at_ocean_mouth(
             let t = sample_index as f32 / SAMPLES_PER_SEGMENT as f32;
             let point = from.lerp(*to, t);
             let sample = sample_at(Vec2::new(point.x, point.z));
-            if !surface_sample_is_wet_ocean(sample, sea_level, ocean_weight) {
+            if !surface_sample_is_wet_ocean(sample, sea_level) {
                 previous_t = t;
                 continue;
             }
@@ -254,7 +249,7 @@ fn truncate_river_at_ocean_mouth(
                 let midpoint_t = (dry_t + wet_t) * 0.5;
                 let midpoint = from.lerp(*to, midpoint_t);
                 let midpoint_sample = sample_at(Vec2::new(midpoint.x, midpoint.z));
-                if surface_sample_is_wet_ocean(midpoint_sample, sea_level, ocean_weight) {
+                if surface_sample_is_wet_ocean(midpoint_sample, sea_level) {
                     wet_t = midpoint_t;
                 } else {
                     dry_t = midpoint_t;
@@ -302,7 +297,6 @@ fn straighten_horizontal_path(points: &mut [Vec3]) {
 
 fn river_path_crosses_disabled_biome(
     points: &[Vec3],
-    ocean_threshold: f32,
     sample_at: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
 ) -> bool {
     const SAMPLES_PER_SEGMENT: usize = 4;
@@ -313,7 +307,7 @@ fn river_path_crosses_disabled_biome(
             let point = segment[0].lerp(segment[1], t);
             let sample = sample_at(Vec2::new(point.x, point.z));
             !sample.biome_hydrology.can_generate_river
-                && sample.continentalness > ocean_threshold
+                && sample.ocean_weight <= f32::EPSILON
         })
     })
 }
@@ -330,7 +324,7 @@ fn river_radius(flow: u32) -> f32 {
 }
 
 pub(super) fn river_height(node: DrainageNode, sea_level: f32) -> f32 {
-    if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+    if node.ocean_weight > f32::EPSILON && node.elevation < sea_level {
         sea_level
     } else {
         (node.elevation - RIVER_WATER_SURFACE_OFFSET).max(1.0)
@@ -349,7 +343,7 @@ mod tests {
         DrainageNode {
             position,
             elevation,
-            continentalness: 0.8,
+            ocean_weight: 0.0,
             biome_hydrology: BiomeHydrologyRules::default(),
         }
     }
@@ -386,18 +380,14 @@ mod tests {
         let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
         let mut sample = |position: Vec2| HydrologySurfaceSample {
             elevation: 80.0,
-            continentalness: 0.8,
+            ocean_weight: 0.0,
             biome_hydrology: BiomeHydrologyRules {
                 can_generate_river: position.x < 8.0 || position.x > 12.0,
                 ..Default::default()
             },
         };
 
-        assert!(river_path_crosses_disabled_biome(
-            &points,
-            0.45,
-            &mut sample
-        ));
+        assert!(river_path_crosses_disabled_biome(&points, &mut sample));
     }
 
     #[test]
@@ -412,11 +402,11 @@ mod tests {
         };
         let mut sample = |position: Vec2| HydrologySurfaceSample {
             elevation: if position.x < 12.0 { 70.0 } else { 40.0 },
-            continentalness: if position.x < 12.0 { 0.8 } else { 0.1 },
+            ocean_weight: if position.x < 12.0 { 0.0 } else { 1.0 },
             biome_hydrology: BiomeHydrologyRules::default(),
         };
 
-        truncate_river_at_ocean_mouth(&mut path, 64.0, 1.0, &mut sample);
+        truncate_river_at_ocean_mouth(&mut path, 64.0, &mut sample);
 
         let mouth = path.points.last().expect("river should keep an ocean mouth");
         assert!(mouth.x >= 11.9 && mouth.x <= 12.1);
@@ -429,18 +419,14 @@ mod tests {
         let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
         let mut sample = |_position: Vec2| HydrologySurfaceSample {
             elevation: 60.0,
-            continentalness: 0.2,
+            ocean_weight: 1.0,
             biome_hydrology: BiomeHydrologyRules {
                 can_generate_river: false,
                 ..Default::default()
             },
         };
 
-        assert!(!river_path_crosses_disabled_biome(
-            &points,
-            0.45,
-            &mut sample
-        ));
+        assert!(!river_path_crosses_disabled_biome(&points, &mut sample));
     }
 
     #[test]
@@ -475,12 +461,10 @@ mod tests {
                     downstream_flow: 4,
                     seed: 42,
                     sea_level: 64.0,
-                    ocean_threshold: 0.45,
-                    ocean_weight: 1.0,
                 },
                 |_| HydrologySurfaceSample {
                     elevation: 120.0,
-                    continentalness: 0.8,
+                    ocean_weight: 0.0,
                     biome_hydrology: BiomeHydrologyRules::default(),
                 },
             );
@@ -495,15 +479,11 @@ mod tests {
         // The graph alone is not enough: a seam may share path height yet lose
         // physical water or carving when the two regions select their sources.
         let physical_region = |coord, graph| HydrologyRegion {
-            seed: 42,
             coord,
             river_graph: graph,
             river_carve_depth: 7.0,
             water_bodies: Vec::new(),
-            sea_level: 64.0,
             settings: Default::default(),
-            ocean_weight: 0.0,
-            macro_samples: Vec::new(),
         };
         let left = physical_region(IVec2::ZERO, left);
         let right = physical_region(IVec2::X, right);

@@ -25,7 +25,7 @@ use super::{
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation::{GenerationColumnSample, surface_carvers::SurfaceCarverResolveCache},
     generation_region::GenerationRegion,
-    hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
+    hydrology::{HydrologyField, HydrologyRegion},
 };
 
 #[derive(Resource, Clone)]
@@ -40,15 +40,9 @@ impl WorldFeatureFields {
         seed: u64,
         sea_level: i32,
         hydrology: DimensionHydrology,
-        ocean_weight: f32,
     ) -> Self {
         Self {
-            hydrology: HydrologyField::new(
-                seed.rotate_left(7),
-                sea_level,
-                hydrology,
-                ocean_weight,
-            ),
+            hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             caches: Arc::new(FeatureCaches::new()),
         }
@@ -60,13 +54,6 @@ impl WorldFeatureFields {
             cave_connectivity: self.cave_connectivity,
             caches: Arc::new(FeatureCaches::new()),
         }
-    }
-
-    pub(crate) fn hydrology_biome_overlay(
-        &self,
-        continentalness: f32,
-    ) -> HydrologyBiomeOverlay<'_> {
-        self.hydrology.biome_overlay(continentalness)
     }
 
     pub(crate) fn generation_columns(
@@ -192,7 +179,7 @@ mod tests {
     };
 
     fn test_fields() -> WorldFeatureFields {
-        WorldFeatureFields::new(42, 64, DimensionHydrology::default(), 1.0)
+        WorldFeatureFields::new(42, 64, DimensionHydrology::default())
     }
 
     #[test]
@@ -204,11 +191,10 @@ mod tests {
                 IVec2::new(coord.x, coord.z),
                 true,
                 true,
-                true,
                 |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
-                    continentalness: 0.5,
+                    ocean_weight: 0.0,
                     biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })
@@ -317,11 +303,10 @@ mod tests {
                 near_region.xz(),
                 true,
                 true,
-                true,
                 |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
-                    continentalness: 0.5,
+                    ocean_weight: 0.0,
                     biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })
@@ -331,11 +316,10 @@ mod tests {
                 far_region.xz(),
                 true,
                 true,
-                true,
                 |_| {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
-                    continentalness: 0.5,
+                    ocean_weight: 0.0,
                     biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })

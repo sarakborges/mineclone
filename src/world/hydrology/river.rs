@@ -54,7 +54,6 @@ where
         network,
     );
     let confluences = direct_confluence_counts(&selection, network);
-    let ocean_threshold = network.ocean_threshold();
     let mut confluence_bodies = HashMap::new();
 
     for (&cell, &incoming_rivers) in &confluences {
@@ -66,7 +65,7 @@ where
         }
 
         let source = network.node(cell);
-        if source.continentalness <= ocean_threshold {
+        if network.is_wet_ocean(source) {
             continue;
         }
 
@@ -158,8 +157,6 @@ where
                     downstream_flow,
                     seed,
                     sea_level,
-                    ocean_threshold,
-                    ocean_weight: network.ocean_weight(),
                 },
                 |position| network.surface_sample_at(position),
             );

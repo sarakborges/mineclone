@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
-    constants::{BED_MATERIAL_DEPTH, COAST_MAXIMUM_SURFACE_HEIGHT, SHORE_STRENGTH},
-    math::{hydrology_dominates_surface, lerp, ocean_strength, smoothstep},
+    constants::{BED_MATERIAL_DEPTH, SHORE_STRENGTH},
+    math::smoothstep,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -11,8 +11,6 @@ pub(crate) struct HydrologyMaterialSet<'a> {
     pub(crate) river_bed_block: Option<&'a str>,
     pub(crate) lake_bed_block: Option<&'a str>,
     pub(crate) inland_shore_block: Option<&'a str>,
-    pub(crate) ocean_bed_block: Option<&'a str>,
-    pub(crate) ocean_shore_block: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -35,7 +33,6 @@ impl<'a> BedMaterial<'a> {
 struct MaterialColumnProfile<'a> {
     water_body: Option<BedMaterial<'a>>,
     river: Option<BedMaterial<'a>>,
-    ocean: Option<BedMaterial<'a>>,
 }
 
 impl<'a> MaterialColumnProfile<'a> {
@@ -43,7 +40,6 @@ impl<'a> MaterialColumnProfile<'a> {
         self.water_body
             .and_then(|material| material.at(y))
             .or_else(|| self.river.and_then(|material| material.at(y)))
-            .or_else(|| self.ocean.and_then(|material| material.at(y)))
     }
 }
 
@@ -95,39 +91,7 @@ impl HydrologyRegion {
             }
         });
 
-        let ocean = self.macro_sample_at(horizontal).and_then(|sample| {
-            let strength = ocean_strength(sample.continentalness, self.ocean_weight);
-            if strength <= 0.0 || !hydrology_dominates_surface(strength) {
-                return None;
-            }
-
-            let target_floor = self.ocean_floor_target(horizontal, strength);
-            let floor = lerp(sample.elevation, target_floor, strength);
-            if floor > self.sea_level + COAST_MAXIMUM_SURFACE_HEIGHT {
-                return None;
-            }
-
-            let material = if strength <= SHORE_STRENGTH {
-                materials
-                    .ocean_shore_block
-                    .or(materials.ocean_bed_block)
-            } else {
-                materials
-                    .ocean_bed_block
-                    .or(materials.ocean_shore_block)
-            };
-
-            Some(BedMaterial {
-                bed: floor,
-                material,
-            })
-        });
-
-        MaterialColumnProfile {
-            water_body,
-            river,
-            ocean,
-        }
+        MaterialColumnProfile { water_body, river }
     }
 }
 

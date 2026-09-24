@@ -214,8 +214,8 @@
   "maxEntities": 128,
   "hydrology": {
     "waterFluid": "asteria:water",
-    "oceanBiome": "asteria:overworld/ocean",
     "riverWeight": 1,
     "lakeWeight": 1
-  }
+  },
+  "oceanBiome": "asteria:overworld/ocean"
 }

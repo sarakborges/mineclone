@@ -40,7 +40,6 @@ use crate::{
 
 const ITEM_HALF_EXTENT: f32 = 0.18;
 const ITEM_SPRITE_SIZE: f32 = 0.46;
-const ITEM_SPRITE_THICKNESS: f32 = 0.024;
 const BLOCK_ITEM_SCALE: f32 = 0.36;
 const DROP_FORWARD_SPEED: f32 = 3.8;
 const DROP_UP_SPEED: f32 = 1.25;
@@ -178,11 +177,7 @@ fn setup_world_item_visual_assets(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     commands.insert_resource(WorldItemVisualAssets {
-        sprite_mesh: meshes.add(Cuboid::new(
-            ITEM_SPRITE_SIZE,
-            ITEM_SPRITE_SIZE,
-            ITEM_SPRITE_THICKNESS,
-        )),
+        sprite_mesh: meshes.add(Rectangle::new(ITEM_SPRITE_SIZE, ITEM_SPRITE_SIZE)),
         fallback_mesh: meshes.add(Cuboid::new(
             ITEM_HALF_EXTENT * 2.0,
             ITEM_HALF_EXTENT * 2.0,
@@ -368,7 +363,7 @@ fn spawn_world_item_visual(
             base_color_texture: Some(
                 content.block_content.asset_server.load(icon.to_owned()),
             ),
-            alpha_mode: AlphaMode::Blend,
+            alpha_mode: AlphaMode::Mask(0.5),
             perceptual_roughness: 1.0,
             unlit: true,
             double_sided: true,

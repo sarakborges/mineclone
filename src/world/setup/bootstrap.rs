@@ -27,7 +27,7 @@ use crate::world::{
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     generation::{
-        authored_surface_fluid_id_for_position, hydrology_continentalness_for_surface,
+        authored_surface_fluid_id_for_position, ocean_weight_from_surface,
     },
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
@@ -142,17 +142,8 @@ impl BootstrapWorldFields {
             );
         }
 
-        let ocean_weight = dimension
-            .hydrology
-            .ocean_biome
-            .as_deref()
-            .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
-        let feature_fields = WorldFeatureFields::new(
-            seed,
-            dimension.sea_level,
-            dimension.hydrology.clone(),
-            ocean_weight,
-        );
+        let feature_fields =
+            WorldFeatureFields::new(seed, dimension.sea_level, dimension.hydrology.clone());
 
         Self {
             biome_field,
@@ -346,7 +337,7 @@ pub(in crate::world) fn begin_world_loading(
     dimension.validate_biomes(biomes);
     dimension
         .hydrology
-        .validate_references(&dimension.id, biomes, fluids);
+        .validate_references(&dimension.id, fluids);
 
     let BootstrapGenerationSettings {
         forced_spawn_biome,
@@ -479,7 +470,7 @@ fn random_spawn_biome_id<'a>(
     biomes: &BiomeRegistry,
     seed: u64,
 ) -> &'a str {
-    let ocean_biome = dimension.hydrology.ocean_biome.as_deref();
+    let ocean_biome = dimension.ocean_biome.as_deref();
     let is_candidate = |entry: &&crate::content::dimension::DimensionBiome| {
         entry.weight > f32::EPSILON
             && entry.require_near.is_empty()
@@ -591,6 +582,15 @@ fn spawn_column_has_surface_fluid(
         return true;
     }
 
+    let position = column.as_vec2() + Vec2::splat(0.5);
+    let surface = biome_field.sample_surface(position);
+    let surface_height = surface_height_from_sample(column, dimension, biome_field, &surface) as f32;
+    if ocean_weight_from_surface(&surface, biome_field) > f32::EPSILON
+        && surface_height < dimension.sea_level as f32
+    {
+        return true;
+    }
+
     let chunk_coord = IVec3::new(
         column.x.div_euclid(CHUNK_SIZE as i32),
         0,
@@ -602,7 +602,6 @@ fn spawn_column_has_surface_fluid(
             region_coord.xz(),
             world_generation.spawn_rivers(),
             world_generation.spawn_lakes(),
-            world_generation.spawn_oceans(),
             |position| {
             let surface_position = position.floor().as_ivec2();
             let surface = biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
@@ -612,22 +611,17 @@ fn spawn_column_has_surface_fluid(
                 biome_field,
                 &surface,
             ) as f32;
-            let continentalness =
-                hydrology_continentalness_for_surface(&surface, dimension);
             let biome_hydrology =
                 biome_field.surface_biome_hydrology(surface.identity_surface_index);
 
             HydrologySurfaceSample {
                 elevation,
-                continentalness,
+                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
                 biome_hydrology,
             }
         },
         )
     });
-    let position = column.as_vec2() + Vec2::splat(0.5);
-    let surface_height = surface_height(column, dimension, biomes, biome_field) as f32;
-
     region
         .hydrology
         .supported_water_at(position, surface_height)

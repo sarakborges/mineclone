@@ -354,7 +354,7 @@ fn generated_chunk_requires_fluid_settling(
     coord: IVec3,
     chunk: &VoxelChunk,
 ) -> bool {
-    if chunk.has_fluid() {
+    if chunk.has_fluid_settling_work() {
         return true;
     }
 
@@ -367,7 +367,7 @@ fn generated_chunk_requires_fluid_settling(
                 }
                 if world
                     .chunk(coord + offset)
-                    .is_some_and(VoxelChunk::has_fluid)
+                    .is_some_and(VoxelChunk::has_fluid_settling_work)
                 {
                     return true;
                 }
@@ -451,11 +451,22 @@ mod tests {
 
         assert!(!generated_chunk_requires_fluid_settling(&world, coord, &dry));
 
-        let mut wet = VoxelChunk::empty();
-        wet.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
-        assert!(generated_chunk_requires_fluid_settling(&world, coord, &wet));
+        let mut static_water = VoxelChunk::empty();
+        static_water.edit_initial_fluids(|fluids| {
+            fluids.set_fluid(4, 5, 6, FluidCell::source(0, 8));
+        });
+        static_water.suppress_generated_fluid_frontiers(&[[4, 5, 6]]);
+        assert!(!generated_chunk_requires_fluid_settling(
+            &world,
+            coord,
+            &static_water
+        ));
 
-        world.insert_chunk(coord + IVec3::X, wet);
+        let mut flowing = VoxelChunk::empty();
+        flowing.set_fluid(4, 5, 6, Some(FluidCell::spreading(0, 7, 1)));
+        assert!(generated_chunk_requires_fluid_settling(&world, coord, &flowing));
+
+        world.insert_chunk(coord + IVec3::X, flowing);
         assert!(generated_chunk_requires_fluid_settling(&world, coord, &dry));
     }
 

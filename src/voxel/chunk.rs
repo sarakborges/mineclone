@@ -575,6 +575,26 @@ impl VoxelChunk {
         self.fluid_count > 0
     }
 
+    pub(crate) fn has_fluid_settling_work(&self) -> bool {
+        self.dynamic_fluid_cells.iter().any(|word| *word != 0)
+            || self.fluid_frontier_sources.iter().any(|word| *word != 0)
+    }
+
+    pub(crate) fn suppress_generated_fluid_frontiers(&mut self, positions: &[[u8; 3]]) {
+        if positions.is_empty() {
+            return;
+        }
+
+        let sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        for [x, y, z] in positions {
+            set_voxel_bit(
+                sources,
+                index(usize::from(*x), usize::from(*y), usize::from(*z)),
+                false,
+            );
+        }
+    }
+
     pub(crate) fn block_count(&self) -> usize {
         self.block_count
     }

@@ -9,6 +9,7 @@ use crate::{
         camera::CameraPerspective,
         held_sprite::{
             HeldSpriteAssets, HeldSpriteContent, setup_held_sprite_mesh, spawn_held_sprite,
+            sync_held_object_dynamic_render_layers, sync_held_object_models,
             sync_held_sprites,
         },
     },
@@ -49,6 +50,8 @@ impl Plugin for PlayerViewModelPlugin {
                     advance_item_switch,
                     sync_held_block,
                     sync_held_sprites,
+                    sync_held_object_models,
+                    sync_held_object_dynamic_render_layers,
                     animate_viewmodel,
                     sync_viewmodel_visibility,
                 )
@@ -101,6 +104,7 @@ fn spawn_first_person_held_sprite(
                 hand,
                 root_transform,
                 bevy::camera::visibility::RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                false,
                 &content,
                 &mut assets,
             );

@@ -14,7 +14,6 @@ pub(super) struct LakeBasinContext<'a> {
     pub(super) seed: u64,
     pub(super) sea_level: f32,
     pub(super) water_fluid: &'a str,
-    pub(super) ocean_threshold: f32,
     pub(super) lake_weight: f32,
 }
 
@@ -24,8 +23,7 @@ pub(super) fn lake_for_local_basin(
     neighbors: &[DrainageNode],
     context: &LakeBasinContext<'_>,
 ) -> Option<WaterBody> {
-    if source.continentalness <= context.ocean_threshold
-        || !source.biome_hydrology.can_generate_lake
+    if !source.biome_hydrology.can_generate_lake
         || source.elevation <= context.sea_level + 1.0
     {
         return None;

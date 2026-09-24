@@ -107,7 +107,6 @@ fn cyclic_boundary_noise(angle: f32, seed: u64, segments: u32) -> f32 {
 pub(crate) enum HydrologyWaterKind {
     Lake,
     River,
-    Ocean,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -128,20 +127,8 @@ pub(crate) struct HydrologyRiverSurfaceSample {
 #[derive(Clone, Copy, Debug)]
 pub struct HydrologySurfaceSample {
     pub elevation: f32,
-    pub continentalness: f32,
-    pub biome_hydrology: BiomeHydrologyRules,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct HydrologyBiomeOverlay<'a> {
-    pub ocean_biome: Option<&'a str>,
     pub ocean_weight: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct HydrologyMacroSample {
-    pub elevation: f32,
-    pub continentalness: f32,
+    pub biome_hydrology: BiomeHydrologyRules,
 }
 
 #[cfg(test)]

@@ -145,7 +145,7 @@ mod tests {
         DrainageNode {
             position,
             elevation,
-            continentalness: 0.8,
+            ocean_weight: 0.0,
             biome_hydrology: BiomeHydrologyRules::default(),
         }
     }

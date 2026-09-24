@@ -75,12 +75,10 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut lakes = HashMap::new();
-    let ocean_threshold = network.ocean_threshold();
     let lake_context = LakeBasinContext {
         seed,
         sea_level,
         water_fluid,
-        ocean_threshold,
         lake_weight: lake_weight.clamp(0.0, 1.0),
     };
 

@@ -10,8 +10,7 @@ use crate::world::{
             RIVER_WATER_BODY_APPROACH_MARGIN,
         },
     math::{
-        lerp, ocean_floor_is_submerged, ocean_strength, river_channel_profile, smoothstep,
-        RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
+        river_channel_profile, smoothstep, RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
     },
         types::WaterBody,
     },
@@ -38,7 +37,6 @@ impl VerticalDensityDelta {
 
 #[derive(Debug)]
 struct DensityColumnProfile {
-    ocean_delta: f32,
     river: Option<VerticalDensityDelta>,
     // Most columns intersect zero or a few water bodies. Inline storage avoids
     // one allocation per wet column while still supporting arbitrary overlaps.
@@ -56,7 +54,7 @@ impl DensityColumnProfile {
             .map(|body| body.at(y))
             .sum::<f32>();
 
-        self.ocean_delta + river_delta + carve_delta + self.shore_delta
+        river_delta + carve_delta + self.shore_delta
     }
 }
 
@@ -150,29 +148,7 @@ impl HydrologyRegion {
             (river, opening)
         });
 
-        let macro_sample = self.macro_sample_at(horizontal);
-        let ocean_strength_at_column = macro_sample.map_or(0.0, |sample| {
-            ocean_strength(sample.continentalness, self.ocean_weight)
-        });
-        let surface_elevation = actual_surface_height.or(macro_sample.map(|sample| sample.elevation));
-        let ocean_delta = macro_sample.map_or(0.0, |sample| {
-            let strength = ocean_strength_at_column;
-            if strength <= 0.0 {
-                return 0.0;
-            }
-
-            let target_floor = self.ocean_floor_target(horizontal, strength);
-            // Blend from the exact terrain column so the coastline remains
-            // continuous. Bathymetric relief fades with ocean strength and
-            // reaches full amplitude only in open water.
-            let base = surface_elevation.unwrap_or(sample.elevation);
-            let floor = lerp(base, target_floor, strength);
-            if ocean_floor_is_submerged(floor, self.sea_level) {
-                floor - base
-            } else {
-                0.0
-            }
-        });
+        let surface_elevation = actual_surface_height;
         let mut water_bodies = SmallVec::new();
         let mut river_water_body_opening = 0.0_f32;
         let mut lake_shore_delta: Option<f32> = None;
@@ -238,9 +214,7 @@ impl HydrologyRegion {
         }
 
         if let Some(channel) = river.as_mut() {
-            let water_body_opening =
-                river_water_body_opening.max(ocean_strength_at_column);
-            let channel_blend = 1.0 - water_body_opening.clamp(0.0, 1.0);
+            let channel_blend = 1.0 - river_water_body_opening.clamp(0.0, 1.0);
             channel.delta *= channel_blend;
             if channel_blend <= f32::EPSILON {
                 river = None;
@@ -255,7 +229,7 @@ impl HydrologyRegion {
                 shore_density_delta(
                     river_shore_normalized_distance(sample.normalized_distance),
                     sample.height,
-                    river_water_body_opening.max(ocean_strength_at_column),
+                    river_water_body_opening,
                     surface_elevation,
                 )
             })
@@ -267,7 +241,6 @@ impl HydrologyRegion {
         };
 
         DensityColumnProfile {
-            ocean_delta,
             river,
             water_bodies,
             shore_delta,
@@ -344,15 +317,11 @@ mod tests {
 
     fn test_region(river_graph: FeatureGraph, water_bodies: Vec<WaterBody>) -> HydrologyRegion {
         HydrologyRegion {
-            seed: 42,
             coord: IVec2::ZERO,
             river_graph,
             river_carve_depth: 7.0,
             water_bodies,
-            sea_level: 64.0,
             settings: DimensionHydrology::default(),
-            ocean_weight: 0.0,
-            macro_samples: Vec::new(),
         }
     }
 
@@ -496,7 +465,6 @@ mod tests {
             });
         }
         let profile = DensityColumnProfile {
-            ocean_delta: 0.0,
             river: None,
             water_bodies: bodies,
             shore_delta: 0.0,

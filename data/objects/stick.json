@@ -10,8 +10,8 @@
     "type": "stackedSprites",
     "texture": "textures/items/stick.png",
     "slices": 4,
-    "baseOffset": 0.001,
-    "sliceSpacing": 0.00025,
+    "baseOffset": 0.0125,
+    "sliceSpacing": 0.025,
     "size": [
       0.68,
       0.68

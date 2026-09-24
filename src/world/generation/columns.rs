@@ -11,6 +11,7 @@ pub(crate) struct GenerationColumnSample {
     pub(crate) surface_height: i32,
     pub(crate) identity_surface_index: usize,
     pub(crate) primary_terrain_strength: f32,
+    pub(crate) ocean_weight: f32,
     pub(crate) surface_margin_index: Option<usize>,
     pub(super) surface_influences: SmallVec<[(usize, f32); 4]>,
 }
@@ -45,6 +46,7 @@ pub(crate) fn sample_flat_generation_columns(
                 surface_height,
                 identity_surface_index: surface.primary_surface_index,
                 primary_terrain_strength,
+                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
                 surface_margin_index: None,
                 surface_influences,
             });
@@ -96,6 +98,7 @@ pub(crate) fn sample_generation_columns(
                 surface_height,
                 identity_surface_index,
                 primary_terrain_strength,
+                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
                 surface_margin_index,
                 surface_influences,
             });
@@ -103,6 +106,23 @@ pub(crate) fn sample_generation_columns(
     }
 
     columns
+}
+
+pub(crate) fn ocean_weight_from_surface(
+    surface: &crate::world::biome_field::BiomeFieldSample<'_>,
+    biome_field: &BiomeField,
+) -> f32 {
+    let Some(ocean_index) = biome_field.ocean_surface_index() else {
+        return 0.0;
+    };
+
+    surface
+        .influences
+        .iter()
+        .filter(|influence| influence.surface_index == ocean_index)
+        .map(|influence| influence.weight)
+        .sum::<f32>()
+        .clamp(0.0, 1.0)
 }
 
 fn resolved_surface_margin_index(

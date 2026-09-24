@@ -52,6 +52,8 @@ pub struct DimensionDefinition {
     pub day_night_cycle: String,
     pub sky: String,
     pub sea_level: i32,
+    #[serde(default)]
+    pub ocean_biome: Option<String>,
     #[serde(default = "default_max_entities")]
     pub max_entities: usize,
     #[serde(default)]
@@ -269,10 +271,22 @@ impl DimensionDefinition {
             }
         }
 
-        if let Some(biome_id) = self.hydrology.ocean_biome.as_deref() {
+        if let Some(biome_id) = self.ocean_biome.as_deref() {
+            let biome = biomes.get(biome_id).unwrap_or_else(|| {
+                panic!(
+                    "dimension {} oceanBiome references missing biome: {biome_id}",
+                    self.id
+                )
+            });
+            assert_eq!(
+                biome.kind,
+                BiomeKind::Surface,
+                "dimension {} oceanBiome must reference a surface biome: {biome_id}",
+                self.id
+            );
             assert!(
                 self.biomes.iter().any(|entry| entry.id == biome_id),
-                "dimension {} hydrology.oceanBiome must also be listed in biomes: {biome_id}",
+                "dimension {} oceanBiome must also be listed in biomes: {biome_id}",
                 self.id
             );
         }

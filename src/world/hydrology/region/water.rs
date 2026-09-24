@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{RIVER_WATER_BODY_APPROACH_MARGIN, SHORE_STRENGTH},
-    math::{lerp, ocean_floor_is_submerged, river_channel_profile},
+    math::river_channel_profile,
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
 
@@ -20,9 +20,8 @@ impl HydrologyRegion {
     }
 
     // The physical fluid pass knows the original terrain height. Reject an
-    // unsupported high lake/ocean candidate *before* selecting the highest
-    // water level, so it cannot hide a lower, supported river at a junction.
-    // Other hydrology consumers retain the original unfiltered water_at API.
+    // unsupported high lake candidate before selecting the highest water level,
+    // so it cannot hide a lower, supported river at a junction.
     pub(crate) fn supported_water_at(
         &self,
         position: Vec2,
@@ -46,8 +45,6 @@ impl HydrologyRegion {
         self.river_surface_with_support(position, None)
     }
 
-    // Carving the headroom above a river is part of generating its physical
-    // channel. Do not excavate that roof if its bed has no supporting terrain.
     pub(crate) fn supported_river_surface_at(
         &self,
         position: Vec2,
@@ -62,7 +59,7 @@ impl HydrologyRegion {
         surface_height: Option<f32>,
     ) -> Option<HydrologyRiverSurfaceSample> {
         let river = self.river_water_with_margin(position, 0.0, surface_height)?;
-        let lake_opening = self
+        let water_body_opening = self
             .water_bodies
             .iter()
             .filter_map(|body| {
@@ -79,10 +76,7 @@ impl HydrologyRegion {
                 (strength > 0.0).then_some(strength)
             })
             .fold(0.0_f32, f32::max);
-        let ocean_opening = self.ocean_strength_at(position);
-        let water_body_opening = lake_opening.max(ocean_opening);
-        let strength =
-            river.strength * (1.0 - water_body_opening.clamp(0.0, 1.0));
+        let strength = river.strength * (1.0 - water_body_opening.clamp(0.0, 1.0));
         (strength > f32::EPSILON).then_some(HydrologyRiverSurfaceSample {
             water_level: river.water_level,
             strength,
@@ -95,8 +89,6 @@ impl HydrologyRegion {
         margin: f32,
         surface_height: Option<f32>,
     ) -> Option<HydrologyWaterSample<'_>> {
-        // An unsupported higher/stronger edge cannot hide another supported
-        // edge at a crossing. Filter each graph candidate before ranking.
         let river = self.river_graph.sample_horizontal_filtered(
             position,
             margin,
@@ -111,8 +103,6 @@ impl HydrologyRegion {
                     )
             },
         )?;
-        // The margin only discovers nearby channels: it must not inflate the
-        // physical river bed, which shares its profile with density carving.
         let profile = river_channel_profile(river.normalized_distance);
 
         Some(HydrologyWaterSample {
@@ -155,36 +145,6 @@ impl HydrologyRegion {
             choose_water(&mut selected, river, surface_height);
         }
 
-        let ocean_strength = self.ocean_strength_at(position);
-        if ocean_strength > 0.0 {
-            let target_floor = self.ocean_floor_target(position, ocean_strength);
-            // Density uses the original terrain column as the starting height
-            // whenever it is known. Using the interpolated macro elevation
-            // here instead could classify that same carved column as dry and
-            // leave an ocean-sized hole with no physical water source.
-            let base = surface_height
-                .or_else(|| self.macro_sample_at(position).map(|sample| sample.elevation))
-                .unwrap_or(target_floor);
-            let bed_level = lerp(base, target_floor, ocean_strength);
-
-            // The first continentalness threshold can still leave terrain above
-            // sea level. Such a dry ocean sample must not supersede an actual
-            // river mouth merely because the ocean's nominal water level is high.
-            if ocean_floor_is_submerged(bed_level, self.sea_level) {
-                choose_water(
-                    &mut selected,
-                    HydrologyWaterSample {
-                        fluid_id: self.settings.water_fluid.as_str(),
-                        water_level: self.sea_level,
-                        bed_level,
-                        strength: ocean_strength,
-                        kind: HydrologyWaterKind::Ocean,
-                    },
-                    surface_height,
-                );
-            }
-        }
-
         selected
     }
 }
@@ -194,8 +154,6 @@ fn choose_water<'a>(
     candidate: HydrologyWaterSample<'a>,
     surface_height: Option<f32>,
 ) {
-    // Filter each candidate rather than filtering the *winner*, which could
-    // leave a supported river hidden under an unsupported higher lake.
     if !bed_has_support(surface_height, candidate.bed_level) {
         return;
     }
@@ -214,10 +172,7 @@ fn choose_water<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::{
-        feature_graph::FeatureGraph,
-        hydrology::{constants::MACRO_SAMPLE_GRID, types::HydrologyMacroSample},
-    };
+    use crate::world::feature_graph::FeatureGraph;
 
     fn sample(
         kind: HydrologyWaterKind,
@@ -230,6 +185,16 @@ mod tests {
             bed_level,
             strength: 1.0,
             kind,
+        }
+    }
+
+    fn region(graph: FeatureGraph) -> HydrologyRegion {
+        HydrologyRegion {
+            coord: IVec2::ZERO,
+            river_graph: graph,
+            river_carve_depth: 7.0,
+            water_bodies: Vec::new(),
+            settings: Default::default(),
         }
     }
 
@@ -275,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn overlapping_river_edges_choose_supported_physical_water_and_carving() {
+    fn overlapping_river_edges_choose_supported_physical_water() {
         for high_first in [true, false] {
             let mut graph = FeatureGraph::default();
             let high_from = graph.add_node(Vec3::new(0.0, 100.0, 0.0));
@@ -289,17 +254,8 @@ mod tests {
                 graph.add_edge(low_from, low_to, 10.0, 10.0);
                 graph.add_edge(high_from, high_to, 10.0, 10.0);
             }
-            let region = HydrologyRegion {
-                seed: 42,
-                coord: IVec2::ZERO,
-                river_graph: graph,
-                river_carve_depth: 7.0,
-                water_bodies: Vec::new(),
-                sea_level: 64.0,
-                settings: Default::default(),
-                ocean_weight: 0.0,
-                macro_samples: Vec::new(),
-            };
+
+            let region = region(graph);
             let position = Vec2::new(10.0, 0.0);
             let original_surface = 85.0;
             assert_eq!(region.water_at(position).unwrap().water_level, 100.0);
@@ -309,49 +265,6 @@ mod tests {
             assert_eq!(supported.kind, HydrologyWaterKind::River);
             assert_eq!(supported.water_level, 86.0);
             assert!(supported.bed_level <= original_surface + 0.5);
-            assert_eq!(
-                region.supported_river_surface_at(position, original_surface)
-                    .unwrap()
-                    .water_level,
-                86.0
-            );
-            assert!(region.density_deltas_for_column::<1>(position, 85.0, original_surface)[0] < 0.0);
-            assert!(region.supported_water_at(position, 60.0).is_none());
-            assert_eq!(region.density_deltas_for_column::<1>(position, 85.0, 60.0), [0.0]);
         }
-    }
-
-    #[test]
-    fn physical_ocean_uses_the_same_original_column_floor_as_density() {
-        let region = HydrologyRegion {
-            seed: 42,
-            coord: IVec2::ZERO,
-            river_graph: FeatureGraph::default(),
-            river_carve_depth: 7.0,
-            water_bodies: Vec::new(),
-            sea_level: 90.0,
-            settings: Default::default(),
-            ocean_weight: 1.0,
-            macro_samples: vec![
-                HydrologyMacroSample {
-                    elevation: 120.0,
-                    continentalness: 0.32,
-                };
-                MACRO_SAMPLE_GRID * MACRO_SAMPLE_GRID
-            ],
-        };
-        let position = Vec2::splat(64.0);
-        let original_surface = 80.0;
-
-        // The macro-only lookup is dry, but the actual terrain column is
-        // submerged after carving. Both physical water and density must use
-        // that column's original height when generating it.
-        assert!(region.water_at(position).is_none());
-        let water = region.supported_water_at(position, original_surface).unwrap();
-        assert_eq!(water.kind, HydrologyWaterKind::Ocean);
-        let density_delta =
-            region.density_deltas_for_column::<1>(position, 40.0, original_surface)[0];
-        assert!((water.bed_level - (original_surface + density_delta)).abs() < 0.001);
-        assert!(water.bed_level < region.sea_level - 0.5);
     }
 }

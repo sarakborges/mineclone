@@ -113,6 +113,17 @@ fn biome_surface_height(
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
             sea_level + base_height + broad * amplitude + detail * detail_amplitude
         }
+        BiomeTerrain::Ocean {
+            depth,
+            amplitude,
+            scale,
+            detail_amplitude,
+            detail_scale,
+        } => {
+            let broad = fractal_noise(position * scale, seed);
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
+            sea_level - depth + broad * amplitude + detail * detail_amplitude
+        }
         BiomeTerrain::Mountains {
             base_height,
             amplitude,

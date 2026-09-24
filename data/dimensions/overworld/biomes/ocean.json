@@ -11,8 +11,7 @@
     "canGenerateRiver": false,
     "lakeChanceMultiplier": 0,
     "riverWidthMultiplier": 1,
-    "shoreBlock": "asteria:sand",
-    "oceanBedBlock": "asteria:sand"
+    "shoreBlock": "asteria:sand"
   },
   "visuals": {
     "skyColor": {
@@ -103,11 +102,11 @@
     }
   },
   "terrain": {
-    "type": "rolling",
-    "baseHeight": -4,
-    "amplitude": 3,
+    "type": "ocean",
+    "depth": 18,
+    "amplitude": 6,
     "scale": 0.006,
-    "detailAmplitude": 1.5,
+    "detailAmplitude": 3,
     "detailScale": 0.026
   },
   "allowSurfaceCarvers": false,

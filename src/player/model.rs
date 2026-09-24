@@ -738,6 +738,7 @@ fn spawn_third_person_held_sprite(
                 hand,
                 root_transform,
                 render_layers,
+                hand_scope.0 == PlayerModelRenderScope::Gameplay,
                 &content,
                 &mut assets,
             );

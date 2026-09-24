@@ -230,6 +230,9 @@ fn spawn_target_hud(
                         TargetObjectIcon,
                         ImageNode::default(),
                         Node {
+                            position_type: PositionType::Absolute,
+                            left: px((TARGET_SLOT_SIZE - TARGET_ICON_SIZE) * 0.5),
+                            top: px((TARGET_SLOT_SIZE - TARGET_ICON_SIZE) * 0.5),
                             width: px(TARGET_ICON_SIZE),
                             height: px(TARGET_ICON_SIZE),
                             ..default()

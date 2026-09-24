@@ -80,7 +80,7 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
         .get(DEFAULT_DIMENSION_ID)
         .unwrap_or_else(|| panic!("missing default dimension definition: {DEFAULT_DIMENSION_ID}"));
     let language = content.language.get();
-    let ocean_biome = dimension.hydrology.ocean_biome.as_deref();
+    let ocean_biome = dimension.ocean_biome.as_deref();
     let mut options = dimension
         .biomes
         .iter()

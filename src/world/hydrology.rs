@@ -12,11 +12,8 @@ mod types;
 mod tests;
 
 pub(crate) use field::HydrologyField;
-pub(crate) use math::{
-    ocean_continentalness_for_surface_weight, suppress_ocean_continentalness,
-};
 pub(crate) use region::{HydrologyMaterialSet, HydrologyRegion};
-pub(crate) use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
+pub(crate) use types::HydrologySurfaceSample;
 pub(crate) use types::{
     HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample,
 };
