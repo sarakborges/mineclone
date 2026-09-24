@@ -1,33 +1,219 @@
 #!/usr/bin/env python3
-"""Generate Asteria's reusable low-poly grass world-object model."""
+"""Generate Asteria's compact organic grass world-object model."""
 from __future__ import annotations
-import json,math,struct
+
+import json
+import math
+import struct
 from pathlib import Path
-OUT=Path(__file__).resolve().parent
-B=(
-(-.18,-.10,.58,.105,.050,.040,.020,-.045,.020,-16,.76),(0,-.06,.72,.115,.055,.045,.020,.020,-.025,7,.98),(.17,-.08,.52,.095,.045,.035,.018,.055,.010,20,.82),(-.10,.08,.46,.090,.042,.032,.016,-.055,-.010,28,.88),(.09,.10,.63,.105,.048,.038,.018,.035,.035,-24,.92),(-.25,.07,.36,.085,.040,.030,.015,-.065,.030,11,.70),(.25,.06,.40,.082,.038,.028,.014,.070,.020,-11,.74),(-.02,.19,.50,.092,.042,.032,.016,-.010,.065,38,.84),(.03,-.20,.43,.088,.040,.030,.015,.015,-.070,-36,.79))
-P=[];N=[];C=[];I=[]
-def sub(a,b):return tuple(a[i]-b[i] for i in range(3))
-def cr(a,b):return(a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0])
-def dt(a,b):return sum(a[i]*b[i] for i in range(3))
-def nm(v):l=math.sqrt(dt(v,v));return tuple(x/l for x in v)
-def rt(x,z,y):c,s=math.cos(y),math.sin(y);return x*c+z*s,-x*s+z*c
-def q(ps,c,br,f):
- ps=list(ps);n=cr(sub(ps[1],ps[0]),sub(ps[2],ps[0]));fc=tuple(sum(p[i] for p in ps)/4 for i in range(3))
- if dt(n,sub(fc,c))<0:ps.reverse();n=cr(sub(ps[1],ps[0]),sub(ps[2],ps[0]))
- n=nm(n);o=len(P)//3;s=max(0,min(1,br*f))
- for p in ps:P.extend(p);N.extend(n);C.extend((s,s,s,1))
- I.extend((o,o+1,o+2,o,o+2,o+3))
-for cx,cz,ht,bw,bd,tw,td,lx,lz,dg,br in B:
- y=math.radians(dg)
- def p(x,yy,z,t=False):rx,rz=rt(x,z,y);return(cx+rx+(lx if t else 0),yy,cz+rz+(lz if t else 0))
- b0,b1,b2,b3=p(-bw/2,0,-bd/2),p(bw/2,0,-bd/2),p(bw/2,0,bd/2),p(-bw/2,0,bd/2);t0,t1,t2,t3=p(-tw/2,ht,-td/2,1),p(tw/2,ht,-td/2,1),p(tw/2,ht,td/2,1),p(-tw/2,ht,td/2,1);c=(cx+lx/2,ht/2,cz+lz/2)
- for ps,f in (((b0,b1,b2,b3),.52),((t0,t1,t2,t3),1.08),((b0,b1,t1,t0),.82),((b1,b2,t2,t1),.93),((b2,b3,t3,t2),1),((b3,b0,t0,t3),.72)):q(ps,c,br,f)
-bb=bytearray();views=[];acc=[]
-def st(data,target):bb.extend(b"\0"*(-len(bb)%4));o=len(bb);bb.extend(data);views.append({"buffer":0,"byteOffset":o,"byteLength":len(data),"target":target});return len(views)-1
-def ac(v,k,ct,t,b=False):
- w={"SCALAR":1,"VEC3":3,"VEC4":4}[k];fmt={5126:"f",5123:"H"}[ct];e={"bufferView":st(struct.pack("<"+fmt*len(v),*v),t),"componentType":ct,"count":len(v)//w,"type":k}
- if b:r=[v[i:i+w]for i in range(0,len(v),w)];e["min"]=[float(min(x[j]for x in r))for j in range(w)];e["max"]=[float(max(x[j]for x in r))for j in range(w)]
- acc.append(e);return len(acc)-1
-scene={"asset":{"version":"2.0","generator":"Asteria grass object generator v1"},"scene":0,"scenes":[{"name":"GrassObject","nodes":[0]}],"nodes":[{"name":"GrassRoot","children":[1],"extras":{"asteria_asset":"object/grass","unit":"meters","origin":"ground_center","forward":"-Z","collision":"none","tint_material":"GrassTint"}},{"name":"Visual","mesh":0}],"meshes":[{"name":"grass_tuft","primitives":[{"attributes":{"POSITION":ac(P,"VEC3",5126,34962,1),"NORMAL":ac(N,"VEC3",5126,34962),"COLOR_0":ac(C,"VEC4",5126,34962)},"indices":ac(I,"SCALAR",5123,34963),"material":0,"mode":4}]}],"materials":[{"name":"GrassTint","pbrMetallicRoughness":{"baseColorFactor":[1,1,1,1],"metallicFactor":0,"roughnessFactor":1},"doubleSided":False}],"bufferViews":views,"accessors":acc,"buffers":[{"byteLength":len(bb)}],"extras":{"asset_id":"asteria:grass_object","kind":"world_object","blade_count":len(B),"tintable":True,"bounds_meters":{"width":.67,"height":.72,"depth":.56}}}
-j=json.dumps(scene,separators=(",",":")).encode();j+=b" "*(-len(j)%4);bn=bytes(bb)+b"\0"*(-len(bb)%4);g=struct.pack("<4sII",b"glTF",2,12+8+len(j)+8+len(bn))+struct.pack("<I4s",len(j),b"JSON")+j+struct.pack("<I4s",len(bn),b"BIN\0")+bn;(OUT/"grass.glb").write_bytes(g)
+
+OUT = Path(__file__).resolve().parent
+
+# x, z, height, width, depth, lean_x, lean_z, yaw_degrees, brightness
+BLADES = (
+    (-.17, -.11, .42, .060, .011, -.030, .018, -18, .96),
+    (-.06, -.13, .55, .068, .012, .018, -.032, 6, 1.00),
+    (.07, -.12, .48, .058, .010, .042, .010, 22, .98),
+    (.18, -.07, .34, .052, .010, .038, .025, -27, .94),
+    (-.22, 0, .31, .050, .009, -.045, .015, 14, .93),
+    (-.10, .02, .47, .064, .011, -.020, .042, 31, .98),
+    (.01, 0, .58, .072, .012, .010, .050, -5, 1.00),
+    (.12, .02, .44, .060, .010, .035, .038, -34, .97),
+    (.23, .08, .29, .046, .009, .048, .012, 18, .92),
+    (-.18, .12, .36, .054, .010, -.040, .030, -35, .95),
+    (-.04, .13, .49, .062, .010, -.012, .052, 39, .99),
+    (.09, .14, .38, .052, .009, .028, .040, 12, .95),
+    (.18, .16, .27, .044, .008, .035, .025, -12, .92),
+)
+
+positions: list[float] = []
+normals: list[float] = []
+colors: list[float] = []
+indices: list[int] = []
+
+
+def sub(a, b):
+    return tuple(a[i] - b[i] for i in range(3))
+
+
+def cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def dot(a, b):
+    return sum(a[i] * b[i] for i in range(3))
+
+
+def normalized(vector):
+    length = math.sqrt(dot(vector, vector))
+    return tuple(value / length for value in vector)
+
+
+def add_quad(points, center, shade):
+    points = list(points)
+    normal = cross(sub(points[1], points[0]), sub(points[2], points[0]))
+    face_center = tuple(sum(point[i] for point in points) / 4 for i in range(3))
+    if dot(normal, sub(face_center, center)) < 0:
+        points.reverse()
+        normal = cross(sub(points[1], points[0]), sub(points[2], points[0]))
+    normal = normalized(normal)
+    start = len(positions) // 3
+    shade = max(0.0, min(1.0, shade))
+    for point in points:
+        positions.extend(point)
+        normals.extend(normal)
+        colors.extend((shade, shade, shade, 1.0))
+    indices.extend((start, start + 1, start + 2, start, start + 2, start + 3))
+
+
+for x, z, height, width, depth, lean_x, lean_z, yaw_degrees, brightness in BLADES:
+    yaw = math.radians(yaw_degrees)
+    right = (math.cos(yaw), 0.0, -math.sin(yaw))
+    forward = (math.sin(yaw), 0.0, math.cos(yaw))
+    rings = []
+    for t, width_scale, depth_scale in (
+        (0.00, 1.00, 1.00),
+        (0.38, 0.82, 0.88),
+        (0.72, 0.54, 0.72),
+        (1.00, 0.16, 0.44),
+    ):
+        curve = t * t
+        cx = x + lean_x * (0.28 * t + 0.72 * curve)
+        cz = z + lean_z * (0.28 * t + 0.72 * curve)
+        cy = height * t
+        half_width = width * width_scale * 0.5
+        half_depth = depth * depth_scale * 0.5
+        rings.append(
+            [
+                (
+                    cx + right[0] * half_width * sw + forward[0] * half_depth * sd,
+                    cy,
+                    cz + right[2] * half_width * sw + forward[2] * half_depth * sd,
+                )
+                for sw, sd in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+            ]
+        )
+
+    center = (x + lean_x * .45, height * .5, z + lean_z * .45)
+    add_quad(rings[0], center, brightness * .94)
+    for lower, upper in zip(rings, rings[1:]):
+        for side, shade in enumerate((.965, .985, 1.0, .975)):
+            next_side = (side + 1) % 4
+            add_quad(
+                (lower[side], lower[next_side], upper[next_side], upper[side]),
+                center,
+                brightness * shade,
+            )
+    add_quad(rings[-1], center, min(1.0, brightness * 1.01))
+
+
+blob = bytearray()
+views = []
+accessors = []
+
+
+def store(data, target):
+    blob.extend(b"\0" * (-len(blob) % 4))
+    offset = len(blob)
+    blob.extend(data)
+    views.append(
+        {"buffer": 0, "byteOffset": offset, "byteLength": len(data), "target": target}
+    )
+    return len(views) - 1
+
+
+def accessor(values, kind, component_type, target, bounds=False):
+    width = {"SCALAR": 1, "VEC3": 3, "VEC4": 4}[kind]
+    fmt = {5126: "f", 5123: "H"}[component_type]
+    entry = {
+        "bufferView": store(struct.pack("<" + fmt * len(values), *values), target),
+        "componentType": component_type,
+        "count": len(values) // width,
+        "type": kind,
+    }
+    if bounds:
+        rows = [values[i : i + width] for i in range(0, len(values), width)]
+        entry["min"] = [float(min(row[j] for row in rows)) for j in range(width)]
+        entry["max"] = [float(max(row[j] for row in rows)) for j in range(width)]
+    accessors.append(entry)
+    return len(accessors) - 1
+
+
+position_accessor = accessor(positions, "VEC3", 5126, 34962, True)
+normal_accessor = accessor(normals, "VEC3", 5126, 34962)
+color_accessor = accessor(colors, "VEC4", 5126, 34962)
+index_accessor = accessor(indices, "SCALAR", 5123, 34963)
+
+scene = {
+    "asset": {"version": "2.0", "generator": "Asteria grass object generator v2"},
+    "scene": 0,
+    "scenes": [{"name": "GrassObject", "nodes": [0]}],
+    "nodes": [
+        {
+            "name": "GrassRoot",
+            "children": [1],
+            "extras": {
+                "asteria_asset": "object/grass",
+                "unit": "meters",
+                "origin": "ground_center",
+                "collision": "none",
+                "tint_material": "GrassTint",
+            },
+        },
+        {"name": "Visual", "mesh": 0},
+    ],
+    "meshes": [
+        {
+            "name": "grass_tuft",
+            "primitives": [
+                {
+                    "attributes": {
+                        "POSITION": position_accessor,
+                        "NORMAL": normal_accessor,
+                        "COLOR_0": color_accessor,
+                    },
+                    "indices": index_accessor,
+                    "material": 0,
+                    "mode": 4,
+                }
+            ],
+        }
+    ],
+    "materials": [
+        {
+            "name": "GrassTint",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [1, 1, 1, 1],
+                "metallicFactor": 0,
+                "roughnessFactor": 1,
+            },
+            "doubleSided": False,
+        }
+    ],
+    "bufferViews": views,
+    "accessors": accessors,
+    "buffers": [{"byteLength": len(blob)}],
+    "extras": {
+        "asset_id": "asteria:grass_object",
+        "kind": "world_object",
+        "blade_count": len(BLADES),
+        "tintable": True,
+        "bounds_meters": {"width": .58, "height": .58, "depth": .48},
+    },
+}
+
+json_bytes = json.dumps(scene, separators=(",", ":")).encode()
+json_bytes += b" " * (-len(json_bytes) % 4)
+binary = bytes(blob) + b"\0" * (-len(blob) % 4)
+glb = (
+    struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_bytes) + 8 + len(binary))
+    + struct.pack("<I4s", len(json_bytes), b"JSON")
+    + json_bytes
+    + struct.pack("<I4s", len(binary), b"BIN\0")
+    + binary
+)
+(OUT / "grass.glb").write_bytes(glb)
