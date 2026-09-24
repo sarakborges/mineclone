@@ -72,6 +72,15 @@ struct BlockEditDefinitions<'w> {
     player: Res<'w, PlayerDefinition>,
 }
 
+#[derive(SystemParam)]
+struct BlockEditActions<'w> {
+    object_store: Res<'w, WorldObjectStore>,
+    object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
+    object_removals: MessageWriter<'w, WorldObjectRemoveRequest>,
+    tool_uses: MessageWriter<'w, ToolUse>,
+    viewmodel_animation: ResMut<'w, ViewModelAnimation>,
+}
+
 #[derive(Clone, Copy)]
 struct TargetedVoxelEdit<'a> {
     left_pressed: bool,
@@ -96,11 +105,7 @@ fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
     mut runtime: VoxelTopologyRuntime,
-    object_store: Res<WorldObjectStore>,
-    mut object_placements: MessageWriter<WorldObjectPlaceRequest>,
-    mut object_removals: MessageWriter<WorldObjectRemoveRequest>,
-    mut tool_uses: MessageWriter<ToolUse>,
-    mut viewmodel_animation: ResMut<ViewModelAnimation>,
+    mut actions: BlockEditActions,
     mut creature_attack: CreatureAttackRuntime,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
@@ -141,12 +146,12 @@ fn edit_targeted_block(
         .map(str::to_owned);
 
     if left_pressed && let Some(entity) = input.object_target.0 {
-        object_removals.write(WorldObjectRemoveRequest {
+        actions.object_removals.write(WorldObjectRemoveRequest {
             entity,
             drop_self: *game_mode == GameMode::Survival,
         });
         input.object_target.0 = None;
-        viewmodel_animation.play_break();
+        actions.viewmodel_animation.play_break();
         return;
     }
 
@@ -158,9 +163,9 @@ fn edit_targeted_block(
             .and_then(|item_id| definitions.tools.get(item_id))
             .is_some_and(|tool| tool.left_behavior == MINE_TOOL_BEHAVIOR_ID);
         if mining_tool {
-            viewmodel_animation.play_break();
+            actions.viewmodel_animation.play_break();
         } else {
-            viewmodel_animation.play_hit();
+            actions.viewmodel_animation.play_hit();
         }
     }
 
@@ -169,7 +174,7 @@ fn edit_targeted_block(
             return;
         };
         if creature_attack.apply(entity, attack, player_transform.translation) {
-            viewmodel_animation.play_hit();
+            actions.viewmodel_animation.play_hit();
         }
         return;
     }
@@ -180,7 +185,7 @@ fn edit_targeted_block(
         right_pressed,
         input.targeted.0,
         &definitions.tools,
-        &mut tool_uses,
+        &mut actions.tool_uses,
     ) {
         return;
     }
@@ -201,10 +206,10 @@ fn edit_targeted_block(
             hit,
             definition,
             runtime.world(),
-            &object_store,
+            &actions.object_store,
         ) {
-            object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
-            viewmodel_animation.play_place();
+            actions.object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
+            actions.viewmodel_animation.play_place();
         }
         return;
     }
@@ -229,14 +234,14 @@ fn edit_targeted_block(
     match outcome {
         VoxelEditOutcome::Consumed => {}
         VoxelEditOutcome::LayerPlaced => {
-            viewmodel_animation.play_place();
+            actions.viewmodel_animation.play_place();
         }
         VoxelEditOutcome::BlockPlaced => {
-            viewmodel_animation.play_place();
+            actions.viewmodel_animation.play_place();
             input.targeted.0 = None;
         }
         VoxelEditOutcome::BlockBroken => {
-            viewmodel_animation.play_break();
+            actions.viewmodel_animation.play_break();
             input.targeted.0 = None;
         }
     }
