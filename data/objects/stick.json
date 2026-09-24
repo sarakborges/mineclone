@@ -1,0 +1,26 @@
+{
+  "id": "asteria:stick",
+  "name": {
+    "english": "Stick",
+    "portuguese_brazil": "Graveto",
+    "spanish": "Ramita"
+  },
+  "category": "crafting_materials",
+  "visual": {
+    "type": "stackedSprites",
+    "texture": "textures/items/stick.png",
+    "slices": 4,
+    "baseOffset": 0.0125,
+    "sliceSpacing": 0.025,
+    "size": [0.68, 0.68],
+    "alphaCutoff": 0.5
+  },
+  "icon": "textures/items/stick.png",
+  "placementFaces": ["top"],
+  "target": {
+    "size": [0.68, 0.12, 0.68],
+    "centerOffset": [0.0, 0.05, 0.0]
+  },
+  "castsShadow": false,
+  "dropSelf": true
+}
