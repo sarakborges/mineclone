@@ -111,12 +111,13 @@ pub enum ObjectVisualDefinition {
     StackedSprites {
         texture: String,
         slices: u8,
-        #[serde(default)]
+        #[serde(default, rename = "baseOffset")]
         base_offset: f32,
+        #[serde(rename = "sliceSpacing")]
         slice_spacing: f32,
         #[serde(default = "default_stacked_sprite_size")]
         size: [f32; 2],
-        #[serde(default = "default_alpha_cutoff")]
+        #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
         alpha_cutoff: f32,
     },
 }
@@ -295,5 +296,46 @@ impl ObjectRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &ObjectDefinition> {
         self.definitions.values()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::ObjectVisualDefinition;
+
+    #[test]
+    fn stacked_sprite_visual_deserializes_camel_case_fields() {
+        let visual: ObjectVisualDefinition = serde_json::from_str(
+            r#"{
+                "type": "stackedSprites",
+                "texture": "textures/items/pebble.png",
+                "slices": 4,
+                "baseOffset": 0.0125,
+                "sliceSpacing": 0.025,
+                "size": [0.42, 0.42],
+                "alphaCutoff": 0.5
+            }"#,
+        )
+        .expect("stacked sprite visual should accept the public camelCase schema");
+
+        let ObjectVisualDefinition::StackedSprites {
+            texture,
+            slices,
+            base_offset,
+            slice_spacing,
+            size,
+            alpha_cutoff,
+        } = visual
+        else {
+            panic!("expected stackedSprites visual");
+        };
+
+        assert_eq!(texture, "textures/items/pebble.png");
+        assert_eq!(slices, 4);
+        assert_eq!(base_offset, 0.0125);
+        assert_eq!(slice_spacing, 0.025);
+        assert_eq!(size, [0.42, 0.42]);
+        assert_eq!(alpha_cutoff, 0.5);
     }
 }

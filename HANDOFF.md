@@ -14135,3 +14135,16 @@ portanto a correção não mexe em runtime, conteúdo ou lógica de jogo.
 
 Se uma working copy que já falhou continuar reutilizando artefatos antigos, um
 `cargo clean` único é suficiente para eliminar o cache de objetos anterior.
+
+## 2026-09-24 — Corrigido schema camelCase de stacked sprite objects
+
+O panic de carregamento de `data/objects/pebble.json` não era um erro do
+conteúdo. `ObjectVisualDefinition` renomeava a variante para
+`stackedSprites`, mas os campos internos `base_offset`, `slice_spacing` e
+`alpha_cutoff` continuavam sendo desserializados pelos nomes Rust em
+snake_case. Os JSONs de Pebble e Stick já seguiam o contrato público camelCase
+documentado: `baseOffset`, `sliceSpacing` e `alphaCutoff`.
+
+O schema Rust agora mapeia explicitamente esses três campos para camelCase.
+Foi adicionado um teste de regressão que desserializa o formato real usado pelos
+objects, e o CI executa esse teste além de Clippy e `cargo check`.

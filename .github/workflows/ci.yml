@@ -60,3 +60,8 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      - name: Object content schema regression
+        run: >-
+          cargo test --locked --bin asteria
+          content::object::tests::stacked_sprite_visual_deserializes_camel_case_fields
