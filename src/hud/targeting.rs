@@ -99,8 +99,6 @@ struct TargetHudIconSnapshot {
 
 #[derive(Clone, Debug, PartialEq)]
 struct TargetObjectHudSnapshot {
-    entity: Entity,
-    object_id: &'static str,
     support: IVec3,
     light_level: u8,
     language: Language,
@@ -322,8 +320,6 @@ fn update_target_hud(
             &content.visual.biomes,
         );
         let snapshot = TargetObjectHudSnapshot {
-            entity,
-            object_id: instance.object_id(),
             support,
             light_level,
             language,
