@@ -125,7 +125,7 @@ struct ObjectMaterialKey {
 
 #[derive(Resource, Default)]
 struct ObjectModelPreloads {
-    _scenes: Vec<Handle<Scene>>,
+    _scenes: Vec<Handle<bevy::world_serialization::WorldAsset>>,
 }
 
 #[derive(Resource, Default)]

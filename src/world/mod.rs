@@ -15,7 +15,7 @@ mod chunk_visibility;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
 mod density_sampling;
-mod deterministic;
+pub(crate) mod deterministic;
 pub(crate) mod dimension;
 pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
