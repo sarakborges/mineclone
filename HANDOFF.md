@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 5B — Módulos e caches legados de caves removidos
+
+Após o detach executável, os módulos agora órfãos foram fisicamente removidos em vez de serem silenciados com allowances.
+
+- deletado `src/world/cave_connectivity.rs` e todo `src/world/cave_connectivity/**`;
+- deletado `src/world/generation/caves.rs` e `generation/caves/**`;
+- deletado `src/world/generation/surface_carvers.rs`;
+- deletado `src/world/feature_graph.rs`;
+- removidos os módulos correspondentes de `world/mod.rs` e `generation.rs`;
+- `WorldFeatureFields` não possui mais `CaveConnectivityField`, cave-region cache ou generation-region cache;
+- `FeatureCaches` retém apenas caches ainda usados pelo worldgen;
+- `GenerationRegion` como objeto deixou de existir; permanecem somente `generation_region_coord` e `generation_region_world_bounds` para particionamento genérico de volume biomes.
+
+O schema/data authored de surface carvers ainda será limpo na Parte 5C. Nenhuma implementação nova de connectors foi iniciada.
+
 ## 2026-09-24 — Parte 5A — Correção de integração após detach de caves
 
 O CI do primeiro detach encontrou consumidores indiretos do sistema antigo e eles foram limpos antes de avançar:

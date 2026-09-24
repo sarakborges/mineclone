@@ -1,6 +1,5 @@
 pub(crate) mod biome;
 pub(crate) mod biome_field;
-pub(crate) mod cave_connectivity;
 mod chunk_async_work;
 mod chunk_generation_tasks;
 mod chunk_mesh_tasks;
@@ -17,7 +16,6 @@ pub(crate) mod day_night;
 mod density_sampling;
 pub(crate) mod deterministic;
 pub(crate) mod dimension;
-pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 pub(crate) mod generation;

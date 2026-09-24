@@ -13,9 +13,8 @@ use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 use super::CachedStructureCandidate;
 use super::super::{
     biome_field::VolumeBiomeRegion,
-    cave_connectivity::CaveConnectivityRegion,
     generation::GenerationColumnSample,
-    generation_region::{GenerationRegion, generation_region_coord},
+    generation_region::generation_region_coord,
 };
 
 const CACHE_REGION_MARGIN: i32 = 1;
@@ -172,8 +171,6 @@ struct RetentionScratch {
 pub(super) struct FeatureCaches {
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
-    caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
-    regions: ConcurrentCache<IVec3, Arc<GenerationRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
     structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
     structure_origins: StructureOriginCache,
@@ -185,8 +182,6 @@ impl FeatureCaches {
         Self {
             generation_columns: ConcurrentCache::new("generation column cache"),
             volume_biomes: ConcurrentCache::new("volume biome cache"),
-            caves: ConcurrentCache::new("cave region cache"),
-            regions: ConcurrentCache::new("generation region cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
             structure_candidates: ConcurrentCache::new("structure candidate cache"),
             structure_origins: StructureOriginCache::new(),
@@ -217,15 +212,6 @@ impl FeatureCaches {
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
-    pub(super) fn cave_region(
-        &self,
-        coord: IVec3,
-        factory: impl FnOnce() -> Option<CaveConnectivityRegion>,
-    ) -> Option<Arc<CaveConnectivityRegion>> {
-        self.caves
-            .get_or_insert_with(coord, || factory().map(Arc::new))
-    }
-
     pub(super) fn structure_top_y(
         &self,
         coord: IVec2,
@@ -253,15 +239,6 @@ impl FeatureCaches {
     ) -> Option<i32> {
         self.structure_origins
             .get_or_insert_with(structure_id, rotation, anchor, factory)
-    }
-
-    pub(super) fn generation_region(
-        &self,
-        coord: IVec3,
-        factory: impl FnOnce() -> GenerationRegion,
-    ) -> Arc<GenerationRegion> {
-        self.regions
-            .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
     pub(super) fn retain_for_chunks<'a>(
@@ -307,10 +284,6 @@ impl FeatureCaches {
             .retain(|coord| horizontal_chunks.contains(coord));
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
-        self.caves
-            .retain(|coord| retained_regions.contains(coord));
-        self.regions
-            .retain(|coord| retained_regions.contains(coord));
         self.structure_origins.retain(|anchor| {
             let chunk_size = CHUNK_SIZE as i32;
             let chunk = IVec2::new(
@@ -322,11 +295,6 @@ impl FeatureCaches {
     }
 
     #[cfg(test)]
-    pub(super) fn region_count(&self) -> usize {
-        self.regions.len()
-    }
-
-    #[cfg(test)]
     pub(super) fn generation_column_count(&self) -> usize {
         self.generation_columns.len()
     }
@@ -334,11 +302,6 @@ impl FeatureCaches {
     #[cfg(test)]
     pub(super) fn volume_biome_region_count(&self) -> usize {
         self.volume_biomes.len()
-    }
-
-    #[cfg(test)]
-    pub(super) fn cave_region_count(&self) -> usize {
-        self.caves.len()
     }
 
     #[cfg(test)]

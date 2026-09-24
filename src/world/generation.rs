@@ -1,4 +1,3 @@
-mod caves;
 mod columns;
 mod density;
 mod fluids;
@@ -6,7 +5,6 @@ mod index;
 mod materials;
 mod structures;
 mod surface_objects;
-pub(crate) mod surface_carvers;
 
 use bevy::prelude::*;
 

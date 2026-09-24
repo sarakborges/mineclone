@@ -22,28 +22,23 @@ pub(crate) struct CachedStructureCandidate {
 use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
-    cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
-    generation::{GenerationColumnSample, surface_carvers::SurfaceCarverResolveCache},
-    generation_region::GenerationRegion,
+    generation::GenerationColumnSample,
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
-    cave_connectivity: CaveConnectivityField,
     caches: Arc<FeatureCaches>,
 }
 
 impl WorldFeatureFields {
-    pub(crate) fn new(seed: u64) -> Self {
+    pub(crate) fn new(_seed: u64) -> Self {
         Self {
-            cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             caches: Arc::new(FeatureCaches::new()),
         }
     }
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
-            cave_connectivity: self.cave_connectivity,
             caches: Arc::new(FeatureCaches::new()),
         }
     }
@@ -67,15 +62,6 @@ impl WorldFeatureFields {
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
         self.caches.volume_biome_region(coord, factory)
-    }
-
-    pub(crate) fn cave_region(
-        &self,
-        coord: IVec3,
-        factory: impl FnOnce(&CaveConnectivityField) -> Option<CaveConnectivityRegion>,
-    ) -> Option<Arc<CaveConnectivityRegion>> {
-        self.caches
-            .cave_region(coord, || factory(&self.cave_connectivity))
     }
 
     pub(crate) fn structure_top_y(
@@ -105,23 +91,11 @@ impl WorldFeatureFields {
         self.caches.structure_candidates(coord, factory)
     }
 
-    pub(crate) fn region(&self, coord: IVec3) -> Arc<GenerationRegion> {
-        self.caches.generation_region(coord, || GenerationRegion {
-            coord,
-            surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
-        })
-    }
-
     pub(crate) fn retain_for_chunks<'a>(
         &self,
         desired: impl IntoIterator<Item = &'a IVec3>,
     ) {
         self.caches.retain_for_chunks(desired);
-    }
-
-    #[cfg(test)]
-    fn cached_region_count(&self) -> usize {
-        self.caches.region_count()
     }
 
     #[cfg(test)]
@@ -132,11 +106,6 @@ impl WorldFeatureFields {
     #[cfg(test)]
     fn cached_volume_biome_region_count(&self) -> usize {
         self.caches.volume_biome_region_count()
-    }
-
-    #[cfg(test)]
-    fn cached_cave_region_count(&self) -> usize {
-        self.caches.cave_region_count()
     }
 
     #[cfg(test)]
@@ -155,17 +124,6 @@ mod tests {
 
     fn test_fields() -> WorldFeatureFields {
         WorldFeatureFields::new(42)
-    }
-
-    #[test]
-    fn generation_region_cache_reuses_the_same_region() {
-        let fields = test_fields();
-        let coord = IVec3::new(2, 0, -1);
-        let first = fields.region(coord);
-        let second = fields.region(coord);
-
-        assert!(Arc::ptr_eq(&first, &second));
-        assert_eq!(fields.cached_region_count(), 1);
     }
 
     #[test]
@@ -193,21 +151,6 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(fields.cached_volume_biome_region_count(), 1);
-    }
-
-    #[test]
-    fn cave_cache_reuses_the_same_generation_region_result() {
-        let fields = test_fields();
-        let coord = IVec3::new(1, 2, 3);
-        let first = fields
-            .cave_region(coord, |_| Some(CaveConnectivityRegion::default()))
-            .expect("test cave region should exist");
-        let second = fields
-            .cave_region(coord, |_| panic!("cached cave region should not rebuild"))
-            .expect("cached cave region should exist");
-
-        assert!(Arc::ptr_eq(&first, &second));
-        assert_eq!(fields.cached_cave_region_count(), 1);
     }
 
     #[test]
@@ -251,10 +194,6 @@ mod tests {
         fields.generation_columns(far_chunk.xz(), Vec::new);
         fields.volume_biome_region(near_region, VolumeBiomeRegion::default);
         fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
-        fields.cave_region(near_region, |_| Some(CaveConnectivityRegion::default()));
-        fields.cave_region(far_region, |_| Some(CaveConnectivityRegion::default()));
-        fields.region(near_region);
-        fields.region(far_region);
         fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || Some(64));
         fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
 
@@ -263,8 +202,6 @@ mod tests {
 
         assert_eq!(fields.cached_generation_column_count(), 1);
         assert_eq!(fields.cached_volume_biome_region_count(), 1);
-        assert_eq!(fields.cached_cave_region_count(), 1);
-        assert_eq!(fields.cached_region_count(), 1);
         assert_eq!(fields.cached_structure_origin_count(), 1);
     }
 }

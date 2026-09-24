@@ -1,18 +1,8 @@
-use std::sync::Arc;
-
 use bevy::prelude::*;
 
 use crate::voxel::chunk::CHUNK_SIZE;
 
-use super::generation::surface_carvers::SurfaceCarverResolveCache;
-
 pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
-
-#[derive(Clone, Debug)]
-pub struct GenerationRegion {
-    pub coord: IVec3,
-    pub(crate) surface_carvers: Arc<SurfaceCarverResolveCache>,
-}
 
 pub fn generation_region_coord(chunk_coord: IVec3) -> IVec3 {
     IVec3::new(
