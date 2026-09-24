@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy::prelude::*;
 
@@ -25,6 +25,114 @@ struct PendingPiece {
     index: usize,
     remaining_strength: Option<f32>,
     depth: usize,
+}
+
+pub(super) fn connected_horizontal_bounds_for_reference(
+    structures: &StructureRegistry,
+    reference: &str,
+) -> Option<(IVec2, IVec2)> {
+    let members = structures.reference_members(reference)?;
+    let mut memo = HashMap::new();
+    let mut bounds = None;
+
+    for structure in members {
+        for &rotation in structure.supported_rotations() {
+            let piece_bounds = connected_horizontal_bounds_for_piece(
+                structure,
+                rotation,
+                None,
+                0,
+                structures,
+                &mut memo,
+            );
+            extend_bounds(&mut bounds, piece_bounds);
+        }
+    }
+
+    bounds
+}
+
+fn connected_horizontal_bounds_for_piece<'a>(
+    structure: &'a StructureDefinition,
+    rotation: StructureRotation,
+    remaining_strength: Option<f32>,
+    depth: usize,
+    structures: &'a StructureRegistry,
+    memo: &mut HashMap<(&'a str, StructureRotation, u32, usize), (IVec2, IVec2)>,
+) -> (IVec2, IVec2) {
+    let remaining_key = remaining_strength.map_or(u32::MAX, f32::to_bits);
+    let key = (structure.id.as_str(), rotation, remaining_key, depth);
+    if let Some(bounds) = memo.get(&key) {
+        return *bounds;
+    }
+
+    let mut bounds = structure.horizontal_bounds_for_rotation(rotation);
+    if depth >= MAX_CONNECTOR_CHAIN_DEPTH {
+        memo.insert(key, bounds);
+        return bounds;
+    }
+
+    for output in structure
+        .connector_points()
+        .into_iter()
+        .filter(|connector| connector.target.is_some())
+    {
+        let effective_strength = remaining_strength
+            .map_or(output.strength, |remaining| remaining.min(output.strength));
+        if effective_strength <= 0.0 {
+            continue;
+        }
+
+        let target = output
+            .target
+            .as_deref()
+            .expect("filtered output connector target must exist");
+        let Some(members) = structures.reference_members(target) else {
+            continue;
+        };
+        let connector_position = rotation.rotate_offset(output.offset);
+        let required_input_face =
+            opposite_connector_face(rotation.rotate_face(output.face));
+        let next_strength =
+            (effective_strength - output.strength_loss_on_each_loop).max(0.0);
+
+        for child in members {
+            for (child_rotation, child_origin) in
+                child.compatible_input_attachments(connector_position, required_input_face)
+            {
+                let child_bounds = connected_horizontal_bounds_for_piece(
+                    child,
+                    child_rotation,
+                    Some(next_strength),
+                    depth + 1,
+                    structures,
+                    memo,
+                );
+                let translated = (
+                    child_origin.xz() + child_bounds.0,
+                    child_origin.xz() + child_bounds.1,
+                );
+                bounds.0 = bounds.0.min(translated.0);
+                bounds.1 = bounds.1.max(translated.1);
+            }
+        }
+    }
+
+    memo.insert(key, bounds);
+    bounds
+}
+
+fn extend_bounds(
+    bounds: &mut Option<(IVec2, IVec2)>,
+    candidate: (IVec2, IVec2),
+) {
+    *bounds = Some(match *bounds {
+        Some((minimum, maximum)) => (
+            minimum.min(candidate.0),
+            maximum.max(candidate.1),
+        ),
+        None => candidate,
+    });
 }
 
 pub(super) fn resolve_connected_pieces<'a>(

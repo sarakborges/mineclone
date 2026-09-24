@@ -1,3 +1,17 @@
+## 2026-09-24 — Parte 6D1 — Envelope horizontal connector-aware por placement
+
+Candidate discovery agora possui um envelope conservador específico para cada Structure/Structure Group/Structure Set.
+
+- o envelope recorre pelo graph de connectors até o mesmo hard cap de 64 níveis;
+- considera todos os membros possíveis de Structure Groups;
+- considera todas as rotações e todos os input connectors geometricamente compatíveis;
+- propaga o mesmo budget de strength/loss do resolver runtime;
+- o resultado é relativo ao anchor da raiz e é cacheado por placement ID em `WorldFeatureFields`;
+- Structure Sets calculam seu envelope usando os bounds connector-aware de cada element, preservando `relativeTo` e `maxDistance`;
+- não existe margem global baseada na maior structure do registry, evitando repetir a regressão antiga em que World Tree inflava todo o streaming.
+
+Este checkpoint amplia apenas a busca conservadora de placement cells. A Parte 6D2 usa esse alcance para materializar as connected pieces nos candidates e rasterizá-las; até lá o filtro geométrico exato ainda elimina roots cuja própria footprint não toca o chunk.
+
 ## 2026-09-24 — Parte 6C — Resolver determinístico de connector chains
 
 Implementado o primeiro resolver completo de cadeias conectadas.

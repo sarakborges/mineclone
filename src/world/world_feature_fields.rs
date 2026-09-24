@@ -72,6 +72,14 @@ impl WorldFeatureFields {
         self.caches.structure_top_y(coord, factory)
     }
 
+    pub(crate) fn structure_placement_bounds(
+        &self,
+        reference: &str,
+        factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
+    ) -> Option<(IVec2, IVec2)> {
+        self.caches.structure_placement_bounds(reference, factory)
+    }
+
     pub(crate) fn structure_origin_y(
         &self,
         structure_id: &str,

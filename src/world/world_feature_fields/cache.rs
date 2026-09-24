@@ -173,6 +173,7 @@ pub(super) struct FeatureCaches {
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
     structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
+    structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -184,6 +185,7 @@ impl FeatureCaches {
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
             structure_candidates: ConcurrentCache::new("structure candidate cache"),
+            structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -228,6 +230,15 @@ impl FeatureCaches {
     ) -> Arc<Vec<CachedStructureCandidate>> {
         self.structure_candidates
             .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    pub(super) fn structure_placement_bounds(
+        &self,
+        reference: &str,
+        factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
+    ) -> Option<(IVec2, IVec2)> {
+        self.structure_placement_bounds
+            .get_or_insert_with(reference.to_owned(), factory)
     }
 
     pub(super) fn structure_origin_y(

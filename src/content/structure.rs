@@ -305,12 +305,11 @@ impl StructureDefinition {
         connectors
     }
 
-    pub(crate) fn resolve_input_attachment(
+    pub(crate) fn compatible_input_attachments(
         &self,
         world_position: IVec3,
         required_world_face: LayerFace,
-        hash: u64,
-    ) -> Option<(StructureRotation, IVec3)> {
+    ) -> Vec<(StructureRotation, IVec3)> {
         let inputs = self
             .connector_points()
             .into_iter()
@@ -337,9 +336,24 @@ impl StructureDefinition {
                 *input_index,
             )
         });
-        let index = (hash as usize) % candidates.len();
-        let (rotation, origin, _) = candidates[index];
-        Some((rotation, origin))
+        candidates
+            .into_iter()
+            .map(|(rotation, origin, _)| (rotation, origin))
+            .collect()
+    }
+
+    pub(crate) fn resolve_input_attachment(
+        &self,
+        world_position: IVec3,
+        required_world_face: LayerFace,
+        hash: u64,
+    ) -> Option<(StructureRotation, IVec3)> {
+        let candidates =
+            self.compatible_input_attachments(world_position, required_world_face);
+        if candidates.is_empty() {
+            return None;
+        }
+        Some(candidates[(hash as usize) % candidates.len()])
     }
 
     pub(crate) fn validate_references(

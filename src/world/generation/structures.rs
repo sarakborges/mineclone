@@ -516,8 +516,13 @@ fn collect_direct_structure_candidates<'a>(
     let biome_id = placement_context.biome_id;
     let placement_id = placement_context.placement_id;
     let bounds = context
-        .structures
-        .bounds_for_reference(placement_id)
+        .feature_fields
+        .structure_placement_bounds(placement_id, || {
+            connectors::connected_horizontal_bounds_for_reference(
+                context.structures,
+                placement_id,
+            )
+        })
         .unwrap_or_else(|| {
             panic!(
                 "biome {biome_id} references missing structure or structure group: {placement_id}"
@@ -598,8 +603,16 @@ fn collect_structure_set_candidates<'a>(
         .structure_sets
         .get(placement_id)
         .expect("validated structure set placement must resolve");
-    let bounds = set
-        .horizontal_bounds(context.structures)
+    let bounds = context
+        .feature_fields
+        .structure_placement_bounds(placement_id, || {
+            set.horizontal_bounds_with(|reference| {
+                connectors::connected_horizontal_bounds_for_reference(
+                    context.structures,
+                    reference,
+                )
+            })
+        })
         .unwrap_or_else(|| panic!("structure set {placement_id} has no resolvable bounds"));
 
     visit_candidate_anchors_intersecting(

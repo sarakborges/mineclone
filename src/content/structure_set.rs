@@ -222,6 +222,13 @@ impl StructureSetDefinition {
         &self,
         structures: &StructureRegistry,
     ) -> Option<(IVec2, IVec2)> {
+        self.horizontal_bounds_with(|reference| structures.bounds_for_reference(reference))
+    }
+
+    pub(crate) fn horizontal_bounds_with(
+        &self,
+        mut bounds_for_reference: impl FnMut(&str) -> Option<(IVec2, IVec2)>,
+    ) -> Option<(IVec2, IVec2)> {
         let mut element_radii = HashMap::<&str, i32>::new();
         let mut maximum_prior_radius = 0_i32;
         let mut bounds: Option<(IVec2, IVec2)> = None;
@@ -235,7 +242,7 @@ impl StructureSetDefinition {
             let radius = base_radius
                 .checked_add(i32::try_from(element.placement.max_distance).ok()?)?;
             let (structure_minimum, structure_maximum) =
-                structures.bounds_for_reference(&element.structure)?;
+                bounds_for_reference(&element.structure)?;
             let minimum = IVec2::splat(-radius) + structure_minimum;
             let maximum = IVec2::splat(radius) + structure_maximum;
 
