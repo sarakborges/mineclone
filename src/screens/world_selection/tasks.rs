@@ -12,7 +12,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
-        object::{ObjectDefinition, ObjectRegistry}, tool::ToolRegistry,
+        object::ObjectRegistry, tool::ToolRegistry,
     },
     voxel::world::VoxelWorld,
     world::save_catalog::{
@@ -100,20 +100,7 @@ impl OwnedLoadContent {
         }
         let mut objects = ObjectRegistry::default();
         for definition in registries.objects.iter() {
-            objects.insert(ObjectDefinition {
-                id: definition.id.clone(),
-                name: definition.name.clone(),
-                category: definition.category.clone(),
-                visual: definition.visual.clone(),
-                icon: definition.icon.clone(),
-                tint: definition.tint,
-                placement_faces: definition.placement_faces.clone(),
-                target: definition.target,
-                unlit: definition.unlit,
-                casts_shadow: definition.casts_shadow,
-                receives_shadow: definition.receives_shadow,
-                drop_self: definition.drop_self,
-            });
+            objects.insert(definition.clone());
         }
         let mut tools = ToolRegistry::default();
         for definition in registries.tools.iter() {
