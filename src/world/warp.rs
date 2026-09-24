@@ -16,8 +16,10 @@ use crate::{
 };
 
 const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
+const WARP_STREAMING_RADIUS_CHUNKS: i32 = 3;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
+const SLOW_WARP_SEARCH_WARNING: std::time::Duration = std::time::Duration::from_millis(4);
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingWarp {
@@ -36,6 +38,11 @@ impl PendingWarp {
             coord
         })
     }
+
+    pub(super) fn streaming_radii(&self) -> Option<(i32, i32)> {
+        self.target
+            .map(|_| (WARP_STREAMING_RADIUS_CHUNKS, WARP_STREAMING_RADIUS_CHUNKS))
+    }
 }
 
 enum CandidateState {
@@ -53,6 +60,7 @@ enum WarpSearchResult {
 pub(super) fn resolve_pending_warp(
     mut pending: ResMut<PendingWarp>,
     world: Res<VoxelWorld>,
+    mut slow_search_warned: Local<bool>,
     mut player: Single<
         (
             &mut Transform,
@@ -65,10 +73,22 @@ pub(super) fn resolve_pending_warp(
     >,
 ) {
     let Some(target) = pending.target else {
+        *slow_search_warned = false;
         return;
     };
 
-    match find_nearest_safe_eye_position(&world, target) {
+    let search_started = std::time::Instant::now();
+    let result = find_nearest_safe_eye_position(&world, target);
+    let search_elapsed = search_started.elapsed();
+    if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
+        warn!(
+            "slow warp safe-position search: target={target:?} elapsed_ms={:.2}",
+            search_elapsed.as_secs_f64() * 1_000.0
+        );
+        *slow_search_warned = true;
+    }
+
+    match result {
         WarpSearchResult::Pending => {}
         WarpSearchResult::Found(destination) => {
             let (transform, walking, flight, gravity, swimming) = &mut *player;
@@ -78,6 +98,7 @@ pub(super) fn resolve_pending_warp(
             gravity.reset_motion();
             swimming.reset_motion();
             pending.target = None;
+            *slow_search_warned = false;
         }
         WarpSearchResult::Exhausted => {
             warn!(
@@ -86,6 +107,7 @@ pub(super) fn resolve_pending_warp(
                 target
             );
             pending.target = None;
+            *slow_search_warned = false;
         }
     }
 }
@@ -132,14 +154,14 @@ fn find_nearest_safe_eye_position(world: &VoxelWorld, target: IVec3) -> WarpSear
             }
         }
 
-        if shell_unloaded {
-            return WarpSearchResult::Pending;
-        }
-
         if let Some((distance_squared, eye)) = best
             && distance_squared <= (radius + 1).pow(2)
         {
             return WarpSearchResult::Found(eye);
+        }
+
+        if shell_unloaded {
+            return WarpSearchResult::Pending;
         }
     }
 

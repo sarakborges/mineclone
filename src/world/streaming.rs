@@ -3,7 +3,10 @@ mod meshing;
 mod selection;
 mod surface_cache;
 
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 use bevy::{
     ecs::system::SystemParam,
@@ -54,6 +57,7 @@ use super::{
 };
 
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
+const SLOW_STREAMING_REBUILD_WARNING: Duration = Duration::from_millis(8);
 
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
@@ -560,13 +564,20 @@ pub(super) fn stream_chunks(
     mut queues: ChunkStreamingQueues,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = selection
-        .pending_warp
-        .streaming_center()
-        .unwrap_or_else(|| chunk_coord_from_position(feet_position));
+    let warp_center = selection.pending_warp.streaming_center();
+    let player_chunk =
+        warp_center.unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = selection.render_distance.chunks();
-    let vertical_radius = selection.render_distance.vertical_chunks();
+    let (horizontal_radius, vertical_radius) = selection
+        .pending_warp
+        .streaming_radii()
+        .unwrap_or_else(|| {
+            (
+                selection.render_distance.chunks(),
+                selection.render_distance.vertical_chunks(),
+            )
+        });
+    let allow_forward_preload = warp_center.is_none();
     let current_tick = work.world_ticks.current_tick();
 
     if work.state.center != Some(center)
@@ -585,14 +596,27 @@ pub(super) fn stream_chunks(
             feature_fields: &generation.feature_fields,
             world_generation: *generation.world_generation,
         };
+        let rebuild_started = Instant::now();
         rebuild_queue(
             &mut work.state,
             center,
             horizontal_radius,
             vertical_radius,
+            allow_forward_preload,
             &mut selection.scratch,
             &rebuild_context,
         );
+        let rebuild_elapsed = rebuild_started.elapsed();
+        if rebuild_elapsed >= SLOW_STREAMING_REBUILD_WARNING {
+            warn!(
+                "slow streaming selection rebuild: center={center:?} radius={horizontal_radius} vertical_radius={vertical_radius} warp={} desired={} pending={} structure_columns={} elapsed_ms={:.2}",
+                !allow_forward_preload,
+                work.state.desired.len(),
+                work.state.pending.len(),
+                work.state.structure_top_chunks.len(),
+                rebuild_elapsed.as_secs_f64() * 1_000.0,
+            );
+        }
 
         let cancelled_generation = {
             let state = &work.state;

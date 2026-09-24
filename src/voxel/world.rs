@@ -33,6 +33,9 @@ pub struct VoxelWorld {
     next_chunk_content_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
+    chunk_object_revisions: HashMap<IVec3, u64>,
+    next_chunk_object_revision: u64,
+    object_scene_revision: u64,
     block_content_revision: u64,
 }
 
@@ -48,6 +51,7 @@ impl VoxelWorld {
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
+        self.mark_chunk_objects_changed(coord);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
@@ -88,6 +92,20 @@ impl VoxelWorld {
         self.block_content_revision
     }
 
+    pub(crate) fn object_scene_revision(&self) -> u64 {
+        self.object_scene_revision
+    }
+
+    pub(crate) fn chunk_object_revision(&self, coord: IVec3) -> Option<u64> {
+        self.chunk(coord)?;
+        Some(
+            *self
+                .chunk_object_revisions
+                .get(&coord)
+                .unwrap_or_else(|| panic!("loaded chunk object revision should exist at {coord:?}")),
+        )
+    }
+
     pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.chunks.keys().copied()
     }
@@ -121,7 +139,13 @@ impl VoxelWorld {
             removed_mesh_revision.is_some(),
             "archived loaded chunk should have a mesh revision: {coord:?}"
         );
+        let removed_object_revision = self.chunk_object_revisions.remove(&coord);
+        debug_assert!(
+            removed_object_revision.is_some(),
+            "archived loaded chunk should have an object revision: {coord:?}"
+        );
         self.bump_block_content_revision();
+        self.bump_object_scene_revision();
 
         if self.persistent_chunks.contains(&coord) {
             self.archived_chunks
@@ -143,6 +167,7 @@ impl VoxelWorld {
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
+        self.mark_chunk_objects_changed(coord);
         true
     }
 
@@ -379,6 +404,7 @@ impl VoxelWorld {
         self.persistent_chunks.insert(chunk_coord);
         if block_changed {
             self.bump_block_content_revision();
+            self.mark_chunk_objects_changed(chunk_coord);
         }
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
@@ -502,6 +528,7 @@ impl VoxelWorld {
 
         self.persistent_chunks.insert(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
+        self.mark_chunk_objects_changed(chunk_coord);
         Some(chunk_coord)
     }
 
@@ -529,6 +556,7 @@ impl VoxelWorld {
 
         self.persistent_chunks.insert(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
+        self.mark_chunk_objects_changed(chunk_coord);
         Some((chunk_coord, removed))
     }
 
@@ -616,6 +644,23 @@ impl VoxelWorld {
             .block_content_revision
             .checked_add(1)
             .expect("block content revision counter exhausted");
+    }
+
+    fn mark_chunk_objects_changed(&mut self, coord: IVec3) {
+        self.bump_object_scene_revision();
+        self.next_chunk_object_revision = self
+            .next_chunk_object_revision
+            .checked_add(1)
+            .expect("chunk object revision counter exhausted");
+        self.chunk_object_revisions
+            .insert(coord, self.next_chunk_object_revision);
+    }
+
+    fn bump_object_scene_revision(&mut self) {
+        self.object_scene_revision = self
+            .object_scene_revision
+            .checked_add(1)
+            .expect("world object scene revision counter exhausted");
     }
 
     fn bump_chunk_content_revision(&mut self, coord: IVec3) {

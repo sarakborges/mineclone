@@ -56,10 +56,15 @@ pub(super) fn rebuild_queue(
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
+    allow_forward_preload: bool,
     scratch: &mut QueueRebuildScratch,
     context: &QueueRebuildContext<'_>,
 ) {
-    update_movement_direction(streaming, center);
+    if allow_forward_preload {
+        update_movement_direction(streaming, center);
+    } else {
+        streaming.movement_direction = IVec2::ZERO;
+    }
     let movement_direction = streaming.movement_direction;
     let prune_caches = should_prune_streaming_caches(
         streaming.center,

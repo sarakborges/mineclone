@@ -1,3 +1,31 @@
+## 2026-09-24 — Performance investigation: warp bootstrap e world-object broadphase
+
+A investigação de FPS/hitches encontrou dois custos determinísticos e eles já foram
+corrigidos nesta parte.
+
+Warp:
+- enquanto há um warp pendente, o streaming deixa de reconstruir a render distance
+  normal inteira no destino e usa um bootstrap local de 3 chunks;
+- o salto remoto não é mais interpretado como movimento do player, portanto não ativa
+  forward preload de até 8 chunks;
+- a busca de posição segura pode aceitar um destino carregado comprovadamente válido
+  antes de bloquear por outros candidatos ainda não carregados na mesma shell;
+- rebuilds de seleção acima de 8 ms e buscas de warp acima de 4 ms agora emitem
+  diagnóstico com duração para identificar os hitches restantes.
+
+World objects:
+- VoxelWorld possui revisions específicas para object scene/chunks; mudanças de fluid,
+  lighting e demais conteúdo não fazem mais o runtime revarrer objects;
+- sync_world_objects retorna imediatamente quando nenhum chunk/object mudou;
+- WorldObjectStore ganhou índice por chunk, removendo a varredura global de supports ao
+  descarregar chunks;
+- targeting não testa mais ray/AABB contra todos os world objects carregados: consulta
+  somente os chunks na vizinhança do raio de interação e faz narrow-phase nesses objects.
+
+A investigação ainda mantém como próximo alvo o preflight de structures no rebuild de
+streaming, que hoje pode resolver connector forests/ground-fit no main thread. Os novos
+slow-path diagnostics devem quantificar esse custo durante movimento normal.
+
 ## 2026-09-24 — Warnings de hierarchy visibility e camera order corrigidos
 
 Os dois warnings emitidos ao finalizar Loading tinham causas independentes, mas relacionadas ao lifecycle do Player.

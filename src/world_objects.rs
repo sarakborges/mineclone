@@ -83,7 +83,53 @@ impl WorldObjectInstance {
 #[derive(Resource, Default)]
 pub(crate) struct WorldObjectStore {
     by_support: HashMap<IVec3, Entity>,
+    by_chunk: HashMap<IVec3, HashSet<IVec3>>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
+    synced_world_revision: u64,
+}
+
+impl WorldObjectStore {
+    pub(crate) fn entities_in_chunk(&self, coord: IVec3) -> impl Iterator<Item = Entity> + '_ {
+        self.by_chunk
+            .get(&coord)
+            .into_iter()
+            .flatten()
+            .filter_map(|support| self.by_support.get(support).copied())
+    }
+
+    fn insert(&mut self, support: IVec3, entity: Entity) {
+        let previous = self.by_support.insert(support, entity);
+        debug_assert!(previous.is_none(), "world object support must be unique");
+        self.by_chunk
+            .entry(chunk_coord_from_world(support))
+            .or_default()
+            .insert(support);
+    }
+
+    fn remove_support(&mut self, support: IVec3) -> Option<Entity> {
+        let entity = self.by_support.remove(&support)?;
+        let coord = chunk_coord_from_world(support);
+        let remove_chunk_entry = if let Some(supports) = self.by_chunk.get_mut(&coord) {
+            supports.remove(&support);
+            supports.is_empty()
+        } else {
+            false
+        };
+        if remove_chunk_entry {
+            self.by_chunk.remove(&coord);
+        }
+        Some(entity)
+    }
+
+    fn take_chunk_entities(&mut self, coord: IVec3) -> Vec<Entity> {
+        let Some(supports) = self.by_chunk.remove(&coord) else {
+            return Vec::new();
+        };
+        supports
+            .into_iter()
+            .filter_map(|support| self.by_support.remove(&support))
+            .collect()
+    }
 }
 
 #[derive(Resource, Default)]
@@ -264,7 +310,8 @@ fn apply_object_removal_requests(
             continue;
         };
 
-        runtime.store.by_support.remove(&instance.support);
+        let removed_entity = runtime.store.remove_support(instance.support);
+        debug_assert_eq!(removed_entity, Some(request.entity));
         if request.drop_loot
             && let Some(definition) = content.objects.get(removed.object_id)
         {
@@ -287,14 +334,17 @@ fn sync_world_objects(
     mut assets: WorldObjectSceneAssets,
     mut store: ResMut<WorldObjectStore>,
 ) {
-    let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
-    let loaded = loaded_coords.iter().copied().collect::<HashSet<_>>();
+    let world_revision = content.world.object_scene_revision();
+    if store.synced_world_revision == world_revision {
+        return;
+    }
 
+    let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
     let unloaded = store
         .synced_chunk_revisions
         .keys()
         .copied()
-        .filter(|coord| !loaded.contains(coord))
+        .filter(|coord| content.world.chunk(*coord).is_none())
         .collect::<Vec<_>>();
     for coord in unloaded {
         despawn_chunk_objects(&mut commands, coord, &mut store);
@@ -304,8 +354,8 @@ fn sync_world_objects(
     for coord in loaded_coords {
         let revision = content
             .world
-            .chunk_content_revision(coord)
-            .expect("loaded chunk must expose a content revision");
+            .chunk_object_revision(coord)
+            .expect("loaded chunk must expose an object revision");
         if store.synced_chunk_revisions.get(&coord).copied() == Some(revision) {
             continue;
         }
@@ -329,11 +379,13 @@ fn sync_world_objects(
                 &content,
                 &mut assets,
             );
-            store.by_support.insert(support, entity);
+            store.insert(support, entity);
         }
 
         store.synced_chunk_revisions.insert(coord, revision);
     }
+
+    store.synced_world_revision = world_revision;
 }
 
 fn despawn_chunk_objects(
@@ -341,16 +393,8 @@ fn despawn_chunk_objects(
     coord: IVec3,
     store: &mut WorldObjectStore,
 ) {
-    let supports = store
-        .by_support
-        .keys()
-        .copied()
-        .filter(|support| chunk_coord_from_world(*support) == coord)
-        .collect::<Vec<_>>();
-    for support in supports {
-        if let Some(entity) = store.by_support.remove(&support) {
-            commands.entity(entity).despawn();
-        }
+    for entity in store.take_chunk_entities(coord) {
+        commands.entity(entity).despawn();
     }
 }
 

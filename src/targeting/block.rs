@@ -12,12 +12,17 @@ use crate::{
     entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayWorldCamera,
-    voxel::{raycast::{VoxelHit, raycast_voxels}, world::VoxelWorld},
+    voxel::{
+        coordinates::chunk_coord_from_world,
+        raycast::{VoxelHit, raycast_voxels},
+        world::VoxelWorld,
+    },
     world_items::{TargetedWorldItem, WorldItem, target_bounds},
-    world_objects::{TargetedWorldObject, WorldObjectInstance},
+    world_objects::{TargetedWorldObject, WorldObjectInstance, WorldObjectStore},
 };
 
 const TARGET_RANGE: f32 = 8.0;
+const TARGET_OBJECT_CHUNK_MARGIN: i32 = 1;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum BlockTargetingSet {
@@ -94,6 +99,7 @@ struct TargetCandidates<'w, 's> {
     creatures: TargetedCreatureQuery<'w, 's>,
     world_items: InteractWorldItemQuery<'w, 's>,
     objects: WorldObjectQuery<'w, 's>,
+    object_store: Res<'w, WorldObjectStore>,
 }
 
 #[derive(SystemParam)]
@@ -166,18 +172,16 @@ fn update_targets(
             .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
             .map(|distance| (TargetKind::WorldItem(entity), distance))
     });
-    let object_hits = candidates
-        .objects
-        .iter()
-        .filter_map(|(entity, transform, object)| {
-            let (min, max) = object.target_bounds(transform.translation);
-            ray_box_distance(origin, direction, min, max)
-                .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
-                .map(|distance| (TargetKind::Object(entity), distance))
-        });
+    let object_hit = closest_world_object_hit(
+        &candidates.object_store,
+        &candidates.objects,
+        origin,
+        direction,
+        block_distance,
+    );
     let closest = creature_hits
         .chain(world_item_hits)
-        .chain(object_hits)
+        .chain(object_hit)
         .min_by(|left, right| left.1.total_cmp(&right.1))
         .map(|(target, _)| target);
 
@@ -206,6 +210,50 @@ fn update_targets(
     if targets.object.0 != next_object {
         targets.object.0 = next_object;
     }
+}
+
+fn closest_world_object_hit(
+    store: &WorldObjectStore,
+    objects: &WorldObjectQuery<'_, '_>,
+    origin: Vec3,
+    direction: Vec3,
+    block_distance: f32,
+) -> Option<(TargetKind, f32)> {
+    let end = origin + direction * TARGET_RANGE;
+    let start_chunk = chunk_coord_from_world(origin.floor().as_ivec3());
+    let end_chunk = chunk_coord_from_world(end.floor().as_ivec3());
+    let minimum = start_chunk.min(end_chunk) - IVec3::splat(TARGET_OBJECT_CHUNK_MARGIN);
+    let maximum = start_chunk.max(end_chunk) + IVec3::splat(TARGET_OBJECT_CHUNK_MARGIN);
+    let mut closest = None;
+
+    for y in minimum.y.max(0)..=maximum.y {
+        for z in minimum.z..=maximum.z {
+            for x in minimum.x..=maximum.x {
+                let coord = IVec3::new(x, y, z);
+                for entity in store.entities_in_chunk(coord) {
+                    let Ok((entity, transform, object)) = objects.get(entity) else {
+                        continue;
+                    };
+                    let (min, max) = object.target_bounds(transform.translation);
+                    let Some(distance) = ray_box_distance(origin, direction, min, max)
+                        .filter(|distance| {
+                            *distance <= TARGET_RANGE && *distance <= block_distance
+                        })
+                    else {
+                        continue;
+                    };
+                    if closest
+                        .as_ref()
+                        .is_none_or(|(_, best_distance)| distance < *best_distance)
+                    {
+                        closest = Some((TargetKind::Object(entity), distance));
+                    }
+                }
+            }
+        }
+    }
+
+    closest
 }
 
 /// Ray versus a static AABB; returns the first forward intersection in blocks.
