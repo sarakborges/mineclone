@@ -311,6 +311,7 @@ mod tests {
             downstream_cell,
             downstream,
             &connected_lakes,
+            &connected_lakes,
             &mut network,
             &mut cache,
         ));
