@@ -1,13 +1,97 @@
 {
   "id": "asteria:boulder_medium",
-  "name": { "english": "Medium Boulder", "portuguese_brazil": "Pedregulho médio", "spanish": "Roca mediana" },
+  "name": {
+    "english": "Medium Boulder",
+    "portuguese_brazil": "Pedregulho médio",
+    "spanish": "Roca mediana"
+  },
   "locatable": false,
   "rotation": true,
-  "anchor": { "x": 2, "y": 0, "z": 2 },
-  "palette": { "S": { "block": "asteria:stone" } },
+  "anchor": {
+    "x": 4,
+    "y": 0,
+    "z": 4
+  },
+  "palette": {
+    "S": {
+      "block": "asteria:stone"
+    },
+    "P": {
+      "layersOnly": true,
+      "surfaceLayers": [
+        {
+          "layer": "asteria:pebble_slice_1",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_2",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_3",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_4",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        }
+      ]
+    }
+  },
   "layers": [
-    { "y": 0, "rows": [".SS..", "SSSS.", "SSSSS", ".SSSS", "..SS."] },
-    { "y": 1, "rows": ["..SS.", ".SSSS", ".SSS.", "..SS.", "....."] },
-    { "y": 2, "rows": [".....", "..SS.", "..S..", ".....", "....."] }
+    {
+      "y": 0,
+      "rows": [
+        ".........",
+        ".........",
+        ".P.SS..P.",
+        "..SSSS...",
+        "..SSSSS..",
+        "...SSSS..",
+        ".P..SS...",
+        ".......P.",
+        "....P...."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".........",
+        ".........",
+        "....SS...",
+        "...SSSS..",
+        "...SSS...",
+        "....SS...",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        "....SS...",
+        "....S....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    }
   ]
 }
