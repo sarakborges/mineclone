@@ -1,5 +1,6 @@
 use bevy::{
     asset::AssetId,
+    ecs::system::SystemParam,
     gltf::GltfAssetLabel,
     platform::collections::{HashMap, HashSet},
     prelude::*,
@@ -53,17 +54,25 @@ pub(crate) fn clear_custom_block_model_render_pool(
     }
 }
 
+#[derive(SystemParam)]
+pub(crate) struct CustomBlockModelContent<'w> {
+    world: Res<'w, VoxelWorld>,
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    asset_server: Res<'w, AssetServer>,
+    render_pool: Res<'w, ChunkRenderPool>,
+}
+
 pub(crate) fn sync_custom_block_models(
     mut commands: Commands,
-    world: Res<VoxelWorld>,
-    blocks: Res<BlockRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    asset_server: Res<AssetServer>,
-    render_pool: Res<ChunkRenderPool>,
+    content: CustomBlockModelContent,
     mut model_pool: ResMut<CustomBlockModelRenderPool>,
 ) {
-    let active = render_pool.active_coords().collect::<HashSet<_>>();
+    let active = content
+        .render_pool
+        .active_coords()
+        .collect::<HashSet<_>>();
 
     let retired = model_pool
         .chunks
@@ -78,7 +87,7 @@ pub(crate) fn sync_custom_block_models(
     }
 
     for coord in active {
-        let Some(revision) = world.chunk_content_revision(coord) else {
+        let Some(revision) = content.world.chunk_content_revision(coord) else {
             continue;
         };
         if model_pool
@@ -93,13 +102,13 @@ pub(crate) fn sync_custom_block_models(
             despawn_model_entities(&mut commands, previous.entities);
         }
 
-        let Some(chunk) = world.chunk(coord) else {
+        let Some(chunk) = content.world.chunk(coord) else {
             continue;
         };
         let mut entities = Vec::new();
         let chunk_origin = coord * CHUNK_SIZE as i32;
         chunk.visit_block_voxels(|x, y, z, cell| {
-            let Some(block) = blocks.get(cell.block_id) else {
+            let Some(block) = content.blocks.get(cell.block_id) else {
                 return;
             };
             let Some(model) = block.model.as_ref() else {
@@ -112,10 +121,10 @@ pub(crate) fn sync_custom_block_models(
                 world_voxel,
                 cell,
                 block,
-                &biome_field,
-                &biomes,
+                &content.biome_field,
+                &content.biomes,
             );
-            let scene = asset_server.load(
+            let scene = content.asset_server.load(
                 GltfAssetLabel::Scene(0).from_asset(model.clone()),
             );
             let entity = commands
