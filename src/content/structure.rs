@@ -9,6 +9,7 @@ use super::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
     fluid::FluidRegistry,
     layer::{LayerFace, LayerRegistry},
+    object::ObjectRegistry,
     registry::DefinitionMap,
     structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
@@ -122,6 +123,8 @@ pub struct StructurePaletteEntry {
     pub block: Option<String>,
     #[serde(default)]
     pub fluid: Option<String>,
+    #[serde(default)]
+    pub object: Option<String>,
     #[serde(default)]
     pub clear: bool,
     #[serde(default)]
@@ -247,6 +250,7 @@ impl StructureDefinition {
         &self,
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
+        objects: &ObjectRegistry,
         fluids: &FluidRegistry,
     ) {
         self.restrictions
@@ -267,6 +271,14 @@ impl StructureDefinition {
                     "structure {} references missing fluid: {}",
                     self.id,
                     fluid
+                );
+            }
+            if let Some(object) = entry.object.as_deref() {
+                assert!(
+                    objects.get(object).is_some(),
+                    "structure {} references missing object: {}",
+                    self.id,
+                    object
                 );
             }
             for surface in &entry.surface_layers {
@@ -388,6 +400,11 @@ impl StructureDefinition {
             .and_then(|entry| entry.fluid.as_deref())
     }
 
+    pub(crate) fn object_for_voxel(&self, voxel: &StructureVoxel) -> Option<&str> {
+        self.palette_entry(voxel.palette_symbol)
+            .and_then(|entry| entry.object.as_deref())
+    }
+
     pub(crate) fn clears_voxel(&self, voxel: &StructureVoxel) -> bool {
         self.palette_entry(voxel.palette_symbol)
             .is_some_and(|entry| entry.clear)
@@ -480,7 +497,10 @@ impl StructureDefinition {
             let horizontal = (voxel.offset.x, voxel.offset.z);
             footprint.insert(horizontal);
             column_voxels.entry(horizontal).or_default().push(*voxel);
-            if voxel.offset.y == min_y_offset && !self.layers_only_voxel(voxel) {
+            if voxel.offset.y == min_y_offset
+                && !self.layers_only_voxel(voxel)
+                && self.object_for_voxel(voxel).is_none()
+            {
                 supports.insert(horizontal);
             }
             spans
@@ -579,11 +599,12 @@ impl StructureDefinition {
             );
             let content_count = usize::from(entry.block.is_some())
                 + usize::from(entry.fluid.is_some())
+                + usize::from(entry.object.is_some())
                 + usize::from(entry.clear)
                 + usize::from(entry.layers_only);
             assert_eq!(
                 content_count, 1,
-                "structure {} palette symbol {symbol} must define exactly one of block, fluid, clear, or layersOnly",
+                "structure {} palette symbol {symbol} must define exactly one of block, fluid, object, clear, or layersOnly",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -602,6 +623,13 @@ impl StructureDefinition {
                 assert!(
                     entry.surface_layers.is_empty(),
                     "structure {} palette symbol {symbol} fluid entries cannot define surfaceLayers",
+                    self.id
+                );
+            }
+            if entry.object.is_some() {
+                assert!(
+                    entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} object entries cannot define surfaceLayers",
                     self.id
                 );
             }
