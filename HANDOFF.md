@@ -14058,30 +14058,41 @@ mantidos.
 
 VERSION: `0.50.200`.
 
-## 2026-09-23 — Pebbles em layers ao redor de boulders
+## 2026-09-23 — Pebble e Stick como objects de stacked sprites
 
-Os quatro boulders (small, medium, big, huge) agora incluem algumas
-pebbles decorativas espalhadas ao redor da pedra principal.
+A implementação inicial dos pebbles ao redor de boulders foi corrigida para
+usar a abstração certa: Pebble não é uma surface layer e não possui quatro
+definitions técnicas diferentes.
 
-Implementação:
-- nenhum modelo 3D novo foi criado;
-- a própria textura textures/items/pebble.png é reutilizada;
-- cada pebble visual é formada por quatro layers horizontais repetidas, com
-  offsets crescentes, produzindo um volume fatiado em vez de um decal totalmente
-  plano;
-- as quatro slices compartilham o mesmo rotationGroup, então giram juntas
-  deterministicamente por posição;
-- as slices técnicas usam creativeVisible: false e não poluem o Creative
-  Inventory;
-- structures agora suportam palette entries layersOnly, que anexam layers
-  ao bloco de terreno existente sem substituir o terreno por outro bloco;
-- layers decorativas não entram no cálculo de support/slope da structure, para
-  não reduzir artificialmente a frequência dos boulders em terreno irregular.
+O sistema de world objects agora suporta visuais genéricos por `visual.type`:
+- `model`: mantém objects baseados em GLB, como grass;
+- `stackedSprites`: renderiza várias cópias da mesma textura no mesmo X/Z e
+  com a mesma rotação, variando somente o offset em Y.
 
-As quantidades foram escaladas pelo tamanho do boulder: poucos stacks no small,
-mais ocorrências progressivamente no medium, big e huge.
+`stackedSprites` é data-driven e define texture, número de slices,
+`baseOffset`, `sliceSpacing`, tamanho e alpha cutoff. Pebble e Stick já usam
+esse mesmo renderer com quatro slices; Stick ainda não possui structure própria.
 
-VERSION corrente após mudanças concorrentes no mesmo branch: 0.66.2.
+Objects agora também são conteúdo autoritativo de chunk:
+- uma `ObjectCell` é anexada ao voxel de suporte e registra object ID, face de
+  attachment e rotação;
+- structure palettes podem usar `"object": "asteria:pebble"`;
+- os boulders small/medium/big/huge usam esse object diretamente;
+- o runtime sincroniza entities visuais a partir dos objects presentes nos
+  chunks carregados;
+- placement e remoção do player alteram o conteúdo do chunk, portanto persistem
+  corretamente;
+- archive/save/load de chunks serializa e valida objects;
+- remover/substituir o bloco de suporte remove o object anexado.
+
+Foram removidos `data/layers/pebble_slice_1..4.json` e os antigos
+`data/items/pebble.json` / `data/items/stick.json`. Pebble e Stick agora
+vivem em `data/objects/` e continuam usando seus ícones/texturas existentes.
+
+O suporte genérico a `layersOnly` continua existindo para decorations que de
+fato sejam surface layers, mas não é mais usado para Pebble.
+
+VERSION: `0.67.2`.
 
 
 ## 2026-09-23 — Random biome agora sorteia o bioma inicial pela seed
