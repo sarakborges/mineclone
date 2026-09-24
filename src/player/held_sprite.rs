@@ -346,3 +346,17 @@ pub(crate) fn sync_held_sprites(
         }
     }
 }
+
+
+#[cfg(test)]
+mod system_param_tests {
+    use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn held_sprite_system_params_initialize_without_query_conflicts() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(sync_held_sprites);
+        system.initialize(&mut world);
+    }
+}

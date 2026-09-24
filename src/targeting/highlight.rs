@@ -110,7 +110,7 @@ struct ArtisansKitPlacementGhost;
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
     targeted_object: Res<'w, TargetedWorldObject>,
-    world_objects: Query<'w, 's, (&'static WorldObjectInstance, &'static Transform)>,
+    world_objects: Query<'w, 's, (&'static WorldObjectInstance, &'static GlobalTransform)>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
 }
@@ -236,7 +236,7 @@ fn update_highlight(
     {
         hide_if_visible(&mut view.brush_ghost.1);
         hide_if_visible(&mut view.artisans_kit_placement.1);
-        let (minimum, maximum) = object.target_bounds(transform.translation);
+        let (minimum, maximum) = object.target_bounds(transform.translation());
         let size = (maximum - minimum) * HIGHLIGHT_SCALE;
         let translation = (minimum + maximum) * 0.5;
         view.highlight.0.translation = translation;
@@ -421,5 +421,19 @@ fn hide_if_visible(visibility: &mut Visibility) {
 fn show_if_hidden(visibility: &mut Visibility) {
     if *visibility != Visibility::Visible {
         *visibility = Visibility::Visible;
+    }
+}
+
+
+#[cfg(test)]
+mod system_param_tests {
+    use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn highlight_system_params_initialize_without_query_conflicts() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(update_highlight);
+        system.initialize(&mut world);
     }
 }
