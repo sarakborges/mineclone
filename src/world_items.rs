@@ -298,7 +298,7 @@ fn spawn_world_item_visual(
     let item_id = request.stack.id();
     if let Some(block) = content.block_content.blocks.get(item_id) {
         let horizontal = Vec2::new(request.position.x, request.position.z);
-        let tint = block_content
+        let tint = content.block_content
             .tint_at_with_override(
                 item_id,
                 horizontal,
@@ -336,12 +336,12 @@ fn spawn_world_item_visual(
         return;
     }
 
-    let icon = items
+    let icon = content.items
         .get(item_id)
         .map(|definition| definition.icon.as_str())
         .or_else(|| content.layers.get(item_id).map(|definition| definition.texture.as_str()))
         .or_else(|| {
-            tools
+            content.tools
                 .get(item_id)
                 .and_then(|definition| (!definition.icon.is_empty()).then_some(definition.icon.as_str()))
         });
