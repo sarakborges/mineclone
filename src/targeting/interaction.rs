@@ -73,6 +73,17 @@ struct BlockEditDefinitions<'w> {
 }
 
 #[derive(SystemParam)]
+struct BlockEditRuntime<'w, 's> {
+    voxels: VoxelTopologyRuntime<'w>,
+    object_store: Res<'w, WorldObjectStore>,
+    object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
+    object_removals: MessageWriter<'w, WorldObjectRemoveRequest>,
+    tool_uses: MessageWriter<'w, ToolUse>,
+    viewmodel_animation: ResMut<'w, ViewModelAnimation>,
+    creature_attack: CreatureAttackRuntime<'w, 's>,
+}
+
+#[derive(SystemParam)]
 struct BlockEditActions<'w> {
     object_store: Res<'w, WorldObjectStore>,
     object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
@@ -104,9 +115,7 @@ enum VoxelEditOutcome {
 fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
-    mut runtime: VoxelTopologyRuntime,
-    mut actions: BlockEditActions,
-    mut creature_attack: CreatureAttackRuntime,
+    mut runtime: BlockEditRuntime,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
@@ -127,7 +136,7 @@ fn edit_targeted_block(
             && definitions.blocks.get(hit.block_id).is_some()
         {
             let mut stack = ItemStack::new(hit.block_id);
-            if let Some(cell) = runtime.world().cell_at(hit.voxel)
+            if let Some(cell) = runtime.voxels.world().cell_at(hit.voxel)
                 && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
             {
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
@@ -146,12 +155,12 @@ fn edit_targeted_block(
         .map(str::to_owned);
 
     if left_pressed && let Some(entity) = input.object_target.0 {
-        actions.object_removals.write(WorldObjectRemoveRequest {
+        actions.runtime.object_removals.write(WorldObjectRemoveRequest {
             entity,
             drop_self: *game_mode == GameMode::Survival,
         });
         input.object_target.0 = None;
-        actions.viewmodel_animation.play_break();
+        actions.runtime.viewmodel_animation.play_break();
         return;
     }
 
@@ -163,9 +172,9 @@ fn edit_targeted_block(
             .and_then(|item_id| definitions.tools.get(item_id))
             .is_some_and(|tool| tool.left_behavior == MINE_TOOL_BEHAVIOR_ID);
         if mining_tool {
-            actions.viewmodel_animation.play_break();
+            actions.runtime.viewmodel_animation.play_break();
         } else {
-            actions.viewmodel_animation.play_hit();
+            actions.runtime.viewmodel_animation.play_hit();
         }
     }
 
@@ -173,8 +182,8 @@ fn edit_targeted_block(
         let Some(attack) = definitions.attacks.get(&definitions.player.attack) else {
             return;
         };
-        if creature_attack.apply(entity, attack, player_transform.translation) {
-            actions.viewmodel_animation.play_hit();
+        if runtime.creature_attack.apply(entity, attack, player_transform.translation) {
+            actions.runtime.viewmodel_animation.play_hit();
         }
         return;
     }
@@ -205,11 +214,11 @@ fn edit_targeted_block(
         if let Some(anchor) = object_placement_anchor(
             hit,
             definition,
-            runtime.world(),
+            runtime.voxels.world(),
             &actions.object_store,
         ) {
-            actions.object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
-            actions.viewmodel_animation.play_place();
+            actions.runtime.object_placements.write(WorldObjectPlaceRequest { object_id, anchor });
+            actions.runtime.viewmodel_animation.play_place();
         }
         return;
     }
@@ -228,20 +237,20 @@ fn edit_targeted_block(
         &definitions.blocks,
         &definitions.layers,
         &input.placement_orientation,
-        &mut runtime,
+        &mut runtime.voxels,
     );
 
     match outcome {
         VoxelEditOutcome::Consumed => {}
         VoxelEditOutcome::LayerPlaced => {
-            actions.viewmodel_animation.play_place();
+            actions.runtime.viewmodel_animation.play_place();
         }
         VoxelEditOutcome::BlockPlaced => {
-            actions.viewmodel_animation.play_place();
+            actions.runtime.viewmodel_animation.play_place();
             input.targeted.0 = None;
         }
         VoxelEditOutcome::BlockBroken => {
-            actions.viewmodel_animation.play_break();
+            actions.runtime.viewmodel_animation.play_break();
             input.targeted.0 = None;
         }
     }
