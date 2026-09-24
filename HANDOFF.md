@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6D1 — Helpers de bounds antigos removidos
+
+O CI do envelope connector-aware tornou dois caminhos anteriores totalmente órfãos: `StructureRegistry::bounds_for_reference` e o wrapper de `StructureSetDefinition::horizontal_bounds` que dependia dele. Ambos foram removidos fisicamente. O único caminho de discovery agora é o envelope connector-aware por placement/reference, sem fallback legado.
+
 ## 2026-09-24 — Parte 6D1 — Envelope horizontal connector-aware por placement
 
 Candidate discovery agora possui um envelope conservador específico para cada Structure/Structure Group/Structure Set.

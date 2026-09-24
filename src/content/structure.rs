@@ -1118,39 +1118,6 @@ impl StructureRegistry {
         })
     }
 
-    pub(crate) fn bounds_for_reference(
-        &self,
-        reference: &str,
-    ) -> Option<(IVec2, IVec2)> {
-        let include_structure = |structure: &StructureDefinition,
-                                 bounds: &mut Option<(IVec2, IVec2)>| {
-            for &rotation in structure.supported_rotations() {
-                let candidate = structure.horizontal_bounds_for_rotation(rotation);
-                *bounds = Some(match *bounds {
-                    Some((minimum, maximum)) => {
-                        (minimum.min(candidate.0), maximum.max(candidate.1))
-                    }
-                    None => candidate,
-                });
-            }
-        };
-
-        let mut bounds = None;
-        if let Some(structure) = self.get(reference) {
-            include_structure(structure, &mut bounds);
-            return bounds;
-        }
-
-        let members = self.groups.get(reference)?;
-        for id in members {
-            let structure = self
-                .get(id)
-                .expect("group index references registered structures");
-            include_structure(structure, &mut bounds);
-        }
-        bounds
-    }
-
 }
 
 fn stable_structure_hash(value: &str) -> u64 {

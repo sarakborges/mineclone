@@ -218,13 +218,6 @@ impl StructureSetDefinition {
         }
     }
 
-    pub(crate) fn horizontal_bounds(
-        &self,
-        structures: &StructureRegistry,
-    ) -> Option<(IVec2, IVec2)> {
-        self.horizontal_bounds_with(|reference| structures.bounds_for_reference(reference))
-    }
-
     pub(crate) fn horizontal_bounds_with(
         &self,
         mut bounds_for_reference: impl FnMut(&str) -> Option<(IVec2, IVec2)>,
