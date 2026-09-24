@@ -24,5 +24,12 @@
     "requiredTools": [
       "pickaxe"
     ]
-  }
+  },
+  "lootTable": [
+    {
+      "item": "asteria:pebble",
+      "chance": 1,
+      "quantity": 4
+    }
+  ]
 }

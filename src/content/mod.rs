@@ -28,6 +28,7 @@ pub(crate) mod item;
 pub(crate) mod item_id;
 pub(crate) mod layer;
 pub(crate) mod layer_id;
+pub(crate) mod loot;
 pub(crate) mod player;
 mod json_file;
 mod loader;

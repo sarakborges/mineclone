@@ -1,3 +1,28 @@
+## 2026-09-23 — Loot tables data-driven para blocos [VERSION 0.64.0]
+
+Blocos agora podem declarar `lootTable` opcional. Ausência da propriedade
+significa nenhum drop. Cada entrada possui `item`, `chance` (0..1, default
+1.0) e `quantity` (inteiro positivo, default 1). Entradas são rolls
+independentes e referências são validadas contra blocks/items/layers/tools no
+load de conteúdo.
+
+Loot tables são consultadas exclusivamente pela mineração em Survival.
+Quebra em Creative continua apenas removendo o bloco e não consulta/spawna loot.
+O resultado usa o mesmo pipeline de `WorldItemPickup::Proximity` introduzido
+em 0.63.0. Quantidade maior que 1 gera entidades físicas separadas enquanto
+`ItemStack` ainda não possui contagem.
+
+Conteúdo inicial:
+- grass -> 1 dirt, 100%;
+- dirt -> 1 dirt, 100%;
+- stone -> 4 pebbles, 100%;
+- todas as leaves atuais -> 1 stick, 60%;
+- glass não possui loot table e portanto não dropa nada.
+
+Metadata de voxel só é preservada automaticamente em self-drop (quando o item
+da entrada possui o mesmo ID do bloco quebrado), evitando transferir
+`biome_tint` de grass para dirt, stone para pebble ou leaf para stick.
+
 ## 2026-09-23 — World item entities + item drops [VERSION 0.63.0]
 
 Foi criada a base física de itens no mundo, separando comportamento de coleta

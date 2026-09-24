@@ -1,13 +1,22 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
         block::{BlockDefinition, BlockRegistry, DEFAULT_BLOCK_BREAK_TICKS},
+        block_id::intern_block_id,
         builtin_ids::BIOME_TINT_METADATA_KEY,
+        item::ItemRegistry,
+        item_id::intern_item_id,
+        layer::LayerRegistry,
+        layer_id::intern_layer_id,
         tool::{ToolDefinition, ToolRegistry},
+        tool_id::intern_tool_id,
         tool_behavior::MINE_TOOL_BEHAVIOR_ID,
     },
-    gameplay::availability::world_interaction_available,
+    gameplay::{
+        availability::world_interaction_available,
+        random::{next_signed_f32, next_unit_f32},
+    },
     player::{
         camera::GameplayCamera,
         game_mode::GameMode,
@@ -36,6 +45,14 @@ pub(crate) struct BlockMiningState {
     target: Option<MiningTarget>,
     accumulated_work: f32,
     swing_ticks: u64,
+}
+
+#[derive(SystemParam)]
+struct MiningContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    items: Res<'w, ItemRegistry>,
+    layers: Res<'w, LayerRegistry>,
+    tools: Res<'w, ToolRegistry>,
 }
 
 impl BlockMiningState {
@@ -79,14 +96,12 @@ impl Plugin for BlockMiningPlugin {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn advance_survival_mining(
     buttons: Res<ButtonInput<MouseButton>>,
     player: Single<&GameMode, With<GameplayCamera>>,
     hotbar: Res<PlayerHotbar>,
     mut targeted: ResMut<TargetedBlock>,
-    blocks: Res<BlockRegistry>,
-    tools: Res<ToolRegistry>,
+    content: MiningContent,
     world_ticks: Res<WorldTickClock>,
     mut runtime: VoxelTopologyRuntime,
     mut mining: ResMut<BlockMiningState>,
@@ -108,7 +123,7 @@ fn advance_survival_mining(
     }
 
     let selected_item = hotbar.item_at(hotbar.selected_slot());
-    let selected_tool = selected_item.and_then(|item_id| tools.get(item_id));
+    let selected_tool = selected_item.and_then(|item_id| content.tools.get(item_id));
 
     // The left-click behavior owns dispatch. Only tools explicitly configured
     // with the mining behavior may participate in the mining loop.
@@ -137,7 +152,7 @@ fn advance_survival_mining(
         }
     }
 
-    let Some(block) = blocks.get(hit.block_id) else {
+    let Some(block) = content.blocks.get(hit.block_id) else {
         mining.reset();
         return;
     };
@@ -155,23 +170,87 @@ fn advance_survival_mining(
         }
     }
 
-    let mut dropped_stack = ItemStack::new(hit.block_id);
-    if let Some(cell) = runtime.world().cell_at(hit.voxel)
-        && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
-    {
-        dropped_stack = dropped_stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
-    }
+    let biome_tint = runtime
+        .world()
+        .cell_at(hit.voxel)
+        .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
+        .map(str::to_owned);
 
     if runtime.set_block(hit.voxel, None).is_some() {
-        item_spawns.write(WorldItemSpawnRequest::dropped(
-            dropped_stack,
-            hit.voxel.as_vec3() + Vec3::splat(0.5),
-            Vec3::Y * 1.2,
-        ));
+        spawn_survival_loot(
+            block,
+            hit.voxel,
+            biome_tint.as_deref(),
+            world_ticks.current_tick(),
+            &content,
+            &mut item_spawns,
+        );
         targeted.0 = None;
         viewmodel.play_break_fast();
     }
     mining.reset();
+}
+
+fn spawn_survival_loot(
+    block: &BlockDefinition,
+    voxel: IVec3,
+    biome_tint: Option<&str>,
+    current_tick: u64,
+    content: &MiningContent<'_>,
+    item_spawns: &mut MessageWriter<WorldItemSpawnRequest>,
+) {
+    let mut random_state = loot_random_seed(voxel, current_tick);
+    let position = voxel.as_vec3() + Vec3::splat(0.5);
+
+    for entry in block.loot_table.entries() {
+        let succeeds = entry.chance >= 1.0 || next_unit_f32(&mut random_state) < entry.chance;
+        if !succeeds {
+            continue;
+        }
+
+        let item_id = resolve_loot_item_id(&entry.item, content);
+        for _ in 0..entry.quantity {
+            let mut stack = ItemStack::new(item_id);
+            if item_id == block.id
+                && let Some(biome_id) = biome_tint
+            {
+                stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
+            }
+
+            let velocity = Vec3::new(
+                next_signed_f32(&mut random_state) * 0.65,
+                1.1 + next_unit_f32(&mut random_state) * 0.4,
+                next_signed_f32(&mut random_state) * 0.65,
+            );
+            item_spawns.write(WorldItemSpawnRequest::dropped(stack, position, velocity));
+        }
+    }
+}
+
+fn resolve_loot_item_id(item_id: &str, content: &MiningContent<'_>) -> &'static str {
+    if content.items.get(item_id).is_some() {
+        intern_item_id(item_id)
+    } else if content.blocks.get(item_id).is_some() {
+        intern_block_id(item_id)
+    } else if content.layers.get(item_id).is_some() {
+        intern_layer_id(item_id)
+    } else if content.tools.get(item_id).is_some() {
+        intern_tool_id(item_id)
+    } else {
+        unreachable!("loot references are validated during content loading: {item_id}")
+    }
+}
+
+fn loot_random_seed(voxel: IVec3, current_tick: u64) -> u32 {
+    let mut seed = (current_tick as u32) ^ ((current_tick >> 32) as u32).rotate_left(11);
+    seed ^= (voxel.x as u32).wrapping_mul(0x9E37_79B9);
+    seed ^= (voxel.y as u32).wrapping_mul(0x85EB_CA6B);
+    seed ^= (voxel.z as u32).wrapping_mul(0xC2B2_AE35);
+    if seed == 0 {
+        0xA341_316C
+    } else {
+        seed
+    }
 }
 
 fn effective_mining_speed(

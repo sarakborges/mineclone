@@ -24,6 +24,15 @@ pub(super) fn validate_content(content: &LoadedContent) {
             &content.tool_categories,
             &content.tools,
         );
+        block.loot_table.validate_references(
+            &format!("block {}", block.id),
+            |item_id| {
+                content.blocks.get(item_id).is_some()
+                    || content.items.get(item_id).is_some()
+                    || content.layers.get(item_id).is_some()
+                    || content.tools.get(item_id).is_some()
+            },
+        );
     }
 
     for layer in content.layers.iter() {

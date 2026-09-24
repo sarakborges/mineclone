@@ -9,6 +9,7 @@ use super::{
     block_id::intern_block_id,
     block_orientation::BlockOrientation,
     inventory_category::InventoryCategoryRegistry,
+    loot::LootTableDefinition,
     registry::DefinitionMap,
     secondary_property::SecondaryPropertyRegistry,
     tool::ToolRegistry,
@@ -180,6 +181,8 @@ pub struct BlockDefinition {
     pub category: String,
     #[serde(default)]
     pub mining: BlockMiningDefinition,
+    #[serde(default)]
+    pub loot_table: LootTableDefinition,
     /// Opt-in capabilities. Blocks without `fragmentable` cannot be sculpted.
     #[serde(default)]
     pub tags: Vec<String>,
@@ -307,6 +310,9 @@ impl BlockRegistry {
         );
         definition.name.validate(&format!("block {} name", definition.id));
         definition.mining.validate(&definition.id);
+        definition
+            .loot_table
+            .validate(&format!("block {}", definition.id));
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
             "block {} light emission must be between 0 and 15",
@@ -450,6 +456,7 @@ mod tests {
             name: localized_name(),
             category: "test".to_owned(),
             mining: BlockMiningDefinition::default(),
+            loot_table: LootTableDefinition::default(),
             tags: Vec::new(),
             tint: BlockTint::None,
             textures: BlockTextures::default(),

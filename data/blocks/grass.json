@@ -79,5 +79,12 @@
     "preferredTools": [
       "shovel"
     ]
-  }
+  },
+  "lootTable": [
+    {
+      "item": "asteria:dirt",
+      "chance": 1,
+      "quantity": 1
+    }
+  ]
 }
