@@ -811,6 +811,32 @@ fn rasterize_structure(
                 return false;
             }
 
+            if structure.layers_only_voxel(voxel) {
+                let max_rise = structure.restrictions.max_slope.max(0) as usize;
+                let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
+                    .rev()
+                    .find(|&candidate_y| {
+                        candidate_y < CHUNK_SIZE
+                            && chunk.cell_at(local_x, candidate_y, local_z).is_some()
+                    })
+                else {
+                    return false;
+                };
+                let support_world_position =
+                    context.chunk_origin
+                        + IVec3::new(local_x as i32, support_y as i32, local_z as i32);
+                for (face, layer) in surface_layer_placements(
+                    context.world_seed,
+                    structure,
+                    rotation,
+                    voxel,
+                    support_world_position,
+                ) {
+                    let _ = chunk.add_layer(local_x, support_y, local_z, face, layer);
+                }
+                return false;
+            }
+
             if let Some(block_id) = voxel.block_id {
                 let block = context.blocks.get(block_id).unwrap_or_else(|| {
                     panic!(
@@ -927,7 +953,15 @@ pub(crate) fn surface_layer_placements(
             if unit_interval(hash) >= surface.chance {
                 continue;
             }
-            let rotation = TextureRotation::from_quarter_turn(((hash >> 32) & 3) as u8);
+            let rotation_hash = surface_layer_hash(
+                world_seed,
+                structure.runtime_hash(),
+                surface.runtime_rotation_hash(),
+                world_position,
+                face,
+            );
+            let rotation =
+                TextureRotation::from_quarter_turn(((rotation_hash >> 32) & 3) as u8);
             placements.push((face, LayerCell::new(&surface.layer, rotation)));
         }
     }
