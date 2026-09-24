@@ -1,10 +1,11 @@
-use crate::content::layer::LayerFace;
+use crate::content::{layer::LayerFace, object::ObjectPlacementFace};
 
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
     layer::{AttachedLayer, LayerCell},
+    object::ObjectCell,
     texture_rotation::TextureRotation,
 };
 
@@ -20,11 +21,20 @@ struct ArchivedLayerCell {
     rotation: u8,
 }
 
+#[derive(Clone, Copy)]
+struct ArchivedObjectCell {
+    voxel_index: u16,
+    face: u8,
+    object_id: &'static str,
+    rotation: u8,
+}
+
 pub struct ArchivedChunk {
     occupancy: [u64; OCCUPANCY_WORDS],
     palette: Vec<VoxelCell>,
     cells: Vec<u16>,
     layers: Vec<ArchivedLayerCell>,
+    objects: Vec<ArchivedObjectCell>,
     fluid_occupancy: [u64; OCCUPANCY_WORDS],
     fluid_palette: Vec<FluidCell>,
     fluid_cells: Vec<u16>,
@@ -34,12 +44,14 @@ impl ArchivedChunk {
     pub(crate) fn from_entries(
         block_entries: impl IntoIterator<Item = (usize, VoxelCell)>,
         layer_entries: impl IntoIterator<Item = (usize, usize, AttachedLayer)>,
+        object_entries: impl IntoIterator<Item = (usize, ObjectCell)>,
         fluid_entries: impl IntoIterator<Item = (usize, FluidCell)>,
     ) -> Self {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut palette = Vec::<VoxelCell>::new();
         let mut cells = Vec::new();
         let mut layers = Vec::new();
+        let mut objects = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut fluid_palette = Vec::<FluidCell>::new();
         let mut fluid_cells = Vec::new();
@@ -74,6 +86,17 @@ impl ArchivedChunk {
         }
         layers.sort_unstable_by_key(|layer| (layer.voxel_index, layer.order));
 
+        for (index, object) in object_entries {
+            assert!(index < CHUNK_VOLUME, "archived object index must stay inside the chunk");
+            objects.push(ArchivedObjectCell {
+                voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
+                face: object.face.index(),
+                object_id: object.object_id,
+                rotation: rotation_index(object.rotation),
+            });
+        }
+        objects.sort_unstable_by_key(|object| object.voxel_index);
+
         for (index, fluid) in fluid_entries {
             assert!(index < CHUNK_VOLUME, "archived fluid index must stay inside the chunk");
             fluid_occupancy[index / u64::BITS as usize] |=
@@ -98,6 +121,7 @@ impl ArchivedChunk {
             palette,
             cells,
             layers,
+            objects,
             fluid_occupancy,
             fluid_palette,
             fluid_cells,
@@ -109,6 +133,7 @@ impl ArchivedChunk {
         let mut palette = Vec::<VoxelCell>::new();
         let mut cells = Vec::new();
         let mut layers = Vec::new();
+        let mut objects = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut fluid_palette = Vec::<FluidCell>::new();
         let mut fluid_cells = Vec::new();
@@ -171,12 +196,22 @@ impl ArchivedChunk {
             }
         }
         layers.sort_unstable_by_key(|layer| (layer.voxel_index, layer.order));
+        for (index, object) in chunk.object_entries() {
+            objects.push(ArchivedObjectCell {
+                voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
+                face: object.face.index(),
+                object_id: object.object_id,
+                rotation: rotation_index(object.rotation),
+            });
+        }
+        objects.sort_unstable_by_key(|object| object.voxel_index);
 
         Self {
             occupancy,
             palette,
             cells,
             layers,
+            objects,
             fluid_occupancy,
             fluid_palette,
             fluid_cells,
@@ -209,6 +244,20 @@ impl ArchivedChunk {
         })
     }
 
+    pub(crate) fn object_entries(&self) -> impl Iterator<Item = (usize, ObjectCell)> + '_ {
+        self.objects.iter().map(|archived| {
+            (
+                archived.voxel_index as usize,
+                ObjectCell {
+                    object_id: archived.object_id,
+                    face: ObjectPlacementFace::from_index(archived.face)
+                        .expect("archived object face must be valid"),
+                    rotation: TextureRotation::from_quarter_turn(archived.rotation),
+                },
+            )
+        })
+    }
+
     pub(crate) fn fluid_entries(&self) -> impl Iterator<Item = (usize, FluidCell)> + '_ {
         occupied_indices(&self.fluid_occupancy)
             .zip(self.fluid_cells.iter().copied())
@@ -229,6 +278,13 @@ impl ArchivedChunk {
             assert!(
                 chunk.add_layer(x, y, z, attached.face, attached.cell),
                 "archived layer must restore onto its supporting block"
+            );
+        }
+        for (index, object) in self.object_entries() {
+            let (x, y, z) = coordinates(index);
+            assert!(
+                chunk.set_object(x, y, z, object),
+                "archived object must restore onto its supporting block"
             );
         }
         if !self.fluid_cells.is_empty() {
