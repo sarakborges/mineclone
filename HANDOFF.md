@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6H — Surface anchor visitor voltou a usar context
+
+Clippy apontou oito parâmetros no helper de candidate anchors após a separação surface/volume. O helper voltou a receber `StructurePlacementContext` e extrai internamente o variant `Surface`, reduzindo a assinatura sem adicionar suppressions nem duplicar estado.
+
 ## 2026-09-24 — Parte 6H — Import duplicado removido
 
 O segundo CI de volume placement encontrou somente a importação duplicada de `BiomeStructurePlacementRules` em `biome.rs`. A duplicata foi removida; nenhum comportamento foi alterado.

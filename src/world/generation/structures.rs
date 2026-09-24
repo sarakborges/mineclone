@@ -544,9 +544,6 @@ fn collect_direct_structure_candidates<'a>(
 ) {
     let biome_id = placement_context.biome_id;
     let placement_id = placement_context.placement_id;
-    let BiomeStructurePlacementRules::Surface(surface_placement) = placement_context.placement else {
-        unreachable!("direct surface structure collector requires surface placement rules");
-    };
     let bounds = context
         .feature_fields
         .structure_placement_bounds(placement_id, || {
@@ -565,9 +562,7 @@ fn collect_direct_structure_candidates<'a>(
         target_min,
         target_max,
         context.biome_field.seed(),
-        placement_context.biome_id,
-        placement_context.placement_id,
-        surface_placement,
+        placement_context,
         bounds,
         |anchor| {
             let member_hash = structure_member_hash(
@@ -647,9 +642,6 @@ fn collect_structure_set_candidates<'a>(
         .structure_sets
         .get(placement_id)
         .expect("validated structure set placement must resolve");
-    let BiomeStructurePlacementRules::Surface(surface_placement) = placement_context.placement else {
-        unreachable!("structure set collector requires surface placement rules");
-    };
     let bounds = context
         .feature_fields
         .structure_placement_bounds(placement_id, || {
@@ -666,9 +658,7 @@ fn collect_structure_set_candidates<'a>(
         target_min,
         target_max,
         context.biome_field.seed(),
-        placement_context.biome_id,
-        placement_context.placement_id,
-        surface_placement,
+        placement_context,
         bounds,
         |placement_anchor| {
             if context
@@ -733,12 +723,18 @@ fn visit_candidate_anchors_intersecting(
     target_min: IVec2,
     target_max: IVec2,
     world_seed: u64,
-    biome_id: &str,
-    structure_reference: &str,
-    placement: StructurePlacementRules,
+    placement_context: StructurePlacementContext<'_>,
     bounds: (IVec2, IVec2),
     mut visit: impl FnMut(IVec2),
 ) {
+    let StructurePlacementContext {
+        biome_id,
+        placement_id: structure_reference,
+        placement,
+    } = placement_context;
+    let BiomeStructurePlacementRules::Surface(placement) = placement else {
+        unreachable!("surface candidate visitor requires surface placement rules");
+    };
     let (minimum_offset, maximum_offset) = bounds;
     let minimum_candidate = target_min - maximum_offset;
     let maximum_candidate = target_max - minimum_offset;
