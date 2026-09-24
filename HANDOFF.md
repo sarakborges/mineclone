@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 6E — Regression harness e audit de connector targets
+
+Adicionada cobertura de regressão focada no resolver genérico, sem criar conteúdo artificial no jogo.
+
+Os testes unitários cobrem:
+- chain reta encerrando exatamente pelo budget de `strengthLossOnEachLoop`;
+- rotação pai→filho com face oposta e origin 3D alinhado;
+- envelope horizontal cobrindo a chain completa;
+- Structure Group determinístico para o mesmo seed e capacidade de selecionar todas as variações;
+- rejeição de peça filha cujo voxel persistente sobreporia geometria já ocupada.
+
+O audit rápido de conteúdo (`tools/check_content_references.py`) agora também indexa Structure Groups e valida todo `palette.*.connector.target` contra Structure ou Structure Group existente. Structure Sets continuam deliberadamente inválidos como target de connector.
+
+O CI padrão compila esses testes via `clippy --all-targets`; ele não executa `cargo test` no fast path.
+
 ## 2026-09-24 — Parte 6D2 — Connected pieces integradas aos candidates e rasterização
 
 As chains resolvidas agora entram no mesmo pipeline autoritativo de structures normais.

@@ -54,8 +54,31 @@ def main() -> int:
     objects = definition_ids("objects")
     errors: list[str] = []
 
+    structure_definitions: list[tuple[Path, dict]] = []
+    structure_ids: set[str] = set()
+    structure_groups: set[str] = set()
     for path in sorted((DATA / "structures").rglob("*.json")):
         definition = load_json(path)
+        structure_id = definition.get("id")
+        if not isinstance(structure_id, str) or not structure_id:
+            errors.append(f"{path.relative_to(ROOT)}: missing non-empty structure id")
+            continue
+        if structure_id in structure_ids:
+            errors.append(f"duplicate structures id: {structure_id}")
+            continue
+        structure_ids.add(structure_id)
+        group_id = definition.get("group_id")
+        if isinstance(group_id, str) and group_id:
+            if ":" in structure_id:
+                namespace, _ = structure_id.split(":", 1)
+                structure_groups.add(f"{namespace}:{group_id}")
+            else:
+                structure_groups.add(group_id)
+        structure_definitions.append((path, definition))
+
+    structure_references = structure_ids | structure_groups
+
+    for path, definition in structure_definitions:
         structure = definition.get("id", str(path.relative_to(ROOT)))
         restrictions = definition.get("restrictions") or {}
 
@@ -117,6 +140,16 @@ def main() -> int:
                     entry["object"],
                     objects,
                     "object",
+                )
+            connector = entry.get("connector")
+            if isinstance(connector, dict) and "target" in connector:
+                require(
+                    errors,
+                    structure,
+                    f"palette[{symbol!r}].connector.target",
+                    connector["target"],
+                    structure_references,
+                    "structure or structure group",
                 )
             for index, surface in enumerate(entry.get("surfaceLayers") or []):
                 require(

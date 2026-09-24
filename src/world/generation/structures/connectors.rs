@@ -322,3 +322,212 @@ fn rotation_index(rotation: StructureRotation) -> u8 {
         StructureRotation::Degrees270 => 3,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use serde_json::{Value, json};
+
+    use super::*;
+
+    fn localized(name: &str) -> Value {
+        json!({
+            "english": name,
+            "portuguese_brazil": name,
+            "spanish": name
+        })
+    }
+
+    fn registry(definitions: Vec<Value>) -> StructureRegistry {
+        let mut registry = StructureRegistry::default();
+        for definition in definitions {
+            registry.insert(
+                serde_json::from_value(definition)
+                    .expect("test structure definition must deserialize"),
+            );
+        }
+        registry
+    }
+
+    fn root_definition(target: &str, loss: f32) -> Value {
+        json!({
+            "id": "test:root",
+            "name": localized("Root"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "S": {"block": "test:block"},
+                "O": {
+                    "connector": {
+                        "target": target,
+                        "face": "right",
+                        "strength": 1.0,
+                        "strengthLossOnEachLoop": loss
+                    }
+                }
+            },
+            "layers": [{"y": 0, "rows": ["SO"]}]
+        })
+    }
+
+    fn segment_definition(id: &str, group_id: Option<&str>, chained: bool) -> Value {
+        let mut definition = json!({
+            "id": id,
+            "name": localized("Segment"),
+            "locatable": false,
+            "rotation": true,
+            "anchor": {"x": 1, "y": 0, "z": 0},
+            "palette": {
+                "I": {"connector": {"face": "left"}},
+                "S": {"block": "test:block"}
+            },
+            "layers": [{"y": 0, "rows": ["IS"]}]
+        });
+        if let Some(group_id) = group_id {
+            definition["group_id"] = json!(group_id);
+        }
+        if chained {
+            definition["palette"]["O"] = json!({
+                "connector": {
+                    "target": id,
+                    "face": "right",
+                    "strength": 1.0,
+                    "strengthLossOnEachLoop": 0.25
+                }
+            });
+            definition["layers"][0]["rows"] = json!(["ISO"]);
+        }
+        definition
+    }
+
+    #[test]
+    fn straight_chain_terminates_from_strength_loss() {
+        let registry = registry(vec![
+            root_definition("test:segment", 0.25),
+            segment_definition("test:segment", None, true),
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+
+        let pieces = resolve_connected_pieces(
+            7,
+            root,
+            StructureRotation::Degrees0,
+            IVec3::ZERO,
+            &registry,
+        );
+
+        assert_eq!(pieces.len(), 5);
+        assert_eq!(
+            pieces.iter().map(|piece| piece.origin.x).collect::<Vec<_>>(),
+            vec![0, 2, 4, 6, 8]
+        );
+    }
+
+    #[test]
+    fn rotated_parent_aligns_child_input_face_and_position() {
+        let registry = registry(vec![
+            root_definition("test:segment", 1.0),
+            segment_definition("test:segment", None, false),
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+
+        let pieces = resolve_connected_pieces(
+            11,
+            root,
+            StructureRotation::Degrees90,
+            IVec3::ZERO,
+            &registry,
+        );
+
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[1].rotation, StructureRotation::Degrees90);
+        assert_eq!(pieces[1].origin, IVec3::new(0, 0, 2));
+    }
+
+    #[test]
+    fn connector_bounds_cover_the_full_possible_chain() {
+        let registry = registry(vec![
+            root_definition("test:segment", 0.25),
+            segment_definition("test:segment", None, true),
+        ]);
+
+        assert_eq!(
+            connected_horizontal_bounds_for_reference(&registry, "test:root"),
+            Some((IVec2::ZERO, IVec2::new(8, 0)))
+        );
+    }
+
+    #[test]
+    fn group_targets_are_deterministic_and_can_select_each_member() {
+        let registry = registry(vec![
+            root_definition("test:segments", 1.0),
+            segment_definition("test:segment_a", Some("segments"), false),
+            segment_definition("test:segment_b", Some("segments"), false),
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+        let mut selected = HashSet::new();
+
+        for seed in 0..64 {
+            let first = resolve_connected_pieces(
+                seed,
+                root,
+                StructureRotation::Degrees0,
+                IVec3::ZERO,
+                &registry,
+            );
+            let second = resolve_connected_pieces(
+                seed,
+                root,
+                StructureRotation::Degrees0,
+                IVec3::ZERO,
+                &registry,
+            );
+            assert_eq!(
+                first.iter().map(|piece| piece.structure.id.as_str()).collect::<Vec<_>>(),
+                second.iter().map(|piece| piece.structure.id.as_str()).collect::<Vec<_>>()
+            );
+            selected.insert(first[1].structure.id.clone());
+        }
+
+        assert_eq!(
+            selected,
+            HashSet::from([
+                "test:segment_a".to_owned(),
+                "test:segment_b".to_owned()
+            ])
+        );
+    }
+
+    #[test]
+    fn child_that_overlaps_existing_voxels_is_rejected() {
+        let overlapping_child = json!({
+            "id": "test:overlap",
+            "name": localized("Overlap"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "S": {"block": "test:block"},
+                "I": {"connector": {"face": "left"}}
+            },
+            "layers": [{"y": 0, "rows": ["SI"]}]
+        });
+        let registry = registry(vec![
+            root_definition("test:overlap", 1.0),
+            overlapping_child,
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+
+        let pieces = resolve_connected_pieces(
+            3,
+            root,
+            StructureRotation::Degrees0,
+            IVec3::ZERO,
+            &registry,
+        );
+
+        assert_eq!(pieces.len(), 1);
+    }
+}
