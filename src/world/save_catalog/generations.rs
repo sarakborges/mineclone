@@ -40,6 +40,25 @@ struct Candidate {
     manifest: WorldManifest,
 }
 
+#[derive(Clone, Copy)]
+struct ChunkLoadRegistries<'a> {
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
+    fluids: &'a FluidRegistry,
+}
+
+impl<'a> From<SaveRegistries<'a>> for ChunkLoadRegistries<'a> {
+    fn from(registries: SaveRegistries<'a>) -> Self {
+        Self {
+            blocks: registries.blocks,
+            layers: registries.layers,
+            objects: registries.objects,
+            fluids: registries.fluids,
+        }
+    }
+}
+
 struct SnapshotCandidates {
     directory: PathBuf,
     candidates: Vec<Candidate>,
@@ -147,10 +166,7 @@ pub(crate) fn load_world(
             &pinned.directory,
             id,
             &candidate.manifest,
-            registries.blocks,
-            registries.layers,
-            registries.objects,
-            registries.fluids,
+            registries.into(),
             |snapshot| registries.validate_playable(snapshot),
         );
         match loaded {
@@ -172,31 +188,19 @@ fn load_snapshot(
     directory: &Path,
     id: &str,
     manifest: &WorldManifest,
-    blocks: &BlockRegistry,
-    layers: &LayerRegistry,
-    objects: &ObjectRegistry,
-    fluids: &FluidRegistry,
+    registries: ChunkLoadRegistries<'_>,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let file = open_snapshot_file(directory, manifest)?;
-    decode_snapshot(
-        directory, file, id, manifest, blocks, layers, objects, fluids, validate,
-    )
+    decode_snapshot(directory, file, id, manifest, registries, validate)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "snapshot decode keeps validation and content registries explicit at the trust boundary"
-)]
 fn decode_snapshot(
     directory: &Path,
     file: fs::File,
     id: &str,
     manifest: &WorldManifest,
-    blocks: &BlockRegistry,
-    layers: &LayerRegistry,
-    objects: &ObjectRegistry,
-    fluids: &FluidRegistry,
+    registries: ChunkLoadRegistries<'_>,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let snapshot = decode_snapshot_state(file, id, manifest, validate)?;
@@ -204,10 +208,10 @@ fn decode_snapshot(
     let world = load_generation_world(
         directory,
         manifest.generation,
-        blocks,
-        layers,
-        objects,
-        fluids,
+        registries.blocks,
+        registries.layers,
+        registries.objects,
+        registries.fluids,
     )?;
     Ok((snapshot, world))
 }
@@ -328,10 +332,12 @@ pub(super) fn prune_old_generations(
             directory,
             id,
             &manifest,
-            &registries.blocks,
-            &registries.layers,
-            &registries.objects,
-            &registries.fluids,
+            ChunkLoadRegistries {
+                blocks: &registries.blocks,
+                layers: &registries.layers,
+                objects: &registries.objects,
+                fluids: &registries.fluids,
+            },
             |snapshot| registries.validate_playable(snapshot),
         ) {
             Ok(_) => {
