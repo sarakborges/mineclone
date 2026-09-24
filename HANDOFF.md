@@ -1,3 +1,12 @@
+## 2026-09-24 — Target HUD stale preview lifecycle fix
+
+Corrigido o Target HUD que podia manter o último preview de bloco visível quando o restante do HUD já deveria estar oculto.
+
+- sair de Pause não força mais o root do Target HUD para Visible; o sistema de targeting decide a visibilidade a partir do target atual;
+- `update_target_hud` não roda durante `PauseState::Paused`, impedindo um target antigo de desfazer o hide aplicado ao entrar no pause;
+- quando Target HUD está configurado como Hidden ou quando não existe block target, o texto é limpo, o `BlockModel` volta para `None` e os previews de block/object são explicitamente escondidos e limpos;
+- nenhum comportamento de inventory/held-item foi alterado.
+
 ## 2026-09-24 — River graph now connects at real water-body boundaries
 
 Hydrology was reworked around physical continuity rather than trying to hide

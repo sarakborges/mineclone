@@ -40,7 +40,6 @@ impl Plugin for TargetHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_target_hud)
             .add_systems(OnEnter(PauseState::Paused), set_visibility::<TargetHudRoot, false>.run_if(in_state(GameState::Gameplay)))
-            .add_systems(OnEnter(PauseState::Running), set_visibility::<TargetHudRoot, true>.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
                 sync_target_hud_layout.run_if(in_state(GameState::Gameplay)),
@@ -49,7 +48,8 @@ impl Plugin for TargetHudPlugin {
                 Update,
                 update_target_hud
                     .after(BlockTargetingSet::Interaction)
-                    .run_if(in_state(GameState::Gameplay)),
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(PauseState::Running)),
             );
     }
 }
@@ -327,6 +327,22 @@ fn update_target_hud(
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
+
+        let mut target_text = target_text.into_inner();
+        target_text.0.clear();
+
+        let (mut model, _, mut block_visibility) = block_icon.into_inner();
+        model.set_block_id(None);
+        if *block_visibility != Visibility::Hidden {
+            *block_visibility = Visibility::Hidden;
+        }
+
+        let (mut image, mut object_visibility) = object_icon.into_inner();
+        image.image = Handle::default();
+        image.color = Color::WHITE;
+        if *object_visibility != Visibility::Hidden {
+            *object_visibility = Visibility::Hidden;
+        }
         return;
     }
 
@@ -396,6 +412,22 @@ fn update_target_hud(
         *cached_object = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
+        }
+
+        let mut target_text = target_text.into_inner();
+        target_text.0.clear();
+
+        let (mut model, _, mut block_visibility) = block_icon.into_inner();
+        model.set_block_id(None);
+        if *block_visibility != Visibility::Hidden {
+            *block_visibility = Visibility::Hidden;
+        }
+
+        let (mut image, mut object_visibility) = object_icon.into_inner();
+        image.image = Handle::default();
+        image.color = Color::WHITE;
+        if *object_visibility != Visibility::Hidden {
+            *object_visibility = Visibility::Hidden;
         }
         return;
     };
