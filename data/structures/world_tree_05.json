@@ -64,7 +64,7 @@
       "block": "asteria:log_world_tree",
       "orientation": "z",
       "connector": {
-        "target": "asteria:root_arch",
+        "target": "asteria:root_arch_diagonal",
         "face": "right",
         "strength": 1,
         "strengthLossOnEachLoop": 1,
@@ -76,7 +76,7 @@
       "block": "asteria:log_world_tree",
       "orientation": "z",
       "connector": {
-        "target": "asteria:root_arch",
+        "target": "asteria:root_arch_diagonal",
         "face": "left",
         "strength": 1,
         "strengthLossOnEachLoop": 1,
@@ -100,7 +100,7 @@
       "block": "asteria:log_world_tree",
       "orientation": "x",
       "connector": {
-        "target": "asteria:root_arch",
+        "target": "asteria:root_arch_diagonal",
         "face": "front",
         "strength": 1,
         "strengthLossOnEachLoop": 1,
@@ -136,7 +136,7 @@
       "block": "asteria:log_world_tree",
       "orientation": "y",
       "connector": {
-        "target": "asteria:root_arch",
+        "target": "asteria:root_arch_diagonal",
         "face": "back",
         "strength": 1,
         "strengthLossOnEachLoop": 1,

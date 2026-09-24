@@ -1,3 +1,20 @@
+## 2026-09-24 — Parte 7E — Root Arches diagonais separadas e direcionadas pelas raízes
+
+A variação diagonal deixou de competir aleatoriamente com arches lineares.
+
+- `asteria:root_arch_04` agora pertence exclusivamente ao Structure Group `asteria:root_arch_diagonal`;
+- `asteria:root_arch` contém apenas as três variações predominantemente lineares;
+- outputs das cinco World Trees foram classificados pela direção radial authored da root tip:
+  - roots com componente secundário >= 55% da componente dominante usam `asteria:root_arch_diagonal`;
+  - roots predominantemente cardinais continuam usando `asteria:root_arch`;
+- quando duas root tips compartilhavam o mesmo palette symbol mas pertenciam a categorias diferentes, o symbol foi dividido mantendo exatamente o mesmo bloco/orientation/moss metadata e alterando apenas o connector target;
+- resultado por World Tree (linear/diagonal): 4/4, 4/8, 4/4, 3/5, 5/4;
+- ground-fit local introduzido na Parte 7D continua autoritativo para ambas as famílias.
+
+`WORLDGEN_VERSION` passou de 6 para 7 porque a seleção determinística de Root Arches mudou.
+
+Próximo passo: validar CI e então substituir o protótipo visual da cave entrance por famílias authored reta/curva/espiral, mantendo o mesmo sistema de connectors.
+
 ## 2026-09-24 — Parte 7D — Teste de group selection migrado para resolver com ground-fit
 
 Os dois calls restantes do teste de seleção determinística de Structure Group agora passam a callback identidade de Y exigida pelo resolver único. Não há mais call site usando a assinatura removida.
