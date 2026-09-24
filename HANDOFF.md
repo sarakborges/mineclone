@@ -1,3 +1,20 @@
+## 2026-09-24 — Creature contact broadphase substitui all-pairs O(n²)
+
+A colisão creature↔creature deixou de executar `iter_combinations_mut::<2>()` sobre
+toda a população em até quatro passes por frame.
+
+- cada pass agora constrói um grid horizontal de 2 blocos;
+- cada creature é inserida em todas as células tocadas pelo AABB usado pela física;
+- somente pares que compartilham ao menos uma célula chegam ao narrow-phase;
+- pares duplicados por ocuparem múltiplas células são deduplicados antes da resolução;
+- `contact`, terrain sweep, push sharing e os quatro passes máximos permanecem os mesmos,
+  portanto a mudança é de broadphase e não de semântica física;
+- o broadphase é reconstruído a cada pass porque as próprias resoluções podem mover
+  creatures entre células.
+
+Isso substitui até milhares/dezenas de milhares de testes AABB irrelevantes por frame
+por trabalho proporcional à densidade local de entidades.
+
 ## 2026-09-24 — StructureField: mapa procedural lazy de roots de structures
 
 Structures de superfície agora têm uma camada de localização separada do resolver pesado,

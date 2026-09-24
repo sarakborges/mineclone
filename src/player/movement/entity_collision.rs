@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
@@ -16,14 +19,67 @@ const CONTACT_EPSILON: f32 = 0.0001;
 const PLAYER_PUSH_SHARE: f32 = 0.35;
 const CREATURE_PUSH_SHARE: f32 = 0.5;
 const MAX_CONTACT_PASSES: usize = 4;
+const CONTACT_GRID_CELL_SIZE: f32 = 2.0;
 
 type Bounds = (Vec3, Vec3);
 type CreatureContacts<'w, 's> = Query<
     'w,
     's,
-    (&'static mut Transform, &'static CreatureTargetCollider),
+    (
+        Entity,
+        &'static mut Transform,
+        &'static CreatureTargetCollider,
+    ),
     (With<CreatureInstance>, Without<PlayerEntity>),
 >;
+
+#[derive(Default)]
+struct CreatureContactBroadphase {
+    buckets: HashMap<IVec2, Vec<Entity>>,
+    pairs: Vec<(Entity, Entity)>,
+    seen_pairs: HashSet<(Entity, Entity)>,
+}
+
+impl CreatureContactBroadphase {
+    fn rebuild(&mut self, creatures: &CreatureContacts<'_, '_>) {
+        self.buckets.clear();
+        self.pairs.clear();
+        self.seen_pairs.clear();
+
+        for (entity, transform, collider) in creatures.iter() {
+            let (minimum, maximum) = collider.0.bounds(transform.translation);
+            let minimum_cell = horizontal_contact_cell(minimum);
+            let maximum_cell = horizontal_contact_cell(maximum);
+
+            for z in minimum_cell.y..=maximum_cell.y {
+                for x in minimum_cell.x..=maximum_cell.x {
+                    self.buckets
+                        .entry(IVec2::new(x, z))
+                        .or_default()
+                        .push(entity);
+                }
+            }
+        }
+
+        for bucket in self.buckets.values() {
+            for first_index in 0..bucket.len() {
+                for second_index in (first_index + 1)..bucket.len() {
+                    let pair = (bucket[first_index], bucket[second_index]);
+                    if self.seen_pairs.insert(pair) {
+                        self.pairs.push(pair);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn horizontal_contact_cell(position: Vec3) -> IVec2 {
+    IVec2::new(
+        (position.x / CONTACT_GRID_CELL_SIZE).floor() as i32,
+        (position.z / CONTACT_GRID_CELL_SIZE).floor() as i32,
+    )
+}
 
 fn player_bounds(eye: Vec3) -> Bounds {
     let feet = eye.y - PLAYER_EYE_HEIGHT;
@@ -185,7 +241,7 @@ pub(super) fn resolve_player_creature_contacts(
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
         let mut had_contact = false;
-        for (mut creature, collider) in &mut creatures {
+        for (_, mut creature, collider) in &mut creatures {
             let Some(contact) = contact(
                 player_bounds(player.translation),
                 collider.0.bounds(creature.translation),
@@ -217,13 +273,21 @@ pub(super) fn resolve_player_creature_contacts(
 pub(super) fn resolve_creature_creature_contacts(
     world: Res<VoxelWorld>,
     mut creatures: CreatureContacts<'_, '_>,
+    mut broadphase: Local<CreatureContactBroadphase>,
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
+        broadphase.rebuild(&creatures);
         let mut had_contact = false;
-        let mut pairs = creatures.iter_combinations_mut::<2>();
-        while let Some([(mut first, first_collider), (mut second, second_collider)]) =
-            pairs.fetch_next()
-        {
+
+        for pair_index in 0..broadphase.pairs.len() {
+            let (first_entity, second_entity) = broadphase.pairs[pair_index];
+            let Ok([
+                (_, mut first, first_collider),
+                (_, mut second, second_collider),
+            ]) = creatures.get_many_mut([first_entity, second_entity])
+            else {
+                continue;
+            };
             let Some(contact) = contact(
                 first_collider.0.bounds(first.translation),
                 second_collider.0.bounds(second.translation),
