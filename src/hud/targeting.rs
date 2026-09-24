@@ -118,26 +118,30 @@ struct TargetHudContent<'w> {
     tool_categories: Res<'w, ToolCategoryRegistry>,
 }
 
+type TargetBlockIconQuery<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut BlockModel,
+        &'static MaterialNode<BlockIconMaterial>,
+        &'static mut Visibility,
+    ),
+    (With<TargetBlockModel>, Without<TargetObjectIcon>),
+>;
+
+type TargetObjectIconQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut ImageNode, &'static mut Visibility),
+    (With<TargetObjectIcon>, Without<TargetBlockModel>),
+>;
+
 #[derive(SystemParam)]
 struct TargetHudView<'w, 's> {
     root_visibility: Single<'w, 's, &'static mut Visibility, With<TargetHudRoot>>,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
-    icon: Single<
-        'w,
-        's,
-        (
-            &'static mut BlockModel,
-            &'static MaterialNode<BlockIconMaterial>,
-            &'static mut Visibility,
-        ),
-        (With<TargetBlockModel>, Without<TargetObjectIcon>),
-    >,
-    object_icon: Single<
-        'w,
-        's,
-        (&'static mut ImageNode, &'static mut Visibility),
-        (With<TargetObjectIcon>, Without<TargetBlockModel>),
-    >,
+    icon: TargetBlockIconQuery<'w, 's>,
+    object_icon: TargetObjectIconQuery<'w, 's>,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
 

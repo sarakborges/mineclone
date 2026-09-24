@@ -520,13 +520,6 @@ fn thin_hollow_log_shell(
     }
 }
 
-fn is_macro_boundary(face: BlockFace, depth: usize) -> bool {
-    match face {
-        BlockFace::Right | BlockFace::Top | BlockFace::Front => depth == EDGE - 1,
-        BlockFace::Left | BlockFace::Bottom | BlockFace::Back => depth == 0,
-    }
-}
-
 fn macro_uv(face: BlockFace, point: Vec3) -> [f32; 2] {
     match face {
         BlockFace::Right => [1.0 - point.z, 1.0 - point.y],
