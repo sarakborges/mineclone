@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6F — Re-export do resolver manual corrigido
+
+O CI da integração de `/place` encontrou apenas o wiring de visibilidade entre `generation::structures` e `generation`. O resolver compartilhado e `ResolvedConnectedPiece` agora são reexportados pelo módulo público interno correto. `ResolvedSetPiece` deixou de ser exposto porque o chat não depende mais desse tipo após migrar para connected pieces.
+
 ## 2026-09-24 — Parte 6F — /place usa o mesmo resolver de Structure Connectors
 
 Placement manual deixou de tratar uma Structure conectável como apenas sua peça raiz.

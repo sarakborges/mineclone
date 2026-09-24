@@ -38,7 +38,7 @@ pub(crate) use self::{
     connectors::{
         ResolvedConnectedPiece, resolve_connected_piece_forest, resolve_connected_pieces,
     },
-    set::{ResolvedSetPiece, resolve_set_pieces},
+    set::resolve_set_pieces,
 };
 
 use self::{geometry::rectangles_overlap, hash::{avalanche, unit_interval}};

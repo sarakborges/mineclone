@@ -37,9 +37,9 @@ pub(crate) use self::{
     fluids::authored_surface_fluid_id_for_position,
 };
 pub(crate) use self::structures::{
-    ResolvedSetPiece, located_structure_origins_in_chunk, resolve_set_pieces,
-    structure_candidate_anchor, structure_candidate_probe,
-    surface_layer_placements,
+    ResolvedConnectedPiece, located_structure_origins_in_chunk,
+    resolve_connected_piece_forest, resolve_connected_pieces, resolve_set_pieces,
+    structure_candidate_anchor, structure_candidate_probe, surface_layer_placements,
 };
 use self::{
     density::{DensityPassContext, sample_density_field},
