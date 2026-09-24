@@ -419,6 +419,7 @@ fn sync_world_objects(
 
     let sync_started = Instant::now();
     let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
+    let loaded_chunk_count = loaded_coords.len();
     let retired = store
         .synced_chunk_revisions
         .keys()
@@ -512,7 +513,7 @@ fn sync_world_objects(
     if elapsed >= SLOW_WORLD_OBJECT_SYNC_WARNING {
         warn!(
             "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} loaded_chunks={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
-            loaded_coords.len(),
+            loaded_chunk_count,
             store.materialized_chunk_count(),
             store.materialized_object_count(),
             elapsed.as_secs_f64() * 1_000.0,

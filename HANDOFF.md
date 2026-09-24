@@ -1,3 +1,9 @@
+### CI follow-up — preserve loaded chunk diagnostic count
+
+O diagnóstico de world objects agora salva `loaded_chunk_count` antes de consumir
+`loaded_coords` no loop de materialização. Isso corrige o borrow-after-move apontado pelo
+Clippy sem alterar o sync.
+
 ## 2026-09-24 — Performance diagnostics agora cobrem world objects
 
 O diagnóstico periódico de render foi ampliado para medir o subsystem que estava invisível nos
