@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 7D — Teste de group selection migrado para resolver com ground-fit
+
+Os dois calls restantes do teste de seleção determinística de Structure Group agora passam a callback identidade de Y exigida pelo resolver único. Não há mais call site usando a assinatura removida.
+
 ## 2026-09-24 — Parte 7D — Wrappers antigos do connector resolver removidos
 
 O CI da correção de ground-fit mostrou que os wrappers antigos sem callback de ground-fit ficaram órfãos. Eles foram removidos em vez de mantidos com suppressions. Produção e testes agora exercitam diretamente `resolve_connected_pieces_with_ground_fit` / `resolve_connected_piece_forest_with_ground_fit`; testes puramente geométricos usam uma callback identidade que preserva o Y authored.

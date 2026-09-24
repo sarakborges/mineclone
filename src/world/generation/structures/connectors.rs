@@ -676,6 +676,7 @@ mod tests {
                 StructureRotation::Degrees0,
                 IVec3::ZERO,
                 &registry,
+                |_, _, geometric_origin| Some(geometric_origin.y),
             );
             let second = resolve_connected_pieces_with_ground_fit(
                 seed,
@@ -683,6 +684,7 @@ mod tests {
                 StructureRotation::Degrees0,
                 IVec3::ZERO,
                 &registry,
+                |_, _, geometric_origin| Some(geometric_origin.y),
             );
             assert_eq!(
                 first.iter().map(|piece| piece.structure.id.as_str()).collect::<Vec<_>>(),
