@@ -33,7 +33,7 @@
     },
     "O": {
       "connector": {
-        "target": "asteria:cavern_tunnel_straight",
+        "target": "asteria:cavern_tunnel_segment",
         "face": "front",
         "strength": 1,
         "strengthLossOnEachLoop": 0.04

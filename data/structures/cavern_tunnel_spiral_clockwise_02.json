@@ -1,6 +1,6 @@
 {
   "id": "asteria:cavern_tunnel_spiral_clockwise_02",
-  "group_id": "cavern_tunnel_spiral_clockwise",
+  "group_id": "cavern_tunnel_segment",
   "name": {
     "english": "Wide Clockwise Spiral Cavern Tunnel",
     "portuguese_brazil": "Túnel Espiral Horário Largo de Caverna",
@@ -38,7 +38,7 @@
     },
     "O": {
       "connector": {
-        "target": "asteria:cavern_tunnel_spiral_clockwise",
+        "target": "asteria:cavern_tunnel_segment",
         "face": "right",
         "strength": 1,
         "strengthLossOnEachLoop": 0.04

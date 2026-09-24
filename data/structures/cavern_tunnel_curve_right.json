@@ -1,6 +1,6 @@
 {
   "id": "asteria:cavern_tunnel_curve_right",
-  "group_id": "cavern_tunnel_curve_entry",
+  "group_id": "cavern_tunnel_segment",
   "name": {
     "english": "Right Curving Cavern Tunnel",
     "portuguese_brazil": "Túnel Curvo de Caverna à Direita",
@@ -38,7 +38,7 @@
     },
     "O": {
       "connector": {
-        "target": "asteria:cavern_tunnel_straight",
+        "target": "asteria:cavern_tunnel_segment",
         "face": "right",
         "strength": 1,
         "strengthLossOnEachLoop": 0.04

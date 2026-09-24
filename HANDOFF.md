@@ -1,3 +1,20 @@
+## 2026-09-24 — Parte 7G — Cave tunnels unificados em um único Structure Group aleatório
+
+A seleção de rota deixou de ficar presa em famílias reta/curva/espiral.
+
+- todas as nove peças de tunnel existentes agora pertencem ao único group `asteria:cavern_tunnel_segment`;
+- todas as cinco variações de `asteria:cavern_entrance_start` apontam para esse mesmo group;
+- todo output de tunnel volta a apontar para `asteria:cavern_tunnel_segment`;
+- a cada hop, o resolver escolhe deterministicamente pelo world seed entre peças retas, curvas para esquerda/direita e as variações antes usadas pelas espirais;
+- não existe mais state machine implícita de handedness nem cadeia forçada `straight -> straight` / `spiral -> spiral`;
+- sequências retas, curvas longas, zigue-zagues e espirais passam a emergir da seleção aleatória de peças compatíveis;
+- a geometria authored de cada peça foi preservada; só `group_id` e `connector.target` mudaram;
+- input/output continuam usando o mesmo attachment contract, portanto rotação e encaixe seguem no resolver genérico.
+
+`WORLDGEN_VERSION` passou de 8 para 9 porque a rota determinística das cave entrances mudou.
+
+Próximo passo: validar visualmente a distribuição e, se necessário, adicionar novas variações ao mesmo group sem criar novas famílias de lógica.
+
 ## 2026-09-24 — Parte 7F — Cave entrances redesenhadas com famílias reta, curva e espiral
 
 O protótipo antigo de `cavern_entrance_start + cavern_tunnel_segment_01..03` foi removido por completo e substituído por conteúdo authored novo sobre o mesmo resolver genérico.

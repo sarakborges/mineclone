@@ -1,6 +1,6 @@
 {
   "id": "asteria:cavern_tunnel_straight_03",
-  "group_id": "cavern_tunnel_straight",
+  "group_id": "cavern_tunnel_segment",
   "name": {
     "english": "Rough Cavern Tunnel",
     "portuguese_brazil": "Túnel Irregular de Caverna",
@@ -38,7 +38,7 @@
     },
     "O": {
       "connector": {
-        "target": "asteria:cavern_tunnel_straight",
+        "target": "asteria:cavern_tunnel_segment",
         "face": "front",
         "strength": 1,
         "strengthLossOnEachLoop": 0.04
