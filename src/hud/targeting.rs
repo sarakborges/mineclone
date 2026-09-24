@@ -126,19 +126,36 @@ type TargetBlockIconQuery<'w, 's> = Single<
         &'static MaterialNode<BlockIconMaterial>,
         &'static mut Visibility,
     ),
-    (With<TargetBlockModel>, Without<TargetObjectIcon>),
+    (
+        With<TargetBlockModel>,
+        Without<TargetObjectIcon>,
+        Without<TargetHudRoot>,
+    ),
 >;
 
 type TargetObjectIconQuery<'w, 's> = Single<
     'w,
     's,
     (&'static mut ImageNode, &'static mut Visibility),
-    (With<TargetObjectIcon>, Without<TargetBlockModel>),
+    (
+        With<TargetObjectIcon>,
+        Without<TargetBlockModel>,
+        Without<TargetHudRoot>,
+    ),
 >;
 
 #[derive(SystemParam)]
 struct TargetHudView<'w, 's> {
-    root_visibility: Single<'w, 's, &'static mut Visibility, With<TargetHudRoot>>,
+    root_visibility: Single<
+        'w,
+        's,
+        &'static mut Visibility,
+        (
+            With<TargetHudRoot>,
+            Without<TargetBlockModel>,
+            Without<TargetObjectIcon>,
+        ),
+    >,
     target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
     icon: TargetBlockIconQuery<'w, 's>,
     object_icon: TargetObjectIconQuery<'w, 's>,
