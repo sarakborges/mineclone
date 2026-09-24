@@ -9,6 +9,7 @@ use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_material::BiomeMaterialLayer,
+    biome_structure::BiomeStructurePlacementRules,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, StructurePlacementRules},
     biome_surface_fluid::BiomeSurfaceFluid,
@@ -248,7 +249,7 @@ impl BiomeDefinition {
 pub(crate) struct BiomeStructurePlacement {
     pub(crate) biome_id: String,
     pub(crate) structure_id: String,
-    pub(crate) placement: StructurePlacementRules,
+    pub(crate) placement: BiomeStructurePlacementRules,
 }
 
 #[derive(Clone, Resource, Default)]
@@ -281,7 +282,7 @@ impl BiomeRegistry {
             .map(|structure| BiomeStructurePlacement {
                 biome_id: biome_id.clone(),
                 structure_id: structure.id.clone(),
-                placement: structure.placement,
+                placement: structure.placement_for_biome(&biome_id, definition.kind),
             })
             .collect::<Vec<_>>();
 

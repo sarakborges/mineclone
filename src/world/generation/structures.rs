@@ -13,7 +13,7 @@ use smallvec::SmallVec;
 
 use crate::{
     content::{
-        biome_structure::StructurePlacementRules,
+        biome_structure::{BiomeStructurePlacementRules, StructurePlacementRules},
         block::BlockRegistry,
         fluid::FluidRegistry,
         layer::LayerFace,
@@ -43,7 +43,10 @@ pub(crate) use self::{
 
 use self::{geometry::rectangles_overlap, hash::{avalanche, unit_interval}};
 use self::{
-    placement::{candidate_anchor, structure_member_hash},
+    placement::{
+        candidate_anchor, structure_member_hash, volume_site_is_selected,
+        volume_structure_member_hash,
+    },
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
@@ -73,7 +76,7 @@ struct StructureCandidate<'a> {
 struct StructurePlacementContext<'a> {
     biome_id: &'a str,
     placement_id: &'a str,
-    placement: StructurePlacementRules,
+    placement: BiomeStructurePlacementRules,
 }
 
 struct StructureRasterizationContext<'a> {
@@ -487,26 +490,48 @@ fn collect_structure_candidates<'a>(
     placement_context: StructurePlacementContext<'a>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
-    if context
-        .structure_sets
-        .get(placement_context.placement_id)
-        .is_some()
-    {
-        collect_structure_set_candidates(
-            target_min,
-            target_max,
-            context,
-            placement_context,
-            candidates,
-        );
-    } else {
-        collect_direct_structure_candidates(
-            target_min,
-            target_max,
-            context,
-            placement_context,
-            candidates,
-        );
+    match placement_context.placement {
+        BiomeStructurePlacementRules::Surface(_) => {
+            if context
+                .structure_sets
+                .get(placement_context.placement_id)
+                .is_some()
+            {
+                collect_structure_set_candidates(
+                    target_min,
+                    target_max,
+                    context,
+                    placement_context,
+                    candidates,
+                );
+            } else {
+                collect_direct_structure_candidates(
+                    target_min,
+                    target_max,
+                    context,
+                    placement_context,
+                    candidates,
+                );
+            }
+        }
+        BiomeStructurePlacementRules::Volume(placement) => {
+            debug_assert!(
+                context
+                    .structure_sets
+                    .get(placement_context.placement_id)
+                    .is_none(),
+                "validated volume placement cannot reference a Structure Set"
+            );
+            collect_volume_structure_candidates(
+                target_min,
+                target_max,
+                context,
+                placement_context.biome_id,
+                placement_context.placement_id,
+                placement,
+                candidates,
+            );
+        }
     }
 }
 
@@ -519,6 +544,9 @@ fn collect_direct_structure_candidates<'a>(
 ) {
     let biome_id = placement_context.biome_id;
     let placement_id = placement_context.placement_id;
+    let BiomeStructurePlacementRules::Surface(surface_placement) = placement_context.placement else {
+        unreachable!("direct surface structure collector requires surface placement rules");
+    };
     let bounds = context
         .feature_fields
         .structure_placement_bounds(placement_id, || {
@@ -537,7 +565,9 @@ fn collect_direct_structure_candidates<'a>(
         target_min,
         target_max,
         context.biome_field.seed(),
-        placement_context,
+        placement_context.biome_id,
+        placement_context.placement_id,
+        surface_placement,
         bounds,
         |anchor| {
             let member_hash = structure_member_hash(
@@ -617,6 +647,9 @@ fn collect_structure_set_candidates<'a>(
         .structure_sets
         .get(placement_id)
         .expect("validated structure set placement must resolve");
+    let BiomeStructurePlacementRules::Surface(surface_placement) = placement_context.placement else {
+        unreachable!("structure set collector requires surface placement rules");
+    };
     let bounds = context
         .feature_fields
         .structure_placement_bounds(placement_id, || {
@@ -633,7 +666,9 @@ fn collect_structure_set_candidates<'a>(
         target_min,
         target_max,
         context.biome_field.seed(),
-        placement_context,
+        placement_context.biome_id,
+        placement_context.placement_id,
+        surface_placement,
         bounds,
         |placement_anchor| {
             if context
@@ -698,15 +733,12 @@ fn visit_candidate_anchors_intersecting(
     target_min: IVec2,
     target_max: IVec2,
     world_seed: u64,
-    placement_context: StructurePlacementContext<'_>,
+    biome_id: &str,
+    structure_reference: &str,
+    placement: StructurePlacementRules,
     bounds: (IVec2, IVec2),
     mut visit: impl FnMut(IVec2),
 ) {
-    let StructurePlacementContext {
-        biome_id,
-        placement_id: structure_reference,
-        placement,
-    } = placement_context;
     let (minimum_offset, maximum_offset) = bounds;
     let minimum_candidate = target_min - maximum_offset;
     let maximum_candidate = target_max - minimum_offset;
@@ -740,6 +772,178 @@ fn visit_candidate_anchors_intersecting(
             }
         }
     }
+}
+
+fn collect_volume_structure_candidates<'a>(
+    target_min: IVec2,
+    target_max: IVec2,
+    context: &'a ChunkGenerationContext<'_>,
+    biome_id: &'a str,
+    placement_id: &'a str,
+    placement: crate::content::biome_structure::VolumeStructurePlacementRules,
+    candidates: &mut Vec<StructureCandidate<'a>>,
+) {
+    let biome = context
+        .biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("missing volume biome definition: {biome_id}"));
+    let range = biome
+        .vertical_range
+        .unwrap_or_else(|| panic!("volume biome {biome_id} with structures must define verticalRange"));
+    let bounds = context
+        .feature_fields
+        .structure_placement_bounds(placement_id, || {
+            connectors::connected_horizontal_bounds_for_reference(
+                context.structures,
+                placement_id,
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "volume biome {biome_id} references missing structure or structure group: {placement_id}"
+            )
+        });
+
+    let candidate_min = target_min - bounds.1;
+    let candidate_max = target_max - bounds.0;
+    let region = context.biome_field.volume_region_in_bounds(
+        Vec3::new(candidate_min.x as f32, range.min, candidate_min.y as f32),
+        Vec3::new(
+            candidate_max.x.saturating_add(1) as f32,
+            range.max + 1.0,
+            candidate_max.y.saturating_add(1) as f32,
+        ),
+    );
+
+    for volume_anchor in context.biome_field.volume_anchors_in_region(&region) {
+        if volume_anchor.id != biome_id {
+            continue;
+        }
+        let anchor = volume_anchor.position.floor().as_ivec3();
+        if anchor.x < candidate_min.x
+            || anchor.x > candidate_max.x
+            || anchor.z < candidate_min.y
+            || anchor.z > candidate_max.y
+            || anchor.y as f32 < range.min
+            || anchor.y as f32 > range.max
+        {
+            continue;
+        }
+
+        let Some(selection) = context
+            .biome_field
+            .volume_selection_in_region(volume_anchor.position, &region)
+        else {
+            continue;
+        };
+        if context.biome_field.volume_biome_id(selection) != biome_id
+            || !volume_site_is_selected(
+                context.biome_field.seed(),
+                biome_id,
+                placement_id,
+                placement,
+                anchor,
+            )
+        {
+            continue;
+        }
+
+        let member_hash = volume_structure_member_hash(
+            context.biome_field.seed(),
+            biome_id,
+            placement_id,
+            anchor,
+        );
+        let structure = context
+            .structures
+            .select_for_reference(placement_id, member_hash)
+            .unwrap_or_else(|| {
+                panic!(
+                    "volume biome {biome_id} references empty structure group: {placement_id}"
+                )
+            });
+        let rotation = structure.rotation_for_hash(member_hash.rotate_left(23));
+        if !volume_root_satisfies_restrictions(
+            biome_id,
+            structure,
+            rotation,
+            anchor,
+            context,
+            &region,
+        ) {
+            continue;
+        }
+
+        let pieces = connectors::resolve_connected_pieces(
+            context.biome_field.seed(),
+            structure,
+            rotation,
+            anchor,
+            context.structures,
+        );
+        let Some((minimum, maximum)) = connected_piece_bounds(&pieces) else {
+            continue;
+        };
+        if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+            continue;
+        }
+
+        for (piece_index, piece) in pieces.into_iter().enumerate() {
+            candidates.push(StructureCandidate {
+                biome_id,
+                placement_id,
+                structure: piece.structure,
+                rotation: piece.rotation,
+                placement_anchor: anchor.xz(),
+                anchor: piece.origin.xz(),
+                origin_y: piece.origin.y,
+                primary_placement_piece: piece_index == 0,
+                priority: structure.priority,
+                reserve_space: structure.generation.reserve_space,
+                conflict_groups: &structure.conflict_groups,
+                minimum,
+                maximum,
+            });
+        }
+    }
+}
+
+fn volume_root_satisfies_restrictions(
+    biome_id: &str,
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+    origin: IVec3,
+    context: &ChunkGenerationContext<'_>,
+    region: &crate::world::biome_field::VolumeBiomeRegion,
+) -> bool {
+    let restrictions = &structure.restrictions;
+    let base_y = origin.y + structure.min_y_offset();
+    if restrictions.min_y.is_some_and(|minimum| base_y < minimum)
+        || restrictions.max_y.is_some_and(|maximum| base_y > maximum)
+        || !restrictions.ground_blocks.is_empty()
+        || restrictions.requires_dry_ground
+        || !restrictions.proximity.is_empty()
+    {
+        return false;
+    }
+
+    if restrictions.required_biome_coverage <= 0.0 {
+        return true;
+    }
+
+    let voxels = structure.voxels();
+    let matching = voxels
+        .iter()
+        .filter(|voxel| {
+            let position = origin + rotation.rotate_offset(voxel.offset);
+            context
+                .biome_field
+                .volume_selection_in_region(position.as_vec3() + Vec3::splat(0.5), region)
+                .is_some_and(|selection| context.biome_field.volume_biome_id(selection) == biome_id)
+        })
+        .count();
+    let coverage = matching as f32 / voxels.len().max(1) as f32;
+    coverage + f32::EPSILON >= restrictions.required_biome_coverage
 }
 
 fn connected_piece_bounds(

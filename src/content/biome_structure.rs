@@ -1,7 +1,8 @@
 use serde::Deserialize;
 
 use super::{
-    biome::BiomeDefinition, structure::StructureRegistry,
+    biome::{BiomeDefinition, BiomeKind},
+    structure::StructureRegistry,
     structure_set::StructureSetRegistry,
 };
 
@@ -31,11 +32,76 @@ impl StructurePlacementRules {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeStructurePlacementRules {
+    pub chance: f32,
+}
+
+impl VolumeStructurePlacementRules {
+    fn validate(self, biome_id: &str, structure_id: &str) {
+        assert!(
+            self.chance.is_finite() && (0.0..=1.0).contains(&self.chance),
+            "volume biome {biome_id} structure {structure_id} volumePlacement chance must be between 0 and 1"
+        );
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BiomeStructurePlacementRules {
+    Surface(StructurePlacementRules),
+    Volume(VolumeStructurePlacementRules),
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeStructure {
     pub id: String,
-    pub placement: StructurePlacementRules,
+    #[serde(default)]
+    pub placement: Option<StructurePlacementRules>,
+    #[serde(default)]
+    pub volume_placement: Option<VolumeStructurePlacementRules>,
+}
+
+impl BiomeStructure {
+    pub(crate) fn placement_for_biome(
+        &self,
+        biome_id: &str,
+        kind: BiomeKind,
+    ) -> BiomeStructurePlacementRules {
+        match kind {
+            BiomeKind::Surface => {
+                assert!(
+                    self.volume_placement.is_none(),
+                    "surface biome {biome_id} structure {} cannot define volumePlacement",
+                    self.id
+                );
+                let placement = self.placement.unwrap_or_else(|| {
+                    panic!(
+                        "surface biome {biome_id} structure {} must define placement",
+                        self.id
+                    )
+                });
+                placement.validate(biome_id, &self.id);
+                BiomeStructurePlacementRules::Surface(placement)
+            }
+            BiomeKind::Volume => {
+                assert!(
+                    self.placement.is_none(),
+                    "volume biome {biome_id} structure {} cannot define surface placement",
+                    self.id
+                );
+                let placement = self.volume_placement.unwrap_or_else(|| {
+                    panic!(
+                        "volume biome {biome_id} structure {} must define volumePlacement",
+                        self.id
+                    )
+                });
+                placement.validate(biome_id, &self.id);
+                BiomeStructurePlacementRules::Volume(placement)
+            }
+        }
+    }
 }
 
 impl BiomeDefinition {
@@ -60,7 +126,20 @@ impl BiomeDefinition {
                 self.id,
                 structure.id
             );
-            structure.placement.validate(&self.id, &structure.id);
+            let placement = structure.placement_for_biome(&self.id, self.kind);
+            if matches!(placement, BiomeStructurePlacementRules::Volume(_)) {
+                assert!(
+                    structure_sets.get(&structure.id).is_none(),
+                    "volume biome {} structure {} must reference a Structure or Structure Group, not a Structure Set",
+                    self.id,
+                    structure.id
+                );
+                assert!(
+                    self.vertical_range.is_some(),
+                    "volume biome {} with structures must define verticalRange",
+                    self.id
+                );
+            }
         }
     }
 }

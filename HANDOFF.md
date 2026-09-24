@@ -1,3 +1,24 @@
+## 2026-09-24 — Parte 6H — Volume biomes podem iniciar Structure connector chains
+
+Foi removida a dependência implícita de surface biome para toda Structure placement.
+
+O schema de biome agora diferencia explicitamente:
+- surface biome: `placement { spacing, chance, jitter }`, igual ao comportamento existente;
+- volume biome: `volumePlacement { chance }`.
+
+Volume placements:
+- usam os próprios sites 3D autoritativos do `BiomeField`; não existe uma segunda grid específica de caves;
+- só aceitam Structure ou Structure Group como root, não Structure Set;
+- exigem `verticalRange` no volume biome;
+- aplicam chance deterministicamente por world seed + biome + structure reference + posição 3D;
+- confirmam que o volume biome é o vencedor efetivo naquele site antes de gerar;
+- usam a posição 3D do site como origin da root e dali em diante passam pelo mesmo resolver de connectors;
+- suportam `minY`, `maxY` e `requiredBiomeCoverage` no volume; restrictions estritamente de superfície (`groundBlocks`, `requiresDryGround`, `proximity`) tornam a candidate inválida em vez de serem silenciosamente reinterpretadas.
+
+O /locate atual continua percorrendo apenas placements de surface grid; volume-root structures deverão permanecer não-locatable até o caminho de locate 3D ser implementado em uma etapa própria.
+
+Nenhuma cave entrance authored foi adicionada ainda.
+
 ## 2026-09-24 — Parte 6G — Iteração sobre connector cache ajustada
 
 Após `connector_points()` passar de `Vec` reconstruído para slice pré-compilada, quatro call sites ainda usavam `.into_iter()`. Foram convertidos para `.iter()` conforme o lint autoritativo; nenhuma semântica mudou e nenhum warning foi suprimido.

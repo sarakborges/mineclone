@@ -9,6 +9,7 @@ use bevy::{
 use crate::{
     content::{
         biome::{BiomeKind, BiomeRegistry},
+        biome_structure::BiomeStructurePlacementRules,
         block::BlockRegistry,
         fluid::FluidRegistry,
         structure::StructureRegistry,
@@ -412,7 +413,9 @@ fn locate_structure(
             continue;
         }
 
-        let placement = biome_structure.placement;
+        let BiomeStructurePlacementRules::Surface(placement) = biome_structure.placement else {
+            continue;
+        };
         let spacing = placement.spacing;
         let center_cell = IVec2::new(
             player_horizontal.x.div_euclid(spacing),
