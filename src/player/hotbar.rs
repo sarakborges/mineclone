@@ -153,10 +153,6 @@ impl PlayerHotbar {
         Ok(restored)
     }
 
-    pub(crate) fn set_selected_item(&mut self, item: Option<&'static str>) {
-        self.set_selected_stack(item.map(ItemStack::new));
-    }
-
     pub(crate) fn set_selected_stack(&mut self, item: Option<ItemStack>) {
         self.slots[self.selected_slot] = item;
     }
