@@ -87,7 +87,14 @@ where
         spec.ocean_threshold,
         &mut surface_sample_at,
     ) {
-        return None;
+        straighten_horizontal_path(&mut path.points);
+        if river_path_crosses_disabled_biome(
+            &path.points,
+            spec.ocean_threshold,
+            &mut surface_sample_at,
+        ) {
+            return None;
+        }
     }
     let mut surface_elevation_at = |position| surface_sample_at(position).elevation;
     constrain_river_path_to_terrain(
@@ -181,6 +188,22 @@ fn truncate_river_at_ocean_mouth(
     }
 }
 
+fn straighten_horizontal_path(points: &mut [Vec3]) {
+    let Some((&first, rest)) = points.split_first() else {
+        return;
+    };
+    let Some(last) = rest.last().copied() else {
+        return;
+    };
+    let count = points.len().saturating_sub(1).max(1);
+
+    for (index, point) in points.iter_mut().enumerate() {
+        let t = index as f32 / count as f32;
+        point.x = lerp(first.x, last.x, t);
+        point.z = lerp(first.z, last.z, t);
+    }
+}
+
 fn river_path_crosses_disabled_biome(
     points: &[Vec3],
     ocean_threshold: f32,
@@ -245,6 +268,21 @@ mod tests {
         let source = node(Vec2::ZERO, 80.0);
 
         assert_eq!(river_height(source, 64.0), 78.0);
+    }
+
+    #[test]
+    fn straightening_preserves_heights_and_removes_horizontal_meander() {
+        let mut points = [
+            Vec3::new(0.0, 12.0, 0.0),
+            Vec3::new(5.0, 10.0, 8.0),
+            Vec3::new(10.0, 8.0, 0.0),
+        ];
+
+        straighten_horizontal_path(&mut points);
+
+        assert_eq!(points[0], Vec3::new(0.0, 12.0, 0.0));
+        assert_eq!(points[1], Vec3::new(5.0, 10.0, 0.0));
+        assert_eq!(points[2], Vec3::new(10.0, 8.0, 0.0));
     }
 
     #[test]

@@ -127,7 +127,9 @@ where
                 // A low continentalness value alone does not imply actual water:
                 // at the outer ocean blend the interpolated floor may still be
                 // above sea level. Never terminate a river on this dry fringe.
-                if !self.is_wet_ocean(candidate) {
+                if !self.is_wet_ocean(candidate)
+                    || !self.river_route_is_open(source.position, candidate.position, true)
+                {
                     continue;
                 }
 
@@ -157,7 +159,7 @@ where
         source: DrainageNode,
         radius: i32,
     ) -> Option<IVec2> {
-        let mut best: Option<(IVec2, f32)> = None;
+        let mut candidates = Vec::new();
 
         for dz in -radius..=radius {
             for dx in -radius..=radius {
@@ -167,7 +169,9 @@ where
 
                 let candidate_cell = source_cell + IVec2::new(dx, dz);
                 let candidate = self.node(candidate_cell);
-                if candidate.elevation + RIVER_MINIMUM_DROP >= source.elevation {
+                if !candidate.biome_hydrology.can_generate_river
+                    || candidate.elevation + RIVER_MINIMUM_DROP >= source.elevation
+                {
                     continue;
                 }
 
@@ -179,18 +183,40 @@ where
                     distance,
                     self.seed,
                 );
-
-                if best.as_ref().is_none_or(|(best_cell, best_score)| {
-                    score.total_cmp(best_score).is_lt()
-                        || (score.total_cmp(best_score).is_eq()
-                            && compare_cell(candidate_cell, *best_cell).is_lt())
-                }) {
-                    best = Some((candidate_cell, score));
-                }
+                candidates.push((candidate_cell, candidate, score));
             }
         }
 
-        best.map(|(cell, _)| cell)
+        candidates.sort_unstable_by(|left, right| {
+            left.2
+                .total_cmp(&right.2)
+                .then_with(|| compare_cell(left.0, right.0))
+        });
+        candidates
+            .into_iter()
+            .find(|(_, candidate, _)| {
+                self.river_route_is_open(source.position, candidate.position, false)
+            })
+            .map(|(cell, _, _)| cell)
+    }
+
+    fn river_route_is_open(
+        &mut self,
+        from: Vec2,
+        to: Vec2,
+        allow_ocean_transition: bool,
+    ) -> bool {
+        const SAMPLE_SPACING: f32 = HYDROLOGY_REGION_SIZE * 0.5;
+
+        let distance = from.distance(to);
+        let steps = (distance / SAMPLE_SPACING).ceil().max(1.0) as usize;
+        (1..steps).all(|index| {
+            let t = index as f32 / steps as f32;
+            let sample = (self.sample)(from.lerp(to, t));
+            sample.biome_hydrology.can_generate_river
+                || (allow_ocean_transition
+                    && sample.continentalness <= self.ocean_threshold)
+        })
     }
 
     fn neighbors(&mut self, cell: IVec2) -> Vec<(IVec2, DrainageNode)> {
@@ -316,6 +342,23 @@ mod tests {
         let low = downstream_score(source, IVec2::Y, 65.0, 1.0, 42);
 
         assert!(low < high);
+    }
+
+    #[test]
+    fn downstream_route_does_not_jump_across_a_disabled_river_biome() {
+        let mut sample = |position: Vec2| HydrologySurfaceSample {
+            elevation: 120.0 - position.x * 0.02,
+            continentalness: 0.8,
+            biome_hydrology: BiomeHydrologyRules {
+                can_generate_river: !(position.x > 60.0 && position.x < 190.0),
+                ..Default::default()
+            },
+        };
+        let mut network = DrainageNetwork::new(42, 0.38, 90.0, 1.0, &mut sample);
+        let source = network.node(IVec2::ZERO);
+        let blocked = network.node(IVec2::new(2, 0));
+
+        assert!(!network.river_route_is_open(source.position, blocked.position, false));
     }
 
     #[test]
