@@ -7,7 +7,10 @@ use std::{
 use bevy::log::warn;
 
 use crate::{
-    content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry},
+    content::{
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        object::ObjectRegistry,
+    },
     voxel::world::VoxelWorld,
 };
 
@@ -146,6 +149,7 @@ pub(crate) fn load_world(
             &candidate.manifest,
             registries.blocks,
             registries.layers,
+            registries.objects,
             registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         );
@@ -170,11 +174,14 @@ fn load_snapshot(
     manifest: &WorldManifest,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
+    objects: &ObjectRegistry,
     fluids: &FluidRegistry,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let file = open_snapshot_file(directory, manifest)?;
-    decode_snapshot(directory, file, id, manifest, blocks, layers, fluids, validate)
+    decode_snapshot(
+        directory, file, id, manifest, blocks, layers, objects, fluids, validate,
+    )
 }
 
 #[expect(
@@ -188,6 +195,7 @@ fn decode_snapshot(
     manifest: &WorldManifest,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
+    objects: &ObjectRegistry,
     fluids: &FluidRegistry,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
@@ -198,6 +206,7 @@ fn decode_snapshot(
         manifest.generation,
         blocks,
         layers,
+        objects,
         fluids,
     )?;
     Ok((snapshot, world))
@@ -321,6 +330,7 @@ pub(super) fn prune_old_generations(
             &manifest,
             &registries.blocks,
             &registries.layers,
+            &registries.objects,
             &registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         ) {
