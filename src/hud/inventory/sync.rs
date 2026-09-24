@@ -30,7 +30,7 @@ use super::{
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-        CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
+        ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
         InventoryItemTooltip, InventoryItemTooltipHint, InventoryItemTooltipId,
         InventoryItemTooltipStats, InventoryItemTooltipStatsTitle, InventoryItemTooltipText,
         InventorySlot, InventorySortButton, InventorySortTooltip, InventoryTrashButton,
@@ -158,7 +158,6 @@ pub(super) struct InventoryRebuildView<'w, 's> {
         ),
         With<CreativeCatalogScrollArea>,
     >,
-    search_text: Query<'w, 's, &'static mut Visibility, With<CreativeSearchText>>,
 }
 
 pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
@@ -416,25 +415,12 @@ pub(super) fn rebuild_inventory_when_changed(
         .panel
         .layout(&inputs.categories, &inputs.localization, None);
 
-    if language_changed {
-        for entity in &view.roots {
-            commands.entity(entity).despawn();
-        }
+    if language_changed
+        && let Some(root_entity) = view.roots.iter().next()
+    {
+        commands.entity(root_entity).despawn();
         spawn_inventory_root(&mut commands, &layout, &mut items);
         return;
-    }
-
-    let show_placeholder = inputs.panel.creative_view.search_query().is_empty()
-        && !inputs.panel.creative_view.search_focused();
-    let next_visibility = if show_placeholder {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-    for mut visibility in &mut view.search_text {
-        if *visibility != next_visibility {
-            *visibility = next_visibility;
-        }
     }
 
     let Some((catalog_entity, mut position, children)) = view.catalog_scroll.iter_mut().next()

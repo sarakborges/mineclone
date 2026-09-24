@@ -1,3 +1,20 @@
+## 2026-09-23 — Creative Inventory filter/search lifecycle fix [VERSION 0.66.2]
+
+Creative Inventory filtering no longer depends specifically on
+`GameplayModalState::Inventory`. The catalog refresh now runs anywhere the
+inventory UI is active, including the Creative Inventory embedded in Character
+Info. Category selection and search therefore rebuild the visible catalog rows
+in both contexts.
+
+The Creative search placeholder visibility was removed from the catalog rebuild
+pipeline and is now owned directly by `style_inventory_search_field`, based on
+the current query/focus state. This prevents placeholder text from overlapping
+typed text and keeps search chrome independent from catalog refreshes.
+
+The language-change full-root rebuild remains restricted to an actual
+`InventoryHudRoot`. If the shared Creative panel is inside Character Info, the
+catalog can refresh without spawning a second standalone inventory root.
+
 ## 2026-09-23 — Custom-model blocks + Grass/Grass Block split [VERSION 0.66.0]
 
 Blocos agora podem declarar `model` com caminho seguro relativo a `assets/`.

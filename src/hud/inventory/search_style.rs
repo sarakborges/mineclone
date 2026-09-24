@@ -96,10 +96,18 @@ pub(super) fn focus_inventory_search_frame(
 pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
     mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<CreativeSearchFrame>>,
-    mut placeholders: Query<(&mut Node, &mut TextColor), With<CreativeSearchText>>,
+    mut placeholders: Query<
+        (&mut Node, &mut Visibility, &mut TextColor),
+        With<CreativeSearchText>,
+    >,
 ) {
     let fill = BackgroundColor(text_input::INPUT_FILL);
     let border = BorderColor::all(text_input::input_border(view.search_focused()));
+    let placeholder_visibility = if view.search_query().is_empty() && !view.search_focused() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
     for (mut background, mut current_border) in &mut frames {
         if *background != fill {
             *background = fill;
@@ -108,7 +116,7 @@ pub(super) fn style_inventory_search_field(
             *current_border = border;
         }
     }
-    for (mut node, mut color) in &mut placeholders {
+    for (mut node, mut visibility, mut color) in &mut placeholders {
         let left = px(text_input::INPUT_PADDING_X + 1.0);
         let top = px(text_input::centered_text_top(SEARCH_HEIGHT));
         if node.position_type != PositionType::Absolute {
@@ -119,6 +127,9 @@ pub(super) fn style_inventory_search_field(
         }
         if node.top != top {
             node.top = top;
+        }
+        if *visibility != placeholder_visibility {
+            *visibility = placeholder_visibility;
         }
         if color.0 != theme::TEXT_MUTED {
             color.0 = theme::TEXT_MUTED;
