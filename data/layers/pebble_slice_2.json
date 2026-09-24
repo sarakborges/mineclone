@@ -1,0 +1,18 @@
+{
+  "id": "asteria:pebble_slice_2",
+  "name": {
+    "english": "Pebble Slice 2",
+    "portuguese_brazil": "Fatia de pedrinha 2",
+    "spanish": "Capa de guijarro 2"
+  },
+  "category": "crafting_materials",
+  "texture": "textures/items/pebble.png",
+  "creativeVisible": false,
+  "faces": [
+    "top"
+  ],
+  "offset": 0.0375,
+  "alphaCutoff": 0.5,
+  "alphaBlend": false,
+  "castsShadow": false
+}
