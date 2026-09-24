@@ -14108,4 +14108,4 @@ novo ObjectRegistry. Foram corrigidos o display/ícone de objects na hotbar, a
 validação de objects em saves e agrupamentos de SystemParam para manter Clippy sem
 `too_many_arguments`.
 
-VERSION: `0.66.5`.
+VERSION: `0.67.1`.
