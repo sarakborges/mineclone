@@ -29,8 +29,6 @@ use crate::world::{
     generation::{
         authored_surface_fluid_id_for_position, ocean_weight_from_surface,
     },
-    generation_region::generation_region_coord,
-    hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::{surface_height, surface_height_from_sample},
     deterministic::mix_hash_u64,
@@ -142,8 +140,7 @@ impl BootstrapWorldFields {
             );
         }
 
-        let feature_fields =
-            WorldFeatureFields::new(seed, dimension.sea_level, dimension.hydrology.clone());
+        let feature_fields = WorldFeatureFields::new(seed);
 
         Self {
             biome_field,
@@ -208,7 +205,6 @@ struct BootstrapSpawnContext<'a> {
     dimension: &'a DimensionDefinition,
     biomes: &'a BiomeRegistry,
     biome_field: &'a BiomeField,
-    feature_fields: &'a WorldFeatureFields,
 }
 
 struct BootstrapSpawn {
@@ -228,9 +224,7 @@ impl BootstrapSpawnContext<'_> {
                 self.dimension,
                 self.biomes,
                 self.biome_field,
-                self.feature_fields,
                 self.forced_spawn_biome && !self.world_generation.single_biome(),
-                self.world_generation,
             )
         } else {
             restored_column
@@ -335,9 +329,7 @@ pub(in crate::world) fn begin_world_loading(
         });
 
     dimension.validate_biomes(biomes);
-    dimension
-        .hydrology
-        .validate_references(&dimension.id, fluids);
+    dimension.validate_fluid_references(fluids);
 
     let BootstrapGenerationSettings {
         forced_spawn_biome,
@@ -394,7 +386,6 @@ pub(in crate::world) fn begin_world_loading(
         dimension,
         biomes,
         biome_field: &biome_field,
-        feature_fields: &feature_fields,
     }
     .resolve(saved_player_position);
     // Saves persist only modified chunks. Untouched terrain is intentionally absent and
@@ -534,9 +525,7 @@ fn find_initial_spawn_column(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
     restrict_to_forced_region: bool,
-    world_generation: WorldGenerationSettings,
 ) -> IVec2 {
     find_map_square_rings(
         DEFAULT_SPAWN_COLUMN,
@@ -553,8 +542,6 @@ fn find_initial_spawn_column(
                 dimension,
                 biomes,
                 biome_field,
-                feature_fields,
-                world_generation,
             ))
                 .then_some(candidate)
         },
@@ -575,8 +562,6 @@ fn spawn_column_has_surface_fluid(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
-    world_generation: WorldGenerationSettings,
 ) -> bool {
     if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
         return true;
@@ -591,41 +576,7 @@ fn spawn_column_has_surface_fluid(
         return true;
     }
 
-    let chunk_coord = IVec3::new(
-        column.x.div_euclid(CHUNK_SIZE as i32),
-        0,
-        column.y.div_euclid(CHUNK_SIZE as i32),
-    );
-    let region_coord = generation_region_coord(chunk_coord);
-    let region = feature_fields.region_with_hydrology(region_coord, |hydrology| {
-        hydrology.region_from_macro_terrain(
-            region_coord.xz(),
-            world_generation.spawn_rivers(),
-            world_generation.spawn_lakes(),
-            |position| {
-            let surface_position = position.floor().as_ivec2();
-            let surface = biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
-            let elevation = surface_height_from_sample(
-                surface_position,
-                dimension,
-                biome_field,
-                &surface,
-            ) as f32;
-            let biome_hydrology =
-                biome_field.surface_biome_hydrology(surface.identity_surface_index);
-
-            HydrologySurfaceSample {
-                elevation,
-                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
-                biome_hydrology,
-            }
-        },
-        )
-    });
-    region
-        .hydrology
-        .supported_water_at(position, surface_height)
-        .is_some()
+    false
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {

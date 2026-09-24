@@ -14459,3 +14459,17 @@ Com isso, river/lake weights, geração permitida por biome, river/lake bed bloc
 blocks do sistema antigo deixaram de existir no conteúdo. Esses comportamentos não recebem
 compatibilidade ou fallback legado.
 
+### Parte 4 — Hydrology runtime e superfícies públicas removidos
+
+Remoção do Hydrology legado concluída no runtime:
+- removido `/locate hydrology`; Ocean é localizado como biome.
+- autocomplete/usage do chat não expõe mais hydrology.
+- removidos toggles de Rivers e Lakes da criação de mundo.
+- bootstrap não constrói nem consulta Hydrology e valida `seaFluid` diretamente.
+- `src/world/hydrology/**` foi deletado integralmente.
+- `src/world/density_sampling/hydrology.rs` foi deletado.
+- `world::hydrology` não é mais módulo do projeto.
+
+Neste ponto rivers/lakes do sistema antigo não existem mais nem como schema, dados, UI,
+cache, generator ou comando. A próxima limpeza independente é cave connectivity/entrances.
+

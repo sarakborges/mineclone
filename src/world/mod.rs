@@ -22,7 +22,6 @@ pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 pub(crate) mod generation;
 pub(crate) mod generation_region;
-pub(crate) mod hydrology;
 mod lighting_updates;
 mod macro_climate;
 mod material_field;

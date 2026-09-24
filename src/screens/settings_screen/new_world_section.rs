@@ -125,8 +125,6 @@ impl WorldGenerationToggleView<'_, '_> {
 #[derive(Component, Clone, Copy)]
 pub(super) enum WorldGenerationFeatureToggle {
     Caves,
-    Rivers,
-    Lakes,
     Oceans,
 }
 
@@ -135,8 +133,6 @@ impl WorldGenerationFeatureToggle {
         let settings = config.world_generation();
         match self {
             Self::Caves => settings.spawn_caves(),
-            Self::Rivers => settings.spawn_rivers(),
-            Self::Lakes => settings.spawn_lakes(),
             Self::Oceans => settings.spawn_oceans(),
         }
     }
@@ -145,8 +141,6 @@ impl WorldGenerationFeatureToggle {
         let enabled = self.enabled(config);
         match self {
             Self::Caves => config.set_spawn_caves(!enabled),
-            Self::Rivers => config.set_spawn_rivers(!enabled),
-            Self::Lakes => config.set_spawn_lakes(!enabled),
             Self::Oceans => config.set_spawn_oceans(!enabled),
         }
     }
@@ -294,22 +288,7 @@ pub(super) fn new_world_generation_section(
                 localization,
                 language,
             ),
-            world_generation_feature_setting(
-                WorldGenerationFeatureToggle::Rivers,
-                config,
-                "newWorld.spawnRivers",
-                "newWorld.spawnRivers.description",
-                localization,
-                language,
-            ),
-            world_generation_feature_setting(
-                WorldGenerationFeatureToggle::Lakes,
-                config,
-                "newWorld.spawnLakes",
-                "newWorld.spawnLakes.description",
-                localization,
-                language,
-            ),
+
             world_generation_feature_setting(
                 WorldGenerationFeatureToggle::Oceans,
                 config,
@@ -437,8 +416,6 @@ fn world_generation_feature_setting(
     let settings = config.world_generation();
     let enabled = match feature {
         WorldGenerationFeatureToggle::Caves => settings.spawn_caves(),
-        WorldGenerationFeatureToggle::Rivers => settings.spawn_rivers(),
-        WorldGenerationFeatureToggle::Lakes => settings.spawn_lakes(),
         WorldGenerationFeatureToggle::Oceans => settings.spawn_oceans(),
     };
     let disabled = settings.mode() == WorldGenerationMode::Void;
@@ -595,12 +572,7 @@ pub(super) fn handle_world_generation_mode_buttons(
         {
             config.set_world_generation_mode(button.0);
             let enabled_by_default = button.0 == WorldGenerationMode::Normal;
-            config.set_worldgen_hydrology(
-                enabled_by_default,
-                enabled_by_default,
-                enabled_by_default,
-                enabled_by_default,
-            );
+            config.set_worldgen_features(enabled_by_default, enabled_by_default);
         }
     }
 }

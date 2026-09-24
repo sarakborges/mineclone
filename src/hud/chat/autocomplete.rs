@@ -68,8 +68,8 @@ const COMMANDS: &[CommandDefinition] = &[
     },
     CommandDefinition {
         name: "locate",
-        usage: "/locate <biome|hydrology> <id> | /locate structure <id> [variation]",
-        description: "Locate a biome, hydrology feature or structure",
+        usage: "/locate biome <id> | /locate structure <id> [variation]",
+        description: "Locate a biome or structure",
         parameters: &[
             ParameterKind::LocateKind,
             ParameterKind::LocateTargetId,
@@ -385,14 +385,13 @@ fn suggestions_for(
                         .collect::<Vec<_>>()
                 }
             },
-            ParameterKind::LocateKind => ["biome", "hydrology", "structure"]
+            ParameterKind::LocateKind => ["biome", "structure"]
                 .into_iter()
                 .filter(|value| value.starts_with(&prefix))
                 .map(|value| Suggestion {
                     value: value.to_owned(),
                     description: match value {
                         "biome" => "Locate a surface or volume biome".to_owned(),
-                        "hydrology" => "Locate ocean, river or lake hydrology".to_owned(),
                         "structure" => "Locate a locatable structure".to_owned(),
                         _ => unreachable!(),
                     },
@@ -402,26 +401,13 @@ fn suggestions_for(
                 "biome" => catalog
                     .biomes
                     .iter()
-                    .filter(|biome| biome.kind != crate::content::biome::BiomeKind::Hydrology)
                     .filter(|biome| id_matches_prefix(&biome.id, &prefix))
                     .map(|biome| Suggestion {
                         value: biome.id.clone(),
                         description: biome.name.text(catalog.language.get()).to_owned(),
                     })
                     .collect::<Vec<_>>(),
-                "hydrology" => ["ocean", "river", "lake"]
-                    .into_iter()
-                    .filter(|value| value.starts_with(&prefix))
-                    .map(|value| Suggestion {
-                        value: value.to_owned(),
-                        description: match value {
-                            "ocean" => "Locate ocean hydrology".to_owned(),
-                            "river" => "Locate river hydrology".to_owned(),
-                            "lake" => "Locate lake hydrology".to_owned(),
-                            _ => unreachable!(),
-                        },
-                    })
-                    .collect::<Vec<_>>(),
+
                 "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
@@ -534,10 +520,6 @@ mod tests {
             ParsedLine::Place("asteria:tree_oak", Some(3))
         );
         assert_eq!(
-            parse_line("/locate hydrology river"),
-            ParsedLine::Locate("hydrology", "river", None)
-        );
-        assert_eq!(
             parse_line("/locate structure asteria:tree_oak"),
             ParsedLine::Locate("structure", "asteria:tree_oak", None)
         );
@@ -588,11 +570,6 @@ mod tests {
             completed_line("/spa", 0..4, "/spawn"),
             ("/spawn ".to_owned(), 7)
         );
-        assert_eq!(
-            completed_line("/locate hyd", 8..11, "hydrology"),
-            ("/locate hydrology ".to_owned(), 18)
-        );
-
         let text = "/spawn me tail";
         let expected = "/spawn asteria:meadow_slime tail";
         assert_eq!(

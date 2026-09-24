@@ -26,8 +26,6 @@ use crate::{
             ChunkGenerationContext, located_structure_origins_in_chunk,
             structure_candidate_anchor, structure_candidate_probe,
         },
-        generation_region::generation_region_coord,
-        hydrology::HydrologyWaterKind,
         terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
         WorldGenerationSettings,
@@ -43,7 +41,6 @@ const MAX_LOCATE_CHUNK_RADIUS: i32 = MAX_LOCATE_BLOCK_RADIUS / CHUNK_SIZE as i32
 enum LocateTargetKind {
     SurfaceBiome,
     VolumeBiome,
-    Hydrology(HydrologyWaterKind),
     Structure,
 }
 
@@ -124,9 +121,6 @@ impl ChatLocateContext<'_> {
                 let kind = match biome.kind {
                     BiomeKind::Surface => LocateTargetKind::SurfaceBiome,
                     BiomeKind::Volume => LocateTargetKind::VolumeBiome,
-                    BiomeKind::Hydrology => {
-                        return format!("Use /locate hydrology for hydrology targets: {id}");
-                    }
                 };
                 (
                     kind,
@@ -134,46 +128,6 @@ impl ChatLocateContext<'_> {
                     id.to_owned(),
                 )
             }
-            "hydrology" => match id {
-                "ocean" => {
-                    let Some(ocean_biome) = dimension.ocean_biome.as_deref() else {
-                        return "Ocean is disabled in this dimension.".to_owned();
-                    };
-                    if !self.world_generation.spawn_oceans() {
-                        return "Ocean is disabled in this world.".to_owned();
-                    }
-                    (
-                        LocateTargetKind::SurfaceBiome,
-                        "Ocean".to_owned(),
-                        ocean_biome.to_owned(),
-                    )
-                }
-                "river" => {
-                    if dimension.hydrology.river_weight <= 0.0
-                        || !self.world_generation.spawn_rivers()
-                    {
-                        return "River hydrology is disabled in this world.".to_owned();
-                    }
-                    (
-                        LocateTargetKind::Hydrology(HydrologyWaterKind::River),
-                        "River".to_owned(),
-                        id.to_owned(),
-                    )
-                }
-                "lake" => {
-                    if dimension.hydrology.lake_weight <= 0.0
-                        || !self.world_generation.spawn_lakes()
-                    {
-                        return "Lake hydrology is disabled in this world.".to_owned();
-                    }
-                    (
-                        LocateTargetKind::Hydrology(HydrologyWaterKind::Lake),
-                        "Lake".to_owned(),
-                        id.to_owned(),
-                    )
-                }
-                _ => return "Usage: /locate hydrology <ocean|river|lake>".to_owned(),
-            },
             "structure" => {
                 if let Some(set) = self.structure_sets.get(id) {
                     if variation.is_some() {
@@ -262,7 +216,7 @@ impl ChatLocateContext<'_> {
                 }
             }
             _ => {
-                return "Usage: /locate <biome|hydrology> <id> | /locate structure <id> [variation]"
+                return "Usage: /locate biome <id> | /locate structure <id> [variation]"
                     .to_owned();
             }
         };
@@ -325,7 +279,6 @@ fn locate_target(
     match kind {
         LocateTargetKind::SurfaceBiome => locate_surface_biome(snapshot, id, player),
         LocateTargetKind::VolumeBiome => locate_volume_biome(snapshot, id, player),
-        LocateTargetKind::Hydrology(kind) => locate_hydrology(snapshot, kind, player),
         LocateTargetKind::Structure => locate_structure(snapshot, id, player),
     }
 }
@@ -411,62 +364,6 @@ fn locate_volume_biome(
                 let position = anchor.position.floor().as_ivec3();
                 if seen.insert(position) {
                     consider_nearest(&mut best, player, position);
-                }
-            }
-        });
-
-        if best_is_final(best, radius) {
-            break;
-        }
-    }
-
-    best.map(|(_, position)| position)
-}
-
-fn locate_hydrology(
-    snapshot: &LocateSnapshot,
-    kind: HydrologyWaterKind,
-    player: IVec3,
-) -> Option<IVec3> {
-    let center = chunk_coord_from_world(player).xz();
-    let context = snapshot.generation_context();
-    let mut best: Option<(i64, IVec3)> = None;
-
-    for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
-        visit_square_chunk_ring(center, radius, |chunk| {
-            let Some(origin) = chunk_block_origin(chunk) else {
-                return;
-            };
-            let region_coord = generation_region_coord(IVec3::new(chunk.x, 0, chunk.y));
-            let region = context.region(region_coord);
-
-            for local_z in 0..CHUNK_SIZE as i32 {
-                for local_x in 0..CHUNK_SIZE as i32 {
-                    let (Some(x), Some(z)) = (
-                        origin.x.checked_add(local_x),
-                        origin.y.checked_add(local_z),
-                    ) else {
-                        continue;
-                    };
-                    let horizontal = IVec2::new(x, z);
-                    let surface_y = surface_height(
-                        horizontal,
-                        &snapshot.dimension,
-                        &snapshot.biomes,
-                        &snapshot.biome_field,
-                    );
-                    let sample_position = horizontal.as_vec2() + Vec2::splat(0.5);
-                    let Some(water) =
-                        region.hydrology.supported_water_at(sample_position, surface_y as f32)
-                    else {
-                        continue;
-                    };
-                    if water.kind != kind {
-                        continue;
-                    }
-
-                    let y = water.water_level.floor() as i32 + 1;
-                    consider_nearest(&mut best, player, IVec3::new(x, y, z));
                 }
             }
         });
