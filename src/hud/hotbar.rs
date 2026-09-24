@@ -5,7 +5,8 @@ use crate::{
     content::{
         block::BlockRegistry, block_orientation::BlockOrientation,
         item::{ItemRegistry, display_name},
-        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
+        layer::LayerRegistry, object::ObjectRegistry, secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
     },
     hud::{
         block_icon::BlockIconMaterial, item_stack_count::spawn_item_stack_count,
@@ -56,6 +57,7 @@ struct HotbarHudContent<'w> {
     items: Res<'w, ItemRegistry>,
     blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
     dyes: Res<'w, SecondaryPropertyRegistry>,
     brush_mode: Res<'w, BrushMode>,
@@ -133,6 +135,7 @@ fn spawn_hotbar(
                 &content.items,
                 &content.blocks,
                 &content.layers,
+                &content.objects,
                 &content.tools,
                 language,
             )
@@ -273,6 +276,7 @@ fn sync_hotbar(
                 &content.items,
                 &content.blocks,
                 &content.layers,
+                &content.objects,
                 &content.tools,
                 language,
             )
