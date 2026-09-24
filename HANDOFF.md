@@ -14005,3 +14005,28 @@ salvo precisa existir exatamente no conteúdo atual; aliases históricos não s�
 mantidos.
 
 VERSION: `0.50.200`.
+
+## 2026-09-23 — Pebbles em layers ao redor de boulders
+
+Os quatro boulders (small, medium, big, huge) agora incluem algumas
+pebbles decorativas espalhadas ao redor da pedra principal.
+
+Implementação:
+- nenhum modelo 3D novo foi criado;
+- a própria textura textures/items/pebble.png é reutilizada;
+- cada pebble visual é formada por quatro layers horizontais repetidas, com
+  offsets crescentes, produzindo um volume fatiado em vez de um decal totalmente
+  plano;
+- as quatro slices compartilham o mesmo rotationGroup, então giram juntas
+  deterministicamente por posição;
+- as slices técnicas usam creativeVisible: false e não poluem o Creative
+  Inventory;
+- structures agora suportam palette entries layersOnly, que anexam layers
+  ao bloco de terreno existente sem substituir o terreno por outro bloco;
+- layers decorativas não entram no cálculo de support/slope da structure, para
+  não reduzir artificialmente a frequência dos boulders em terreno irregular.
+
+As quantidades foram escaladas pelo tamanho do boulder: poucos stacks no small,
+mais ocorrências progressivamente no medium, big e huge.
+
+VERSION corrente após mudanças concorrentes no mesmo branch: 0.66.2.
