@@ -1,3 +1,13 @@
+## 2026-09-23 — 3D grass world-object model [VERSION 0.64.1]
+
+Foi criado o primeiro asset da nova família `assets/models/objects/`: `assets/models/objects/grass/grass.glb`, com fonte reproduzível em `generate_grass.py`.
+
+O grass object é geometria 3D real, não crossed quads: um tufo low-poly/blocky com 9 lâminas afiladas, alturas, rotações e inclinações variadas. A origem fica no centro do chão para placement natural sobre o topo de um voxel; o modelo atinge aproximadamente 0.72 m de altura e ocupa cerca de 0.67 x 0.56 m no plano horizontal.
+
+O GLB usa um único material `GrassTint` branco, rough e não metálico. Variações visuais entre lâminas/faces ficam em `COLOR_0` apenas como luminosidade relativa. Isso deixa o asset preparado para biome tint futuro: o runtime poderá multiplicar a cor base do material pela paleta do bioma sem precisar gerar uma variante do modelo.
+
+Este checkpoint adiciona somente o modelo e seu gerador. Registry de world objects, placement, targeting, coleta e distribuição por worldgen não foram inventados nesta alteração.
+
 ## 2026-09-23 — Loot tables data-driven para blocos [VERSION 0.64.0]
 
 Blocos agora podem declarar `lootTable` opcional. Ausência da propriedade
