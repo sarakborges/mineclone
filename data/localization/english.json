@@ -72,6 +72,7 @@
   "settings.keybind.characterInfo": "Character Info",
   "settings.keybind.chat": "Chat",
   "settings.keybind.toolAction": "Rotate / Tool Action",
+  "settings.keybind.dropItem": "Drop Item",
   "settings.keybind.changePerspective": "Change Perspective",
   "settings.keybind.pressKey": "Press a key...",
   "settings.keybind.reserved": "{key} is reserved by a hardcoded control.",

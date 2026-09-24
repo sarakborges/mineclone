@@ -72,6 +72,7 @@
   "settings.keybind.characterInfo": "Información del Personaje",
   "settings.keybind.chat": "Chat",
   "settings.keybind.toolAction": "Rotar / Acción de Herramienta",
+  "settings.keybind.dropItem": "Soltar Objeto",
   "settings.keybind.changePerspective": "Cambiar Perspectiva",
   "settings.keybind.pressKey": "Pulsa una tecla...",
   "settings.keybind.reserved": "{key} está reservada por un control fijo.",

@@ -113,6 +113,10 @@ const ACTION_CONTROLS: &[ControlSpec] = &[
         binding: ControlBinding::Editable(KeybindAction::ToolAction),
         action_key: "settings.keybind.toolAction",
     },
+    ControlSpec {
+        binding: ControlBinding::Editable(KeybindAction::DropItem),
+        action_key: "settings.keybind.dropItem",
+    },
 ];
 
 const CHAT_CONTROLS: &[ControlSpec] = &[

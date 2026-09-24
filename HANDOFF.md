@@ -1,3 +1,35 @@
+## 2026-09-23 — World item entities + item drops [VERSION 0.63.0]
+
+Foi criada a base física de itens no mundo, separando comportamento de coleta
+da identidade do item. Um mesmo `ItemStack` pode existir como
+`WorldItemPickup::Interact` (recurso persistente no cenário, coletado com
+botão direito quando targeted) ou `WorldItemPickup::Proximity` (drop
+transitório, coletado automaticamente por proximidade). A entidade física
+carrega o `ItemStack` completo, portanto metadata como `biome_tint` não é
+perdida.
+
+`src/world_items.rs` centraliza spawn, visual, gravidade/colisão voxel,
+targeting bounds, coleta e requests de drop. Itens/tools/layers usam seus
+sprites/texturas em crossed quads; blocos usam o renderer de block model em
+miniatura e respeitam o biome tint do stack. Drops possuem um curto pickup
+delay para não serem reabsorvidos imediatamente pelo jogador que os soltou.
+
+O inventário ganhou inserção de stack e remoção do stack selecionado. Arrastar
+um item para o cursor e clicar fora dos controles do inventário agora gera um
+drop no mundo em vez de apagar o item. A ação `Drop Item` foi adicionada aos
+keybinds com default `Q` e também aparece na tela Controls.
+
+Mineração em Survival agora gera um world-item drop do próprio bloco ao concluir
+a quebra e transfere `biome_tint` do `VoxelCell` para o `ItemStack`
+dropado. O mesmo pipeline é usado por Q e pelo descarte fora do inventário.
+
+`stick` e `pebble` foram adicionados como generic items em
+`crafting_materials`, apontando respectivamente para
+`textures/items/stick.png` e `textures/items/pebble.png`. As texturas serão
+fornecidas separadamente. A infraestrutura de `Interact` está pronta para o
+worldgen criar sticks/pebbles naturais; regras de distribuição/worldgen ainda
+não foram inventadas neste checkpoint.
+
 # HANDOFF — Asteria / Mineclone
 ## 2026-09-23 — Base de metadata de item + biome tint override [VERSION 0.62.0]
 
