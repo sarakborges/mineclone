@@ -60,7 +60,8 @@ where
         network,
     );
     let confluences = direct_confluence_counts(&selection, network);
-    let connected_lakes = connected_lake_cells(&selection.lakes, network);
+    let outlet_connected_lakes = connected_lake_cells(&selection.lakes, network);
+    let destination_lakes = selection.lakes.keys().copied().collect::<HashSet<_>>();
     let ocean_threshold = network.ocean_threshold();
     let mut destination_cache = HashMap::new();
     let mut confluence_water_levels = HashMap::new();
@@ -107,10 +108,10 @@ where
                 continue;
             }
 
-            let reaches_destination = connected_lakes.contains(&cell)
+            let reaches_destination = destination_lakes.contains(&cell)
                 || drainage_reaches_water_destination(
                     cell,
-                    &connected_lakes,
+                    &destination_lakes,
                     network,
                     &mut destination_cache,
                 );
@@ -123,7 +124,6 @@ where
                     selection
                         .lakes
                         .get(&cell)
-                        .filter(|_| connected_lakes.contains(&cell))
                         .cloned()
                 })
                 .flatten();
@@ -157,7 +157,7 @@ where
             let downstream: DrainageNode = network.node(downstream_cell);
             if !downstream.biome_hydrology.can_generate_river
                 && !network.is_wet_ocean(downstream)
-                && !connected_lakes.contains(&downstream_cell)
+                && !destination_lakes.contains(&downstream_cell)
             {
                 continue;
             }
@@ -165,7 +165,8 @@ where
                 cell,
                 downstream_cell,
                 downstream,
-                &connected_lakes,
+                &destination_lakes,
+                &outlet_connected_lakes,
                 network,
                 &mut destination_cache,
             ) {
@@ -178,7 +179,6 @@ where
             let downstream_water_level = selection
                 .lakes
                 .get(&downstream_cell)
-                .filter(|_| connected_lakes.contains(&downstream_cell))
                 .map(|lake| lake.water_level)
                 .or_else(|| confluence_water_levels.get(&downstream_cell).copied());
 
@@ -230,19 +230,26 @@ fn valid_lake_outlet<F>(
     source: IVec2,
     downstream_cell: IVec2,
     downstream: DrainageNode,
-    connected_lakes: &HashSet<IVec2>,
+    destination_lakes: &HashSet<IVec2>,
+    outlet_connected_lakes: &HashSet<IVec2>,
     network: &mut DrainageNetwork<'_, F>,
     destination_cache: &mut HashMap<IVec2, bool>,
 ) -> bool
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    !connected_lakes.contains(&source)
-        || network.is_wet_ocean(downstream)
-        || connected_lakes.contains(&downstream_cell)
+    if !destination_lakes.contains(&source) {
+        return true;
+    }
+    if !outlet_connected_lakes.contains(&source) {
+        return false;
+    }
+
+    network.is_wet_ocean(downstream)
+        || destination_lakes.contains(&downstream_cell)
         || drainage_reaches_water_destination(
             downstream_cell,
-            connected_lakes,
+            destination_lakes,
             network,
             destination_cache,
         )
@@ -292,6 +299,7 @@ mod tests {
             source,
             downstream_cell,
             downstream,
+            &connected_lakes,
             &connected_lakes,
             &mut network,
             &mut cache,

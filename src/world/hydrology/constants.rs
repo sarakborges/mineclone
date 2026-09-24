@@ -28,7 +28,7 @@ pub(super) const RIVER_FLOW_FOR_MAX_WIDTH: f32 = 20.0;
 pub(super) const RIVER_MINIMUM_RADIUS: f32 = 5.5;
 pub(super) const RIVER_MAXIMUM_RADIUS: f32 = 11.0;
 // Graph distance after which river shore grading has fully faded.
-pub(super) const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 2.5;
+pub(super) const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 1.55;
 pub(super) const RIVER_CARVE_DEPTH: f32 = 7.0;
 pub(super) const RIVER_CARVE_STRENGTH: f32 = 16.0;
 

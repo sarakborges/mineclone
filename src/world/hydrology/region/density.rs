@@ -262,16 +262,11 @@ fn shore_density_delta(
     let target_surface = water_level + LAKE_SHORE_SURFACE_OFFSET;
     let height_delta = target_surface - surface_elevation;
 
-    // Remove high terrain above the channel as well as raising a low outer
-    // bank. Inside the water footprint only remove roof material: adding
-    // positive density there could fill the lake or river itself.
-    let height_delta = if normalized_distance < 1.0 {
-        height_delta.min(0.0)
-    } else {
-        height_delta
-    };
-
-    height_delta * shore_strength * (1.0 - opening)
+    // Shore grading is subtractive only. Positive density here used to
+    // manufacture isolated blocks above rivers and could build a wall where a
+    // river met a lake. Natural hydrology may lower a high bank, never raise
+    // terrain that was not present in the original column.
+    height_delta.min(0.0) * shore_strength * (1.0 - opening)
 }
 
 fn river_shore_normalized_distance(graph_distance: f32) -> f32 {
