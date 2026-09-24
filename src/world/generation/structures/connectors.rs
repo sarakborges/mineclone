@@ -90,30 +90,34 @@ fn connected_horizontal_bounds_for_piece<'a>(
         let Some(members) = structures.reference_members(target) else {
             continue;
         };
+        let world_face = rotation.rotate_face(output.face);
         let connector_position = rotation.rotate_offset(output.offset);
-        let required_input_face =
-            opposite_connector_face(rotation.rotate_face(output.face));
+        let required_input_face = opposite_connector_face(world_face);
         let next_strength =
             (effective_strength - output.strength_loss_on_each_loop).max(0.0);
 
-        for child in members {
-            for (child_rotation, child_origin) in
-                child.compatible_input_attachments(connector_position, required_input_face)
-            {
-                let child_bounds = connected_horizontal_bounds_for_piece(
-                    child,
-                    child_rotation,
-                    Some(next_strength),
-                    depth + 1,
-                    structures,
-                    memo,
-                );
-                let translated = (
-                    child_origin.xz() + child_bounds.0,
-                    child_origin.xz() + child_bounds.1,
-                );
-                bounds.0 = bounds.0.min(translated.0);
-                bounds.1 = bounds.1.max(translated.1);
+        for distance in connector_bound_distances(output.min_distance, output.max_distance) {
+            let attachment_position =
+                connector_position + connector_face_offset(world_face) * distance as i32;
+            for child in &members {
+                for (child_rotation, child_origin) in
+                    child.compatible_input_attachments(attachment_position, required_input_face)
+                {
+                    let child_bounds = connected_horizontal_bounds_for_piece(
+                        child,
+                        child_rotation,
+                        Some(next_strength),
+                        depth + 1,
+                        structures,
+                        memo,
+                    );
+                    let translated = (
+                        child_origin.xz() + child_bounds.0,
+                        child_origin.xz() + child_bounds.1,
+                    );
+                    bounds.0 = bounds.0.min(translated.0);
+                    bounds.1 = bounds.1.max(translated.1);
+                }
             }
         }
     }
@@ -236,10 +240,12 @@ fn resolve_connected_branch<'a>(
                 continue;
             };
 
-            let world_position =
-                parent.origin + parent.rotation.rotate_offset(output.offset);
-            let required_input_face =
-                opposite_connector_face(parent.rotation.rotate_face(output.face));
+            let world_face = parent.rotation.rotate_face(output.face);
+            let distance = connector_distance(hash, output.min_distance, output.max_distance);
+            let world_position = parent.origin
+                + parent.rotation.rotate_offset(output.offset)
+                + connector_face_offset(world_face) * distance as i32;
+            let required_input_face = opposite_connector_face(world_face);
             let Some((child_rotation, child_origin)) = child.resolve_input_attachment(
                 world_position,
                 required_input_face,
@@ -278,6 +284,31 @@ fn resolve_connected_branch<'a>(
     }
 
     pieces
+}
+
+fn connector_distance(hash: u64, min_distance: u32, max_distance: u32) -> u32 {
+    if min_distance == max_distance {
+        return min_distance;
+    }
+    let span = u64::from(max_distance - min_distance) + 1;
+    min_distance + u32::try_from(hash % span).expect("connector distance must fit in u32")
+}
+
+fn connector_bound_distances(min_distance: u32, max_distance: u32) -> [u32; 2] {
+    [min_distance, max_distance]
+}
+
+fn connector_face_offset(face: crate::content::layer::LayerFace) -> IVec3 {
+    use crate::content::layer::LayerFace;
+
+    match face {
+        LayerFace::Right => IVec3::X,
+        LayerFace::Left => IVec3::NEG_X,
+        LayerFace::Top => IVec3::Y,
+        LayerFace::Bottom => IVec3::NEG_Y,
+        LayerFace::Front => IVec3::Z,
+        LayerFace::Back => IVec3::NEG_Z,
+    }
 }
 
 fn occupy_piece(piece: ResolvedConnectedPiece<'_>, occupied: &mut HashSet<IVec3>) {
@@ -444,6 +475,66 @@ mod tests {
         assert_eq!(structure.connector_points().len(), 1);
         assert_eq!(structure.voxels()[0].offset, IVec3::ZERO);
         assert_eq!(structure.connector_points()[0].offset, IVec3::ZERO);
+    }
+
+    #[test]
+    fn connector_distance_moves_child_within_authored_range_deterministically() {
+        let root = json!({
+            "id": "test:distance_root",
+            "name": localized("Distance Root"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "S": {"block": "test:block"},
+                "O": {
+                    "connector": {
+                        "target": "test:distance_child",
+                        "face": "right",
+                        "strength": 1.0,
+                        "strengthLossOnEachLoop": 1.0,
+                        "minDistance": 4,
+                        "maxDistance": 9
+                    }
+                }
+            },
+            "layers": [{"y": 0, "rows": ["SO"]}]
+        });
+        let child = json!({
+            "id": "test:distance_child",
+            "name": localized("Distance Child"),
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "I": {"connector": {"face": "left"}},
+                "S": {"block": "test:block"}
+            },
+            "layers": [{"y": 0, "rows": ["IS"]}]
+        });
+        let registry = registry(vec![root, child]);
+        let root = registry.get("test:distance_root").expect("root must exist");
+
+        let first = resolve_connected_pieces(
+            41,
+            root,
+            StructureRotation::Degrees0,
+            IVec3::ZERO,
+            &registry,
+        );
+        let second = resolve_connected_pieces(
+            41,
+            root,
+            StructureRotation::Degrees0,
+            IVec3::ZERO,
+            &registry,
+        );
+
+        assert_eq!(first.len(), 2);
+        assert_eq!(first[1].origin, second[1].origin);
+        assert!((5..=10).contains(&first[1].origin.x));
+        assert_eq!(first[1].origin.y, 0);
+        assert_eq!(first[1].origin.z, 0);
     }
 
     #[test]

@@ -1,3 +1,23 @@
+## 2026-09-24 — Parte 7B3 — Connectors recebem minDistance/maxDistance
+
+O connector agora pode separar espacialmente a peça filha do ponto pai sem abandonar o vínculo/direção authored.
+
+Schema:
+- `minDistance` e `maxDistance` são opcionais e defaultam para 0;
+- distância é medida em blocos entre a posição do output connector e a posição do input connector da filha;
+- o deslocamento ocorre ao longo da `face` mundial do output, após aplicar a rotação da peça pai;
+- o valor real é escolhido deterministicamente pelo hash da mesma ocorrência/connector/depth;
+- `minDistance <= maxDistance` é obrigatório;
+- inputs não aceitam distância própria: continuam apenas declarando o ponto/face de attachment.
+
+Runtime/discovery:
+- distance 0 preserva byte-for-byte a geometria conceitual das chains atuais (cavern tunnels continuam colados);
+- bounds conservadores avaliam min e max do intervalo, suficiente para cobrir todo deslocamento linear possível sem iterar cada distância;
+- seleção de Structure Group, rotação do filho, strength/loss e overlap continuam usando o mesmo resolver;
+- teste cobre range e determinismo.
+
+Isto permite que outputs na World Tree usem, por exemplo, `minDistance: 8` / `maxDistance: 24`, fazendo Root Arches nascerem relacionadas à raiz correta mas sem ficarem grudadas no tronco/root voxel.
+
 ## 2026-09-24 — Parte 7B2 — Regression test usa o caminho público do registry
 
 O CI do output connector em voxel persistente falhou somente porque o teste chamava diretamente `StructureDefinition::validate_layout` e `rebuild_runtime`, que são privados ao módulo de conteúdo. O teste agora monta um registry real com pai + filho e valida o objeto já inserido/precompilado, cobrindo exatamente o caminho de produção sem ampliar visibilidade interna.

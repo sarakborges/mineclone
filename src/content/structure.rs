@@ -169,6 +169,10 @@ pub struct StructureConnector {
     pub strength: f32,
     #[serde(default = "default_connector_strength_loss")]
     pub strength_loss_on_each_loop: f32,
+    #[serde(default)]
+    pub min_distance: u32,
+    #[serde(default)]
+    pub max_distance: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -178,6 +182,8 @@ pub(crate) struct StructureConnectorPoint {
     pub(crate) target: Option<String>,
     pub(crate) strength: f32,
     pub(crate) strength_loss_on_each_loop: f32,
+    pub(crate) min_distance: u32,
+    pub(crate) max_distance: u32,
 }
 
 
@@ -606,6 +612,8 @@ impl StructureDefinition {
                             target: connector.target.clone(),
                             strength: connector.strength,
                             strength_loss_on_each_loop: connector.strength_loss_on_each_loop,
+                            min_distance: connector.min_distance,
+                            max_distance: connector.max_distance,
                         });
                     }
                     let has_persistent_payload = entry.block.is_some()
@@ -822,6 +830,18 @@ impl StructureDefinition {
                     assert!(
                         entry.surface_layers.is_empty(),
                         "structure {} palette symbol {symbol} connector-only inputs cannot define surfaceLayers",
+                        self.id
+                    );
+                }
+                assert!(
+                    connector.min_distance <= connector.max_distance,
+                    "structure {} palette symbol {symbol} connector minDistance must be <= maxDistance",
+                    self.id
+                );
+                if connector.target.is_none() {
+                    assert!(
+                        connector.min_distance == 0 && connector.max_distance == 0,
+                        "structure {} palette symbol {symbol} input connectors cannot define minDistance/maxDistance",
                         self.id
                     );
                 }
