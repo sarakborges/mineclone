@@ -182,7 +182,7 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub mining: BlockMiningDefinition,
     #[serde(default)]
-    pub loot_table: LootTableDefinition,
+    pub(crate) loot_table: LootTableDefinition,
     /// Opt-in capabilities. Blocks without `fragmentable` cannot be sculpted.
     #[serde(default)]
     pub tags: Vec<String>,

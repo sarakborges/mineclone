@@ -55,6 +55,15 @@ struct MiningContent<'w> {
     tools: Res<'w, ToolRegistry>,
 }
 
+#[derive(SystemParam)]
+struct MiningRuntime<'w> {
+    targeted: ResMut<'w, TargetedBlock>,
+    world: VoxelTopologyRuntime<'w>,
+    mining: ResMut<'w, BlockMiningState>,
+    viewmodel: ResMut<'w, ViewModelAnimation>,
+    item_spawns: MessageWriter<'w, WorldItemSpawnRequest>,
+}
+
 impl BlockMiningState {
     fn begin(&mut self, target: MiningTarget) {
         self.target = Some(target);
@@ -100,25 +109,21 @@ fn advance_survival_mining(
     buttons: Res<ButtonInput<MouseButton>>,
     player: Single<&GameMode, With<GameplayCamera>>,
     hotbar: Res<PlayerHotbar>,
-    mut targeted: ResMut<TargetedBlock>,
     content: MiningContent,
     world_ticks: Res<WorldTickClock>,
-    mut runtime: VoxelTopologyRuntime,
-    mut mining: ResMut<BlockMiningState>,
-    mut viewmodel: ResMut<ViewModelAnimation>,
-    mut item_spawns: MessageWriter<WorldItemSpawnRequest>,
+    mut runtime: MiningRuntime,
 ) {
     if *player.into_inner() != GameMode::Survival || !buttons.pressed(MouseButton::Left) {
-        mining.reset();
+        runtime.mining.reset();
         return;
     }
 
-    let Some(hit) = targeted.0 else {
-        mining.reset();
+    let Some(hit) = runtime.targeted.0 else {
+        runtime.mining.reset();
         return;
     };
-    if runtime.world().block_id_at(hit.voxel) != Some(hit.block_id) {
-        mining.reset();
+    if runtime.world.world().block_id_at(hit.voxel) != Some(hit.block_id) {
+        runtime.mining.reset();
         return;
     }
 
@@ -128,7 +133,7 @@ fn advance_survival_mining(
     // The left-click behavior owns dispatch. Only tools explicitly configured
     // with the mining behavior may participate in the mining loop.
     if selected_tool.is_some_and(|tool| tool.left_behavior != MINE_TOOL_BEHAVIOR_ID) {
-        mining.reset();
+        runtime.mining.reset();
         return;
     }
 
@@ -137,23 +142,23 @@ fn advance_survival_mining(
         block_id: hit.block_id,
         selected_item,
     };
-    let started = mining.target != Some(target);
+    let started = runtime.mining.target != Some(target);
     if started {
-        mining.begin(target);
-        viewmodel.play_break_fast();
+        runtime.mining.begin(target);
+        runtime.viewmodel.play_break_fast();
     }
 
     let elapsed_ticks = world_ticks.ticks_this_frame() as u64;
     if !started {
-        mining.swing_ticks = mining.swing_ticks.saturating_add(elapsed_ticks);
-        if mining.swing_ticks >= MINING_SWING_INTERVAL_TICKS {
-            mining.swing_ticks %= MINING_SWING_INTERVAL_TICKS;
-            viewmodel.play_break_fast();
+        runtime.mining.swing_ticks = runtime.mining.swing_ticks.saturating_add(elapsed_ticks);
+        if runtime.mining.swing_ticks >= MINING_SWING_INTERVAL_TICKS {
+            runtime.mining.swing_ticks %= MINING_SWING_INTERVAL_TICKS;
+            runtime.viewmodel.play_break_fast();
         }
     }
 
     let Some(block) = content.blocks.get(hit.block_id) else {
-        mining.reset();
+        runtime.mining.reset();
         return;
     };
     let Some(speed) = effective_mining_speed(block, selected_tool) else {
@@ -164,8 +169,8 @@ fn advance_survival_mining(
 
     let required_work = DEFAULT_BLOCK_BREAK_TICKS as f32 * block.mining.hardness;
     if required_work > 0.0 {
-        mining.accumulated_work += world_ticks.ticks_this_frame() as f32 * speed;
-        if mining.accumulated_work < required_work {
+        runtime.mining.accumulated_work += world_ticks.ticks_this_frame() as f32 * speed;
+        if runtime.mining.accumulated_work < required_work {
             return;
         }
     }
@@ -176,19 +181,19 @@ fn advance_survival_mining(
         .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
-    if runtime.set_block(hit.voxel, None).is_some() {
+    if runtime.world.set_block(hit.voxel, None).is_some() {
         spawn_survival_loot(
             block,
             hit.voxel,
             biome_tint.as_deref(),
             world_ticks.current_tick(),
             &content,
-            &mut item_spawns,
+            &mut runtime.item_spawns,
         );
-        targeted.0 = None;
-        viewmodel.play_break_fast();
+        runtime.targeted.0 = None;
+        runtime.viewmodel.play_break_fast();
     }
-    mining.reset();
+    runtime.mining.reset();
 }
 
 fn spawn_survival_loot(

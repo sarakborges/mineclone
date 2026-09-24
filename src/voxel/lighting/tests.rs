@@ -429,6 +429,7 @@ fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
         name: localized_text(id),
         category: "test".to_owned(),
         mining: Default::default(),
+        loot_table: Default::default(),
         tags: Vec::new(),
         tint: BlockTint::None,
         textures: BlockTextures::default(),
