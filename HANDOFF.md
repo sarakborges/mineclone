@@ -1,3 +1,42 @@
+## 2026-09-24 — Object/UI consistency + hydrology continuity [VERSION 0.68.0]
+
+Este checkpoint fecha um pacote de regressões visuais, de interação e de worldgen.
+
+Objects e inventory:
+- hollow logs usam nas paredes internas a mesma textura lateral da face externa correspondente;
+- placement ghost de hollow logs usa geometria oca, em vez do cubo cheio;
+- Pebble e Stick continuam sendo quatro slices da mesma textura, agora praticamente coplanares
+  (`baseOffset = 0.001`, `sliceSpacing = 0.002`) para formar uma camada sólida, sem lâminas visivelmente separadas;
+- `asteria:shears_rustic` foi removido em favor do ID canônico `asteria:shears`, com `textures/tools/shears.png`;
+- Enchanted Forest Spores usa `textures/items/spore-enchanted-forest.png`;
+- world-item pickup é exclusivamente por botão direito; pickup automático por proximidade foi removido;
+- world objects aparecem no target highlight e no Target HUD;
+- Grass object recebe biome tint também na mão, no inventory e no cursor, respeitando metadata `biome_tint`;
+- ícones de categorias do Creative usam sampler linear dedicado;
+- previews 3D de blocos no inventory/target ganharam margem maior e filtragem bilinear apenas no shader de UI,
+  sem alterar o sampler nearest usado pelas texturas do mundo.
+
+Structures:
+- Oak e Willow variants receberam Stick objects ao redor do tronco;
+- o rasterizer de structures não coloca objects quando o suporte ou o espaço imediatamente acima contém fluido,
+  então esses sticks não aparecem dentro d'água.
+
+Hydrology:
+- a máscara física de oceano foi alinhada ao limite climático do biome Ocean (`continentalness <= 0.38`);
+- carving de oceano só acontece quando o floor resultante realmente fica abaixo do nível do mar, evitando
+  depressões estreitas/secas em Plains;
+- rios começam a fundir carving/water profile antes de entrar no footprint de lakes, evitando trincheiras que
+  cortavam a margem e o terreno do lago;
+- headwaters válidos ganham um pequeno source water body, então canais não surgem visualmente do nada;
+- a seleção downstream rejeita rotas que atravessam biomes com river generation desabilitada;
+- quando apenas o meandro curvo invade um biome proibido, a aresta tenta uma rota horizontal reta antes de ser
+  descartada, reduzindo trechos físicos isolados;
+- destinos de oceano também validam a rota entre source e outlet.
+
+Validação:
+- commit de integração `84bcad5e4101e11d87e8a8ceddc8900c17a03cf9` passou localization audit,
+  structure content reference audit, Clippy com `-D warnings` e `cargo check --locked`.
+
 ## 2026-09-23 — First-class world objects + rebuilt grass [VERSION 0.67.0]
 
 A implementação experimental de custom-model block de 0.66.0 foi substituída.
