@@ -31,16 +31,14 @@ use crate::{
 
 #[derive(Component)]
 pub(crate) struct WorldObjectInstance {
-    object_id: &'static str,
     support: IVec3,
     target_size: Vec3,
     target_center_offset: Vec3,
 }
 
 impl WorldObjectInstance {
-    fn new(object_id: &'static str, support: IVec3, definition: &ObjectDefinition) -> Self {
+    fn new(support: IVec3, definition: &ObjectDefinition) -> Self {
         Self {
-            object_id,
             support,
             target_size: Vec3::from_array(definition.target.size),
             target_center_offset: Vec3::from_array(definition.target.center_offset),
@@ -126,7 +124,6 @@ struct WorldObjectSceneContent<'w> {
 struct WorldObjectSceneAssets<'w> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
-    model_materials: ResMut<'w, ObjectMaterialCache>,
     stacked_meshes: ResMut<'w, StackedSpriteMeshCache>,
     stacked_materials: ResMut<'w, StackedSpriteMaterialCache>,
 }
@@ -299,7 +296,7 @@ fn spawn_world_object(
 
     let mut root = commands.spawn((
         Name::new(format!("World Object ({})", definition.id)),
-        WorldObjectInstance::new(object.object_id, support, definition),
+        WorldObjectInstance::new(support, definition),
         transform,
         Visibility::Hidden,
         ChunkRenderCoord(chunk_coord_from_world(support)),
