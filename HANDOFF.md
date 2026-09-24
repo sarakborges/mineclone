@@ -1,3 +1,10 @@
+### CI follow-up — nonblocking structure top
+
+O primeiro CI da remoção do preflight síncrono falhou apenas porque
+`streaming/generation.rs` usava o swizzle `IVec3::xz()` sem importar o trait
+`Vec3Swizzles` naquele módulo. O código agora constrói o `IVec2` horizontal
+explicitamente, sem adicionar uma dependência de trait apenas para esse acesso.
+
 ## 2026-09-24 — Structure top deixa a main thread; streaming usa mapa lazy dos workers
 
 A investigação confirmou que o streaming estava executando o mesmo preflight pesado de

@@ -77,12 +77,13 @@ pub(super) fn collect_generated_chunks(
         };
         budget.record(1);
 
+        let horizontal = IVec2::new(completed.coord.x, completed.coord.z);
         if let Some(structure_top_chunk) = work
             .generation_tasks
-            .structure_top_chunk_if_ready(completed.coord.xz())
+            .structure_top_chunk_if_ready(horizontal)
         {
             work.state
-                .adopt_structure_top_chunk(completed.coord.xz(), structure_top_chunk);
+                .adopt_structure_top_chunk(horizontal, structure_top_chunk);
         }
 
         if completed.revision != current_revision {
