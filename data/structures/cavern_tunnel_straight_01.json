@@ -1,11 +1,12 @@
 {
-  "id": "asteria:cavern_entrance_start",
+  "id": "asteria:cavern_tunnel_straight_01",
+  "group_id": "cavern_tunnel_straight",
   "name": {
-    "english": "Cavern Entrance",
-    "portuguese_brazil": "Entrada de Caverna",
-    "spanish": "Entrada de Caverna"
+    "english": "Natural Cavern Tunnel",
+    "portuguese_brazil": "Túnel Natural de Caverna",
+    "spanish": "Túnel Natural de Caverna"
   },
-  "locatable": true,
+  "locatable": false,
   "rotation": true,
   "priority": 5,
   "conflictGroups": [
@@ -14,7 +15,7 @@
   "restrictions": {
     "maxSlope": 0,
     "requiresDryGround": false,
-    "requiredBiomeCoverage": 0.25
+    "requiredBiomeCoverage": 0
   },
   "generation": {
     "replacePolicy": "terrain",
@@ -30,9 +31,14 @@
     "C": {
       "clear": true
     },
+    "I": {
+      "connector": {
+        "face": "back"
+      }
+    },
     "O": {
       "connector": {
-        "target": "asteria:cavern_tunnel_segment",
+        "target": "asteria:cavern_tunnel_straight",
         "face": "front",
         "strength": 1,
         "strengthLossOnEachLoop": 0.04
@@ -51,14 +57,22 @@
         ".....",
         ".....",
         ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
         "....."
       ]
     },
     {
       "y": 1,
       "rows": [
+        "CCCCC",
         ".CCC.",
         ".CCC.",
+        ".....",
+        ".....",
+        ".....",
         ".....",
         ".....",
         ".....",
@@ -71,9 +85,13 @@
     {
       "y": 2,
       "rows": [
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
         ".CCC.",
-        ".CCC.",
-        ".CCC.",
+        ".....",
+        ".....",
+        ".....",
         ".....",
         ".....",
         ".....",
@@ -85,10 +103,14 @@
     {
       "y": 3,
       "rows": [
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        ".CCC.",
+        ".CCC.",
         ".....",
-        ".CCC.",
-        ".CCC.",
-        ".CCC.",
+        ".....",
         ".....",
         ".....",
         ".....",
@@ -99,11 +121,15 @@
     {
       "y": 4,
       "rows": [
+        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        ".CCC.",
         ".....",
         ".....",
-        ".CCC.",
-        ".CCC.",
-        ".CCC.",
         ".....",
         ".....",
         ".....",
@@ -113,12 +139,16 @@
     {
       "y": 5,
       "rows": [
-        ".....",
-        ".....",
-        ".....",
+        "..I..",
         ".CCC.",
         ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
         ".CCC.",
+        ".CCC.",
+        ".....",
         ".....",
         ".....",
         "....."
@@ -130,10 +160,14 @@
         ".....",
         ".....",
         ".....",
+        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        ".CCC.",
         ".....",
-        ".CCC.",
-        ".CCC.",
-        ".CCC.",
         ".....",
         "....."
       ]
@@ -145,8 +179,12 @@
         ".....",
         ".....",
         ".....",
-        ".....",
         ".CCC.",
+        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
         ".CCC.",
         ".CCC.",
         "....."
@@ -162,7 +200,11 @@
         ".....",
         ".....",
         ".CCC.",
-        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
         "....."
       ]
     },
@@ -177,12 +219,74 @@
         ".....",
         ".....",
         ".CCC.",
+        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "CCCCC",
+        "....."
+      ]
+    },
+    {
+      "y": 10,
+      "rows": [
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".CCC.",
+        "CCCCC",
+        "CCCCC",
+        "....."
+      ]
+    },
+    {
+      "y": 11,
+      "rows": [
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".CCC.",
+        ".CCC.",
         "....."
       ]
     },
     {
       "y": 12,
       "rows": [
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        ".....",
+        "....."
+      ]
+    },
+    {
+      "y": 13,
+      "rows": [
+        ".....",
+        ".....",
+        ".....",
+        ".....",
         ".....",
         ".....",
         ".....",

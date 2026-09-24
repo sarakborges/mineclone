@@ -1,3 +1,39 @@
+## 2026-09-24 — Parte 7F — Cave entrances redesenhadas com famílias reta, curva e espiral
+
+O protótipo antigo de `cavern_entrance_start + cavern_tunnel_segment_01..03` foi removido por completo e substituído por conteúdo authored novo sobre o mesmo resolver genérico.
+
+Raízes:
+- `asteria:cavern_entrance_start` agora é um Structure Group, não uma structure única;
+- duas variações iniciam rota reta;
+- uma inicia rota curva;
+- uma inicia espiral horária;
+- uma inicia espiral anti-horária;
+- todas continuam locatable e usam o mesmo `volumePlacement` já authored em Caverns.
+
+Geometria:
+- túnel-base passou de corredor estreito/escada repetitiva para seção arredondada/irregular com ~5 blocos de largura útil;
+- avanço padrão: 12 blocos horizontais para 8 de subida, suavizando a inclinação;
+- roots começam com uma boca/câmara mais larga antes de afunilar no túnel;
+- variantes retas: natural, larga e irregular;
+- curva: quarter-turn authored de 90° para esquerda ou direita e depois transição para o group reto;
+- espiral: quarter-turn de 90° repetido sempre no mesmo sentido; quatro peças completam uma volta horizontal e sobem 32 blocos, produzindo uma hélice quadrada vertical;
+- clockwise e counterclockwise são groups separados para o handedness nunca inverter no meio da chain;
+- cada família mantém transforms idênticos dentro do próprio group, então input/output continuam encaixando deterministicamente.
+
+Connectors:
+- inputs ficam um bloco acima do teto do corredor, fora do volume transitável;
+- outputs ficam no plano seguinte ao último slice carved, evitando overlap de `clear` entre parent/child;
+- `strength=1` / `strengthLossOnEachLoop=0.04` preserva o alcance máximo de ~25 hops;
+- nenhuma família usa path procedural, carve noise, legacy cave connectivity ou subsystem paralelo.
+
+Arquivos legados removidos:
+- `cavern_entrance_start.json`;
+- `cavern_tunnel_segment_01.json`;
+- `cavern_tunnel_segment_02.json`;
+- `cavern_tunnel_segment_03.json`.
+
+`WORLDGEN_VERSION` passou de 7 para 8 porque cave entrance geometry e route selection mudaram deterministicamente.
+
 ## 2026-09-24 — Parte 7E — Root Arches diagonais separadas e direcionadas pelas raízes
 
 A variação diagonal deixou de competir aleatoriamente com arches lineares.
