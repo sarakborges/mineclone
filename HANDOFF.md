@@ -1,3 +1,34 @@
+## 2026-09-24 — River graph now connects at real water-body boundaries
+
+Hydrology was reworked around physical continuity rather than trying to hide
+bad intersections after the fact.
+
+- River edges entering lakes are clipped at the first intersection with the
+  lake's real irregular boundary instead of continuing to the lake center.
+- River edges leaving lakes/headwaters/confluence pools start at the boundary
+  where they exit that body. Their endpoint water height is still exactly the
+  authoritative water-body level.
+- Confluence pools are now retained as full `WaterBody` values during river
+  graph construction, so incoming/outgoing channels use the same boundary and
+  water level rather than a parallel height-only map.
+- Density samples the physical river core separately from the expanded dry
+  bank. An expanded bank can no longer outrank another river's actual channel
+  at crossings or nearby parallel rivers.
+- Lake shore grading now respects the river opening on both sides of the lake
+  boundary, preventing a closed shore wall across a river mouth.
+- River bank reach was reduced from 1.55x to 1.30x radius to avoid wide dry
+  grading bands merging between neighboring channels.
+- River carving strength now scales to the actual local surface-to-bed relief,
+  with the previous fixed strength retained only as a minimum. Tall local
+  columns can no longer survive as detached roofs/blocks above a valid channel.
+- Ocean mouths still stop at the first physically wet ocean sample; headwaters
+  continue to use explicit source water bodies, so every generated river path
+  has a physical water source and a physical destination.
+
+Validation for code commit `fbc6885f078fbb6de8944728d2a50cf3da7b0466`:
+localization audit, structure reference audit, Clippy with `-D warnings`, and
+`cargo check --locked` all passed. No `cargo test` step was added.
+
 ## 2026-09-24 — Object rendering, placement, chunk residency e hydrology [VERSION 0.69.0]
 
 Este checkpoint supersede os pontos de pickup/rendering/hydrology de 0.68.0 quando houver conflito.
