@@ -201,10 +201,6 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         }
     }
 
-    if before <= recovery_bytes {
-
-    }
-
     if before <= high_bytes {
         return;
     }

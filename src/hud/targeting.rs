@@ -246,17 +246,33 @@ fn spawn_target_hud(
         });
 }
 
+type TargetHudRowLayout<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Node,
+    (
+        With<TargetHudRow>,
+        Without<TargetHudRoot>,
+        Without<TargetBlockText>,
+    ),
+>;
+
+type TargetHudTextLayout<'w, 's> = Single<
+    'w,
+    's,
+    &'static mut Node,
+    (
+        With<TargetBlockText>,
+        Without<TargetHudRoot>,
+        Without<TargetHudRow>,
+    ),
+>;
+
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
     root: TargetHudRootLayout,
-    mut row: Single<
-        &mut Node,
-        (With<TargetHudRow>, Without<TargetHudRoot>, Without<TargetBlockText>),
-    >,
-    mut text: Single<
-        &mut Node,
-        (With<TargetBlockText>, Without<TargetHudRoot>, Without<TargetHudRow>),
-    >,
+    mut row: TargetHudRowLayout,
+    mut text: TargetHudTextLayout,
 ) {
     let position = settings.target_block_position();
     let (mut root_node, mut applied_position) = root.into_inner();

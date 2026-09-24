@@ -18,7 +18,7 @@ use crate::{
     hud::ui_image::load_smooth_image,
     player::{
         PLAYER_EYE_HEIGHT,
-        camera::{GameplayCamera, GameplayWorldCamera},
+        camera::GameplayWorldCamera,
         hotbar::PlayerHotbar,
         item_stack::ItemStack,
         movement::config::{COLLISION_STEP, GRAVITY},
