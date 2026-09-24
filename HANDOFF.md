@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6A — Connector face validado no schema
+
+A orientação `face` do connector agora participa explicitamente da validação authored, mantendo o campo vivo sob `-D warnings` antes da implementação do resolver 6B. Nenhum lint foi suprimido.
+
 ## 2026-09-24 — Parte 6A — Ajuste do schema de connectors para CI limpo
 
 O primeiro schema de connectors pré-compilava posição/face/strength em uma estrutura runtime antes do resolver existir, o que gerava dead-code sob `-D warnings`. O estado intermediário foi corrigido sem suppressions: enquanto o resolver da Parte 6B ainda não existe, a metadata permanece no palette authored e a validação de targets trabalha diretamente sobre ela. Connector cells continuam excluídas dos voxels persistentes.

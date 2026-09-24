@@ -706,6 +706,11 @@ impl StructureDefinition {
                     "structure {} palette symbol {symbol} connector entries cannot define surfaceLayers",
                     self.id
                 );
+                assert!(
+                    LayerFace::ALL.contains(&connector.face),
+                    "structure {} palette symbol {symbol} connector face must be valid",
+                    self.id
+                );
                 if let Some(target) = connector.target.as_deref() {
                     assert!(
                         !target.trim().is_empty(),
