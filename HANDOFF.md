@@ -14227,3 +14227,23 @@ não aparecem em diffs pequenos durante migrações de IDs.
   aumentado e o preview isométrico de blocks ocupa mais pixels sem voltar a cortar nas bordas.
 - O CI permanece no caminho rápido: localization audit, structure reference audit, Clippy e cargo check;
   nenhum `cargo test` foi adicionado.
+
+## 2026-09-24 — Object interaction/rendering + river continuity follow-up
+
+Object/item fixes:
+- natural dropped items use the gameplay camera's global position for proximity pickup;
+- every world item can also be collected explicitly with right click, while left click is consumed by the item target;
+- Pebble/Stick remain four copies of the exact same texture but use 0.001 m vertical spacing, removing visible separated sheets;
+- Pebble/Stick now use generic deterministic `positionJitter`;
+- vertical hollow logs accept top-placement objects into their cavity and clamp jitter to the available inner footprint;
+- hollow logs use hollow geometry in first- and third-person held-block rendering;
+- Architect's Compass now uses the canonical ID `asteria:architects_compass`, with no Rustic tier suffix;
+- Grass model scenes are pre-instantiated hidden after content loading to warm model dependencies before first placement;
+- block display proportions were restored to the pre-regression layout; inventory and target previews use larger UI footprints;
+- block target highlight is hidden while the mining crack overlay is active to avoid transparent-overlay flicker.
+
+Hydrology fixes:
+- river carving no longer fades in the approach margin before lake carving exists; the blend starts at the real irregular lake boundary;
+- river headroom carving reaches the original terrain surface, eliminating detached terrain slabs above channels;
+- river bank grading is restricted to the dry outer bank, avoiding extra cuts inside overlapping river footprints;
+- a curved river edge that excursions into a disabled biome is straightened rather than deleted, because downstream selection already validates the direct route. This preserves physical continuity to the selected lake/ocean destination.

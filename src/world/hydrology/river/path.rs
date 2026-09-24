@@ -87,14 +87,9 @@ where
         spec.ocean_threshold,
         &mut surface_sample_at,
     ) {
+        // Downstream selection validates the direct route. A rejected curved
+        // path is therefore a meander excursion, not an invalid drainage edge.
         straighten_horizontal_path(&mut path.points);
-        if river_path_crosses_disabled_biome(
-            &path.points,
-            spec.ocean_threshold,
-            &mut surface_sample_at,
-        ) {
-            return None;
-        }
     }
     let mut surface_elevation_at = |position| surface_sample_at(position).elevation;
     constrain_river_path_to_terrain(

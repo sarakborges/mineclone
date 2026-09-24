@@ -7,7 +7,6 @@ use crate::world::{
         constants::{
             LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET,
             RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
-            RIVER_WATER_BODY_APPROACH_MARGIN,
         },
     math::{
         lerp, ocean_floor_is_submerged, ocean_strength, river_channel_profile, smoothstep,
@@ -114,7 +113,10 @@ impl HydrologyRegion {
             let bed = sample.height - self.river_carve_depth * profile;
             let river = (profile > 0.0).then_some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
-                maximum_y: sample.height + 1.5,
+                maximum_y: actual_surface_height
+                    .unwrap_or(sample.height + 1.5)
+                    .max(sample.height + 1.5)
+                    + 0.5,
                 delta: -RIVER_CARVE_STRENGTH * profile,
             });
             let opening = smoothstep((profile * 2.0).clamp(0.0, 1.0));
@@ -162,12 +164,7 @@ impl HydrologyRegion {
             // for sin/cos and boundary noise a second time per water body.
             let distance = body.normalized_horizontal_distance(horizontal);
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
-            river_water_body_opening = river_water_body_opening.max(
-                body.approach_strength_with_margin(
-                    horizontal,
-                    RIVER_WATER_BODY_APPROACH_MARGIN,
-                ),
-            );
+            river_water_body_opening = river_water_body_opening.max(strength);
             // Reject the lake's inner carving and grading if the original
             // column lies below its bed. Keep outer, dry shore grading: it
             // does not create water, and can still blend a neighboring bank.
@@ -216,6 +213,11 @@ impl HydrologyRegion {
 
         let lake_shore_delta = lake_shore_delta.unwrap_or(0.0);
         let river_shore_delta = river_graph_sample.map_or(0.0, |sample| {
+            if sample.normalized_distance
+                <= RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
+            {
+                return 0.0;
+            }
             shore_density_delta(
                 river_shore_normalized_distance(sample.normalized_distance),
                 sample.height,
