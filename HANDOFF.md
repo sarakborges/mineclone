@@ -1,3 +1,13 @@
+## 2026-09-24 — Warnings de hierarchy visibility e camera order corrigidos
+
+Os dois warnings emitidos ao finalizar Loading tinham causas independentes, mas relacionadas ao lifecycle do Player.
+
+- o root `Player` agora possui `Visibility::Inherited`, garantindo que qualquer filho com `InheritedVisibility` tenha uma cadeia de visibility válida e eliminando o Bevy B0004;
+- `GameplayWorldCamera` passa a nascer com `is_active = false` enquanto o Player ainda é criado na fase `WorldLoadingPhase::Spawning`;
+- no `OnEnter(GameState::Gameplay)`, `activate_gameplay_world_camera` ativa explicitamente a câmera do mundo;
+- isso impede a loading camera (ordem 0) e a world camera (ordem 0) de ficarem simultaneamente ativas no mesmo window target durante a transição;
+- as ordens autoritativas da camera stack permanecem `world=0`, `viewmodel=1`, `ui=2`; nenhuma prioridade foi alterada apenas para silenciar o warning.
+
 ## 2026-09-24 — Survival placement consome stacks do inventário
 
 Placement em Survival agora usa o stack real do hotbar como recurso consumível.

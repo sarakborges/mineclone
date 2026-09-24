@@ -37,7 +37,10 @@ impl Plugin for PlayerCameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MouseLookInputState>()
             .init_resource::<CameraPerspective>()
-            .add_systems(OnEnter(GameState::Gameplay), reset_camera_perspective)
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                (reset_camera_perspective, activate_gameplay_world_camera),
+            )
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 capture_cursor.run_if(world_interaction_available),
@@ -147,6 +150,14 @@ pub(crate) struct GameplayWorldCamera;
 
 fn reset_camera_perspective(mut perspective: ResMut<CameraPerspective>) {
     *perspective = CameraPerspective::FirstPerson;
+}
+
+fn activate_gameplay_world_camera(
+    mut cameras: Query<&mut Camera, With<GameplayWorldCamera>>,
+) {
+    for mut camera in &mut cameras {
+        camera.is_active = true;
+    }
 }
 
 fn toggle_camera_perspective(

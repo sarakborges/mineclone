@@ -60,6 +60,7 @@ pub(crate) fn spawn_player_entity(
         .spawn((
             PlayerEntity,
             transform,
+            Visibility::Inherited,
             gameplay_camera,
             LOCAL_PLAYER_ID,
             game_mode,
@@ -79,6 +80,7 @@ pub(crate) fn spawn_player_entity(
                 GameplayWorldCamera,
                 Camera3d::default(),
                 Camera {
+                    is_active: false,
                     order: WORLD_CAMERA_ORDER,
                     output_mode: CameraOutputMode::Skip,
                     ..default()
