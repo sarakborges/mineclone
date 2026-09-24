@@ -70,6 +70,7 @@ struct HotbarItemView<'a> {
     items: &'a ItemRegistry,
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
     tools: &'a ToolRegistry,
     dyes: &'a SecondaryPropertyRegistry,
     brush_mode: &'a BrushMode,
@@ -146,6 +147,7 @@ fn spawn_hotbar(
         items: &content.items,
         blocks: &content.blocks,
         layers: &content.layers,
+        objects: &content.objects,
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
@@ -292,6 +294,7 @@ fn sync_hotbar(
         items: &content.items,
         blocks: &content.blocks,
         layers: &content.layers,
+        objects: &content.objects,
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
@@ -377,6 +380,19 @@ fn spawn_hotbar_item(
             Color::WHITE,
             ITEM_ICON_SIZE,
         );
+        return;
+    }
+
+    if let Some(object) = items.objects.get(item_id) {
+        slot.spawn((
+            ImageNode::new(items.asset_server.load(object.icon.clone())),
+            Node {
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
         return;
     }
 
