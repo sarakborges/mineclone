@@ -261,7 +261,8 @@ fn active_token(text: &str, cursor: usize) -> Option<(Range<usize>, usize)> {
 }
 
 fn text_matches_query(value: &str, query: &str) -> bool {
-    value.to_ascii_lowercase().contains(query)
+    let query = query.to_ascii_lowercase();
+    value.to_ascii_lowercase().contains(&query)
 }
 
 fn id_matches_query(id: &str, query: &str) -> bool {

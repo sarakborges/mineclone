@@ -1,3 +1,7 @@
+## 2026-09-24 — Autocomplete substring normaliza ambos os lados
+
+O helper compartilhado de matching agora normaliza tanto o valor quanto a query, garantindo comparação case-insensitive mesmo quando chamado fora do fluxo normal que já lowercasa o token do editor.
+
 ## 2026-09-24 — Chat command autocomplete agora usa substring
 
 O matching do autocomplete deixou de exigir prefixo. O texto digitado pode aparecer em qualquer posição da sugestão, sempre case-insensitive.
