@@ -2,7 +2,7 @@ mod path;
 mod selection;
 mod water_bodies;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 
@@ -10,14 +10,8 @@ use crate::world::feature_graph::FeatureGraph;
 
 use self::{
     path::{RiverEdgeSpec, add_curved_river_edge},
-    selection::{
-        RiverSelection, build_flow_cache, connected_lake_cells, drainage_reaches_water_destination,
-        selected_river_sources,
-    },
-    water_bodies::{
-        confluence_lake, headwater_source_body, mountain_spring_body,
-        plunge_pool_for_waterfall,
-    },
+    selection::{RiverSelection, build_flow_cache, selected_river_sources},
+    water_bodies::{confluence_lake, plunge_pool_for_waterfall},
 };
 use super::{
     constants::RIVER_EDGE_MARGIN_CELLS,
@@ -60,10 +54,7 @@ where
         network,
     );
     let confluences = direct_confluence_counts(&selection, network);
-    let outlet_connected_lakes = connected_lake_cells(&selection.lakes, network);
-    let destination_lakes = selection.lakes.keys().copied().collect::<HashSet<_>>();
     let ocean_threshold = network.ocean_threshold();
-    let mut destination_cache = HashMap::new();
     let mut confluence_bodies = HashMap::new();
 
     for (&cell, &incoming_rivers) in &confluences {
@@ -108,31 +99,10 @@ where
                 continue;
             }
 
-            let reaches_destination = destination_lakes.contains(&cell)
-                || drainage_reaches_water_destination(
-                    cell,
-                    &destination_lakes,
-                    network,
-                    &mut destination_cache,
-                );
-            if !reaches_destination {
-                continue;
-            }
-
             let lake = spawn_lakes
                 .then(|| selection.lakes.get(&cell).cloned())
                 .flatten();
-            let spring = selection
-                .springs
-                .contains(&cell)
-                .then(|| mountain_spring_body(cell, source, seed, sea_level, water_fluid));
-            let is_headwater = selection.channels.contains(&cell)
-                && !confluences.contains_key(&cell)
-                && lake.is_none()
-                && spring.is_none();
-            let headwater = is_headwater
-                .then(|| headwater_source_body(cell, source, seed, sea_level, water_fluid));
-            let generated_source_body = lake.or(spring).or(headwater);
+            let generated_source_body = lake;
             let source_body = generated_source_body
                 .clone()
                 .or_else(|| confluence_bodies.get(&cell).cloned());
@@ -152,21 +122,12 @@ where
                 continue;
             };
             let downstream: DrainageNode = network.node(downstream_cell);
-            if !downstream.biome_hydrology.can_generate_river
-                && !network.is_wet_ocean(downstream)
-                && !destination_lakes.contains(&downstream_cell)
+            let downstream_is_destination = network.is_wet_ocean(downstream)
+                || selection.lakes.contains_key(&downstream_cell);
+            if !downstream_is_destination
+                && (!downstream.biome_hydrology.can_generate_river
+                    || !selection.channels.contains(&downstream_cell))
             {
-                continue;
-            }
-            if !valid_lake_outlet(
-                cell,
-                downstream_cell,
-                downstream,
-                &destination_lakes,
-                &outlet_connected_lakes,
-                network,
-                &mut destination_cache,
-            ) {
                 continue;
             }
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
@@ -220,40 +181,6 @@ where
     }
 }
 
-// Receiving a river marks a lake as connected, but does not imply that the
-// lake's own downstream path has a valid outlet. Do not manufacture a stub
-// from a terminal lake into dry terrain. Other river cells already passed
-// their full downstream-reachability check above, so this extra trace is only
-// needed for lake cells and benefits from the shared destination cache.
-fn valid_lake_outlet<F>(
-    source: IVec2,
-    downstream_cell: IVec2,
-    downstream: DrainageNode,
-    destination_lakes: &HashSet<IVec2>,
-    outlet_connected_lakes: &HashSet<IVec2>,
-    network: &mut DrainageNetwork<'_, F>,
-    destination_cache: &mut HashMap<IVec2, bool>,
-) -> bool
-where
-    F: FnMut(Vec2) -> HydrologySurfaceSample,
-{
-    if !destination_lakes.contains(&source) {
-        return true;
-    }
-    if !outlet_connected_lakes.contains(&source) {
-        return false;
-    }
-
-    network.is_wet_ocean(downstream)
-        || destination_lakes.contains(&downstream_cell)
-        || drainage_reaches_water_destination(
-            downstream_cell,
-            destination_lakes,
-            network,
-            destination_cache,
-        )
-}
-
 fn direct_confluence_counts<F>(
     selection: &RiverSelection,
     network: &mut DrainageNetwork<'_, F>,
@@ -275,44 +202,3 @@ where
     incoming
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::content::biome_hydrology::BiomeHydrologyRules;
-
-    #[test]
-    fn receiving_lake_does_not_emit_an_outlet_into_a_dry_dead_end() {
-        let mut sample = |_position| HydrologySurfaceSample {
-            elevation: 100.0,
-            continentalness: 0.8,
-            biome_hydrology: BiomeHydrologyRules::default(),
-        };
-        let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
-        let source = IVec2::ZERO;
-        let downstream_cell = IVec2::X;
-        let downstream = network.node(downstream_cell);
-        let mut connected_lakes = HashSet::from([source]);
-        let mut cache = HashMap::new();
-
-        assert!(!valid_lake_outlet(
-            source,
-            downstream_cell,
-            downstream,
-            &connected_lakes,
-            &connected_lakes,
-            &mut network,
-            &mut cache,
-        ));
-
-        connected_lakes.insert(downstream_cell);
-        assert!(valid_lake_outlet(
-            source,
-            downstream_cell,
-            downstream,
-            &connected_lakes,
-            &connected_lakes,
-            &mut network,
-            &mut cache,
-        ));
-    }
-}

@@ -54,6 +54,22 @@ impl WaterBody {
         smoothstep(1.0 - distance.clamp(0.0, 1.0))
     }
 
+    pub fn approach_strength_with_margin(&self, position: Vec2, margin: f32) -> f32 {
+        let base_distance = self.normalized_horizontal_distance(position);
+        if base_distance <= 1.0 {
+            return 1.0;
+        }
+
+        let expanded_distance =
+            self.normalized_horizontal_distance_with_margin(position, margin.max(0.0));
+        if expanded_distance >= 1.0 {
+            return 0.0;
+        }
+
+        let span = (base_distance - expanded_distance).max(f32::EPSILON);
+        smoothstep(((1.0 - expanded_distance) / span).clamp(0.0, 1.0))
+    }
+
     pub fn maximum_horizontal_extent(&self) -> f32 {
         self.radius.max_element() * 1.42
     }

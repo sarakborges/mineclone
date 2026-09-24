@@ -7,6 +7,7 @@ use crate::world::{
         constants::{
             LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET,
             RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
+            RIVER_WATER_BODY_APPROACH_MARGIN,
         },
     math::{
         lerp, ocean_floor_is_submerged, ocean_strength, river_channel_profile, smoothstep,
@@ -188,7 +189,17 @@ impl HydrologyRegion {
             // for sin/cos and boundary noise a second time per water body.
             let distance = body.normalized_horizontal_distance(horizontal);
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
-            river_water_body_opening = river_water_body_opening.max(strength);
+            if bed_has_support(
+                actual_surface_height,
+                body.water_level - body.carve_depth,
+            ) {
+                river_water_body_opening = river_water_body_opening.max(
+                    body.approach_strength_with_margin(
+                        horizontal,
+                        RIVER_WATER_BODY_APPROACH_MARGIN,
+                    ),
+                );
+            }
             // Reject the lake's inner carving and grading if the original
             // column lies below its bed. Keep outer, dry shore grading: it
             // does not create water, and can still blend a neighboring bank.
@@ -227,9 +238,11 @@ impl HydrologyRegion {
         }
 
         if let Some(channel) = river.as_mut() {
-            let lake_blend = 1.0 - river_water_body_opening.clamp(0.0, 1.0);
-            channel.delta *= lake_blend;
-            if lake_blend <= f32::EPSILON {
+            let water_body_opening =
+                river_water_body_opening.max(ocean_strength_at_column);
+            let channel_blend = 1.0 - water_body_opening.clamp(0.0, 1.0);
+            channel.delta *= channel_blend;
+            if channel_blend <= f32::EPSILON {
                 river = None;
             }
         }
@@ -263,7 +276,10 @@ impl HydrologyRegion {
 }
 
 fn water_body_might_affect_column(body: &WaterBody, position: Vec2) -> bool {
-    let outer_extent = body.maximum_horizontal_extent() * LAKE_SHORE_OUTER_DISTANCE;
+    let shore_extent = body.maximum_horizontal_extent() * LAKE_SHORE_OUTER_DISTANCE;
+    let approach_extent =
+        (body.radius.max_element() + RIVER_WATER_BODY_APPROACH_MARGIN) * 1.42;
+    let outer_extent = shore_extent.max(approach_extent);
     body.center.distance_squared(position) <= outer_extent * outer_extent
 }
 

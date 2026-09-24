@@ -31,6 +31,7 @@ pub(super) const RIVER_MAXIMUM_RADIUS: f32 = 11.0;
 pub(super) const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 1.30;
 pub(super) const RIVER_CARVE_DEPTH: f32 = 7.0;
 pub(super) const RIVER_CARVE_STRENGTH: f32 = 16.0;
+pub(super) const RIVER_WATER_BODY_APPROACH_MARGIN: f32 = 20.0;
 
 pub(super) const LAKE_MINIMUM_RADIUS: f32 = 48.0;
 pub(super) const LAKE_MAXIMUM_RADIUS: f32 = 112.0;

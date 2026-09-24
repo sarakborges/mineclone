@@ -9,50 +9,6 @@ use super::super::{
 
 const PLUNGE_POOL_CHANCE: f32 = 0.84;
 
-pub(super) fn headwater_source_body(
-    cell: IVec2,
-    source: DrainageNode,
-    seed: u64,
-    sea_level: f32,
-    water_fluid: &str,
-) -> WaterBody {
-    let hash = cell_hash(cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let base_radius = lerp(5.5, 9.0, hash_unit(hash.rotate_left(13)));
-    let aspect = lerp(0.84, 1.16, hash_unit(hash.rotate_left(31)));
-
-    WaterBody {
-        center: source.position,
-        radius: Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect)),
-        rotation: hash_unit(hash.rotate_left(47)) * std::f32::consts::TAU,
-        shape_seed: hash.rotate_left(9),
-        water_level: river_height(source, sea_level),
-        carve_depth: lerp(3.0, 5.0, hash_unit(hash.rotate_left(57))),
-        fluid_id: water_fluid.to_owned(),
-    }
-}
-
-pub(super) fn mountain_spring_body(
-    cell: IVec2,
-    source: DrainageNode,
-    seed: u64,
-    sea_level: f32,
-    water_fluid: &str,
-) -> WaterBody {
-    let hash = cell_hash(cell, seed ^ 0x1f83_d9ab_fb41_bd6b);
-    let base_radius = lerp(4.0, 7.5, hash_unit(hash.rotate_left(11)));
-    let aspect = lerp(0.82, 1.18, hash_unit(hash.rotate_left(27)));
-
-    WaterBody {
-        center: source.position,
-        radius: Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect)),
-        rotation: hash_unit(hash.rotate_left(41)) * std::f32::consts::TAU,
-        shape_seed: hash.rotate_left(7),
-        water_level: river_height(source, sea_level),
-        carve_depth: lerp(2.5, 4.5, hash_unit(hash.rotate_left(53))),
-        fluid_id: water_fluid.to_owned(),
-    }
-}
-
 pub(super) fn confluence_lake(
     cell: IVec2,
     source: DrainageNode,
