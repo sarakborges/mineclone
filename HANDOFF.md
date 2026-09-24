@@ -14120,3 +14120,18 @@ validação de objects em saves e agrupamentos de SystemParam para manter Clippy
 `too_many_arguments`.
 
 VERSION: `0.67.1`.
+
+## 2026-09-23 — Windows volta ao linker MSVC padrão
+
+Removido o override global de `rust-lld.exe` em `.cargo/config.toml`.
+O override havia sido introduzido apenas para acelerar links de desenvolvimento,
+mas passou a produzir falhas de link no Windows com símbolos Rust/LLVM internos
+(`anon.*.llvm.*` e `core::ptr::drop_glue`) ausentes em bundles genéricos do
+Bevy UI.
+
+O target `x86_64-pc-windows-msvc` volta a usar o linker padrão do toolchain
+MSVC (`link.exe`). As otimizações de `[profile.dev]` permanecem inalteradas,
+portanto a correção não mexe em runtime, conteúdo ou lógica de jogo.
+
+Se uma working copy que já falhou continuar reutilizando artefatos antigos, um
+`cargo clean` único é suficiente para eliminar o cache de objetos anterior.
