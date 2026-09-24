@@ -457,6 +457,7 @@ fn locate_structure(
                     probe_chunk,
                     id,
                     anchor,
+                    0,
                     &context,
                 ) {
                     if seen.insert(position) {

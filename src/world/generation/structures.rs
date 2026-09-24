@@ -307,6 +307,7 @@ pub(crate) fn located_structure_origins_in_chunk(
     horizontal_chunk: IVec2,
     structure_id: &str,
     placement_anchor: IVec2,
+    placement_y: i32,
     context: &ChunkGenerationContext<'_>,
 ) -> Vec<IVec3> {
     let chunk_size = CHUNK_SIZE as i32;
@@ -320,6 +321,7 @@ pub(crate) fn located_structure_origins_in_chunk(
         .iter()
         .filter(|candidate| {
             candidate.placement_anchor == placement_anchor
+                && candidate.placement_y == placement_y
                 && ((candidate.placement_id == structure_id
                     && candidate.primary_placement_piece)
                     || candidate.structure_id == structure_id

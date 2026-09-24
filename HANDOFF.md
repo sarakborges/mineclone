@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6I — placement_y consumido no filtro de occurrence
+
+O CI do identity 3D apontou `CachedStructureCandidate::placement_y` como ainda não lido. `located_structure_origins_in_chunk` agora recebe o Y da occurrence e exige correspondência junto do X/Z; o locate surface passa `0`, preservando seu comportamento atual e preparando o mesmo API para volume roots.
+
 ## 2026-09-24 — Parte 6I — Identidade 3D e conflitos verticais para volume roots
 
 Volume-root structures deixaram de herdar duas suposições 2D do antigo placement surface.
