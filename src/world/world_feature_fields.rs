@@ -17,6 +17,7 @@ pub(crate) struct CachedStructureCandidate {
     pub(crate) placement_anchor: IVec2,
     pub(crate) anchor: IVec2,
     pub(crate) origin_y: i32,
+    pub(crate) primary_placement_piece: bool,
 }
 
 use self::cache::FeatureCaches;

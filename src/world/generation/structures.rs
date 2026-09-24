@@ -56,6 +56,7 @@ struct StructureCandidate<'a> {
     placement_anchor: IVec2,
     anchor: IVec2,
     origin_y: i32,
+    primary_placement_piece: bool,
     priority: i32,
     reserve_space: bool,
     conflict_groups: &'a [String],
@@ -307,7 +308,8 @@ pub(crate) fn located_structure_origins_in_chunk(
         .iter()
         .filter(|candidate| {
             candidate.placement_anchor == placement_anchor
-                && (candidate.placement_id == structure_id
+                && ((candidate.placement_id == structure_id
+                    && candidate.primary_placement_piece)
                     || candidate.structure_id == structure_id
                     || context
                         .structures
@@ -353,6 +355,7 @@ fn resolved_structure_candidates(
                 placement_anchor: candidate.placement_anchor,
                 anchor: candidate.anchor,
                 origin_y: candidate.origin_y,
+                primary_placement_piece: candidate.primary_placement_piece,
             })
             .collect()
     })
@@ -430,6 +433,16 @@ fn resolve_structure_candidates_uncached<'a>(
                     && candidates_conflict(other, candidate)
             })
         })
+        .filter(|candidate| {
+            let (minimum_offset, maximum_offset) =
+                candidate.structure.horizontal_bounds_for_rotation(candidate.rotation);
+            rectangles_overlap(
+                candidate.anchor + minimum_offset,
+                candidate.anchor + maximum_offset,
+                chunk_min,
+                chunk_max,
+            )
+        })
         .collect::<Vec<_>>();
     accepted.sort_by(candidate_order);
     accepted
@@ -447,33 +460,19 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
     );
     let chunk_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_maximum = chunk_minimum + IVec2::splat(chunk_size - 1);
-    let mut maximum_top_y = 0;
-
-    for candidate in resolved_structure_candidates(chunk_origin, context).iter() {
-        let Some(root) = context.structures.get(&candidate.structure_id) else {
-            continue;
-        };
-        let root_origin = IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y);
-
-        for piece in connectors::resolve_connected_pieces(
-            context.biome_field.seed(),
-            root,
-            candidate.rotation,
-            root_origin,
-            context.structures,
-        ) {
+    resolved_structure_candidates(chunk_origin, context)
+        .iter()
+        .filter_map(|candidate| {
+            let structure = context.structures.get(&candidate.structure_id)?;
             let (minimum_offset, maximum_offset) =
-                piece.structure.horizontal_bounds_for_rotation(piece.rotation);
-            let minimum = piece.origin.xz() + minimum_offset;
-            let maximum = piece.origin.xz() + maximum_offset;
-            if rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum) {
-                maximum_top_y = maximum_top_y
-                    .max(piece.origin.y + piece.structure.effective_max_y_offset());
-            }
-        }
-    }
-
-    maximum_top_y
+                structure.horizontal_bounds_for_rotation(candidate.rotation);
+            let minimum = candidate.anchor + minimum_offset;
+            let maximum = candidate.anchor + maximum_offset;
+            rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum)
+                .then_some(candidate.origin_y + structure.effective_max_y_offset())
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 fn collect_structure_candidates<'a>(
@@ -551,13 +550,6 @@ fn collect_direct_structure_candidates<'a>(
                     )
                 });
             let rotation = structure.rotation_for_hash(member_hash);
-            let (minimum_offset, maximum_offset) =
-                structure.horizontal_bounds_for_rotation(rotation);
-            let minimum = anchor + minimum_offset;
-            let maximum = anchor + maximum_offset;
-            if !rectangles_overlap(minimum, maximum, target_min, target_max) {
-                return;
-            }
 
             let surface_sample = context
                 .biome_field
@@ -571,21 +563,38 @@ fn collect_direct_structure_candidates<'a>(
             else {
                 return;
             };
-
-            candidates.push(StructureCandidate {
-                biome_id,
-                placement_id,
+            let root_origin = IVec3::new(anchor.x, origin_y, anchor.y);
+            let pieces = connectors::resolve_connected_pieces(
+                context.biome_field.seed(),
                 structure,
                 rotation,
-                placement_anchor: anchor,
-                anchor,
-                origin_y,
-                priority: structure.priority,
-                reserve_space: structure.generation.reserve_space,
-                conflict_groups: &structure.conflict_groups,
-                minimum,
-                maximum,
-            });
+                root_origin,
+                context.structures,
+            );
+            let Some((minimum, maximum)) = connected_piece_bounds(&pieces) else {
+                return;
+            };
+            if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+                return;
+            }
+
+            for (piece_index, piece) in pieces.into_iter().enumerate() {
+                candidates.push(StructureCandidate {
+                    biome_id,
+                    placement_id,
+                    structure: piece.structure,
+                    rotation: piece.rotation,
+                    placement_anchor: anchor,
+                    anchor: piece.origin.xz(),
+                    origin_y: piece.origin.y,
+                    primary_placement_piece: piece_index == 0,
+                    priority: structure.priority,
+                    reserve_space: structure.generation.reserve_space,
+                    conflict_groups: &structure.conflict_groups,
+                    minimum,
+                    maximum,
+                });
+            }
         },
     );
 }
@@ -643,29 +652,32 @@ fn collect_structure_set_candidates<'a>(
                 return;
             };
 
-            let minimum = pieces
-                .iter()
-                .fold(IVec2::splat(i32::MAX), |minimum, piece| {
-                    minimum.min(piece.minimum)
-                });
-            let maximum = pieces
-                .iter()
-                .fold(IVec2::splat(i32::MIN), |maximum, piece| {
-                    maximum.max(piece.maximum)
-                });
+            let connected = connectors::resolve_connected_piece_forest(
+                context.biome_field.seed(),
+                pieces.iter().map(|piece| connectors::ResolvedConnectedPiece {
+                    structure: piece.structure,
+                    rotation: piece.rotation,
+                    origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
+                }),
+                context.structures,
+            );
+            let Some((minimum, maximum)) = connected_piece_bounds(&connected) else {
+                return;
+            };
             if !rectangles_overlap(minimum, maximum, target_min, target_max) {
                 return;
             }
 
-            for piece in pieces {
+            for (piece_index, piece) in connected.into_iter().enumerate() {
                 candidates.push(StructureCandidate {
                     biome_id,
                     placement_id,
                     structure: piece.structure,
                     rotation: piece.rotation,
                     placement_anchor,
-                    anchor: piece.anchor,
-                    origin_y: piece.origin_y,
+                    anchor: piece.origin.xz(),
+                    origin_y: piece.origin.y,
+                    primary_placement_piece: piece_index == 0,
                     priority: set.priority,
                     reserve_space: set.reserve_space,
                     conflict_groups: &set.conflict_groups,
@@ -725,6 +737,24 @@ fn visit_candidate_anchors_intersecting(
     }
 }
 
+fn connected_piece_bounds(
+    pieces: &[connectors::ResolvedConnectedPiece<'_>],
+) -> Option<(IVec2, IVec2)> {
+    pieces.iter().fold(None, |bounds, piece| {
+        let (minimum_offset, maximum_offset) =
+            piece.structure.horizontal_bounds_for_rotation(piece.rotation);
+        let minimum = piece.origin.xz() + minimum_offset;
+        let maximum = piece.origin.xz() + maximum_offset;
+        Some(match bounds {
+            Some((current_minimum, current_maximum)) => (
+                current_minimum.min(minimum),
+                current_maximum.max(maximum),
+            ),
+            None => (minimum, maximum),
+        })
+    })
+}
+
 fn candidate_identity<'a>(
     candidate: &StructureCandidate<'a>,
 ) -> (
@@ -769,9 +799,6 @@ fn candidate_order(
         .then_with(|| left.biome_id.cmp(right.biome_id))
         .then_with(|| left.placement_anchor.x.cmp(&right.placement_anchor.x))
         .then_with(|| left.placement_anchor.y.cmp(&right.placement_anchor.y))
-        .then_with(|| left.structure.id.cmp(&right.structure.id))
-        .then_with(|| left.anchor.x.cmp(&right.anchor.x))
-        .then_with(|| left.anchor.y.cmp(&right.anchor.y))
 }
 
 fn candidate_outranks(

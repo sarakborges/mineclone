@@ -142,23 +142,60 @@ pub(super) fn resolve_connected_pieces<'a>(
     root_origin: IVec3,
     structures: &'a StructureRegistry,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
-    let root_piece = ResolvedConnectedPiece {
-        structure: root,
-        rotation: root_rotation,
-        origin: root_origin,
-    };
-    let root_connectors = root.connector_points();
-    if !root_connectors
-        .iter()
-        .any(|connector| connector.target.is_some())
-    {
-        return vec![root_piece];
+    resolve_connected_piece_forest(
+        world_seed,
+        [ResolvedConnectedPiece {
+            structure: root,
+            rotation: root_rotation,
+            origin: root_origin,
+        }],
+        structures,
+    )
+}
+
+pub(super) fn resolve_connected_piece_forest<'a>(
+    world_seed: u64,
+    roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
+    structures: &'a StructureRegistry,
+) -> Vec<ResolvedConnectedPiece<'a>> {
+    let roots = roots.into_iter().collect::<Vec<_>>();
+    if roots.is_empty() {
+        return Vec::new();
+    }
+    if roots.iter().all(|root| {
+        !root
+            .structure
+            .connector_points()
+            .iter()
+            .any(|connector| connector.target.is_some())
+    }) {
+        return roots;
     }
 
-    let mut pieces = vec![root_piece];
     let mut occupied = HashSet::new();
-    occupy_piece(root_piece, &mut occupied);
+    for root in &roots {
+        occupy_piece(*root, &mut occupied);
+    }
 
+    let mut resolved = Vec::new();
+    for root in roots {
+        resolved.extend(resolve_connected_branch(
+            world_seed,
+            root,
+            structures,
+            &mut occupied,
+        ));
+    }
+    resolved
+}
+
+fn resolve_connected_branch<'a>(
+    world_seed: u64,
+    root: ResolvedConnectedPiece<'a>,
+    structures: &'a StructureRegistry,
+    occupied: &mut HashSet<IVec3>,
+) -> Vec<ResolvedConnectedPiece<'a>> {
+    let mut pieces = vec![root];
     let mut pending = VecDeque::from([PendingPiece {
         index: 0,
         remaining_strength: None,

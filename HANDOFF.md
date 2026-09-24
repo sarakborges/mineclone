@@ -1,3 +1,18 @@
+## 2026-09-24 — Parte 6D2 — Connected pieces integradas aos candidates e rasterização
+
+As chains resolvidas agora entram no mesmo pipeline autoritativo de structures normais.
+
+- direct placements expandem sua root Structure em connected pieces depois de validar biome/restrictions/ground da raiz;
+- Structure Sets expandem todas as suas peças como uma única forest, compartilhando ocupação para impedir que uma chain atravesse outra peça do mesmo set;
+- cada connected piece vira um `StructureCandidate` normal e é cacheada/rasterizada pelo pipeline existente;
+- todas as peças de uma ocorrência compartilham o mesmo envelope, priority, reserveSpace e conflictGroups da placement raiz/set;
+- conflict ordering agora é estritamente por ocorrência (`priority + placement + biome + placementAnchor`), sem tie-break diferente por peça; uma ocorrência ganha ou perde inteira;
+- depois do conflict resolution, o cache do chunk retém apenas as peças cuja geometria realmente toca aquele chunk, evitando carregar a chain inteira em todos os chunks dentro do envelope conservador;
+- `maximum_potential_structure_top_y_for_chunk` usa diretamente as connected pieces já materializadas, sem expandir a cadeia uma segunda vez;
+- `/locate` diferencia a peça primária da placement para não retornar cada filho conectado quando o alvo é o placement/root.
+
+Com esta etapa, discovery conservador, conflict resolution, chunk selection e rasterização passam a observar a mesma chain determinística. Ainda falta conteúdo de prova/testes authored antes de migrar World Tree ou cavern entrances.
+
 ## 2026-09-24 — Parte 6D1 — Helpers de bounds antigos removidos
 
 O CI do envelope connector-aware tornou dois caminhos anteriores totalmente órfãos: `StructureRegistry::bounds_for_reference` e o wrapper de `StructureSetDefinition::horizontal_bounds` que dependia dele. Ambos foram removidos fisicamente. O único caminho de discovery agora é o envelope connector-aware por placement/reference, sem fallback legado.
