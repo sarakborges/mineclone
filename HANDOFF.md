@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 7B3 — Connector distance protegido contra overflow
+
+`minDistance/maxDistance` usam `u32` no conteúdo, mas o voxel world usa coordenadas `i32`. A validação agora rejeita `maxDistance > i32::MAX` antes de compilar o connector runtime, evitando wrap ao converter o deslocamento para a face do connector.
+
 ## 2026-09-24 — Parte 7B3 — Connectors recebem minDistance/maxDistance
 
 O connector agora pode separar espacialmente a peça filha do ponto pai sem abandonar o vínculo/direção authored.

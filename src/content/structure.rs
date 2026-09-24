@@ -838,6 +838,11 @@ impl StructureDefinition {
                     "structure {} palette symbol {symbol} connector minDistance must be <= maxDistance",
                     self.id
                 );
+                assert!(
+                    connector.max_distance <= i32::MAX as u32,
+                    "structure {} palette symbol {symbol} connector maxDistance must fit in i32 world coordinates",
+                    self.id
+                );
                 if connector.target.is_none() {
                     assert!(
                         connector.min_distance == 0 && connector.max_distance == 0,
