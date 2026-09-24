@@ -1,0 +1,26 @@
+{
+  "id": "asteria:pebble",
+  "name": {
+    "english": "Pebble",
+    "portuguese_brazil": "Pedrinha",
+    "spanish": "Guijarro"
+  },
+  "category": "crafting_materials",
+  "visual": {
+    "type": "stackedSprites",
+    "texture": "textures/items/pebble.png",
+    "slices": 4,
+    "baseOffset": 0.0125,
+    "sliceSpacing": 0.025,
+    "size": [0.42, 0.42],
+    "alphaCutoff": 0.5
+  },
+  "icon": "textures/items/pebble.png",
+  "placementFaces": ["top"],
+  "target": {
+    "size": [0.42, 0.12, 0.42],
+    "centerOffset": [0.0, 0.05, 0.0]
+  },
+  "castsShadow": false,
+  "dropSelf": true
+}
