@@ -1,14 +1,119 @@
 {
   "id": "asteria:boulder_big",
-  "name": { "english": "Big Boulder", "portuguese_brazil": "Pedregulho grande", "spanish": "Roca grande" },
+  "name": {
+    "english": "Big Boulder",
+    "portuguese_brazil": "Pedregulho grande",
+    "spanish": "Roca grande"
+  },
   "locatable": false,
   "rotation": true,
-  "anchor": { "x": 3, "y": 0, "z": 3 },
-  "palette": { "S": { "block": "asteria:stone" } },
+  "anchor": {
+    "x": 5,
+    "y": 0,
+    "z": 5
+  },
+  "palette": {
+    "S": {
+      "block": "asteria:stone"
+    },
+    "P": {
+      "layersOnly": true,
+      "surfaceLayers": [
+        {
+          "layer": "asteria:pebble_slice_1",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_2",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_3",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        },
+        {
+          "layer": "asteria:pebble_slice_4",
+          "faces": [
+            "top"
+          ],
+          "rotationGroup": "pebble_stack"
+        }
+      ]
+    }
+  },
   "layers": [
-    { "y": 0, "rows": ["..SS...", ".SSSS..", "SSSSSS.", "SSSSSSS", ".SSSSSS", "..SSSS.", "...SS.."] },
-    { "y": 1, "rows": ["...S...", ".SSSS..", "SSSSSS.", ".SSSSS.", ".SSSS..", "..SSS..", "......."] },
-    { "y": 2, "rows": [".......", "..SS...", ".SSSS..", ".SSSS..", "..SSS..", ".......", "......."] },
-    { "y": 3, "rows": [".......", ".......", "..SS...", "..SSS..", "...S...", ".......", "......."] }
+    {
+      "y": 0,
+      "rows": [
+        ".....P.....",
+        "...........",
+        ".P..SS...P.",
+        "...SSSS....",
+        "..SSSSSS...",
+        "..SSSSSSS..",
+        "...SSSSSS..",
+        "....SSSS...",
+        ".P...SS....",
+        ".........P.",
+        "....P......"
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        "...........",
+        "...........",
+        ".....S.....",
+        "...SSSS....",
+        "..SSSSSS...",
+        "...SSSSS...",
+        "...SSSS....",
+        "....SSS....",
+        "...........",
+        "...........",
+        "..........."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        "...........",
+        "...........",
+        "...........",
+        "....SS.....",
+        "...SSSS....",
+        "...SSSS....",
+        "....SSS....",
+        "...........",
+        "...........",
+        "...........",
+        "..........."
+      ]
+    },
+    {
+      "y": 3,
+      "rows": [
+        "...........",
+        "...........",
+        "...........",
+        "...........",
+        "....SS.....",
+        "....SSS....",
+        ".....S.....",
+        "...........",
+        "...........",
+        "...........",
+        "..........."
+      ]
+    }
   ]
 }
