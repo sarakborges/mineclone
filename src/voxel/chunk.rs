@@ -9,6 +9,7 @@ use super::{
     fluid::FluidCell,
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     light::{BlockLight, VoxelLight},
+    object::ObjectCell,
 };
 
 pub const CHUNK_SIZE: usize = 16;
@@ -188,11 +189,17 @@ fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
     Arc::clone(EMPTY_LAYERS.get_or_init(|| Arc::new(HashMap::new())))
 }
 
+fn shared_empty_objects() -> Arc<HashMap<u16, ObjectCell>> {
+    static EMPTY_OBJECTS: OnceLock<Arc<HashMap<u16, ObjectCell>>> = OnceLock::new();
+    Arc::clone(EMPTY_OBJECTS.get_or_init(|| Arc::new(HashMap::new())))
+}
+
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
     blocks: Arc<BlockStorage>,
     fluids: Arc<FluidStorage>,
     layers: Arc<HashMap<u16, Vec<AttachedLayer>>>,
+    objects: Arc<HashMap<u16, ObjectCell>>,
     light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
@@ -241,6 +248,7 @@ pub(crate) struct VoxelChunkStructureMut<'a> {
     blocks: &'a mut BlockStorage,
     fluids: &'a mut FluidStorage,
     layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
+    objects: &'a mut HashMap<u16, ObjectCell>,
     block_palette_indices: HashMap<VoxelCell, u16>,
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
@@ -271,13 +279,14 @@ impl VoxelChunkStructureMut<'_> {
         let had_block = previous.is_some();
         let had_content = had_block || self.fluids.get(voxel_index).is_some();
 
-        if previous.map(|cell| cell.block_id) != Some(block.block_id)
-            && let Some(removed) = self.layers.remove(&(voxel_index as u16))
-        {
-            *self.layer_count = self
-                .layer_count
-                .checked_sub(removed.len())
-                .expect("chunk layer count cannot underflow");
+        if previous.map(|cell| cell.block_id) != Some(block.block_id) {
+            if let Some(removed) = self.layers.remove(&(voxel_index as u16)) {
+                *self.layer_count = self
+                    .layer_count
+                    .checked_sub(removed.len())
+                    .expect("chunk layer count cannot underflow");
+            }
+            self.objects.remove(&(voxel_index as u16));
         }
 
         let next = if let Some(&palette_index) = self.block_palette_indices.get(&block) {
@@ -356,6 +365,7 @@ impl VoxelChunkStructureMut<'_> {
                 .checked_sub(removed.len())
                 .expect("chunk layer count cannot underflow");
         }
+        self.objects.remove(&(voxel_index as u16));
         if self.fluids.get(voxel_index).is_none() {
             adjust_boundary_counts(self.boundary_content_counts, x, y, z, false);
         }
@@ -379,6 +389,16 @@ impl VoxelChunkStructureMut<'_> {
             face,
             layer,
         )
+    }
+
+    pub(crate) fn set_object(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        object: ObjectCell,
+    ) -> bool {
+        set_object_in_storage(self.blocks, self.objects, x, y, z, object)
     }
 
     pub(crate) fn clear_fluid(&mut self, x: usize, y: usize, z: usize) {
@@ -528,6 +548,7 @@ impl VoxelChunk {
             blocks: shared_empty_blocks(),
             fluids: shared_empty_fluids(),
             layers: shared_empty_layers(),
+            objects: shared_empty_objects(),
             light: shared_dark_light(),
             block_count: 0,
             fluid_count: 0,
@@ -540,7 +561,10 @@ impl VoxelChunk {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.block_count == 0 && self.fluid_count == 0 && self.layer_count == 0
+        self.block_count == 0
+            && self.fluid_count == 0
+            && self.layer_count == 0
+            && self.objects.is_empty()
     }
 
     pub(crate) fn has_fluid(&self) -> bool {
@@ -690,6 +714,19 @@ impl VoxelChunk {
             .map(|(&index, layers)| (index as usize, layers.as_slice()))
     }
 
+    pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
+        if !in_bounds(x, y, z) {
+            return None;
+        }
+        self.objects.get(&(index(x as usize, y as usize, z as usize) as u16)).copied()
+    }
+
+    pub(crate) fn object_entries(&self) -> impl Iterator<Item = (usize, ObjectCell)> + '_ {
+        self.objects
+            .iter()
+            .map(|(&index, &object)| (index as usize, object))
+    }
+
     pub fn fluid_at(&self, x: i32, y: i32, z: i32) -> Option<FluidCell> {
         if !in_bounds(x, y, z) {
             return None;
@@ -832,6 +869,7 @@ impl VoxelChunk {
         let blocks = Arc::make_mut(&mut self.blocks);
         let fluids = Arc::make_mut(&mut self.fluids);
         let layers = Arc::make_mut(&mut self.layers);
+        let objects = Arc::make_mut(&mut self.objects);
         let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
         let block_palette_indices = blocks
             .palette
@@ -853,6 +891,7 @@ impl VoxelChunk {
                 blocks,
                 fluids,
                 layers,
+                objects,
                 block_palette_indices,
                 block_count: &mut self.block_count,
                 fluid_count: &mut self.fluid_count,
@@ -929,11 +968,13 @@ impl VoxelChunk {
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         let blocks = Arc::make_mut(&mut self.blocks);
         let layers = Arc::make_mut(&mut self.layers);
+        let objects = Arc::make_mut(&mut self.objects);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         set_block_in_storage(
             blocks,
             self.fluids.as_ref(),
             layers,
+            objects,
             &mut self.block_count,
             &mut self.layer_count,
             fluid_frontier_sources,
@@ -976,6 +1017,21 @@ impl VoxelChunk {
     ) -> bool {
         let layers = Arc::make_mut(&mut self.layers);
         remove_layer_in_storage(layers, &mut self.layer_count, x, y, z, face, layer_id)
+    }
+
+    pub(crate) fn set_object(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        object: ObjectCell,
+    ) -> bool {
+        let objects = Arc::make_mut(&mut self.objects);
+        set_object_in_storage(self.blocks.as_ref(), objects, x, y, z, object)
+    }
+
+    pub(crate) fn remove_object(&mut self, x: usize, y: usize, z: usize) -> Option<ObjectCell> {
+        Arc::make_mut(&mut self.objects).remove(&(index(x, y, z) as u16))
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
@@ -1062,6 +1118,7 @@ fn set_block_in_storage(
     blocks: &mut BlockStorage,
     fluids: &FluidStorage,
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
+    objects: &mut HashMap<u16, ObjectCell>,
     block_count: &mut usize,
     layer_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
@@ -1077,12 +1134,13 @@ fn set_block_in_storage(
     let had_content = had_block || fluids.get(index).is_some();
     let has_block = block.is_some();
 
-    if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id)
-        && let Some(removed) = layers.remove(&(index as u16))
-    {
-        *layer_count = layer_count
-            .checked_sub(removed.len())
-            .expect("chunk layer count cannot underflow");
+    if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id) {
+        if let Some(removed) = layers.remove(&(index as u16)) {
+            *layer_count = layer_count
+                .checked_sub(removed.len())
+                .expect("chunk layer count cannot underflow");
+        }
+        objects.remove(&(index as u16));
     }
 
     let has_content = has_block || fluids.get(index).is_some();
@@ -1135,6 +1193,26 @@ fn add_layer_in_storage(
     );
     entries.push(AttachedLayer { face, cell: layer });
     *layer_count += 1;
+    true
+}
+
+fn set_object_in_storage(
+    blocks: &BlockStorage,
+    objects: &mut HashMap<u16, ObjectCell>,
+    x: usize,
+    y: usize,
+    z: usize,
+    object: ObjectCell,
+) -> bool {
+    let voxel_index = index(x, y, z);
+    if blocks.get(voxel_index).is_none() {
+        return false;
+    }
+    let key = voxel_index as u16;
+    if objects.get(&key).copied() == Some(object) {
+        return false;
+    }
+    objects.insert(key, object);
     true
 }
 
