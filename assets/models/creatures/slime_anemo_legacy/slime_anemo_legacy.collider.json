@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "id": "asteria:slime_anemo_legacy",
+  "asset": "slime_anemo_legacy.glb",
+  "units": "meters",
+  "world_up": "+Y",
+  "forward": "-Z",
+  "origin": "center of ground contact, feet at local y = 0",
+  "model_bounds_rest": {
+    "size": [
+      1.9,
+      0.9,
+      0.96
+    ],
+    "center": [
+      0,
+      0.45,
+      0
+    ],
+    "approximate_visual_height": 0.9
+  },
+  "collider": {
+    "type": "aabb",
+    "size": [
+      0.78,
+      0.84,
+      0.78
+    ],
+    "center_offset": [
+      0,
+      0.42,
+      0
+    ],
+    "min_offset": [
+      -0.39,
+      0,
+      -0.39
+    ],
+    "max_offset": [
+      0.39,
+      0.84,
+      0.39
+    ],
+    "follows": "SlimeRoot world transform, not visual squash",
+    "solid_world_collision": true,
+    "targeting": true
+  },
+  "target_collider": {
+    "type": "aabb",
+    "size": [
+      1.9,
+      0.9,
+      0.96
+    ],
+    "center_offset": [
+      0,
+      0.45,
+      0
+    ]
+  },
+  "animation": {
+    "clips": {
+      "Idle": {
+        "duration_s": 2,
+        "loop": true
+      },
+      "Anticipate": {
+        "duration_s": 0.24,
+        "loop": false
+      },
+      "Airborne": {
+        "duration_s": 0.72,
+        "loop": true
+      },
+      "Land": {
+        "duration_s": 0.34,
+        "loop": false
+      },
+      "Hurt": {
+        "duration_s": 0.38,
+        "loop": false
+      },
+      "Death": {
+        "duration_s": 0.75,
+        "loop": false
+      }
+    },
+    "root_motion": false,
+    "visual_root": "BodyPivot",
+    "jump_sequence": [
+      "Anticipate",
+      "Airborne",
+      "Land",
+      "Idle"
+    ]
+  },
+  "materials": {
+    "shell": "AirShell",
+    "core": "AirCore",
+    "face": "SlimeFace",
+    "wings": [
+      "AirWingWhite",
+      "AirWingMint"
+    ],
+    "detail": "AirDetail",
+    "unlit": true,
+    "rule": "Fixed authored Anemo colors; SlimeFace is the only runtime texture override."
+  },
+  "authoring": {
+    "generator": "generate_slime_anemo_legacy.py",
+    "base_model": "../slime/slime.glb",
+    "construction": "compact cubic legacy silhouette with block-feather wings and two air motes"
+  }
+}
