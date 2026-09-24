@@ -9,6 +9,7 @@ use crate::{
     content::{
         builtin_ids::DYED_PROPERTY_ID,
         item::ItemRegistry,
+        object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
@@ -50,6 +51,7 @@ struct HeldSpriteTint;
 pub(crate) struct HeldSpriteContent<'w> {
     hotbar: Res<'w, PlayerHotbar>,
     items: Res<'w, ItemRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
     brush_mode: Res<'w, BrushMode>,
     properties: Res<'w, SecondaryPropertyRegistry>,
@@ -63,6 +65,14 @@ impl HeldSpriteContent<'_> {
         if let Some(item) = self.items.get(item_id) {
             return Some(HeldSpriteVisual {
                 icon: &item.icon,
+                tint_icon: None,
+                tint: None,
+                kind: HeldSpriteKind::Item,
+            });
+        }
+        if let Some(object) = self.objects.get(item_id) {
+            return Some(HeldSpriteVisual {
+                icon: &object.icon,
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,

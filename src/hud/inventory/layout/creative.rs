@@ -12,6 +12,8 @@ use crate::{
         item_id::intern_item_id,
         layer::{LayerDefinition, LayerRegistry},
         layer_id::intern_layer_id,
+        object::{ObjectDefinition, ObjectRegistry},
+        object_id::intern_object_id,
         tool::{ToolDefinition, ToolRegistry},
         tool_id::intern_tool_id,
     },
@@ -38,6 +40,7 @@ struct CreativeCatalogSources<'a> {
     items: &'a ItemRegistry,
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
     tools: &'a ToolRegistry,
     categories: &'a InventoryCategoryRegistry,
     language: Language,
@@ -48,6 +51,7 @@ enum CreativeCatalogItem<'a> {
     Item(&'a ItemDefinition),
     Block(&'a BlockDefinition),
     Layer(&'a LayerDefinition),
+    Object(&'a ObjectDefinition),
     Tool(&'a ToolDefinition),
 }
 
@@ -57,6 +61,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Item(item) => &item.id,
             Self::Block(block) => &block.id,
             Self::Layer(layer) => &layer.id,
+            Self::Object(object) => &object.id,
             Self::Tool(tool) => &tool.id,
         }
     }
@@ -66,6 +71,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Item(item) => &item.category,
             Self::Block(block) => &block.category,
             Self::Layer(layer) => &layer.category,
+            Self::Object(object) => &object.category,
             Self::Tool(tool) => &tool.category,
         }
     }
@@ -75,6 +81,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Item(item) => item.name.text(language),
             Self::Block(block) => block.name.text(language),
             Self::Layer(layer) => layer.name.text(language),
+            Self::Object(object) => object.name.text(language),
             Self::Tool(tool) => tool.name.text(language),
         }
     }
@@ -84,6 +91,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Item(item) => intern_item_id(&item.id),
             Self::Block(block) => intern_block_id(&block.id),
             Self::Layer(layer) => intern_layer_id(&layer.id),
+            Self::Object(object) => intern_object_id(&object.id),
             Self::Tool(tool) => intern_tool_id(&tool.id),
         }
     }
@@ -393,6 +401,7 @@ pub(in crate::hud::inventory) fn spawn_creative_catalog_rows(
             items: items.items,
             blocks: items.blocks,
             layers: items.layers,
+            objects: items.objects,
             tools: items.tools,
             categories,
             language: items.language,
@@ -477,6 +486,7 @@ fn filtered_creative_catalog<'a>(
         .map(CreativeCatalogItem::Item)
         .chain(sources.blocks.iter().map(CreativeCatalogItem::Block))
         .chain(sources.layers.iter().map(CreativeCatalogItem::Layer))
+        .chain(sources.objects.iter().map(CreativeCatalogItem::Object))
         .chain(sources.tools.iter().map(CreativeCatalogItem::Tool))
         .filter(|item| category.is_none_or(|category| item.category() == category))
         .filter(|item| match item {

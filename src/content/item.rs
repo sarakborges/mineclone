@@ -9,6 +9,7 @@ use super::{
     inventory_category::InventoryCategoryRegistry,
     item_id::intern_item_id,
     layer::LayerRegistry,
+    object::ObjectRegistry,
     registry::DefinitionMap,
     tool::ToolRegistry,
 };
@@ -82,6 +83,7 @@ pub(crate) fn display_name<'a>(
     items: &'a ItemRegistry,
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
     tools: &'a ToolRegistry,
     language: Language,
 ) -> &'a str {
@@ -93,6 +95,9 @@ pub(crate) fn display_name<'a>(
     }
     if let Some(layer) = layers.get(item_id) {
         return layer.name.text(language);
+    }
+    if let Some(object) = objects.get(item_id) {
+        return object.name.text(language);
     }
     if let Some(tool) = tools.get(item_id) {
         return tool.name.text(language);

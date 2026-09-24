@@ -11,6 +11,7 @@ use crate::{
         builtin_ids::BIOME_TINT_METADATA_KEY,
         item::ItemRegistry,
         layer::LayerRegistry,
+        object::ObjectRegistry,
         tool::ToolRegistry,
     },
     gameplay::availability::world_interaction_available,
@@ -199,6 +200,7 @@ struct WorldItemSpawnContent<'w> {
     block_content: BlockVisualContent<'w>,
     items: Res<'w, ItemRegistry>,
     layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
 }
 
@@ -244,6 +246,7 @@ fn spawn_world_items(
                     block_content: &content.block_content,
                     items: &content.items,
                     layers: &content.layers,
+                    objects: &content.objects,
                     tools: &content.tools,
                 },
                 WorldItemVisualMaterialAssets {
@@ -261,6 +264,7 @@ struct WorldItemVisualContent<'a, 'w> {
     block_content: &'a BlockVisualContent<'w>,
     items: &'a ItemRegistry,
     layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
     tools: &'a ToolRegistry,
 }
 
@@ -320,6 +324,7 @@ fn spawn_world_item_visual(
         .get(item_id)
         .map(|definition| definition.icon.as_str())
         .or_else(|| content.layers.get(item_id).map(|definition| definition.texture.as_str()))
+        .or_else(|| content.objects.get(item_id).map(|definition| definition.icon.as_str()))
         .or_else(|| {
             content.tools
                 .get(item_id)
