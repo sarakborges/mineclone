@@ -1,3 +1,7 @@
+## 2026-09-24 — Parte 6H — Correção de parsing/imports do volume placement
+
+O primeiro CI do volume placement encontrou um parse ambíguo do Rust em comparações logo após `as f32` e um import surface antigo em `biome.rs`. As comparações foram parentetizadas e o import consolidado. Nenhum comportamento foi alterado.
+
 ## 2026-09-24 — Parte 6H — Volume biomes podem iniciar Structure connector chains
 
 Foi removida a dependência implícita de surface biome para toda Structure placement.

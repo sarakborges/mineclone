@@ -11,7 +11,7 @@ use super::{
     biome_material::BiomeMaterialLayer,
     biome_structure::BiomeStructurePlacementRules,
     biome_sky_layer::BiomeSkyLayerVisuals,
-    biome_structure::{BiomeStructure, StructurePlacementRules},
+    biome_structure::{BiomeStructure, BiomeStructurePlacementRules},
     biome_surface_fluid::BiomeSurfaceFluid,
     biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,

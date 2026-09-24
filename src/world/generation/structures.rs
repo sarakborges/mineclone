@@ -824,8 +824,8 @@ fn collect_volume_structure_candidates<'a>(
             || anchor.x > candidate_max.x
             || anchor.z < candidate_min.y
             || anchor.z > candidate_max.y
-            || anchor.y as f32 < range.min
-            || anchor.y as f32 > range.max
+            || (anchor.y as f32) < range.min
+            || (anchor.y as f32) > range.max
         {
             continue;
         }
