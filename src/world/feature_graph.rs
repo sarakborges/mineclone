@@ -157,6 +157,7 @@ impl FeatureGraph {
 
     // River bank grading scales with the base radius of EACH edge, not a
     // fixed global extra width. Biomes may multiply widths above the default.
+    #[cfg(test)]
     pub(crate) fn sample_horizontal_with_radius_multiplier(
         &self,
         position: Vec2,
