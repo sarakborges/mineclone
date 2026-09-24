@@ -480,7 +480,7 @@ impl StructureDefinition {
             let horizontal = (voxel.offset.x, voxel.offset.z);
             footprint.insert(horizontal);
             column_voxels.entry(horizontal).or_default().push(*voxel);
-            if voxel.offset.y == min_y_offset {
+            if voxel.offset.y == min_y_offset && !self.layers_only_voxel(voxel) {
                 supports.insert(horizontal);
             }
             spans
