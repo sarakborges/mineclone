@@ -104,7 +104,7 @@ impl OwnedLoadContent {
                 id: definition.id.clone(),
                 name: definition.name.clone(),
                 category: definition.category.clone(),
-                model: definition.model.clone(),
+                visual: definition.visual.clone(),
                 icon: definition.icon.clone(),
                 tint: definition.tint,
                 placement_faces: definition.placement_faces.clone(),
