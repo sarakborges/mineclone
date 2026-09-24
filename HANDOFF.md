@@ -1,3 +1,25 @@
+## 2026-09-24 — World-object render hierarchy achatada
+
+O runtime de world objects deixou de criar hierarquias ECS por objeto estático.
+
+- `Model` não instancia mais `WorldAssetRoot(Scene(0))`; o object root renderiza
+  diretamente `Mesh0/Primitive0` do GLTF;
+- o material StandardMaterial do GLTF é carregado diretamente via `Material0/std` e
+  recebe tint/unlit assim que o asset fica disponível, preservando o cache existente;
+- o grass atual é compatível com esse caminho: seu GLB authored contém exatamente uma
+  primitive, material 0 e nodes sem transform geométrico adicional;
+- `stackedSprites` não cria mais 4 child entities: todas as slices são combinadas em um
+  único Mesh reutilizável por configuração;
+- stick/pebble passam de 5 ECS entities por object para 1;
+- grass deixa de criar uma Scene hierarchy por tufo e passa a 1 entity por object;
+- shadow flags agora ficam no próprio entity renderizável;
+- preloading mantém somente handles de mesh/material; não existem mais hidden Scene
+  instances deslocadas para -1.000.000 apenas para forçar asset loading.
+
+A aparência e os targets continuam data-driven; esta etapa só remove custo estrutural de
+ECS/transform/visibility e permite que o renderer faça batching entre entities que
+compartilham mesh/material.
+
 ### CI follow-up — broadphase visibility
 
 Clippy corretamente rejeitou a exposição indireta de um `Local<CreatureContactBroadphase>`

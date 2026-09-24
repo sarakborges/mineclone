@@ -1,13 +1,12 @@
-use std::f32::consts::FRAC_PI_2;
-
 use bevy::{
-    asset::AssetId,
+    asset::{AssetId, RenderAssetUsages},
     ecs::system::SystemParam,
     gltf::GltfAssetLabel,
     light::{NotShadowCaster, NotShadowReceiver},
+    mesh::Indices,
     platform::collections::{HashMap, HashSet},
     prelude::*,
-    world_serialization::WorldInstanceReady,
+    render::render_resource::PrimitiveTopology,
 };
 
 use crate::{
@@ -183,7 +182,13 @@ struct ObjectMaterialKey {
 
 #[derive(Resource, Default)]
 struct ObjectModelPreloads {
-    _scenes: Vec<Handle<bevy::world_serialization::WorldAsset>>,
+    _meshes: Vec<Handle<Mesh>>,
+    _materials: Vec<Handle<StandardMaterial>>,
+}
+
+#[derive(Component)]
+struct PendingObjectModelMaterial {
+    source: Handle<StandardMaterial>,
 }
 
 #[derive(Resource, Default)]
@@ -193,6 +198,9 @@ struct ObjectMaterialCache(HashMap<ObjectMaterialKey, Handle<StandardMaterial>>)
 struct StackedSpriteMeshKey {
     width: u32,
     depth: u32,
+    slices: u8,
+    base_offset: u32,
+    slice_spacing: u32,
 }
 
 #[derive(Resource, Default)]
@@ -245,6 +253,7 @@ impl Plugin for WorldObjectsPlugin {
                     apply_object_placement_requests,
                     apply_object_removal_requests,
                     sync_world_objects,
+                    configure_pending_object_model_materials,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -261,28 +270,27 @@ impl Plugin for WorldObjectsPlugin {
 
 
 fn preload_object_models(
-    mut commands: Commands,
     objects: Res<ObjectRegistry>,
     asset_server: Res<AssetServer>,
     mut preloads: ResMut<ObjectModelPreloads>,
 ) {
-    preloads._scenes = objects
-        .iter()
-        .filter_map(|definition| match &definition.visual {
-            ObjectVisualDefinition::Model { path } => Some(
-                asset_server.load(GltfAssetLabel::Scene(0).from_asset(path.clone())),
-            ),
-            ObjectVisualDefinition::StackedSprites { .. } => None,
-        })
-        .collect();
+    preloads._meshes.clear();
+    preloads._materials.clear();
 
-    for scene in &preloads._scenes {
-        commands.spawn((
-            Name::new("Object Model Preload"),
-            WorldAssetRoot(scene.clone()),
-            Transform::from_translation(Vec3::splat(-1_000_000.0)),
-            Visibility::Hidden,
+    for definition in objects.iter() {
+        let ObjectVisualDefinition::Model { path } = &definition.visual else {
+            continue;
+        };
+        preloads._meshes.push(asset_server.load(
+            GltfAssetLabel::Primitive {
+                mesh: 0,
+                primitive: 0,
+            }
+            .from_asset(path.clone()),
         ));
+        preloads
+            ._materials
+            .push(asset_server.load(format!("{path}#Material0/std")));
     }
 }
 
@@ -441,20 +449,29 @@ fn spawn_world_object(
 
     match &definition.visual {
         ObjectVisualDefinition::Model { path } => {
-            let scene = content
-                .asset_server
-                .load(GltfAssetLabel::Scene(0).from_asset(path.clone()));
-            let appearance = WorldObjectAppearance {
-                tint,
-                unlit: definition.unlit,
-                casts_shadow: definition.casts_shadow,
-                receives_shadow: definition.receives_shadow,
-            };
-            root.with_children(|children| {
-                children
-                    .spawn((WorldAssetRoot(scene), appearance))
-                    .observe(configure_loaded_object_scene);
-            });
+            let mesh = content.asset_server.load(
+                GltfAssetLabel::Primitive {
+                    mesh: 0,
+                    primitive: 0,
+                }
+                .from_asset(path.clone()),
+            );
+            let source_material: Handle<StandardMaterial> =
+                content.asset_server.load(format!("{path}#Material0/std"));
+            root.insert((
+                Mesh3d(mesh),
+                MeshMaterial3d(source_material.clone()),
+                WorldObjectAppearance {
+                    tint,
+                    unlit: definition.unlit,
+                    casts_shadow: definition.casts_shadow,
+                    receives_shadow: definition.receives_shadow,
+                },
+                PendingObjectModelMaterial {
+                    source: source_material,
+                },
+            ));
+            apply_shadow_flags(&mut root, definition);
         }
         ObjectVisualDefinition::StackedSprites {
             texture,
@@ -467,11 +484,19 @@ fn spawn_world_object(
             let mesh_key = StackedSpriteMeshKey {
                 width: size[0].to_bits(),
                 depth: size[1].to_bits(),
+                slices: *slices,
+                base_offset: base_offset.to_bits(),
+                slice_spacing: slice_spacing.to_bits(),
             };
             let mesh = if let Some(existing) = assets.stacked_meshes.0.get(&mesh_key) {
                 existing.clone()
             } else {
-                let handle = assets.meshes.add(Rectangle::new(size[0], size[1]));
+                let handle = assets.meshes.add(stacked_sprite_mesh(
+                    *size,
+                    *slices,
+                    *base_offset,
+                    *slice_spacing,
+                ));
                 assets.stacked_meshes.0.insert(mesh_key, handle.clone());
                 handle
             };
@@ -508,23 +533,8 @@ fn spawn_world_object(
                 handle
             };
 
-            root.with_children(|children| {
-                for slice in 0..*slices {
-                    let y = *base_offset + *slice_spacing * f32::from(slice);
-                    let mut slice_entity = children.spawn((
-                        Mesh3d(mesh.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::from_translation(Vec3::Y * y)
-                            .with_rotation(Quat::from_rotation_x(-FRAC_PI_2)),
-                    ));
-                    if !definition.casts_shadow {
-                        slice_entity.insert(NotShadowCaster);
-                    }
-                    if !definition.receives_shadow {
-                        slice_entity.insert(NotShadowReceiver);
-                    }
-                }
-            });
+            root.insert((Mesh3d(mesh), MeshMaterial3d(material)));
+            apply_shadow_flags(&mut root, definition);
         }
     }
 
@@ -632,46 +642,32 @@ fn texture_rotation_radians(rotation: TextureRotation) -> f32 {
     }
 }
 
-fn configure_loaded_object_scene(
-    ready: On<WorldInstanceReady>,
+fn configure_pending_object_model_materials(
     mut commands: Commands,
-    children: Query<&Children>,
-    appearances: Query<&WorldObjectAppearance>,
-    mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
+    pending: Query<(
+        Entity,
+        &PendingObjectModelMaterial,
+        &WorldObjectAppearance,
+    )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut cache: ResMut<ObjectMaterialCache>,
 ) {
-    let Ok(appearance) = appearances.get(ready.entity) else {
-        return;
-    };
-    let rgba = appearance.tint.to_srgba();
-    let tint = [
-        rgba.red.to_bits(),
-        rgba.green.to_bits(),
-        rgba.blue.to_bits(),
-        rgba.alpha.to_bits(),
-    ];
-
-    for descendant in children.iter_descendants(ready.entity) {
-        if !appearance.casts_shadow {
-            commands.entity(descendant).insert(NotShadowCaster);
-        }
-        if !appearance.receives_shadow {
-            commands.entity(descendant).insert(NotShadowReceiver);
-        }
-
-        let Ok(original) = mesh_materials.get(descendant) else {
-            continue;
-        };
+    for (entity, pending, appearance) in &pending {
+        let rgba = appearance.tint.to_srgba();
         let key = ObjectMaterialKey {
-            material: original.id(),
-            tint,
+            material: pending.source.id(),
+            tint: [
+                rgba.red.to_bits(),
+                rgba.green.to_bits(),
+                rgba.blue.to_bits(),
+                rgba.alpha.to_bits(),
+            ],
             unlit: appearance.unlit,
         };
         let replacement = if let Some(existing) = cache.0.get(&key) {
             existing.clone()
         } else {
-            let Some(mut material) = materials.get(original.id()).cloned() else {
+            let Some(mut material) = materials.get(&pending.source).cloned() else {
                 continue;
             };
             material.base_color = appearance.tint;
@@ -680,6 +676,70 @@ fn configure_loaded_object_scene(
             cache.0.insert(key, handle.clone());
             handle
         };
-        commands.entity(descendant).insert(MeshMaterial3d(replacement));
+
+        commands
+            .entity(entity)
+            .insert(MeshMaterial3d(replacement))
+            .remove::<PendingObjectModelMaterial>()
+            .remove::<WorldObjectAppearance>();
     }
 }
+
+fn apply_shadow_flags(root: &mut EntityCommands<'_>, definition: &ObjectDefinition) {
+    if !definition.casts_shadow {
+        root.insert(NotShadowCaster);
+    }
+    if !definition.receives_shadow {
+        root.insert(NotShadowReceiver);
+    }
+}
+
+fn stacked_sprite_mesh(
+    size: [f32; 2],
+    slices: u8,
+    base_offset: f32,
+    slice_spacing: f32,
+) -> Mesh {
+    let half_x = size[0] * 0.5;
+    let half_z = size[1] * 0.5;
+    let mut positions = Vec::with_capacity(usize::from(slices) * 4);
+    let mut normals = Vec::with_capacity(usize::from(slices) * 4);
+    let mut uvs = Vec::with_capacity(usize::from(slices) * 4);
+    let mut indices = Vec::with_capacity(usize::from(slices) * 6);
+
+    for slice in 0..slices {
+        let y = base_offset + slice_spacing * f32::from(slice);
+        let base = u32::from(slice) * 4;
+        positions.extend_from_slice(&[
+            [-half_x, y, -half_z],
+            [half_x, y, -half_z],
+            [half_x, y, half_z],
+            [-half_x, y, half_z],
+        ]);
+        normals.extend_from_slice(&[[0.0, 1.0, 0.0]; 4]);
+        uvs.extend_from_slice(&[
+            [0.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 0.0],
+            [0.0, 0.0],
+        ]);
+        indices.extend_from_slice(&[
+            base,
+            base + 1,
+            base + 2,
+            base,
+            base + 2,
+            base + 3,
+        ]);
+    }
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_indices(Indices::U32(indices))
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+}
+
