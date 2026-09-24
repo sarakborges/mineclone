@@ -1,7 +1,5 @@
 use crate::content::{block::BlockRegistry, block_id::intern_block_id};
 
-use super::block_face::BlockFace;
-
 const LOG_PREFIX: &str = "asteria:log_";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,18 +61,6 @@ pub(crate) fn transformed_log_id(
     let candidate = format!("{LOG_PREFIX}{wood}{}", target.suffix());
     blocks.get(&candidate)?;
     Some(intern_block_id(&candidate))
-}
-
-pub(crate) fn hollow_surface_texture_face(
-    block_id: &str,
-    source_face: BlockFace,
-    interior_surface: bool,
-) -> BlockFace {
-    if interior_surface && is_hollow_log_id(block_id) {
-        BlockFace::Top
-    } else {
-        source_face
-    }
 }
 
 #[cfg(test)]

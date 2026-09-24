@@ -114,9 +114,10 @@ fn edit_targeted_block(
     }
 
     let (player_transform, game_mode) = input.player.into_inner();
-    if right_pressed
-        && (input.world_item_target.0.is_some() || input.object_target.0.is_some())
-    {
+    if input.world_item_target.0.is_some() {
+        return;
+    }
+    if right_pressed && input.object_target.0.is_some() {
         return;
     }
     if middle_pressed && game_mode.has_creative_inventory() {

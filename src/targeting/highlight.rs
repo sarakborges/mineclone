@@ -23,6 +23,7 @@ use crate::{
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
+    world_objects::{TargetedWorldObject, WorldObjectInstance},
     voxel::{
         log_variant::is_hollow_log_id,
         microblock::{
@@ -108,6 +109,8 @@ struct ArtisansKitPlacementGhost;
 #[derive(SystemParam)]
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
+    targeted_object: Res<'w, TargetedWorldObject>,
+    world_objects: Query<'w, 's, (&'static WorldObjectInstance, &'static Transform)>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
 }
@@ -201,6 +204,7 @@ fn update_highlight(
             || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
     });
     if !scene_changed
+        && !input.targeted_object.is_changed()
         && !artisans_kit_selected
         && !input.brush_mode.is_changed()
         && !content.blocks.is_changed()
@@ -225,6 +229,20 @@ fn update_highlight(
         && let Some(mut material) = view.materials.get_mut(highlight_material_handle)
     {
         material.base_color = highlight_color;
+    }
+
+    if let Some(entity) = input.targeted_object.0
+        && let Ok((object, transform)) = input.world_objects.get(entity)
+    {
+        hide_if_visible(&mut view.brush_ghost.1);
+        hide_if_visible(&mut view.artisans_kit_placement.1);
+        let (minimum, maximum) = object.target_bounds(transform.translation);
+        let size = (maximum - minimum) * HIGHLIGHT_SCALE;
+        let translation = (minimum + maximum) * 0.5;
+        view.highlight.0.translation = translation;
+        view.highlight.0.scale = size;
+        show_if_hidden(&mut view.highlight.1);
+        return;
     }
 
     let Some(hit) = input.scene.hit() else {

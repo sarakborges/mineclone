@@ -103,7 +103,7 @@ impl WorldItemSpawnRequest {
             stack,
             position,
             velocity: Vec3::ZERO,
-            pickup: WorldItemPickup::Proximity,
+            pickup: WorldItemPickup::Interact,
         }
     }
 
@@ -112,7 +112,7 @@ impl WorldItemSpawnRequest {
             stack,
             position,
             velocity,
-            pickup: WorldItemPickup::Proximity,
+            pickup: WorldItemPickup::Interact,
         }
     }
 }

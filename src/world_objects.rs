@@ -31,18 +31,28 @@ use crate::{
 
 #[derive(Component)]
 pub(crate) struct WorldObjectInstance {
+    object_id: &'static str,
     support: IVec3,
     target_size: Vec3,
     target_center_offset: Vec3,
 }
 
 impl WorldObjectInstance {
-    fn new(support: IVec3, definition: &ObjectDefinition) -> Self {
+    fn new(object_id: &'static str, support: IVec3, definition: &ObjectDefinition) -> Self {
         Self {
+            object_id,
             support,
             target_size: Vec3::from_array(definition.target.size),
             target_center_offset: Vec3::from_array(definition.target.center_offset),
         }
+    }
+
+    pub(crate) fn object_id(&self) -> &'static str {
+        self.object_id
+    }
+
+    pub(crate) fn support(&self) -> IVec3 {
+        self.support
     }
 
     pub(crate) fn target_bounds(&self, origin: Vec3) -> (Vec3, Vec3) {
@@ -296,7 +306,7 @@ fn spawn_world_object(
 
     let mut root = commands.spawn((
         Name::new(format!("World Object ({})", definition.id)),
-        WorldObjectInstance::new(support, definition),
+        WorldObjectInstance::new(object.object_id, support, definition),
         transform,
         Visibility::Hidden,
         ChunkRenderCoord(chunk_coord_from_world(support)),

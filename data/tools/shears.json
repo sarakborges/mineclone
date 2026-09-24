@@ -1,5 +1,5 @@
 {
-  "id": "asteria:shears_rustic",
+  "id": "asteria:shears",
   "name": {
     "english": "Shears",
     "portuguese_brazil": "Tesoura",
@@ -11,7 +11,7 @@
     "spanish": "Elimina capas superficiales de los bloques."
   },
   "category": "tools",
-  "icon": "",
+  "icon": "textures/tools/shears.png",
   "leftBehavior": "asteria:none",
   "rightBehavior": "asteria:layer/remove"
 }

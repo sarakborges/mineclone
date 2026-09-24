@@ -72,6 +72,7 @@ struct PlacementPreviewSpawnContent<'w> {
 
 #[derive(SystemParam)]
 struct PlacementPreviewSpawnAssets<'w> {
+    block_meshes: Res<'w, BlockModelMeshes>,
     block_materials: ResMut<'w, BlockModelMaterials>,
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
 }
@@ -82,6 +83,7 @@ fn spawn_placement_preview(
     assets: PlacementPreviewSpawnAssets,
 ) {
     let PlacementPreviewSpawnAssets {
+        block_meshes,
         mut block_materials,
         mut materials,
     } = assets;
@@ -161,6 +163,7 @@ struct PlacementPreviewView<'w, 's> {
         (
             &'static PlacementPreviewFace,
             &'static MeshMaterial3d<BlockModelMaterial>,
+            &'static mut Mesh3d,
             &'static mut Visibility,
         ),
     >,
@@ -228,6 +231,13 @@ fn update_placement_preview(
         hide_if_visible(&mut root.2);
 
         for (face, material_handle, mut visibility) in &mut faces {
+            if block_changed {
+                mesh.0 = if is_hollow_log_id(block_id) {
+                    block_meshes.hollow_world_face(face.face)
+                } else {
+                    block_meshes.world_face(face.face)
+                };
+            }
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };

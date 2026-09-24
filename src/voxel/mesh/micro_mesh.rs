@@ -22,7 +22,7 @@ use super::super::{
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
     },
-    log_variant::{hollow_surface_texture_face, is_hollow_log_id},
+    log_variant::is_hollow_log_id,
     microblock::{
         HOLLOW_LOG_WALL_THICKNESS, MICROBLOCK_EDGE, MicroblockMask, occupied_cell,
     },
@@ -389,7 +389,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         rotate_macro_uv(macro_uv(source_face, oriented), rotation)
     });
     let material_face = block_face_material_face(
-        hollow_surface_texture_face(surface.cell.block_id, source_face, !is_macro_boundary(face, depth)),
+        source_face,
         surface.block,
     );
     let material_code = surface
