@@ -258,34 +258,45 @@ fn spawn_world_items(
             spawn_world_item_visual(
                 root,
                 request,
-                &content.visual_assets,
-                &content.block_meshes,
-                &content.block_content,
-                &content.items,
-                &content.layers,
-                &content.tools,
-                &mut assets.standard_materials,
-                &mut assets.block_materials,
+                WorldItemVisualContent {
+                    visual_assets: &content.visual_assets,
+                    block_meshes: &content.block_meshes,
+                    block_content: &content.block_content,
+                    items: &content.items,
+                    layers: &content.layers,
+                    tools: &content.tools,
+                },
+                WorldItemVisualMaterialAssets {
+                    standard: &mut assets.standard_materials,
+                    block: &mut assets.block_materials,
+                },
             );
         });
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+struct WorldItemVisualContent<'a, 'w> {
+    visual_assets: &'a WorldItemVisualAssets,
+    block_meshes: &'a BlockModelMeshes,
+    block_content: &'a BlockVisualContent<'w>,
+    items: &'a ItemRegistry,
+    layers: &'a LayerRegistry,
+    tools: &'a ToolRegistry,
+}
+
+struct WorldItemVisualMaterialAssets<'a> {
+    standard: &'a mut Assets<StandardMaterial>,
+    block: &'a mut Assets<BlockModelMaterial>,
+}
+
 fn spawn_world_item_visual(
     root: &mut ChildSpawnerCommands,
     request: &WorldItemSpawnRequest,
-    visual_assets: &WorldItemVisualAssets,
-    block_meshes: &BlockModelMeshes,
-    block_content: &BlockVisualContent<'_>,
-    items: &ItemRegistry,
-    layers: &LayerRegistry,
-    tools: &ToolRegistry,
-    standard_materials: &mut Assets<StandardMaterial>,
-    block_materials: &mut Assets<BlockModelMaterial>,
+    content: WorldItemVisualContent<'_, '_>,
+    assets: WorldItemVisualMaterialAssets<'_>,
 ) {
     let item_id = request.stack.id();
-    if let Some(block) = block_content.blocks.get(item_id) {
+    if let Some(block) = content.block_content.blocks.get(item_id) {
         let horizontal = Vec2::new(request.position.x, request.position.z);
         let tint = block_content
             .tint_at_with_override(
@@ -315,8 +326,8 @@ fn spawn_world_item_visual(
                     };
                     set_block_model_tint(&mut material, tint);
                     model.spawn((
-                        Mesh3d(block_meshes.world_face(face)),
-                        MeshMaterial3d(block_materials.add(material)),
+                        Mesh3d(content.block_meshes.world_face(face)),
+                        MeshMaterial3d(assets.block.add(material)),
                         NotShadowCaster,
                     ));
                 }
@@ -328,7 +339,7 @@ fn spawn_world_item_visual(
     let icon = items
         .get(item_id)
         .map(|definition| definition.icon.as_str())
-        .or_else(|| layers.get(item_id).map(|definition| definition.texture.as_str()))
+        .or_else(|| content.layers.get(item_id).map(|definition| definition.texture.as_str()))
         .or_else(|| {
             tools
                 .get(item_id)
@@ -336,8 +347,8 @@ fn spawn_world_item_visual(
         });
 
     if let Some(icon) = icon {
-        let material = standard_materials.add(StandardMaterial {
-            base_color_texture: Some(block_content.asset_server.load(icon.to_owned())),
+        let material = assets.standard.add(StandardMaterial {
+            base_color_texture: Some(content.block_content.asset_server.load(icon.to_owned())),
             alpha_mode: AlphaMode::Mask(0.5),
             perceptual_roughness: 1.0,
             unlit: true,
@@ -349,7 +360,7 @@ fn spawn_world_item_visual(
             .with_children(|visual| {
                 for angle in [std::f32::consts::FRAC_PI_4, -std::f32::consts::FRAC_PI_4] {
                     visual.spawn((
-                        Mesh3d(visual_assets.sprite_mesh.clone()),
+                        Mesh3d(content.visual_assets.sprite_mesh.clone()),
                         MeshMaterial3d(material.clone()),
                         Transform::from_rotation(Quat::from_rotation_y(angle)),
                         NotShadowCaster,
@@ -359,7 +370,7 @@ fn spawn_world_item_visual(
         return;
     }
 
-    let material = standard_materials.add(StandardMaterial {
+    let material = assets.standard.add(StandardMaterial {
         base_color: Color::srgb(0.65, 0.65, 0.65),
         perceptual_roughness: 1.0,
         unlit: true,
@@ -367,7 +378,7 @@ fn spawn_world_item_visual(
     });
     root.spawn((
         WorldItemVisual,
-        Mesh3d(visual_assets.fallback_mesh.clone()),
+        Mesh3d(content.visual_assets.fallback_mesh.clone()),
         MeshMaterial3d(material),
         Transform::default(),
         NotShadowCaster,
