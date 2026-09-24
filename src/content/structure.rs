@@ -1148,7 +1148,7 @@ fn stable_structure_hash(value: &str) -> u64 {
     hash
 }
 
-fn opposite_connector_face(face: LayerFace) -> LayerFace {
+pub(crate) fn opposite_connector_face(face: LayerFace) -> LayerFace {
     match face {
         LayerFace::Right => LayerFace::Left,
         LayerFace::Left => LayerFace::Right,

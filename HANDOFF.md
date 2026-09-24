@@ -1,3 +1,20 @@
+## 2026-09-24 — Parte 6C — Resolver determinístico de connector chains
+
+Implementado o primeiro resolver completo de cadeias conectadas.
+
+- cada output connector pode iniciar/continuar uma branch;
+- o budget efetivo de cada hop é `min(strength herdada, strength do output)`;
+- ao anexar a próxima peça, `strengthLossOnEachLoop` é subtraído antes de permitir novo hop;
+- existe hard cap adicional de 64 níveis mesmo com conteúdo malicioso;
+- Structure Groups são resolvidos deterministicamente pelo world seed + structure/origin/rotation/connector/depth;
+- input/rotation da filha usa o resolver geométrico da Parte 6B;
+- connectors compartilham a mesma célula lógica de conexão; como connector não é voxel persistente, a geometria das peças encosta sem criar bloco marcador;
+- auto-overlap é rejeitado por ocupação voxel exata, não por AABB aproximado;
+- estruturas sem output connectors seguem fast path e não constroem mapa de ocupação;
+- o cálculo vertical de `maximum_potential_structure_top_y_for_chunk` já considera peças conectadas quando a raiz é descoberta naquele horizontal chunk.
+
+Ainda falta ampliar o candidate discovery horizontal para encontrar uma raiz cuja cadeia alcança o chunk embora a raiz em si esteja fora dele; isso é a Parte 6D. A rasterização das peças conectadas entra junto dessa integração para não existir estado em que discovery e rendering discordem.
+
 ## 2026-09-24 — Parte 6B — Connector attachment budget consumido na validação
 
 O CI da primeira versão do resolver apontou `strength` e `strengthLossOnEachLoop` como metadata resolvida ainda não consumida. A validação de connector points agora recalcula o budget máximo de passos a partir desses valores e garante novamente o limite de 1..=64 no objeto geométrico que o resolver efetivamente usa. Nenhum `allow(dead_code)` foi adicionado.

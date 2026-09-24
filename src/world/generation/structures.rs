@@ -1,3 +1,4 @@
+mod connectors;
 mod geometry;
 mod hash;
 mod placement;
@@ -446,20 +447,33 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
     );
     let chunk_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_maximum = chunk_minimum + IVec2::splat(chunk_size - 1);
+    let mut maximum_top_y = 0;
 
-    resolved_structure_candidates(chunk_origin, context)
-        .iter()
-        .filter_map(|candidate| {
-            let structure = context.structures.get(&candidate.structure_id)?;
+    for candidate in resolved_structure_candidates(chunk_origin, context).iter() {
+        let Some(root) = context.structures.get(&candidate.structure_id) else {
+            continue;
+        };
+        let root_origin = IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y);
+
+        for piece in connectors::resolve_connected_pieces(
+            context.biome_field.seed(),
+            root,
+            candidate.rotation,
+            root_origin,
+            context.structures,
+        ) {
             let (minimum_offset, maximum_offset) =
-                structure.horizontal_bounds_for_rotation(candidate.rotation);
-            let minimum = candidate.anchor + minimum_offset;
-            let maximum = candidate.anchor + maximum_offset;
-            rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum)
-                .then_some(candidate.origin_y + structure.effective_max_y_offset())
-        })
-        .max()
-        .unwrap_or(0)
+                piece.structure.horizontal_bounds_for_rotation(piece.rotation);
+            let minimum = piece.origin.xz() + minimum_offset;
+            let maximum = piece.origin.xz() + maximum_offset;
+            if rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum) {
+                maximum_top_y = maximum_top_y
+                    .max(piece.origin.y + piece.structure.effective_max_y_offset());
+            }
+        }
+    }
+
+    maximum_top_y
 }
 
 fn collect_structure_candidates<'a>(
