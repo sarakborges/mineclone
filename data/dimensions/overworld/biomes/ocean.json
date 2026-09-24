@@ -102,7 +102,6 @@
     "detailAmplitude": 3,
     "detailScale": 0.026
   },
-  "allowSurfaceCarvers": false,
   "surfaceLayers": [
     {
       "block": "asteria:sand",

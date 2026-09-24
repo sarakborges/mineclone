@@ -30,7 +30,6 @@
     "detailScale": 0.031,
     "craterIrregularity": 0.08
   },
-  "allowSurfaceCarvers": true,
   "surfaceLayers": [
     {
       "block": "asteria:bassalt",

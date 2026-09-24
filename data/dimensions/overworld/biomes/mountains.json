@@ -44,7 +44,6 @@
       "warpStrength": 14
     }
   ],
-  "allowSurfaceCarvers": true,
   "surfaceLayers": [
     {
       "block": "asteria:stone"

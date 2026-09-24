@@ -25,7 +25,6 @@
     "topAmplitude": 10,
     "topScale": 0.008
   },
-  "allowSurfaceCarvers": true,
   "surfaceLayers": [
     {
       "block": "asteria:stone"

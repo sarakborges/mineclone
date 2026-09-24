@@ -1,3 +1,9 @@
+## 2026-09-24 — Parte 5D — Flags authored de surface carvers removidas
+
+Removidas de todos os surface biomes as chaves `allowSurfaceCarvers`. Como o schema já não aceita nem usa esse conceito, os arquivos de conteúdo agora também não carregam configuração morta para entradas/túneis legados.
+
+O bloco `surfaceCarvers` do biome Caverns será removido no próximo checkpoint, encerrando a limpeza de conteúdo desse subsistema.
+
 ## 2026-09-24 — Parte 5C — Schema legado de surface carvers removido
 
 O contrato de conteúdo do antigo sistema de entrances/tunnels também foi removido, sem manter aliases ou campos ignorados.
