@@ -13,6 +13,7 @@ use smallvec::SmallVec;
 
 use crate::{
     content::{
+        biome_density::BiomeDensityModifier,
         biome_structure::{BiomeStructurePlacementRules, StructurePlacementRules},
         block::BlockRegistry,
         fluid::FluidRegistry,
@@ -62,6 +63,7 @@ struct StructureCandidate<'a> {
     structure: &'a StructureDefinition,
     rotation: StructureRotation,
     placement_anchor: IVec2,
+    placement_y: i32,
     anchor: IVec2,
     origin_y: i32,
     primary_placement_piece: bool,
@@ -70,6 +72,8 @@ struct StructureCandidate<'a> {
     conflict_groups: &'a [String],
     minimum: IVec2,
     maximum: IVec2,
+    minimum_y: i32,
+    maximum_y: i32,
 }
 
 #[derive(Clone, Copy)]
@@ -361,6 +365,7 @@ fn resolved_structure_candidates(
                 structure_id: candidate.structure.id.clone(),
                 rotation: candidate.rotation,
                 placement_anchor: candidate.placement_anchor,
+                placement_y: candidate.placement_y,
                 anchor: candidate.anchor,
                 origin_y: candidate.origin_y,
                 primary_placement_piece: candidate.primary_placement_piece,
@@ -601,7 +606,9 @@ fn collect_direct_structure_candidates<'a>(
                 root_origin,
                 context.structures,
             );
-            let Some((minimum, maximum)) = connected_piece_bounds(&pieces) else {
+            let Some((minimum, maximum, minimum_y, maximum_y)) =
+                connected_piece_bounds(&pieces)
+            else {
                 return;
             };
             if !rectangles_overlap(minimum, maximum, target_min, target_max) {
@@ -615,6 +622,7 @@ fn collect_direct_structure_candidates<'a>(
                     structure: piece.structure,
                     rotation: piece.rotation,
                     placement_anchor: anchor,
+                    placement_y: 0,
                     anchor: piece.origin.xz(),
                     origin_y: piece.origin.y,
                     primary_placement_piece: piece_index == 0,
@@ -623,6 +631,8 @@ fn collect_direct_structure_candidates<'a>(
                     conflict_groups: &structure.conflict_groups,
                     minimum,
                     maximum,
+                    minimum_y,
+                    maximum_y,
                 });
             }
         },
@@ -691,7 +701,9 @@ fn collect_structure_set_candidates<'a>(
                 }),
                 context.structures,
             );
-            let Some((minimum, maximum)) = connected_piece_bounds(&connected) else {
+            let Some((minimum, maximum, minimum_y, maximum_y)) =
+                connected_piece_bounds(&connected)
+            else {
                 return;
             };
             if !rectangles_overlap(minimum, maximum, target_min, target_max) {
@@ -705,6 +717,7 @@ fn collect_structure_set_candidates<'a>(
                     structure: piece.structure,
                     rotation: piece.rotation,
                     placement_anchor,
+                    placement_y: 0,
                     anchor: piece.origin.xz(),
                     origin_y: piece.origin.y,
                     primary_placement_piece: piece_index == 0,
@@ -713,6 +726,8 @@ fn collect_structure_set_candidates<'a>(
                     conflict_groups: &set.conflict_groups,
                     minimum,
                     maximum,
+                    minimum_y,
+                    maximum_y,
                 });
             }
         },
@@ -783,6 +798,11 @@ fn collect_volume_structure_candidates<'a>(
         .biomes
         .get(biome_id)
         .unwrap_or_else(|| panic!("missing volume biome definition: {biome_id}"));
+    if matches!(biome.density_modifier, Some(BiomeDensityModifier::Cavern { .. }))
+        && !context.world_generation.spawn_caves()
+    {
+        return;
+    }
     let range = biome
         .vertical_range
         .unwrap_or_else(|| panic!("volume biome {biome_id} with structures must define verticalRange"));
@@ -877,7 +897,9 @@ fn collect_volume_structure_candidates<'a>(
             anchor,
             context.structures,
         );
-        let Some((minimum, maximum)) = connected_piece_bounds(&pieces) else {
+        let Some((minimum, maximum, minimum_y, maximum_y)) =
+            connected_piece_bounds(&pieces)
+        else {
             continue;
         };
         if !rectangles_overlap(minimum, maximum, target_min, target_max) {
@@ -891,6 +913,7 @@ fn collect_volume_structure_candidates<'a>(
                 structure: piece.structure,
                 rotation: piece.rotation,
                 placement_anchor: anchor.xz(),
+                placement_y: anchor.y,
                 anchor: piece.origin.xz(),
                 origin_y: piece.origin.y,
                 primary_placement_piece: piece_index == 0,
@@ -899,6 +922,8 @@ fn collect_volume_structure_candidates<'a>(
                 conflict_groups: &structure.conflict_groups,
                 minimum,
                 maximum,
+                minimum_y,
+                maximum_y,
             });
         }
     }
@@ -944,18 +969,22 @@ fn volume_root_satisfies_restrictions(
 
 fn connected_piece_bounds(
     pieces: &[connectors::ResolvedConnectedPiece<'_>],
-) -> Option<(IVec2, IVec2)> {
+) -> Option<(IVec2, IVec2, i32, i32)> {
     pieces.iter().fold(None, |bounds, piece| {
         let (minimum_offset, maximum_offset) =
             piece.structure.horizontal_bounds_for_rotation(piece.rotation);
         let minimum = piece.origin.xz() + minimum_offset;
         let maximum = piece.origin.xz() + maximum_offset;
+        let minimum_y = piece.origin.y + piece.structure.min_y_offset();
+        let maximum_y = piece.origin.y + piece.structure.effective_max_y_offset();
         Some(match bounds {
-            Some((current_minimum, current_maximum)) => (
+            Some((current_minimum, current_maximum, current_min_y, current_max_y)) => (
                 current_minimum.min(minimum),
                 current_maximum.max(maximum),
+                current_min_y.min(minimum_y),
+                current_max_y.max(maximum_y),
             ),
-            None => (minimum, maximum),
+            None => (minimum, maximum, minimum_y, maximum_y),
         })
     })
 }
@@ -966,6 +995,7 @@ fn candidate_identity<'a>(
     &'a str,
     &'a str,
     IVec2,
+    i32,
     &'a str,
     IVec2,
     StructureRotation,
@@ -974,6 +1004,7 @@ fn candidate_identity<'a>(
         candidate.biome_id,
         candidate.placement_id,
         candidate.placement_anchor,
+        candidate.placement_y,
         candidate.structure.id.as_str(),
         candidate.anchor,
         candidate.rotation,
@@ -1004,6 +1035,7 @@ fn candidate_order(
         .then_with(|| left.biome_id.cmp(right.biome_id))
         .then_with(|| left.placement_anchor.x.cmp(&right.placement_anchor.x))
         .then_with(|| left.placement_anchor.y.cmp(&right.placement_anchor.y))
+        .then_with(|| left.placement_y.cmp(&right.placement_y))
 }
 
 fn candidate_outranks(
@@ -1020,6 +1052,7 @@ fn same_candidate(
     left.placement_id == right.placement_id
         && left.biome_id == right.biome_id
         && left.placement_anchor == right.placement_anchor
+        && left.placement_y == right.placement_y
 }
 
 fn candidates_conflict(
@@ -1031,7 +1064,9 @@ fn candidates_conflict(
         higher.maximum,
         lower.minimum,
         lower.maximum,
-    ) && candidates_may_conflict(higher, lower)
+    ) && higher.maximum_y >= lower.minimum_y
+        && higher.minimum_y <= lower.maximum_y
+        && candidates_may_conflict(higher, lower)
 }
 
 fn bit_get(bits: &[u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) -> bool {

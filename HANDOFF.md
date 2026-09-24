@@ -1,3 +1,14 @@
+## 2026-09-24 — Parte 6I — Identidade 3D e conflitos verticais para volume roots
+
+Volume-root structures deixaram de herdar duas suposições 2D do antigo placement surface.
+
+- cada ocorrência agora carrega `placement_y`; roots volumétricas com o mesmo X/Z mas em alturas diferentes não colapsam na mesma identidade;
+- ordering e deduplicação de occurrences incluem Y;
+- candidates carregam o envelope vertical da chain inteira;
+- conflict resolution exige overlap horizontal **e vertical**, evitando que structures empilhadas em profundidades diferentes se eliminem apenas por compartilhar X/Z;
+- surface placements e Structure Sets continuam com `placement_y = 0`, preservando a identidade histórica baseada em placement cell;
+- volume biomes cujo `densityModifier` é `cavern` não geram structure roots quando `spawnCaves=false`, mantendo o toggle autoritativo também para futuros tunnel/entrance connectors.
+
 ## 2026-09-24 — Parte 6H — Surface anchor visitor voltou a usar context
 
 Clippy apontou oito parâmetros no helper de candidate anchors após a separação surface/volume. O helper voltou a receber `StructurePlacementContext` e extrai internamente o variant `Surface`, reduzindo a assinatura sem adicionar suppressions nem duplicar estado.
