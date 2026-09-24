@@ -6,7 +6,6 @@
     "spanish": "Césped"
   },
   "category": "foliage",
-  "model": "models/objects/grass/grass.glb",
   "icon": "textures/objects/grass.png",
   "tint": "grass",
   "placementFaces": [
@@ -27,5 +26,9 @@
   "unlit": true,
   "castsShadow": false,
   "receivesShadow": false,
-  "dropSelf": true
+  "dropSelf": true,
+  "visual": {
+    "type": "model",
+    "path": "models/objects/grass/grass.glb"
+  }
 }
