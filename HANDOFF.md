@@ -1,3 +1,9 @@
+### CI follow-up — broadphase visibility
+
+Clippy corretamente rejeitou a exposição indireta de um `Local<CreatureContactBroadphase>`
+privado em um system `pub(super)`. O broadphase agora possui a mesma visibilidade do system,
+sem alterar API fora de `player::movement` nem o comportamento da física.
+
 ## 2026-09-24 — Creature contact broadphase substitui all-pairs O(n²)
 
 A colisão creature↔creature deixou de executar `iter_combinations_mut::<2>()` sobre

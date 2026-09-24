@@ -34,7 +34,7 @@ type CreatureContacts<'w, 's> = Query<
 >;
 
 #[derive(Default)]
-struct CreatureContactBroadphase {
+pub(super) struct CreatureContactBroadphase {
     buckets: HashMap<IVec2, Vec<Entity>>,
     pairs: Vec<(Entity, Entity)>,
     seen_pairs: HashSet<(Entity, Entity)>,
