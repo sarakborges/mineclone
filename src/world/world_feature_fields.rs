@@ -25,24 +25,37 @@ use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
+    structure_field::StructureField,
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
     caches: Arc<FeatureCaches>,
+    structure_field: Arc<StructureField>,
 }
 
 impl WorldFeatureFields {
-    pub(crate) fn new(_seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
+            structure_field: Arc::new(StructureField::empty(seed)),
         }
+    }
+
+    pub(crate) fn with_structure_field(mut self, structure_field: StructureField) -> Self {
+        self.structure_field = Arc::new(structure_field);
+        self
     }
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
+            structure_field: self.structure_field.clone(),
         }
+    }
+
+    pub(crate) fn structure_field(&self) -> &StructureField {
+        &self.structure_field
     }
 
     pub(crate) fn generation_columns(

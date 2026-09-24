@@ -9,6 +9,8 @@ use crate::{
         fluid::FluidRegistry,
         layer::LayerRegistry,
         read_content,
+        structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     player::player_id::LOCAL_PLAYER_ID,
     rendering::terrain_material::{TerrainLightingBuffer, TerrainMaterial},
@@ -32,6 +34,7 @@ use crate::world::{
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::{surface_height, surface_height_from_sample},
     deterministic::mix_hash_u64,
+    structure_field::StructureField,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -48,6 +51,8 @@ struct BootstrapRegistries<'a> {
     blocks: &'a BlockRegistry,
     layers: &'a LayerRegistry,
     fluids: &'a FluidRegistry,
+    structures: &'a StructureRegistry,
+    structure_sets: &'a StructureSetRegistry,
 }
 
 impl<'a> BootstrapRegistries<'a> {
@@ -62,6 +67,8 @@ impl<'a> BootstrapRegistries<'a> {
                 blocks: &fresh.blocks,
                 layers: &fresh.layers,
                 fluids: &fresh.fluids,
+                structures: &fresh.structures,
+                structure_sets: &fresh.structure_sets,
             },
             None => Self {
                 dimensions: &loaded.dimensions,
@@ -69,6 +76,8 @@ impl<'a> BootstrapRegistries<'a> {
                 blocks: &loaded.blocks,
                 layers: &loaded.layers,
                 fluids: &loaded.fluids,
+                structures: &loaded.structures,
+                structure_sets: &loaded.structure_sets,
             },
         }
     }
@@ -125,6 +134,7 @@ impl BootstrapWorldFields {
         biome_size_multiplier: f32,
         world_generation: WorldGenerationSettings,
         forced_spawn_biome: Option<&str>,
+        structure_field: StructureField,
     ) -> Self {
         let mut biome_field =
             BiomeField::from_dimension(dimension, biomes, seed, biome_size_multiplier);
@@ -140,7 +150,7 @@ impl BootstrapWorldFields {
             );
         }
 
-        let feature_fields = WorldFeatureFields::new(seed);
+        let feature_fields = WorldFeatureFields::new(seed).with_structure_field(structure_field);
 
         Self {
             biome_field,
@@ -318,6 +328,8 @@ pub(in crate::world) fn begin_world_loading(
         blocks,
         layers,
         fluids,
+        structures,
+        structure_sets,
     } = BootstrapRegistries::resolve(&content, fresh_content.as_ref());
     let dimension = dimensions
         .get(&config.current_dimension.id)
@@ -347,6 +359,8 @@ pub(in crate::world) fn begin_world_loading(
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
 
+    let structure_field =
+        StructureField::from_content(config.seed.0, biomes, structures, structure_sets);
     let BootstrapWorldFields {
         biome_field,
         feature_fields,
@@ -357,6 +371,7 @@ pub(in crate::world) fn begin_world_loading(
         biome_size_multiplier,
         world_generation,
         forced_spawn_biome.as_deref(),
+        structure_field,
     );
     let BootstrapRenderingResources {
         terrain_lighting,

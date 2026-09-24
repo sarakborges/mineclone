@@ -35,6 +35,7 @@ mod seed;
 mod setup;
 mod storage_durability;
 mod streaming;
+mod structure_field;
 pub(crate) mod terrain;
 pub(crate) mod tick;
 pub(crate) mod thumbnail;

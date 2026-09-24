@@ -40,7 +40,8 @@ pub(crate) use self::structures::{
     ResolvedConnectedPiece, fit_structure_to_ground, located_structure_origins_in_chunk,
     resolve_connected_piece_forest_with_ground_fit, resolve_connected_pieces_with_ground_fit,
     resolve_set_pieces,
-    structure_candidate_anchor, structure_candidate_probe, surface_layer_placements,
+    connected_horizontal_bounds_for_reference, structure_candidate_anchor,
+    structure_candidate_probe, surface_layer_placements,
     volume_structure_candidate_probe,
 };
 use self::{

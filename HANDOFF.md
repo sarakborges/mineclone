@@ -1,3 +1,29 @@
+## 2026-09-24 — StructureField: mapa procedural lazy de roots de structures
+
+Structures de superfície agora têm uma camada de localização separada do resolver pesado,
+seguindo a mesma ideia arquitetural do BiomeField.
+
+- novo `StructureField` é construído uma vez durante Loading a partir da world seed e das
+  regras authored de placement;
+- ele mantém entradas imutáveis de biome/reference/spacing/chance/jitter e os bounds
+  horizontais máximos pré-computados;
+- bounds de Structure Groups e connector chains são calculados uma única vez por reference
+  no bootstrap, em vez de serem descobertos durante streaming/gameplay;
+- consultar quais roots podem tocar uma região agora é só matemática determinística de grid
+  + hash da seed; nenhuma palette, ground-fit, conflict resolution ou connector forest é
+  materializada nessa consulta;
+- `resolve_structure_candidates_uncached` consulta primeiro esse mapa de roots para
+  placements Surface e só então executa a resolução pesada nos workers;
+- placements Volume continuam usando o caminho de VolumeBiomeField, porque seus anchors são
+  3D e obedecem a uma topologia diferente;
+- `WorldFeatureFields` compartilha o StructureField imutável entre snapshots, enquanto os
+  caches pesados podem ser recriados independentemente.
+
+Com isso ficam separadas três responsabilidades:
+1. StructureField: onde uma root potencial existe;
+2. worker/cache de worldgen: se ela é válida e como connectors/sets resolvem;
+3. chunk renderer: só materializa o resultado quando o chunk é realmente necessário.
+
 ### CI follow-up 2 — import horizontal coordinate
 
 O follow-up anterior removeu a necessidade de `Vec3Swizzles`, mas o módulo importava

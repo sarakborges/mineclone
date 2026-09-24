@@ -27,7 +27,7 @@ struct PendingPiece {
     depth: usize,
 }
 
-pub(super) fn connected_horizontal_bounds_for_reference(
+pub(crate) fn connected_horizontal_bounds_for_reference(
     structures: &StructureRegistry,
     reference: &str,
 ) -> Option<(IVec2, IVec2)> {
