@@ -14382,3 +14382,36 @@ Validação:
 - Commit de código validado: `4e5f6aebea3c77042b5dbb8facd86e6fd7a04613`.
 - CI push e PR: localization audit, content reference audit, Clippy `-D warnings` e
   `cargo check --locked` passaram.
+
+## 2026-09-24 — Início da substituição dos geradores legados por Structures conectáveis
+
+Foi definida uma nova direção arquitetural para o worldgen, mas a implementação do
+sistema novo **não começa enquanto os sistemas antigos não forem removidos por completo**.
+
+Sequência acordada:
+1. remover totalmente Hydrology como subsistema, incluindo tipos, caches, sampling,
+   drainage, river/lake generation, materiais/carving específicos, regras por biome,
+   toggles e referências de conteúdo/runtime;
+2. remover o sistema legado de cave connectivity/tunnels/entrances e seus caches e
+   integrações próprias;
+3. manter Ocean exclusivamente como surface biome, com bathymetry própria e água do mar
+   pertencendo à dimensão via sea level/fluid, sem reintroduzir Hydrology;
+4. manter cavern biomes existentes, mas sem gerar túneis/entradas pelo sistema antigo
+   enquanto o mecanismo novo ainda não existir;
+5. somente depois do projeto estar limpo dos sistemas legados iniciar a infraestrutura
+   genérica de connectors dentro de Structures.
+
+Direção aprovada para a etapa seguinte:
+- connector será metadata/célula especial dentro da própria Structure e não um bloco
+  persistente no mundo;
+- connector poderá apontar para uma Structure ou para um Structure Group já existente;
+- a próxima peça será alinhada automaticamente pela posição/orientação dos connectors;
+- cadeias usarão strength e strengthLossOnEachLoop para terminar naturalmente;
+- o mesmo mecanismo deverá futuramente substituir raízes compostas da World Tree,
+  cave entrances/tunnels, rivers/lakes e outras estruturas modulares;
+- não criar subsistemas paralelos específicos para cada uma dessas features.
+
+Regra de execução deste refactor: cada parte funcional commitada deve atualizar este
+HANDOFF.md no mesmo commit. Não deixar código legado desativado, aliases de compatibilidade
+ou implementações antigas coexistindo com a substituição final.
+
