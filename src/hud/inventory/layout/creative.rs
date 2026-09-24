@@ -479,6 +479,10 @@ fn filtered_creative_catalog<'a>(
         .chain(sources.layers.iter().map(CreativeCatalogItem::Layer))
         .chain(sources.tools.iter().map(CreativeCatalogItem::Tool))
         .filter(|item| category.is_none_or(|category| item.category() == category))
+        .filter(|item| match item {
+            CreativeCatalogItem::Layer(layer) => layer.creative_visible,
+            _ => true,
+        })
         .filter(|item| {
             query.is_empty()
                 || item
