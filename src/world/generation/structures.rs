@@ -14,7 +14,9 @@ use smallvec::SmallVec;
 use crate::{
     content::{
         biome_density::BiomeDensityModifier,
-        biome_structure::{BiomeStructurePlacementRules, StructurePlacementRules},
+        biome_structure::{
+            BiomeStructurePlacementRules, StructurePlacementRules, VolumeStructurePlacementRules,
+        },
         block::BlockRegistry,
         fluid::FluidRegistry,
         layer::LayerFace,
@@ -301,6 +303,49 @@ pub(crate) fn structure_candidate_probe(
         .first()
         .copied()?;
     Some(placement_anchor + offset)
+}
+
+pub(crate) fn volume_structure_candidate_probe(
+    biome_id: &str,
+    placement_id: &str,
+    target_reference: &str,
+    placement_anchor: IVec3,
+    placement: VolumeStructurePlacementRules,
+    context: &ChunkGenerationContext<'_>,
+) -> Option<IVec2> {
+    if !volume_site_is_selected(
+        context.biome_field.seed(),
+        biome_id,
+        placement_id,
+        placement,
+        placement_anchor,
+    ) {
+        return None;
+    }
+
+    let member_hash = volume_structure_member_hash(
+        context.biome_field.seed(),
+        biome_id,
+        placement_id,
+        placement_anchor,
+    );
+    let structure = context
+        .structures
+        .select_for_reference(placement_id, member_hash)?;
+    if placement_id != target_reference
+        && !context
+            .structures
+            .reference_contains_structure(target_reference, &structure.id)
+    {
+        return None;
+    }
+
+    let rotation = structure.rotation_for_hash(member_hash.rotate_left(23));
+    let offset = structure
+        .horizontal_footprint_for_rotation(rotation)
+        .first()
+        .copied()?;
+    Some(placement_anchor.xz() + offset)
 }
 
 pub(crate) fn located_structure_origins_in_chunk(

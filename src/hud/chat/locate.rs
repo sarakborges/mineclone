@@ -26,6 +26,7 @@ use crate::{
         generation::{
             ChunkGenerationContext, located_structure_origins_in_chunk,
             structure_candidate_anchor, structure_candidate_probe,
+            volume_structure_candidate_probe,
         },
         terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
@@ -413,61 +414,148 @@ fn locate_structure(
             continue;
         }
 
-        let BiomeStructurePlacementRules::Surface(placement) = biome_structure.placement else {
-            continue;
-        };
-        let spacing = placement.spacing;
-        let center_cell = IVec2::new(
-            player_horizontal.x.div_euclid(spacing),
-            player_horizontal.y.div_euclid(spacing),
-        );
-        let maximum_cell_radius =
-            (MAX_LOCATE_BLOCK_RADIUS + spacing - 1) / spacing + 2;
+        match biome_structure.placement {
+            BiomeStructurePlacementRules::Surface(placement) => {
+                let spacing = placement.spacing;
+                let center_cell = IVec2::new(
+                    player_horizontal.x.div_euclid(spacing),
+                    player_horizontal.y.div_euclid(spacing),
+                );
+                let maximum_cell_radius =
+                    (MAX_LOCATE_BLOCK_RADIUS + spacing - 1) / spacing + 2;
 
-        for radius in 0..=maximum_cell_radius {
-            visit_square_cell_ring(center_cell, radius, |cell| {
-                let Some(anchor) = structure_candidate_anchor(
-                    snapshot.biome_field.seed(),
-                    &biome_structure.biome_id,
-                    &biome_structure.structure_id,
-                    placement,
-                    cell,
-                ) else {
-                    return;
-                };
+                for radius in 0..=maximum_cell_radius {
+                    visit_square_cell_ring(center_cell, radius, |cell| {
+                        let Some(anchor) = structure_candidate_anchor(
+                            snapshot.biome_field.seed(),
+                            &biome_structure.biome_id,
+                            &biome_structure.structure_id,
+                            placement,
+                            cell,
+                        ) else {
+                            return;
+                        };
 
-                let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
-                let dz = i64::from(anchor.y) - i64::from(player_horizontal.y);
-                if dx * dx + dz * dz > maximum_distance_squared {
-                    return;
-                }
+                        let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
+                        let dz = i64::from(anchor.y) - i64::from(player_horizontal.y);
+                        if dx * dx + dz * dz > maximum_distance_squared {
+                            return;
+                        }
 
-                let Some(probe) = structure_candidate_probe(
-                    &biome_structure.biome_id,
-                    &biome_structure.structure_id,
-                    id,
-                    anchor,
-                    &context,
-                ) else {
-                    return;
-                };
-                let probe_chunk =
-                    chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
-                for position in located_structure_origins_in_chunk(
-                    probe_chunk,
-                    id,
-                    anchor,
-                    0,
-                    &context,
-                ) {
-                    if seen.insert(position) {
-                        consider_nearest(&mut best, player, position);
+                        let Some(probe) = structure_candidate_probe(
+                            &biome_structure.biome_id,
+                            &biome_structure.structure_id,
+                            id,
+                            anchor,
+                            &context,
+                        ) else {
+                            return;
+                        };
+                        let probe_chunk =
+                            chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                        for position in located_structure_origins_in_chunk(
+                            probe_chunk,
+                            id,
+                            anchor,
+                            0,
+                            &context,
+                        ) {
+                            if seen.insert(position) {
+                                consider_nearest(&mut best, player, position);
+                            }
+                        }
+                    });
+
+                    if structure_search_is_final(best, radius, spacing, placement.jitter) {
+                        break;
                     }
                 }
-            });
+            }
+            BiomeStructurePlacementRules::Volume(placement) => {
+                let Some(biome) = snapshot.biomes.get(&biome_structure.biome_id) else {
+                    continue;
+                };
+                let Some(range) = biome.vertical_range else {
+                    continue;
+                };
+                let center = chunk_coord_from_world(player).xz();
+                let mut visited_anchors = HashSet::new();
 
-            if structure_search_is_final(best, radius, spacing, placement.jitter) {
-                break;
+                for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
+                    visit_square_chunk_ring(center, radius, |chunk| {
+                        let Some(origin) = chunk_block_origin(chunk) else {
+                            return;
+                        };
+                        let minimum =
+                            Vec3::new(origin.x as f32, range.min, origin.y as f32);
+                        let maximum = Vec3::new(
+                            (i64::from(origin.x) + CHUNK_SIZE as i64) as f32,
+                            range.max,
+                            (i64::from(origin.y) + CHUNK_SIZE as i64) as f32,
+                        );
+                        let region = snapshot
+                            .biome_field
+                            .volume_region_in_bounds(minimum, maximum);
+
+                        for volume_anchor in
+                            snapshot.biome_field.volume_anchors_in_region(&region)
+                        {
+                            if volume_anchor.id != biome_structure.biome_id {
+                                continue;
+                            }
+                            let anchor = volume_anchor.position.floor().as_ivec3();
+                            if !visited_anchors.insert(anchor) {
+                                continue;
+                            }
+
+                            let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
+                            let dz = i64::from(anchor.z) - i64::from(player_horizontal.y);
+                            if dx * dx + dz * dz > maximum_distance_squared {
+                                continue;
+                            }
+
+                            let Some(selection) = snapshot
+                                .biome_field
+                                .volume_selection_in_region(volume_anchor.position, &region)
+                            else {
+                                continue;
+                            };
+                            if snapshot.biome_field.volume_biome_id(selection)
+                                != biome_structure.biome_id
+                            {
+                                continue;
+                            }
+
+                            let Some(probe) = volume_structure_candidate_probe(
+                                &biome_structure.biome_id,
+                                &biome_structure.structure_id,
+                                id,
+                                anchor,
+                                placement,
+                                &context,
+                            ) else {
+                                continue;
+                            };
+                            let probe_chunk =
+                                chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                            for position in located_structure_origins_in_chunk(
+                                probe_chunk,
+                                id,
+                                anchor.xz(),
+                                anchor.y,
+                                &context,
+                            ) {
+                                if seen.insert(position) {
+                                    consider_nearest(&mut best, player, position);
+                                }
+                            }
+                        }
+                    });
+
+                    if best_is_final(best, radius) {
+                        break;
+                    }
+                }
             }
         }
     }

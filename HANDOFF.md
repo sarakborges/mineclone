@@ -1,3 +1,14 @@
+## 2026-09-24 — Parte 6J — /locate suporta Structure roots em volume biomes
+
+O último consumidor que ainda assumia placements exclusivamente 2D foi migrado.
+
+- `/locate structure` agora distingue `Surface` e `Volume` placements;
+- volume lookup percorre os mesmos volume sites autoritativos do `BiomeField`, sem grid paralela;
+- confirma o volume biome vencedor, aplica a mesma chance determinística e a mesma seleção de Structure/Structure Group da geração;
+- usa o probe da root para consultar o candidate cache real, então restrictions, conflicts, connector expansion e `spawnCaves` continuam autoritativos;
+- o filtro usa X/Z + `placement_y`, evitando confundir occurrences empilhadas;
+- structures volume-root podem usar `locatable: true` normalmente; não há mais exceção documental exigindo que sejam não-locatable.
+
 ## 2026-09-24 — Parte 6I — placement_y consumido no filtro de occurrence
 
 O CI do identity 3D apontou `CachedStructureCandidate::placement_y` como ainda não lido. `located_structure_origins_in_chunk` agora recebe o Y da occurrence e exige correspondência junto do X/Z; o locate surface passa `0`, preservando seu comportamento atual e preparando o mesmo API para volume roots.
