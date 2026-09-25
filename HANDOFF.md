@@ -1,3 +1,19 @@
+## 2026-09-25 — Generation/remesh usam todo o limite async global
+
+- o log 0.68.31 mostrou 1.500..3.400 chunks pendentes enquanto `generation_tasks` ficava em
+  0..1 e `async_limit=2`; o backlog continuava crescendo durante movimento;
+- a causa era uma segunda reserva interna: `try_acquire_generation` e `try_acquire_remesh`
+  usavam `limit - 1`, apesar do `base_limit` global já reservar ~40% do pool para trabalho
+  não relacionado a chunks;
+- com limite adaptativo 2, essa segunda reserva serializava generation/remesh em apenas uma task;
+- generation e remesh agora podem preencher o limite global compartilhado inteiro, assim como
+  initial mesh; o limiter global continua impedindo oversubscription;
+- não foram alterados render distance, limites máximos por stage ou fidelidade de worldgen;
+- próxima investigação medida no mesmo log: fluid closure ainda pode acumular 70..108 targets e
+  publicar mais de 100 chunks de uma vez, causando burst de ~145 ms.
+
+VERSION: `0.68.32`.
+
 ## 2026-09-25 — Streaming budget mede o próprio pipeline e dry waves mantêm workers ocupados
 
 - o log 0.68.27 mostrava 3.500..5.100 chunks em `stream_pending`, mas normalmente só 0..1
