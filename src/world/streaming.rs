@@ -20,7 +20,7 @@ use crate::{
     voxel::{
         coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
-        lighting::PendingLightingUpdates,
+        lighting::{DirectLightingSeedResult, PendingLightingUpdates},
         meshlet::ChunkMeshletMask,
         world::VoxelWorld,
     },
@@ -126,6 +126,8 @@ pub(super) struct ChunkStreamingState {
     surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
     initial_lighting_seeded: HashSet<IVec3>,
+    initial_lighting_seed_results: HashMap<IVec3, DirectLightingSeedResult>,
+    initial_lighting_activated: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
     mesh_pressure_evicted: HashMap<IVec3, usize>,
     fluid_settling: GeneratedFluidSettling,
@@ -535,8 +537,29 @@ impl ChunkStreamingState {
         self.initial_lighting_seeded.insert(coord)
     }
 
+    fn store_initial_lighting_seed_result(
+        &mut self,
+        coord: IVec3,
+        result: DirectLightingSeedResult,
+    ) {
+        self.initial_lighting_seed_results.insert(coord, result);
+    }
+
+    fn take_initial_lighting_seed_result(
+        &mut self,
+        coord: IVec3,
+    ) -> Option<DirectLightingSeedResult> {
+        self.initial_lighting_seed_results.remove(&coord)
+    }
+
+    fn mark_initial_lighting_activated(&mut self, coord: IVec3) -> bool {
+        self.initial_lighting_activated.insert(coord)
+    }
+
     pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
         self.initial_lighting_seeded.remove(&coord);
+        self.initial_lighting_seed_results.remove(&coord);
+        self.initial_lighting_activated.remove(&coord);
         self.initial_mesh_seed_catchup.remove(&coord);
     }
 
@@ -801,29 +824,20 @@ pub(super) fn stream_chunks(
     }
 }
 
-// A chunk must be seeded before it participates in presentation. Generated
-// chunks may now wait resident-but-unseeded in `ready`; mesh/remesh snapshots
-// deliberately include only already-published neighbors, so those background
-// chunks cannot leak DARK halo data into visible geometry. Preserve the
-// once-per-residency rule and seed immediately before initial mesh capture.
-fn seed_loaded_chunk_lighting(
+// Direct lighting is residency safety: any loaded chunk may be sampled by
+// lighting propagation, so its stored light cannot remain the all-DARK default.
+// Runtime wake/relaxation queues are presentation work and are activated only
+// when the chunk is actually selected for initial rendering.
+pub(super) fn seed_loaded_chunk_direct_lighting(
     coord: IVec3,
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
 ) {
     if !work.state.mark_initial_lighting_seeded(coord) {
         return;
     }
 
-    let chunk_is_empty = work
-        .world
-        .chunk(coord)
-        .unwrap_or_else(|| panic!("seeded chunk must be resident: {coord:?}"))
-        .is_empty();
-    queues.fluid.reactivate_loaded_chunk(coord, current_tick);
-    queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
     let lighting_seed = queues.lighting.seed_chunk_direct_lighting(
         &mut work.world,
         coord,
@@ -831,9 +845,12 @@ fn seed_loaded_chunk_lighting(
         content.fluids(),
         content.secondary_properties(),
     );
+    work.state
+        .store_initial_lighting_seed_result(coord, lighting_seed);
 
-    // A previously scheduled mesh may have captured a missing halo before
-    // this chunk arrived. Reconcile after first publication, never cancel it.
+    // A mesh task may already have captured this position as missing air.
+    // Remember only the affected meshlets; the finished task can publish and
+    // receive a targeted catch-up instead of being cancelled.
     for y in -1..=1 {
         for z in -1..=1 {
             for x in -1..=1 {
@@ -843,8 +860,7 @@ fn seed_loaded_chunk_lighting(
                 }
                 let neighbor = coord + offset;
                 if work.mesh_tasks.contains(neighbor) {
-                    let meshlets =
-                        ChunkMeshletMask::for_dependency_offset(-offset);
+                    let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
                     let combined = work
                         .state
                         .initial_mesh_seed_catchup
@@ -852,14 +868,39 @@ fn seed_loaded_chunk_lighting(
                         .copied()
                         .unwrap_or_default()
                         .union(meshlets);
-                    work
-                        .state
+                    work.state
                         .initial_mesh_seed_catchup
                         .insert(neighbor, combined);
                 }
             }
         }
     }
+}
+
+pub(super) fn activate_loaded_chunk_for_initial_mesh(
+    coord: IVec3,
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
+) {
+    seed_loaded_chunk_direct_lighting(coord, content, work, queues);
+    if !work.state.mark_initial_lighting_activated(coord) {
+        return;
+    }
+
+    let lighting_seed = work
+        .state
+        .take_initial_lighting_seed_result(coord)
+        .expect("newly activated chunk must retain its direct-light seed result");
+    let chunk_is_empty = work
+        .world
+        .chunk(coord)
+        .unwrap_or_else(|| panic!("activated chunk must be resident: {coord:?}"))
+        .is_empty();
+
+    queues.fluid.reactivate_loaded_chunk(coord, current_tick);
+    queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
 
     if chunk_is_empty {
         queues.lighting.enqueue_empty_chunk_relaxation(coord);
@@ -867,9 +908,6 @@ fn seed_loaded_chunk_lighting(
         queues.lighting.enqueue_chunk_relaxation(coord);
     }
 
-    // Only a section that actually attenuates the incoming direct skylight can
-    // invalidate resident sections below it. Empty/transparent sections leave
-    // the previous missing-section-as-air result unchanged.
     if lighting_seed.changes_direct_sky_below {
         queues
             .lighting
