@@ -21,9 +21,7 @@ use crate::{
     },
 };
 
-use super::{
-    ChunkStreamingQueues, ChunkStreamingWork, seed_loaded_chunk_direct_lighting,
-};
+use super::{ChunkStreamingQueues, ChunkStreamingWork};
 
 const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
 const MAX_CRITICAL_GENERATION_WAVE_TARGETS: usize = 4;
@@ -44,7 +42,7 @@ pub(super) fn collect_generated_chunks(
     current_tick: u64,
 ) {
     if work.state.has_settled_publication() {
-        if process_settled_wave_publication(content, work, queues) {
+        if process_settled_wave_publication(work) {
             work.state.finish_generation_wave();
         }
         return;
@@ -113,7 +111,6 @@ pub(super) fn collect_generated_chunks(
                     completed.coord
                 );
             }
-            seed_loaded_chunk_direct_lighting(completed.coord, content, work, queues);
             work.state.mark_ready(completed.coord);
             work.state.complete_generation_wave_target(completed.coord);
             continue;
@@ -128,7 +125,6 @@ pub(super) fn collect_generated_chunks(
         if requires_fluid_settling {
             work.state.stage_generated_chunk(completed.coord);
         } else {
-            seed_loaded_chunk_direct_lighting(completed.coord, content, work, queues);
             work.state.mark_ready(completed.coord);
             work.state.complete_generation_wave_target(completed.coord);
         }
@@ -205,9 +201,7 @@ fn begin_settled_wave_publication(
 }
 
 fn process_settled_wave_publication(
-    content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
 ) -> bool {
     let deadline = work.frame_budget.deadline();
     let mut budget = FrameWorkBudget::new(
@@ -229,10 +223,9 @@ fn process_settled_wave_publication(
             continue;
         }
 
-        // Settling has already converged generated fluids. Seed direct light
-        // now so the resident chunk is safe for lighting queries, but defer
-        // runtime wake/relaxation queues until initial mesh activation.
-        seed_loaded_chunk_direct_lighting(coord, content, work, queues);
+        // Settling has already converged generated fluids. Lighting stays
+        // uninitialized until initial publication; dynamic propagation treats
+        // unpublished chunks as outside its active domain.
         work.state.mark_ready(coord);
         work.state.complete_generation_wave_target(coord);
     }
@@ -403,7 +396,6 @@ fn select_generation_wave(
                 work.world.restore_chunk(coord),
                 "resident or persisted chunk must remain resident or archived: {coord:?}"
             );
-            seed_loaded_chunk_direct_lighting(coord, content, work, queues);
             work.state.mark_ready(coord);
             budget.record(1);
             continue;
