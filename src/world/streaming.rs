@@ -796,7 +796,13 @@ pub(super) fn stream_chunks(
     // direct-light seeding for newly generated chunks can consume the shared
     // frame deadline while hundreds of render-ready chunks wait in `ready`.
     if work.mesh_tasks.pending_count() > 0 {
-        collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
+        collect_built_chunk_meshes(
+            &content,
+            &mut renderer,
+            &mut work,
+            &mut queues,
+            current_tick,
+        );
     }
     if work.state.ready.len() > 0 {
         dispatch_initial_mesh_tasks(
@@ -820,10 +826,9 @@ pub(super) fn stream_chunks(
     }
 }
 
-// Direct lighting is residency safety: any loaded chunk may be sampled by
-// lighting propagation, so its stored light cannot remain the all-DARK default.
-// Runtime wake/relaxation queues are presentation work and are activated only
-// when the chunk is actually selected for initial rendering.
+// Direct lighting is presentation preparation. Unpublished preload chunks stay
+// outside the dynamic-lighting domain, so they can remain unseeded without
+// leaking DARK halo values into visible chunks.
 pub(super) fn seed_loaded_chunk_direct_lighting(
     coord: IVec3,
     content: &ChunkContent<'_>,
@@ -873,14 +878,12 @@ pub(super) fn seed_loaded_chunk_direct_lighting(
     }
 }
 
-pub(super) fn activate_loaded_chunk_for_initial_mesh(
+pub(super) fn activate_published_chunk_runtime(
     coord: IVec3,
-    content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
-    seed_loaded_chunk_direct_lighting(coord, content, work, queues);
     if !work.state.mark_initial_lighting_activated(coord) {
         return;
     }
