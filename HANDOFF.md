@@ -1,5 +1,21 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — retained deixa de duplicar toda a seleção anterior
+- `retained` existia para manter por mais uma selection revision os chunks que acabaram de sair de
+  `desired`, mas armazenava o `desired` anterior inteiro; a cada fronteira isso duplicava milhares
+  de entradas em outro HashSet e fazia o retirement seguinte revisitar uma seleção quase completa;
+- agora `retained` contém somente o delta `previous_desired - desired`; a união efetiva continua
+  exatamente igual a `desired atual ∪ desired anterior`, preservando a janela de retenção;
+- o fast path reutiliza diretamente `no_longer_desired`; o full rebuild calcula o mesmo delta
+  explicitamente;
+- o retirement continua protegendo chunks que reentraram em `desired` ou receberam uma nova
+  retenção antes do processamento;
+- `no_longer_desired` também é revalidado contra a seleção final antes de alterar a pending queue,
+  cobrindo reinserções ocorridas na etapa final do rebuild incremental;
+- testes cobrem a equivalência da união e a proteção de chunks reentrados/renovados.
+
+VERSION: `0.67.7`.
+
 ### Follow-up — fila pending também vira incremental no fast path de movimento
 - a auditoria estática encontrou um custo síncrono remanescente em `rebuild_queue()`: mesmo quando
   o conjunto `desired` usava o fast path incremental, a fila `pending` era limpa e reconstruída
