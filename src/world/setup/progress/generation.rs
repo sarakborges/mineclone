@@ -68,7 +68,7 @@ fn integrate_generated_chunks(
         };
         budget.record(1);
 
-        let horizontal = completed.coord.xz();
+        let horizontal = bevy::prelude::IVec2::new(completed.coord.x, completed.coord.z);
         if let Some(structure_top_chunk) =
             generation_tasks.structure_top_chunk_if_ready(horizontal)
         {

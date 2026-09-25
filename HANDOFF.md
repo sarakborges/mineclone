@@ -1,3 +1,12 @@
+### CI follow-up — imports explícitos do bootstrap
+
+- o primeiro CI de 0.68.7 falhou por dois imports ausentes: o novo uso de `IVec3::xz()` exigia
+  o trait `Vec3Swizzles` no módulo de geração, e o teste de bootstrap não importava
+  `IVec2`/`IVec3`;
+- a geração agora constrói o horizontal explicitamente com `IVec2::new(x, z)`, sem depender de
+  swizzle implícito, e o teste importa os tipos vetoriais diretamente;
+- nenhuma lógica, estágio, raio, budget ou VERSION mudou nesta correção.
+
 ## 2026-09-25 — ExtrudedSprite sem repetição vertical
 
 - removido `repeatHeight` do schema e do runtime de `extrudedSprite`;

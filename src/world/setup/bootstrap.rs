@@ -704,6 +704,8 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
 
 #[cfg(test)]
 mod tests {
+    use bevy::prelude::{IVec2, IVec3};
+
     use super::{bootstrap_column_top_chunks, random_spawn_candidate_index};
 
     #[test]
