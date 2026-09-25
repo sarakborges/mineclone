@@ -1,3 +1,21 @@
+## 2026-09-25 — Fluid settling inicializa generation waves de forma incremental
+
+- o log de 0.68.19 mostrou os maiores hitches restantes durante movimento coincidindo com
+  `generation_wave_targets` na casa de centenas; em um dos piores frames havia 348 targets,
+  316 chunks staged e frame de ~230 ms;
+- o limite normal de generation wave é pequeno, mas o fechamento de fluidos pode expandir a wave
+  para centenas de chunks para manter convergência correta através de seams;
+- o custo síncrono estava em `GeneratedFluidSettling::begin`: ele varria, no mesmo frame, o
+  frontier e o dependency halo de todos os chunks staged antes de o budget de settling começar;
+- `begin` agora apenas registra os chunks e os coloca em uma fila deduplicada de inicialização;
+- `process`, que já roda sob o budget de streaming fluid settling, inicializa no máximo o que
+  couber no budget, um chunk por item contabilizado, antes de processar propagação/verificação;
+- a propriedade de publicação não mudou: todos os chunks da wave continuam unpublished até a
+  convergência completa; a correção de fluid seams também permanece intacta;
+- nenhuma redução de render distance, geração, maxSpread ou fidelidade de fluidos foi feita.
+
+VERSION: `0.68.25`.
+
 ## 2026-09-25 — Target HUD mostra Sky Light e Block Light separadamente
 
 - o Target HUD descartava a distinção entre canais ao calcular `max(light.sky(), light.block())`

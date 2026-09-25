@@ -47,6 +47,7 @@ pub(in crate::world) struct GeneratedFluidSettling {
     mutable_chunks: HashSet<IVec3>,
     changed_existing_positions: HashSet<IVec3>,
     dependency_positions: HashSet<IVec3>,
+    initialization_queue: DeduplicatedQueue<IVec3>,
     work_queue: DeduplicatedQueue<IVec3>,
     verification_queue: DeduplicatedQueue<IVec3>,
     verification_chunks: Vec<IVec3>,
@@ -102,8 +103,8 @@ impl GeneratedFluidSettling {
 
     pub(in crate::world) fn begin(
         &mut self,
-        world: &VoxelWorld,
-        fluids: &FluidRegistry,
+        _world: &VoxelWorld,
+        _fluids: &FluidRegistry,
         coords: impl IntoIterator<Item = IVec3>,
     ) {
         self.reset();
@@ -117,21 +118,11 @@ impl GeneratedFluidSettling {
 
         for coord in generated {
             if self.generated_chunks.insert(coord) {
-                self.include_mutable_chunk(world, coord, true);
+                self.initialization_queue.enqueue(coord);
             }
         }
 
-        if self.generated_chunks.is_empty() {
-            return;
-        }
-
-        self.active = true;
-        let mut seeds = self.generated_chunks.iter().copied().collect::<Vec<_>>();
-        seeds.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        for coord in seeds {
-            self.seed_frontier_into_work(world, coord);
-            self.seed_dependency_halo(world, fluids, coord);
-        }
+        self.active = !self.generated_chunks.is_empty();
     }
 
     pub(in crate::world) fn process(
@@ -148,6 +139,15 @@ impl GeneratedFluidSettling {
         }
 
         while !budget.exhausted() {
+            if let Some(coord) = self.initialization_queue.pop() {
+                budget.record(1);
+                if self.include_mutable_chunk(world, coord, true) {
+                    self.seed_frontier_into_work(world, coord);
+                    self.seed_dependency_halo(world, fluids, coord);
+                }
+                continue;
+            }
+
             if let Some(position) = self.work_queue.pop() {
                 budget.record(1);
                 self.evaluate_position(world, fluids, position);
@@ -227,6 +227,7 @@ impl GeneratedFluidSettling {
         self.mutable_chunks.clear();
         self.changed_existing_positions.clear();
         self.dependency_positions.clear();
+        self.initialization_queue.clear();
         self.work_queue.clear();
         self.verification_queue.clear();
         self.verification_chunks.clear();
