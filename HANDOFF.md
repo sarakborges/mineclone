@@ -1,3 +1,46 @@
+## 2026-09-25 — Streaming 0.68.41 faz prefetch da próxima wave durante fluid settling
+
+- o log 0.68.40 confirmou que a cache de prioridade da pending queue funcionou: depois que a
+  seleção estabilizou, `pending_priority_scans` chegou a 0, eliminando os scans repetidos O(n)
+  por target;
+- o mesmo log mostrou melhora de recuperação de streaming, mas ainda havia períodos com
+  `generation_wave_targets>0`, `generation_wave_pending=0`, `generation_tasks=0`,
+  `staged_generated_chunks=0` e `async_chunk_work=0/4`, enquanto
+  `stream_pending_renderable` seguia alto (~1500..2100);
+- esse estado é compatível com `GeneratedFluidSettling` ativo: os staged chunks são drenados para
+  o fixed-point solver, mas os target reservations permanecem pertencendo à wave até convergência;
+- generation era bloqueada durante todo esse settling/publication, deixando o AsyncComputeTaskPool
+  ocioso mesmo com milhares de chunks ainda pendentes;
+- foi adicionada uma fila lógica separada de `generation_prefetch_targets`:
+  - durante fluid settling ou settled publication, o sistema `Last` pode selecionar chunks da
+    pending queue e calcular a PRÓXIMA wave em background;
+  - chunks prefetched não entram no `VoxelWorld`, não participam de fluid/lighting e não são
+    publicados antes da wave corrente convergir;
+  - ao finalizar a wave atual, `finish_generation_wave` promove atomicamente os prefetched targets
+    para `generation_wave_targets`; resultados já concluídos são integrados no fluxo normal no
+    próximo Update;
+  - cancellation por mudança de seleção remove a reservation tanto da active wave quanto do
+    prefetch;
+  - `generated_chunk_is_unpublished` considera prefetch reservado para impedir duplicação em
+    rebuilds de seleção;
+  - o prefetch respeita o mesmo `generation_wave_target_limit`: critical pending continua limitado
+    a 4 targets; caso normal permanece limitado a 8;
+  - se não houver async permit, o chunk é requeueado e o refill encerra sem gastar o restante do
+    frame tentando outros targets;
+- o late refill normal continua apenas alimentando targets já selecionados da active wave;
+- foram adicionados testes cobrindo promoção do prefetch para a próxima wave e remoção correta da
+  reservation em cancelamento;
+- runtime diagnostics agora incluem `generation_prefetch_targets` e estado interno do
+  `GeneratedFluidSettling`: active, generated, mutable, initialization, work, verification e
+  verification_chunks restantes;
+- esses novos campos permitem distinguir explicitamente, no próximo log, CPU de generation,
+  starvation de permits e fixed-point de fluido;
+- CI funcional run `36198998281`: success em localization audit, structure content reference
+  audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.41`.
+
 ## 2026-09-25 — Streaming 0.68.40 mantém generation workers alimentados e elimina rescans O(n)
 
 - o log 0.68.39 confirmou que o sync esparso de world objects funcionou: `world_object_chunks`
