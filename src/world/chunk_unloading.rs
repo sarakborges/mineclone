@@ -117,6 +117,14 @@ pub(super) fn retire_distant_chunk_meshes(
     mut remesh_tasks: ResMut<ChunkRemeshTasks>,
     mut state: Local<RenderRetirementState>,
 ) {
+    // Do not churn render residency while the current show radius still has
+    // holes to fill. Normal distance retirement can catch up once visible
+    // streaming is complete; hard mesh-memory pressure is enforced separately
+    // by enforce_chunk_mesh_residency_budget in PostUpdate.
+    if streaming.has_renderable_streaming_backlog() {
+        return;
+    }
+
     let selection_revision = streaming.selection_revision();
     if state.selection_revision != Some(selection_revision) {
         for coord in renderer.pool.active_coords() {
