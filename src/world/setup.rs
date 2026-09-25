@@ -2,7 +2,7 @@ mod bootstrap;
 mod progress;
 mod system_params;
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use super::fluid_updates::GeneratedFluidSettling;
 
@@ -16,6 +16,7 @@ enum WorldLoadingPhase {
     Lighting,
     Meshing,
     Assets,
+    Finalizing,
     Spawning,
 }
 
@@ -24,6 +25,7 @@ pub(crate) enum WorldLoadingStage {
     Terrain,
     Chunks,
     Assets,
+    Finalizing,
 }
 
 #[derive(Resource)]
@@ -36,6 +38,8 @@ pub(crate) struct WorldLoadingState {
     meshed: usize,
     assets_loaded: usize,
     assets_total: usize,
+    finalization_frames: u8,
+    column_top_chunks: HashMap<IVec2, i32>,
     spawn_column: IVec2,
     fluid_settling: GeneratedFluidSettling,
     phase: WorldLoadingPhase,
@@ -54,7 +58,8 @@ impl WorldLoadingState {
             | WorldLoadingPhase::SettlingFluids
             | WorldLoadingPhase::Lighting => WorldLoadingStage::Terrain,
             WorldLoadingPhase::Meshing => WorldLoadingStage::Chunks,
-            WorldLoadingPhase::Assets | WorldLoadingPhase::Spawning => WorldLoadingStage::Assets,
+            WorldLoadingPhase::Assets => WorldLoadingStage::Assets,
+            WorldLoadingPhase::Finalizing | WorldLoadingPhase::Spawning => WorldLoadingStage::Finalizing,
         }
     }
 
@@ -63,6 +68,26 @@ impl WorldLoadingState {
             WorldLoadingStage::Terrain => (self.generated, self.total()),
             WorldLoadingStage::Chunks => (self.meshed, self.total()),
             WorldLoadingStage::Assets => (self.assets_loaded, self.assets_total),
+            WorldLoadingStage::Finalizing => (
+                usize::from(self.finalization_frames),
+                usize::from(progress::INITIAL_FINALIZATION_FRAMES),
+            ),
         }
+    }
+
+    fn extend_column_to_structure_top(&mut self, horizontal: IVec2, structure_top_chunk: i32) {
+        let Some(current_top) = self.column_top_chunks.get_mut(&horizontal) else {
+            return;
+        };
+        if structure_top_chunk <= *current_top {
+            return;
+        }
+
+        let previous_top = *current_top;
+        *current_top = structure_top_chunk;
+        self.coords.extend(
+            (previous_top + 1..=structure_top_chunk)
+                .map(|y| IVec3::new(horizontal.x, y, horizontal.y)),
+        );
     }
 }

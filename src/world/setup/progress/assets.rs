@@ -14,6 +14,6 @@ pub(super) fn wait_for_gameplay_assets(
     progress.loading_state.assets_total = load_progress.total;
 
     if load_progress.is_complete() {
-        progress.loading_state.phase = WorldLoadingPhase::Spawning;
+        progress.loading_state.phase = WorldLoadingPhase::Finalizing;
     }
 }

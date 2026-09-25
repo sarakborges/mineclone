@@ -1,4 +1,8 @@
-use bevy::{prelude::*, render::storage::ShaderBuffer};
+use bevy::{
+    platform::collections::HashMap,
+    prelude::*,
+    render::storage::ShaderBuffer,
+};
 
 use crate::{
     content::{
@@ -37,15 +41,14 @@ use crate::world::{
     generation::{
         authored_surface_fluid_id_for_position, ocean_weight_from_surface,
     },
-    render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
+    render_distance::RenderDistanceSettings,
+    streaming::initial_streaming_chunk_coords,
     terrain::{surface_height, surface_height_from_sample},
     deterministic::mix_hash_u64,
     structure_field::StructureField,
     world_feature_fields::WorldFeatureFields,
 };
 
-const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
-const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
@@ -446,7 +449,15 @@ pub(in crate::world) fn begin_world_loading(
     .resolve(saved_player_position);
     // Saves persist only modified chunks. Untouched terrain is intentionally absent and
     // must be regenerated from the pinned worldgen identity around the restored player.
-    let coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
+    let coords = bootstrap_chunk_coords(
+        initial_center,
+        &config.render_distance,
+        dimension,
+        biomes,
+        &biome_field,
+        &feature_fields,
+    );
+    let column_top_chunks = bootstrap_column_top_chunks(&coords);
     let bootstrap_chunks = coords
         .iter()
         .copied()
@@ -478,6 +489,8 @@ pub(in crate::world) fn begin_world_loading(
         meshed: 0,
         assets_loaded: 0,
         assets_total: gameplay_asset_count,
+        finalization_frames: 0,
+        column_top_chunks,
         spawn_column,
         fluid_settling: Default::default(),
         phase: WorldLoadingPhase::Generating,
@@ -507,12 +520,33 @@ fn spawn_surface_chunk(column: IVec2, surface_y: i32) -> IVec3 {
     )
 }
 
-fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSettings) -> Vec<IVec3> {
-    chunk_coords_in_volume(
+fn bootstrap_chunk_coords(
+    center: IVec3,
+    render_distance: &RenderDistanceSettings,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
+) -> Vec<IVec3> {
+    initial_streaming_chunk_coords(
         center,
-        BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS.min(render_distance.chunks()),
-        BOOTSTRAP_VERTICAL_RADIUS_CHUNKS.min(render_distance.vertical_chunks()),
+        render_distance.chunks(),
+        render_distance.vertical_chunks(),
+        dimension,
+        biomes,
+        biome_field,
+        feature_fields,
     )
+}
+
+fn bootstrap_column_top_chunks(coords: &[IVec3]) -> HashMap<IVec2, i32> {
+    let mut tops = HashMap::<IVec2, i32>::new();
+    for coord in coords {
+        tops.entry(coord.xz())
+            .and_modify(|top| *top = (*top).max(coord.y))
+            .or_insert(coord.y);
+    }
+    tops
 }
 
 fn random_spawn_biome_id<'a>(
@@ -670,7 +704,18 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
 
 #[cfg(test)]
 mod tests {
-    use super::random_spawn_candidate_index;
+    use super::{bootstrap_column_top_chunks, random_spawn_candidate_index};
+
+    #[test]
+    fn bootstrap_column_tops_track_the_highest_selected_chunk() {
+        let tops = bootstrap_column_top_chunks(&[
+            IVec3::new(2, 1, -3),
+            IVec3::new(2, 4, -3),
+            IVec3::new(1, 2, 7),
+        ]);
+        assert_eq!(tops.get(&IVec2::new(2, -3)), Some(&4));
+        assert_eq!(tops.get(&IVec2::new(1, 7)), Some(&2));
+    }
 
     #[test]
     fn random_spawn_candidate_is_deterministic_for_same_seed() {

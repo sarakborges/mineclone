@@ -68,6 +68,15 @@ fn integrate_generated_chunks(
         };
         budget.record(1);
 
+        let horizontal = completed.coord.xz();
+        if let Some(structure_top_chunk) =
+            generation_tasks.structure_top_chunk_if_ready(horizontal)
+        {
+            progress
+                .loading_state
+                .extend_column_to_structure_top(horizontal, structure_top_chunk);
+        }
+
         if completed.revision != current_revision {
             assert!(
                 generation_tasks.schedule(completed.coord, async_work),

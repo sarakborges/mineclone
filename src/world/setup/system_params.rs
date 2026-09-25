@@ -12,12 +12,14 @@ use crate::{
         structure_set::StructureSetRegistry,
     },
     rendering::GameplayAssetPreloads,
+    ui::transition::ScreenTransition,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
     world::{
         InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
         chunk_async_work::ChunkAsyncWorkLimiter,
         chunk_generation_tasks::ChunkGenerationTasks,
         chunk_mesh_tasks::ChunkMeshTasks,
+        chunk_rendering::ChunkRenderCoord,
         chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
         dimension::CurrentDimension,
         fluid_updates::PendingFluidUpdates,
@@ -94,4 +96,11 @@ pub(in crate::world) struct WorldSetupAssets<'w> {
     pub(super) images: ResMut<'w, Assets<Image>>,
     pub(super) asset_server: Res<'w, AssetServer>,
     pub(super) gameplay_preloads: Res<'w, GameplayAssetPreloads>,
+}
+
+#[derive(SystemParam)]
+pub(in crate::world) struct WorldSetupFinalization<'w, 's> {
+    pub(super) transition: ResMut<'w, ScreenTransition>,
+    pub(super) player_definition: Res<'w, PlayerDefinition>,
+    pub(super) chunk_entities: Query<'w, 's, (), With<ChunkRenderCoord>>,
 }

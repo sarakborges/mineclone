@@ -60,6 +60,7 @@
   "loading.terrain": "Loading terrain... {completed}/{total}",
   "loading.chunks": "Loading chunks... {completed}/{total}",
   "loading.assets": "Loading assets... {completed}/{total}",
+  "loading.finalizing": "Preparing world... {completed}/{total}",
   "pause.title": "PAUSED",
   "pause.resume": "Resume",
   "pause.leaveWorld": "Leave World",

@@ -87,6 +87,7 @@ fn format_loading_progress(
         WorldLoadingStage::Terrain => "loading.terrain",
         WorldLoadingStage::Chunks => "loading.chunks",
         WorldLoadingStage::Assets => "loading.assets",
+        WorldLoadingStage::Finalizing => "loading.finalizing",
     };
     localization
         .text(language, key)

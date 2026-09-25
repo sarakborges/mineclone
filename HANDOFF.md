@@ -1,3 +1,20 @@
+## 2026-09-25 — Load World cobre a seleção inicial real antes do Gameplay
+
+- removido o bootstrap fixo de raio 4 x ±2 chunks, que declarava o mundo pronto e deixava o
+  streaming abrir Gameplay com milhares de chunks ainda pendentes;
+- o bootstrap agora reutiliza a própria seleção surface-aware do streaming, incluindo o preload
+  estacionário da render distance, o volume local vertical e as colunas necessárias para cobrir a
+  superfície; não existe mais uma segunda geometria de seleção divergente para o carregamento;
+- durante geração, se o worker resolve uma structure que ultrapassa o topo inicialmente previsto
+  para uma coluna selecionada, o bootstrap estende dinamicamente essa coluna até o structure top
+  antes de avançar para fluid settling/lighting/meshing;
+- após assets, a nova etapa `Preparing world` só avança quando todas as coordenadas do bootstrap
+  possuem allocation no ChunkRenderPool e todas as entities de render não-vazias já materializaram
+  no ECS; a etapa permanece por dois updates completos antes de spawn/transição;
+- Gameplay continua sem simulação durante todo o pipeline de terrain, chunks, assets e finalização.
+
+VERSION: `0.68.7`.
+
 ## 2026-09-25 — Pebble/Stick ainda mais baixos
 
 - Pebble e Stick foram reduzidos em mais 60% da altura visual atual;

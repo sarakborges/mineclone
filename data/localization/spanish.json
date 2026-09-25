@@ -60,6 +60,7 @@
   "loading.terrain": "Cargando terreno... {completed}/{total}",
   "loading.chunks": "Cargando chunks... {completed}/{total}",
   "loading.assets": "Cargando recursos... {completed}/{total}",
+  "loading.finalizing": "Preparando mundo... {completed}/{total}",
   "pause.title": "EN PAUSA",
   "pause.resume": "Continuar",
   "pause.leaveWorld": "Salir del Mundo",

@@ -4,10 +4,13 @@ use bevy::{
 };
 
 use crate::{
+    content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
     world::{
+        biome_field::BiomeField,
         generation_region::generation_region_coord,
         render_distance::chunk_is_in_volume,
+        world_feature_fields::WorldFeatureFields,
     },
 };
 
@@ -34,6 +37,14 @@ struct DesiredChunkSelection {
     vertical_radius: i32,
 }
 
+#[derive(Clone, Copy)]
+struct SurfaceSelectionContext<'a> {
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    biome_field: &'a BiomeField,
+    feature_fields: &'a WorldFeatureFields,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct HorizontalSelectionShapeKey {
     radius: i32,
@@ -50,6 +61,39 @@ pub(super) struct QueueRebuildScratch {
     no_longer_desired: Vec<IVec3>,
     horizontal_shape_key: Option<HorizontalSelectionShapeKey>,
     horizontal_offsets: Vec<IVec2>,
+}
+
+pub(in crate::world) fn initial_streaming_chunk_coords(
+    center: IVec3,
+    render_distance_chunks: i32,
+    vertical_radius: i32,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
+) -> Vec<IVec3> {
+    let horizontal_radius = render_distance_chunks + HORIZONTAL_PRELOAD_CHUNKS;
+    let selection = DesiredChunkSelection { center, horizontal_radius, vertical_radius };
+    let context = SurfaceSelectionContext { dimension, biomes, biome_field, feature_fields };
+    let mut horizontal_offsets = Vec::new();
+    rebuild_horizontal_selection_offsets(&mut horizontal_offsets, horizontal_radius, IVec2::ZERO);
+
+    let mut desired = HashSet::new();
+    let mut surface_ranges = HashMap::new();
+    let mut surface_support_minimums = HashMap::new();
+    let mut structure_top_chunks = HashMap::new();
+    rebuild_desired_chunk_coords(
+        &mut desired,
+        selection,
+        &horizontal_offsets,
+        context,
+        &mut surface_ranges,
+        &mut surface_support_minimums,
+        &mut structure_top_chunks,
+    );
+    let mut coords = desired.into_iter().collect::<Vec<_>>();
+    coords.sort_by_key(|coord| (*coord - center).length_squared());
+    coords
 }
 
 pub(super) fn rebuild_queue(
@@ -109,6 +153,12 @@ pub(super) fn rebuild_queue(
         horizontal_radius: preload_radius,
         vertical_radius,
     };
+    let surface_context = SurfaceSelectionContext {
+        dimension: context.dimension,
+        biomes: context.biomes,
+        biome_field: context.biome_field,
+        feature_fields: context.feature_fields,
+    };
     let incremental_rebuild = can_incrementally_rebuild_desired(
         previous_center,
         previous_horizontal_radius,
@@ -129,7 +179,7 @@ pub(super) fn rebuild_queue(
             desired_selection,
             movement_direction,
             &scratch.horizontal_offsets,
-            context,
+            surface_context,
             &mut streaming.surface_ranges,
             &mut streaming.surface_support_minimums,
             &mut streaming.structure_top_chunks,
@@ -143,7 +193,7 @@ pub(super) fn rebuild_queue(
             &mut scratch.desired,
             desired_selection,
             &scratch.horizontal_offsets,
-            context,
+            surface_context,
             &mut streaming.surface_ranges,
             &mut streaming.surface_support_minimums,
             &mut streaming.structure_top_chunks,
@@ -511,7 +561,7 @@ fn rebuild_desired_chunk_coords(
     desired: &mut HashSet<IVec3>,
     selection: DesiredChunkSelection,
     horizontal_offsets: &[IVec2],
-    context: &QueueRebuildContext<'_>,
+    context: SurfaceSelectionContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: &mut HashMap<IVec2, i32>,
     structure_top_chunks: &mut HashMap<IVec2, i32>,
@@ -545,7 +595,7 @@ fn rebuild_desired_chunk_coords_incremental(
     selection: DesiredChunkSelection,
     movement_direction: IVec2,
     horizontal_offsets: &[IVec2],
-    context: &QueueRebuildContext<'_>,
+    context: SurfaceSelectionContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: &mut HashMap<IVec2, i32>,
     structure_top_chunks: &mut HashMap<IVec2, i32>,
@@ -664,7 +714,7 @@ fn insert_surface_column(
     horizontal: IVec2,
     horizontal_distance_squared: i32,
     local_radius: i32,
-    context: &QueueRebuildContext<'_>,
+    context: SurfaceSelectionContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: &mut HashMap<IVec2, i32>,
     structure_top_chunks: &HashMap<IVec2, i32>,

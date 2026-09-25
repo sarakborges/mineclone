@@ -2,20 +2,15 @@ mod assets;
 mod fluids;
 mod generation;
 mod lighting;
+mod finalization;
 mod meshing;
 mod spawning;
 
 use std::time::Duration;
 
-use bevy::prelude::*;
-
-use crate::{
-    content::player::PlayerDefinition,
-    ui::transition::ScreenTransition,
-};
-
 use self::{
     assets::wait_for_gameplay_assets,
+    finalization::finalize_initial_world,
     fluids::settle_initial_fluids,
     generation::generate_initial_chunks,
     lighting::light_initial_chunks,
@@ -25,23 +20,23 @@ use self::{
 use super::{
     WorldLoadingPhase,
     system_params::{
-        WorldSetupAssets, WorldSetupChunkPipeline, WorldSetupPersistence, WorldSetupProgress,
-        WorldSetupSimulation,
+        WorldSetupAssets, WorldSetupChunkPipeline, WorldSetupFinalization, WorldSetupPersistence,
+        WorldSetupProgress, WorldSetupSimulation,
     },
 };
 
 pub(super) const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
+pub(super) const INITIAL_FINALIZATION_FRAMES: u8 = 2;
 
 pub(in crate::world) fn setup_world(
     mut pipeline: WorldSetupChunkPipeline,
     mut progress: WorldSetupProgress,
     mut assets: WorldSetupAssets,
-    mut transition: ResMut<ScreenTransition>,
     mut simulation: WorldSetupSimulation,
     persistence: WorldSetupPersistence,
-    player_definition: Res<PlayerDefinition>,
+    mut finalization: WorldSetupFinalization,
 ) {
-    if transition.is_active() {
+    if finalization.transition.is_active() {
         return;
     }
 
@@ -92,13 +87,18 @@ pub(in crate::world) fn setup_world(
             &assets.gameplay_preloads,
             &mut progress,
         ),
+        WorldLoadingPhase::Finalizing => finalize_initial_world(
+            &pipeline.renderer.pool,
+            &mut progress,
+            &finalization.chunk_entities,
+        ),
         WorldLoadingPhase::Spawning => spawn_loaded_world(
             &pipeline.content,
             &mut pipeline.renderer,
             &mut progress,
-            &mut transition,
+            &mut finalization.transition,
             &persistence,
-            &player_definition,
+            &finalization.player_definition,
         ),
     }
 }
