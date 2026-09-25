@@ -73,6 +73,22 @@ impl GeneratedFluidSettling {
         self.active && self.mutable_chunks.contains(&coord)
     }
 
+    pub(in crate::world) fn diagnostic_counts(
+        &self,
+    ) -> (bool, usize, usize, usize, usize, usize, usize) {
+        (
+            self.active,
+            self.generated_chunks.len(),
+            self.mutable_chunks.len(),
+            self.initialization_queue.len(),
+            self.work_queue.len(),
+            self.verification_queue.len(),
+            self.verification_chunks
+                .len()
+                .saturating_sub(self.verification_chunk_cursor),
+        )
+    }
+
     pub(in crate::world) fn begin(
         &mut self,
         _world: &VoxelWorld,
