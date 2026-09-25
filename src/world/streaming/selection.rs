@@ -58,6 +58,11 @@ pub(super) fn rebuild_queue(
     scratch: &mut QueueRebuildScratch,
     context: &QueueRebuildContext<'_>,
 ) {
+    let previous_center = streaming.center;
+    let previous_movement_direction = streaming.movement_direction;
+    let previous_horizontal_radius = streaming.horizontal_radius;
+    let previous_vertical_radius = streaming.vertical_radius;
+
     if allow_forward_preload {
         update_movement_direction(streaming, center);
     } else {
@@ -65,9 +70,9 @@ pub(super) fn rebuild_queue(
     }
     let movement_direction = streaming.movement_direction;
     let prune_caches = should_prune_streaming_caches(
-        streaming.center,
-        streaming.horizontal_radius,
-        streaming.vertical_radius,
+        previous_center,
+        previous_horizontal_radius,
+        previous_vertical_radius,
         center,
         horizontal_radius,
         vertical_radius,
@@ -96,19 +101,46 @@ pub(super) fn rebuild_queue(
         preload_radius,
         movement_direction,
     );
-    rebuild_desired_chunk_coords(
-        &mut scratch.desired,
-        DesiredChunkSelection {
-            center,
-            horizontal_radius: preload_radius,
-            vertical_radius,
-        },
-        &scratch.horizontal_offsets,
-        context,
-        &mut streaming.surface_ranges,
-        &mut streaming.surface_support_minimums,
-        &mut streaming.structure_top_chunks,
-    );
+    let desired_selection = DesiredChunkSelection {
+        center,
+        horizontal_radius: preload_radius,
+        vertical_radius,
+    };
+    if can_incrementally_rebuild_desired(
+        previous_center,
+        previous_horizontal_radius,
+        previous_vertical_radius,
+        previous_movement_direction,
+        center,
+        horizontal_radius,
+        vertical_radius,
+        movement_direction,
+        allow_forward_preload,
+        prune_caches,
+    ) {
+        rebuild_desired_chunk_coords_incremental(
+            &mut scratch.desired,
+            &streaming.desired,
+            previous_center.expect("incremental rebuild requires previous center"),
+            desired_selection,
+            movement_direction,
+            &scratch.horizontal_offsets,
+            context,
+            &mut streaming.surface_ranges,
+            &mut streaming.surface_support_minimums,
+            &mut streaming.structure_top_chunks,
+        );
+    } else {
+        rebuild_desired_chunk_coords(
+            &mut scratch.desired,
+            desired_selection,
+            &scratch.horizontal_offsets,
+            context,
+            &mut streaming.surface_ranges,
+            &mut streaming.surface_support_minimums,
+            &mut streaming.structure_top_chunks,
+        );
+    }
     if prune_caches {
         context.feature_fields.retain_for_chunks(&scratch.desired);
         context
@@ -180,6 +212,35 @@ fn should_prune_streaming_caches(
     previous_center.map(generation_region_coord) != Some(generation_region_coord(center))
         || previous_horizontal_radius != horizontal_radius
         || previous_vertical_radius != vertical_radius
+}
+
+#[allow(clippy::too_many_arguments)]
+fn can_incrementally_rebuild_desired(
+    previous_center: Option<IVec3>,
+    previous_horizontal_radius: i32,
+    previous_vertical_radius: i32,
+    previous_movement_direction: IVec2,
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+    movement_direction: IVec2,
+    allow_forward_preload: bool,
+    prune_caches: bool,
+) -> bool {
+    let Some(previous_center) = previous_center else {
+        return false;
+    };
+    let delta = center - previous_center;
+
+    allow_forward_preload
+        && !prune_caches
+        && previous_horizontal_radius == horizontal_radius
+        && previous_vertical_radius == vertical_radius
+        && previous_movement_direction == movement_direction
+        && delta.y == 0
+        && delta.x.abs() <= 1
+        && delta.z.abs() <= 1
+        && delta.xz() != IVec2::ZERO
 }
 
 fn collect_retired_chunk_coords(
@@ -315,6 +376,22 @@ fn inside_forward_preload(
     lateral_squared <= lateral_width * lateral_width
 }
 
+fn horizontal_offset_is_selected(
+    offset: IVec2,
+    horizontal_radius: i32,
+    movement_direction: IVec2,
+) -> bool {
+    if offset.length_squared() <= horizontal_radius * horizontal_radius {
+        return true;
+    }
+    movement_direction != IVec2::ZERO
+        && inside_forward_preload(
+            offset,
+            horizontal_radius,
+            movement_direction.as_vec2().normalize(),
+        )
+}
+
 fn sync_horizontal_selection_offsets(
     scratch: &mut QueueRebuildScratch,
     horizontal_radius: i32,
@@ -410,13 +487,92 @@ fn rebuild_desired_chunk_coords(
     structure_top_chunks: &mut HashMap<IVec2, i32>,
 ) {
     desired.clear();
+    insert_local_volume(desired, selection);
+
+    let local_radius = selection
+        .horizontal_radius
+        .min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
+    let center_horizontal = selection.center.xz();
+    for &offset in horizontal_offsets {
+        insert_surface_column(
+            desired,
+            center_horizontal + offset,
+            offset.length_squared(),
+            local_radius,
+            context,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rebuild_desired_chunk_coords_incremental(
+    desired: &mut HashSet<IVec3>,
+    previous_desired: &HashSet<IVec3>,
+    previous_center: IVec3,
+    selection: DesiredChunkSelection,
+    movement_direction: IVec2,
+    horizontal_offsets: &[IVec2],
+    context: &QueueRebuildContext<'_>,
+    surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
+    surface_support_minimums: &mut HashMap<IVec2, i32>,
+    structure_top_chunks: &mut HashMap<IVec2, i32>,
+) {
+    desired.clear();
+    let local_radius = selection
+        .horizontal_radius
+        .min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
+
+    desired.extend(previous_desired.iter().copied().filter(|coord| {
+        coord_remains_selected(
+            *coord,
+            selection,
+            movement_direction,
+            local_radius,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
+        )
+    }));
+    insert_local_volume(desired, selection);
+
+    let center_horizontal = selection.center.xz();
+    let previous_horizontal = previous_center.xz();
+    for &offset in horizontal_offsets {
+        let horizontal = center_horizontal + offset;
+        let previous_offset = horizontal - previous_horizontal;
+        let was_selected =
+            horizontal_offset_is_selected(previous_offset, selection.horizontal_radius, movement_direction);
+        let has_cached_range = surface_ranges.contains_key(&horizontal)
+            && surface_support_minimums.contains_key(&horizontal);
+
+        if was_selected && has_cached_range {
+            continue;
+        }
+
+        insert_surface_column(
+            desired,
+            horizontal,
+            offset.length_squared(),
+            local_radius,
+            context,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
+        );
+    }
+}
+
+fn insert_local_volume(desired: &mut HashSet<IVec3>, selection: DesiredChunkSelection) {
     let DesiredChunkSelection {
         center,
         horizontal_radius,
         vertical_radius,
     } = selection;
-
     let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
+
     assert!(center.y >= 0, "streaming center Y cannot be negative");
     assert!(
         local_radius >= 0,
@@ -439,61 +595,126 @@ fn rebuild_desired_chunk_coords(
             }
         }
     }
+}
 
-    let center_horizontal = center.xz();
-
-    for &offset in horizontal_offsets {
-            let horizontal_distance_squared = offset.length_squared();
-            let horizontal = center_horizontal + offset;
-            let (own_minimum, own_maximum) = cached_surface_range(
-                surface_ranges,
-                horizontal,
-                context.dimension,
-                context.biomes,
-                context.biome_field,
-                context.feature_fields,
-            );
-            let structure_top_chunk = structure_top_chunks
-                .get(&horizontal)
-                .copied()
-                .unwrap_or(-1);
-            let surrounding_minimum = *surface_support_minimums
-                .entry(horizontal)
-                .or_insert_with(|| {
-                    let mut minimum = own_minimum;
-                    for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
-                        let neighbor = horizontal + neighbor_offset;
-                        let (neighbor_minimum, _) = cached_surface_range(
-                            surface_ranges,
-                            neighbor,
-                            context.dimension,
-                            context.biomes,
-                            context.biome_field,
-                            context.feature_fields,
-                        );
-                        minimum = minimum.min(neighbor_minimum);
-                    }
-                    minimum
-                });
-
-            let chunk_size = CHUNK_SIZE as i32;
-            let near_player = horizontal_distance_squared <= local_radius * local_radius;
-            let padding_below = if near_player {
-                NEAR_SURFACE_PADDING_BELOW_CHUNKS
-            } else {
-                FAR_SURFACE_PADDING_BELOW_CHUNKS
-            };
-            let minimum_y =
-                (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
-            let maximum_y = own_maximum
-                .div_euclid(chunk_size)
-                .max(structure_top_chunk)
-                .max(minimum_y);
-
-            for y in minimum_y..=maximum_y {
-                desired.insert(IVec3::new(horizontal.x, y, horizontal.y));
+#[allow(clippy::too_many_arguments)]
+fn insert_surface_column(
+    desired: &mut HashSet<IVec3>,
+    horizontal: IVec2,
+    horizontal_distance_squared: i32,
+    local_radius: i32,
+    context: &QueueRebuildContext<'_>,
+    surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
+    surface_support_minimums: &mut HashMap<IVec2, i32>,
+    structure_top_chunks: &HashMap<IVec2, i32>,
+) {
+    let (own_minimum, own_maximum) = cached_surface_range(
+        surface_ranges,
+        horizontal,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
+        context.feature_fields,
+    );
+    let surrounding_minimum = *surface_support_minimums
+        .entry(horizontal)
+        .or_insert_with(|| {
+            let mut minimum = own_minimum;
+            for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
+                let neighbor = horizontal + neighbor_offset;
+                let (neighbor_minimum, _) = cached_surface_range(
+                    surface_ranges,
+                    neighbor,
+                    context.dimension,
+                    context.biomes,
+                    context.biome_field,
+                    context.feature_fields,
+                );
+                minimum = minimum.min(neighbor_minimum);
             }
+            minimum
+        });
+    let structure_top_chunk = structure_top_chunks
+        .get(&horizontal)
+        .copied()
+        .unwrap_or(-1);
+    let (minimum_y, maximum_y) = surface_chunk_range(
+        own_maximum,
+        surrounding_minimum,
+        structure_top_chunk,
+        horizontal_distance_squared <= local_radius * local_radius,
+    );
+
+    for y in minimum_y..=maximum_y {
+        desired.insert(IVec3::new(horizontal.x, y, horizontal.y));
     }
+}
+
+fn coord_remains_selected(
+    coord: IVec3,
+    selection: DesiredChunkSelection,
+    movement_direction: IVec2,
+    local_radius: i32,
+    surface_ranges: &HashMap<IVec2, (i32, i32)>,
+    surface_support_minimums: &HashMap<IVec2, i32>,
+    structure_top_chunks: &HashMap<IVec2, i32>,
+) -> bool {
+    if chunk_is_in_volume(
+        selection.center,
+        coord,
+        local_radius,
+        selection.vertical_radius,
+    ) {
+        return true;
+    }
+
+    let horizontal = coord.xz();
+    let offset = horizontal - selection.center.xz();
+    if !horizontal_offset_is_selected(
+        offset,
+        selection.horizontal_radius,
+        movement_direction,
+    ) {
+        return false;
+    }
+
+    let Some((_, own_maximum)) = surface_ranges.get(&horizontal).copied() else {
+        return false;
+    };
+    let Some(surrounding_minimum) = surface_support_minimums.get(&horizontal).copied() else {
+        return false;
+    };
+    let structure_top_chunk = structure_top_chunks
+        .get(&horizontal)
+        .copied()
+        .unwrap_or(-1);
+    let (minimum_y, maximum_y) = surface_chunk_range(
+        own_maximum,
+        surrounding_minimum,
+        structure_top_chunk,
+        offset.length_squared() <= local_radius * local_radius,
+    );
+    (minimum_y..=maximum_y).contains(&coord.y)
+}
+
+fn surface_chunk_range(
+    own_maximum: i32,
+    surrounding_minimum: i32,
+    structure_top_chunk: i32,
+    near_player: bool,
+) -> (i32, i32) {
+    let chunk_size = CHUNK_SIZE as i32;
+    let padding_below = if near_player {
+        NEAR_SURFACE_PADDING_BELOW_CHUNKS
+    } else {
+        FAR_SURFACE_PADDING_BELOW_CHUNKS
+    };
+    let minimum_y = (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
+    let maximum_y = own_maximum
+        .div_euclid(chunk_size)
+        .max(structure_top_chunk)
+        .max(minimum_y);
+    (minimum_y, maximum_y)
 }
 
 #[cfg(test)]
@@ -529,6 +750,60 @@ mod tests {
         }
 
         offsets
+    }
+
+    #[test]
+    fn incremental_rebuild_only_handles_adjacent_same_direction_motion() {
+        let previous = IVec3::new(10, 2, 10);
+
+        assert!(can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            IVec2::X,
+            previous + IVec3::X,
+            12,
+            2,
+            IVec2::X,
+            true,
+            false,
+        ));
+        assert!(!can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            IVec2::X,
+            previous + IVec3::new(2, 0, 0),
+            12,
+            2,
+            IVec2::X,
+            true,
+            false,
+        ));
+        assert!(!can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            IVec2::X,
+            previous + IVec3::X,
+            12,
+            2,
+            IVec2::Y,
+            true,
+            false,
+        ));
+        assert!(!can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            IVec2::X,
+            previous + IVec3::X,
+            12,
+            2,
+            IVec2::X,
+            true,
+            true,
+        ));
     }
 
     #[test]

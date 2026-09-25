@@ -1,3 +1,26 @@
+## 2026-09-24 — Streaming desired selection usa diff incremental durante movimento contínuo
+
+Depois de remover a ordenação síncrona da pending queue, o rebuild ainda reconstruía todo o
+`desired HashSet` e consultava surface/structure metadata para todas as colunas a cada fronteira
+de chunk.
+
+Agora existe um fast path incremental para o caso dominante de gameplay:
+
+- quando o player anda para um chunk adjacente mantendo raio, Y e direção de movimento, e não
+  cruza uma generation-region boundary, a seleção anterior é reutilizada;
+- chunks antigos são filtrados com apenas testes geométricos + lookups nos caches já existentes;
+- somente colunas que realmente entraram no novo shape executam `cached_surface_range` e
+  cálculo de suporte vertical;
+- o pequeno volume local 3D ao redor do player é reinserido explicitamente para preservar
+  cobertura subterrânea;
+- mudanças de direção, warp/salto grande, alteração de render distance, mudança vertical ou
+  pruning de caches continuam usando o full rebuild conservador;
+- o cálculo de range vertical foi centralizado em helpers compartilhados entre full e
+  incremental paths para evitar divergência semântica.
+
+Em movimento contínuo, o custo pesado de seleção deixa de escalar com toda a área visível a cada
+16 blocos percorridos e passa a escalar principalmente com a borda nova do shape.
+
 ### CI follow-up — teste de priority sem PendingEntry
 
 O primeiro CI da seleção lazy falhou porque um teste ainda instanciava o antigo
