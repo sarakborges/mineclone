@@ -25,7 +25,8 @@
   log se o limite adaptativo realmente recupera do floor para a capacidade-base da máquina;
 - CI Rust validation run `36189088589`: success em localization audit, structure content
   reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
-  `cargo check --locked`.
+  `cargo check --locked`;
+- CI do commit versionado `0.68.37`, run `36189241060`: success.
 
 VERSION: `0.68.37`.
 
