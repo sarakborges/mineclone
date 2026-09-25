@@ -39,7 +39,7 @@ impl ObjectPlacementFace {
         }
     }
 
-(self) -> IVec3 {
+    pub(crate) fn normal(self) -> IVec3 {
         match self {
             Self::Right => IVec3::X,
             Self::Left => IVec3::NEG_X,

@@ -227,7 +227,7 @@ impl VoxelWorld {
             .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
-(&self, world_position: IVec3) -> Option<ObjectCell> {
+    pub(crate) fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
         if world_position.y < 0 {
             return None;
         }
@@ -531,7 +531,7 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
-(
+    pub(crate) fn set_object_at(
         &mut self,
         support_position: IVec3,
         object: ObjectCell,
@@ -565,7 +565,7 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
-(
+    pub(crate) fn remove_object_at(
         &mut self,
         support_position: IVec3,
     ) -> Option<(IVec3, ObjectCell)> {

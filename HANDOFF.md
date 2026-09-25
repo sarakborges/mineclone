@@ -1,3 +1,10 @@
+### Correção da limpeza de dead code — test-only não é código morto
+
+- `VoxelChunk::set_block` continua sob `#[cfg(test)]` porque há consumidores reais em testes de outros módulos; ele não entra no binário de runtime;
+- a tentativa de removê-lo exigiria reescrever fixtures sem reduzir código executável e ainda confundiria API de teste com dead code;
+- as suppressions `dead_code` obsoletas de world objects foram removidas; métodos com consumidores reais agora compilam sem suppression;
+- nenhuma API realmente órfã deve ser preservada com `allow/expect(dead_code)`.
+
 ### Correção de auditoria — sem wrapper morto para set_block
 
 - a primeira correção do CI havia mantido `VoxelChunk::set_block` apenas sob `#[cfg(test)]`; isso ainda preservava uma API redundante sem necessidade;
