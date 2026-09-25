@@ -1146,6 +1146,11 @@ impl VoxelChunk {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn clear_light(&mut self) {
+        self.light = shared_dark_light();
+    }
+
 }
 
 #[expect(

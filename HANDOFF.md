@@ -1,3 +1,11 @@
+### CI follow-up — helpers de reset de light ficam test-only
+
+- o follow-up anterior removeu `clear_light`/`clear_chunk_light` por estarem mortos no binário,
+  mas eles ainda são usados por testes de lighting e mesh snapshot;
+- os helpers foram restaurados sob `#[cfg(test)]`: não entram no runtime final e continuam
+  disponíveis para os testes que precisam construir estados de iluminação artificiais;
+- VERSION permanece `0.68.15`.
+
 ### CI follow-up — remove limpeza de lighting que ficou morta
 
 - a migração do bootstrap para direct-light seed tornou `VoxelChunk::clear_light` e
