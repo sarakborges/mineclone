@@ -128,6 +128,7 @@ pub(super) struct ChunkStreamingState {
     generation_wave_targets: HashSet<IVec3>,
     generation_wave_pending: DeduplicatedQueue<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
+    settled_publication_chunks: Vec<IVec3>,
     generation_wave_changed_existing_positions: HashSet<IVec3>,
     generation_wave_owned_existing_chunks: HashSet<IVec3>,
     selection_revision: u64,
@@ -271,15 +272,19 @@ impl ChunkStreamingState {
     fn generation_wave_active(&self) -> bool {
         !self.generation_wave_targets.is_empty()
             || !self.staged_generated_chunks.is_empty()
+            || !self.settled_publication_chunks.is_empty()
             || self.fluid_settling.is_active()
     }
 
     fn generation_wave_accepts_new_targets(&self) -> bool {
-        !self.fluid_settling.is_active() && self.staged_generated_chunks.is_empty()
+        !self.fluid_settling.is_active()
+            && self.staged_generated_chunks.is_empty()
+            && self.settled_publication_chunks.is_empty()
     }
 
     fn generation_dispatch_work_exists(&self) -> bool {
         !self.fluid_settling.is_active()
+            && self.settled_publication_chunks.is_empty()
             && (self.generation_wave_pending.len() > 0
                 || (self.pending.len() > 0 && self.generation_wave_accepts_new_targets()))
     }
@@ -360,10 +365,31 @@ impl ChunkStreamingState {
         completion
     }
 
+    fn begin_settled_publication(&mut self, mut chunks: Vec<IVec3>) {
+        debug_assert!(
+            self.settled_publication_chunks.is_empty(),
+            "settled publication queue must be empty before a new wave is staged"
+        );
+        chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        self.settled_publication_chunks = chunks;
+    }
+
+    fn has_settled_publication(&self) -> bool {
+        !self.settled_publication_chunks.is_empty()
+    }
+
+    fn pop_settled_publication_chunk(&mut self) -> Option<IVec3> {
+        self.settled_publication_chunks.pop()
+    }
+
     fn finish_generation_wave(&mut self) {
         assert!(
             self.staged_generated_chunks.is_empty(),
             "generation wave cannot finish with unpublished generated chunks"
+        );
+        assert!(
+            self.settled_publication_chunks.is_empty(),
+            "generation wave cannot finish with settled chunks awaiting publication"
         );
         assert!(
             self.generation_wave_pending.len() == 0,
@@ -399,7 +425,9 @@ impl ChunkStreamingState {
     }
 
     fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunks.contains(&coord) || self.fluid_settling.contains(coord)
+        self.staged_generated_chunks.contains(&coord)
+            || self.settled_publication_chunks.contains(&coord)
+            || self.fluid_settling.contains(coord)
     }
 
     fn adopt_structure_top_chunk(&mut self, horizontal: IVec2, top_chunk: i32) {
