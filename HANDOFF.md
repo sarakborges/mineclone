@@ -1,3 +1,19 @@
+## 2026-09-25 — UI fixa identidade da fonte e interrompe explosão de font atlases
+
+- o log de runtime de 0.68.19 mostrou `font_atlas_faces` crescendo de 10 para 1.995 e
+  `font_atlas_bytes` de ~23 MB para ~2,11 GB na mesma sessão, enquanto a quantidade de
+  tamanhos permaneceu praticamente estável; o crescimento era de faces, não de font sizes;
+- a tipografia compartilhada usava `FontSource::SystemUi`; HUDs dinâmicos (FPS, coordenadas,
+  relógio, target HUD etc.) são reprocessados continuamente e a descoberta de system fonts
+  podia materializar novas identidades de face enquanto os atlases anteriores continuavam vivos;
+- toda a UI agora usa o handle estável da fonte built-in do Bevy
+  (`FontSource::Handle(Handle::default())`), fazendo os rerenders reutilizarem as mesmas faces;
+- removida a feature `system_font_discovery` do Bevy porque a tipografia autoritativa não a usa mais;
+- nenhum tamanho, conteúdo, posição ou lógica de HUD foi alterado neste pedaço;
+- CI continua sem testes: somente audits, Clippy e `cargo check`.
+
+VERSION: `0.68.21`.
+
 ## 2026-09-25 — Support loss transforma Pebble/Stick no próprio item em todos os modos
 
 - o primeiro detach de objects só era consumido pelo mining de Survival; Creative continuava usando `set_block(...)`, que descartava o `detached_object` retornado pelo storage;
