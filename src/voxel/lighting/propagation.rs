@@ -471,6 +471,7 @@ mod tests {
                 &mut settling_changed,
                 &mut settling_changed_positions,
             ),
+            &|_| true,
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
 
@@ -515,6 +516,7 @@ mod tests {
                 &mut settling_changed,
                 &mut settling_changed_positions,
             ),
+            &|_| true,
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
 
@@ -536,6 +538,7 @@ mod tests {
                     &mut settling_changed,
                     &mut settling_changed_positions,
                 ),
+                &|_| true,
                 |_| false,
             );
         }
