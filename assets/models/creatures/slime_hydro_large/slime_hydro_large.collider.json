@@ -1,45 +1,45 @@
 {
   "schema_version": 1,
-  "id": "asteria:slime_anemo",
-  "asset": "slime_anemo.glb",
+  "id": "asteria:slime_hydro_large",
+  "asset": "slime_hydro_large.glb",
   "units": "meters",
   "world_up": "+Y",
   "forward": "-Z",
   "origin": "center of ground contact, feet at local y = 0",
   "model_bounds_rest": {
     "size": [
-      1.2,
-      1,
-      1.14
+      1.92,
+      1.52,
+      1.8
     ],
     "center": [
       0,
-      0.5,
+      0.76,
       0
     ],
-    "approximate_visual_height": 1
+    "approximate_visual_height": 1.52
   },
   "collider": {
     "type": "aabb",
     "size": [
-      0.78,
-      0.84,
-      0.7752
+      1.248,
+      1.2768,
+      1.224
     ],
     "center_offset": [
       0,
-      0.42,
+      0.6384,
       0
     ],
     "min_offset": [
-      -0.39,
+      -0.624,
       0,
-      -0.3876
+      -0.612
     ],
     "max_offset": [
-      0.39,
-      0.84,
-      0.3876
+      0.624,
+      1.2768,
+      0.612
     ],
     "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLB animation",
     "solid_world_collision": true,

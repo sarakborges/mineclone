@@ -1,34 +1,34 @@
 {
-  "id": "asteria:slime_anemo",
+  "id": "asteria:slime_electro_mutant",
   "name": {
-    "english": "Anemo Slime",
-    "portuguese_brazil": "Slime Anemo",
-    "spanish": "Slime Anemo"
+    "english": "Mutant Electro Slime",
+    "portuguese_brazil": "Slime Electro Mutante",
+    "spanish": "Slime Electro Mutante"
   },
-  "model": "models/creatures/slime_anemo/slime_anemo.glb",
-  "health": 8,
-  "maxPerType": 4,
+  "model": "models/creatures/slime_electro_mutant/slime_electro_mutant.glb",
+  "health": 72,
+  "maxPerType": 1,
   "collider": {
     "size": [
-      0.78,
-      0.84,
-      0.7752
+      1.521,
+      1.4952,
+      1.462
     ],
     "centerOffset": [
       0,
-      0.42,
+      0.7476,
       0
     ]
   },
   "targetCollider": {
     "size": [
-      1.2,
-      1,
-      1.14
+      2.34,
+      1.78,
+      2.15
     ],
     "centerOffset": [
       0,
-      0.5,
+      0.89,
       0
     ]
   },
@@ -51,26 +51,26 @@
     "hurt": "Hurt",
     "death": "Death"
   },
-  "jumpSpeed": 6.75,
-  "fallGravityScale": 0.45,
-  "moveSpeed": 1.65,
-  "jumpInterval": 2.15,
-  "anticipationSeconds": 0.22,
-  "landingSeconds": 0.28,
+  "jumpSpeed": 5.15,
+  "fallGravityScale": 0.95,
+  "moveSpeed": 1.32,
+  "jumpInterval": 1.92,
+  "anticipationSeconds": 0.28,
+  "landingSeconds": 0.38,
   "particleEffects": {
     "idle": {
-      "count": 2,
+      "count": 3,
       "color": [
-        0.74,
         1,
-        0.94,
+        0.92,
+        0.3,
         0.68
       ],
-      "size": 0.038,
+      "size": 0.0665,
       "lifetime": 1,
       "interval": 0.55,
-      "spawnRadius": 0.408,
-      "yOffset": 0.48,
+      "spawnRadius": 0.7956,
+      "yOffset": 0.8544,
       "horizontalSpeed": 0.09,
       "verticalSpeed": 0.18,
       "verticalJitter": 0.07,
@@ -78,16 +78,16 @@
       "endScale": 0.1
     },
     "land": {
-      "count": 8,
+      "count": 18,
       "color": [
-        0.74,
         1,
-        0.94,
+        0.92,
+        0.3,
         0.68
       ],
-      "size": 0.048,
+      "size": 0.084,
       "lifetime": 0.52,
-      "spawnRadius": 0.33456,
+      "spawnRadius": 0.65239,
       "yOffset": 0.08,
       "horizontalSpeed": 0.72,
       "verticalSpeed": 0.46,
@@ -96,17 +96,17 @@
       "endScale": 0.05
     },
     "hurt": {
-      "count": 7,
+      "count": 14,
       "color": [
-        0.8492,
         1,
-        0.9652,
+        0.9536,
+        0.594,
         0.78
       ],
-      "size": 0.05,
+      "size": 0.0875,
       "lifetime": 0.5,
-      "spawnRadius": 0.29376,
-      "yOffset": 0.45,
+      "spawnRadius": 0.57283,
+      "yOffset": 0.801,
       "horizontalSpeed": 0.66,
       "verticalSpeed": 0.48,
       "verticalJitter": 0.28,
@@ -114,17 +114,17 @@
       "endScale": 0.07
     },
     "death": {
-      "count": 18,
+      "count": 40,
       "color": [
-        0.8492,
         1,
-        0.9652,
+        0.9536,
+        0.594,
         0.78
       ],
-      "size": 0.062,
+      "size": 0.1085,
       "lifetime": 0.9,
-      "spawnRadius": 0.408,
-      "yOffset": 0.42,
+      "spawnRadius": 0.7956,
+      "yOffset": 0.7476,
       "horizontalSpeed": 0.92,
       "verticalSpeed": 0.86,
       "verticalJitter": 0.5,

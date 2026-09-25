@@ -17,4 +17,9 @@ The active slime uses `assets/models/creatures/slime_blob/slime_blob.glb`, gener
 
 Creature animation particle effects are authored in the creature JSON through `particleEffects`; they are runtime entities and are not baked into the GLB.
 
-A separate elemental legacy variant lives in `assets/models/creatures/slime_anemo_legacy/` and is addressable as `asteria:slime_anemo_legacy`. It preserves the cubic slime silhouette and squash/stretch animations while adding the Anemo turquoise-to-pale palette, side wings, air motes, the relaxed Anemo face, and the lighter Anemo jump/fall behavior. The rounded `asteria:slime_anemo` remains unchanged.
+## Elemental slime family
+
+The elemental family follows the rounded `slime_blob` body language and ships Electro, Dendro, Geo, Hydro, Anemo, Cryo and Pyro in small and large forms, plus `asteria:slime_electro_mutant`. Every variant owns a GLB and collider metadata in its own sibling directory and a creature definition under `data/creatures/`.
+
+Faces are opaque pixel geometry instead of texture-only eye decals: every variant has element-specific eyes plus brows, mouth and/or cheeks, with a distinct expression and blocky elemental silhouette details. The active Anemo asset was rebuilt with the family and no longer depends on the old Anemo face texture. The obsolete legacy-Anemo model and definition were removed.
+

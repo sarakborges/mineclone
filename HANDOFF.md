@@ -16818,3 +16818,12 @@ Corrigidos os dois resíduos apontados pelo Clippy após a remoção:
 Esses resíduos pertenciam ao código de cave connectivity que será removido na próxima etapa,
 mas foram corrigidos primeiro para manter a regra de CI verde entre partes.
 
+## 2026-09-25 — Elemental slime family rebuild
+
+- Rebuilt the active Anemo and added a complete rounded-blob elemental family: Electro, Dendro, Geo, Hydro, Anemo, Cryo and Pyro; each now has small + large variants, plus a Mutant Electro.
+- Models keep the rounded voxel language of `slime_blob`, with fixed unlit element palettes and blocky silhouette/accessory details.
+- Faces are authored as opaque geometry rather than an eyes-only texture. Every variant has a distinct expression using eyes plus brows/mouth/cheeks to reflect its element/personality.
+- Added per-creature JSON definitions and collider metadata for all 15 variants. The family has no runtime face-texture dependency.
+- Removed the previous active Anemo generator, the obsolete legacy-Anemo model/definition, and the old Anemo face texture.
+- No biome spawn tables were changed in this commit; the definitions are available to the existing creature/debug spawn paths.
+

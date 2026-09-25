@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "id": "asteria:slime_anemo",
-  "asset": "slime_anemo.glb",
+  "id": "asteria:slime_electro",
+  "asset": "slime_electro.glb",
   "units": "meters",
   "world_up": "+Y",
   "forward": "-Z",

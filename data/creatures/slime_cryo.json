@@ -1,13 +1,13 @@
 {
-  "id": "asteria:slime_anemo",
+  "id": "asteria:slime_cryo",
   "name": {
-    "english": "Anemo Slime",
-    "portuguese_brazil": "Slime Anemo",
-    "spanish": "Slime Anemo"
+    "english": "Cryo Slime",
+    "portuguese_brazil": "Slime Cryo",
+    "spanish": "Slime Cryo"
   },
-  "model": "models/creatures/slime_anemo/slime_anemo.glb",
-  "health": 8,
-  "maxPerType": 4,
+  "model": "models/creatures/slime_cryo/slime_cryo.glb",
+  "health": 12,
+  "maxPerType": 3,
   "collider": {
     "size": [
       0.78,
@@ -51,19 +51,19 @@
     "hurt": "Hurt",
     "death": "Death"
   },
-  "jumpSpeed": 6.75,
-  "fallGravityScale": 0.45,
-  "moveSpeed": 1.65,
-  "jumpInterval": 2.15,
-  "anticipationSeconds": 0.22,
-  "landingSeconds": 0.28,
+  "jumpSpeed": 4.8,
+  "fallGravityScale": 0.92,
+  "moveSpeed": 1.25,
+  "jumpInterval": 2.25,
+  "anticipationSeconds": 0.25,
+  "landingSeconds": 0.34,
   "particleEffects": {
     "idle": {
       "count": 2,
       "color": [
-        0.74,
-        1,
+        0.76,
         0.94,
+        1,
         0.68
       ],
       "size": 0.038,
@@ -80,9 +80,9 @@
     "land": {
       "count": 8,
       "color": [
-        0.74,
-        1,
+        0.76,
         0.94,
+        1,
         0.68
       ],
       "size": 0.048,
@@ -98,9 +98,9 @@
     "hurt": {
       "count": 7,
       "color": [
-        0.8492,
-        1,
+        0.8608,
         0.9652,
+        1,
         0.78
       ],
       "size": 0.05,
@@ -116,9 +116,9 @@
     "death": {
       "count": 18,
       "color": [
-        0.8492,
-        1,
+        0.8608,
         0.9652,
+        1,
         0.78
       ],
       "size": 0.062,

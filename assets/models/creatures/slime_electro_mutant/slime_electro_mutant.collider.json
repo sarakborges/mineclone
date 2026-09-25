@@ -1,45 +1,45 @@
 {
   "schema_version": 1,
-  "id": "asteria:slime_anemo",
-  "asset": "slime_anemo.glb",
+  "id": "asteria:slime_electro_mutant",
+  "asset": "slime_electro_mutant.glb",
   "units": "meters",
   "world_up": "+Y",
   "forward": "-Z",
   "origin": "center of ground contact, feet at local y = 0",
   "model_bounds_rest": {
     "size": [
-      1.2,
-      1,
-      1.14
+      2.34,
+      1.78,
+      2.15
     ],
     "center": [
       0,
-      0.5,
+      0.89,
       0
     ],
-    "approximate_visual_height": 1
+    "approximate_visual_height": 1.78
   },
   "collider": {
     "type": "aabb",
     "size": [
-      0.78,
-      0.84,
-      0.7752
+      1.521,
+      1.4952,
+      1.462
     ],
     "center_offset": [
       0,
-      0.42,
+      0.7476,
       0
     ],
     "min_offset": [
-      -0.39,
+      -0.7605,
       0,
-      -0.3876
+      -0.731
     ],
     "max_offset": [
-      0.39,
-      0.84,
-      0.3876
+      0.7605,
+      1.4952,
+      0.731
     ],
     "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLB animation",
     "solid_world_collision": true,
