@@ -37,7 +37,8 @@
   starvation de permits e fixed-point de fluido;
 - CI funcional run `36198998281`: success em localization audit, structure content reference
   audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
-  `cargo check --locked`.
+  `cargo check --locked`;
+- CI do HEAD versionado/documentado run `36199114753`: success.
 
 VERSION: `0.68.41`.
 
