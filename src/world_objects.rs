@@ -50,6 +50,7 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
+        chunk_rendering::ChunkRenderPool,
         deterministic::{hash_signed, hash_string, mix_u32_components},
         render_distance::{RenderDistanceSettings, chunk_visibility_radii},
         tick::WorldTickClock,
@@ -72,6 +73,7 @@ pub(crate) struct WorldObjectStore {
     by_chunk: HashMap<IVec3, HashSet<IVec3>>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
     synced_world_revision: u64,
+    synced_render_pool_revision: u64,
     materialized_center: Option<IVec2>,
     materialized_show_radius: i32,
     materialized_hide_radius: i32,
@@ -316,14 +318,17 @@ fn sync_world_objects(
     content: WorldObjectSceneContent,
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
+    render_pool: Res<ChunkRenderPool>,
     frame_budget: Res<WorldFrameWorkBudget>,
     mut store: ResMut<WorldObjectStore>,
 ) {
     let world_revision = content.world.object_scene_revision();
+    let render_pool_revision = render_pool.membership_revision();
     let player_chunk = chunk_coord_from_position(player.translation);
     let center = IVec2::new(player_chunk.x, player_chunk.z);
     let (show_radius, hide_radius) = chunk_visibility_radii(render_distance.chunks());
     if store.synced_world_revision == world_revision
+        && store.synced_render_pool_revision == render_pool_revision
         && store.materialized_center == Some(center)
         && store.materialized_show_radius == show_radius
         && store.materialized_hide_radius == hide_radius
@@ -332,9 +337,10 @@ fn sync_world_objects(
     }
 
     let sync_started = Instant::now();
-    let candidate_coords = content
-        .world
-        .loaded_chunk_coords_in_horizontal_radius(center, hide_radius);
+    let candidate_coords = render_pool
+        .active_coords()
+        .filter(|coord| chunk_inside_object_radius(*coord, center, hide_radius))
+        .collect::<Vec<_>>();
     let candidate_chunk_count = candidate_coords.len();
     let retired = store
         .synced_chunk_revisions
@@ -342,6 +348,7 @@ fn sync_world_objects(
         .copied()
         .filter(|coord| {
             content.world.chunk(*coord).is_none()
+                || !render_pool.contains(*coord)
                 || !chunk_inside_object_radius(*coord, center, hide_radius)
         })
         .collect::<Vec<_>>();
@@ -444,6 +451,7 @@ fn sync_world_objects(
 
     if !deferred {
         store.synced_world_revision = world_revision;
+        store.synced_render_pool_revision = render_pool_revision;
         store.materialized_center = Some(center);
         store.materialized_show_radius = show_radius;
         store.materialized_hide_radius = hide_radius;
