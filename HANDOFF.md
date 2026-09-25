@@ -14,6 +14,14 @@
 
 VERSION: `0.67.9`.
 
+### CI follow-up — slow-frame diagnostics ajustados ao lint
+- o primeiro CI de 0.67.9 falhou apenas por lint: `Debug` derivado não conta como leitura dos
+  campos para `dead_code`, Clippy exigiu `sort_unstable_by_key` e a função de captura excedeu
+  o limite de argumentos;
+- o contexto agora possui `Debug` manual, a ordenação usa `Reverse` com
+  `sort_unstable_by_key` e os recursos foram agrupados em um `SystemParam`;
+- sem mudança de comportamento, threshold, capacidade, scheduling ou VERSION.
+
 ### Follow-up — diagnostics passam a medir o próprio custo
 - a linha periódica de `render assets` varre chunk allocations, images/font atlases e executa
   verificações de consistência; como isso roda na main thread a cada 10 s, a própria telemetria

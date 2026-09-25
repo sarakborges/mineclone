@@ -1,4 +1,5 @@
 use std::{
+    cmp::Reverse,
     collections::{HashMap, VecDeque},
     time::Instant,
 };
@@ -48,7 +49,7 @@ struct FrameTimeDiagnostic {
     max_micros: u64,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Default)]
 struct SlowFrameContext {
     frame_micros: u64,
     selection_revision: u64,
@@ -66,6 +67,30 @@ struct SlowFrameContext {
     remesh_geometry: usize,
     remesh_lighting: usize,
     remesh_fluid: usize,
+}
+
+impl std::fmt::Debug for SlowFrameContext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SlowFrame")
+            .field("frame_us", &self.frame_micros)
+            .field("selection_revision", &self.selection_revision)
+            .field("warp", &self.warp_active)
+            .field("pending", &self.stream_pending)
+            .field("ready", &self.stream_ready)
+            .field("generation_tasks", &self.generation_tasks)
+            .field("mesh_tasks", &self.mesh_tasks)
+            .field("remesh_tasks", &self.remesh_tasks)
+            .field("async_work", &self.async_chunk_work)
+            .field("async_limit", &self.async_chunk_work_limit)
+            .field("wave_pending", &self.generation_wave_pending)
+            .field("wave_targets", &self.generation_wave_targets)
+            .field("staged", &self.staged_generated_chunks)
+            .field("remesh_geometry", &self.remesh_geometry)
+            .field("remesh_lighting", &self.remesh_lighting)
+            .field("remesh_fluid", &self.remesh_fluid)
+            .finish()
+    }
 }
 
 impl FrameTimeSamples {
@@ -100,7 +125,7 @@ impl FrameTimeSamples {
     fn record_slow_frame(&mut self, context: SlowFrameContext) {
         self.slow_frames.push(context);
         self.slow_frames
-            .sort_unstable_by(|left, right| right.frame_micros.cmp(&left.frame_micros));
+            .sort_unstable_by_key(|context| Reverse(context.frame_micros));
         self.slow_frames.truncate(SLOW_FRAME_CONTEXT_CAPACITY);
     }
 
@@ -130,16 +155,21 @@ pub(super) fn slow_frame_context_due(time: Res<Time<Real>>) -> bool {
     time.delta().as_micros() >= u128::from(SLOW_FRAME_CONTEXT_THRESHOLD_MICROS)
 }
 
+#[derive(SystemParam)]
+pub(super) struct SlowFrameContextAssets<'w> {
+    streaming: Res<'w, ChunkStreamingState>,
+    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    async_work: Res<'w, ChunkAsyncWorkLimiter>,
+    mesh_tasks: Res<'w, ChunkMeshTasks>,
+    remesh_queue: Res<'w, ChunkRemeshQueue>,
+    remesh_tasks: Res<'w, ChunkRemeshTasks>,
+    pending_warp: Res<'w, PendingWarp>,
+    samples: ResMut<'w, FrameTimeSamples>,
+}
+
 pub(super) fn record_slow_frame_context(
     time: Res<Time<Real>>,
-    streaming: Res<ChunkStreamingState>,
-    generation_tasks: Res<ChunkGenerationTasks>,
-    async_work: Res<ChunkAsyncWorkLimiter>,
-    mesh_tasks: Res<ChunkMeshTasks>,
-    remesh_queue: Res<ChunkRemeshQueue>,
-    remesh_tasks: Res<ChunkRemeshTasks>,
-    pending_warp: Res<PendingWarp>,
-    mut samples: ResMut<FrameTimeSamples>,
+    mut assets: SlowFrameContextAssets,
 ) {
     let frame_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
     let (
@@ -149,20 +179,21 @@ pub(super) fn record_slow_frame_context(
         generation_wave_targets,
         staged_generated_chunks,
         _,
-    ) = streaming.diagnostic_counts();
-    let (remesh_geometry, remesh_lighting, remesh_fluid) = remesh_queue.diagnostic_counts();
+    ) = assets.streaming.diagnostic_counts();
+    let (remesh_geometry, remesh_lighting, remesh_fluid) =
+        assets.remesh_queue.diagnostic_counts();
 
-    samples.record_slow_frame(SlowFrameContext {
+    assets.samples.record_slow_frame(SlowFrameContext {
         frame_micros,
-        selection_revision: streaming.selection_revision(),
-        warp_active: pending_warp.streaming_center().is_some(),
+        selection_revision: assets.streaming.selection_revision(),
+        warp_active: assets.pending_warp.streaming_center().is_some(),
         stream_pending,
         stream_ready,
-        generation_tasks: generation_tasks.pending_count(),
-        mesh_tasks: mesh_tasks.pending_count(),
-        remesh_tasks: remesh_tasks.pending_count(),
-        async_chunk_work: async_work.in_flight(),
-        async_chunk_work_limit: async_work.limit(),
+        generation_tasks: assets.generation_tasks.pending_count(),
+        mesh_tasks: assets.mesh_tasks.pending_count(),
+        remesh_tasks: assets.remesh_tasks.pending_count(),
+        async_chunk_work: assets.async_work.in_flight(),
+        async_chunk_work_limit: assets.async_work.limit(),
         generation_wave_pending,
         generation_wave_targets,
         staged_generated_chunks,
