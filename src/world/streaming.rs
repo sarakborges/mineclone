@@ -40,9 +40,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::{
-        GeneratedFluidSettling, GeneratedFluidSettlingCompletion, PendingFluidUpdates,
-    },
+    fluid_updates::{GeneratedFluidSettling, PendingFluidUpdates},
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     work_budget::WorldFrameWorkBudget,
@@ -288,15 +286,6 @@ impl ChunkStreamingState {
         if self.generation_wave_targets.insert(coord) {
             self.generation_wave_pending.enqueue(coord);
         }
-    }
-
-    fn remove_pending(&mut self, coord: IVec3) {
-        self.pending.remove(coord);
-    }
-
-    fn adopt_generation_wave_target(&mut self, coord: IVec3) {
-        self.remove_pending(coord);
-        self.start_generation_wave_target(coord);
     }
 
     fn generation_wave_active(&self) -> bool {
