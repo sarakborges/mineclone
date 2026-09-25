@@ -100,11 +100,17 @@ struct StreamingPriorityDiagnostics {
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RetiredScanKey {
+struct SelectionScanKey {
     queue_revision: u64,
     selection_revision: u64,
     center: IVec2,
     radius_squared: i64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CriticalPendingScanKey {
+    queue_revision: u64,
+    center: IVec3,
 }
 
 #[derive(Resource, Default)]
@@ -132,7 +138,9 @@ pub(super) struct ChunkStreamingState {
     generation_wave_changed_existing_positions: HashSet<IVec3>,
     generation_wave_owned_existing_chunks: HashSet<IVec3>,
     selection_revision: u64,
-    retired_scan_miss: Option<RetiredScanKey>,
+    pending_critical_scan_miss: Option<CriticalPendingScanKey>,
+    ready_scan_miss: Option<SelectionScanKey>,
+    retired_scan_miss: Option<SelectionScanKey>,
     priority_diagnostics: StreamingPriorityDiagnostics,
 }
 
@@ -175,7 +183,7 @@ impl ChunkStreamingState {
         let center = center.xz();
         let radius = i64::from(horizontal_radius.max(0));
         let radius_squared = radius * radius;
-        let scan_key = RetiredScanKey {
+        let scan_key = SelectionScanKey {
             queue_revision: self.retired.revision(),
             selection_revision: self.selection_revision,
             center,
@@ -208,6 +216,30 @@ impl ChunkStreamingState {
         if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
             self.pending.enqueue_front(coord);
         }
+    }
+
+    fn has_critical_pending(&mut self) -> bool {
+        let Some(center) = self.center else {
+            return false;
+        };
+        let scan_key = CriticalPendingScanKey {
+            queue_revision: self.pending.revision(),
+            center,
+        };
+        if self.pending_critical_scan_miss == Some(scan_key) {
+            return false;
+        }
+
+        let found = self
+            .pending
+            .values()
+            .any(|coord| is_critical_streaming_coord(coord, center));
+        if found {
+            self.pending_critical_scan_miss = None;
+        } else {
+            self.pending_critical_scan_miss = Some(scan_key);
+        }
+        found
     }
 
     fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
@@ -522,9 +554,19 @@ impl ChunkStreamingState {
         let center = self.center?;
         let movement_direction = self.movement_direction;
         let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let radius = i64::from(show_radius.max(0));
+        let scan_key = SelectionScanKey {
+            queue_revision: self.ready.revision(),
+            selection_revision: self.selection_revision,
+            center: center.xz(),
+            radius_squared: radius * radius,
+        };
+        if self.ready_scan_miss == Some(scan_key) {
+            return None;
+        }
+
         let desired = &self.desired;
         let retained = &self.retained;
-
         let queue_len = self.ready.len();
         let started = Instant::now();
         let selected = self.ready.pop_min_where_by_key(
@@ -537,6 +579,11 @@ impl ChunkStreamingState {
         self.priority_diagnostics
             .ready
             .record(started.elapsed(), queue_len);
+        if selected.is_some() {
+            self.ready_scan_miss = None;
+        } else {
+            self.ready_scan_miss = Some(scan_key);
+        }
         selected
     }
 
@@ -985,5 +1032,59 @@ mod tests {
         assert!(state.ready.contains(preload_only));
     }
 
+    #[test]
+    fn ready_scan_miss_invalidates_when_selection_or_queue_changes() {
+        let preload_only = IVec3::new(20, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            horizontal_radius: 12,
+            ..default()
+        };
+        state.desired.insert(preload_only);
+        state.mark_ready(preload_only);
 
+        assert_eq!(state.pop_ready(), None);
+        let first_miss = state.ready_scan_miss;
+        assert!(first_miss.is_some());
+        assert_eq!(state.pop_ready(), None);
+        assert_eq!(state.ready_scan_miss, first_miss);
+
+        let visible = IVec3::X;
+        state.desired.insert(visible);
+        state.mark_ready(visible);
+        assert_eq!(state.pop_ready(), Some(visible));
+        assert_eq!(state.ready_scan_miss, None);
+
+        assert_eq!(state.pop_ready(), None);
+        state.center = Some(IVec3::new(6, 0, 0));
+        state.mark_selection_rebuilt();
+        assert_eq!(state.pop_ready(), Some(preload_only));
+        assert_eq!(state.ready_scan_miss, None);
+    }
+
+    #[test]
+    fn critical_pending_scan_miss_invalidates_when_queue_or_center_changes() {
+        let far = IVec3::new(10, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            ..default()
+        };
+        state.pending.enqueue(far);
+
+        assert!(!state.has_critical_pending());
+        let first_miss = state.pending_critical_scan_miss;
+        assert!(first_miss.is_some());
+        assert!(!state.has_critical_pending());
+        assert_eq!(state.pending_critical_scan_miss, first_miss);
+
+        state.pending.enqueue(IVec3::X);
+        assert!(state.has_critical_pending());
+        assert_eq!(state.pending_critical_scan_miss, None);
+
+        state.pending.remove(IVec3::X);
+        assert!(!state.has_critical_pending());
+        state.center = Some(IVec3::new(9, 0, 0));
+        assert!(state.has_critical_pending());
+        assert_eq!(state.pending_critical_scan_miss, None);
+    }
 }
