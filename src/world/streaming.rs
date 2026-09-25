@@ -4,6 +4,7 @@ mod selection;
 mod surface_cache;
 
 use std::{
+    collections::VecDeque,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
@@ -111,6 +112,13 @@ struct CriticalPendingScanKey {
     center: IVec3,
 }
 
+#[derive(Default)]
+struct PendingPriorityCache {
+    queue_revision: u64,
+    selection_revision: u64,
+    pending: VecDeque<IVec3>,
+}
+
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -137,6 +145,7 @@ pub(super) struct ChunkStreamingState {
     settled_publication_chunks: Vec<IVec3>,
     selection_revision: u64,
     pending_critical_scan_miss: Option<CriticalPendingScanKey>,
+    pending_priority_cache: PendingPriorityCache,
     ready_scan_miss: Option<SelectionScanKey>,
     retired_scan_miss: Option<SelectionScanKey>,
     priority_diagnostics: StreamingPriorityDiagnostics,
@@ -242,46 +251,69 @@ impl ChunkStreamingState {
 
     fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
         let center = self.center?;
-        let movement_direction = self.movement_direction;
-        let visible_radius = self.horizontal_radius;
-        let center_structure_top_chunk = self
-            .structure_top_chunks
-            .get(&center.xz())
-            .copied()
-            .unwrap_or(0);
-        let prioritize_surface = selection::player_is_above_surface(
-            center,
-            center_structure_top_chunk,
-            &self.surface_ranges,
-        );
-        let structure_top_chunks = &self.structure_top_chunks;
-        let surface_ranges = &self.surface_ranges;
+        let queue_revision = self.pending.revision();
+        let selection_revision = self.selection_revision;
 
-        let queue_len = self.pending.len();
-        let started = Instant::now();
-        let selected = self.pending.pop_min_by_key(|coord| {
-            (
-                selection::pending_priority(
-                    coord,
-                    center,
-                    visible_radius,
-                    structure_top_chunks
-                        .get(&coord.xz())
-                        .copied()
-                        .unwrap_or(0),
-                    movement_direction,
-                    prioritize_surface,
-                    surface_ranges,
-                ),
-                coord.y,
-                coord.z,
-                coord.x,
-            )
-        });
-        self.priority_diagnostics
-            .pending
-            .record(started.elapsed(), queue_len);
-        selected
+        if self.pending_priority_cache.queue_revision != queue_revision
+            || self.pending_priority_cache.selection_revision != selection_revision
+        {
+            let movement_direction = self.movement_direction;
+            let visible_radius = self.horizontal_radius;
+            let center_structure_top_chunk = self
+                .structure_top_chunks
+                .get(&center.xz())
+                .copied()
+                .unwrap_or(0);
+            let prioritize_surface = selection::player_is_above_surface(
+                center,
+                center_structure_top_chunk,
+                &self.surface_ranges,
+            );
+            let structure_top_chunks = &self.structure_top_chunks;
+            let surface_ranges = &self.surface_ranges;
+
+            let queue_len = self.pending.len();
+            let started = Instant::now();
+            let mut ordered = self.pending.values().collect::<Vec<_>>();
+            ordered.sort_unstable_by_key(|coord| {
+                (
+                    selection::pending_priority(
+                        *coord,
+                        center,
+                        visible_radius,
+                        structure_top_chunks
+                            .get(&coord.xz())
+                            .copied()
+                            .unwrap_or(0),
+                        movement_direction,
+                        prioritize_surface,
+                        surface_ranges,
+                    ),
+                    coord.y,
+                    coord.z,
+                    coord.x,
+                )
+            });
+            self.priority_diagnostics
+                .pending
+                .record(started.elapsed(), queue_len);
+            self.pending_priority_cache.pending = ordered.into();
+            self.pending_priority_cache.queue_revision = queue_revision;
+            self.pending_priority_cache.selection_revision = selection_revision;
+        }
+
+        while let Some(coord) = self.pending_priority_cache.pending.pop_front() {
+            if !self.pending.contains(coord) {
+                continue;
+            }
+
+            let removed = self.pending.remove(coord);
+            debug_assert!(removed, "pending priority cache must reference an active chunk");
+            self.pending_priority_cache.queue_revision = self.pending.revision();
+            return Some(coord);
+        }
+
+        None
     }
 
     fn start_generation_wave_target(&mut self, coord: IVec3) {
@@ -1078,6 +1110,32 @@ mod tests {
         state.mark_selection_rebuilt();
         assert_eq!(state.pop_ready(), Some(preload_only));
         assert_eq!(state.ready_scan_miss, None);
+    }
+
+    #[test]
+    fn pending_priority_cache_survives_its_own_queue_pops() {
+        let near = IVec3::X;
+        let middle = IVec3::new(2, 0, 0);
+        let far = IVec3::new(3, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            horizontal_radius: 12,
+            ..default()
+        };
+        state.desired.extend([near, middle, far]);
+        state.pending.enqueue(far);
+        state.pending.enqueue(near);
+        state.pending.enqueue(middle);
+
+        assert_eq!(state.pop_pending_by_priority(), Some(near));
+        let cached_selection_revision = state.pending_priority_cache.selection_revision;
+        assert_eq!(state.pop_pending_by_priority(), Some(middle));
+        assert_eq!(
+            state.pending_priority_cache.selection_revision,
+            cached_selection_revision
+        );
+        assert_eq!(state.pop_pending_by_priority(), Some(far));
+        assert_eq!(state.pop_pending_by_priority(), None);
     }
 
     #[test]
