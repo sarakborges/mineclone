@@ -1,3 +1,14 @@
+### CI follow-up — LoadingProgressUi explicita disjunção das queries
+
+- o alias de `ParamSet` não foi aceito pela inferência de `SystemParamFunction` do Bevy 0.19;
+- a UI dinâmica do loading agora é um `#[derive(SystemParam)] LoadingProgressUi`, agrupando as
+  queries relacionadas em um único contexto;
+- as duas sobreposições reais são declaradas disjuntas com `With<LoadingPhaseStatusText>` /
+  `Without<LoadingPhaseStatusText>`, permitindo ao scheduler validar `Text` e `TextColor`
+  sem panic B0001;
+- o teste de inicialização do system e o step dedicado no CI permanecem; VERSION continua
+  `0.68.13`.
+
 ### CI follow-up — ParamSet tipado sem suppressions
 
 - Clippy rejeitou a assinatura inline do `ParamSet` por `type_complexity`;

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -39,23 +39,31 @@ struct LoadingPhaseLabel(WorldLoadingPhase);
 #[derive(Component)]
 struct LoadingPhaseStatusText(WorldLoadingPhase);
 
-type LoadingTextQueries<'w, 's> = ParamSet<
-    'w,
-    's,
-    (
-        Query<'w, 's, &'static mut Text, With<LoadingSummaryText>>,
-        Query<'w, 's, (&'static LoadingPhaseLabel, &'static mut TextColor)>,
-        Query<
-            'w,
-            's,
-            (
-                &'static LoadingPhaseStatusText,
-                &'static mut Text,
-                &'static mut TextColor,
-            ),
-        >,
-    ),
->;
+#[derive(SystemParam)]
+struct LoadingProgressUi<'w, 's> {
+    summaries: Query<
+        'w,
+        's,
+        &'static mut Text,
+        (With<LoadingSummaryText>, Without<LoadingPhaseStatusText>),
+    >,
+    rows: Query<'w, 's, (&'static LoadingPhaseRow, &'static mut BackgroundColor)>,
+    labels: Query<
+        'w,
+        's,
+        (&'static LoadingPhaseLabel, &'static mut TextColor),
+        Without<LoadingPhaseStatusText>,
+    >,
+    statuses: Query<
+        'w,
+        's,
+        (
+            &'static LoadingPhaseStatusText,
+            &'static mut Text,
+            &'static mut TextColor,
+        ),
+    >,
+}
 
 fn setup_loading_screen(
     mut commands: Commands,
@@ -200,25 +208,21 @@ fn update_loading_progress(
     loading_state: Option<Res<WorldLoadingState>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    mut rows: Query<(&LoadingPhaseRow, &mut BackgroundColor)>,
-    mut text_queries: LoadingTextQueries<'_, '_>,
+    mut ui: LoadingProgressUi,
 ) {
     let Some(loading_state) = loading_state else {
         return;
     };
     let language = language.get();
 
-    {
-        let mut summaries = text_queries.p0();
-        if let Ok(mut summary) = summaries.single_mut() {
-            let next = format_loading_summary(&localization, language, &loading_state);
-            if **summary != next {
-                **summary = next;
-            }
+    if let Ok(mut summary) = ui.summaries.single_mut() {
+        let next = format_loading_summary(&localization, language, &loading_state);
+        if **summary != next {
+            **summary = next;
         }
     }
 
-    for (phase_row, mut background) in &mut rows {
+    for (phase_row, mut background) in &mut ui.rows {
         let status = loading_state.phase_status(phase_row.0);
         let target = if status == WorldLoadingPhaseStatus::Active {
             theme::PURPLE_SOFT
@@ -230,35 +234,29 @@ fn update_loading_progress(
         }
     }
 
-    {
-        let mut labels = text_queries.p1();
-        for (phase_label, mut color) in &mut labels {
-            let target = phase_text_color(loading_state.phase_status(phase_label.0));
-            if color.0 != target {
-                color.0 = target;
-            }
+    for (phase_label, mut color) in &mut ui.labels {
+        let target = phase_text_color(loading_state.phase_status(phase_label.0));
+        if color.0 != target {
+            color.0 = target;
         }
     }
 
-    {
-        let mut statuses = text_queries.p2();
-        for (status_label, mut text, mut color) in &mut statuses {
-            let phase = status_label.0;
-            let status = loading_state.phase_status(phase);
-            let next = format_loading_status(
-                &localization,
-                language,
-                status,
-                loading_state.phase_progress(phase),
-            );
-            if **text != next {
-                **text = next;
-            }
+    for (status_label, mut text, mut color) in &mut ui.statuses {
+        let phase = status_label.0;
+        let status = loading_state.phase_status(phase);
+        let next = format_loading_status(
+            &localization,
+            language,
+            status,
+            loading_state.phase_progress(phase),
+        );
+        if **text != next {
+            **text = next;
+        }
 
-            let target = phase_status_color(status);
-            if color.0 != target {
-                color.0 = target;
-            }
+        let target = phase_status_color(status);
+        if color.0 != target {
+            color.0 = target;
         }
     }
 }
