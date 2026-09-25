@@ -1,3 +1,14 @@
+## 2026-09-25 — Quebrar suporte destaca world object como loot
+
+- a mutação de bloco removia `ObjectCell` silenciosamente dentro do storage sempre que o ID do bloco-suporte mudava; por isso Pebble/Stick desapareciam ao quebrar o bloco sob eles, antes de qualquer sistema de loot poder observá-los;
+- o storage agora devolve explicitamente o object destacado ao trocar/remover o suporte; `VoxelWorld::set_block_at_with_previous` propaga bloco anterior + object destacado e `VoxelTopologyRuntime` expõe `set_block_detailed` para fluxos que precisam reagir à topologia;
+- Survival mining usa esse resultado: calcula a posição do object ainda com o suporte anterior, executa a mesma loot table/dropSelf usada ao quebrar o object diretamente e gera `WorldItemSpawnRequest::dropped`;
+- a lógica de loot de objects foi extraída para `emit_object_loot` + `ObjectLootRegistries`, evitando duplicação entre quebra direta do object e perda do bloco-suporte;
+- Creative mantém a regra vigente de não gerar drops ao quebrar blocos: o caminho criativo continua usando a mutação simples e apenas descarta o object dependente;
+- teste de regressão garante que a mutação detalhada retorna o `ObjectCell` destacado e o remove do voxel.
+
+VERSION: `0.68.16`.
+
 ### CI follow-up — helpers de reset de light ficam test-only
 
 - o follow-up anterior removeu `clear_light`/`clear_chunk_light` por estarem mortos no binário,

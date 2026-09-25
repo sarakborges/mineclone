@@ -29,6 +29,9 @@ use crate::{
     voxel::edit::VoxelTopologyRuntime,
     world::tick::WorldTickClock,
     world_items::WorldItemSpawnRequest,
+    world_objects::{
+        emit_object_loot, world_object_position, ObjectLootRegistries,
+    },
 };
 
 use super::block::{BlockTargetingSet, TargetedBlock};
@@ -185,7 +188,35 @@ fn advance_survival_mining(
         .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
-    if runtime.world.set_block(hit.voxel, None).is_some() {
+    if let Some(mutation) = runtime.world.set_block_detailed(hit.voxel, None) {
+        if let Some(object) = mutation.detached_object
+            && let Some(definition) = content.objects.get(object.object_id)
+        {
+            let position = world_object_position(
+                hit.voxel,
+                mutation.previous_cell,
+                object,
+                definition,
+            ) + Vec3::Y * 0.25;
+            emit_object_loot(
+                definition,
+                hit.voxel,
+                world_ticks.current_tick(),
+                ObjectLootRegistries::new(
+                    &content.blocks,
+                    &content.items,
+                    &content.layers,
+                    &content.objects,
+                    &content.tools,
+                ),
+                |stack| {
+                    runtime
+                        .item_spawns
+                        .write(WorldItemSpawnRequest::dropped(stack, position));
+                },
+            );
+        }
+
         spawn_survival_loot(
             block,
             hit.voxel,

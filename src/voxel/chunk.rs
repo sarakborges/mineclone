@@ -1003,6 +1003,16 @@ impl VoxelChunk {
     }
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
+        let _ = self.set_block_with_detached_object(x, y, z, block);
+    }
+
+    pub(crate) fn set_block_with_detached_object(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        block: Option<VoxelCell>,
+    ) -> Option<ObjectCell> {
         let blocks = Arc::make_mut(&mut self.blocks);
         let layers = Arc::make_mut(&mut self.layers);
         let objects = Arc::make_mut(&mut self.objects);
@@ -1020,7 +1030,7 @@ impl VoxelChunk {
             y,
             z,
             block,
-        );
+        )
     }
 
     pub(crate) fn add_layer(
@@ -1170,21 +1180,24 @@ fn set_block_in_storage(
     y: usize,
     z: usize,
     block: Option<VoxelCell>,
-) {
+) -> Option<ObjectCell> {
     let index = index(x, y, z);
     let previous_block = blocks.get(index);
     let had_block = previous_block.is_some();
     let had_content = had_block || fluids.get(index).is_some();
     let has_block = block.is_some();
 
-    if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id) {
-        if let Some(removed) = layers.remove(&(index as u16)) {
-            *layer_count = layer_count
-                .checked_sub(removed.len())
-                .expect("chunk layer count cannot underflow");
-        }
-        objects.remove(&(index as u16));
-    }
+    let detached_object =
+        if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id) {
+            if let Some(removed) = layers.remove(&(index as u16)) {
+                *layer_count = layer_count
+                    .checked_sub(removed.len())
+                    .expect("chunk layer count cannot underflow");
+            }
+            objects.remove(&(index as u16))
+        } else {
+            None
+        };
 
     let has_content = has_block || fluids.get(index).is_some();
 
@@ -1197,6 +1210,7 @@ fn set_block_in_storage(
 
     blocks.set(index, block);
     refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
+    detached_object
 }
 
 #[expect(

@@ -7,8 +7,15 @@ use crate::{
 
 use super::{
     cell::VoxelCell, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
-    world::VoxelWorld,
+    object::ObjectCell, world::VoxelWorld,
 };
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct VoxelBlockMutation {
+    pub(crate) chunk: IVec3,
+    pub(crate) previous_cell: Option<VoxelCell>,
+    pub(crate) detached_object: Option<ObjectCell>,
+}
 
 #[derive(SystemParam)]
 pub(crate) struct VoxelMutationRuntime<'w> {
@@ -56,14 +63,27 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
-        let (chunk, previous_cell) = self
+        self.set_block_detailed(world_position, block)
+            .map(|mutation| mutation.chunk)
+    }
+
+    pub(crate) fn set_block_detailed(
+        &mut self,
+        world_position: IVec3,
+        block: Option<VoxelCell>,
+    ) -> Option<VoxelBlockMutation> {
+        let (chunk, previous_cell, detached_object) = self
             .world
             .set_block_at_with_previous(world_position, block)?;
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
         self.remesh_queue.enqueue_voxel_edit(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        Some(VoxelBlockMutation {
+            chunk,
+            previous_cell,
+            detached_object,
+        })
     }
 
     pub(crate) fn set_fluid(
@@ -112,6 +132,14 @@ impl VoxelTopologyRuntime<'_> {
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
         self.mutation.set_block(world_position, block)
+    }
+
+    pub(crate) fn set_block_detailed(
+        &mut self,
+        world_position: IVec3,
+        block: Option<VoxelCell>,
+    ) -> Option<VoxelBlockMutation> {
+        self.mutation.set_block_detailed(world_position, block)
     }
 
     pub(crate) fn set_fluid(

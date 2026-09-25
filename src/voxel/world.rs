@@ -403,14 +403,14 @@ impl VoxelWorld {
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
         self.set_block_at_with_previous(world_position, block)
-            .map(|(chunk_coord, _)| chunk_coord)
+            .map(|(chunk_coord, _, _)| chunk_coord)
     }
 
     pub(crate) fn set_block_at_with_previous(
         &mut self,
         world_position: IVec3,
         block: Option<VoxelCell>,
-    ) -> Option<(IVec3, Option<VoxelCell>)> {
+    ) -> Option<(IVec3, Option<VoxelCell>, Option<ObjectCell>)> {
         if world_position.y < 0 {
             return None;
         }
@@ -418,6 +418,7 @@ impl VoxelWorld {
         let (chunk_coord, local_position) = split_world_position(world_position);
         let previous_block;
         let block_changed;
+        let detached_object;
 
         {
             let chunk = self.chunks.get_mut(&chunk_coord)?;
@@ -434,7 +435,7 @@ impl VoxelWorld {
 
             previous_block = current_block;
             block_changed = current_block != block;
-            chunk.set_block(x, y, z, block);
+            detached_object = chunk.set_block_with_detached_object(x, y, z, block);
 
             if block.is_some() {
                 chunk.set_fluid(x, y, z, None);
@@ -448,7 +449,7 @@ impl VoxelWorld {
         }
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
-        Some((chunk_coord, previous_block))
+        Some((chunk_coord, previous_block, detached_object))
     }
 
 
@@ -918,8 +919,31 @@ mod tests {
 
         assert_eq!(
             world.set_block_at_with_previous(position, Some(second)),
-            Some((coord, Some(first))),
+            Some((coord, Some(first), None)),
         );
+    }
+
+    #[test]
+    fn detailed_block_mutation_returns_detached_object() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let position = IVec3::new(1, 2, 3);
+        let support = VoxelCell::new("stone", Default::default());
+        let object = ObjectCell::new(
+            "asteria:pebble",
+            crate::content::object::ObjectPlacementFace::Top,
+            Default::default(),
+        );
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(1, 2, 3, Some(support));
+        assert!(chunk.set_object(1, 2, 3, object));
+        world.insert_chunk(coord, chunk);
+
+        assert_eq!(
+            world.set_block_at_with_previous(position, None),
+            Some((coord, Some(support), Some(object))),
+        );
+        assert_eq!(world.object_at(position), None);
     }
 
     #[test]

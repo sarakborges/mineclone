@@ -168,6 +168,32 @@ struct WorldObjectRemovalContent<'w> {
     tools: Res<'w, ToolRegistry>,
 }
 
+pub(crate) struct ObjectLootRegistries<'a> {
+    blocks: &'a BlockRegistry,
+    items: &'a ItemRegistry,
+    layers: &'a LayerRegistry,
+    objects: &'a ObjectRegistry,
+    tools: &'a ToolRegistry,
+}
+
+impl<'a> ObjectLootRegistries<'a> {
+    pub(crate) fn new(
+        blocks: &'a BlockRegistry,
+        items: &'a ItemRegistry,
+        layers: &'a LayerRegistry,
+        objects: &'a ObjectRegistry,
+        tools: &'a ToolRegistry,
+    ) -> Self {
+        Self {
+            blocks,
+            items,
+            layers,
+            objects,
+            tools,
+        }
+    }
+}
+
 #[derive(Component)]
 struct WorldObjectAppearance {
     tint: Color,
@@ -604,12 +630,33 @@ fn spawn_object_loot(
     content: &WorldObjectRemovalContent<'_>,
     drops: &mut MessageWriter<WorldItemSpawnRequest>,
 ) {
+    emit_object_loot(
+        definition,
+        support,
+        current_tick,
+        ObjectLootRegistries::new(
+            &content.blocks,
+            &content.items,
+            &content.layers,
+            &content.objects,
+            &content.tools,
+        ),
+        |stack| {
+            drops.write(WorldItemSpawnRequest::dropped(stack, position));
+        },
+    );
+}
+
+pub(crate) fn emit_object_loot(
+    definition: &ObjectDefinition,
+    support: IVec3,
+    current_tick: u64,
+    content: ObjectLootRegistries<'_>,
+    mut emit: impl FnMut(ItemStack),
+) {
     if definition.loot_table.entries().is_empty() {
         if definition.drop_self {
-            drops.write(WorldItemSpawnRequest::dropped(
-                ItemStack::new(intern_object_id(&definition.id)),
-                position,
-            ));
+            emit(ItemStack::new(intern_object_id(&definition.id)));
         }
         return;
     }
@@ -619,22 +666,19 @@ fn spawn_object_loot(
         if entry.chance < 1.0 && next_unit_f32(&mut random_state) >= entry.chance {
             continue;
         }
-        let item_id = resolve_object_loot_item_id(&entry.item, content);
+        let item_id = resolve_object_loot_item_id(&entry.item, &content);
         let mut remaining = entry.quantity;
         while remaining > 0 {
             let quantity = remaining.min(MAX_STACK_SIZE);
             remaining -= quantity;
-            drops.write(WorldItemSpawnRequest::dropped(
-                ItemStack::new(item_id).with_quantity(quantity),
-                position,
-            ));
+            emit(ItemStack::new(item_id).with_quantity(quantity));
         }
     }
 }
 
 fn resolve_object_loot_item_id(
     item_id: &str,
-    content: &WorldObjectRemovalContent<'_>,
+    content: &ObjectLootRegistries<'_>,
 ) -> &'static str {
     if content.items.get(item_id).is_some() {
         intern_item_id(item_id)
