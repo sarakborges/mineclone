@@ -1,5 +1,10 @@
 ## 2026-09-25 — Objects com altura real e tiling vertical
 
+### Correção de CI — consumidor de held item atualizado
+- o primeiro commit removeu o enum legado do registry, mas deixou um consumidor em `player/held_sprite.rs` ainda casando `StackedSprites`; Clippy corretamente bloqueou a etapa;
+- o held item agora reconhece `SpritePrism` diretamente, sem alias de compatibilidade nem restauração do contrato antigo;
+- versão permanece `0.68.0`: esta é uma correção da mesma etapa, não uma feature adicional.
+
 ### Pebble/stick — remoção do empilhamento de sprites
 - removido o contrato `stackedSprites`: pebble e stick não são mais construídos como várias lâminas horizontais desconectadas;
 - adicionado `spritePrism`, um visual genérico de object que gera um único mesh contínuo com largura/profundidade, altura explícita e `tileHeight`;
