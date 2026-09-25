@@ -1,7 +1,9 @@
-### CI follow-up — wrapper de set_block fica test-only
+### Correção de auditoria — sem wrapper morto para set_block
 
-- após a mutação detalhada virar o caminho runtime, `VoxelChunk::set_block` ficou necessário apenas para fixtures de testes;
-- o wrapper foi movido para `#[cfg(test)]` em vez de receber suppression de dead code; runtime usa exclusivamente `set_block_with_detached_object`;
+- a primeira correção do CI havia mantido `VoxelChunk::set_block` apenas sob `#[cfg(test)]`; isso ainda preservava uma API redundante sem necessidade;
+- o wrapper foi removido por completo e os testes usam diretamente `set_block_with_detached_object`, que é a API autoritativa de mutação do chunk;
+- também foram removidas suppressions `dead_code` obsoletas de `ObjectPlacementFace::normal`, `VoxelChunk::{object_at,remove_object}` e `VoxelWorld::{object_at,set_object_at,remove_object_at}`; todos esses símbolos já possuem consumidores reais;
+- a regra daqui em diante é eliminar código morto, não escondê-lo com `allow/expect(dead_code)` ou wrappers test-only redundantes;
 - VERSION permanece `0.68.16`.
 
 ## 2026-09-25 — Quebrar suporte destaca world object como loot

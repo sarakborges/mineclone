@@ -39,11 +39,7 @@ impl ObjectPlacementFace {
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "voxel-backed world-object runtime migration has not consumed face normals yet"
-    )]
-    pub(crate) fn normal(self) -> IVec3 {
+(self) -> IVec3 {
         match self {
             Self::Right => IVec3::X,
             Self::Left => IVec3::NEG_X,

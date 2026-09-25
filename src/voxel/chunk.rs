@@ -738,11 +738,7 @@ impl VoxelChunk {
             .map(|(&index, layers)| (index as usize, layers.as_slice()))
     }
 
-    #[allow(
-        dead_code,
-        reason = "voxel-backed world-object runtime migration is still in progress"
-    )]
-    pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
+(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
         if !in_bounds(x, y, z) {
             return None;
         }
@@ -1002,11 +998,6 @@ impl VoxelChunk {
         edit(&mut content)
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
-        let _ = self.set_block_with_detached_object(x, y, z, block);
-    }
-
     pub(crate) fn set_block_with_detached_object(
         &mut self,
         x: usize,
@@ -1078,11 +1069,7 @@ impl VoxelChunk {
         set_object_in_storage(self.blocks.as_ref(), objects, x, y, z, object)
     }
 
-    #[allow(
-        dead_code,
-        reason = "voxel-backed world-object runtime migration is still in progress"
-    )]
-    pub(crate) fn remove_object(&mut self, x: usize, y: usize, z: usize) -> Option<ObjectCell> {
+(&mut self, x: usize, y: usize, z: usize) -> Option<ObjectCell> {
         Arc::make_mut(&mut self.objects).remove(&(index(x, y, z) as u16))
     }
 
@@ -1544,10 +1531,10 @@ mod tests {
         assert!(chunk.is_empty());
         assert!(!chunk.has_fluid());
 
-        chunk.set_block(1, 1, 1, Some(VoxelCell::new("stone", Default::default())));
+        chunk.set_block_with_detached_object(1, 1, 1, Some(VoxelCell::new("stone", Default::default())));
         assert!(!chunk.is_empty());
 
-        chunk.set_block(1, 1, 1, None);
+        chunk.set_block_with_detached_object(1, 1, 1, None);
         assert!(chunk.is_empty());
     }
 
@@ -1581,7 +1568,7 @@ mod tests {
         assert!(chunk.boundary_has_content(IVec3::Y));
         assert!(chunk.boundary_has_fluid(IVec3::NEG_X));
 
-        chunk.set_block(
+        chunk.set_block_with_detached_object(
             0,
             last,
             3,
@@ -1591,7 +1578,7 @@ mod tests {
         assert!(chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_fluid(IVec3::NEG_X));
 
-        chunk.set_block(0, last, 3, None);
+        chunk.set_block_with_detached_object(0, last, 3, None);
         assert!(!chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_content(IVec3::Y));
     }
@@ -1600,7 +1587,7 @@ mod tests {
     fn layers_stack_per_face_and_follow_support_identity() {
         let mut chunk = VoxelChunk::empty();
         let support = VoxelCell::new("stone", Default::default());
-        chunk.set_block(2, 3, 4, Some(support));
+        chunk.set_block_with_detached_object(2, 3, 4, Some(support));
 
         let moss = LayerCell::new("asteria:moss", Default::default());
         let lichen = LayerCell::new("asteria:lichen", Default::default());
@@ -1608,7 +1595,7 @@ mod tests {
         assert!(chunk.add_layer(2, 3, 4, LayerFace::Top, lichen));
         assert_eq!(chunk.layers_at(2, 3, 4).len(), 2);
 
-        chunk.set_block(
+        chunk.set_block_with_detached_object(
             2,
             3,
             4,
@@ -1635,7 +1622,7 @@ mod tests {
         let block = VoxelCell::new("stone", Default::default());
         let fluid = FluidCell::source(0, 8);
 
-        chunk.set_block(2, 3, 4, Some(block));
+        chunk.set_block_with_detached_object(2, 3, 4, Some(block));
         chunk.set_fluid(2, 3, 4, Some(fluid));
 
         assert_eq!(chunk.cell_at(2, 3, 4), Some(block));
@@ -1650,7 +1637,7 @@ mod tests {
         let block = VoxelCell::new("stone", Default::default());
         let fluid = FluidCell::source(0, 8);
 
-        chunk.set_block(3, 5, 7, Some(block));
+        chunk.set_block_with_detached_object(3, 5, 7, Some(block));
         chunk.set_fluid(3, 5, 7, Some(fluid));
 
         assert_eq!(chunk.cell_at_local(3, 5, 7), chunk.cell_at(3, 5, 7));
@@ -1667,7 +1654,7 @@ mod tests {
         let cell = VoxelCell::new("stone", Default::default());
         let fluid = FluidCell::source(0, 8);
         let light = VoxelLight::new_hsi(12, Default::default());
-        chunk.set_block(1, 2, 3, Some(cell));
+        chunk.set_block_with_detached_object(1, 2, 3, Some(cell));
         chunk.set_fluid(4, 5, 6, Some(fluid));
         chunk.set_light(7, 8, 9, light);
 
@@ -1703,7 +1690,7 @@ mod tests {
 
         for offset in FLUID_SPREAD_TARGETS {
             let target = source + offset;
-            chunk.set_block(
+            chunk.set_block_with_detached_object(
                 target.x as usize,
                 target.y as usize,
                 target.z as usize,
@@ -1716,7 +1703,7 @@ mod tests {
         assert!(sources.is_empty());
 
         let reopened = source + IVec3::X;
-        chunk.set_block(
+        chunk.set_block_with_detached_object(
             reopened.x as usize,
             reopened.y as usize,
             reopened.z as usize,
@@ -1735,7 +1722,7 @@ mod tests {
 
         for offset in [IVec3::NEG_Y, IVec3::X, IVec3::Z, IVec3::NEG_Z] {
             let target = source + offset;
-            chunk.set_block(
+            chunk.set_block_with_detached_object(
                 target.x as usize,
                 target.y as usize,
                 target.z as usize,
@@ -1755,7 +1742,7 @@ mod tests {
         let block = VoxelCell::new("stone", Default::default());
         let fluid = FluidCell::spreading(0, 7, 1);
 
-        chunk.set_block(0, 0, 0, Some(block));
+        chunk.set_block_with_detached_object(0, 0, 0, Some(block));
         chunk.set_fluid(last, last, last, Some(fluid));
 
         assert_eq!(chunk.cell_at(0, 0, 0), Some(block));
@@ -1785,7 +1772,7 @@ mod tests {
     #[test]
     fn chunk_clone_shares_storage_until_mutated() {
         let mut chunk = VoxelChunk::empty();
-        chunk.set_block(1, 2, 3, Some(VoxelCell::new("stone", Default::default())));
+        chunk.set_block_with_detached_object(1, 2, 3, Some(VoxelCell::new("stone", Default::default())));
         chunk.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
         chunk.set_light(7, 8, 9, VoxelLight::new_hsi(12, Default::default()));
 
@@ -1794,7 +1781,7 @@ mod tests {
         assert!(Arc::ptr_eq(&chunk.fluids, &clone.fluids));
         assert!(Arc::ptr_eq(&chunk.light, &clone.light));
 
-        clone.set_block(1, 2, 3, None);
+        clone.set_block_with_detached_object(1, 2, 3, None);
         clone.set_fluid(4, 5, 6, None);
         clone.set_light(7, 8, 9, VoxelLight::DARK);
 
