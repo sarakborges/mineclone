@@ -1,3 +1,8 @@
+### CI follow-up 3 — assinatura auxiliar do Target HUD
+
+A segunda função auxiliar do Target HUD ainda referenciava a assinatura antiga com dois
+lifetimes. Ela agora acompanha `TargetHudState<'w>`.
+
 ### CI follow-up 2 — TargetHudState sem lifetime de Query
 
 Depois de remover a Query de WorldObjectInstance do Target HUD, o lifetime de system-query

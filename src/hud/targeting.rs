@@ -562,7 +562,7 @@ fn target_object_hud_text(
 fn target_hud_text(
     snapshot: &TargetHudSnapshot,
     block: Option<&BlockDefinition>,
-    state: &TargetHudState<'_, '_>,
+    state: &TargetHudState<'_>,
     content: &TargetHudContent<'_>,
 ) -> String {
     let language = snapshot.language;
