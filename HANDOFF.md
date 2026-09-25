@@ -1,5 +1,18 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — diagnostics passam a medir o próprio custo
+- a linha periódica de `render assets` varre chunk allocations, images/font atlases e executa
+  verificações de consistência; como isso roda na main thread a cada 10 s, a própria telemetria
+  poderia introduzir um spike e depois aparecer no frame-time da janela seguinte;
+- o sistema agora cronometra sua execução completa e publica `diagnostic_prev_us` na chamada
+  seguinte, deixando explícito quanto custou a coleta anterior sem misturar esse valor com os
+  samples que acabaram de ser drenados;
+- a medição inclui as varreduras, logging e checks de consistência; a primeira emissão usa zero
+  porque ainda não existe execução anterior;
+- nenhuma política de streaming, render, worldgen ou budget mudou neste passo.
+
+VERSION: `0.67.8`.
+
 ### Follow-up — retained deixa de duplicar toda a seleção anterior
 - `retained` existia para manter por mais uma selection revision os chunks que acabaram de sair de
   `desired`, mas armazenava o `desired` anterior inteiro; a cada fronteira isso duplicava milhares
