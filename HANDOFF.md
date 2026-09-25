@@ -1,3 +1,13 @@
+## 2026-09-25 — Loading reduz ruído de status
+
+- fases `PENDING` continuam visíveis, mas sem contador `0/total`;
+- a fase `ACTIVE` não repete o texto `ACTIVE`: o highlight da linha já comunica o estado;
+- quando a fase ativa possui contador, a coluna da direita mostra somente `completed/total`;
+- fases `DONE` continuam explicitamente marcadas como concluídas;
+- nenhuma regra de bootstrap, seleção, budget ou transição foi alterada.
+
+VERSION: `0.68.14`.
+
 ### CI follow-up — LoadingProgressUi explicita disjunção das queries
 
 - o alias de `ParamSet` não foi aceito pela inferência de `SystemParamFunction` do Bevy 0.19;

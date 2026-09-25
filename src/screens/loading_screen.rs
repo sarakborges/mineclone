@@ -278,11 +278,17 @@ fn format_loading_status(
     status: WorldLoadingPhaseStatus,
     progress: Option<(usize, usize)>,
 ) -> String {
-    let status = localization.text(language, loading_status_key(status));
-    progress.map_or_else(
-        || status.to_owned(),
-        |(completed, total)| format!("{status}  {completed}/{total}"),
-    )
+    match status {
+        WorldLoadingPhaseStatus::Pending => {
+            localization.text(language, "loading.status.pending").to_owned()
+        }
+        WorldLoadingPhaseStatus::Active => progress
+            .map(|(completed, total)| format!("{completed}/{total}"))
+            .unwrap_or_default(),
+        WorldLoadingPhaseStatus::Done => {
+            localization.text(language, "loading.status.done").to_owned()
+        }
+    }
 }
 
 fn loading_phase_key(phase: WorldLoadingPhase) -> &'static str {
@@ -294,14 +300,6 @@ fn loading_phase_key(phase: WorldLoadingPhase) -> &'static str {
         WorldLoadingPhase::Assets => "loading.phase.assets",
         WorldLoadingPhase::Finalizing => "loading.phase.finalizing",
         WorldLoadingPhase::Spawning => "loading.phase.spawning",
-    }
-}
-
-fn loading_status_key(status: WorldLoadingPhaseStatus) -> &'static str {
-    match status {
-        WorldLoadingPhaseStatus::Pending => "loading.status.pending",
-        WorldLoadingPhaseStatus::Active => "loading.status.active",
-        WorldLoadingPhaseStatus::Done => "loading.status.done",
     }
 }
 
