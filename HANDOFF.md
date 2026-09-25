@@ -1,3 +1,45 @@
+## 2026-09-25 — UI 0.68.42 elimina race que recriava system-font faces antes do layout
+
+- o log 0.68.41 mostrou que o gargalo dominante já não era streaming:
+  `stream_pending_renderable` ficou em 0 na maior parte do teste, mesmo com milhares de chunks
+  em `stream_ready` que eram apenas preload fora do show radius;
+- o FPS, porém, caiu progressivamente mesmo com generation/mesh/remesh zerados:
+  aproximadamente 54 FPS -> 50 -> 44 -> 36 -> 31 FPS;
+- ao mesmo tempo, `font_atlas_sizes` permaneceu estável em 10, mas
+  `font_atlas_faces` cresceu de 7 para 189 e depois 373, enquanto
+  `font_atlas_bytes` subiu de ~25 MiB para ~391 MiB;
+- os runtime images adicionais eram quase exclusivamente atlases 512x512, confirmando novamente
+  churn de identidade de face, não crescimento legítimo de variedade de tamanho;
+- esse é o mesmo tipo de leak diagnosticado na 0.68.21/0.68.27, mas a proteção existente tinha
+  uma race de scheduling:
+  - `pin_ui_font_handles` rodava em `Update`;
+  - ele observava somente `Added<TextFont>`;
+  - TextFonts criados/modificados depois desse sistema no mesmo `Update` só eram pinados no frame
+    seguinte;
+  - entretanto o Bevy mede/layouta UI em `PostUpdate`, então havia uma janela onde
+    `FontSource::SystemUi` era resolvido diretamente pelo FontCx e podia materializar uma nova
+    identidade de face + atlas antes do handle estável ser aplicado;
+- `pin_ui_font_handles` agora roda em `PostUpdate` e é explicitamente ordenado:
+  1. antes de `bevy::text::load_font_assets_into_font_collection`;
+  2. antes de `UiSystems::Content`;
+- a query passou de `Added<TextFont>` para `Changed<TextFont>`, cobrindo tanto entidades novas
+  quanto qualquer HUD/widget que reatribua TextFont numa entity existente;
+- a resolução concreta de System UI continua a mesma: family é resolvida uma vez no Startup,
+  weight/width/style são cacheados em `UiFontFaces` e cada combinação reutiliza um
+  `Handle<Font>` estável;
+- o pin agora acontece no mesmo frame e antes do pipeline de measure/layout/atlas do Bevy, fechando
+  a race em vez de depender da ordem incidental dos sistemas em Update;
+- o log também mostrou `fluid_settling_active=false` durante todo o período capturado, portanto
+  o prefetch 0.68.41 não foi exercitado neste teste e não explica a queda de FPS observada;
+- `StandardMaterial` ainda cresceu de forma secundária durante a sessão, mas muito mais devagar
+  que os font atlases; deve ser reavaliado depois que o leak principal for confirmado como
+  estabilizado em runtime;
+- CI funcional run `36200522205`: success em localization audit, structure content reference
+  audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.42`.
+
 ## 2026-09-25 — Streaming 0.68.41 faz prefetch da próxima wave durante fluid settling
 
 - o log 0.68.40 confirmou que a cache de prioridade da pending queue funcionou: depois que a
