@@ -102,5 +102,7 @@ pub(in crate::world) struct WorldSetupAssets<'w> {
 pub(in crate::world) struct WorldSetupFinalization<'w, 's> {
     pub(super) transition: ResMut<'w, ScreenTransition>,
     pub(super) player_definition: Res<'w, PlayerDefinition>,
-    pub(super) chunk_entities: Query<'w, 's, (), With<ChunkRenderCoord>>,
+    pub(super) render_distance: Res<'w, RenderDistanceSettings>,
+    pub(super) chunk_entities:
+        Query<'w, 's, (&'static ChunkRenderCoord, &'static mut Visibility)>,
 }

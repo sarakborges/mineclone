@@ -8,10 +8,10 @@ use super::super::{WorldLoadingPhase, system_params::WorldSetupProgress};
 pub(super) fn finalize_initial_world(
     render_pool: &ChunkRenderPool,
     progress: &mut WorldSetupProgress<'_>,
-    chunk_entities: &Query<(), With<ChunkRenderCoord>>,
+    chunk_entities: &mut Query<(&ChunkRenderCoord, &mut Visibility)>,
 ) {
     if render_pool.active_count() != progress.loading_state.total()
-        || chunk_entities.iter().count() != render_pool.entity_count()
+        || chunk_entities.iter_mut().count() != render_pool.entity_count()
     {
         return;
     }

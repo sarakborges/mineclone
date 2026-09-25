@@ -7,9 +7,13 @@ use crate::{
         safe_spawn_position, spawn_player_entity,
     },
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
+    voxel::coordinates::chunk_coord_from_position,
     world::{
         WorldLoadMode,
+        chunk_rendering::ChunkRenderCoord,
         chunk_system_params::{ChunkContent, ChunkRenderer},
+        chunk_visibility::prime_chunk_visibility,
+        render_distance::RenderDistanceSettings,
     },
 };
 
@@ -22,6 +26,8 @@ pub(super) fn spawn_loaded_world(
     transition: &mut ScreenTransition,
     persistence: &WorldSetupPersistence<'_>,
     player_definition: &crate::content::player::PlayerDefinition,
+    render_distance: &RenderDistanceSettings,
+    chunk_entities: &mut Query<(&ChunkRenderCoord, &mut Visibility)>,
 ) {
     if progress.loading_state.transition_requested {
         return;
@@ -56,6 +62,17 @@ pub(super) fn spawn_loaded_world(
         saved_look,
         saved_flying,
     );
+
+    // Bootstrap chunk entities are intentionally created hidden so streaming
+    // can apply hysteresis later. Prime the exact initial visibility while the
+    // transition overlay is still closed, so Gameplay's first revealed frame
+    // already contains the world.
+    prime_chunk_visibility(
+        chunk_coord_from_position(translation).xz(),
+        render_distance.chunks(),
+        chunk_entities,
+    );
+
     progress.loading_state.transition_requested = true;
     transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
 }

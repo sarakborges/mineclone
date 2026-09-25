@@ -1,3 +1,21 @@
+## 2026-09-25 — Bootstrap entrega chunks visíveis antes de abrir Gameplay
+
+- meshes de chunk são criados com `Visibility::Hidden` para que o streaming aplique hysteresis,
+  inclusive durante o loading;
+- até agora o loading validava somente que render-pool/ECS estavam completos e pedia a transição,
+  enquanto a primeira aplicação de visibilidade só ocorria no `PostUpdate` de Gameplay;
+- isso criava uma janela real Loading -> Gameplay com todos os chunks ainda hidden, agravada pelo
+  antigo reseed síncrono de fluidos;
+- o bootstrap agora aplica a mesma regra de show/hide radius aos chunk entities já materializados,
+  usando a posição final real do player e o render distance, antes de pedir a transição;
+- o overlay continua fechado durante essa preparação; quando o fade-in começa, o mundo já está
+  visível e não depende do primeiro PostUpdate de Gameplay;
+- a função compartilhada `prime_chunk_visibility` reutiliza exatamente a regra/hysteresis do
+  sistema runtime, sem duplicar cálculo de radius;
+- nenhum delay artificial, render distance ou conteúdo de chunk foi alterado.
+
+VERSION: `0.68.30`.
+
 ### Correção de CI — remove helpers órfãos do reseed global
 
 - removidos `enqueue_resident_fluid_frontier` e seu helper privado, que só existiam para o

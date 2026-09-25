@@ -91,7 +91,7 @@ pub(in crate::world) fn setup_world(
         WorldLoadingPhase::Finalizing => finalize_initial_world(
             &pipeline.renderer.pool,
             &mut progress,
-            &finalization.chunk_entities,
+            &mut finalization.chunk_entities,
         ),
         WorldLoadingPhase::Spawning => spawn_loaded_world(
             &pipeline.content,
@@ -100,6 +100,8 @@ pub(in crate::world) fn setup_world(
             &mut finalization.transition,
             &persistence,
             &finalization.player_definition,
+            &finalization.render_distance,
+            &mut finalization.chunk_entities,
         ),
     }
 }

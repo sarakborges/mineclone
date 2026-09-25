@@ -15,6 +15,17 @@ pub(super) struct ChunkVisibilityState {
     hide_radius: i32,
 }
 
+pub(super) fn prime_chunk_visibility(
+    center: IVec2,
+    render_distance_chunks: i32,
+    chunks: &mut Query<(&ChunkRenderCoord, &mut Visibility)>,
+) {
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance_chunks);
+    for (coord, mut visibility) in chunks.iter_mut() {
+        apply_chunk_visibility(center, show_radius, hide_radius, coord.0, &mut visibility);
+    }
+}
+
 pub(super) fn sync_chunk_visibility(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
