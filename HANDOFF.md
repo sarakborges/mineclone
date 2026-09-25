@@ -1,3 +1,12 @@
+## 2026-09-25 — Pebble/Stick ainda mais baixos
+
+- Pebble e Stick foram reduzidos em mais 60% da altura visual atual;
+- `height` passou de 0.03 para 0.012;
+- `repeatHeight` passou de 0.0075 para 0.003, preservando quatro repetições verticais no extruded sprite;
+- largura, profundidade, baseOffset e regras de iluminação/sombra permanecem inalteradas.
+
+VERSION: `0.68.6`.
+
 ## 2026-09-25 — Pebble/Stick mais baixos e sem shading de mundo
 
 - Pebble e Stick agora usam 30% da altura anterior: `height` passou de 0.1 para 0.03;

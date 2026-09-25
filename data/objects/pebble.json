@@ -10,8 +10,8 @@
     "type": "extrudedSprite",
     "texture": "textures/items/pebble.png",
     "baseOffset": 0.0125,
-    "height": 0.03,
-    "repeatHeight": 0.0075,
+    "height": 0.012,
+    "repeatHeight": 0.003,
     "size": [
       0.42,
       0.42
