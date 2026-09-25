@@ -50,7 +50,9 @@ impl Plugin for UiDesignSystemPlugin {
             )
             .add_systems(
                 PostUpdate,
-                pin_ui_font_handles.before(UiSystems::Content),
+                pin_ui_font_handles
+                    .before(bevy::text::load_font_assets_into_font_collection)
+                    .before(UiSystems::Content),
             )
             .add_systems(Last, scrollbar::sync_auto_scrollbars);
     }
