@@ -39,6 +39,24 @@ struct LoadingPhaseLabel(WorldLoadingPhase);
 #[derive(Component)]
 struct LoadingPhaseStatusText(WorldLoadingPhase);
 
+type LoadingTextQueries<'w, 's> = ParamSet<
+    'w,
+    's,
+    (
+        Query<'w, 's, &'static mut Text, With<LoadingSummaryText>>,
+        Query<'w, 's, (&'static LoadingPhaseLabel, &'static mut TextColor)>,
+        Query<
+            'w,
+            's,
+            (
+                &'static LoadingPhaseStatusText,
+                &'static mut Text,
+                &'static mut TextColor,
+            ),
+        >,
+    ),
+>;
+
 fn setup_loading_screen(
     mut commands: Commands,
     localization: Res<UiLocalization>,
@@ -183,11 +201,7 @@ fn update_loading_progress(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut rows: Query<(&LoadingPhaseRow, &mut BackgroundColor)>,
-    mut text_queries: ParamSet<(
-        Query<&mut Text, With<LoadingSummaryText>>,
-        Query<(&LoadingPhaseLabel, &mut TextColor)>,
-        Query<(&LoadingPhaseStatusText, &mut Text, &mut TextColor)>,
-    )>,
+    mut text_queries: LoadingTextQueries<'_, '_>,
 ) {
     let Some(loading_state) = loading_state else {
         return;

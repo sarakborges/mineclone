@@ -1,3 +1,10 @@
+### CI follow-up — ParamSet tipado sem suppressions
+
+- Clippy rejeitou a assinatura inline do `ParamSet` por `type_complexity`;
+- a composição das três queries foi movida para o alias `LoadingTextQueries`, deixando a
+  assinatura do system legível sem `#[allow]` e sem mudar a estratégia de acesso sequencial;
+- VERSION permanece `0.68.13`.
+
 ### CI follow-up — B0001 passa a ser gate real
 
 - o teste de regressão do loading existia no código, mas o workflow Rust validation ainda não
