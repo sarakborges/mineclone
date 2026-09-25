@@ -55,9 +55,7 @@ enum ChunkAsyncStage {
 
 impl ChunkAsyncWorkLimiter {
     pub(crate) fn try_acquire_generation(&self) -> Option<ChunkAsyncWorkPermit> {
-        let limit = self.limit();
-        let generation_limit = if limit > 1 { limit - 1 } else { 1 };
-        self.try_acquire_with_limit(generation_limit, ChunkAsyncStage::Generation)
+        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::Generation)
     }
 
     pub(crate) fn try_acquire_loading_generation(&self) -> Option<ChunkAsyncWorkPermit> {
@@ -77,9 +75,7 @@ impl ChunkAsyncWorkLimiter {
     }
 
     pub(crate) fn try_acquire_remesh(&self) -> Option<ChunkAsyncWorkPermit> {
-        let limit = self.limit();
-        let remesh_limit = if limit > 1 { limit - 1 } else { 1 };
-        self.try_acquire_with_limit(remesh_limit, ChunkAsyncStage::Remesh)
+        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::Remesh)
     }
 
     fn try_acquire_with_limit(
