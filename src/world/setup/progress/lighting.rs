@@ -115,6 +115,7 @@ fn settle_initial_lighting(
             content.secondary_properties(),
             changed_chunks,
             &mut changed_positions,
+            &|_| true,
             |processed_voxels| {
                 budget.record(processed_voxels.saturating_sub(recorded_voxels));
                 recorded_voxels = processed_voxels;
