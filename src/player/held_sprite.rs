@@ -107,7 +107,7 @@ impl HeldSpriteContent<'_> {
         if let Some(object) = self.objects.get(item_id) {
             return match &object.visual {
                 ObjectVisualDefinition::Model { .. } => None,
-                ObjectVisualDefinition::SpritePrism { .. } => Some(HeldSpriteVisual {
+                ObjectVisualDefinition::ExtrudedSprite { .. } => Some(HeldSpriteVisual {
                     icon: &object.icon,
                     tint_icon: None,
                     tint: None,

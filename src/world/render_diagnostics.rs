@@ -10,7 +10,7 @@ use crate::{
     app::{crash_log::append_runtime_diagnostic, game_state::GameState},
     rendering::terrain_material::TerrainMaterial,
     world_objects::{
-        ObjectMaterialCache, SpritePrismMaterialCache, SpritePrismMeshCache,
+        ObjectMaterialCache, ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache,
         WorldObjectStore,
     },
 };
@@ -290,8 +290,8 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     terrain_materials: Res<'w, Assets<TerrainMaterial>>,
     world_objects: Res<'w, WorldObjectStore>,
     object_materials: Res<'w, ObjectMaterialCache>,
-    sprite_prism_meshes: Res<'w, SpritePrismMeshCache>,
-    sprite_prism_materials: Res<'w, SpritePrismMaterialCache>,
+    extruded_sprite_meshes: Res<'w, ExtrudedSpriteMeshCache>,
+    extruded_sprite_materials: Res<'w, ExtrudedSpriteMaterialCache>,
     frame_times: ResMut<'w, FrameTimeSamples>,
 }
 
@@ -400,7 +400,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     let diagnostic = format!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlas_faces={} font_atlas_sizes={} font_atlas_variations={} font_atlas_raster_modes={} font_atlas_size_range={:?} font_atlas_top_sizes={:?} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} sprite_prism_mesh_cache={} sprite_prism_material_cache={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlas_faces={} font_atlas_sizes={} font_atlas_variations={} font_atlas_raster_modes={} font_atlas_size_range={:?} font_atlas_top_sizes={:?} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} extruded_sprite_mesh_cache={} extruded_sprite_material_cache={}",
         assets.state.get(),
         *previous_diagnostic_micros,
         frame_times.count,
@@ -432,8 +432,8 @@ pub(super) fn log_render_asset_pressure(
         assets.world_objects.materialized_object_count(),
         assets.world_objects.materialized_chunk_count(),
         assets.object_materials.len(),
-        assets.sprite_prism_meshes.len(),
-        assets.sprite_prism_materials.len(),
+        assets.extruded_sprite_meshes.len(),
+        assets.extruded_sprite_materials.len(),
     );
     info!("{diagnostic}");
     let _ = append_runtime_diagnostic(&diagnostic);

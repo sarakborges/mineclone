@@ -12,9 +12,9 @@ use super::{
     registry::DefinitionMap,
 };
 
-const MAX_SPRITE_PRISM_SIZE: f32 = 4.0;
-const MAX_SPRITE_PRISM_OFFSET: f32 = 2.0;
-const MAX_SPRITE_PRISM_TILES: u32 = 64;
+const MAX_EXTRUDED_SPRITE_SIZE: f32 = 4.0;
+const MAX_EXTRUDED_SPRITE_OFFSET: f32 = 2.0;
+const MAX_EXTRUDED_SPRITE_REPEATS: u32 = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -108,7 +108,7 @@ fn default_position_jitter() -> [f32; 2] {
 }
 
 
-fn default_sprite_prism_size() -> [f32; 2] {
+fn default_extruded_sprite_size() -> [f32; 2] {
     [0.75, 0.75]
 }
 
@@ -122,14 +122,14 @@ pub enum ObjectVisualDefinition {
     Model {
         path: String,
     },
-    SpritePrism {
+    ExtrudedSprite {
         texture: String,
         #[serde(default, rename = "baseOffset")]
         base_offset: f32,
         height: f32,
-        #[serde(rename = "tileHeight")]
-        tile_height: f32,
-        #[serde(default = "default_sprite_prism_size")]
+        #[serde(rename = "repeatHeight")]
+        repeat_height: f32,
+        #[serde(default = "default_extruded_sprite_size")]
         size: [f32; 2],
         #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
         alpha_cutoff: f32,
@@ -146,47 +146,47 @@ impl ObjectVisualDefinition {
                     "object {object_id} model path must be a safe relative asset path: {path}"
                 );
             }
-            Self::SpritePrism {
+            Self::ExtrudedSprite {
                 texture,
                 base_offset,
                 height,
-                tile_height,
+                repeat_height,
                 size,
                 alpha_cutoff,
             } => {
                 *texture = texture.trim().to_owned();
                 assert!(
                     is_safe_relative_asset_path(texture),
-                    "object {object_id} sprite prism texture must be a safe relative asset path: {texture}"
+                    "object {object_id} extruded sprite texture must be a safe relative asset path: {texture}"
                 );
                 assert!(
                     base_offset.is_finite()
-                        && (0.0..=MAX_SPRITE_PRISM_OFFSET).contains(base_offset),
-                    "object {object_id} spritePrism baseOffset must be finite and between 0 and {MAX_SPRITE_PRISM_OFFSET}"
+                        && (0.0..=MAX_EXTRUDED_SPRITE_OFFSET).contains(base_offset),
+                    "object {object_id} extrudedSprite baseOffset must be finite and between 0 and {MAX_EXTRUDED_SPRITE_OFFSET}"
                 );
                 assert!(
-                    height.is_finite() && *height > 0.0 && *height <= MAX_SPRITE_PRISM_SIZE,
-                    "object {object_id} spritePrism height must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
+                    height.is_finite() && *height > 0.0 && *height <= MAX_EXTRUDED_SPRITE_SIZE,
+                    "object {object_id} extrudedSprite height must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
                 );
                 assert!(
-                    tile_height.is_finite()
-                        && *tile_height > 0.0
-                        && *tile_height <= MAX_SPRITE_PRISM_SIZE,
-                    "object {object_id} spritePrism tileHeight must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
+                    repeat_height.is_finite()
+                        && *repeat_height > 0.0
+                        && *repeat_height <= MAX_EXTRUDED_SPRITE_SIZE,
+                    "object {object_id} extrudedSprite repeatHeight must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
                 );
                 assert!(
-                    *height / *tile_height <= MAX_SPRITE_PRISM_TILES as f32,
-                    "object {object_id} spritePrism cannot exceed {MAX_SPRITE_PRISM_TILES} vertical texture tiles"
+                    *height / *repeat_height <= MAX_EXTRUDED_SPRITE_REPEATS as f32,
+                    "object {object_id} extrudedSprite cannot exceed {MAX_EXTRUDED_SPRITE_REPEATS} vertical repeats"
                 );
                 assert!(
                     size.iter().all(|value| {
-                        value.is_finite() && *value > 0.0 && *value <= MAX_SPRITE_PRISM_SIZE
+                        value.is_finite() && *value > 0.0 && *value <= MAX_EXTRUDED_SPRITE_SIZE
                     }),
-                    "object {object_id} spritePrism size must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
+                    "object {object_id} extrudedSprite size must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
                 );
                 assert!(
                     alpha_cutoff.is_finite() && (0.0..=1.0).contains(alpha_cutoff),
-                    "object {object_id} spritePrism alphaCutoff must be between 0 and 1"
+                    "object {object_id} extrudedSprite alphaCutoff must be between 0 and 1"
                 );
             }
         }
@@ -340,51 +340,51 @@ mod tests {
     use super::ObjectVisualDefinition;
 
     #[test]
-    fn sprite_prism_visual_deserializes_camel_case_fields() {
+    fn extruded_sprite_visual_deserializes_camel_case_fields() {
         let visual: ObjectVisualDefinition = serde_json::from_str(
             r#"{
-                "type": "spritePrism",
+                "type": "extrudedSprite",
                 "texture": "textures/items/pebble.png",
                 "baseOffset": 0.0125,
                 "height": 0.1,
-                "tileHeight": 0.025,
+                "repeatHeight": 0.025,
                 "size": [0.42, 0.42],
                 "alphaCutoff": 0.5
             }"#,
         )
-        .expect("sprite prism visual should accept the public camelCase schema");
+        .expect("extruded sprite visual should accept the public camelCase schema");
 
-        let ObjectVisualDefinition::SpritePrism {
+        let ObjectVisualDefinition::ExtrudedSprite {
             texture,
             base_offset,
             height,
-            tile_height,
+            repeat_height,
             size,
             alpha_cutoff,
         } = visual
         else {
-            panic!("expected spritePrism visual");
+            panic!("expected extrudedSprite visual");
         };
 
         assert_eq!(texture, "textures/items/pebble.png");
         assert_eq!(base_offset, 0.0125);
         assert_eq!(height, 0.1);
-        assert_eq!(tile_height, 0.025);
+        assert_eq!(repeat_height, 0.025);
         assert_eq!(size, [0.42, 0.42]);
         assert_eq!(alpha_cutoff, 0.5);
     }
 
     #[test]
-    fn legacy_stacked_sprite_visual_is_rejected() {
+    fn removed_sprite_prism_visual_is_rejected() {
         let result = serde_json::from_str::<ObjectVisualDefinition>(
             r#"{
-                "type": "stackedSprites",
+                "type": "spritePrism",
                 "texture": "textures/items/pebble.png",
-                "slices": 4,
-                "sliceSpacing": 0.025
+                "baseOffset": 0.0125,
+                "height": 0.1,
+                "tileHeight": 0.025
             }"#,
         );
-
-        assert!(result.is_err(), "legacy stackedSprites schema must stay removed");
+        assert!(result.is_err(), "spritePrism must stay removed");
     }
 }

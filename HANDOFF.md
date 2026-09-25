@@ -1,3 +1,17 @@
+## 2026-09-25 — Pebble/Stick passam a extrusão real do sprite
+
+- a captura in-game mostrou que `spritePrism` estava conceitualmente errado: o retângulo 3D aplicava o sprite inteiro às paredes e os trechos transparentes/escuros viravam fileiras de riscos ao redor do object;
+- `spritePrism` foi removido por completo, sem alias/fallback;
+- o novo primitive data-driven `extrudedSprite` usa o sprite como face superior, lê o alpha da Image e gera parede somente no contorno dos pixels opacos;
+- `height` define a espessura real; `repeatHeight` define a repetição vertical. Cada trecho de parede reutiliza somente o texel opaco daquele ponto do contorno, em vez de projetar o retângulo transparente inteiro;
+- continua sendo uma única entity e um único mesh cacheado por textura + geometria, sem GLB authored e sem múltiplas entities/layers;
+- a materialização aguarda a Image carregada; o preload de gameplay foi atualizado para o novo visual, então o loading continua bloqueando gameplay até essas texturas estarem disponíveis;
+- a geração possui limites explícitos de pixels e quads, e a lógica de contour/mesh ficou isolada em `world_objects/extruded_sprite.rs` em vez de inflar o owner de world objects;
+- Pebble e Stick usam `height = 0.1` e `repeatHeight = 0.025`;
+- há regressão para arestas internas entre pixels opacos não virarem paredes e para o schema antigo `spritePrism` continuar rejeitado.
+
+VERSION: `0.68.4`.
+
 ## 2026-09-25 — Diagnóstico separa a explosão de font atlases
 
 - o primeiro relatório persistido de runtime mostrou crescimento contínuo de font atlases durante
