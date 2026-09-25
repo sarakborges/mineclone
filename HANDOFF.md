@@ -1,3 +1,9 @@
+### CI follow-up 2 — TargetHudState sem lifetime de Query
+
+Depois de remover a Query de WorldObjectInstance do Target HUD, o lifetime de system-query
+`'s` ficou sem uso. `TargetHudState` agora carrega apenas `'w`, refletindo os resources
+que realmente possui.
+
 ### CI follow-up — HUD/highlight também usam support voxel
 
 O primeiro CI do desacoplamento gameplay↔render encontrou as duas últimas dependências de

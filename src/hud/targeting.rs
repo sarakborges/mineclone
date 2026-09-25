@@ -107,7 +107,7 @@ struct TargetObjectHudSnapshot {
 }
 
 #[derive(SystemParam)]
-struct TargetHudState<'w, 's> {
+struct TargetHudState<'w> {
     targeted: Res<'w, TargetedBlock>,
     object_target: Res<'w, TargetedWorldObject>,
     world: Res<'w, VoxelWorld>,
@@ -541,7 +541,7 @@ fn update_target_hud(
 fn target_object_hud_text(
     snapshot: &TargetObjectHudSnapshot,
     object: &crate::content::object::ObjectDefinition,
-    state: &TargetHudState<'_, '_>,
+    state: &TargetHudState<'_>,
 ) -> String {
     let language = snapshot.language;
     let coordinates = state
