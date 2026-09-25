@@ -1,3 +1,34 @@
+## 2026-09-25 — Streaming deixa de confundir VSync 60 Hz com overload
+
+- o log 0.68.36 mostrou que a fluid closure ficou finalmente limitada: `generation_wave_targets`
+  permaneceu em 7..8 e `staged_generated_chunks=0`; portanto a regressão de waves com 500..600+
+  chunks foi removida;
+- apesar disso, durante movimento `active_chunks` caiu de 4065 para 1342 enquanto
+  `stream_pending` permaneceu em ~2600..3100, mostrando que retirement continuava vencendo a
+  reposição de chunks;
+- o mesmo log mostrou `async_chunk_work=.../2` praticamente durante todo Gameplay, embora o
+  loading estivesse com limite 4;
+- a causa era a adaptação de `ChunkAsyncWorkLimiter`: dois frames >1/55 s já podiam reduzir o
+  limite, mas a recuperação exigia frames <=1/65 s durante 120 frames;
+- numa apresentação VSync de 60 Hz (~16.67 ms), <=1/65 s (~15.38 ms) é inalcançável; após cair
+  para o floor 2, o limiter ficava preso permanentemente ali;
+- o controlador agora trata apenas pressão sustentada: redução exige 8 frames consecutivos abaixo
+  de ~45 FPS; recuperação aceita frames >=55 FPS e precisa de 30 frames estáveis;
+- foram adicionados testes provando que 60 Hz recupera capacidade, um hitch isolado não reduz o
+  limite e pressão sustentada ainda faz backoff;
+- o log também mostrou um segundo threshold refresh-unaware: `WorldFrameWorkBudget` considerava
+  qualquer frame >1/60 s pressionado (2 ms), enquanto o tier fast exigia >75 FPS;
+- jitter normal de VSync 60 Hz portanto deixava o world pipeline frequentemente no budget mínimo;
+- o budget global agora usa ~55 FPS como threshold de pressão e >70 FPS para o tier fast, deixando
+  60 Hz estável no budget normal de 3 ms;
+- o diagnóstico de runtime agora inclui `async_chunk_base_limit`, permitindo confirmar no próximo
+  log se o limite adaptativo realmente recupera do floor para a capacidade-base da máquina;
+- CI Rust validation run `36189088589`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.37`.
+
 ## 2026-09-25 — Fluid settling não expande mais generation wave por fronteiras descarregadas
 
 - o log 0.68.34 confirmou a regressão principal restante do streaming: durante movimento,
