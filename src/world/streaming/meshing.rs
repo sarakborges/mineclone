@@ -14,8 +14,8 @@ use crate::{
 };
 
 use super::{
-    ChunkStreamingQueues, ChunkStreamingWork, activate_loaded_chunk_for_initial_mesh,
-    chunk_load_priority,
+    ChunkStreamingQueues, ChunkStreamingWork, activate_published_chunk_runtime,
+    chunk_load_priority, seed_loaded_chunk_direct_lighting,
 };
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
@@ -58,8 +58,6 @@ pub(super) fn dispatch_initial_mesh_tasks(
             continue;
         };
 
-        activate_loaded_chunk_for_initial_mesh(coord, content, work, queues, current_tick);
-
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {
                 work.state.defer_ready(coord);
@@ -76,8 +74,17 @@ pub(super) fn dispatch_initial_mesh_tasks(
             work.state.mark_ready(preempted);
         }
 
+        seed_loaded_chunk_direct_lighting(coord, content, work, queues);
+
         if chunk_is_empty {
-            integrate_empty_chunk(content, renderer, &work.world, &mut queues.remesh, coord);
+            integrate_empty_chunk(
+                content,
+                renderer,
+                work,
+                queues,
+                coord,
+                current_tick,
+            );
             continue;
         }
 
@@ -98,12 +105,13 @@ pub(super) fn dispatch_initial_mesh_tasks(
 fn integrate_empty_chunk(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
-    world: &VoxelWorld,
-    remesh_queue: &mut ChunkRemeshQueue,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
     coord: IVec3,
+    current_tick: u64,
 ) {
     let render_context = content.render_context(
-        world,
+        &work.world,
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
@@ -115,14 +123,21 @@ fn integrate_empty_chunk(
         Vec::new(),
         &render_context,
     );
-    notify_loaded_chunk_neighbors(coord, world, &renderer.pool, remesh_queue);
+    activate_published_chunk_runtime(coord, work, queues, current_tick);
+    notify_loaded_chunk_neighbors(
+        coord,
+        &work.world,
+        &renderer.pool,
+        &mut queues.remesh,
+    );
 }
 
 pub(super) fn collect_built_chunk_meshes(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     work: &mut ChunkStreamingWork<'_>,
-    remesh_queue: &mut ChunkRemeshQueue,
+    queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
 ) {
     let deadline = work.frame_budget.deadline();
     let current_revision = work.mesh_tasks.revision();
@@ -216,22 +231,28 @@ pub(super) fn collect_built_chunk_meshes(
         );
         work.state.initial_mesh_seed_catchup.remove(&completed.coord);
         if !catchup_meshlets.is_empty() {
-            remesh_queue.enqueue_geometry_meshlets_priority(
+            queues.remesh.enqueue_geometry_meshlets_priority(
                 completed.coord,
                 catchup_meshlets,
             );
             if chunk_has_fluid {
-                remesh_queue.enqueue_fluid_meshlets_priority(
+                queues.remesh.enqueue_fluid_meshlets_priority(
                     completed.coord,
                     catchup_meshlets,
                 );
             }
         }
+        activate_published_chunk_runtime(
+            completed.coord,
+            work,
+            queues,
+            current_tick,
+        );
         notify_loaded_chunk_neighbors(
             completed.coord,
             &work.world,
             &renderer.pool,
-            remesh_queue,
+            &mut queues.remesh,
         );
     }
 }
