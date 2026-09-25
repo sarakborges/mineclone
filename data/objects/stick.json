@@ -10,8 +10,8 @@
     "type": "extrudedSprite",
     "texture": "textures/items/stick.png",
     "baseOffset": 0.0125,
-    "height": 0.1,
-    "repeatHeight": 0.025,
+    "height": 0.03,
+    "repeatHeight": 0.0075,
     "size": [
       0.68,
       0.68
@@ -34,7 +34,9 @@
       0
     ]
   },
+  "unlit": true,
   "castsShadow": false,
+  "receivesShadow": false,
   "dropSelf": true,
   "interaction": "pickup",
   "positionJitter": [

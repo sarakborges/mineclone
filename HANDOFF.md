@@ -1,3 +1,14 @@
+## 2026-09-25 — Pebble/Stick mais baixos e sem shading de mundo
+
+- Pebble e Stick agora usam 30% da altura anterior: `height` passou de 0.1 para 0.03;
+- `repeatHeight` foi reduzido na mesma proporção, de 0.025 para 0.0075, preservando quatro repetições verticais do contorno na nova espessura;
+- a investigação do sombreado confirmou duas causas data-driven: ambos herdavam `unlit = false` e `receivesShadow = true`;
+- por isso o `StandardMaterial` participava da iluminação PBR normal (inclusive variação por normal nas faces laterais) e ainda podia receber shadow map, apesar de `castsShadow = false`;
+- Pebble e Stick agora declaram `unlit: true` e `receivesShadow: false`, mantendo a cor/textura do sprite sem escurecimento pela iluminação ou sombras projetadas;
+- o primitive genérico `extrudedSprite` não foi hardcoded como unlit: outros objects ainda podem optar por iluminação normal via conteúdo.
+
+VERSION: `0.68.5`.
+
 ## 2026-09-25 — Pebble/Stick passam a extrusão real do sprite
 
 - a captura in-game mostrou que `spritePrism` estava conceitualmente errado: o retângulo 3D aplicava o sprite inteiro às paredes e os trechos transparentes/escuros viravam fileiras de riscos ao redor do object;
