@@ -188,5 +188,7 @@
   "hud.artisansKit": "Kit de Artesão: {precision} · {toolAction}: precisão · Esquerdo: remover · Direito: colocar",
   "artisansKit.precision.thick": "Grosso",
   "artisansKit.precision.thin": "Fino",
-  "artisansKit.precision.extraThin": "Extrafino"
+  "artisansKit.precision.extraThin": "Extrafino",
+  "loading.summary": "{columns} colunas de terreno · {sections} seções de chunk (16×16×16)",
+  "loading.summary.pending": "Preparando geometria do mundo"
 }

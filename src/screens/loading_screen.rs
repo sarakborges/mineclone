@@ -3,9 +3,17 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{theme, typography},
+    ui::{
+        cosmic_background::{self, STAR_FIELD},
+        surface, theme, typography,
+    },
     world::{WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState},
 };
+
+const LOADING_PANEL_WIDTH: f32 = 560.0;
+const LOADING_ROW_HEIGHT: f32 = 48.0;
+const LOADING_ROW_GAP: f32 = 4.0;
+const LOADING_PHASE_INDEX_WIDTH: f32 = 34.0;
 
 pub struct LoadingScreenPlugin;
 
@@ -20,55 +28,153 @@ impl Plugin for LoadingScreenPlugin {
 }
 
 #[derive(Component)]
-struct LoadingPhaseText(WorldLoadingPhase);
+struct LoadingSummaryText;
+
+#[derive(Component)]
+struct LoadingPhaseRow(WorldLoadingPhase);
+
+#[derive(Component)]
+struct LoadingPhaseLabel(WorldLoadingPhase);
+
+#[derive(Component)]
+struct LoadingPhaseStatusText(WorldLoadingPhase);
 
 fn setup_loading_screen(
     mut commands: Commands,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
-    commands.spawn((Camera2d, DespawnOnExit(GameState::Loading)));
+    commands.spawn((
+        Camera2d,
+        BoxShadowSamples(8),
+        DespawnOnExit(GameState::Loading),
+    ));
     let language = language.get();
 
     commands
         .spawn((
             DespawnOnExit(GameState::Loading),
             Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                right: px(0),
+                top: px(0),
+                bottom: px(0),
                 width: percent(100),
                 height: percent(100),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                row_gap: px(16),
+                row_gap: px(18),
                 ..default()
             },
             BackgroundColor(theme::SCREEN_BACKGROUND),
             theme::cosmic_background_gradient(),
         ))
         .with_children(|screen| {
-            screen.spawn(typography::heading(
+            for &spec in STAR_FIELD {
+                screen.spawn(cosmic_background::star(spec));
+            }
+
+            screen.spawn(typography::title(
                 localization.text(language, "loading.world").to_owned(),
             ));
+            screen.spawn((
+                LoadingSummaryText,
+                typography::muted(
+                    localization
+                        .text(language, "loading.summary.pending")
+                        .to_owned(),
+                ),
+            ));
+
             screen
-                .spawn(Node {
+                .spawn(surface::hud_container(Node {
+                    width: px(LOADING_PANEL_WIDTH),
+                    padding: UiRect::all(px(14)),
+                    border: UiRect::all(px(1)),
                     flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::FlexStart,
-                    row_gap: px(6),
-                    min_width: px(420),
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(LOADING_ROW_GAP),
                     ..default()
-                })
+                }))
                 .with_children(|phase_list| {
-                    for phase in WorldLoadingPhase::ALL {
-                        let text = format_loading_phase(
+                    for (index, phase) in WorldLoadingPhase::ALL.into_iter().enumerate() {
+                        spawn_loading_phase_row(
+                            phase_list,
                             &localization,
                             language,
+                            index + 1,
                             phase,
-                            WorldLoadingPhaseStatus::Pending,
-                            None,
                         );
-                        phase_list.spawn((typography::muted(text), LoadingPhaseText(phase)));
                     }
                 });
+        });
+}
+
+fn spawn_loading_phase_row(
+    parent: &mut ChildSpawnerCommands,
+    localization: &UiLocalization,
+    language: Language,
+    index: usize,
+    phase: WorldLoadingPhase,
+) {
+    parent
+        .spawn((
+            LoadingPhaseRow(phase),
+            Node {
+                width: percent(100),
+                height: px(LOADING_ROW_HEIGHT),
+                padding: UiRect::horizontal(px(12)),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(10),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            Pickable::IGNORE,
+        ))
+        .with_children(|row| {
+            row.spawn((
+                typography::caption(format!("{index:02}")),
+                Node {
+                    width: px(LOADING_PHASE_INDEX_WIDTH),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+
+            row.spawn((
+                LoadingPhaseLabel(phase),
+                typography::hud(
+                    localization
+                        .text(language, loading_phase_key(phase))
+                        .to_owned(),
+                ),
+                Node {
+                    flex_grow: 1.0,
+                    min_width: px(0),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+
+            row.spawn((
+                LoadingPhaseStatusText(phase),
+                typography::caption(
+                    localization
+                        .text(language, "loading.status.pending")
+                        .to_owned(),
+                ),
+                TextLayout::justify(Justify::Right),
+                Node {
+                    min_width: px(150),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
         });
 }
 
@@ -76,35 +182,88 @@ fn update_loading_progress(
     loading_state: Option<Res<WorldLoadingState>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    mut labels: Query<(&LoadingPhaseText, &mut Text)>,
+    mut summaries: Query<&mut Text, With<LoadingSummaryText>>,
+    mut rows: Query<(&LoadingPhaseRow, &mut BackgroundColor)>,
+    mut labels: Query<(&LoadingPhaseLabel, &mut TextColor)>,
+    mut statuses: Query<(&LoadingPhaseStatusText, &mut Text, &mut TextColor)>,
 ) {
     let Some(loading_state) = loading_state else {
         return;
     };
+    let language = language.get();
 
-    for (phase_label, mut text) in &mut labels {
-        let phase = phase_label.0;
-        let next = format_loading_phase(
+    if let Ok(mut summary) = summaries.single_mut() {
+        let next = format_loading_summary(&localization, language, &loading_state);
+        if **summary != next {
+            **summary = next;
+        }
+    }
+
+    for (phase_row, mut background) in &mut rows {
+        let status = loading_state.phase_status(phase_row.0);
+        let target = if status == WorldLoadingPhaseStatus::Active {
+            theme::PURPLE_SOFT
+        } else {
+            Color::NONE
+        };
+        if background.0 != target {
+            background.0 = target;
+        }
+    }
+
+    for (phase_label, mut color) in &mut labels {
+        let target = phase_text_color(loading_state.phase_status(phase_label.0));
+        if color.0 != target {
+            color.0 = target;
+        }
+    }
+
+    for (status_label, mut text, mut color) in &mut statuses {
+        let phase = status_label.0;
+        let status = loading_state.phase_status(phase);
+        let next = format_loading_status(
             &localization,
-            language.get(),
-            phase,
-            loading_state.phase_status(phase),
+            language,
+            status,
             loading_state.phase_progress(phase),
         );
         if **text != next {
             **text = next;
         }
+
+        let target = phase_status_color(status);
+        if color.0 != target {
+            color.0 = target;
+        }
     }
 }
 
-fn format_loading_phase(
+fn format_loading_summary(
     localization: &UiLocalization,
     language: Language,
-    phase: WorldLoadingPhase,
+    loading_state: &WorldLoadingState,
+) -> String {
+    localization
+        .text(language, "loading.summary")
+        .replace("{columns}", &loading_state.column_count().to_string())
+        .replace("{sections}", &loading_state.total().to_string())
+}
+
+fn format_loading_status(
+    localization: &UiLocalization,
+    language: Language,
     status: WorldLoadingPhaseStatus,
     progress: Option<(usize, usize)>,
 ) -> String {
-    let phase_key = match phase {
+    let status = localization.text(language, loading_status_key(status));
+    progress.map_or_else(
+        || status.to_owned(),
+        |(completed, total)| format!("{status}  {completed}/{total}"),
+    )
+}
+
+fn loading_phase_key(phase: WorldLoadingPhase) -> &'static str {
+    match phase {
         WorldLoadingPhase::Generating => "loading.phase.generating",
         WorldLoadingPhase::SettlingFluids => "loading.phase.settlingFluids",
         WorldLoadingPhase::Lighting => "loading.phase.lighting",
@@ -112,17 +271,28 @@ fn format_loading_phase(
         WorldLoadingPhase::Assets => "loading.phase.assets",
         WorldLoadingPhase::Finalizing => "loading.phase.finalizing",
         WorldLoadingPhase::Spawning => "loading.phase.spawning",
-    };
-    let status_key = match status {
+    }
+}
+
+fn loading_status_key(status: WorldLoadingPhaseStatus) -> &'static str {
+    match status {
         WorldLoadingPhaseStatus::Pending => "loading.status.pending",
         WorldLoadingPhaseStatus::Active => "loading.status.active",
         WorldLoadingPhaseStatus::Done => "loading.status.done",
-    };
+    }
+}
 
-    let status = localization.text(language, status_key);
-    let phase = localization.text(language, phase_key);
-    progress.map_or_else(
-        || format!("[{status}] {phase}"),
-        |(completed, total)| format!("[{status}] {phase} · {completed}/{total}"),
-    )
+fn phase_text_color(status: WorldLoadingPhaseStatus) -> Color {
+    match status {
+        WorldLoadingPhaseStatus::Pending => theme::TEXT_SUBTLE,
+        WorldLoadingPhaseStatus::Active | WorldLoadingPhaseStatus::Done => theme::TEXT_PRIMARY,
+    }
+}
+
+fn phase_status_color(status: WorldLoadingPhaseStatus) -> Color {
+    match status {
+        WorldLoadingPhaseStatus::Pending => theme::TEXT_SUBTLE,
+        WorldLoadingPhaseStatus::Active => theme::BORDER_FOCUS,
+        WorldLoadingPhaseStatus::Done => theme::TEXT_MUTED,
+    }
 }

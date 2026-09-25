@@ -188,5 +188,7 @@
   "hud.artisansKit": "Artisan's Kit: {precision} · {toolAction}: precision · Left: remove · Right: place",
   "artisansKit.precision.thick": "Thick",
   "artisansKit.precision.thin": "Thin",
-  "artisansKit.precision.extraThin": "Extra Thin"
+  "artisansKit.precision.extraThin": "Extra Thin",
+  "loading.summary": "{columns} terrain columns · {sections} chunk sections (16×16×16)",
+  "loading.summary.pending": "Preparing world geometry"
 }

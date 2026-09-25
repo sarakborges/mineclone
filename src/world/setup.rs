@@ -75,6 +75,10 @@ impl WorldLoadingState {
         self.coords.len()
     }
 
+    pub(crate) fn column_count(&self) -> usize {
+        self.column_top_chunks.len()
+    }
+
     pub(crate) fn phase_status(&self, phase: WorldLoadingPhase) -> WorldLoadingPhaseStatus {
         if phase == self.phase {
             if phase == WorldLoadingPhase::Spawning && self.transition_requested {

@@ -1,3 +1,20 @@
+## 2026-09-25 — Loading screen legível e contagem de chunk sections explícita
+
+- a lista técnica de fases permanece completa, mas deixou de parecer um log cru;
+- a tela agora usa um painel central no visual padrão do Asteria, com uma linha por fase,
+  numeração fixa, label à esquerda e status/progresso alinhado à direita;
+- somente a fase ativa recebe destaque visual; fases concluídas continuam visíveis e fases
+  futuras ficam discretas;
+- o resumo do loading separa explicitamente colunas horizontais de terreno de chunk sections
+  16×16×16, evitando interpretar `~11k` sections como `~11k` colunas;
+- com render distance 24, a seleção horizontal inicial chega a 2.121 colunas (raio 26 por causa
+  da margem/preload); várias sections verticais por coluna são necessárias para superfície,
+  encostas, paredes e structures, então totais na faixa de ~10–11k sections são coerentes;
+- esta etapa muda somente apresentação/telemetria da loading screen, sem reduzir a área exigida
+  pelo contrato de world-ready antes do Gameplay.
+
+VERSION: `0.68.11`.
+
 ## 2026-09-25 — Boulders não invadem o Volcano
 
 - `asteria:overworld/volcano` continua sem structures próprias; os blobs de stone observados no
