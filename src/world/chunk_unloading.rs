@@ -1,6 +1,10 @@
-use std::time::Duration;
+use std::{cmp::Reverse, time::Duration};
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::HashSet,
+    prelude::*,
+};
 
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
@@ -25,8 +29,37 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
+const RENDER_RETIREMENT_BUDGET: Duration = Duration::from_millis(1);
+const MAX_RENDER_RETIREMENTS_PER_FRAME: usize = 2;
 const MIN_UNLOAD_RETENTION_MARGIN_CHUNKS: i32 = 10;
 const MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME: usize = 8;
+
+#[derive(Default)]
+struct RenderRetirementState {
+    selection_revision: Option<u64>,
+    pending: Vec<IVec3>,
+    queued: HashSet<IVec3>,
+}
+
+impl RenderRetirementState {
+    fn enqueue(&mut self, coord: IVec3) {
+        if self.queued.insert(coord) {
+            self.pending.push(coord);
+        }
+    }
+
+    fn sort_for_pop(&mut self) {
+        self.pending
+            .sort_unstable_by_key(|coord| Reverse((coord.y, coord.z, coord.x)));
+    }
+
+    fn pop(&mut self) -> Option<IVec3> {
+        let coord = self.pending.pop()?;
+        let removed = self.queued.remove(&coord);
+        debug_assert!(removed, "render retirement queue membership must stay synchronized");
+        Some(coord)
+    }
+}
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkUnloadState {
@@ -79,30 +112,44 @@ pub(super) fn retire_distant_chunk_meshes(
     mut renderer: ChunkRenderer,
     streaming: Res<ChunkStreamingState>,
     world: Res<VoxelWorld>,
+    frame_budget: Res<WorldFrameWorkBudget>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
     mut remesh_tasks: ResMut<ChunkRemeshTasks>,
-    mut retired: Local<Vec<IVec3>>,
-    mut last_selection_revision: Local<Option<u64>>,
+    mut state: Local<RenderRetirementState>,
 ) {
     let selection_revision = streaming.selection_revision();
-    if *last_selection_revision == Some(selection_revision) {
-        return;
+    if state.selection_revision != Some(selection_revision) {
+        for coord in renderer.pool.active_coords() {
+            if !streaming.retains_render_mesh(coord) {
+                state.enqueue(coord);
+            }
+        }
+        state.sort_for_pop();
+        state.selection_revision = Some(selection_revision);
     }
-    *last_selection_revision = Some(selection_revision);
 
-    retired.clear();
-    retired.extend(
-        renderer
-            .pool
-            .active_coords()
-            .filter(|coord| !streaming.retains_render_mesh(*coord)),
-    );
-    if retired.is_empty() {
+    if state.pending.is_empty() {
         return;
     }
 
-    retired.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-    for coord in retired.drain(..) {
+    let mut budget = FrameWorkBudget::new(RENDER_RETIREMENT_BUDGET, 1)
+        .with_global_deadline(frame_budget.deadline())
+        .with_maximum_items(MAX_RENDER_RETIREMENTS_PER_FRAME);
+
+    while !budget.exhausted() {
+        let Some(coord) = state.pop() else {
+            break;
+        };
+        budget.record(1);
+
+        // Selection can change again while a retirement backlog is being
+        // drained. Revalidate just before destructive work so moving back
+        // toward a chunk cancels its stale retirement rather than causing
+        // unnecessary despawn/remesh churn.
+        if !renderer.pool.contains(coord) || streaming.retains_render_mesh(coord) {
+            continue;
+        }
+
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         remesh_queue.remove(coord);
         remesh_tasks.cancel_coord(coord);
@@ -462,6 +509,23 @@ fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_retirement_queue_deduplicates_and_preserves_stable_pop_order() {
+        let mut state = RenderRetirementState::default();
+        state.enqueue(IVec3::new(2, 1, 0));
+        state.enqueue(IVec3::new(2, 1, 0));
+        state.enqueue(IVec3::new(-1, 0, 4));
+        state.enqueue(IVec3::new(0, 0, 0));
+        state.sort_for_pop();
+
+        assert_eq!(state.pending.len(), 3);
+        assert_eq!(state.pop(), Some(IVec3::new(0, 0, 0)));
+        assert_eq!(state.pop(), Some(IVec3::new(-1, 0, 4)));
+        assert_eq!(state.pop(), Some(IVec3::new(2, 1, 0)));
+        assert!(state.pop().is_none());
+        assert!(state.queued.is_empty());
+    }
     use crate::voxel::{
         cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
     };

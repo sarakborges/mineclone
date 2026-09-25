@@ -1,3 +1,23 @@
+## 2026-09-24 — Retirement de chunk render é incremental e budgetado
+
+A troca de seleção ainda concentrava outro custo síncrono no mesmo frame do queue rebuild:
+`retire_distant_chunk_meshes` varria allocations fora da nova seleção e aposentava todas de uma
+vez. Cada retirement pode despawnar múltiplas render entities, cancelar remesh state e visitar o
+halo 3×3×3 para invalidar vizinhos.
+
+- candidatos de retirement agora entram em uma fila deduplicada persistente;
+- mudança de `selection_revision` apenas acrescenta novos candidatos à fila;
+- trabalho destrutivo é limitado a 1 ms / no máximo 2 chunks por frame e respeita o
+  `WorldFrameWorkBudget` global;
+- cada candidato é revalidado imediatamente antes de aposentar;
+- se o player mudou de direção e o chunk voltou a ser retido enquanto aguardava na fila, a
+  aposentadoria é cancelada sem despawn/remesh desnecessário;
+- novas revisions podem acrescentar candidatos sem perder backlog existente;
+- teste cobre deduplicação e ordem estável de processamento.
+
+A varredura de keys do render pool em uma revision ainda existe, mas o custo pesado de
+despawn + 26-neighbor halo invalidation deixa de ocorrer em rajada no frame de fronteira.
+
 ## 2026-09-24 — Streaming selection não varre mais o quadrado expandido inteiro
 
 O rebuild síncrono da seleção de chunks reconstruía o volume desejado ao cruzar fronteiras de
