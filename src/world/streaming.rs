@@ -4,7 +4,6 @@ mod selection;
 mod surface_cache;
 
 use std::{
-    collections::VecDeque,
     time::{Duration, Instant},
 };
 

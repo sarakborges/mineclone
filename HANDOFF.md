@@ -1,3 +1,8 @@
+### CI follow-up — import removido com ReadyPriorityCache
+
+A remoção do `ReadyPriorityCache` deixou `VecDeque` sem uso em `streaming.rs`. O import
+foi removido; nenhuma lógica foi alterada.
+
 ## 2026-09-24 — Ready mesh priority também sai do frame de selection rebuild
 
 A fila `ready` ainda possuía `ReadyPriorityCache`, que invalidava por
