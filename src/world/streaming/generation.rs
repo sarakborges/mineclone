@@ -406,7 +406,7 @@ fn select_generation_wave(
                 work.world.restore_chunk(coord),
                 "resident or persisted chunk must remain resident or archived: {coord:?}"
             );
-            seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
+            seed_loaded_chunk_direct_lighting(coord, content, work, queues);
             work.state.mark_ready(coord);
             budget.record(1);
             continue;
