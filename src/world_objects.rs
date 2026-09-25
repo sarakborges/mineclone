@@ -48,7 +48,6 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        chunk_rendering::ChunkRenderCoord,
         deterministic::{hash_signed, hash_string, mix_u32_components},
         render_distance::{RenderDistanceSettings, chunk_visibility_radii},
         tick::WorldTickClock,
@@ -524,8 +523,7 @@ fn spawn_world_object(
     let mut root = commands.spawn((
         Name::new(format!("World Object ({})", definition.id)),
         transform,
-        Visibility::Hidden,
-        ChunkRenderCoord(chunk_coord_from_world(support)),
+        Visibility::Visible,
         DespawnOnExit(GameState::Gameplay),
     ));
 

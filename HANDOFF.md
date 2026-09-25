@@ -1,3 +1,19 @@
+## 2026-09-24 — World objects saem da varredura global de chunk visibility
+
+World-object render entities não carregam mais `ChunkRenderCoord`.
+
+- `sync_world_objects` já materializa apenas chunks dentro do show radius e preserva-os até
+  saírem do hide radius, usando exatamente a mesma hysteresis do terrain;
+- por isso cada object pode nascer `Visibility::Visible` e permanecer visível até o próprio
+  residency system despawná-lo;
+- `sync_chunk_visibility` deixa de iterar/mutar milhares de grass/stick/pebble entities toda
+  vez que o player cruza uma fronteira de chunk;
+- terrain/chunk meshes continuam usando `ChunkRenderCoord` normalmente;
+- targeting já é voxel-backed e não depende desta mudança visual.
+
+Esse passo remove uma query global proporcional ao número de world objects do hot path de
+movimento entre chunks.
+
 ### CI follow-up 3 — assinatura auxiliar do Target HUD
 
 A segunda função auxiliar do Target HUD ainda referenciava a assinatura antiga com dois
