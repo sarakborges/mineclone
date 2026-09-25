@@ -7,11 +7,11 @@
   },
   "category": "crafting_materials",
   "visual": {
-    "type": "stackedSprites",
+    "type": "spritePrism",
     "texture": "textures/items/stick.png",
-    "slices": 4,
     "baseOffset": 0.0125,
-    "sliceSpacing": 0.025,
+    "height": 0.1,
+    "tileHeight": 0.025,
     "size": [
       0.68,
       0.68

@@ -197,25 +197,25 @@ impl ObjectMaterialCache {
 }
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-struct StackedSpriteMeshKey {
+struct SpritePrismMeshKey {
     width: u32,
     depth: u32,
-    slices: u8,
+    height: u32,
     base_offset: u32,
-    slice_spacing: u32,
+    tile_height: u32,
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct StackedSpriteMeshCache(HashMap<StackedSpriteMeshKey, Handle<Mesh>>);
+pub(crate) struct SpritePrismMeshCache(HashMap<SpritePrismMeshKey, Handle<Mesh>>);
 
-impl StackedSpriteMeshCache {
+impl SpritePrismMeshCache {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
 }
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-struct StackedSpriteMaterialKey {
+struct SpritePrismMaterialKey {
     object_id: &'static str,
     tint: [u8; 4],
     unlit: bool,
@@ -223,11 +223,11 @@ struct StackedSpriteMaterialKey {
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct StackedSpriteMaterialCache(
-    HashMap<StackedSpriteMaterialKey, Handle<StandardMaterial>>,
+pub(crate) struct SpritePrismMaterialCache(
+    HashMap<SpritePrismMaterialKey, Handle<StandardMaterial>>,
 );
 
-impl StackedSpriteMaterialCache {
+impl SpritePrismMaterialCache {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
@@ -246,8 +246,8 @@ struct WorldObjectSceneContent<'w> {
 struct WorldObjectSceneAssets<'w> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
-    stacked_meshes: ResMut<'w, StackedSpriteMeshCache>,
-    stacked_materials: ResMut<'w, StackedSpriteMaterialCache>,
+    sprite_prism_meshes: ResMut<'w, SpritePrismMeshCache>,
+    sprite_prism_materials: ResMut<'w, SpritePrismMaterialCache>,
 }
 
 pub(crate) struct WorldObjectsPlugin;
@@ -258,8 +258,8 @@ impl Plugin for WorldObjectsPlugin {
             .init_resource::<TargetedWorldObject>()
             .init_resource::<ObjectModelPreloads>()
             .init_resource::<ObjectMaterialCache>()
-            .init_resource::<StackedSpriteMeshCache>()
-            .init_resource::<StackedSpriteMaterialCache>()
+            .init_resource::<SpritePrismMeshCache>()
+            .init_resource::<SpritePrismMaterialCache>()
             .add_message::<WorldObjectPlaceRequest>()
             .add_message::<WorldObjectRemoveRequest>()
             .add_systems(PostStartup, preload_object_models)
@@ -596,42 +596,42 @@ fn spawn_world_object(
             ));
             apply_shadow_flags(&mut root, definition);
         }
-        ObjectVisualDefinition::StackedSprites {
+        ObjectVisualDefinition::SpritePrism {
             texture,
-            slices,
             base_offset,
-            slice_spacing,
+            height,
+            tile_height,
             size,
             alpha_cutoff,
         } => {
-            let mesh_key = StackedSpriteMeshKey {
+            let mesh_key = SpritePrismMeshKey {
                 width: size[0].to_bits(),
                 depth: size[1].to_bits(),
-                slices: *slices,
+                height: height.to_bits(),
                 base_offset: base_offset.to_bits(),
-                slice_spacing: slice_spacing.to_bits(),
+                tile_height: tile_height.to_bits(),
             };
-            let mesh = if let Some(existing) = assets.stacked_meshes.0.get(&mesh_key) {
+            let mesh = if let Some(existing) = assets.sprite_prism_meshes.0.get(&mesh_key) {
                 existing.clone()
             } else {
-                let handle = assets.meshes.add(stacked_sprite_mesh(
-                    *size,
-                    *slices,
-                    *base_offset,
-                    *slice_spacing,
-                ));
-                assets.stacked_meshes.0.insert(mesh_key, handle.clone());
+                let handle = assets
+                    .meshes
+                    .add(sprite_prism_mesh(*size, *height, *base_offset, *tile_height));
+                assets
+                    .sprite_prism_meshes
+                    .0
+                    .insert(mesh_key, handle.clone());
                 handle
             };
 
             let (tint, tint_key) = quantized_object_tint(tint);
-            let material_key = StackedSpriteMaterialKey {
+            let material_key = SpritePrismMaterialKey {
                 object_id: object.object_id,
                 tint: tint_key,
                 unlit: definition.unlit,
                 alpha_cutoff: alpha_cutoff.to_bits(),
             };
-            let material = if let Some(existing) = assets.stacked_materials.0.get(&material_key) {
+            let material = if let Some(existing) = assets.sprite_prism_materials.0.get(&material_key) {
                 existing.clone()
             } else {
                 let handle = assets.materials.add(StandardMaterial {
@@ -645,7 +645,7 @@ fn spawn_world_object(
                     ..default()
                 });
                 assets
-                    .stacked_materials
+                    .sprite_prism_materials
                     .0
                     .insert(material_key, handle.clone());
                 handle
@@ -851,52 +851,112 @@ fn apply_shadow_flags(root: &mut EntityCommands<'_>, definition: &ObjectDefiniti
     }
 }
 
-fn stacked_sprite_mesh(
+struct SpritePrismMeshBuffers {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+impl SpritePrismMeshBuffers {
+    fn with_quad_capacity(quad_count: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(quad_count * 4),
+            normals: Vec::with_capacity(quad_count * 4),
+            uvs: Vec::with_capacity(quad_count * 4),
+            indices: Vec::with_capacity(quad_count * 6),
+        }
+    }
+
+    fn push_quad(
+        &mut self,
+        positions: [[f32; 3]; 4],
+        normal: [f32; 3],
+        uvs: [[f32; 2]; 4],
+    ) {
+        let base = self.positions.len() as u32;
+        self.positions.extend_from_slice(&positions);
+        self.normals.extend_from_slice(&[normal; 4]);
+        self.uvs.extend_from_slice(&uvs);
+        self.indices
+            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+}
+
+fn sprite_prism_mesh(
     size: [f32; 2],
-    slices: u8,
+    height: f32,
     base_offset: f32,
-    slice_spacing: f32,
+    tile_height: f32,
 ) -> Mesh {
     let half_x = size[0] * 0.5;
     let half_z = size[1] * 0.5;
-    let mut positions = Vec::with_capacity(usize::from(slices) * 4);
-    let mut normals = Vec::with_capacity(usize::from(slices) * 4);
-    let mut uvs = Vec::with_capacity(usize::from(slices) * 4);
-    let mut indices = Vec::with_capacity(usize::from(slices) * 6);
+    let top_y = base_offset + height;
+    let vertical_tiles = (height / tile_height).ceil() as usize;
+    let mut buffers = SpritePrismMeshBuffers::with_quad_capacity(vertical_tiles * 4 + 2);
 
-    for slice in 0..slices {
-        let y = base_offset + slice_spacing * f32::from(slice);
-        let base = u32::from(slice) * 4;
-        positions.extend_from_slice(&[
-            [-half_x, y, -half_z],
-            [half_x, y, -half_z],
-            [half_x, y, half_z],
-            [-half_x, y, half_z],
-        ]);
-        normals.extend_from_slice(&[[0.0, 1.0, 0.0]; 4]);
-        uvs.extend_from_slice(&[
+    buffers.push_quad(
+        [
+            [-half_x, top_y, -half_z],
+            [half_x, top_y, -half_z],
+            [half_x, top_y, half_z],
+            [-half_x, top_y, half_z],
+        ],
+        [0.0, 1.0, 0.0],
+        [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+    );
+    buffers.push_quad(
+        [
+            [-half_x, base_offset, half_z],
+            [half_x, base_offset, half_z],
+            [half_x, base_offset, -half_z],
+            [-half_x, base_offset, -half_z],
+        ],
+        [0.0, -1.0, 0.0],
+        [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+    );
+
+    let sides = [
+        ([-half_x, -half_z], [half_x, -half_z], [0.0, 0.0, -1.0]),
+        ([half_x, -half_z], [half_x, half_z], [1.0, 0.0, 0.0]),
+        ([half_x, half_z], [-half_x, half_z], [0.0, 0.0, 1.0]),
+        ([-half_x, half_z], [-half_x, -half_z], [-1.0, 0.0, 0.0]),
+    ];
+
+    for tile in 0..vertical_tiles {
+        let local_y0 = tile_height * tile as f32;
+        let local_y1 = (local_y0 + tile_height).min(height);
+        let y0 = base_offset + local_y0;
+        let y1 = base_offset + local_y1;
+        let tile_v = (local_y1 - local_y0) / tile_height;
+        let side_uvs = [
             [0.0, 1.0],
             [1.0, 1.0],
-            [1.0, 0.0],
-            [0.0, 0.0],
-        ]);
-        indices.extend_from_slice(&[
-            base,
-            base + 1,
-            base + 2,
-            base,
-            base + 2,
-            base + 3,
-        ]);
+            [1.0, 1.0 - tile_v],
+            [0.0, 1.0 - tile_v],
+        ];
+
+        for &(start, end, normal) in &sides {
+            buffers.push_quad(
+                [
+                    [start[0], y0, start[1]],
+                    [end[0], y0, end[1]],
+                    [end[0], y1, end[1]],
+                    [start[0], y1, start[1]],
+                ],
+                normal,
+                side_uvs,
+            );
+        }
     }
 
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
-    .with_inserted_indices(Indices::U32(indices))
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(buffers.indices))
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, buffers.positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, buffers.normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, buffers.uvs)
 }
 

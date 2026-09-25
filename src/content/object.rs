@@ -12,9 +12,9 @@ use super::{
     registry::DefinitionMap,
 };
 
-const MAX_STACKED_SPRITE_SLICES: u8 = 32;
-const MAX_STACKED_SPRITE_SIZE: f32 = 4.0;
-const MAX_STACKED_SPRITE_OFFSET: f32 = 2.0;
+const MAX_SPRITE_PRISM_SIZE: f32 = 4.0;
+const MAX_SPRITE_PRISM_OFFSET: f32 = 2.0;
+const MAX_SPRITE_PRISM_TILES: u32 = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -108,7 +108,7 @@ fn default_position_jitter() -> [f32; 2] {
 }
 
 
-fn default_stacked_sprite_size() -> [f32; 2] {
+fn default_sprite_prism_size() -> [f32; 2] {
     [0.75, 0.75]
 }
 
@@ -122,14 +122,14 @@ pub enum ObjectVisualDefinition {
     Model {
         path: String,
     },
-    StackedSprites {
+    SpritePrism {
         texture: String,
-        slices: u8,
         #[serde(default, rename = "baseOffset")]
         base_offset: f32,
-        #[serde(rename = "sliceSpacing")]
-        slice_spacing: f32,
-        #[serde(default = "default_stacked_sprite_size")]
+        height: f32,
+        #[serde(rename = "tileHeight")]
+        tile_height: f32,
+        #[serde(default = "default_sprite_prism_size")]
         size: [f32; 2],
         #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
         alpha_cutoff: f32,
@@ -146,42 +146,47 @@ impl ObjectVisualDefinition {
                     "object {object_id} model path must be a safe relative asset path: {path}"
                 );
             }
-            Self::StackedSprites {
+            Self::SpritePrism {
                 texture,
-                slices,
                 base_offset,
-                slice_spacing,
+                height,
+                tile_height,
                 size,
                 alpha_cutoff,
             } => {
                 *texture = texture.trim().to_owned();
                 assert!(
                     is_safe_relative_asset_path(texture),
-                    "object {object_id} stacked sprite texture must be a safe relative asset path: {texture}"
-                );
-                assert!(
-                    (1..=MAX_STACKED_SPRITE_SLICES).contains(slices),
-                    "object {object_id} stackedSprites slices must be between 1 and {MAX_STACKED_SPRITE_SLICES}"
+                    "object {object_id} sprite prism texture must be a safe relative asset path: {texture}"
                 );
                 assert!(
                     base_offset.is_finite()
-                        && (0.0..=MAX_STACKED_SPRITE_OFFSET).contains(base_offset),
-                    "object {object_id} stackedSprites baseOffset must be finite and between 0 and {MAX_STACKED_SPRITE_OFFSET}"
+                        && (0.0..=MAX_SPRITE_PRISM_OFFSET).contains(base_offset),
+                    "object {object_id} spritePrism baseOffset must be finite and between 0 and {MAX_SPRITE_PRISM_OFFSET}"
                 );
                 assert!(
-                    slice_spacing.is_finite()
-                        && (0.0..=MAX_STACKED_SPRITE_OFFSET).contains(slice_spacing),
-                    "object {object_id} stackedSprites sliceSpacing must be finite and between 0 and {MAX_STACKED_SPRITE_OFFSET}"
+                    height.is_finite() && *height > 0.0 && *height <= MAX_SPRITE_PRISM_SIZE,
+                    "object {object_id} spritePrism height must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
+                );
+                assert!(
+                    tile_height.is_finite()
+                        && *tile_height > 0.0
+                        && *tile_height <= MAX_SPRITE_PRISM_SIZE,
+                    "object {object_id} spritePrism tileHeight must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
+                );
+                assert!(
+                    *height / *tile_height <= MAX_SPRITE_PRISM_TILES as f32,
+                    "object {object_id} spritePrism cannot exceed {MAX_SPRITE_PRISM_TILES} vertical texture tiles"
                 );
                 assert!(
                     size.iter().all(|value| {
-                        value.is_finite() && *value > 0.0 && *value <= MAX_STACKED_SPRITE_SIZE
+                        value.is_finite() && *value > 0.0 && *value <= MAX_SPRITE_PRISM_SIZE
                     }),
-                    "object {object_id} stackedSprites size must be positive, finite and <= {MAX_STACKED_SPRITE_SIZE}"
+                    "object {object_id} spritePrism size must be positive, finite and <= {MAX_SPRITE_PRISM_SIZE}"
                 );
                 assert!(
                     alpha_cutoff.is_finite() && (0.0..=1.0).contains(alpha_cutoff),
-                    "object {object_id} stackedSprites alphaCutoff must be between 0 and 1"
+                    "object {object_id} spritePrism alphaCutoff must be between 0 and 1"
                 );
             }
         }
@@ -335,37 +340,51 @@ mod tests {
     use super::ObjectVisualDefinition;
 
     #[test]
-    fn stacked_sprite_visual_deserializes_camel_case_fields() {
+    fn sprite_prism_visual_deserializes_camel_case_fields() {
         let visual: ObjectVisualDefinition = serde_json::from_str(
             r#"{
-                "type": "stackedSprites",
+                "type": "spritePrism",
                 "texture": "textures/items/pebble.png",
-                "slices": 4,
                 "baseOffset": 0.0125,
-                "sliceSpacing": 0.025,
+                "height": 0.1,
+                "tileHeight": 0.025,
                 "size": [0.42, 0.42],
                 "alphaCutoff": 0.5
             }"#,
         )
-        .expect("stacked sprite visual should accept the public camelCase schema");
+        .expect("sprite prism visual should accept the public camelCase schema");
 
-        let ObjectVisualDefinition::StackedSprites {
+        let ObjectVisualDefinition::SpritePrism {
             texture,
-            slices,
             base_offset,
-            slice_spacing,
+            height,
+            tile_height,
             size,
             alpha_cutoff,
         } = visual
         else {
-            panic!("expected stackedSprites visual");
+            panic!("expected spritePrism visual");
         };
 
         assert_eq!(texture, "textures/items/pebble.png");
-        assert_eq!(slices, 4);
         assert_eq!(base_offset, 0.0125);
-        assert_eq!(slice_spacing, 0.025);
+        assert_eq!(height, 0.1);
+        assert_eq!(tile_height, 0.025);
         assert_eq!(size, [0.42, 0.42]);
         assert_eq!(alpha_cutoff, 0.5);
+    }
+
+    #[test]
+    fn legacy_stacked_sprite_visual_is_rejected() {
+        let result = serde_json::from_str::<ObjectVisualDefinition>(
+            r#"{
+                "type": "stackedSprites",
+                "texture": "textures/items/pebble.png",
+                "slices": 4,
+                "sliceSpacing": 0.025
+            }"#,
+        );
+
+        assert!(result.is_err(), "legacy stackedSprites schema must stay removed");
     }
 }

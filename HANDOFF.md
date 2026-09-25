@@ -1,3 +1,15 @@
+## 2026-09-25 — Objects com altura real e tiling vertical
+
+### Pebble/stick — remoção do empilhamento de sprites
+- removido o contrato `stackedSprites`: pebble e stick não são mais construídos como várias lâminas horizontais desconectadas;
+- adicionado `spritePrism`, um visual genérico de object que gera um único mesh contínuo com largura/profundidade, altura explícita e `tileHeight`;
+- as laterais são divididas apenas geometricamente em bandas UV para repetir a textura verticalmente sem esticá-la; continua sendo uma única entity e um único mesh;
+- pebble e stick usam `height = 0.1` e `tileHeight = 0.025`, mantendo quatro repetições verticais sem duplicar layers;
+- cache de mesh/material e diagnostics foram renomeados para refletir o novo primitive, eliminando nomenclatura do sistema legado;
+- o schema antigo é rejeitado por teste de regressão em vez de permanecer como compatibilidade morta.
+
+VERSION: `0.68.0`.
+
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
 ### Follow-up — diagnósticos de runtime persistem no session log
