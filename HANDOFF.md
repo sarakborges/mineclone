@@ -20,7 +20,12 @@
 - não foi convertido terrain voxel para GLB/model por bloco: terreno continua batched em chunk
   meshes, preservando batching/culling e evitando milhares de entities/drawables individuais;
 - models continuam apropriados para objects e futuros blocks especiais que realmente precisem de
-  geometria authored, mas não substituem o renderer voxel de terreno.
+  geometria authored, mas não substituem o renderer voxel de terreno;
+- a troca de owner tornou `VoxelWorld::loaded_chunk_coords_in_horizontal_radius` obsoleto; o
+  helper e seu teste foram removidos em vez de manter dead code/suppression;
+- CI Rust validation run `36187167681`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
 
 VERSION: `0.68.35`.
 
