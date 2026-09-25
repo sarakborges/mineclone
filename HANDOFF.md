@@ -1,3 +1,17 @@
+## 2026-09-25 — Boulders não invadem o Volcano
+
+- `asteria:overworld/volcano` continua sem structures próprias; os blobs de stone observados no
+  volcano vinham de boulders ancorados em biomas vizinhos cujo footprint atravessava a fronteira;
+- o placement de surface structures já validava o bioma do anchor, mas os quatro boulders usavam
+  `requiredBiomeCoverage = 0`, permitindo que parte da estrutura ocupasse outro bioma;
+- `boulder_small`, `boulder_medium`, `boulder_big` e `boulder_huge` agora exigem
+  `requiredBiomeCoverage = 1.0`, então todo o footprint precisa permanecer no bioma que autorizou
+  o placement;
+- nenhuma regra global de structures foi alterada: estruturas que intencionalmente podem atravessar
+  fronteiras continuam com seu comportamento atual.
+
+VERSION: `0.68.10`.
+
 ## 2026-09-25 — Loading mostra a pipeline completa sem substituir fases
 
 - a loading screen deixou de mostrar uma única linha agregada que era substituída conforme o

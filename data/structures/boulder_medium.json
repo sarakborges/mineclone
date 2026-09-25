@@ -7,6 +7,9 @@
   },
   "locatable": false,
   "rotation": true,
+  "restrictions": {
+    "requiredBiomeCoverage": 1.0
+  },
   "anchor": {
     "x": 4,
     "y": 0,
