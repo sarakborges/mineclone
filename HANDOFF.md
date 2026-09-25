@@ -1,3 +1,22 @@
+## 2026-09-24 — Cave/Volume connector chains são cacheadas pela root 3D
+
+O mesmo desperdício removido das structures Surface existia nas structures Volume: uma cave
+entrance/tunnel chain que atravessava vários chunks podia chamar
+`resolve_connected_pieces_with_ground_fit` novamente em cada chunk.
+
+- o payload de cache foi generalizado de Surface para `CachedStructureForest`;
+- `WorldFeatureFields` ganhou `connected_structure_forest`, chaveado por biome, root
+  structure id, rotation e origem 3D;
+- Volume roots continuam executando seleção e restrictions no contexto correto do VolumeBiome,
+  mas depois de aprovadas a connector forest é materializada uma única vez;
+- chunks subsequentes reutilizam pieces e bounds e apenas fazem overlap/conflict filtering;
+- workers concorrentes que atingem a mesma cave root compartilham o mesmo OnceLock;
+- o cache é retido por generation region da origem 3D, com a mesma margem já usada pelos caches
+  de worldgen.
+
+Isso ataca diretamente a latência de geração de cavernas/tunnels durante exploração e warp sem
+transformar a consulta de VolumeBiome em estado eager.
+
 ## 2026-09-24 — Connector forests de superfície são cacheadas por root/anchor
 
 O StructureField já evitava descoberta pesada na main thread, mas uma structure conectada grande

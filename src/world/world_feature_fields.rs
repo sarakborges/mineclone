@@ -22,7 +22,7 @@ pub(crate) struct CachedStructureCandidate {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct CachedSurfaceStructurePiece {
+pub(crate) struct CachedStructureForestPiece {
     pub(crate) structure_id: String,
     pub(crate) rotation: StructureRotation,
     pub(crate) anchor: IVec2,
@@ -31,8 +31,8 @@ pub(crate) struct CachedSurfaceStructurePiece {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct CachedSurfaceStructurePlacement {
-    pub(crate) pieces: Vec<CachedSurfaceStructurePiece>,
+pub(crate) struct CachedStructureForest {
+    pub(crate) pieces: Vec<CachedStructureForestPiece>,
     pub(crate) minimum: IVec2,
     pub(crate) maximum: IVec2,
     pub(crate) minimum_y: i32,
@@ -141,10 +141,27 @@ impl WorldFeatureFields {
         biome_id: &str,
         placement_id: &str,
         anchor: IVec2,
-        factory: impl FnOnce() -> Option<CachedSurfaceStructurePlacement>,
-    ) -> Arc<Option<CachedSurfaceStructurePlacement>> {
+        factory: impl FnOnce() -> Option<CachedStructureForest>,
+    ) -> Arc<Option<CachedStructureForest>> {
         self.caches
             .surface_structure_placement(biome_id, placement_id, anchor, factory)
+    }
+
+    pub(crate) fn connected_structure_forest(
+        &self,
+        biome_id: &str,
+        structure_id: &str,
+        rotation: StructureRotation,
+        origin: IVec3,
+        factory: impl FnOnce() -> CachedStructureForest,
+    ) -> Arc<CachedStructureForest> {
+        self.caches.connected_structure_forest(
+            biome_id,
+            structure_id,
+            rotation,
+            origin,
+            factory,
+        )
     }
 
     pub(crate) fn retain_for_chunks<'a>(

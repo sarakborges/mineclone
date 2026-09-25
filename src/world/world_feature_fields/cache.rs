@@ -10,7 +10,7 @@ use bevy::{
 
 use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
-use super::{CachedStructureCandidate, CachedSurfaceStructurePlacement};
+use super::{CachedStructureCandidate, CachedStructureForest};
 use super::super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
@@ -179,7 +179,11 @@ pub(super) struct FeatureCaches {
     structure_top_ys: ConcurrentCache<IVec2, i32>,
     structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
     surface_structure_placements:
-        ConcurrentCache<(String, String, IVec2), Arc<Option<CachedSurfaceStructurePlacement>>>,
+        ConcurrentCache<(String, String, IVec2), Arc<Option<CachedStructureForest>>>,
+    connected_structure_forests: ConcurrentCache<
+        (String, String, StructureRotation, IVec3),
+        Arc<CachedStructureForest>,
+    >,
     structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
@@ -194,6 +198,9 @@ impl FeatureCaches {
             structure_candidates: ConcurrentCache::new("structure candidate cache"),
             surface_structure_placements: ConcurrentCache::new(
                 "surface structure placement cache",
+            ),
+            connected_structure_forests: ConcurrentCache::new(
+                "connected structure forest cache",
             ),
             structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
             structure_origins: StructureOriginCache::new(),
@@ -251,10 +258,29 @@ impl FeatureCaches {
         biome_id: &str,
         placement_id: &str,
         anchor: IVec2,
-        factory: impl FnOnce() -> Option<CachedSurfaceStructurePlacement>,
-    ) -> Arc<Option<CachedSurfaceStructurePlacement>> {
+        factory: impl FnOnce() -> Option<CachedStructureForest>,
+    ) -> Arc<Option<CachedStructureForest>> {
         self.surface_structure_placements.get_or_insert_with(
             (biome_id.to_owned(), placement_id.to_owned(), anchor),
+            || Arc::new(factory()),
+        )
+    }
+
+    pub(super) fn connected_structure_forest(
+        &self,
+        biome_id: &str,
+        structure_id: &str,
+        rotation: StructureRotation,
+        origin: IVec3,
+        factory: impl FnOnce() -> CachedStructureForest,
+    ) -> Arc<CachedStructureForest> {
+        self.connected_structure_forests.get_or_insert_with(
+            (
+                biome_id.to_owned(),
+                structure_id.to_owned(),
+                rotation,
+                origin,
+            ),
             || Arc::new(factory()),
         )
     }
@@ -332,6 +358,16 @@ impl FeatureCaches {
                     0,
                     chunk.y,
                 )))
+            });
+        self.connected_structure_forests
+            .retain(|(_, _, _, origin)| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec3::new(
+                    origin.x.div_euclid(chunk_size),
+                    origin.y.div_euclid(chunk_size),
+                    origin.z.div_euclid(chunk_size),
+                );
+                retained_regions.contains(&generation_region_coord(chunk))
             });
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
