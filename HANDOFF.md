@@ -1,3 +1,23 @@
+## 2026-09-24 — Pending streaming priority deixa o frame de queue rebuild
+
+O queue rebuild ainda ordenava toda a lista de chunks pendentes em cada mudança de centro, mesmo
+depois do cache do shape horizontal. Essa ordenação acontecia síncronamente no mesmo frame em que
+o player cruzava uma fronteira de chunk.
+
+- `rebuild_queue` agora apenas reconcilia o conjunto de coordenadas pendentes; não calcula nem
+  ordena priority keys;
+- `DeduplicatedQueue` ganhou `pop_min_by_key`, que escolhe o melhor item ativo sem reordenar a
+  fila inteira;
+- `select_generation_wave` calcula a mesma `PendingPriority` e os mesmos tiebreakers somente
+  quando realmente vai consumir um chunk;
+- esse consumo já roda sob o budget de dispatch de geração, então o custo de prioridade deixa de
+  ficar concentrado no frame de mudança de chunk;
+- a ordem lógica permanece equivalente à ordenação anterior: menor
+  `(PendingPriority, y, z, x)` continua vencendo.
+
+Isso remove um `O(n log n)` síncrono do hot path de movimentação/warp e troca por seleção
+`O(n)` somente quando há capacidade real para despachar trabalho.
+
 ### CI follow-up — visibilidade do estado de retirement
 
 O CI do retirement budgetado falhou apenas por `private-interfaces`: o system

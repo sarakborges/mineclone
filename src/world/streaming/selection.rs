@@ -28,12 +28,6 @@ const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y,
 type PendingPriority = (i32, i32, i32, i32, i32, i32, i32, i32, i32, i32);
 
 #[derive(Clone, Copy)]
-struct PendingEntry {
-    coord: IVec3,
-    priority: PendingPriority,
-}
-
-#[derive(Clone, Copy)]
 struct DesiredChunkSelection {
     center: IVec3,
     horizontal_radius: i32,
@@ -49,7 +43,7 @@ struct HorizontalSelectionShapeKey {
 #[derive(Default)]
 pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
-    pending: Vec<PendingEntry>,
+    pending: Vec<IVec3>,
     retired: Vec<IVec3>,
     horizontal_shape_key: Option<HorizontalSelectionShapeKey>,
     horizontal_offsets: Vec<IVec2>,
@@ -124,18 +118,7 @@ pub(super) fn rebuild_queue(
 
     streaming.retain_mesh_pressure_evictions(&scratch.desired, center);
 
-    let center_structure_top_chunk = streaming
-        .structure_top_chunks
-        .get(&center.xz())
-        .copied()
-        .unwrap_or(0);
-    let prioritize_surface = player_is_above_surface(
-        center,
-        center_structure_top_chunk,
-        &streaming.surface_ranges,
-    );
     scratch.pending.clear();
-    let structure_top_chunks = &streaming.structure_top_chunks;
     scratch.pending.extend(
         scratch
             .desired
@@ -145,31 +128,8 @@ pub(super) fn rebuild_queue(
                 !context.render_pool.contains(*coord)
                     && !streaming.generated_chunk_is_unpublished(*coord)
                     && !streaming.mesh_is_pressure_evicted(*coord)
-            })
-            .map(|coord| PendingEntry {
-                coord,
-                priority: pending_priority(
-                    coord,
-                    center,
-                    horizontal_radius,
-                    structure_top_chunks
-                        .get(&coord.xz())
-                        .copied()
-                        .unwrap_or(0),
-                    movement_direction,
-                    prioritize_surface,
-                    &streaming.surface_ranges,
-                ),
             }),
     );
-    scratch.pending.sort_unstable_by_key(|entry| {
-        (
-            entry.priority,
-            entry.coord.y,
-            entry.coord.z,
-            entry.coord.x,
-        )
-    });
 
     collect_retired_chunk_coords(
         &streaming.retained,
@@ -188,8 +148,8 @@ pub(super) fn rebuild_queue(
 
     streaming.pending.clear();
     streaming.pending.reserve(scratch.pending.len());
-    for entry in scratch.pending.drain(..) {
-        streaming.pending.enqueue(entry.coord);
+    for coord in scratch.pending.drain(..) {
+        streaming.pending.enqueue(coord);
     }
 
     for coord in scratch.retired.drain(..) {
@@ -239,7 +199,7 @@ fn collect_retired_chunk_coords(
     retired.sort_by_key(|coord| -(*coord - center).length_squared());
 }
 
-fn player_is_above_surface(
+pub(super) fn player_is_above_surface(
     center: IVec3,
     structure_top_chunk: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
@@ -252,7 +212,7 @@ fn player_is_above_surface(
     center.y > maximum_structure_chunk
 }
 
-fn pending_priority(
+pub(super) fn pending_priority(
     coord: IVec3,
     center: IVec3,
     visible_radius: i32,

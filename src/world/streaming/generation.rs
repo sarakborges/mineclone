@@ -418,7 +418,7 @@ fn select_generation_wave(
             break;
         }
 
-        let Some(coord) = work.state.pending.pop() else {
+        let Some(coord) = work.state.pop_pending_by_priority() else {
             break;
         };
 

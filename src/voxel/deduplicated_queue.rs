@@ -147,6 +147,30 @@ where
         Some(self.remove_active_index(index))
     }
 
+    pub(crate) fn pop_min_by_key<K: Ord>(
+        &mut self,
+        mut key: impl FnMut(T) -> K,
+    ) -> Option<T> {
+        self.compact_if_sparse();
+        let mut best: Option<(usize, K)> = None;
+
+        for (index, (value, generation)) in self.pending.iter().enumerate() {
+            if self.queued.get(value).copied() != Some(*generation) {
+                continue;
+            }
+            let candidate_key = key(*value);
+            if best
+                .as_ref()
+                .is_none_or(|(_, best_key)| candidate_key < *best_key)
+            {
+                best = Some((index, candidate_key));
+            }
+        }
+
+        let (index, _) = best?;
+        Some(self.remove_active_index(index))
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.queued.len()
     }
@@ -297,6 +321,16 @@ mod tests {
         assert_eq!(queue.pop_where(|value| value % 2 == 0), Some(2));
         assert_eq!(queue.pop(), Some(1));
         assert_eq!(queue.pop(), Some(3));
+    }
+
+    #[test]
+    fn pop_min_by_key_selects_best_active_value_without_reordering_queue() {
+        let mut queue = DeduplicatedQueue::from(vec![7, 3, 9, 5]);
+
+        assert_eq!(queue.pop_min_by_key(|value| value), Some(3));
+        assert_eq!(queue.pop_min_by_key(|value| value), Some(5));
+        assert_eq!(queue.pop(), Some(7));
+        assert_eq!(queue.pop(), Some(9));
     }
 
     #[test]

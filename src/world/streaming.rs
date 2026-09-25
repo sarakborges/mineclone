@@ -200,6 +200,44 @@ impl ChunkStreamingState {
         }
     }
 
+    fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
+        let center = self.center?;
+        let movement_direction = self.movement_direction;
+        let visible_radius = self.horizontal_radius;
+        let center_structure_top_chunk = self
+            .structure_top_chunks
+            .get(&center.xz())
+            .copied()
+            .unwrap_or(0);
+        let prioritize_surface = selection::player_is_above_surface(
+            center,
+            center_structure_top_chunk,
+            &self.surface_ranges,
+        );
+        let structure_top_chunks = &self.structure_top_chunks;
+        let surface_ranges = &self.surface_ranges;
+
+        self.pending.pop_min_by_key(|coord| {
+            (
+                selection::pending_priority(
+                    coord,
+                    center,
+                    visible_radius,
+                    structure_top_chunks
+                        .get(&coord.xz())
+                        .copied()
+                        .unwrap_or(0),
+                    movement_direction,
+                    prioritize_surface,
+                    surface_ranges,
+                ),
+                coord.y,
+                coord.z,
+                coord.x,
+            )
+        })
+    }
+
     fn start_generation_wave_target(&mut self, coord: IVec3) {
         if self.generation_wave_targets.insert(coord) {
             self.generation_wave_pending.enqueue(coord);
