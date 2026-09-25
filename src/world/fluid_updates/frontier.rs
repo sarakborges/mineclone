@@ -19,14 +19,6 @@ const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
     IVec3::NEG_Z,
 ];
 
-pub(super) fn enqueue_resident_fluid_frontier(
-    pending: &mut PendingFluidUpdates,
-    world: &VoxelWorld,
-    coord: IVec3,
-) {
-    enqueue_chunk_fluid_spread_targets(pending, world, coord);
-}
-
 pub(super) fn enqueue_loaded_fluid_frontier(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
@@ -101,24 +93,6 @@ pub(super) fn visit_unloaded_fluid_frontier_chunks(
             visit(chunk_coord_from_world(target));
         }
     });
-}
-
-fn enqueue_chunk_fluid_spread_targets(
-    pending: &mut PendingFluidUpdates,
-    world: &VoxelWorld,
-    coord: IVec3,
-) {
-    visit_chunk_fluid_spread_targets(
-        world,
-        coord,
-        &mut |fluid_id, target, priority| {
-            if priority {
-                pending.enqueue_fluid_priority(fluid_id, target);
-            } else {
-                pending.enqueue_fluid(fluid_id, target);
-            }
-        },
-    );
 }
 
 fn visit_chunk_fluid_spread_targets(

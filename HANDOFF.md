@@ -1,3 +1,10 @@
+### Correção de CI — remove helpers órfãos do reseed global
+
+- removidos `enqueue_resident_fluid_frontier` e seu helper privado, que só existiam para o
+  reseed global removido em 0.68.29;
+- o caminho autoritativo `enqueue_loaded_fluid_frontier` usado por bootstrap/streaming permanece;
+- sem suppressions de dead code; VERSION permanece `0.68.29`.
+
 ## 2026-09-25 — Gameplay não revarre fluid frontiers após bootstrap
 
 - o primeiro frame de Gameplay do log 0.68.27 teve ~270 ms com streaming/generation/mesh/remesh
