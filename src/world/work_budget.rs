@@ -5,8 +5,12 @@ use bevy::{prelude::{Res, ResMut, Resource, Time}, time::Real};
 const WORLD_WORK_BUDGET_PRESSURED: Duration = Duration::from_millis(2);
 const WORLD_WORK_BUDGET_NORMAL: Duration = Duration::from_millis(3);
 const WORLD_WORK_BUDGET_FAST: Duration = Duration::from_millis(4);
-const WORLD_WORK_PRESSURE_FRAME_SECONDS: f32 = 1.0 / 60.0;
-const WORLD_WORK_FAST_FRAME_SECONDS: f32 = 1.0 / 75.0;
+// Treat a normal 60 Hz present cadence as healthy. The previous 1/60
+// pressure threshold classified ordinary VSync jitter as overload, pinning
+// the world pipeline to its 2 ms budget; the >75 FPS fast tier was likewise
+// unreachable on a 60 Hz display.
+const WORLD_WORK_PRESSURE_FRAME_SECONDS: f32 = 1.0 / 55.0;
+const WORLD_WORK_FAST_FRAME_SECONDS: f32 = 1.0 / 70.0;
 
 #[derive(Resource)]
 pub(crate) struct WorldFrameWorkBudget {
@@ -99,17 +103,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn world_work_budget_shrinks_before_frame_rate_drops_below_sixty() {
+    fn world_work_budget_treats_sixty_hz_as_normal_capacity() {
         assert_eq!(
             gameplay_world_work_budget(1.0 / 90.0),
             WORLD_WORK_BUDGET_FAST
         );
         assert_eq!(
-            gameplay_world_work_budget(1.0 / 70.0),
+            gameplay_world_work_budget(1.0 / 60.0),
             WORLD_WORK_BUDGET_NORMAL
         );
         assert_eq!(
-            gameplay_world_work_budget(1.0 / 55.0),
+            gameplay_world_work_budget(1.0 / 50.0),
             WORLD_WORK_BUDGET_PRESSURED
         );
     }
