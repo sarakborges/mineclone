@@ -553,6 +553,25 @@ impl ChunkStreamingState {
         )
     }
 
+    pub(crate) fn has_renderable_streaming_backlog(&self) -> bool {
+        let Some(center) = self.center else {
+            return false;
+        };
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let renderable = |coord: IVec3| {
+            self.keeps_loaded(coord)
+                && chunk_is_inside_render_radius(center, coord, show_radius)
+        };
+
+        self.ready.values().any(renderable)
+            || self.pending.values().any(renderable)
+            || self
+                .generation_wave_targets
+                .iter()
+                .copied()
+                .any(renderable)
+    }
+
     pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
             self.pending.len(),
@@ -761,10 +780,11 @@ pub(super) fn stream_chunks(
     }
 }
 
-// A resident chunk must never expose unseeded DARK light to a neighboring
-// mesh snapshot. This used to happen while generated chunks waited in `ready`
-// for a free mesh task slot, darkening whole faces during streaming. Preserve
-// the once-per-residency rule and defer convergence through the existing queue.
+// A chunk must be seeded before it participates in presentation. Generated
+// chunks may now wait resident-but-unseeded in `ready`; mesh/remesh snapshots
+// deliberately include only already-published neighbors, so those background
+// chunks cannot leak DARK halo data into visible geometry. Preserve the
+// once-per-residency rule and seed immediately before initial mesh capture.
 fn seed_loaded_chunk_lighting(
     coord: IVec3,
     content: &ChunkContent<'_>,
@@ -1024,5 +1044,27 @@ mod tests {
         state.center = Some(IVec3::new(9, 0, 0));
         assert!(state.has_critical_pending());
         assert_eq!(state.pending_critical_scan_miss, None);
+    }
+
+    #[test]
+    fn renderable_streaming_backlog_ignores_preload_only_work() {
+        let visible = IVec3::new(3, 0, 0);
+        let preload_only = IVec3::new(20, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            horizontal_radius: 12,
+            ..default()
+        };
+        state.desired.extend([visible, preload_only]);
+
+        state.ready.enqueue(preload_only);
+        assert!(!state.has_renderable_streaming_backlog());
+
+        state.pending.enqueue(visible);
+        assert!(state.has_renderable_streaming_backlog());
+
+        state.pending.remove(visible);
+        state.start_generation_wave_target(visible);
+        assert!(state.has_renderable_streaming_backlog());
     }
 }
