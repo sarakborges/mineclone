@@ -86,7 +86,8 @@ struct TargetHudSnapshot {
     normal: IVec3,
     properties: SecondaryProperties,
     layers: SmallVec<[(LayerFace, &'static str); 8]>,
-    light_level: u8,
+    sky_light: u8,
+    block_light: u8,
     breaking_progress: Option<u8>,
     language: Language,
 }
@@ -100,7 +101,8 @@ struct TargetHudIconSnapshot {
 #[derive(Clone, Debug, PartialEq)]
 struct TargetObjectHudSnapshot {
     support: IVec3,
-    light_level: u8,
+    sky_light: u8,
+    block_light: u8,
     language: Language,
     icon: String,
     tint: Color,
@@ -351,7 +353,8 @@ fn update_target_hud(
     {
         let language = state.language.get();
         let light = state.world.light_at(support + IVec3::Y);
-        let light_level = light.sky().max(light.block());
+        let sky_light = light.sky();
+        let block_light = light.block();
         let tint_position = Vec2::new(support.x as f32 + 0.5, support.z as f32 + 0.5);
         let tint = block_tint_at(
             object.tint,
@@ -361,7 +364,8 @@ fn update_target_hud(
         );
         let snapshot = TargetObjectHudSnapshot {
             support,
-            light_level,
+            sky_light,
+            block_light,
             language,
             icon: object.icon.clone(),
             tint,
@@ -442,7 +446,8 @@ fn update_target_hud(
         hit.voxel + hit.normal
     };
     let light = state.world.light_at(light_position);
-    let light_level = light.sky().max(light.block());
+    let sky_light = light.sky();
+    let block_light = light.block();
     let mut applied_layers = state
         .world
         .layers_at(hit.voxel)
@@ -472,7 +477,8 @@ fn update_target_hud(
         normal: hit.normal,
         properties,
         layers: applied_layers.clone(),
-        light_level,
+        sky_light,
+        block_light,
         breaking_progress,
         language,
     };
@@ -551,12 +557,14 @@ fn target_object_hud_text(
         .replace("{z}", &snapshot.support.z.to_string())
         .replace("{y}", &snapshot.support.y.to_string());
 
-    format!(
-        "{}\n{}: {}\n{coordinates}",
-        object.name.text(language),
-        state.localization.text(language, "hud.light"),
-        snapshot.light_level,
-    )
+    let light_text = target_light_text(
+        &state.localization,
+        language,
+        snapshot.sky_light,
+        snapshot.block_light,
+    );
+
+    format!("{}\n{light_text}\n{coordinates}", object.name.text(language))
 }
 
 fn target_hud_text(
@@ -666,10 +674,28 @@ fn target_hud_text(
         })
         .unwrap_or_default();
 
+    let light_text = target_light_text(
+        &state.localization,
+        language,
+        snapshot.sky_light,
+        snapshot.block_light,
+    );
+
     format!(
-        "{block_name}{properties_text}{layers_text}{mining_text}{breaking_text}\n{}: {}\n{coordinates}",
-        state.localization.text(language, "hud.light"),
-        snapshot.light_level,
+        "{block_name}{properties_text}{layers_text}{mining_text}{breaking_text}\n{light_text}\n{coordinates}"
+    )
+}
+
+fn target_light_text(
+    localization: &UiLocalization,
+    language: Language,
+    sky_light: u8,
+    block_light: u8,
+) -> String {
+    format!(
+        "{}: {sky_light} | {}: {block_light}",
+        localization.text(language, "hud.skyLight"),
+        localization.text(language, "hud.blockLight"),
     )
 }
 

@@ -1,3 +1,18 @@
+## 2026-09-25 — Target HUD mostra Sky Light e Block Light separadamente
+
+- o Target HUD descartava a distinção entre canais ao calcular `max(light.sky(), light.block())`
+  e exibir apenas `Light: N`;
+- snapshots de bloco e world object agora armazenam `sky_light` e `block_light` separadamente,
+  portanto o cache também invalida corretamente quando qualquer canal muda;
+- a linha de lighting agora é única e mostra os dois valores:
+  `Sky Light: N | Block Light: N`;
+- o mesmo formato é usado para blocos e objects;
+- removida a chave legada `hud.light` e adicionadas `hud.skyLight` / `hud.blockLight` nas
+  três localizações (EN, PT-BR, ES);
+- nenhuma regra de iluminação foi alterada; é apenas exposição dos dois canais reais no HUD.
+
+VERSION: `0.68.24`.
+
 ### Correção de Clippy — fixture de FluidDefinition
 
 - a fixture de lighting que constrói `FluidDefinition` manualmente foi atualizada com
