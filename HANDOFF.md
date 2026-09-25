@@ -1,5 +1,17 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — diagnostics medem o custo da seleção lazy de prioridade
+- a troca dos sorts globais por `pop_min_by_key` removeu o pico `O(n log n)` do rebuild, mas cada
+  dispatch ainda pode varrer toda a fila ativa antes de o budget ser reavaliado;
+- os diagnostics de 10 s agora registram separadamente para as filas `pending` e `ready`:
+  número de scans, tempo médio, maior tempo individual e maior tamanho de fila observado;
+- nenhuma ordem de prioridade ou política de streaming foi alterada neste passo: a medição existe
+  justamente para decidir com dados se o próximo refactor deve ser heap/cache incremental ou se o
+  custo dominante ainda está em generation/meshing;
+- os campos aparecem na linha `render assets` como `pending_priority_*` e `ready_priority_*`.
+
+VERSION: `0.67.4`.
+
 ### Follow-up — world objects passam a respeitar o frame budget global
 - `sync_world_objects` mantinha um budget local de 2 ms independente do `WorldFrameWorkBudget`;
   durante streaming pesado isso permitia gastar até mais 2 ms de main thread depois de streaming,

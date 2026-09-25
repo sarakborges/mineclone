@@ -4,6 +4,7 @@ mod selection;
 mod surface_cache;
 
 use std::{
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
 
@@ -51,6 +52,50 @@ use super::{
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 const SLOW_STREAMING_REBUILD_WARNING: Duration = Duration::from_millis(8);
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct StreamingPriorityScanDiagnostic {
+    pub(super) count: u64,
+    pub(super) average_micros: u64,
+    pub(super) max_micros: u64,
+    pub(super) max_queue_len: usize,
+}
+
+#[derive(Default)]
+struct StreamingPriorityScanMetrics {
+    count: AtomicU64,
+    total_nanos: AtomicU64,
+    max_nanos: AtomicU64,
+    max_queue_len: AtomicUsize,
+}
+
+impl StreamingPriorityScanMetrics {
+    fn record(&self, elapsed: Duration, queue_len: usize) {
+        let elapsed_nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.total_nanos
+            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
+        self.max_queue_len.fetch_max(queue_len, Ordering::Relaxed);
+    }
+
+    fn take(&self) -> StreamingPriorityScanDiagnostic {
+        let count = self.count.swap(0, Ordering::Relaxed);
+        let total_nanos = self.total_nanos.swap(0, Ordering::Relaxed);
+        StreamingPriorityScanDiagnostic {
+            count,
+            average_micros: total_nanos.checked_div(count).unwrap_or(0) / 1_000,
+            max_micros: self.max_nanos.swap(0, Ordering::Relaxed) / 1_000,
+            max_queue_len: self.max_queue_len.swap(0, Ordering::Relaxed),
+        }
+    }
+}
+
+#[derive(Default)]
+struct StreamingPriorityDiagnostics {
+    pending: StreamingPriorityScanMetrics,
+    ready: StreamingPriorityScanMetrics,
+}
+
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,6 +131,7 @@ pub(super) struct ChunkStreamingState {
     generation_wave_owned_existing_chunks: HashSet<IVec3>,
     selection_revision: u64,
     retired_scan_miss: Option<RetiredScanKey>,
+    priority_diagnostics: StreamingPriorityDiagnostics,
 }
 
 impl ChunkStreamingState {
@@ -179,7 +225,9 @@ impl ChunkStreamingState {
         let structure_top_chunks = &self.structure_top_chunks;
         let surface_ranges = &self.surface_ranges;
 
-        self.pending.pop_min_by_key(|coord| {
+        let queue_len = self.pending.len();
+        let started = Instant::now();
+        let selected = self.pending.pop_min_by_key(|coord| {
             (
                 selection::pending_priority(
                     coord,
@@ -197,7 +245,11 @@ impl ChunkStreamingState {
                 coord.z,
                 coord.x,
             )
-        })
+        });
+        self.priority_diagnostics
+            .pending
+            .record(started.elapsed(), queue_len);
+        selected
     }
 
     fn start_generation_wave_target(&mut self, coord: IVec3) {
@@ -439,13 +491,19 @@ impl ChunkStreamingState {
         let desired = &self.desired;
         let retained = &self.retained;
 
-        self.ready.pop_min_where_by_key(
+        let queue_len = self.ready.len();
+        let started = Instant::now();
+        let selected = self.ready.pop_min_where_by_key(
             |coord| {
                 (desired.contains(&coord) || retained.contains(&coord))
                     && chunk_is_inside_render_radius(center, coord, show_radius)
             },
             |coord| chunk_load_priority(coord, center, movement_direction),
-        )
+        );
+        self.priority_diagnostics
+            .ready
+            .record(started.elapsed(), queue_len);
+        selected
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
@@ -463,6 +521,18 @@ impl ChunkStreamingState {
         self.initial_mesh_seed_catchup.remove(&coord);
     }
 
+
+    pub(super) fn take_priority_scan_diagnostics(
+        &self,
+    ) -> (
+        StreamingPriorityScanDiagnostic,
+        StreamingPriorityScanDiagnostic,
+    ) {
+        (
+            self.priority_diagnostics.pending.take(),
+            self.priority_diagnostics.ready.take(),
+        )
+    }
 
     pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
