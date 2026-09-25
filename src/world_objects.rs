@@ -310,7 +310,7 @@ fn apply_object_removal_requests(
 }
 
 const WORLD_OBJECT_SYNC_BUDGET: Duration = Duration::from_millis(2);
-const MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME: usize = 2;
+const MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME: usize = 16;
 const SLOW_WORLD_OBJECT_SYNC_WARNING: Duration = Duration::from_millis(4);
 
 fn sync_world_objects(
@@ -340,6 +340,13 @@ fn sync_world_objects(
     let candidate_coords = render_pool
         .active_coords()
         .filter(|coord| chunk_inside_object_radius(*coord, center, hide_radius))
+        .filter(|coord| {
+            store.synced_chunk_revisions.contains_key(coord)
+                || content
+                    .world
+                    .chunk(*coord)
+                    .is_some_and(|chunk| chunk.has_objects())
+        })
         .collect::<Vec<_>>();
     let candidate_chunk_count = candidate_coords.len();
     let retired = store
@@ -444,7 +451,11 @@ fn sync_world_objects(
                 }
             }
 
-            store.synced_chunk_revisions.insert(coord, revision);
+            if desired_supports.is_empty() {
+                store.synced_chunk_revisions.remove(&coord);
+            } else {
+                store.synced_chunk_revisions.insert(coord, revision);
+            }
             processed_chunks += 1;
         }
     }
