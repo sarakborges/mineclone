@@ -1,3 +1,20 @@
+## 2026-09-25 — Gameplay não revarre fluid frontiers após bootstrap
+
+- o primeiro frame de Gameplay do log 0.68.27 teve ~270 ms com streaming/generation/mesh/remesh
+  todos zerados, indicando trabalho síncrono fora dos diagnósticos do pipeline;
+- `OnEnter(Gameplay)` executava `reseed_loaded_fluid_frontiers`, que coletava, ordenava e
+  revarria todos os chunks residentes imediatamente após sair do loading;
+- o bootstrap de fluid settling já zera `PendingFluidUpdates` e enfileira explicitamente o
+  frontier de cada chunk da closure convergida antes de avançar para Lighting, portanto o reseed
+  global era redundante no handoff Loading -> Gameplay;
+- removido o sistema de `OnEnter(Gameplay)` e a função obsoleta, evitando um scan síncrono de
+  milhares de chunks sob a tela de transição;
+- não foi adicionado delay artificial: o loading continua entregando exatamente o estado já
+  convergido e preparado pelo bootstrap;
+- nenhuma regra de fluido ou worldgen mudou.
+
+VERSION: `0.68.29`.
+
 ## 2026-09-25 — Natural creature spawn resolve biome no ponto candidato, incluindo volume biome
 
 - natural spawn escolhia a regra de criatura a partir de `CurrentBiome` do jogador antes de

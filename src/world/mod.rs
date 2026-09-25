@@ -72,7 +72,7 @@ use chunk_unloading::{
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
-use fluid_updates::{PendingFluidUpdates, process_fluid_updates, reseed_loaded_fluid_frontiers};
+use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 pub(crate) use new_world::{
@@ -163,7 +163,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingWarp>,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
-                    reseed_loaded_fluid_frontiers,
                 )
                     .chain(),
             )

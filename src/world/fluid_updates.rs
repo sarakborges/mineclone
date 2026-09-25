@@ -41,19 +41,6 @@ const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 
-pub(super) fn reseed_loaded_fluid_frontiers(
-    world: Res<VoxelWorld>,
-    mut pending: ResMut<PendingFluidUpdates>,
-) {
-    // Preserve work explicitly handed off by bootstrap settling. This pass is
-    // idempotent safety/reconciliation for all resident chunks, not a reset.
-    let mut loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
-    loaded.sort_by_key(|coord| (coord.y, coord.z, coord.x));
-    for coord in loaded {
-        frontier::enqueue_resident_fluid_frontier(&mut pending, &world, coord);
-    }
-}
-
 #[derive(SystemParam)]
 pub(super) struct FluidSimulationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
