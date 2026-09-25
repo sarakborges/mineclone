@@ -343,7 +343,7 @@ fn schedule_generation_wave_pending(
     }
 }
 
-pub(super) fn refill_generation_workers(
+pub(in crate::world) fn refill_generation_workers(
     mut state: ResMut<super::ChunkStreamingState>,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     async_work: Res<ChunkAsyncWorkLimiter>,
