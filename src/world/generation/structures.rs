@@ -32,8 +32,9 @@ use crate::{
         object::ObjectCell,
         texture_rotation::TextureRotation,
     },
-    world::{
-        world_feature_fields::CachedStructureCandidate,
+    world::world_feature_fields::{
+        CachedStructureCandidate, CachedSurfaceStructurePiece,
+        CachedSurfaceStructurePlacement,
     },
 };
 
@@ -598,65 +599,75 @@ fn collect_direct_structure_candidates<'a>(
                         )
                     });
                 let rotation = structure.rotation_for_hash(member_hash);
+                let resolved = context.feature_fields.surface_structure_placement(
+                    biome_id,
+                    placement_id,
+                    anchor,
+                    || {
+                        let surface_sample = context
+                            .biome_field
+                            .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
+                        if surface_sample.primary_id != biome_id {
+                            return None;
+                        }
 
-                let surface_sample = context
-                    .biome_field
-                    .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
-                if surface_sample.primary_id != biome_id {
-                    return;
-                }
-
-                let Some(origin_y) =
-                    validated_structure_origin_y(biome_id, structure, rotation, anchor, context)
-                else {
-                    return;
-                };
-                let root_origin = IVec3::new(anchor.x, origin_y, anchor.y);
-                let pieces = connectors::resolve_connected_pieces_with_ground_fit(
-                    context.biome_field.seed(),
-                    structure,
-                    rotation,
-                    root_origin,
-                    context.structures,
-                    |child, child_rotation, geometric_origin| {
-                        validated_structure_origin_y(
+                        let origin_y = validated_structure_origin_y(
                             biome_id,
-                            child,
-                            child_rotation,
-                            geometric_origin.xz(),
+                            structure,
+                            rotation,
+                            anchor,
                             context,
-                        )
+                        )?;
+                        let pieces = connectors::resolve_connected_pieces_with_ground_fit(
+                            context.biome_field.seed(),
+                            structure,
+                            rotation,
+                            IVec3::new(anchor.x, origin_y, anchor.y),
+                            context.structures,
+                            |child, child_rotation, geometric_origin| {
+                                validated_structure_origin_y(
+                                    biome_id,
+                                    child,
+                                    child_rotation,
+                                    geometric_origin.xz(),
+                                    context,
+                                )
+                            },
+                        );
+                        let (minimum, maximum, minimum_y, maximum_y) =
+                            connected_piece_bounds(&pieces)?;
+                        Some(CachedSurfaceStructurePlacement {
+                            pieces: cache_surface_structure_pieces(pieces),
+                            minimum,
+                            maximum,
+                            minimum_y,
+                            maximum_y,
+                        })
                     },
                 );
-                let Some((minimum, maximum, minimum_y, maximum_y)) =
-                    connected_piece_bounds(&pieces)
-                else {
+                let Some(resolved) = resolved.as_ref() else {
                     return;
                 };
-                if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+                if !rectangles_overlap(
+                    resolved.minimum,
+                    resolved.maximum,
+                    target_min,
+                    target_max,
+                ) {
                     return;
                 }
 
-                for (piece_index, piece) in pieces.into_iter().enumerate() {
-                    candidates.push(StructureCandidate {
-                        biome_id,
-                        placement_id,
-                        structure: piece.structure,
-                        rotation: piece.rotation,
-                        placement_anchor: anchor,
-                        placement_y: 0,
-                        anchor: piece.origin.xz(),
-                        origin_y: piece.origin.y,
-                        primary_placement_piece: piece_index == 0,
-                        priority: structure.priority,
-                        reserve_space: structure.generation.reserve_space,
-                        conflict_groups: &structure.conflict_groups,
-                        minimum,
-                        maximum,
-                        minimum_y,
-                        maximum_y,
-                    });
-                }
+                append_cached_surface_structure_candidates(
+                    resolved,
+                    biome_id,
+                    placement_id,
+                    anchor,
+                    structure.priority,
+                    structure.generation.reserve_space,
+                    &structure.conflict_groups,
+                    context,
+                    candidates,
+                );
             },
         );
 }
@@ -683,82 +694,152 @@ fn collect_structure_set_candidates<'a>(
             target_min,
             target_max,
             |placement_anchor| {
-                if context
-                    .biome_field
-                    .sample_surface(placement_anchor.as_vec2() + Vec2::splat(0.5))
-                    .primary_id
-                    != biome_id
-                {
-                    return;
-                }
-
-                let Some(pieces) = resolve_set_pieces(
-                    context.biome_field.seed(),
-                    set,
+                let resolved = context.feature_fields.surface_structure_placement(
+                    biome_id,
+                    placement_id,
                     placement_anchor,
-                    context.structures,
-                    |structure, rotation, anchor| {
-                        validated_structure_origin_y(
-                            biome_id,
-                            structure,
-                            rotation,
-                            anchor,
-                            context,
-                        )
-                    },
-                ) else {
-                    return;
-                };
+                    || {
+                        if context
+                            .biome_field
+                            .sample_surface(
+                                placement_anchor.as_vec2() + Vec2::splat(0.5),
+                            )
+                            .primary_id
+                            != biome_id
+                        {
+                            return None;
+                        }
 
-                let connected = connectors::resolve_connected_piece_forest_with_ground_fit(
-                    context.biome_field.seed(),
-                    pieces.iter().map(|piece| connectors::ResolvedConnectedPiece {
-                        structure: piece.structure,
-                        rotation: piece.rotation,
-                        origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
-                    }),
-                    context.structures,
-                    |child, child_rotation, geometric_origin| {
-                        validated_structure_origin_y(
-                            biome_id,
-                            child,
-                            child_rotation,
-                            geometric_origin.xz(),
-                            context,
-                        )
+                        let pieces = resolve_set_pieces(
+                            context.biome_field.seed(),
+                            set,
+                            placement_anchor,
+                            context.structures,
+                            |structure, rotation, anchor| {
+                                validated_structure_origin_y(
+                                    biome_id,
+                                    structure,
+                                    rotation,
+                                    anchor,
+                                    context,
+                                )
+                            },
+                        )?;
+                        let connected =
+                            connectors::resolve_connected_piece_forest_with_ground_fit(
+                                context.biome_field.seed(),
+                                pieces.iter().map(|piece| {
+                                    connectors::ResolvedConnectedPiece {
+                                        structure: piece.structure,
+                                        rotation: piece.rotation,
+                                        origin: IVec3::new(
+                                            piece.anchor.x,
+                                            piece.origin_y,
+                                            piece.anchor.y,
+                                        ),
+                                    }
+                                }),
+                                context.structures,
+                                |child, child_rotation, geometric_origin| {
+                                    validated_structure_origin_y(
+                                        biome_id,
+                                        child,
+                                        child_rotation,
+                                        geometric_origin.xz(),
+                                        context,
+                                    )
+                                },
+                            );
+                        let (minimum, maximum, minimum_y, maximum_y) =
+                            connected_piece_bounds(&connected)?;
+                        Some(CachedSurfaceStructurePlacement {
+                            pieces: cache_surface_structure_pieces(connected),
+                            minimum,
+                            maximum,
+                            minimum_y,
+                            maximum_y,
+                        })
                     },
                 );
-                let Some((minimum, maximum, minimum_y, maximum_y)) =
-                    connected_piece_bounds(&connected)
-                else {
+                let Some(resolved) = resolved.as_ref() else {
                     return;
                 };
-                if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+                if !rectangles_overlap(
+                    resolved.minimum,
+                    resolved.maximum,
+                    target_min,
+                    target_max,
+                ) {
                     return;
                 }
 
-                for (piece_index, piece) in connected.into_iter().enumerate() {
-                    candidates.push(StructureCandidate {
-                        biome_id,
-                        placement_id,
-                        structure: piece.structure,
-                        rotation: piece.rotation,
-                        placement_anchor,
-                        placement_y: 0,
-                        anchor: piece.origin.xz(),
-                        origin_y: piece.origin.y,
-                        primary_placement_piece: piece_index == 0,
-                        priority: set.priority,
-                        reserve_space: set.reserve_space,
-                        conflict_groups: &set.conflict_groups,
-                        minimum,
-                        maximum,
-                        minimum_y,
-                        maximum_y,
-                    });
-                }
+                append_cached_surface_structure_candidates(
+                    resolved,
+                    biome_id,
+                    placement_id,
+                    placement_anchor,
+                    set.priority,
+                    set.reserve_space,
+                    &set.conflict_groups,
+                    context,
+                    candidates,
+                );
             },
         );
+}
+
+fn cache_surface_structure_pieces(
+    pieces: Vec<connectors::ResolvedConnectedPiece<'_>>,
+) -> Vec<CachedSurfaceStructurePiece> {
+    pieces
+        .into_iter()
+        .enumerate()
+        .map(|(piece_index, piece)| CachedSurfaceStructurePiece {
+            structure_id: piece.structure.id.clone(),
+            rotation: piece.rotation,
+            anchor: piece.origin.xz(),
+            origin_y: piece.origin.y,
+            primary_placement_piece: piece_index == 0,
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_cached_surface_structure_candidates<'a>(
+    resolved: &CachedSurfaceStructurePlacement,
+    biome_id: &'a str,
+    placement_id: &'a str,
+    placement_anchor: IVec2,
+    priority: i32,
+    reserve_space: bool,
+    conflict_groups: &'a [String],
+    context: &'a ChunkGenerationContext<'_>,
+    candidates: &mut Vec<StructureCandidate<'a>>,
+) {
+    for piece in &resolved.pieces {
+        let structure = context
+            .structures
+            .get(&piece.structure_id)
+            .unwrap_or_else(|| panic!("missing cached structure: {}", piece.structure_id));
+        candidates.push(StructureCandidate {
+            biome_id,
+            placement_id,
+            structure,
+            rotation: piece.rotation,
+            placement_anchor,
+            placement_y: 0,
+            anchor: piece.anchor,
+            origin_y: piece.origin_y,
+            primary_placement_piece: piece.primary_placement_piece,
+            priority,
+            reserve_space,
+            conflict_groups,
+            minimum: resolved.minimum,
+            maximum: resolved.maximum,
+            minimum_y: resolved.minimum_y,
+            maximum_y: resolved.maximum_y,
+        });
+    }
 }
 
 fn collect_volume_structure_candidates<'a>(

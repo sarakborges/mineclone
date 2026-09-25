@@ -10,7 +10,7 @@ use bevy::{
 
 use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
-use super::CachedStructureCandidate;
+use super::{CachedStructureCandidate, CachedSurfaceStructurePlacement};
 use super::super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
@@ -178,6 +178,8 @@ pub(super) struct FeatureCaches {
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
     structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
+    surface_structure_placements:
+        ConcurrentCache<(String, String, IVec2), Arc<Option<CachedSurfaceStructurePlacement>>>,
     structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
@@ -190,6 +192,9 @@ impl FeatureCaches {
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
             structure_candidates: ConcurrentCache::new("structure candidate cache"),
+            surface_structure_placements: ConcurrentCache::new(
+                "surface structure placement cache",
+            ),
             structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
@@ -239,6 +244,19 @@ impl FeatureCaches {
     ) -> Arc<Vec<CachedStructureCandidate>> {
         self.structure_candidates
             .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    pub(super) fn surface_structure_placement(
+        &self,
+        biome_id: &str,
+        placement_id: &str,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<CachedSurfaceStructurePlacement>,
+    ) -> Arc<Option<CachedSurfaceStructurePlacement>> {
+        self.surface_structure_placements.get_or_insert_with(
+            (biome_id.to_owned(), placement_id.to_owned(), anchor),
+            || Arc::new(factory()),
+        )
     }
 
     pub(super) fn structure_placement_bounds(
@@ -302,6 +320,19 @@ impl FeatureCaches {
             .retain(|coord| horizontal_chunks.contains(coord));
         self.structure_candidates
             .retain(|coord| horizontal_chunks.contains(coord));
+        self.surface_structure_placements
+            .retain(|(_, _, anchor)| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec2::new(
+                    anchor.x.div_euclid(chunk_size),
+                    anchor.y.div_euclid(chunk_size),
+                );
+                retained_regions.contains(&generation_region_coord(IVec3::new(
+                    chunk.x,
+                    0,
+                    chunk.y,
+                )))
+            });
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
         self.structure_origins.retain(|anchor| {

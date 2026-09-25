@@ -21,6 +21,24 @@ pub(crate) struct CachedStructureCandidate {
     pub(crate) primary_placement_piece: bool,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct CachedSurfaceStructurePiece {
+    pub(crate) structure_id: String,
+    pub(crate) rotation: StructureRotation,
+    pub(crate) anchor: IVec2,
+    pub(crate) origin_y: i32,
+    pub(crate) primary_placement_piece: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CachedSurfaceStructurePlacement {
+    pub(crate) pieces: Vec<CachedSurfaceStructurePiece>,
+    pub(crate) minimum: IVec2,
+    pub(crate) maximum: IVec2,
+    pub(crate) minimum_y: i32,
+    pub(crate) maximum_y: i32,
+}
+
 use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
@@ -116,6 +134,17 @@ impl WorldFeatureFields {
         factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
     ) -> Arc<Vec<CachedStructureCandidate>> {
         self.caches.structure_candidates(coord, factory)
+    }
+
+    pub(crate) fn surface_structure_placement(
+        &self,
+        biome_id: &str,
+        placement_id: &str,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<CachedSurfaceStructurePlacement>,
+    ) -> Arc<Option<CachedSurfaceStructurePlacement>> {
+        self.caches
+            .surface_structure_placement(biome_id, placement_id, anchor, factory)
     }
 
     pub(crate) fn retain_for_chunks<'a>(

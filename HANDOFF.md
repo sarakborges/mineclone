@@ -1,3 +1,24 @@
+## 2026-09-24 — Connector forests de superfície são cacheadas por root/anchor
+
+O StructureField já evitava descoberta pesada na main thread, mas uma structure conectada grande
+ainda podia resolver a mesma connector forest repetidamente: uma vez para cada chunk horizontal
+que ela atravessava.
+
+- `WorldFeatureFields` ganhou cache concorrente de placements Surface resolvidos, chaveado por
+  biome + placement reference + root anchor;
+- o cache guarda inclusive `None`, evitando repetir validação/ground-fit para roots rejeitadas;
+- Direct structures resolvem root + connector chain uma única vez e armazenam pieces/bounds;
+- Structure Sets resolvem o set e toda a connector forest uma única vez por placement anchor;
+- cada chunk subsequente apenas consulta o placement já resolvido, testa overlap e reconstrói
+  referências baratas para as StructureDefinitions;
+- o cache é compartilhado entre workers via WorldFeatureFields e usa o mesmo OnceLock concorrente,
+  portanto workers concorrentes não duplicam a mesma forest;
+- retenção usa a margem de generation regions já existente, evitando crescimento ilimitado
+  enquanto mantém roots próximas aos chunks desejados quentes.
+
+Isso reduz diretamente CPU de worldgen/warp em estruturas grandes como World Tree, root arches e
+outras chains Surface que atravessam múltiplos chunks.
+
 ## 2026-09-24 — World-object sync consulta apenas colunas carregadas no raio relevante
 
 `sync_world_objects` não enumera mais todo o mapa 3D de chunks residentes quando o player
