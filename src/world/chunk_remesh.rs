@@ -72,7 +72,7 @@ pub(super) fn process_chunk_remesh_queue(
     // current show radius is still pending/generated/ready, do not start new
     // background remesh tasks. Completed remeshes above are still integrated,
     // but fresh async capacity is left for initial meshes and generation.
-    if streaming.has_renderable_streaming_backlog() {
+    if streaming.has_renderable_initial_mesh_backlog() {
         return;
     }
 
