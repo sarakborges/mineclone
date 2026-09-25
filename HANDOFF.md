@@ -1,3 +1,24 @@
+## 2026-09-25 — UI fixa handles concretos dos system-font faces
+
+- o log de 0.68.25 confirmou que a tentativa anterior de fixar apenas o nome da família não
+  resolveu o leak: em Gameplay, `font_atlas_faces` cresceu de 49 para 320 e
+  `font_atlas_bytes` de ~68 MB para ~355 MB em cerca de 20 segundos;
+- a concentração estava em 16 px (306 atlas keys), portanto o problema não era criação de novos
+  font sizes, e sim novas identidades de face durante relayout de HUD dinâmico;
+- o design system agora resolve a família System UI uma vez, consulta o face concreto correspondente
+  a cada combinação de weight/width/style e carrega seus bytes através do próprio FontCx;
+- cada combinação vira um `Assets<Font>` uma única vez e recebe um `Handle<Font>` estável,
+  cacheado em `UiFontFaces`;
+- todo `TextFont` novo que pedir SystemUi (ou a mesma family concreta) é imediatamente convertido
+  para esse handle estável antes dos sistemas de layout em PostUpdate;
+- isso preserva a fonte real do sistema e cobertura Unicode/localizações; não usa o
+  `FiraMono-subset` built-in, que é insuficiente para texto não-ASCII;
+- o cache é limitado naturalmente ao pequeno conjunto de estilos realmente usados pela UI, em vez
+  de criar uma nova identidade de face a cada rerender;
+- nenhuma tipografia visual, font size, peso solicitado ou conteúdo de UI foi alterado.
+
+VERSION: `0.68.27`.
+
 ### Correção de compilação — seleção macro do Ocean
 
 - o primeiro patch usou `BiomeDistribution::is_regional` sem importar o tipo no módulo;
