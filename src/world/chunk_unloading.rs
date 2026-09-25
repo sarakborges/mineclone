@@ -166,6 +166,7 @@ pub(super) fn retire_distant_chunk_meshes(
             coord,
             &world,
             &renderer.pool,
+            &streaming,
             &mut remesh_queue,
         );
     }
@@ -352,6 +353,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             candidate.coord,
             &runtime.world,
             &renderer.pool,
+            &runtime.streaming,
             &mut runtime.remesh_queue,
         );
 
@@ -448,6 +450,7 @@ pub(super) fn unload_chunk_meshes(
             coord,
             &runtime.world,
             &renderer.pool,
+            &streaming,
             &mut runtime.remesh_queue,
         );
     }
@@ -462,6 +465,7 @@ fn enqueue_retired_render_halo_remeshes(
     coord: IVec3,
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
+    streaming: &ChunkStreamingState,
     remesh_queue: &mut ChunkRemeshQueue,
 ) {
     for y in -1..=1 {
@@ -472,7 +476,10 @@ fn enqueue_retired_render_halo_remeshes(
                     continue;
                 }
                 let neighbor = coord + offset;
-                if neighbor.y < 0 || !render_pool.contains(neighbor) {
+                if neighbor.y < 0
+                    || !render_pool.contains(neighbor)
+                    || !streaming.retains_render_mesh(neighbor)
+                {
                     continue;
                 }
                 let Some(chunk) = world.chunk(neighbor) else {
