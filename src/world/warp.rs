@@ -87,11 +87,8 @@ impl PendingWarp {
     pub(super) fn streaming_radii(&self) -> Option<(i32, i32)> {
         self.target.map(|_| {
             let chunk_size = CHUNK_SIZE as i32;
-            let search_radius_chunks = self
-                .search
-                .radius
-                .max(0)
-                .div_ceil(chunk_size)
+            let search_radius_blocks = self.search.radius.max(0);
+            let search_radius_chunks = ((search_radius_blocks + chunk_size - 1) / chunk_size)
                 .max(WARP_STREAMING_MIN_RADIUS_CHUNKS);
             (search_radius_chunks, search_radius_chunks)
         })

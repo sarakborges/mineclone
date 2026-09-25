@@ -1,3 +1,9 @@
+### CI follow-up — stable signed ceiling division
+
+A toolchain atual ainda rejeita `i32::div_ceil` como unstable. Como o search radius é
+explicitamente não-negativo, o cálculo usa agora `(radius + chunk_size - 1) / chunk_size`,
+preservando exatamente a progressão 1→2 do bootstrap.
+
 ## 2026-09-24 — Warp streaming bootstrap agora cresce sob demanda
 
 O warp não usa mais um bootstrap fixo de 3 chunks em todas as direções.
