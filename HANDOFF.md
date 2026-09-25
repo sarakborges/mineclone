@@ -1,3 +1,22 @@
+## 2026-09-25 — Bootstrap de Lighting distingue propagação de bookkeeping
+
+- corrigido o panic introduzido em 0.68.17: o passe de direct-light seed assumia que
+  `PendingLightingUpdates::is_empty()` significava apenas "nenhuma propagação pendente";
+- essa premissa era incorreta porque `is_empty()` também inclui change sets internos e remeshes
+  diferidos de fluid settling, que não impedem nem precisam ser consumidos pelo direct-light seed;
+- `PendingLightingUpdates` agora expõe `has_propagation_work()`, restrito à fila de lighting e
+  aos edits de emissão que realmente serão drenados por `process_pending_lighting`;
+- o bootstrap usa somente esse estado de propagação para decidir quando adicionar o próximo lote
+  de relaxamento e quando concluir Lighting; bookkeeping/remesh diferido deixa de causar panic ou
+  possibilidade de deadlock;
+- trabalho de propagação já existente é preservado: todo direct-light baseline é semeado primeiro
+  e depois a fila existente converge junto com os lotes de relaxamento inicial;
+- `is_empty()` mantém a semântica ampla usada pelo runtime de Gameplay, inclusive para garantir
+  que remeshes diferidos sejam publicados pelo sistema dinâmico;
+- nenhuma regra visual de lighting, fluidos, worldgen, seleção ou render distance foi alterada.
+
+VERSION: `0.68.19`.
+
 ### CI correction — nunca executar testes/link completo no workflow
 
 - removido do `Rust validation` o step `cargo test --locked loading_progress_system_initializes_without_query_conflicts`;

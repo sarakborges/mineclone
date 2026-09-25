@@ -42,11 +42,6 @@ fn seed_initial_direct_lighting(
     lighting: &mut PendingLightingUpdates,
     budget: &mut FrameWorkBudget,
 ) {
-    debug_assert!(
-        lighting.is_empty(),
-        "bootstrap direct-light seeding must run before relaxation is queued"
-    );
-
     while progress.loading_state.lighting_seed_cursor < progress.loading_state.coords.len() {
         if budget.exhausted() {
             break;
@@ -103,9 +98,9 @@ fn settle_initial_lighting(
             break;
         }
 
-        if lighting.is_empty() {
+        if !lighting.has_propagation_work() {
             enqueue_initial_relaxation_batch(progress, lighting);
-            if lighting.is_empty() {
+            if !lighting.has_propagation_work() {
                 finish_initial_lighting(progress);
                 break;
             }
@@ -129,14 +124,14 @@ fn settle_initial_lighting(
         changed_chunks.clear();
         changed_positions.clear();
 
-        if !lighting.is_empty() {
+        if !!lighting.has_propagation_work() {
             break;
         }
     }
 
     if progress.loading_state.lighting_relaxation_cursor
         >= progress.loading_state.lighting_relaxations.len()
-        && lighting.is_empty()
+        && !lighting.has_propagation_work()
     {
         finish_initial_lighting(progress);
     }

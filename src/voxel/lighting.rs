@@ -170,9 +170,12 @@ impl PendingLightingUpdates {
         )
     }
 
+    pub(crate) fn has_propagation_work(&self) -> bool {
+        !self.queue.is_empty() || !self.emission_edit_previous_cells.is_empty()
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
-        self.queue.is_empty()
-            && self.emission_edit_previous_cells.is_empty()
+        !self.has_propagation_work()
             && self.interactive_changed_chunks.is_empty()
             && self.interactive_changed_positions.is_empty()
             && self.settling_changed_chunks.is_empty()
