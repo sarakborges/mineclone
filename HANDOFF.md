@@ -1,3 +1,26 @@
+## 2026-09-24 — Streaming passa a proteger o frame budget antes de cair abaixo de 60 FPS
+
+A investigação de stutters encontrou duas políticas agressivas demais durante exploração/warp:
+
+- o orçamento global de trabalho de mundo permitia 8 ms de main thread por frame, quase metade
+  de um frame de 60 FPS antes de contar render, input, ECS e UI;
+- chunk generation/meshing podia ocupar ~75% do AsyncComputeTaskPool e só começava a aliviar após
+  quatro frames piores que 45 FPS.
+
+A política agora é adaptativa e orientada a preservar frame time:
+
+- world work recebe 4 ms quando o frame anterior está abaixo de 13,3 ms, 3 ms na faixa
+  intermediária e 2 ms quando o frame anterior já passou de 16,7 ms;
+- o limiter de chunk workers usa ~60% do pool como teto base, deixando capacidade explícita para
+  render/support work e outros sistemas async;
+- adaptação de background work começa acima de ~18,2 ms (55 FPS), após 2 frames lentos, em vez de
+  esperar 4 frames abaixo de 45 FPS;
+- recuperação fica deliberadamente mais lenta (120 frames <= ~15,4 ms) para evitar oscilar de
+  volta para saturação assim que há um intervalo curto de folga.
+
+Isso não altera worldgen nem a ordem de chunks. Apenas impede streaming de consumir agressivamente
+o mesmo CPU budget necessário para manter o jogo responsivo.
+
 ## 2026-09-24 — Warp safe-position search usa prioridade por distância real
 
 A busca de destino seguro do `/warp` deixa de enumerar shells Chebyshev completas. Mesmo com

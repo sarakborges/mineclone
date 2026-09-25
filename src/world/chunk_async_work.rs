@@ -104,10 +104,7 @@ impl ChunkAsyncWorkLimiter {
     }
 
     pub(crate) fn base_limit(&self) -> usize {
-        let workers = AsyncComputeTaskPool::get().thread_num().max(1);
-        // Keep some executor headroom instead of allowing independent chunk
-        // subsystems to saturate every worker with long CPU-heavy jobs.
-        (workers * 3).div_ceil(4).max(1)
+        base_async_limit_for_workers(AsyncComputeTaskPool::get().thread_num().max(1))
     }
 
     pub(crate) fn limit(&self) -> usize {
@@ -162,10 +159,17 @@ impl ChunkAsyncStageMetrics {
     }
 }
 
-const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 45.0;
-const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 55.0;
-const ASYNC_SLOW_FRAMES: u16 = 4;
-const ASYNC_RECOVERY_FRAMES: u16 = 60;
+const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 55.0;
+const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 65.0;
+const ASYNC_SLOW_FRAMES: u16 = 2;
+const ASYNC_RECOVERY_FRAMES: u16 = 120;
+
+fn base_async_limit_for_workers(workers: usize) -> usize {
+    // Chunk generation/meshing is sustained CPU work. Keep roughly 40% of the
+    // async pool free so renderer support work and unrelated async systems are
+    // not starved while streaming is active.
+    (workers.max(1) * 3).div_ceil(5).max(1)
+}
 
 fn adaptive_limit_floor(base: usize) -> usize {
     if base <= 2 {
@@ -245,7 +249,16 @@ impl Drop for ChunkAsyncWorkPermit {
 
 #[cfg(test)]
 mod tests {
-    use super::adaptive_limit_floor;
+    use super::{adaptive_limit_floor, base_async_limit_for_workers};
+
+    #[test]
+    fn base_limit_reserves_headroom_for_non_chunk_work() {
+        assert_eq!(base_async_limit_for_workers(1), 1);
+        assert_eq!(base_async_limit_for_workers(2), 2);
+        assert_eq!(base_async_limit_for_workers(4), 3);
+        assert_eq!(base_async_limit_for_workers(8), 5);
+        assert_eq!(base_async_limit_for_workers(12), 8);
+    }
 
     #[test]
     fn adaptive_floor_preserves_half_of_chunk_throughput_on_wide_pools() {
