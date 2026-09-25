@@ -62,42 +62,6 @@ struct RetiredScanKey {
     radius_squared: i64,
 }
 
-#[derive(Default)]
-struct ReadyPriorityCache {
-    source_revision: u64,
-    selection_revision: u64,
-    pending: VecDeque<IVec3>,
-}
-
-impl ReadyPriorityCache {
-    fn sync(
-        &mut self,
-        ready: &DeduplicatedQueue<IVec3>,
-        selection_revision: u64,
-        center: IVec3,
-        movement_direction: IVec2,
-    ) {
-        if self.source_revision == ready.revision()
-            && self.selection_revision == selection_revision
-        {
-            return;
-        }
-
-        self.pending.clear();
-        let mut ordered = ready.values_in_order().collect::<Vec<_>>();
-        ordered.sort_unstable_by_key(|coord| {
-            chunk_load_priority(*coord, center, movement_direction)
-        });
-        self.pending.extend(ordered);
-        self.source_revision = ready.revision();
-        self.selection_revision = selection_revision;
-    }
-
-    fn mark_source_revision(&mut self, revision: u64) {
-        self.source_revision = revision;
-    }
-}
-
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -109,7 +73,6 @@ pub(super) struct ChunkStreamingState {
     retired: DeduplicatedQueue<IVec3>,
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
-    ready_priority: ReadyPriorityCache,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
@@ -474,31 +437,16 @@ impl ChunkStreamingState {
         let center = self.center?;
         let movement_direction = self.movement_direction;
         let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
-        self.ready_priority.sync(
-            &self.ready,
-            self.selection_revision,
-            center,
-            movement_direction,
-        );
+        let desired = &self.desired;
+        let retained = &self.retained;
 
-        while let Some(coord) = self.ready_priority.pending.pop_front() {
-            if !self.ready.contains(coord) {
-                continue;
-            }
-            if !(self.desired.contains(&coord) || self.retained.contains(&coord))
-                || !chunk_is_inside_render_radius(center, coord, show_radius)
-            {
-                continue;
-            }
-
-            let removed = self.ready.remove(coord);
-            debug_assert!(removed, "ready priority cache must reference an active chunk");
-            self.ready_priority
-                .mark_source_revision(self.ready.revision());
-            return Some(coord);
-        }
-
-        None
+        self.ready.pop_min_where_by_key(
+            |coord| {
+                (desired.contains(&coord) || retained.contains(&coord))
+                    && chunk_is_inside_render_radius(center, coord, show_radius)
+            },
+            |coord| chunk_load_priority(coord, center, movement_direction),
+        )
     }
 
     fn defer_ready(&mut self, coord: IVec3) {

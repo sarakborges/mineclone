@@ -1,3 +1,20 @@
+## 2026-09-24 — Ready mesh priority também sai do frame de selection rebuild
+
+A fila `ready` ainda possuía `ReadyPriorityCache`, que invalidava por
+`selection_revision` e ordenava todos os chunks prontos na primeira tentativa de mesh após cada
+mudança de centro.
+
+- `ReadyPriorityCache` foi removido;
+- `DeduplicatedQueue` ganhou `pop_min_where_by_key`, que escolhe o melhor item elegível sem
+  remover os itens fora do render radius;
+- `pop_ready` usa a mesma `chunk_load_priority` diretamente no momento de consumo;
+- chunks preload-only permanecem na fila, exatamente como antes, até entrarem no show radius;
+- a seleção acontece dentro do budget de initial-mesh dispatch em vez de concentrar outro
+  `O(n log n)` no frame de mudança de chunk.
+
+Com isso, os dois sorts globais ligados a uma nova `selection_revision` (pending e ready) saem
+do hot path síncrono de movimentação/warp.
+
 ## 2026-09-24 — Streaming desired selection usa diff incremental durante movimento contínuo
 
 Depois de remover a ordenação síncrona da pending queue, o rebuild ainda reconstruía todo o
