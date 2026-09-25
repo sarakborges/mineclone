@@ -41,6 +41,13 @@ pub(super) fn collect_generated_chunks(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
+    if work.state.has_settled_publication() {
+        if process_settled_wave_publication(content, work, queues, current_tick) {
+            work.state.finish_generation_wave();
+        }
+        return;
+    }
+
     if work.state.fluid_settling.is_active() {
         if !process_streaming_fluid_settling(content, work) {
             return;
