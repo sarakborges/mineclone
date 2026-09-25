@@ -1,3 +1,43 @@
+## 2026-09-25 — Initial mesh passa a ter prioridade sobre geração/remesh durante backlog visual
+
+- o log 0.68.37 confirmou que o fix do limiter funcionou: `async_chunk_work_limit` recuperou até
+  `async_chunk_base_limit=4` durante Gameplay, em vez de permanecer preso em 2;
+- o gargalo seguinte ficou explícito: `stream_ready` cresceu até ~1000 chunks enquanto
+  `mesh_tasks` ficava em 0..4 e havia vários snapshots com `generation_tasks=7..8` mas
+  `async_chunk_work=0/4`; os workers já haviam terminado e o main thread não estava drenando
+  publicação/apresentação na mesma velocidade;
+- `stream_chunks` processava generation integration antes de collect/dispatch de initial mesh;
+  seed direto de lighting e integração de novos resultados podiam consumir o deadline global
+  enquanto centenas de chunks já prontos esperavam mesh;
+- a ordem do pipeline foi invertida para tratar apresentação como foreground:
+  1. integrar meshes concluídos;
+  2. despachar initial meshes de `ready`;
+  3. integrar geração concluída/settling;
+  4. despachar nova geração;
+- lighting inicial foi dividido explicitamente em duas responsabilidades:
+  - direct-light seed continua ocorrendo assim que um chunk se torna residente, preservando a
+    invariável de que propagação nunca amostra o estado DARK default;
+  - wake de runtime fluid frontier + enqueue de lighting relaxation só ocorre quando o chunk
+    realmente é selecionado para initial mesh;
+- o resultado do direct-light seed fica retido em `ChunkStreamingState` até a ativação visual;
+  unload limpa seed/result/activation e mantém a regra once-per-residency;
+- chunks vizinhos com mesh task já capturado recebem apenas targeted
+  `initial_mesh_seed_catchup`, preservando publicação sem cancelar trabalho assíncrono pronto;
+- background remesh deixa de iniciar novas tasks quando existe chunk VISÍVEL em `ready`
+  aguardando initial mesh; completed remesh tasks continuam sendo integradas;
+- essa supressão foi estreitada para `ready` renderizável apenas: generation/pending por si só
+  não bloqueiam remesh, evitando starvation de edits/lighting durante movimento prolongado;
+- runtime diagnostics agora separam `stream_pending_renderable`,
+  `stream_ready_renderable` e `wave_targets_renderable`, para distinguir atraso visual real
+  de forward preload saudável;
+- removida a última chamada legada a `seed_loaded_chunk_lighting` e o plumbing de
+  `current_tick` que ficou obsoleto no generation dispatch;
+- CI do commit versionado `0.68.38`, run `36191289714`: success em localization audit,
+  structure content reference audit, Clippy `--locked --all-targets --all-features -- -D warnings`
+  e `cargo check --locked`.
+
+VERSION: `0.68.38`.
+
 ## 2026-09-25 — Initial mesh ganha prioridade sobre remesh e lighting wake deixa generation integration
 
 - o log 0.68.37 confirmou que o fix do limiter funcionou: durante movimento o async limit voltou
