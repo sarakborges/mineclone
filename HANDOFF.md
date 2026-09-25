@@ -19,7 +19,10 @@
 - adicionados testes cobrindo invalidação do ready miss por mudança de fila/seleção e do pending
   crítico por mudança de fila/centro;
 - prioridade, render distance, forward preload, geração, fluid settling e fidelidade de worldgen
-  permanecem inalterados.
+  permanecem inalterados;
+- CI Rust validation run `36184991332`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
 
 VERSION: `0.68.34`.
 
