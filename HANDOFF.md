@@ -1,3 +1,24 @@
+## 2026-09-25 — Publicação pós-fluid-settling é incremental
+
+- o log 0.68.31 mostrou fluid closure crescendo para 72..108 generation-wave targets, com cerca
+  de 100 chunks staged; ao convergir, todos eram publicados no mesmo frame;
+- houve um slow frame de ~145 ms junto de `ready=144`, consistente com o custo síncrono de
+  seed de lighting + publicação em massa após settling;
+- o estado de streaming agora possui uma fila explícita de chunks já convergidos aguardando
+  publicação;
+- enquanto essa fila existir, a generation wave permanece ativa e não aceita novos targets;
+- a publicação usa budget próprio de 1 ms, mínimo 1 e máximo 8 chunks por frame, também respeitando
+  o deadline global do world pipeline;
+- cada chunk só sai do estado unpublished imediatamente antes de receber direct-light seed,
+  entrar em `ready` ou ser arquivado por ter saído da seleção;
+- a regra de correção permanece igual: nenhum chunk de uma wave com fluido é visível antes da
+  convergência completa da closure;
+- reconciliação de mutations existentes e ownership de fluidos continua ocorrendo antes da fila
+  de publicação;
+- nenhuma regra de fluido, worldgen, lighting ou render distance foi afrouxada.
+
+VERSION: `0.68.33`.
+
 ## 2026-09-25 — Generation/remesh usam todo o limite async global
 
 - o log 0.68.31 mostrou 1.500..3.400 chunks pendentes enquanto `generation_tasks` ficava em
