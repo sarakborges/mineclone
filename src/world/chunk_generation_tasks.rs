@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_async_work::ChunkAsyncWorkLimiter,
+    chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
@@ -130,10 +130,35 @@ impl ChunkGenerationTasks {
         coord: IVec3,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
-        if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains(coord) {
+        self.schedule_with_permit(
+            coord,
+            MAX_GENERATION_TASKS_IN_FLIGHT,
+            || limiter.try_acquire_generation(),
+        )
+    }
+
+    pub(crate) fn schedule_loading(
+        &mut self,
+        coord: IVec3,
+        limiter: &ChunkAsyncWorkLimiter,
+    ) -> bool {
+        self.schedule_with_permit(
+            coord,
+            limiter.loading_queue_limit(),
+            || limiter.try_acquire_loading_generation(),
+        )
+    }
+
+    fn schedule_with_permit(
+        &mut self,
+        coord: IVec3,
+        pending_limit: usize,
+        acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
+    ) -> bool {
+        if self.pending.len() >= pending_limit || self.pending.contains(coord) {
             return false;
         }
-        let Some(permit) = limiter.try_acquire_generation() else {
+        let Some(permit) = acquire_permit() else {
             return false;
         };
 

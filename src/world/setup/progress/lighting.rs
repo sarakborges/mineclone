@@ -31,10 +31,32 @@ pub(super) fn light_initial_chunks(
                 progress.loading_state.phase = WorldLoadingPhase::Meshing;
                 break;
             };
-            assert!(
-                lighting.enqueue_initial_chunk_lighting(&mut progress.world, coord),
-                "generated bootstrap chunk data should exist at {coord:?}"
+
+            let chunk_is_empty = progress
+                .world
+                .chunk(coord)
+                .unwrap_or_else(|| {
+                    panic!("generated bootstrap chunk data should exist at {coord:?}")
+                })
+                .is_empty();
+            let direct_seed = lighting.seed_chunk_direct_lighting(
+                &mut progress.world,
+                coord,
+                content.blocks(),
+                content.fluids(),
+                content.secondary_properties(),
             );
+
+            if chunk_is_empty {
+                lighting.enqueue_empty_chunk_relaxation(coord);
+            } else if direct_seed.requires_relaxation {
+                lighting.enqueue_chunk_relaxation(coord);
+            }
+
+            if lighting.is_empty() {
+                progress.loading_state.lit += 1;
+                continue;
+            }
         }
 
         let mut recorded_voxels = 0;

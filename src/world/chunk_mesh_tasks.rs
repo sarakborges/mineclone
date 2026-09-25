@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_async_work::ChunkAsyncWorkLimiter,
+    chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
@@ -101,10 +101,39 @@ impl ChunkMeshTasks {
         world: ChunkMeshSnapshot,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
-        if self.pending.len() >= MAX_MESH_TASKS_IN_FLIGHT || self.pending.contains(coord) {
+        self.schedule_with_permit(
+            coord,
+            world,
+            MAX_MESH_TASKS_IN_FLIGHT,
+            || limiter.try_acquire_initial_mesh(),
+        )
+    }
+
+    pub(crate) fn schedule_loading(
+        &mut self,
+        coord: IVec3,
+        world: ChunkMeshSnapshot,
+        limiter: &ChunkAsyncWorkLimiter,
+    ) -> bool {
+        self.schedule_with_permit(
+            coord,
+            world,
+            limiter.loading_queue_limit(),
+            || limiter.try_acquire_loading_initial_mesh(),
+        )
+    }
+
+    fn schedule_with_permit(
+        &mut self,
+        coord: IVec3,
+        world: ChunkMeshSnapshot,
+        pending_limit: usize,
+        acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
+    ) -> bool {
+        if self.pending.len() >= pending_limit || self.pending.contains(coord) {
             return false;
         }
-        let Some(permit) = limiter.try_acquire_initial_mesh() else {
+        let Some(permit) = acquire_permit() else {
             return false;
         };
 

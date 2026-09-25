@@ -1,3 +1,22 @@
+## 2026-09-25 — Bootstrap mantém workers ocupados e evita lighting voxel-a-voxel desnecessário
+
+- o relatório de runtime mostrou generation com apenas ~3 jobs de chunk em voo e initial meshing
+  com ~4, mesmo com cada job terminando em poucos milissegundos; como o bootstrap só reabastecia a
+  fila uma vez por frame, o AsyncComputeTaskPool ficava ocioso até o update seguinte;
+- o Loading agora usa uma fila assíncrona própria com profundidade de quatro lotes por worker,
+  suficiente para manter o pool ocupado entre frames; os limites conservadores/adaptativos de
+  Gameplay permanecem inalterados;
+- generation e initial meshing ganharam caminhos `schedule_loading` separados e mantêm um budget
+  curto dedicado a dispatch mesmo quando a integração de resultados consumiu o budget principal;
+- o lighting inicial deixou de limpar a section e enfileirar todos os 4.096 voxels
+  indiscriminadamente; ele agora usa o mesmo direct-light seed já usado no streaming:
+  sections vazias relaxam apenas fronteiras e sections opacas simples podem não precisar de
+  relaxamento completo;
+- removido `enqueue_initial_chunk_lighting`, que ficou legado após a migração do bootstrap;
+- nenhuma regra de worldgen, seleção de chunks, simulação, fluidos ou render distance foi alterada.
+
+VERSION: `0.68.15`.
+
 ## 2026-09-25 — Loading reduz ruído de status
 
 - fases `PENDING` continuam visíveis, mas sem contador `0/total`;

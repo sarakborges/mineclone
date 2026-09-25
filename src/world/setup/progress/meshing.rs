@@ -2,14 +2,17 @@ use crate::{
     voxel::mesh_snapshot::ChunkMeshSnapshot,
     world::{
         chunk_async_work::ChunkAsyncWorkLimiter,
-        chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
+        chunk_mesh_tasks::ChunkMeshTasks,
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
         work_budget::FrameWorkBudget,
     },
 };
 
-use super::{INITIAL_LOADING_BUDGET, super::{WorldLoadingPhase, system_params::WorldSetupProgress}};
+use super::{
+    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
+    super::{WorldLoadingPhase, system_params::WorldSetupProgress},
+};
 
 pub(super) fn mesh_initial_chunks(
     content: &ChunkContent<'_>,
@@ -19,20 +22,24 @@ pub(super) fn mesh_initial_chunks(
     async_work: &ChunkAsyncWorkLimiter,
 ) {
     mesh_tasks.sync_snapshot(content);
-    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
+    let mut integration_budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     integrate_built_chunk_meshes(
         content,
         renderer,
-        &mut budget,
+        &mut integration_budget,
         progress,
         mesh_tasks,
         async_work,
     );
+
+    // Keep the async pool fed even when publishing completed meshes consumes
+    // the main-thread integration budget for this loading frame.
+    let mut dispatch_budget = FrameWorkBudget::new(INITIAL_LOADING_DISPATCH_BUDGET, 1);
     dispatch_mesh_tasks(
         content,
         renderer,
-        &mut budget,
+        &mut dispatch_budget,
         progress,
         mesh_tasks,
         async_work,
@@ -74,7 +81,7 @@ fn integrate_built_chunk_meshes(
             let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
             assert!(
-                mesh_tasks.schedule(coord, snapshot, async_work),
+                mesh_tasks.schedule_loading(coord, snapshot, async_work),
                 "stale bootstrap mesh must be rescheduled for {coord:?}"
             );
             continue;
@@ -144,13 +151,13 @@ fn dispatch_mesh_tasks(
             continue;
         }
 
-        if mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
+        if mesh_tasks.pending_count() >= async_work.loading_queue_limit() {
             break;
         }
 
         let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !mesh_tasks.schedule(coord, snapshot, async_work) {
+        if !mesh_tasks.schedule_loading(coord, snapshot, async_work) {
             break;
         }
 

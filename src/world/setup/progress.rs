@@ -26,6 +26,7 @@ use super::{
 };
 
 pub(super) const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
+pub(super) const INITIAL_LOADING_DISPATCH_BUDGET: Duration = Duration::from_millis(2);
 pub(super) const INITIAL_FINALIZATION_FRAMES: u8 = 2;
 
 pub(in crate::world) fn setup_world(

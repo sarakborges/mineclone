@@ -8,6 +8,8 @@ use std::{
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
+const LOADING_QUEUE_DEPTH_PER_WORKER: usize = 4;
+
 #[derive(Resource, Clone, Default)]
 pub(crate) struct ChunkAsyncWorkLimiter {
     in_flight: Arc<AtomicUsize>,
@@ -58,8 +60,20 @@ impl ChunkAsyncWorkLimiter {
         self.try_acquire_with_limit(generation_limit, ChunkAsyncStage::Generation)
     }
 
+    pub(crate) fn try_acquire_loading_generation(&self) -> Option<ChunkAsyncWorkPermit> {
+        self.try_acquire_with_limit(self.loading_queue_limit(), ChunkAsyncStage::Generation)
+    }
+
     pub(crate) fn try_acquire_initial_mesh(&self) -> Option<ChunkAsyncWorkPermit> {
         self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::InitialMesh)
+    }
+
+    pub(crate) fn try_acquire_loading_initial_mesh(&self) -> Option<ChunkAsyncWorkPermit> {
+        self.try_acquire_with_limit(self.loading_queue_limit(), ChunkAsyncStage::InitialMesh)
+    }
+
+    pub(crate) fn loading_queue_limit(&self) -> usize {
+        loading_queue_limit_for_workers(AsyncComputeTaskPool::get().thread_num().max(1))
     }
 
     pub(crate) fn try_acquire_remesh(&self) -> Option<ChunkAsyncWorkPermit> {
@@ -164,6 +178,10 @@ const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 65.0;
 const ASYNC_SLOW_FRAMES: u16 = 2;
 const ASYNC_RECOVERY_FRAMES: u16 = 120;
 
+fn loading_queue_limit_for_workers(workers: usize) -> usize {
+    workers.max(1).saturating_mul(LOADING_QUEUE_DEPTH_PER_WORKER)
+}
+
 fn base_async_limit_for_workers(workers: usize) -> usize {
     // Chunk generation/meshing is sustained CPU work. Keep roughly 40% of the
     // async pool free so renderer support work and unrelated async systems are
@@ -249,7 +267,16 @@ impl Drop for ChunkAsyncWorkPermit {
 
 #[cfg(test)]
 mod tests {
-    use super::{adaptive_limit_floor, base_async_limit_for_workers};
+    use super::{
+        adaptive_limit_floor, base_async_limit_for_workers, loading_queue_limit_for_workers,
+    };
+
+    #[test]
+    fn loading_queue_keeps_multiple_batches_ready_per_worker() {
+        assert_eq!(loading_queue_limit_for_workers(1), 4);
+        assert_eq!(loading_queue_limit_for_workers(4), 16);
+        assert_eq!(loading_queue_limit_for_workers(8), 32);
+    }
 
     #[test]
     fn base_limit_reserves_headroom_for_non_chunk_work() {

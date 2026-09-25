@@ -1,12 +1,15 @@
 use crate::world::{
     PendingFluidUpdates, WorldLoadMode,
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
+    chunk_generation_tasks::ChunkGenerationTasks,
     chunk_system_params::{ChunkContent, ChunkGeneration},
     work_budget::FrameWorkBudget,
 };
 
-use super::{INITIAL_LOADING_BUDGET, super::{WorldLoadingPhase, system_params::WorldSetupProgress}};
+use super::{
+    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
+    super::{WorldLoadingPhase, system_params::WorldSetupProgress},
+};
 
 pub(super) fn generate_initial_chunks(
     generation: &ChunkGeneration<'_>,
@@ -18,18 +21,22 @@ pub(super) fn generate_initial_chunks(
     load_mode: WorldLoadMode,
 ) {
     generation_tasks.sync_snapshot(generation, content);
-    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
+    let mut integration_budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     integrate_generated_chunks(
-        &mut budget,
+        &mut integration_budget,
         progress,
         fluid_updates,
         generation_tasks,
         async_work,
         load_mode,
     );
+
+    // Loading is not gameplay: keep enough work queued to prevent short
+    // generation jobs from draining the async pool between rendered frames.
+    let mut dispatch_budget = FrameWorkBudget::new(INITIAL_LOADING_DISPATCH_BUDGET, 1);
     dispatch_generation_tasks(
-        &mut budget,
+        &mut dispatch_budget,
         progress,
         fluid_updates,
         generation_tasks,
@@ -79,7 +86,7 @@ fn integrate_generated_chunks(
 
         if completed.revision != current_revision {
             assert!(
-                generation_tasks.schedule(completed.coord, async_work),
+                generation_tasks.schedule_loading(completed.coord, async_work),
                 "stale bootstrap generation must be rescheduled for {:?}",
                 completed.coord
             );
@@ -106,7 +113,7 @@ fn dispatch_generation_tasks(
     async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
-    while generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
+    while generation_tasks.pending_count() < async_work.loading_queue_limit() {
         if budget.exhausted() {
             break;
         }
@@ -144,7 +151,7 @@ fn dispatch_generation_tasks(
             continue;
         }
 
-        if !generation_tasks.schedule(coord, async_work) {
+        if !generation_tasks.schedule_loading(coord, async_work) {
             break;
         }
         progress.loading_state.generation_cursor += 1;
