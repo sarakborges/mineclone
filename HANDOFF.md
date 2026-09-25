@@ -16869,3 +16869,11 @@ mas foram corrigidos primeiro para manter a regra de CI verde entre partes.
 - Removed the previous active Anemo generator, the obsolete legacy-Anemo model/definition, and the old Anemo face texture.
 - No biome spawn tables were changed in this commit; the definitions are available to the existing creature/debug spawn paths.
 
+## 2026-09-25 — Elemental slime reference-fidelity pass
+
+- Re-authored all 14 elemental slime GLBs on `develop` to follow the supplied reference board more closely while preserving the rounded `slime_blob` body/animation language.
+- Electro now reads through paired antenna/orb details on the small form and the large form's central antenna + side circuit marks.
+- Dendro, Geo, Hydro, Anemo, Cryo and Pyro small/large silhouette details were tightened toward the reference rather than expanding with unrelated interpretations.
+- Element-specific face expressions remain geometry-authored, but were simplified to stay closer to the source visual language.
+- Removed `asteria:slime_electro_mutant` completely (model, collider metadata and creature definition). The family is now exactly 7 elements × 2 sizes = 14 variants.
+

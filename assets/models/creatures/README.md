@@ -19,7 +19,7 @@ Creature animation particle effects are authored in the creature JSON through `p
 
 ## Elemental slime family
 
-The elemental family follows the rounded `slime_blob` body language and ships Electro, Dendro, Geo, Hydro, Anemo, Cryo and Pyro in small and large forms, plus `asteria:slime_electro_mutant`. Every variant owns a GLB and collider metadata in its own sibling directory and a creature definition under `data/creatures/`.
+The elemental family follows the rounded `slime_blob` body language and ships Electro, Dendro, Geo, Hydro, Anemo, Cryo and Pyro in small and large forms. Every variant owns a GLB and collider metadata in its own sibling directory and a creature definition under `data/creatures/`. The reference pass keeps the small and large silhouettes closer to the supplied elemental slime lineup.
 
 Faces are opaque pixel geometry instead of texture-only eye decals: every variant has element-specific eyes plus brows, mouth and/or cheeks, with a distinct expression and blocky elemental silhouette details. The active Anemo asset was rebuilt with the family and no longer depends on the old Anemo face texture. The obsolete legacy-Anemo model and definition were removed.
 
