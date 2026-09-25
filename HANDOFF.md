@@ -1,3 +1,23 @@
+## 2026-09-25 — Floating Islands começam em Y=200 e usam silhueta de ilha
+
+- `verticalRange.min` das Floating Islands subiu de 150 para 200, eliminando a interseção
+  observada com o topo de volcanoes;
+- o antigo modifier `solid` só aplicava ruído 3D dentro de um volume elipsoidal, produzindo
+  blobs amorfos; além disso, `fillStrength: 28` dependia da densidade do terreno-base e não
+  conseguia formar ilhas reais muito acima da superfície;
+- criado o density modifier data-driven `floating_island`: ele recebe a posição normalizada
+  dentro do site volumétrico, mantém um topo largo e quase plano, afunila a parte inferior em
+  direção ao centro e usa ruído apenas para irregularidade de borda/topo;
+- o preenchimento da ilha agora vence corretamente a densidade negativa do céu através de
+  `fillMargin`, em vez de somar um valor fixo insuficiente;
+- o peso do biome continua influenciando qual volume é selecionado, mas não enfraquece a
+  densidade interna do site escolhido; a força espacial/fade da borda continua preservada;
+- o material continua sendo `asteria:stone`; esta etapa altera forma/altura, não paleta;
+- teste unitário cobre topo sólido + centro inferior sólido + borda inferior vazia, mas o CI
+  continua sem executar testes, conforme regra do projeto.
+
+VERSION: `0.68.22`.
+
 ## 2026-09-25 — UI fixa identidade da fonte e interrompe explosão de font atlases
 
 - o log de runtime de 0.68.19 mostrou `font_atlas_faces` crescendo de 10 para 1.995 e

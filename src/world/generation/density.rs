@@ -42,6 +42,9 @@ impl PackedVolumeBiomeSelection {
         (self.biome_index != Self::NONE_INDEX).then_some(VolumeBiomeSelection {
             biome_index: usize::from(self.biome_index),
             strength: self.strength,
+            // Material resolution only needs biome identity. Density shaping
+            // consumes the full selection before it is packed into the field.
+            local_position: Vec3::ZERO,
         })
     }
 }

@@ -51,6 +51,7 @@ impl VolumeBiomeRegion {
 pub(crate) struct VolumeBiomeSelection {
     pub(crate) biome_index: usize,
     pub(crate) strength: f32,
+    pub(crate) local_position: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -83,7 +84,7 @@ impl BiomeField {
         }
 
         let warped = warp_volume_position(position, self.seed);
-        let mut selected: Option<(ResolvedVolumeBiomeSite, f32)> = None;
+        let mut selected: Option<(ResolvedVolumeBiomeSite, f32, f32, Vec3)> = None;
 
         for site in &region.sites {
             let biome = &self.volume_biomes[site.biome_index];
@@ -91,24 +92,24 @@ impl BiomeField {
                 continue;
             }
 
-            let normalized_distance =
-                normalized_ellipsoid_distance(warped - site.position, site.radii);
-            let strength =
-                volume_site_strength(normalized_distance) * biome.weight.clamp(0.0, 1.0);
-            if strength <= 0.0 {
+            let local_position = normalized_ellipsoid_position(warped - site.position, site.radii);
+            let site_strength = volume_site_strength(local_position.length());
+            let selection_strength = site_strength * biome.weight.clamp(0.0, 1.0);
+            if selection_strength <= 0.0 {
                 continue;
             }
 
-            if selected.is_none_or(|(current, current_strength)| {
-                site_is_better(*site, strength, current, current_strength)
+            if selected.is_none_or(|(current, _, current_selection_strength, _)| {
+                site_is_better(*site, selection_strength, current, current_selection_strength)
             }) {
-                selected = Some((*site, strength));
+                selected = Some((*site, site_strength, selection_strength, local_position));
             }
         }
 
-        selected.map(|(site, strength)| VolumeBiomeSelection {
+        selected.map(|(site, strength, _, local_position)| VolumeBiomeSelection {
             biome_index: site.biome_index,
             strength,
+            local_position,
         })
     }
 
@@ -281,10 +282,8 @@ fn volume_site_radii(biome: &BiomeFieldEntry, hash: u64) -> Vec3 {
     )
 }
 
-fn normalized_ellipsoid_distance(delta: Vec3, radii: Vec3) -> f32 {
-    let normalized = Vec3::new(delta.x / radii.x, delta.y / radii.y, delta.z / radii.z);
-
-    (normalized.x * normalized.x + normalized.y * normalized.y + normalized.z * normalized.z).sqrt()
+fn normalized_ellipsoid_position(delta: Vec3, radii: Vec3) -> Vec3 {
+    Vec3::new(delta.x / radii.x, delta.y / radii.y, delta.z / radii.z)
 }
 
 fn volume_site_strength(normalized_distance: f32) -> f32 {

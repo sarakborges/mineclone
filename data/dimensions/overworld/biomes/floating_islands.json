@@ -7,15 +7,16 @@
   },
   "kind": "volume",
   "verticalRange": {
-    "min": 150,
+    "min": 200,
     "max": 280
   },
   "priority": 2,
   "densityModifier": {
-    "type": "solid",
-    "fillStrength": 28,
-    "noiseScale": 0.038,
-    "coverage": 0.52
+    "type": "floating_island",
+    "fillMargin": 4,
+    "noiseScale": 0.032,
+    "edgeIrregularity": 0.13,
+    "topRoughness": 0.08
   },
   "solidBlock": "asteria:stone",
   "visuals": {
