@@ -51,54 +51,6 @@ pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) 
 }
 
 
-pub fn chunk_coords_in_volume(
-    center: IVec3,
-    horizontal_radius: i32,
-    vertical_radius: i32,
-) -> Vec<IVec3> {
-    assert!(center.y >= 0, "streaming center Y cannot be negative");
-    assert!(
-        horizontal_radius >= 0,
-        "horizontal streaming radius cannot be negative"
-    );
-    assert!(
-        vertical_radius >= 0,
-        "vertical streaming radius cannot be negative"
-    );
-
-    let mut coords = Vec::new();
-    let min_chunk_y = (center.y - vertical_radius).max(0);
-    let max_chunk_y = center
-        .y
-        .checked_add(vertical_radius)
-        .expect("vertical streaming range cannot overflow chunk coordinates");
-
-    for y in min_chunk_y..=max_chunk_y {
-        for z in -horizontal_radius..=horizontal_radius {
-            for x in -horizontal_radius..=horizontal_radius {
-                let coord = IVec3::new(
-                    center
-                        .x
-                        .checked_add(x)
-                        .expect("horizontal streaming X range cannot overflow chunk coordinates"),
-                    y,
-                    center
-                        .z
-                        .checked_add(z)
-                        .expect("horizontal streaming Z range cannot overflow chunk coordinates"),
-                );
-
-                if chunk_is_in_volume(center, coord, horizontal_radius, vertical_radius) {
-                    coords.push(coord);
-                }
-            }
-        }
-    }
-
-    coords.sort_by_key(|coord| (*coord - center).length_squared());
-    coords
-}
-
 pub(crate) fn chunk_is_in_volume(
     center: IVec3,
     coord: IVec3,
@@ -131,48 +83,9 @@ mod tests {
     }
 
     #[test]
-    fn streaming_volume_never_crosses_below_zero() {
-        let coords = chunk_coords_in_volume(IVec3::ZERO, 1, 4);
-
-        assert!(coords.iter().all(|coord| coord.y >= 0));
-    }
-
-    #[test]
-    fn streaming_volume_respects_vertical_radius() {
-        let center = IVec3::new(3, 10, -2);
-        let coords = chunk_coords_in_volume(center, 2, 3);
-
-        assert!(coords.iter().all(|coord| (coord.y - center.y).abs() <= 3));
-    }
-
-    #[test]
-    fn every_loaded_vertical_layer_keeps_full_horizontal_radius() {
-        let center = IVec3::new(0, 8, 0);
-        let coords = chunk_coords_in_volume(center, 6, 2);
-        let center_layer = coords.iter().filter(|coord| coord.y == center.y).count();
-        let adjacent_layer = coords
-            .iter()
-            .filter(|coord| coord.y == center.y + 1)
-            .count();
-        let top_layer = coords
-            .iter()
-            .filter(|coord| coord.y == center.y + 2)
-            .count();
-
-        assert_eq!(adjacent_layer, center_layer);
-        assert_eq!(top_layer, center_layer);
-    }
-
-    #[test]
-    fn membership_matches_generated_volume() {
+    fn volume_membership_respects_horizontal_and_vertical_bounds() {
         let center = IVec3::new(2, 5, -3);
-        let coords = chunk_coords_in_volume(center, 4, 2);
 
-        assert!(
-            coords
-                .iter()
-                .all(|coord| chunk_is_in_volume(center, *coord, 4, 2))
-        );
         assert!(chunk_is_in_volume(
             center,
             center + IVec3::new(4, 2, 0),
@@ -182,6 +95,18 @@ mod tests {
         assert!(!chunk_is_in_volume(
             center,
             center + IVec3::new(5, 0, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            center + IVec3::new(0, 3, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            IVec3::new(center.x, -1, center.z),
             4,
             2
         ));

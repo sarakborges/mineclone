@@ -1,3 +1,10 @@
+### CI follow-up — helper de volume legado removido
+
+- após corrigir os imports, Clippy expôs `chunk_coords_in_volume` como código morto: o bootstrap deixou de usá-lo quando passou a compartilhar a seleção surface-aware do streaming;
+- a função e os testes específicos do gerador de volume legado foram removidos em vez de receber `allow(dead_code)`;
+- os testes restantes cobrem diretamente a regra de membership por raio horizontal/vertical;
+- VERSION permanece `0.68.8`.
+
 ### CI follow-up — imports explícitos do bootstrap
 
 - o primeiro CI de 0.68.7 falhou por dois imports ausentes: o novo uso de `IVec3::xz()` exigia
