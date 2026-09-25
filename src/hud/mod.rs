@@ -13,7 +13,7 @@ mod player;
 mod targeting;
 mod time;
 mod tool_icon;
-mod underwater;
+mod fluid_immersion;
 mod world;
 
 use bevy::{
@@ -34,7 +34,7 @@ use inventory::InventoryHudPlugin;
 use player::PlayerHudPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
-use underwater::UnderwaterTintPlugin;
+use fluid_immersion::FluidImmersionTintPlugin;
 use world::WorldHudPlugin;
 
 use crate::{
@@ -215,7 +215,7 @@ impl Plugin for HudPlugin {
             )
             .add_plugins(UiMaterialPlugin::<BlockIconMaterial>::default())
             .add_plugins((
-                UnderwaterTintPlugin,
+                FluidImmersionTintPlugin,
                 CharacterInfoHudPlugin,
                 CrosshairPlugin,
                 HotbarHudPlugin,

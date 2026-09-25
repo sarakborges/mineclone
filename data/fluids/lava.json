@@ -6,15 +6,23 @@
     "spanish": "Lava"
   },
   "color": {
-    "hue": 28.0,
-    "saturation": 0.96,
-    "intensity": 0.72
+    "hue": 16,
+    "saturation": 0.98,
+    "intensity": 0.5
   },
-  "opacity": 1.0,
+  "opacity": 1,
   "roughness": 0.34,
-  "metallic": 0.0,
+  "metallic": 0,
   "lightDampening": 15,
   "lightEmission": 15,
-  "spreadSpeed": 4.0,
-  "maxSpread": 3
+  "spreadSpeed": 4,
+  "maxSpread": 3,
+  "immersionTint": {
+    "color": {
+      "hue": 16,
+      "saturation": 0.98,
+      "intensity": 0.3
+    },
+    "opacity": 0.72
+  }
 }

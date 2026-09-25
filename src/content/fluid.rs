@@ -9,6 +9,13 @@ use super::color::Hsi;
 
 pub type FluidId = u16;
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FluidImmersionTint {
+    pub color: Hsi,
+    pub opacity: f32,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FluidDefinition {
@@ -23,6 +30,8 @@ pub struct FluidDefinition {
     pub light_dampening: u8,
     #[serde(default)]
     pub light_emission: u8,
+    #[serde(default)]
+    pub immersion_tint: Option<FluidImmersionTint>,
     pub spread_speed: f32,
     pub max_spread: u16,
 }
@@ -65,6 +74,18 @@ impl FluidRegistry {
             "fluid {} light emission must be between 0 and 15",
             definition.id
         );
+        if let Some(tint) = definition.immersion_tint {
+            assert!(
+                tint.color.is_valid(),
+                "fluid {} immersionTint.color HSI color is invalid",
+                definition.id
+            );
+            assert!(
+                tint.opacity.is_finite() && (0.0..=1.0).contains(&tint.opacity),
+                "fluid {} immersionTint.opacity must be between 0 and 1",
+                definition.id
+            );
+        }
         assert!(
             definition.spread_speed.is_finite() && definition.spread_speed >= 0.0,
             "fluid {} spread speed must be finite and non-negative",

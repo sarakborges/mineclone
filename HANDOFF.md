@@ -1,3 +1,20 @@
+## 2026-09-25 — Lava laranja e tint de imersão data-driven por fluido
+
+- a lava estava configurada em HSI `28° / 0.96 / 0.72`; essa intensidade fazia o canal vermelho
+  ultrapassar 1.0 e ser clipado enquanto o verde permanecia alto, puxando a aparência para amarelo;
+- a cor da lava foi ajustada para `16° / 0.98 / 0.50`, produzindo um laranja muito mais definido;
+- o antigo sistema `UnderwaterTint` aplicava o tint azul do biome para qualquer fluido porque
+  nunca consultava o `fluid_id` no voxel da câmera;
+- criado `FluidDefinition.immersionTint` opcional, com color + opacity validados no loader;
+- água não define override e continua usando o `underwaterTint` do biome exatamente como antes;
+- lava define um overlay laranja escuro com opacidade 0.72, portanto ficar submerso nela agora é
+  semi-opaco/quente em vez de azul;
+- o HUD foi renomeado semanticamente de underwater para fluid immersion e também detecta troca
+  direta entre dois fluidos sem exigir sair do fluido primeiro;
+- nenhuma física, spread speed, emissão de luz ou dampening da lava mudou.
+
+VERSION: `0.68.23`.
+
 ### Correção do font atlas — preserva glyph coverage de PT-BR/ES
 
 - o handle built-in do Bevy usa `FiraMono-subset`, portanto não é uma base segura para toda a
