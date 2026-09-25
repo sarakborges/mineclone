@@ -45,6 +45,8 @@ pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
     pending: Vec<IVec3>,
     retired: Vec<IVec3>,
+    newly_desired: Vec<IVec3>,
+    no_longer_desired: Vec<IVec3>,
     horizontal_shape_key: Option<HorizontalSelectionShapeKey>,
     horizontal_offsets: Vec<IVec2>,
 }
@@ -106,7 +108,7 @@ pub(super) fn rebuild_queue(
         horizontal_radius: preload_radius,
         vertical_radius,
     };
-    if can_incrementally_rebuild_desired(
+    let incremental_rebuild = can_incrementally_rebuild_desired(
         previous_center,
         previous_horizontal_radius,
         previous_vertical_radius,
@@ -117,7 +119,8 @@ pub(super) fn rebuild_queue(
         movement_direction,
         allow_forward_preload,
         prune_caches,
-    ) {
+    );
+    if incremental_rebuild {
         rebuild_desired_chunk_coords_incremental(
             &mut scratch.desired,
             &streaming.desired,
@@ -129,8 +132,12 @@ pub(super) fn rebuild_queue(
             &mut streaming.surface_ranges,
             &mut streaming.surface_support_minimums,
             &mut streaming.structure_top_chunks,
+            &mut scratch.newly_desired,
+            &mut scratch.no_longer_desired,
         );
     } else {
+        scratch.newly_desired.clear();
+        scratch.no_longer_desired.clear();
         rebuild_desired_chunk_coords(
             &mut scratch.desired,
             desired_selection,
@@ -150,18 +157,27 @@ pub(super) fn rebuild_queue(
 
     streaming.retain_mesh_pressure_evictions(&scratch.desired, center);
 
-    scratch.pending.clear();
-    scratch.pending.extend(
-        scratch
-            .desired
-            .iter()
-            .copied()
-            .filter(|coord| {
-                !context.render_pool.contains(*coord)
-                    && !streaming.generated_chunk_is_unpublished(*coord)
-                    && !streaming.mesh_is_pressure_evicted(*coord)
-            }),
-    );
+    if incremental_rebuild {
+        apply_incremental_pending_delta(
+            streaming,
+            context.render_pool,
+            &scratch.newly_desired,
+            &scratch.no_longer_desired,
+        );
+    } else {
+        scratch.pending.clear();
+        scratch.pending.extend(
+            scratch
+                .desired
+                .iter()
+                .copied()
+                .filter(|coord| {
+                    !context.render_pool.contains(*coord)
+                        && !streaming.generated_chunk_is_unpublished(*coord)
+                        && !streaming.mesh_is_pressure_evicted(*coord)
+                }),
+        );
+    }
 
     collect_retired_chunk_coords(
         &streaming.retained,
@@ -178,10 +194,12 @@ pub(super) fn rebuild_queue(
     streaming.vertical_radius = vertical_radius;
     streaming.mark_selection_rebuilt();
 
-    streaming.pending.clear();
-    streaming.pending.reserve(scratch.pending.len());
-    for coord in scratch.pending.drain(..) {
-        streaming.pending.enqueue(coord);
+    if !incremental_rebuild {
+        streaming.pending.clear();
+        streaming.pending.reserve(scratch.pending.len());
+        for coord in scratch.pending.drain(..) {
+            streaming.pending.enqueue(coord);
+        }
     }
 
     for coord in scratch.retired.drain(..) {
@@ -519,23 +537,31 @@ fn rebuild_desired_chunk_coords_incremental(
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: &mut HashMap<IVec2, i32>,
     structure_top_chunks: &mut HashMap<IVec2, i32>,
+    newly_desired: &mut Vec<IVec3>,
+    no_longer_desired: &mut Vec<IVec3>,
 ) {
     desired.clear();
+    newly_desired.clear();
+    no_longer_desired.clear();
     let local_radius = selection
         .horizontal_radius
         .min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
 
-    desired.extend(previous_desired.iter().copied().filter(|coord| {
-        coord_remains_selected(
-            *coord,
+    for &coord in previous_desired {
+        if coord_remains_selected(
+            coord,
             selection,
             movement_direction,
             local_radius,
             surface_ranges,
             surface_support_minimums,
             structure_top_chunks,
-        )
-    }));
+        ) {
+            desired.insert(coord);
+        } else {
+            no_longer_desired.push(coord);
+        }
+    }
     insert_local_volume(desired, selection);
 
     let center_horizontal = selection.center.xz();
@@ -562,6 +588,28 @@ fn rebuild_desired_chunk_coords_incremental(
             surface_support_minimums,
             structure_top_chunks,
         );
+    }
+
+    newly_desired.extend(desired.difference(previous_desired).copied());
+}
+
+fn apply_incremental_pending_delta(
+    streaming: &mut ChunkStreamingState,
+    render_pool: &crate::world::chunk_rendering::ChunkRenderPool,
+    newly_desired: &[IVec3],
+    no_longer_desired: &[IVec3],
+) {
+    for &coord in no_longer_desired {
+        streaming.pending.remove(coord);
+    }
+
+    for &coord in newly_desired {
+        if !render_pool.contains(coord)
+            && !streaming.generated_chunk_is_unpublished(coord)
+            && !streaming.mesh_is_pressure_evicted(coord)
+        {
+            streaming.pending.enqueue(coord);
+        }
     }
 }
 
@@ -829,6 +877,30 @@ mod tests {
                 assert_eq!(actual, expected, "radius={radius} direction={direction:?}");
             }
         }
+    }
+
+    #[test]
+    fn incremental_pending_delta_preserves_unchanged_entries() {
+        let mut streaming = ChunkStreamingState::default();
+        let render_pool = crate::world::chunk_rendering::ChunkRenderPool::default();
+        let removed = IVec3::new(0, 0, 0);
+        let retained = IVec3::new(1, 0, 0);
+        let added = IVec3::new(2, 0, 0);
+
+        streaming.pending.enqueue(removed);
+        streaming.pending.enqueue(retained);
+
+        apply_incremental_pending_delta(
+            &mut streaming,
+            &render_pool,
+            &[added],
+            &[removed],
+        );
+
+        assert_eq!(
+            streaming.pending.values_in_order().collect::<Vec<_>>(),
+            vec![retained, added]
+        );
     }
 
     #[test]

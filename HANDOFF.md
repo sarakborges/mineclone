@@ -1,5 +1,21 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — fila pending também vira incremental no fast path de movimento
+- a auditoria estática encontrou um custo síncrono remanescente em `rebuild_queue()`: mesmo quando
+  o conjunto `desired` usava o fast path incremental, a fila `pending` era limpa e reconstruída
+  inteira a cada mudança para um chunk adjacente;
+- o fast path agora calcula o delta entre a seleção anterior e a nova: entradas que continuam
+  desejadas permanecem na fila, apenas coordenadas que saíram são removidas e apenas coordenadas
+  novas são enfileiradas;
+- isso preserva a prioridade lazy existente e evita refazer HashMap/VecDeque de toda a fila no
+  frame de fronteira;
+- full rebuild continua sendo usado sem alterações em warp, mudança de raio/altura/direção e
+  pruning de generation region;
+- foi adicionado teste garantindo que a reconciliação incremental preserve a ordem das entradas
+  inalteradas enquanto remove/adiciona somente o delta.
+
+VERSION: `0.67.6`.
+
 ### Follow-up — frame time entra no diagnóstico periódico
 - o log `render assets` tinha backlog, assets e tempos async, mas não registrava a distribuição de
   frame time da mesma janela; isso impedia correlacionar spikes visíveis com o subsystem ativo;
