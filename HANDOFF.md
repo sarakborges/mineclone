@@ -1,5 +1,18 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — world objects passam a respeitar o frame budget global
+- `sync_world_objects` mantinha um budget local de 2 ms independente do `WorldFrameWorkBudget`;
+  durante streaming pesado isso permitia gastar até mais 2 ms de main thread depois de streaming,
+  remesh e retirement já terem consumido o orçamento global do frame;
+- o sync visual agora consulta o mesmo deadline global antes de processar o próximo chunk, mantendo
+  o piso de progresso de pelo menos um chunk por execução e o teto local de 2 chunks / 2 ms;
+- gameplay de objects continua voxel-backed, portanto adiar materialização visual quando o frame já
+  está pressionado não atrasa targeting, pickup, break ou worldgen;
+- `WorldFrameWorkBudget` passou a ser exposto apenas dentro do crate para esse segundo consumidor;
+  não houve alteração nos valores adaptativos de 2/3/4 ms.
+
+VERSION: `0.67.3`.
+
 Estado desta frente no `develop`: o gargalo não era Bevy/wgpu/OpenGL em si, e sim trabalho
 demais sendo executado ou preparado no caminho crítico do frame. A investigação já virou uma
 sequência de correções arquiteturais, não apenas tuning de números.

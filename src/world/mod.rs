@@ -95,7 +95,8 @@ use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
 use warp::{PendingWarp, resolve_pending_warp};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
-use work_budget::{WorldFrameWorkBudget, begin_world_frame_work_budget};
+pub(crate) use work_budget::WorldFrameWorkBudget;
+use work_budget::begin_world_frame_work_budget;
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;

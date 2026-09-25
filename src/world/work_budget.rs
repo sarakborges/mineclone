@@ -9,7 +9,7 @@ const WORLD_WORK_PRESSURE_FRAME_SECONDS: f32 = 1.0 / 60.0;
 const WORLD_WORK_FAST_FRAME_SECONDS: f32 = 1.0 / 75.0;
 
 #[derive(Resource)]
-pub(super) struct WorldFrameWorkBudget {
+pub(crate) struct WorldFrameWorkBudget {
     deadline: Instant,
 }
 
@@ -22,7 +22,7 @@ impl Default for WorldFrameWorkBudget {
 }
 
 impl WorldFrameWorkBudget {
-    pub(super) fn deadline(&self) -> Instant {
+    pub(crate) fn deadline(&self) -> Instant {
         self.deadline
     }
 

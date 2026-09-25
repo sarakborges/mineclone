@@ -51,6 +51,7 @@ use crate::{
         deterministic::{hash_signed, hash_string, mix_u32_components},
         render_distance::{RenderDistanceSettings, chunk_visibility_radii},
         tick::WorldTickClock,
+        WorldFrameWorkBudget,
     },
     world_items::WorldItemSpawnRequest,
 };
@@ -367,6 +368,7 @@ fn sync_world_objects(
     mut assets: WorldObjectSceneAssets,
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
+    frame_budget: Res<WorldFrameWorkBudget>,
     mut store: ResMut<WorldObjectStore>,
 ) {
     let world_revision = content.world.object_scene_revision();
@@ -399,7 +401,11 @@ fn sync_world_objects(
     let mut deferred = false;
 
     for coord in retired {
-        if world_object_sync_budget_exhausted(sync_started, processed_chunks) {
+        if world_object_sync_budget_exhausted(
+            sync_started,
+            processed_chunks,
+            frame_budget.deadline(),
+        ) {
             deferred = true;
             break;
         }
@@ -427,7 +433,11 @@ fn sync_world_objects(
             if store.synced_chunk_revisions.get(&coord).copied() == Some(revision) {
                 continue;
             }
-            if world_object_sync_budget_exhausted(sync_started, processed_chunks) {
+            if world_object_sync_budget_exhausted(
+                sync_started,
+                processed_chunks,
+                frame_budget.deadline(),
+            ) {
                 deferred = true;
                 break;
             }
@@ -506,9 +516,15 @@ fn sync_world_objects(
     }
 }
 
-fn world_object_sync_budget_exhausted(started: Instant, processed_chunks: usize) -> bool {
+fn world_object_sync_budget_exhausted(
+    started: Instant,
+    processed_chunks: usize,
+    global_deadline: Instant,
+) -> bool {
     processed_chunks >= MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME
-        || (processed_chunks > 0 && started.elapsed() >= WORLD_OBJECT_SYNC_BUDGET)
+        || (processed_chunks > 0
+            && (started.elapsed() >= WORLD_OBJECT_SYNC_BUDGET
+                || Instant::now() >= global_deadline))
 }
 
 
