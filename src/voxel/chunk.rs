@@ -607,6 +607,10 @@ impl VoxelChunk {
         self.block_count > 0 || self.layer_count > 0
     }
 
+    pub(crate) fn has_objects(&self) -> bool {
+        !self.objects.is_empty()
+    }
+
     pub(crate) fn visit_potential_fluid_frontier_sources(
         &self,
         mut visit: impl FnMut(IVec3, FluidCell),
