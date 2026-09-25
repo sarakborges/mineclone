@@ -1,3 +1,49 @@
+## 2026-09-25 — Streaming 0.68.39 remove seed de preload e corta churn de retirement/remesh
+
+- o log 0.68.38 mostrou que o backlog `ready` total não era mais o gargalo visual:
+  `stream_ready` ficou em ~725..2065, mas `stream_ready_renderable` quase sempre ficou em 0..3;
+  portanto a maior parte dessa fila era forward/preload saudável fora do show radius;
+- o atraso visual real apareceu em `stream_pending_renderable`, que cresceu para 1324, 1828 e
+  2183 chunks enquanto `wave_targets_renderable` permanecia limitado a 8;
+- no mesmo período `generation_tasks` frequentemente ficava em 3..4 com
+  `async_chunk_work=0/4`: os workers já tinham terminado e o main thread ainda estava integrando
+  resultados;
+- a causa síncrona principal era o direct-light seed completo executado na generation integration
+  para TODO chunk residente, inclusive preload que ainda não tinha mesh publicado;
+- generation integration agora apenas instala/restaura o chunk e o move para `ready`; direct-light
+  seed foi movido para imediatamente antes da primeira captura/publicação de initial mesh;
+- para preservar correção, dynamic lighting agora possui domínio explícito de publicação:
+  `process_pending_lighting` só processa chunks presentes no `ChunkRenderPool`, e propagação
+  cardinal através de um vizinho não publicado o trata como DARK/unavailable, exatamente como uma
+  fronteira ainda não carregada;
+- direct skylight continua podendo consultar conteúdo residente acima para calcular obstrução, mas
+  luz propagada não atravessa chunks de preload ainda não apresentados;
+- runtime fluid wake + enqueue de lighting relaxation agora acontecem DEPOIS que o chunk entra no
+  `ChunkRenderPool`; bootstrap/loading mantém todos os chunks no domínio de lighting durante a
+  fase própria de convergência;
+- resultado do direct-light seed continua cacheado no `ChunkStreamingState` entre tentativa de
+  initial mesh e publicação, evitando reseed em retries;
+- background remesh volta a ser bloqueado enquanto existir QUALQUER backlog visual
+  (`pending`, generation wave ou `ready` dentro do show radius), em vez de olhar apenas
+  `ready_renderable`;
+- normal mesh retirement também pausa enquanto a cobertura visível ainda está incompleta; o
+  residency pressure budget continua autorizado a evictar se memória realmente apertar;
+- halo remesh após retirement/unload agora só é enfileirado para vizinhos que ainda são mantidos
+  pela residency visual atual, evitando reconstruir meshes escondidos/prestes a sair;
+- o mesmo log mostrou o início de Gameplay em ~29..45 FPS mesmo com streaming zerado, enquanto
+  `world_object_chunks` subia de 74 -> 971 -> 2169 -> 3130;
+- `sync_world_objects` estava marcando TODOS os chunks renderizados como sincronizados, inclusive
+  milhares sem object algum, com cap fixo de 2 chunks/frame;
+- `VoxelChunk::has_objects()` agora permite filtrar o sync de forma esparsa: só entram chunks que
+  possuem objects ou que já tinham estado materializado e precisam reconciliar remoções;
+- chunks que ficam sem objects saem novamente do índice de revisions, e o cap por frame sobe de
+  2 para 16 mantendo o budget temporal rígido de 2 ms + deadline global;
+- CI funcional run `36193370585`: success em localization audit, structure content reference
+  audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.39`.
+
 ## 2026-09-25 — Initial mesh passa a ter prioridade sobre geração/remesh durante backlog visual
 
 - o log 0.68.37 confirmou que o fix do limiter funcionou: `async_chunk_work_limit` recuperou até
