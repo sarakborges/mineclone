@@ -305,6 +305,7 @@ pub(crate) fn process_pending_lighting(
     secondary_properties: &SecondaryPropertyRegistry,
     changed_chunks: &mut HashSet<IVec3>,
     changed_positions: &mut HashSet<IVec3>,
+    is_chunk_active: &impl Fn(IVec3) -> bool,
     budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
@@ -330,6 +331,7 @@ pub(crate) fn process_pending_lighting(
             settling_changed_chunks,
             settling_changed_positions,
         ),
+        is_chunk_active,
         budget_exhausted,
     );
 }
