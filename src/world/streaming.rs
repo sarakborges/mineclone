@@ -32,7 +32,10 @@ use self::{
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
     selection::rebuild_queue,
 };
-pub(in crate::world) use self::selection::initial_streaming_chunk_coords;
+pub(in crate::world) use self::{
+    generation::refill_generation_workers,
+    selection::initial_streaming_chunk_coords,
+};
 use super::{
     biome_field::BiomeField,
     chunk_async_work::ChunkAsyncWorkLimiter,
