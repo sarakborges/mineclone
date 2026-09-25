@@ -121,6 +121,22 @@ impl BiomeField {
         let climate = self.climate.sample(site);
         let hash = cell_hash(cell, self.seed);
 
+        if let Some(ocean_index) = self.ocean_surface_index
+            && self.surface_biome_is_enabled(ocean_index)
+        {
+            let ocean = &self.surface_biomes[ocean_index];
+            if ocean.weight > f32::EPSILON
+                && ocean
+                    .distributions
+                    .iter()
+                    .copied()
+                    .any(BiomeDistribution::is_regional)
+                && climate_suitability(ocean.climate, climate) >= 1.0 - f32::EPSILON
+            {
+                return ocean_index;
+            }
+        }
+
         self.select_weighted_surface_biome_index(site, climate, hash, |_| true)
             .unwrap_or_else(|| {
                 panic!("surface biome field has no active biome at site {cell:?}")
@@ -478,6 +494,37 @@ mod tests {
         assert!(!exclusive_fallback_allows(&volcano, &gorge));
         assert!(exclusive_fallback_allows(&volcano, &volcano));
         assert!(exclusive_fallback_allows(&volcano, &plains));
+    }
+
+    #[test]
+    fn full_ocean_continentalness_range_is_authoritative() {
+        let ocean_climate = BiomeClimate {
+            continentalness: Some(BiomeClimateRange {
+                min: 0.0,
+                max: 0.38,
+            }),
+            ..Default::default()
+        };
+        let ocean_core = MacroClimateSample {
+            temperature: 0.5,
+            humidity: 0.5,
+            continentalness: 0.2,
+            erosion: 0.5,
+        };
+        let shoreline = MacroClimateSample {
+            continentalness: 0.44,
+            ..ocean_core
+        };
+        let inland = MacroClimateSample {
+            continentalness: 0.6,
+            ..ocean_core
+        };
+
+        assert_eq!(climate_suitability(ocean_climate, ocean_core), 1.0);
+        assert!(
+            (0.0..1.0).contains(&climate_suitability(ocean_climate, shoreline))
+        );
+        assert_eq!(climate_suitability(ocean_climate, inland), 0.0);
     }
 
     #[test]

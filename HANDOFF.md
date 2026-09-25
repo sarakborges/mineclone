@@ -1,3 +1,24 @@
+## 2026-09-25 — Ocean usa continentalness como máscara macro autoritativa
+
+- investigado por que Ocean aparecia como faixas/bolsões finos apesar de `size.x/z = 180..520`;
+- a causa principal estava na seleção regional: mesmo dentro de `continentalness 0.0..0.38`,
+  Ocean entrava apenas como candidato de peso 1 numa roleta contra todos os land biomes sem
+  restrição de continentalness;
+- portanto uma área climaticamente oceânica continuava escolhendo Plains/Wasteland/Forest/etc.
+  na maioria dos sites, fragmentando o oceano em células estreitas;
+- quando o `oceanBiome` configurado está habilitado, é regional e o sample climático está
+  integralmente dentro da faixa autorada do biome, esse site agora é Ocean de forma determinística,
+  antes da roleta genérica;
+- fora do core oceânico, a margem de climate suitability existente continua fazendo a transição
+  para costa/continente, sem hardcode de coordenadas ou IDs;
+- `size` de surface biome ainda participa do espaçamento global do field, mas não é um raio
+  individual por biome; isso explica por que simplesmente aumentar 180..520 nunca resolveria a
+  fragmentação causada pela seleção;
+- `WORLDGEN_VERSION` sobe de 9 para 10 porque a identidade determinística de chunks novos muda;
+- nenhum parâmetro do terrain profile do Ocean (depth/amplitude/sand margin) foi alterado.
+
+VERSION: `0.68.26`.
+
 ## 2026-09-25 — Fluid settling inicializa generation waves de forma incremental
 
 - o log de 0.68.19 mostrou os maiores hitches restantes durante movimento coincidindo com
