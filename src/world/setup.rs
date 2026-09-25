@@ -51,11 +51,20 @@ pub(crate) enum WorldLoadingPhaseStatus {
     Done,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InitialLightingRelaxation {
+    BoundaryOnly(IVec3),
+    Full(IVec3),
+}
+
 #[derive(Resource)]
 pub(crate) struct WorldLoadingState {
     coords: Vec<IVec3>,
     generation_cursor: usize,
     generated: usize,
+    lighting_seed_cursor: usize,
+    lighting_relaxation_cursor: usize,
+    lighting_relaxations: Vec<InitialLightingRelaxation>,
     lit: usize,
     mesh_cursor: usize,
     meshed: usize,

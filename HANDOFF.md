@@ -1,3 +1,21 @@
+## 2026-09-25 — Lighting inicial separa direct seed da propagação
+
+- o teste de runtime após 0.68.15 mostrou Fluid Settling praticamente instantâneo, enquanto
+  Lighting podia aparentar demora para começar e permanecer em 0/total por vários frames;
+- a causa era estrutural: o bootstrap fazia direct-light seed de uma section e drenava toda a
+  propagação dela antes de sequer semear a próxima, então o primeiro relaxamento grande podia
+  monopolizar vários frames e ainda convergir contra vizinhos que continuavam com light escura;
+- o bootstrap agora faz primeiro um passe budgetado de direct-light seed por todas as sections
+  selecionadas, registrando apenas quais realmente precisam de relaxamento completo ou de
+  fronteira; o progresso de Lighting avança durante esse passe;
+- depois do baseline direto estar pronto em toda a seleção, os relaxamentos são enfileirados em
+  lotes pequenos de 8 sections e drenados pelo mesmo budget de 12 ms, evitando tanto uma fila
+  gigante quanto propagação redundante contra sections ainda não semeadas;
+- o contador segura apenas o último item até a convergência terminar, então a UI não anuncia
+  100% de Lighting enquanto ainda existe trabalho de propagação;
+- nenhuma regra de iluminação, worldgen, fluidos, seleção ou render distance foi alterada.
+
+VERSION: 0.68.17.
 ### Correção da limpeza de dead code — test-only não é código morto
 
 - `VoxelChunk::set_block` continua sob `#[cfg(test)]` porque há consumidores reais em testes de outros módulos; ele não entra no binário de runtime;
