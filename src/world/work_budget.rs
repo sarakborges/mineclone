@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use bevy::prelude::{Res, ResMut, Resource, Time};
+use bevy::{prelude::{Res, ResMut, Resource, Time}, time::Real};
 
 const WORLD_WORK_BUDGET_PRESSURED: Duration = Duration::from_millis(2);
 const WORLD_WORK_BUDGET_NORMAL: Duration = Duration::from_millis(3);

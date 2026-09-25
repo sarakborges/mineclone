@@ -1,3 +1,9 @@
+### CI follow-up — import explícito do clock Real
+
+O primeiro CI do frame-budget adaptativo falhou apenas porque `work_budget.rs` usa imports
+seletivos do Bevy; `Real` não estava no escopo. O tipo de clock agora é importado
+explicitamente de `bevy::time::Real`.
+
 ## 2026-09-24 — Streaming passa a proteger o frame budget antes de cair abaixo de 60 FPS
 
 A investigação de stutters encontrou duas políticas agressivas demais durante exploração/warp:
