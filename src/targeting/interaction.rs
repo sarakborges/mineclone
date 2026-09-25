@@ -16,13 +16,17 @@ use crate::{
         item_stack::ItemStack, viewmodel::ViewModelAnimation,
     },
     voxel::{
-        cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, object::ObjectCell,
+        cell::VoxelCell,
+        edit::{VoxelBlockMutation, VoxelTopologyRuntime},
+        layer::LayerCell,
+        object::ObjectCell,
         log_variant::is_hollow_log_id,
         raycast::VoxelHit, texture_rotation::TextureRotation,
     },
-    world_items::TargetedWorldItem,
+    world_items::{TargetedWorldItem, WorldItemSpawnRequest},
     world_objects::{
-        TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest,
+        detached_object_drop_request, TargetedWorldObject, WorldObjectPlaceRequest,
+        WorldObjectRemoveRequest,
     },
 };
 
@@ -78,6 +82,7 @@ struct BlockEditActions<'w> {
     object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
     object_removals: MessageWriter<'w, WorldObjectRemoveRequest>,
     tool_uses: MessageWriter<'w, ToolUse>,
+    item_spawns: MessageWriter<'w, WorldItemSpawnRequest>,
     viewmodel_animation: ResMut<'w, ViewModelAnimation>,
 }
 
@@ -93,12 +98,12 @@ struct TargetedVoxelEdit<'a> {
     game_mode: &'a GameMode,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 enum VoxelEditOutcome {
     Consumed,
     LayerPlaced,
     BlockPlaced,
-    BlockBroken,
+    BlockBroken(VoxelBlockMutation),
 }
 
 fn edit_targeted_block(
@@ -280,7 +285,17 @@ fn edit_targeted_block(
             actions.viewmodel_animation.play_place();
             input.targeted.0 = None;
         }
-        VoxelEditOutcome::BlockBroken => {
+        VoxelEditOutcome::BlockBroken(mutation) => {
+            if let Some(object) = mutation.detached_object
+                && let Some(drop) = detached_object_drop_request(
+                    hit.voxel,
+                    mutation.previous_cell,
+                    object,
+                    &definitions.objects,
+                )
+            {
+                actions.item_spawns.write(drop);
+            }
             actions.viewmodel_animation.play_break();
             input.targeted.0 = None;
         }
@@ -366,8 +381,10 @@ fn edit_targeted_voxel(
         if matches!(request.game_mode, GameMode::Survival) {
             return VoxelEditOutcome::Consumed;
         }
-        return if runtime.set_block(request.hit.voxel, None).is_some() {
-            VoxelEditOutcome::BlockBroken
+        return if let Some(mutation) =
+            runtime.set_block_detailed(request.hit.voxel, None)
+        {
+            VoxelEditOutcome::BlockBroken(mutation)
         } else {
             VoxelEditOutcome::Consumed
         };

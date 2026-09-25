@@ -1,3 +1,14 @@
+## 2026-09-25 — Support loss transforma Pebble/Stick no próprio item em todos os modos
+
+- o primeiro detach de objects só era consumido pelo mining de Survival; Creative continuava usando `set_block(...)`, que descartava o `detached_object` retornado pelo storage;
+- quebra instantânea em Creative agora usa a mutação detalhada e também converte o object destacado em `WorldItemSpawnRequest`;
+- perder o bloco-suporte foi separado semanticamente de quebrar o object: support loss não executa a loot table do object; quando `dropSelf = true`, o object vira exatamente um item dele mesmo;
+- por isso Pebble e Stick são preservados como drops tanto em Survival quanto em Creative, enquanto o bloco quebrado continua sem loot em Creative;
+- objects com `dropSelf = false` (por exemplo Grass) continuam podendo desaparecer com o suporte, respeitando a própria definição;
+- Survival mining foi migrado para o mesmo helper `detached_object_drop_request`, removendo a divergência entre os dois modos.
+
+VERSION: `0.68.20`.
+
 ## 2026-09-25 — Bootstrap de Lighting distingue propagação de bookkeeping
 
 - corrigido o panic introduzido em 0.68.17: o passe de direct-light seed assumia que

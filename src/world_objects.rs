@@ -589,6 +589,25 @@ pub(crate) fn world_object_position(
     base_position + object_position_jitter(definition, support, hollow_orientation)
 }
 
+pub(crate) fn detached_object_drop_request(
+    support: IVec3,
+    support_cell: Option<VoxelCell>,
+    object: ObjectCell,
+    objects: &ObjectRegistry,
+) -> Option<WorldItemSpawnRequest> {
+    let definition = objects.get(object.object_id)?;
+    if !definition.drop_self {
+        return None;
+    }
+
+    let position =
+        world_object_position(support, support_cell, object, definition) + Vec3::Y * 0.25;
+    Some(WorldItemSpawnRequest::dropped(
+        ItemStack::new(object.object_id),
+        position,
+    ))
+}
+
 fn object_position_jitter(
     definition: &ObjectDefinition,
     support: IVec3,
