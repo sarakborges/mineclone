@@ -525,7 +525,6 @@ fn spawn_world_object(
             texture,
             base_offset,
             height,
-            repeat_height,
             size,
             alpha_cutoff,
         } => {
@@ -535,7 +534,6 @@ fn spawn_world_object(
                     size: *size,
                     height: *height,
                     base_offset: *base_offset,
-                    repeat_height: *repeat_height,
                     alpha_cutoff: *alpha_cutoff,
                 },
                 tint,

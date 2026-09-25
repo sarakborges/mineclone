@@ -17,7 +17,6 @@ pub(super) struct ExtrudedSpriteGeometry {
     pub(super) size: [f32; 2],
     pub(super) height: f32,
     pub(super) base_offset: f32,
-    pub(super) repeat_height: f32,
     pub(super) alpha_cutoff: f32,
 }
 
@@ -52,7 +51,6 @@ struct ExtrudedSpriteMeshKey {
     depth: u32,
     height: u32,
     base_offset: u32,
-    repeat_height: u32,
     alpha_cutoff: u32,
 }
 
@@ -165,7 +163,6 @@ fn mesh_key(pending: &PendingExtrudedSprite) -> ExtrudedSpriteMeshKey {
         depth: geometry.size[1].to_bits(),
         height: geometry.height.to_bits(),
         base_offset: geometry.base_offset.to_bits(),
-        repeat_height: geometry.repeat_height.to_bits(),
         alpha_cutoff: geometry.alpha_cutoff.to_bits(),
     }
 }
@@ -276,7 +273,6 @@ impl MeshBuffers {
 struct SpriteExtrusion<'a> {
     mask: &'a OpaqueMask,
     geometry: ExtrudedSpriteGeometry,
-    vertical_repeats: usize,
 }
 
 impl SpriteExtrusion<'_> {
@@ -290,49 +286,37 @@ impl SpriteExtrusion<'_> {
         let x1 = -self.geometry.size[0] * 0.5 + self.geometry.size[0] * u1;
         let z0 = self.geometry.size[1] * 0.5 - self.geometry.size[1] * v0;
         let z1 = self.geometry.size[1] * 0.5 - self.geometry.size[1] * v1;
+        let y0 = self.geometry.base_offset;
+        let y1 = self.geometry.base_offset + self.geometry.height;
+        let side_uvs = [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
 
-        for repeat in 0..self.vertical_repeats {
-            let local_y0 = self.geometry.repeat_height * repeat as f32;
-            let local_y1 = (local_y0 + self.geometry.repeat_height).min(self.geometry.height);
-            let y0 = self.geometry.base_offset + local_y0;
-            let y1 = self.geometry.base_offset + local_y1;
-            let repeat_fraction = (local_y1 - local_y0) / self.geometry.repeat_height;
-            let repeated_v0 = v1 - (v1 - v0) * repeat_fraction;
-            let side_uvs = [
-                [u0, v1],
-                [u1, v1],
-                [u1, repeated_v0],
-                [u0, repeated_v0],
-            ];
-
-            if !self.mask.is_opaque(pixel_x as isize - 1, pixel_y as isize) {
-                buffers.push_quad(
-                    [[x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1]],
-                    [-1.0, 0.0, 0.0],
-                    side_uvs,
-                );
-            }
-            if !self.mask.is_opaque(pixel_x as isize + 1, pixel_y as isize) {
-                buffers.push_quad(
-                    [[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0]],
-                    [1.0, 0.0, 0.0],
-                    side_uvs,
-                );
-            }
-            if !self.mask.is_opaque(pixel_x as isize, pixel_y as isize - 1) {
-                buffers.push_quad(
-                    [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]],
-                    [0.0, 0.0, 1.0],
-                    side_uvs,
-                );
-            }
-            if !self.mask.is_opaque(pixel_x as isize, pixel_y as isize + 1) {
-                buffers.push_quad(
-                    [[x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1]],
-                    [0.0, 0.0, -1.0],
-                    side_uvs,
-                );
-            }
+        if !self.mask.is_opaque(pixel_x as isize - 1, pixel_y as isize) {
+            buffers.push_quad(
+                [[x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1]],
+                [-1.0, 0.0, 0.0],
+                side_uvs,
+            );
+        }
+        if !self.mask.is_opaque(pixel_x as isize + 1, pixel_y as isize) {
+            buffers.push_quad(
+                [[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0]],
+                [1.0, 0.0, 0.0],
+                side_uvs,
+            );
+        }
+        if !self.mask.is_opaque(pixel_x as isize, pixel_y as isize - 1) {
+            buffers.push_quad(
+                [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]],
+                [0.0, 0.0, 1.0],
+                side_uvs,
+            );
+        }
+        if !self.mask.is_opaque(pixel_x as isize, pixel_y as isize + 1) {
+            buffers.push_quad(
+                [[x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1]],
+                [0.0, 0.0, -1.0],
+                side_uvs,
+            );
         }
     }
 }
@@ -342,9 +326,7 @@ fn extruded_sprite_mesh(
     geometry: ExtrudedSpriteGeometry,
 ) -> Result<Mesh, String> {
     let mask = OpaqueMask::from_image(image, geometry.alpha_cutoff)?;
-    let vertical_repeats = (geometry.height / geometry.repeat_height).ceil() as usize;
-    let side_quads = mask.exposed_edge_count().saturating_mul(vertical_repeats);
-    let quad_count = 2 + side_quads;
+    let quad_count = 2 + mask.exposed_edge_count();
     if quad_count > MAX_EXTRUDED_SPRITE_QUADS {
         return Err(format!(
             "extrusion would create {quad_count} quads; maximum is {MAX_EXTRUDED_SPRITE_QUADS}"
@@ -380,7 +362,6 @@ fn extruded_sprite_mesh(
     let extrusion = SpriteExtrusion {
         mask: &mask,
         geometry,
-        vertical_repeats,
     };
     for y in 0..mask.height {
         for x in 0..mask.width {

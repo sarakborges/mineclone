@@ -1,3 +1,14 @@
+## 2026-09-25 — ExtrudedSprite sem repetição vertical
+
+- removido `repeatHeight` do schema e do runtime de `extrudedSprite`;
+- `height` agora é a única propriedade que controla a espessura do sprite extrudado;
+- as laterais do contorno são geradas como um único quad por aresta exposta, cobrindo toda a altura, sem tiling/repetição vertical;
+- o texel correspondente ao contorno é esticado pela altura da lateral; a face superior continua usando o sprite original;
+- Pebble e Stick permanecem com `height = 0.012`, sem qualquer propriedade de repetição;
+- o cache de mesh deixou de considerar repeatHeight, eliminando estado morto do primitive.
+
+VERSION: `0.68.8`.
+
 ## 2026-09-25 — Load World cobre a seleção inicial real antes do Gameplay
 
 - removido o bootstrap fixo de raio 4 x ±2 chunks, que declarava o mundo pronto e deixava o

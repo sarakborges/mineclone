@@ -14,7 +14,6 @@ use super::{
 
 const MAX_EXTRUDED_SPRITE_SIZE: f32 = 4.0;
 const MAX_EXTRUDED_SPRITE_OFFSET: f32 = 2.0;
-const MAX_EXTRUDED_SPRITE_REPEATS: u32 = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -127,8 +126,6 @@ pub enum ObjectVisualDefinition {
         #[serde(default, rename = "baseOffset")]
         base_offset: f32,
         height: f32,
-        #[serde(rename = "repeatHeight")]
-        repeat_height: f32,
         #[serde(default = "default_extruded_sprite_size")]
         size: [f32; 2],
         #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
@@ -150,7 +147,6 @@ impl ObjectVisualDefinition {
                 texture,
                 base_offset,
                 height,
-                repeat_height,
                 size,
                 alpha_cutoff,
             } => {
@@ -167,16 +163,6 @@ impl ObjectVisualDefinition {
                 assert!(
                     height.is_finite() && *height > 0.0 && *height <= MAX_EXTRUDED_SPRITE_SIZE,
                     "object {object_id} extrudedSprite height must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
-                );
-                assert!(
-                    repeat_height.is_finite()
-                        && *repeat_height > 0.0
-                        && *repeat_height <= MAX_EXTRUDED_SPRITE_SIZE,
-                    "object {object_id} extrudedSprite repeatHeight must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
-                );
-                assert!(
-                    *height / *repeat_height <= MAX_EXTRUDED_SPRITE_REPEATS as f32,
-                    "object {object_id} extrudedSprite cannot exceed {MAX_EXTRUDED_SPRITE_REPEATS} vertical repeats"
                 );
                 assert!(
                     size.iter().all(|value| {
@@ -346,8 +332,7 @@ mod tests {
                 "type": "extrudedSprite",
                 "texture": "textures/items/pebble.png",
                 "baseOffset": 0.0125,
-                "height": 0.1,
-                "repeatHeight": 0.025,
+                "height": 0.012,
                 "size": [0.42, 0.42],
                 "alphaCutoff": 0.5
             }"#,
@@ -358,7 +343,6 @@ mod tests {
             texture,
             base_offset,
             height,
-            repeat_height,
             size,
             alpha_cutoff,
         } = visual
@@ -368,8 +352,7 @@ mod tests {
 
         assert_eq!(texture, "textures/items/pebble.png");
         assert_eq!(base_offset, 0.0125);
-        assert_eq!(height, 0.1);
-        assert_eq!(repeat_height, 0.025);
+        assert_eq!(height, 0.012);
         assert_eq!(size, [0.42, 0.42]);
         assert_eq!(alpha_cutoff, 0.5);
     }
