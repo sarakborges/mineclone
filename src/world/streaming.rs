@@ -18,7 +18,7 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::{chunk_coord_from_position, chunk_coord_from_world},
+        coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
         lighting::PendingLightingUpdates,
         meshlet::ChunkMeshletMask,
@@ -135,8 +135,6 @@ pub(super) struct ChunkStreamingState {
     generation_wave_pending: DeduplicatedQueue<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     settled_publication_chunks: Vec<IVec3>,
-    generation_wave_changed_existing_positions: HashSet<IVec3>,
-    generation_wave_owned_existing_chunks: HashSet<IVec3>,
     selection_revision: u64,
     pending_critical_scan_miss: Option<CriticalPendingScanKey>,
     ready_scan_miss: Option<SelectionScanKey>,
@@ -356,47 +354,6 @@ impl ChunkStreamingState {
         staged
     }
 
-    fn retain_settling_round(
-        &mut self,
-        completion: GeneratedFluidSettlingCompletion,
-    ) {
-        for coord in completion.generated_chunks {
-            debug_assert!(
-                self.generation_wave_targets.contains(&coord),
-                "retained settled chunk must remain reserved by its generation wave"
-            );
-            self.staged_generated_chunks.insert(coord);
-        }
-        self.generation_wave_changed_existing_positions
-            .extend(completion.changed_existing_positions);
-        self.generation_wave_owned_existing_chunks
-            .extend(completion.owned_existing_chunks);
-    }
-
-    fn merge_settling_rounds(
-        &mut self,
-        mut completion: GeneratedFluidSettlingCompletion,
-    ) -> GeneratedFluidSettlingCompletion {
-        completion
-            .changed_existing_positions
-            .extend(self.generation_wave_changed_existing_positions.drain());
-        completion.changed_existing_positions.sort_unstable_by_key(|position| {
-            let coord = chunk_coord_from_world(*position);
-            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
-        });
-        completion.changed_existing_positions.dedup();
-
-        completion
-            .owned_existing_chunks
-            .extend(self.generation_wave_owned_existing_chunks.drain());
-        completion
-            .owned_existing_chunks
-            .sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        completion.owned_existing_chunks.dedup();
-
-        completion
-    }
-
     fn begin_settled_publication(&mut self, mut chunks: Vec<IVec3>) {
         debug_assert!(
             self.settled_publication_chunks.is_empty(),
@@ -435,14 +392,6 @@ impl ChunkStreamingState {
             self.generation_wave_targets.is_empty(),
             "generation wave cannot finish with unresolved target reservations: {:?}",
             self.generation_wave_targets
-        );
-        assert!(
-            self.generation_wave_changed_existing_positions.is_empty(),
-            "generation wave cannot finish with unreconciled existing fluid mutations"
-        );
-        assert!(
-            self.generation_wave_owned_existing_chunks.is_empty(),
-            "generation wave cannot finish while runtime fluid ownership is still suspended"
         );
     }
 
