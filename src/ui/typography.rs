@@ -7,10 +7,7 @@ use super::theme;
 
 fn ui_font(size: f32, weight: FontWeight) -> TextFont {
     TextFont {
-        // Dynamic HUD text is reshaped continuously. Keep every text node on
-        // Bevy's stable built-in font asset handle so rerenders reuse the same
-        // font face and its atlases instead of materializing new system faces.
-        font: FontSource::Handle(Handle::default()),
+        font: FontSource::SystemUi,
         font_size: FontSize::Px(size),
         weight,
         ..default()

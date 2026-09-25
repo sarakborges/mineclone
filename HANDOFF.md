@@ -1,3 +1,15 @@
+### Correção do font atlas — preserva glyph coverage de PT-BR/ES
+
+- o handle built-in do Bevy usa `FiraMono-subset`, portanto não é uma base segura para toda a
+  localização com acentos;
+- `typography::ui_font` volta a declarar semanticamente `SystemUi`, mas o design-system resolve
+  essa generic family uma única vez no Startup;
+- todo `TextFont` recém-adicionado que usa `SystemUi` é convertido em Update para a
+  `FontSource::Family` concreta resolvida, antes do layout em PostUpdate;
+- isso mantém a fonte real do sistema e sua cobertura de glyphs, mas evita re-resolver a generic
+  family a cada rerender dos HUDs dinâmicos;
+- VERSION permanece `0.68.22`.
+
 ### Correção de Clippy — contexto de density modifier
 
 - o CI rejeitou a primeira implementação de Floating Islands porque `density_modifier_delta`
