@@ -68,6 +68,14 @@ pub(super) fn process_chunk_remesh_queue(
         return;
     }
 
+    // Initial publication is foreground work: while any chunk inside the
+    // current show radius is still pending/generated/ready, do not start new
+    // background remesh tasks. Completed remeshes above are still integrated,
+    // but fresh async capacity is left for initial meshes and generation.
+    if streaming.has_renderable_streaming_backlog() {
+        return;
+    }
+
     dispatch_remesh_tasks(
         RemeshDispatchContext {
             world: &world,
