@@ -1,3 +1,9 @@
+### Correção de compilação — seleção macro do Ocean
+
+- o primeiro patch usou `BiomeDistribution::is_regional` sem importar o tipo no módulo;
+- a checagem agora usa o tipo inferido no closure, sem novo import e sem mudar a lógica;
+- VERSION permanece `0.68.26`.
+
 ## 2026-09-25 — Ocean usa continentalness como máscara macro autoritativa
 
 - investigado por que Ocean aparecia como faixas/bolsões finos apesar de `size.x/z = 180..520`;

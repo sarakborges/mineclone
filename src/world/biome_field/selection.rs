@@ -130,7 +130,7 @@ impl BiomeField {
                     .distributions
                     .iter()
                     .copied()
-                    .any(BiomeDistribution::is_regional)
+                    .any(|distribution| distribution.is_regional())
                 && climate_suitability(ocean.climate, climate) >= 1.0 - f32::EPSILON
             {
                 return ocean_index;
