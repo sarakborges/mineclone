@@ -22,16 +22,20 @@ use super::{
     chunk_remesh_tasks::ChunkRemeshTasks,
     chunk_rendering::ChunkRenderPool,
     streaming::ChunkStreamingState,
+    warp::PendingWarp,
 };
 
 const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
 const FRAME_TIME_SAMPLE_CAPACITY: usize = 4096;
+const SLOW_FRAME_CONTEXT_THRESHOLD_MICROS: u64 = 20_000;
+const SLOW_FRAME_CONTEXT_CAPACITY: usize = 8;
 
 #[derive(Resource, Default)]
 pub(super) struct FrameTimeSamples {
     micros: VecDeque<u64>,
+    slow_frames: Vec<SlowFrameContext>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -42,6 +46,26 @@ struct FrameTimeDiagnostic {
     p95_micros: u64,
     p99_micros: u64,
     max_micros: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SlowFrameContext {
+    frame_micros: u64,
+    selection_revision: u64,
+    warp_active: bool,
+    stream_pending: usize,
+    stream_ready: usize,
+    generation_tasks: usize,
+    mesh_tasks: usize,
+    remesh_tasks: usize,
+    async_chunk_work: usize,
+    async_chunk_work_limit: usize,
+    generation_wave_pending: usize,
+    generation_wave_targets: usize,
+    staged_generated_chunks: usize,
+    remesh_geometry: usize,
+    remesh_lighting: usize,
+    remesh_fluid: usize,
 }
 
 impl FrameTimeSamples {
@@ -72,6 +96,17 @@ impl FrameTimeSamples {
             max_micros: values.last().copied().unwrap_or(0),
         }
     }
+
+    fn record_slow_frame(&mut self, context: SlowFrameContext) {
+        self.slow_frames.push(context);
+        self.slow_frames
+            .sort_unstable_by(|left, right| right.frame_micros.cmp(&left.frame_micros));
+        self.slow_frames.truncate(SLOW_FRAME_CONTEXT_CAPACITY);
+    }
+
+    fn take_slow_frames(&mut self) -> Vec<SlowFrameContext> {
+        std::mem::take(&mut self.slow_frames)
+    }
 }
 
 fn percentile_micros(sorted: &[u64], percentile: usize) -> u64 {
@@ -89,6 +124,52 @@ pub(super) fn record_frame_time(
 ) {
     let elapsed_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
     samples.record(elapsed_micros);
+}
+
+pub(super) fn slow_frame_context_due(time: Res<Time<Real>>) -> bool {
+    time.delta().as_micros() >= u128::from(SLOW_FRAME_CONTEXT_THRESHOLD_MICROS)
+}
+
+pub(super) fn record_slow_frame_context(
+    time: Res<Time<Real>>,
+    streaming: Res<ChunkStreamingState>,
+    generation_tasks: Res<ChunkGenerationTasks>,
+    async_work: Res<ChunkAsyncWorkLimiter>,
+    mesh_tasks: Res<ChunkMeshTasks>,
+    remesh_queue: Res<ChunkRemeshQueue>,
+    remesh_tasks: Res<ChunkRemeshTasks>,
+    pending_warp: Res<PendingWarp>,
+    mut samples: ResMut<FrameTimeSamples>,
+) {
+    let frame_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
+    let (
+        stream_pending,
+        stream_ready,
+        generation_wave_pending,
+        generation_wave_targets,
+        staged_generated_chunks,
+        _,
+    ) = streaming.diagnostic_counts();
+    let (remesh_geometry, remesh_lighting, remesh_fluid) = remesh_queue.diagnostic_counts();
+
+    samples.record_slow_frame(SlowFrameContext {
+        frame_micros,
+        selection_revision: streaming.selection_revision(),
+        warp_active: pending_warp.streaming_center().is_some(),
+        stream_pending,
+        stream_ready,
+        generation_tasks: generation_tasks.pending_count(),
+        mesh_tasks: mesh_tasks.pending_count(),
+        remesh_tasks: remesh_tasks.pending_count(),
+        async_chunk_work: async_work.in_flight(),
+        async_chunk_work_limit: async_work.limit(),
+        generation_wave_pending,
+        generation_wave_targets,
+        staged_generated_chunks,
+        remesh_geometry,
+        remesh_lighting,
+        remesh_fluid,
+    });
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -161,6 +242,7 @@ pub(super) fn log_render_asset_pressure(
     let (pending_priority_scan, ready_priority_scan) =
         assets.streaming.take_priority_scan_diagnostics();
     let frame_times = assets.frame_times.take_diagnostic();
+    let slow_frames = assets.frame_times.take_slow_frames();
     let average_fps = if frame_times.average_micros == 0 {
         0.0
     } else {
@@ -225,7 +307,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} stacked_object_mesh_cache={} stacked_object_material_cache={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} stacked_object_mesh_cache={} stacked_object_material_cache={}",
         assets.state.get(),
         *previous_diagnostic_micros,
         frame_times.count,

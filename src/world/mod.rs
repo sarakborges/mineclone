@@ -82,7 +82,8 @@ pub(crate) use new_world::{
     snap_biome_size_multiplier,
 };
 use render_diagnostics::{
-    FrameTimeSamples, log_render_asset_pressure, record_frame_time, render_diagnostics_due,
+    FrameTimeSamples, log_render_asset_pressure, record_frame_time, record_slow_frame_context,
+    render_diagnostics_due, slow_frame_context_due,
 };
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
@@ -185,6 +186,7 @@ impl Plugin for WorldPlugin {
                 PreUpdate,
                 (
                     record_frame_time,
+                    record_slow_frame_context.run_if(slow_frame_context_due),
                     begin_world_frame_work_budget,
                     tune_chunk_async_work,
                     advance_world_ticks.in_set(WorldTickSet),

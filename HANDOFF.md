@@ -1,5 +1,19 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — piores frames passam a carregar contexto de streaming
+- os percentis de 10 s mostram que houve um hitch, mas ainda podiam esconder em que estado do
+  pipeline o pior frame aconteceu;
+- a coleta de frame time agora preserva, por janela, os 8 piores frames com duração de pelo menos
+  20 ms e publica esse conjunto em `slow_frames` na linha periódica de `render assets`;
+- cada entrada registra frame time, selection revision, se havia warp ativo, pending/ready,
+  generation/mesh/remesh tasks, uso/limite do async chunk pool, generation wave/staging e filas de
+  remesh por motivo;
+- a captura roda somente quando `Time<Real>::delta()` já ultrapassou o threshold; não existe log
+  por frame, e o contexto corresponde ao estado observado imediatamente depois do frame lento;
+- nenhuma política de streaming, prioridade, worldgen, render ou budget mudou neste passo.
+
+VERSION: `0.67.9`.
+
 ### Follow-up — diagnostics passam a medir o próprio custo
 - a linha periódica de `render assets` varre chunk allocations, images/font atlases e executa
   verificações de consistência; como isso roda na main thread a cada 10 s, a própria telemetria
