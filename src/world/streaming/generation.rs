@@ -270,10 +270,8 @@ fn reconcile_existing_fluid_changes(
 }
 
 pub(super) fn dispatch_generation_tasks(
-    content: &ChunkContent<'_>,
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
 ) {
     if work.state.fluid_settling.is_active() {
         return;
@@ -285,13 +283,7 @@ pub(super) fn dispatch_generation_tasks(
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
     if work.state.generation_wave_accepts_new_targets() {
-        select_generation_wave(
-            content,
-            render_pool,
-            work,
-            queues,
-            &mut budget,
-        );
+        select_generation_wave(render_pool, work, &mut budget);
     }
 
     let attempts = work.state.generation_wave_pending.len();
@@ -366,10 +358,8 @@ fn generation_wave_target_limit(state: &mut super::ChunkStreamingState) -> usize
 }
 
 fn select_generation_wave(
-    content: &ChunkContent<'_>,
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
     budget: &mut FrameWorkBudget,
 ) {
     let target_limit = generation_wave_target_limit(&mut work.state);
