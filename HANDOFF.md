@@ -1,3 +1,14 @@
+## 2026-09-25 — World objects locais materializam antes dos chunks distantes
+
+- Pebble/Stick aparentemente invisíveis não eram falha de textura: o Target/Hitbox lê o `ObjectCell` diretamente do voxel, enquanto o visual depende da entity criada por `sync_world_objects`;
+- após o novo loading carregar toda a seleção inicial, `loaded_chunk_coords_in_horizontal_radius` enumerava chunks do canto mínimo do raio até o máximo; com o budget de 2 chunks/frame, a coluna do player podia ficar centenas de frames atrás;
+- a enumeração agora percorre primeiro a coluna central e depois anéis externos, preservando o mesmo raio circular e o mesmo budget por frame;
+- isso materializa world objects próximos imediatamente sem aumentar custo por frame nem fazer sort O(n log n) a cada update;
+- o teste do índice de colunas agora verifica explicitamente que a coluna central vem primeiro;
+- o renderer `extrudedSprite` e `height = 0.012` de Pebble/Stick permanecem inalterados nesta correção.
+
+VERSION: `0.68.12`.
+
 ## 2026-09-25 — Loading screen legível e contagem de chunk sections explícita
 
 - a lista técnica de fases permanece completa, mas deixou de parecer um log cru;

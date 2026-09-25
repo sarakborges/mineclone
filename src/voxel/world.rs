@@ -123,20 +123,26 @@ impl VoxelWorld {
         let diameter = (radius * 2 + 1) as usize;
         let mut coords = Vec::with_capacity(diameter * diameter);
 
-        for z in (center.y - radius)..=(center.y + radius) {
-            for x in (center.x - radius)..=(center.x + radius) {
-                let horizontal = IVec2::new(x, z);
-                if (horizontal - center).length_squared() > radius_squared {
-                    continue;
+        for ring in 0..=radius {
+            for z_offset in -ring..=ring {
+                for x_offset in -ring..=ring {
+                    if ring > 0 && x_offset.abs() != ring && z_offset.abs() != ring {
+                        continue;
+                    }
+
+                    let horizontal = center + IVec2::new(x_offset, z_offset);
+                    if (horizontal - center).length_squared() > radius_squared {
+                        continue;
+                    }
+                    let Some(ys) = self.loaded_chunk_columns.get(&horizontal) else {
+                        continue;
+                    };
+                    coords.extend(
+                        ys.iter()
+                            .copied()
+                            .map(|y| IVec3::new(horizontal.x, y, horizontal.y)),
+                    );
                 }
-                let Some(ys) = self.loaded_chunk_columns.get(&horizontal) else {
-                    continue;
-                };
-                coords.extend(
-                    ys.iter()
-                        .copied()
-                        .map(|y| IVec3::new(horizontal.x, y, horizontal.y)),
-                );
             }
         }
 
@@ -772,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn loaded_chunk_coords_in_horizontal_radius_uses_column_index() {
+    fn loaded_chunk_coords_in_horizontal_radius_prioritizes_center_column() {
         let mut world = VoxelWorld::default();
         for coord in [
             IVec3::new(0, 0, 0),
@@ -784,8 +790,7 @@ mod tests {
             world.insert_chunk(coord, VoxelChunk::empty());
         }
 
-        let mut coords = world.loaded_chunk_coords_in_horizontal_radius(IVec2::ZERO, 1);
-        coords.sort_by_key(|coord| (coord.x, coord.z, coord.y));
+        let coords = world.loaded_chunk_coords_in_horizontal_radius(IVec2::ZERO, 1);
 
         assert_eq!(
             coords,
