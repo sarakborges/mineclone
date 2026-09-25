@@ -42,7 +42,7 @@ pub(super) fn collect_generated_chunks(
     current_tick: u64,
 ) {
     if work.state.has_settled_publication() {
-        if process_settled_wave_publication(content, work, queues, current_tick) {
+        if process_settled_wave_publication(work) {
             work.state.finish_generation_wave();
         }
         return;
@@ -126,13 +126,10 @@ pub(super) fn collect_generated_chunks(
         if requires_fluid_settling {
             work.state.stage_generated_chunk(completed.coord);
         } else {
-            seed_loaded_chunk_lighting(
-                completed.coord,
-                content,
-                work,
-                queues,
-                current_tick,
-            );
+            // Keep generation integration cheap. Direct lighting and runtime
+            // fluid activation are presentation prerequisites, not residency
+            // prerequisites; dispatch_initial_mesh_tasks performs them for the
+            // nearest renderable chunk immediately before snapshot capture.
             work.state.mark_ready(completed.coord);
             work.state.complete_generation_wave_target(completed.coord);
         }
@@ -209,10 +206,7 @@ fn begin_settled_wave_publication(
 }
 
 fn process_settled_wave_publication(
-    content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
 ) -> bool {
     let deadline = work.frame_budget.deadline();
     let mut budget = FrameWorkBudget::new(
@@ -234,7 +228,9 @@ fn process_settled_wave_publication(
             continue;
         }
 
-        seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
+        // Settling has already converged the generated fluid state. Defer
+        // direct-light seeding/runtime frontier activation until this chunk is
+        // actually selected for initial mesh publication.
         work.state.mark_ready(coord);
         work.state.complete_generation_wave_target(coord);
     }
