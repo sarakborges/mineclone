@@ -1,3 +1,29 @@
+## 2026-09-25 — World objects seguem publicação visual dos chunks
+
+- o log 0.68.34 mostrou chunks de terreno desaparecendo/ficando ainda não publicados enquanto
+  entities 3D de world objects continuavam visíveis;
+- a causa era ownership diferente: `sync_world_objects` materializava Grass/Pebble/Stick a partir
+  de chunks carregados em CPU dentro do show/hide radius, enquanto os voxels só existem visualmente
+  quando o chunk possui allocation no `ChunkRenderPool`;
+- com backlog de generation/meshing ou retirement de mesh, isso permitia models 3D flutuarem onde
+  o terreno correspondente ainda não estava publicado;
+- world objects continuam sendo dados autoritativos do `VoxelChunk`; somente a entidade visual
+  passa a depender de publicação no `ChunkRenderPool`;
+- candidatos de materialização agora vêm diretamente de `ChunkRenderPool::active_coords()`, em
+  vez de todos os chunks carregados em CPU;
+- uma entidade de world object é aposentada quando seu chunk deixa o render pool, mesmo que o
+  conteúdo continue residente/preloaded em CPU;
+- o sync acompanha `ChunkRenderPool::membership_revision()`, portanto publicação/retirement de
+  chunk invalida o cache visual mesmo sem qualquer mudança no conteúdo dos objects;
+- o hysteresis show/hide existente continua sendo usado, então models entram e saem junto da
+  mesma residency visual conceitual dos voxels;
+- não foi convertido terrain voxel para GLB/model por bloco: terreno continua batched em chunk
+  meshes, preservando batching/culling e evitando milhares de entities/drawables individuais;
+- models continuam apropriados para objects e futuros blocks especiais que realmente precisem de
+  geometria authored, mas não substituem o renderer voxel de terreno.
+
+VERSION: `0.68.35`.
+
 ## 2026-09-25 — Streaming cacheia misses estáveis de ready e pending crítico
 
 - a separação entre residency de CPU e mesh de GPU deixou a fila `ready` capaz de permanecer
