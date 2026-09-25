@@ -1,3 +1,10 @@
+### Correção de Clippy — contexto de finalização no spawning
+
+- `spawn_loaded_world` passou de oito argumentos após incluir apresentação inicial;
+- transition, player definition, render distance e chunk visibility query já pertencem ao mesmo
+  `WorldSetupFinalization`, então a função agora recebe esse contexto único;
+- sem suppression de Clippy e sem mudança de comportamento; VERSION permanece `0.68.30`.
+
 ## 2026-09-25 — Bootstrap entrega chunks visíveis antes de abrir Gameplay
 
 - meshes de chunk são criados com `Visibility::Hidden` para que o streaming aplique hysteresis,

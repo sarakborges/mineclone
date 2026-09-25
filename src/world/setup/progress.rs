@@ -97,11 +97,8 @@ pub(in crate::world) fn setup_world(
             &pipeline.content,
             &mut pipeline.renderer,
             &mut progress,
-            &mut finalization.transition,
             &persistence,
-            &finalization.player_definition,
-            &finalization.render_distance,
-            &mut finalization.chunk_entities,
+            &mut finalization,
         ),
     }
 }

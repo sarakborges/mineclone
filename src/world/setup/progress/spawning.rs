@@ -6,28 +6,25 @@ use crate::{
         find_safe_spawn_position, player_id::LOCAL_PLAYER_ID, player_position_is_clear,
         safe_spawn_position, spawn_player_entity,
     },
-    ui::transition::{ScreenTransition, ScreenTransitionTarget},
+    ui::transition::ScreenTransitionTarget,
     voxel::coordinates::chunk_coord_from_position,
     world::{
         WorldLoadMode,
-        chunk_rendering::ChunkRenderCoord,
         chunk_system_params::{ChunkContent, ChunkRenderer},
         chunk_visibility::prime_chunk_visibility,
-        render_distance::RenderDistanceSettings,
     },
 };
 
-use super::super::system_params::{WorldSetupPersistence, WorldSetupProgress};
+use super::super::system_params::{
+    WorldSetupFinalization, WorldSetupPersistence, WorldSetupProgress,
+};
 
 pub(super) fn spawn_loaded_world(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     progress: &mut WorldSetupProgress<'_>,
-    transition: &mut ScreenTransition,
     persistence: &WorldSetupPersistence<'_>,
-    player_definition: &crate::content::player::PlayerDefinition,
-    render_distance: &RenderDistanceSettings,
-    chunk_entities: &mut Query<(&ChunkRenderCoord, &mut Visibility)>,
+    finalization: &mut WorldSetupFinalization<'_, '_>,
 ) {
     if progress.loading_state.transition_requested {
         return;
@@ -57,7 +54,7 @@ pub(super) fn spawn_loaded_world(
         &mut renderer.commands,
         translation,
         game_mode,
-        player_definition,
+        &finalization.player_definition,
         saved_health,
         saved_look,
         saved_flying,
@@ -69,12 +66,14 @@ pub(super) fn spawn_loaded_world(
     // already contains the world.
     prime_chunk_visibility(
         chunk_coord_from_position(translation).xz(),
-        render_distance.chunks(),
-        chunk_entities,
+        finalization.render_distance.chunks(),
+        &mut finalization.chunk_entities,
     );
 
     progress.loading_state.transition_requested = true;
-    transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+    finalization
+        .transition
+        .request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
 
 fn spawn_position(
