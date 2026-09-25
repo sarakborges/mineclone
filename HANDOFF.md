@@ -1,3 +1,13 @@
+### Correção do pedaço de font atlas — lockfile preservado
+
+- `system_font_discovery` foi restaurado na lista de features do Bevy porque removê-lo altera o
+  grafo resolvido e exigiria regenerar `Cargo.lock`; o CI corretamente recusou essa divergência
+  com `--locked`;
+- a correção real do leak permanece: a tipografia autoritativa não usa mais `FontSource::SystemUi`
+  e continua presa ao handle estável da fonte built-in;
+- manter a feature habilitada não recria o problema enquanto ela não é usada pela UI;
+- VERSION permanece `0.68.22`.
+
 ## 2026-09-25 — Floating Islands começam em Y=200 e usam silhueta de ilha
 
 - `verticalRange.min` das Floating Islands subiu de 150 para 200, eliminando a interseção
