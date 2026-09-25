@@ -40,7 +40,8 @@
   2 para 16 mantendo o budget temporal rígido de 2 ms + deadline global;
 - CI funcional run `36193370585`: success em localization audit, structure content reference
   audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
-  `cargo check --locked`.
+  `cargo check --locked`;
+- CI do HEAD versionado/documentado run `36193520227`: success.
 
 VERSION: `0.68.39`.
 
