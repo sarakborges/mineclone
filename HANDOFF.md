@@ -1,3 +1,12 @@
+### CI follow-up — B0001 passa a ser gate real
+
+- o teste de regressão do loading existia no código, mas o workflow Rust validation ainda não
+  executava testes; portanto Clippy/`cargo check` continuariam incapazes de detectar B0001;
+- o CI agora executa explicitamente
+  `cargo test --locked loading_progress_system_initializes_without_query_conflicts` entre Clippy
+  e Check;
+- VERSION permanece `0.68.13`: esta alteração fecha a validação da mesma correção de crash.
+
 ## 2026-09-25 — Loading screen não cria queries ECS conflitantes
 
 - corrigido o panic Bevy B0001 introduzido na UI do loading de 0.68.11: summary, phase label e

@@ -61,6 +61,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
+      # Bevy validates Query aliasing when systems initialize, not during
+      # cargo check. Keep a focused runtime-ECS regression gate for the loading UI.
+      - name: Loading ECS query regression
+        run: cargo test --locked loading_progress_system_initializes_without_query_conflicts
+
       - name: Check
         run: cargo check --locked
 
