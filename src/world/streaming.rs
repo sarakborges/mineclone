@@ -824,12 +824,7 @@ pub(super) fn stream_chunks(
         collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.state.generation_dispatch_work_exists() {
-        dispatch_generation_tasks(
-            &content,
-            &renderer.pool,
-            &mut work,
-            &mut queues,
-        );
+        dispatch_generation_tasks(&renderer.pool, &mut work);
     }
 }
 
