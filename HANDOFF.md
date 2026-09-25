@@ -1,3 +1,28 @@
+## 2026-09-25 — Streaming cacheia misses estáveis de ready e pending crítico
+
+- a separação entre residency de CPU e mesh de GPU deixou a fila `ready` capaz de permanecer
+  não vazia contendo apenas chunks de preload fora do show radius;
+- `pop_ready` ainda assumia a semântica antiga em que uma fila não vazia sempre consumia uma
+  entrada; por isso, quando todos os chunks estavam fora do show radius, fazia o mesmo scan O(n)
+  em todo frame sem alterar a revisão da fila;
+- esse scan acontece antes de `dispatch_generation_tasks`; com backlog grande ele podia consumir
+  parte relevante do deadline global do world pipeline sem sequer registrar um item no budget,
+  atrasando geração mesmo com worker capacity disponível;
+- `ready` agora mantém um scan-miss cache keyed por revisão da fila, revisão da seleção,
+  centro horizontal e show radius; enquanto nenhum desses inputs muda, o miss retorna em O(1);
+- `generation_wave_target_limit` também havia voltado a executar
+  `pending.values().any(...critical...)` em toda chamada, inclusive com uma wave seca já cheia;
+- o miss de pending crítico voltou a ser cacheado por revisão da fila + streaming center;
+  qualquer enqueue/remove/pop ou movimento do centro invalida o cache naturalmente;
+- hits não são cacheados: quando há trabalho elegível/crítico a política existente continua
+  consumindo e reavaliando normalmente;
+- adicionados testes cobrindo invalidação do ready miss por mudança de fila/seleção e do pending
+  crítico por mudança de fila/centro;
+- prioridade, render distance, forward preload, geração, fluid settling e fidelidade de worldgen
+  permanecem inalterados.
+
+VERSION: `0.68.34`.
+
 ## 2026-09-25 — Publicação pós-fluid-settling é incremental
 
 - o log 0.68.31 mostrou fluid closure crescendo para 72..108 generation-wave targets, com cerca
