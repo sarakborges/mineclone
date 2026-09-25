@@ -1,3 +1,23 @@
+## 2026-09-24 — Streaming selection não varre mais o quadrado expandido inteiro
+
+O rebuild síncrono da seleção de chunks reconstruía o volume desejado ao cruzar fronteiras de
+chunk. Com render distance padrão 12, o preload base usa raio 14 e o forward preload pode elevar
+o search radius até 21; o código percorria todo o quadrado expandido e descartava a maior parte
+dos offsets somente depois.
+
+- o shape horizontal da seleção agora é pré-computado e cacheado por
+  `(horizontal_radius, movement_direction)`;
+- o círculo base é enumerado diretamente;
+- o corredor de forward preload usa somente o AABB do trapézio direcional, em vez do quadrado
+  inteiro de `[-search_radius, +search_radius]`;
+- ao continuar andando na mesma direção, nem a geometria do shape precisa ser reconstruída;
+- a semântica do conjunto selecionado é preservada exatamente;
+- teste compara o novo shape contra o algoritmo brute-force anterior para raios 4, 12 e 24 e
+  todas as oito direções mais stationary.
+
+Isso reduz trabalho síncrono de cada queue rebuild sem alterar prioridade, render distance,
+surface sampling ou quais chunks são carregados.
+
 ### CI follow-up — import explícito do clock Real
 
 O primeiro CI do frame-budget adaptativo falhou apenas porque `work_budget.rs` usa imports

@@ -38,6 +38,11 @@ struct DesiredChunkSelection {
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct HorizontalSelectionShapeKey {
+    radius: i32,
     movement_direction: IVec2,
 }
 
@@ -46,6 +51,8 @@ pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
     pending: Vec<PendingEntry>,
     retired: Vec<IVec3>,
+    horizontal_shape_key: Option<HorizontalSelectionShapeKey>,
+    horizontal_offsets: Vec<IVec2>,
 }
 
 pub(super) fn rebuild_queue(
@@ -90,14 +97,19 @@ pub(super) fn rebuild_queue(
         });
     }
 
+    sync_horizontal_selection_offsets(
+        scratch,
+        preload_radius,
+        movement_direction,
+    );
     rebuild_desired_chunk_coords(
         &mut scratch.desired,
         DesiredChunkSelection {
             center,
             horizontal_radius: preload_radius,
             vertical_radius,
-            movement_direction,
         },
+        &scratch.horizontal_offsets,
         context,
         &mut streaming.surface_ranges,
         &mut streaming.surface_support_minimums,
@@ -343,9 +355,95 @@ fn inside_forward_preload(
     lateral_squared <= lateral_width * lateral_width
 }
 
+fn sync_horizontal_selection_offsets(
+    scratch: &mut QueueRebuildScratch,
+    horizontal_radius: i32,
+    movement_direction: IVec2,
+) {
+    let key = HorizontalSelectionShapeKey {
+        radius: horizontal_radius,
+        movement_direction,
+    };
+    if scratch.horizontal_shape_key == Some(key) {
+        return;
+    }
+
+    scratch.horizontal_offsets.clear();
+    rebuild_horizontal_selection_offsets(
+        &mut scratch.horizontal_offsets,
+        horizontal_radius,
+        movement_direction,
+    );
+    scratch.horizontal_shape_key = Some(key);
+}
+
+fn rebuild_horizontal_selection_offsets(
+    offsets: &mut Vec<IVec2>,
+    horizontal_radius: i32,
+    movement_direction: IVec2,
+) {
+    offsets.clear();
+    let radius_squared = horizontal_radius * horizontal_radius;
+    for z in -horizontal_radius..=horizontal_radius {
+        for x in -horizontal_radius..=horizontal_radius {
+            let offset = IVec2::new(x, z);
+            if offset.length_squared() <= radius_squared {
+                offsets.push(offset);
+            }
+        }
+    }
+
+    if movement_direction == IVec2::ZERO {
+        return;
+    }
+
+    let forward = movement_direction.as_vec2().normalize();
+    let lateral = Vec2::new(-forward.y, forward.x);
+    let preload = forward_preload_chunks(horizontal_radius) as f32;
+    let base = horizontal_radius as f32;
+    let limit = base + preload;
+    let near_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + preload * 0.5;
+    let far_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS;
+    let corners = [
+        forward * base + lateral * near_width,
+        forward * base - lateral * near_width,
+        forward * limit + lateral * far_width,
+        forward * limit - lateral * far_width,
+    ];
+    let minimum = corners
+        .iter()
+        .copied()
+        .reduce(Vec2::min)
+        .expect("forward preload bounds require corners")
+        .floor()
+        .as_ivec2()
+        - IVec2::ONE;
+    let maximum = corners
+        .iter()
+        .copied()
+        .reduce(Vec2::max)
+        .expect("forward preload bounds require corners")
+        .ceil()
+        .as_ivec2()
+        + IVec2::ONE;
+
+    for z in minimum.y..=maximum.y {
+        for x in minimum.x..=maximum.x {
+            let offset = IVec2::new(x, z);
+            if offset.length_squared() <= radius_squared {
+                continue;
+            }
+            if inside_forward_preload(offset, horizontal_radius, forward) {
+                offsets.push(offset);
+            }
+        }
+    }
+}
+
 fn rebuild_desired_chunk_coords(
     desired: &mut HashSet<IVec3>,
     selection: DesiredChunkSelection,
+    horizontal_offsets: &[IVec2],
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: &mut HashMap<IVec2, i32>,
@@ -356,7 +454,6 @@ fn rebuild_desired_chunk_coords(
         center,
         horizontal_radius,
         vertical_radius,
-        movement_direction,
     } = selection;
 
     let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
@@ -383,28 +480,10 @@ fn rebuild_desired_chunk_coords(
         }
     }
 
-    let forward_direction = (movement_direction != IVec2::ZERO)
-        .then(|| movement_direction.as_vec2().normalize());
-    let search_radius = horizontal_radius
-        + if forward_direction.is_some() {
-            forward_preload_chunks(horizontal_radius)
-        } else {
-            0
-        };
-    let horizontal_radius_squared = horizontal_radius * horizontal_radius;
     let center_horizontal = center.xz();
 
-    for z in -search_radius..=search_radius {
-        for x in -search_radius..=search_radius {
-            let offset = IVec2::new(x, z);
+    for &offset in horizontal_offsets {
             let horizontal_distance_squared = offset.length_squared();
-            let inside_base = horizontal_distance_squared <= horizontal_radius_squared;
-            let inside_forward = forward_direction
-                .is_some_and(|direction| inside_forward_preload(offset, horizontal_radius, direction));
-            if !inside_base && !inside_forward {
-                continue;
-            }
-
             let horizontal = center_horizontal + offset;
             let (own_minimum, own_maximum) = cached_surface_range(
                 surface_ranges,
@@ -454,13 +533,68 @@ fn rebuild_desired_chunk_coords(
             for y in minimum_y..=maximum_y {
                 desired.insert(IVec3::new(horizontal.x, y, horizontal.y));
             }
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn brute_force_horizontal_offsets(
+        horizontal_radius: i32,
+        movement_direction: IVec2,
+    ) -> HashSet<IVec2> {
+        let forward_direction = (movement_direction != IVec2::ZERO)
+            .then(|| movement_direction.as_vec2().normalize());
+        let search_radius = horizontal_radius
+            + if forward_direction.is_some() {
+                forward_preload_chunks(horizontal_radius)
+            } else {
+                0
+            };
+        let radius_squared = horizontal_radius * horizontal_radius;
+        let mut offsets = HashSet::new();
+
+        for z in -search_radius..=search_radius {
+            for x in -search_radius..=search_radius {
+                let offset = IVec2::new(x, z);
+                let inside_base = offset.length_squared() <= radius_squared;
+                let inside_forward = forward_direction.is_some_and(|direction| {
+                    inside_forward_preload(offset, horizontal_radius, direction)
+                });
+                if inside_base || inside_forward {
+                    offsets.insert(offset);
+                }
+            }
+        }
+
+        offsets
+    }
+
+    #[test]
+    fn optimized_horizontal_selection_matches_previous_bruteforce_shape() {
+        let directions = [
+            IVec2::ZERO,
+            IVec2::X,
+            IVec2::NEG_X,
+            IVec2::Y,
+            IVec2::NEG_Y,
+            IVec2::new(1, 1),
+            IVec2::new(1, -1),
+            IVec2::new(-1, 1),
+            IVec2::new(-1, -1),
+        ];
+
+        for radius in [4, 12, 24] {
+            for direction in directions {
+                let expected = brute_force_horizontal_offsets(radius, direction);
+                let mut actual = Vec::new();
+                rebuild_horizontal_selection_offsets(&mut actual, radius, direction);
+                let actual = actual.into_iter().collect::<HashSet<_>>();
+                assert_eq!(actual, expected, "radius={radius} direction={direction:?}");
+            }
+        }
+    }
 
     #[test]
     fn retired_chunks_exclude_both_live_selection_generations() {
