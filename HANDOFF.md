@@ -1,3 +1,16 @@
+## 2026-09-25 — Loading screen não cria queries ECS conflitantes
+
+- corrigido o panic Bevy B0001 introduzido na UI do loading de 0.68.11: summary, phase label e
+  phase status escreviam em `Text`/`TextColor` através de Queries separadas, e o scheduler não
+  podia provar que os conjuntos de entities eram disjuntos;
+- as três consultas de texto agora pertencem a um único `ParamSet` e são acessadas
+  sequencialmente, mantendo a separação sem espalhar filtros `Without<T>`;
+- adicionado teste de regressão que inicializa o próprio system `update_loading_progress`; isso
+  faz o CI capturar conflitos B0001, que `cargo check` e Clippy sozinhos não detectam;
+- layout, fases, contadores e contrato de world-ready permanecem inalterados.
+
+VERSION: `0.68.13`.
+
 ## 2026-09-25 — World objects locais materializam antes dos chunks distantes
 
 - Pebble/Stick aparentemente invisíveis não eram falha de textura: o Target/Hitbox lê o `ObjectCell` diretamente do voxel, enquanto o visual depende da entity criada por `sync_world_objects`;

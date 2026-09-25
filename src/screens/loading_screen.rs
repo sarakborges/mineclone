@@ -182,20 +182,25 @@ fn update_loading_progress(
     loading_state: Option<Res<WorldLoadingState>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    mut summaries: Query<&mut Text, With<LoadingSummaryText>>,
     mut rows: Query<(&LoadingPhaseRow, &mut BackgroundColor)>,
-    mut labels: Query<(&LoadingPhaseLabel, &mut TextColor)>,
-    mut statuses: Query<(&LoadingPhaseStatusText, &mut Text, &mut TextColor)>,
+    mut text_queries: ParamSet<(
+        Query<&mut Text, With<LoadingSummaryText>>,
+        Query<(&LoadingPhaseLabel, &mut TextColor)>,
+        Query<(&LoadingPhaseStatusText, &mut Text, &mut TextColor)>,
+    )>,
 ) {
     let Some(loading_state) = loading_state else {
         return;
     };
     let language = language.get();
 
-    if let Ok(mut summary) = summaries.single_mut() {
-        let next = format_loading_summary(&localization, language, &loading_state);
-        if **summary != next {
-            **summary = next;
+    {
+        let mut summaries = text_queries.p0();
+        if let Ok(mut summary) = summaries.single_mut() {
+            let next = format_loading_summary(&localization, language, &loading_state);
+            if **summary != next {
+                **summary = next;
+            }
         }
     }
 
@@ -211,29 +216,35 @@ fn update_loading_progress(
         }
     }
 
-    for (phase_label, mut color) in &mut labels {
-        let target = phase_text_color(loading_state.phase_status(phase_label.0));
-        if color.0 != target {
-            color.0 = target;
+    {
+        let mut labels = text_queries.p1();
+        for (phase_label, mut color) in &mut labels {
+            let target = phase_text_color(loading_state.phase_status(phase_label.0));
+            if color.0 != target {
+                color.0 = target;
+            }
         }
     }
 
-    for (status_label, mut text, mut color) in &mut statuses {
-        let phase = status_label.0;
-        let status = loading_state.phase_status(phase);
-        let next = format_loading_status(
-            &localization,
-            language,
-            status,
-            loading_state.phase_progress(phase),
-        );
-        if **text != next {
-            **text = next;
-        }
+    {
+        let mut statuses = text_queries.p2();
+        for (status_label, mut text, mut color) in &mut statuses {
+            let phase = status_label.0;
+            let status = loading_state.phase_status(phase);
+            let next = format_loading_status(
+                &localization,
+                language,
+                status,
+                loading_state.phase_progress(phase),
+            );
+            if **text != next {
+                **text = next;
+            }
 
-        let target = phase_status_color(status);
-        if color.0 != target {
-            color.0 = target;
+            let target = phase_status_color(status);
+            if color.0 != target {
+                color.0 = target;
+            }
         }
     }
 }
@@ -294,5 +305,19 @@ fn phase_status_color(status: WorldLoadingPhaseStatus) -> Color {
         WorldLoadingPhaseStatus::Pending => theme::TEXT_SUBTLE,
         WorldLoadingPhaseStatus::Active => theme::BORDER_FOCUS,
         WorldLoadingPhaseStatus::Done => theme::TEXT_MUTED,
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loading_progress_system_initializes_without_query_conflicts() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(update_loading_progress);
+
+        system.initialize(&mut world);
     }
 }
