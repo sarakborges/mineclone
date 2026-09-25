@@ -31,6 +31,9 @@ const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const STREAMING_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(1);
 const MIN_STREAMING_FLUID_SETTLING_UPDATES: usize = 1;
 const MAX_STREAMING_FLUID_SETTLING_UPDATES: usize = 128;
+const SETTLED_PUBLICATION_BUDGET: Duration = Duration::from_millis(1);
+const MIN_SETTLED_PUBLICATIONS_PER_FRAME: usize = 1;
+const MAX_SETTLED_PUBLICATIONS_PER_FRAME: usize = 8;
 
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
