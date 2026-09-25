@@ -384,11 +384,12 @@ fn prefetch_next_generation_wave(
     generation_tasks: &mut ChunkGenerationTasks,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
+    let prefetch_limit = generation_wave_target_limit(state);
     let mut attempts = MAX_GENERATION_DISPATCH_WORK_PER_FRAME;
 
     while attempts > 0
         && generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
-        && state.generation_prefetch_targets.len() < MAX_GENERATION_TASKS_IN_FLIGHT
+        && state.generation_prefetch_targets.len() < prefetch_limit
     {
         attempts -= 1;
 
