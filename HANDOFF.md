@@ -1,3 +1,36 @@
+## 2026-09-25 — Initial mesh ganha prioridade sobre remesh e lighting wake deixa generation integration
+
+- o log 0.68.37 confirmou que o fix do limiter funcionou: durante movimento o async limit voltou
+  para o base limit 4, em vez de permanecer preso em 2;
+- o gargalo seguinte ficou claro no mesmo log: workers terminavam o trabalho, mas os resultados
+  ficavam esperando o main thread; houve vários snapshots com generation_tasks=7..8 e mesh_tasks
+  pendentes enquanto async_chunk_work=0/4;
+- stream_ready chegou a ~1000 chunks e remesh_geometry ficou sustentado em ~800..900, mostrando
+  que initial publication estava competindo com reparos de chunks já visíveis;
+- background remesh agora não despacha novas tasks enquanto existir backlog de streaming realmente
+  renderizável dentro do show radius; remeshes já concluídos continuam sendo integrados normalmente;
+- para evitar confundir forward preload saudável com atraso visual, diagnostics agora separam:
+  `stream_pending_renderable`, `stream_ready_renderable` e `wave_targets_renderable`;
+- o lifecycle de lighting foi dividido em duas fases:
+  1. direct-light seed acontece imediatamente quando o chunk vira residente, preservando a
+     invariável de que propagação nunca observa um chunk carregado como DARK;
+  2. fluid wake + enqueue de chunk relaxation/empty-boundary relaxation só acontecem quando o chunk
+     é selecionado para initial mesh;
+- isso remove do hot path de generation-result integration a criação de milhares de entradas de
+  background lighting para chunks de preload/background que ainda nem serão apresentados;
+- direct-light seed results ficam armazenados por chunk até a primeira activation visual e são
+  descartados junto do residency state no unload;
+- initial mesh continua capturando apenas vizinhos já publicados no render pool e mantém catch-up
+  meshlets quando um novo chunk residente chega ao halo de uma task já em voo;
+- nenhum relaxamento foi removido: ele só é adiado até a primeira publicação visual do chunk;
+- o primeiro CI intermediário falhou apenas porque um callsite ainda usava o nome antigo
+  `seed_loaded_chunk_lighting`; o callsite foi removido e a assinatura de dispatch foi limpa;
+- CI do HEAD versionado run `36191289714`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.38`.
+
 ## 2026-09-25 — Streaming deixa de confundir VSync 60 Hz com overload
 
 - o log 0.68.36 mostrou que a fluid closure ficou finalmente limitada: `generation_wave_targets`
