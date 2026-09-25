@@ -93,7 +93,7 @@ use save_session::{
     save_on_gameplay_window_close,
 };
 pub(crate) use seed::WorldSeed;
-pub(crate) use setup::WorldLoadingState;
+pub(crate) use setup::{WorldLoadingStage, WorldLoadingState};
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
 use warp::{PendingWarp, resolve_pending_warp};

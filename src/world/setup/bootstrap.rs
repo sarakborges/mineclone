@@ -6,14 +6,20 @@ use crate::{
         biome::{BiomeKind, BiomeRegistry},
         block::BlockRegistry,
         dimension::{DimensionDefinition, DimensionRegistry},
+        creature::CreatureRegistry,
         fluid::FluidRegistry,
         layer::LayerRegistry,
+        object::ObjectRegistry,
+        player::PlayerDefinition,
         read_content,
         structure::StructureRegistry,
         structure_set::StructureSetRegistry,
     },
     player::player_id::LOCAL_PLAYER_ID,
-    rendering::terrain_material::{TerrainLightingBuffer, TerrainMaterial},
+    rendering::{
+        GameplayAssetPreloads,
+        terrain_material::{TerrainLightingBuffer, TerrainMaterial},
+    },
     voxel::{
         chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position,
         spatial_search::find_map_square_rings, world::VoxelWorld,
@@ -78,6 +84,32 @@ impl<'a> BootstrapRegistries<'a> {
                 fluids: &loaded.fluids,
                 structures: &loaded.structures,
                 structure_sets: &loaded.structure_sets,
+            },
+        }
+    }
+}
+
+struct BootstrapVisualContent<'a> {
+    player: &'a PlayerDefinition,
+    creatures: &'a CreatureRegistry,
+    objects: &'a ObjectRegistry,
+}
+
+impl<'a> BootstrapVisualContent<'a> {
+    fn resolve(
+        loaded: &'a WorldBootstrapContent<'_>,
+        fresh: Option<&'a LoadedContent>,
+    ) -> Self {
+        match fresh {
+            Some(fresh) => Self {
+                player: &fresh.player,
+                creatures: &fresh.creatures,
+                objects: &fresh.objects,
+            },
+            None => Self {
+                player: &loaded.player,
+                creatures: &loaded.creatures,
+                objects: &loaded.objects,
             },
         }
     }
@@ -322,6 +354,15 @@ pub(in crate::world) fn begin_world_loading(
     } else {
         None
     };
+    let visual_content = BootstrapVisualContent::resolve(&content, fresh_content.as_ref());
+    let gameplay_asset_preloads = GameplayAssetPreloads::from_content(
+        &content.asset_server,
+        visual_content.player,
+        visual_content.creatures,
+        visual_content.objects,
+    );
+    let gameplay_asset_count = gameplay_asset_preloads.total();
+
     let BootstrapRegistries {
         dimensions,
         biomes,
@@ -427,6 +468,7 @@ pub(in crate::world) fn begin_world_loading(
     commands.insert_resource(terrain_lighting);
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
+    commands.insert_resource(gameplay_asset_preloads);
     commands.insert_resource(WorldLoadingState {
         coords,
         generation_cursor: 0,
@@ -434,6 +476,8 @@ pub(in crate::world) fn begin_world_loading(
         lit: 0,
         mesh_cursor: 0,
         meshed: 0,
+        assets_loaded: 0,
+        assets_total: gameplay_asset_count,
         spawn_column,
         fluid_settling: Default::default(),
         phase: WorldLoadingPhase::Generating,

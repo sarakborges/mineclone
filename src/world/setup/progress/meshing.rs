@@ -42,7 +42,7 @@ pub(super) fn mesh_initial_chunks(
         && progress.loading_state.meshed >= progress.loading_state.coords.len()
         && mesh_tasks.pending_count() == 0
     {
-        progress.loading_state.phase = WorldLoadingPhase::Spawning;
+        progress.loading_state.phase = WorldLoadingPhase::Assets;
     }
 }
 

@@ -176,12 +176,6 @@ struct ObjectMaterialKey {
     unlit: bool,
 }
 
-#[derive(Resource, Default)]
-struct ObjectModelPreloads {
-    _meshes: Vec<Handle<Mesh>>,
-    _materials: Vec<Handle<StandardMaterial>>,
-}
-
 #[derive(Component)]
 struct PendingObjectModelMaterial {
     source: Handle<StandardMaterial>,
@@ -256,13 +250,11 @@ impl Plugin for WorldObjectsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldObjectStore>()
             .init_resource::<TargetedWorldObject>()
-            .init_resource::<ObjectModelPreloads>()
             .init_resource::<ObjectMaterialCache>()
             .init_resource::<SpritePrismMeshCache>()
             .init_resource::<SpritePrismMaterialCache>()
             .add_message::<WorldObjectPlaceRequest>()
             .add_message::<WorldObjectRemoveRequest>()
-            .add_systems(PostStartup, preload_object_models)
             .add_systems(
                 PostUpdate,
                 (
@@ -284,31 +276,6 @@ impl Plugin for WorldObjectsPlugin {
     }
 }
 
-
-fn preload_object_models(
-    objects: Res<ObjectRegistry>,
-    asset_server: Res<AssetServer>,
-    mut preloads: ResMut<ObjectModelPreloads>,
-) {
-    preloads._meshes.clear();
-    preloads._materials.clear();
-
-    for definition in objects.iter() {
-        let ObjectVisualDefinition::Model { path } = &definition.visual else {
-            continue;
-        };
-        preloads._meshes.push(asset_server.load(
-            GltfAssetLabel::Primitive {
-                mesh: 0,
-                primitive: 0,
-            }
-            .from_asset(path.clone()),
-        ));
-        preloads
-            ._materials
-            .push(asset_server.load(format!("{path}#Material0/std")));
-    }
-}
 
 fn apply_object_placement_requests(
     mut requests: MessageReader<WorldObjectPlaceRequest>,

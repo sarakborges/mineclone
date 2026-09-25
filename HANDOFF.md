@@ -1,3 +1,22 @@
+## 2026-09-25 — Loading bloqueia gameplay até assets visuais estarem prontos
+
+- o bootstrap agora possui um owner único de preload para assets visuais necessários ao gameplay;
+  player, creatures e objects model-backed carregam seus GLTFs durante a própria geração inicial,
+  e textures externas de creatures/sprite-prism entram no mesmo conjunto deduplicado;
+- o preload usa handles fortes e só considera um asset pronto quando o root e todas as dependências
+  recursivas estão carregados; falhas de root/dependência encerram com erro explícito em vez de
+  deixar a loading screen presa indefinidamente;
+- a state machine ganhou uma fase `Assets`: depois do mesh inicial, o jogo continua em
+  `GameState::Loading`, portanto sem simulação/gameplay, até o conjunto visual estar pronto;
+- a loading screen agora expõe o pipeline proceduralmente como `Loading terrain` →
+  `Loading chunks` → `Loading assets`, cada etapa com progresso próprio;
+- removido o preload específico de object em `PostStartup`: ele apenas solicitava mesh/material e
+  não fazia parte do contrato de entrada no mundo;
+- `setup_world` deixou de silenciar `too_many_arguments`; o pipeline de chunks e o gate de assets
+  agora usam SystemParams coesos e separados, sem criar um contexto genérico de tudo.
+
+VERSION: `0.68.2`.
+
 ## 2026-09-25 — Grass em pixel art com textura real
 
 ### Grass object — cards rígidos, alpha mask e detalhe preservado

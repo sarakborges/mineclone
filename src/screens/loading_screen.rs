@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{theme, typography},
-    world::WorldLoadingState,
+    world::{WorldLoadingStage, WorldLoadingState},
 };
 
 pub struct LoadingScreenPlugin;
@@ -29,7 +29,8 @@ fn setup_loading_screen(
 ) {
     commands.spawn((Camera2d, DespawnOnExit(GameState::Loading)));
     let language = language.get();
-    let progress = format_loading_progress(&localization, language, 0, 0);
+    let progress =
+        format_loading_progress(&localization, language, WorldLoadingStage::Terrain, 0, 0);
 
     commands.spawn((
         DespawnOnExit(GameState::Loading),
@@ -65,22 +66,30 @@ fn update_loading_progress(
         return;
     };
 
+    let (completed, total) = loading_state.stage_progress();
     **label = format_loading_progress(
         &localization,
         language.get(),
-        loading_state.generated(),
-        loading_state.total(),
+        loading_state.stage(),
+        completed,
+        total,
     );
 }
 
 fn format_loading_progress(
     localization: &UiLocalization,
     language: Language,
-    generated: usize,
+    stage: WorldLoadingStage,
+    completed: usize,
     total: usize,
 ) -> String {
+    let key = match stage {
+        WorldLoadingStage::Terrain => "loading.terrain",
+        WorldLoadingStage::Chunks => "loading.chunks",
+        WorldLoadingStage::Assets => "loading.assets",
+    };
     localization
-        .text(language, "loading.progress")
-        .replace("{generated}", &generated.to_string())
+        .text(language, key)
+        .replace("{completed}", &completed.to_string())
         .replace("{total}", &total.to_string())
 }

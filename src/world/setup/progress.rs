@@ -1,3 +1,4 @@
+mod assets;
 mod fluids;
 mod generation;
 mod lighting;
@@ -11,15 +12,10 @@ use bevy::prelude::*;
 use crate::{
     content::player::PlayerDefinition,
     ui::transition::ScreenTransition,
-    world::{
-        chunk_async_work::ChunkAsyncWorkLimiter,
-        chunk_generation_tasks::ChunkGenerationTasks,
-        chunk_mesh_tasks::ChunkMeshTasks,
-        chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    },
 };
 
 use self::{
+    assets::wait_for_gameplay_assets,
     fluids::settle_initial_fluids,
     generation::generate_initial_chunks,
     lighting::light_initial_chunks,
@@ -28,26 +24,20 @@ use self::{
 };
 use super::{
     WorldLoadingPhase,
-    system_params::{WorldSetupPersistence, WorldSetupProgress, WorldSetupSimulation},
+    system_params::{
+        WorldSetupAssets, WorldSetupChunkPipeline, WorldSetupPersistence, WorldSetupProgress,
+        WorldSetupSimulation,
+    },
 };
 
 pub(super) const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "world bootstrap system keeps independently borrowed Bevy resources explicit"
-)]
 pub(in crate::world) fn setup_world(
-    generation: ChunkGeneration,
-    content: ChunkContent,
-    mut renderer: ChunkRenderer,
+    mut pipeline: WorldSetupChunkPipeline,
     mut progress: WorldSetupProgress,
-    mut images: ResMut<Assets<Image>>,
+    mut assets: WorldSetupAssets,
     mut transition: ResMut<ScreenTransition>,
     mut simulation: WorldSetupSimulation,
-    mut generation_tasks: ResMut<ChunkGenerationTasks>,
-    mut mesh_tasks: ResMut<ChunkMeshTasks>,
-    async_work: Res<ChunkAsyncWorkLimiter>,
     persistence: WorldSetupPersistence,
     player_definition: Res<PlayerDefinition>,
 ) {
@@ -61,44 +51,50 @@ pub(in crate::world) fn setup_world(
     }
 
     if progress.loading_state.phase == WorldLoadingPhase::Meshing
-        && !renderer
+        && !pipeline
+            .renderer
             .terrain_materials
-            .ensure_texture_array_ready(&mut images)
+            .ensure_texture_array_ready(&mut assets.images)
     {
         return;
     }
 
     match progress.loading_state.phase {
         WorldLoadingPhase::Generating => generate_initial_chunks(
-            &generation,
-            &content,
+            &pipeline.generation,
+            &pipeline.content,
             &mut progress,
             &mut simulation.fluids,
-            &mut generation_tasks,
-            &async_work,
+            &mut pipeline.generation_tasks,
+            &pipeline.async_work,
             *persistence.load_mode,
         ),
         WorldLoadingPhase::SettlingFluids => {
-            settle_initial_fluids(&content, &mut progress, &mut simulation.fluids)
+            settle_initial_fluids(&pipeline.content, &mut progress, &mut simulation.fluids)
         }
         WorldLoadingPhase::Lighting => light_initial_chunks(
-            &content,
+            &pipeline.content,
             &mut progress,
             &mut simulation.lighting,
             &mut simulation.changed_lighting_chunks,
         ),
         WorldLoadingPhase::Meshing => {
             mesh_initial_chunks(
-                &content,
-                &mut renderer,
+                &pipeline.content,
+                &mut pipeline.renderer,
                 &mut progress,
-                &mut mesh_tasks,
-                &async_work,
+                &mut pipeline.mesh_tasks,
+                &pipeline.async_work,
             )
         }
+        WorldLoadingPhase::Assets => wait_for_gameplay_assets(
+            &assets.asset_server,
+            &assets.gameplay_preloads,
+            &mut progress,
+        ),
         WorldLoadingPhase::Spawning => spawn_loaded_world(
-            &content,
-            &mut renderer,
+            &pipeline.content,
+            &mut pipeline.renderer,
             &mut progress,
             &mut transition,
             &persistence,

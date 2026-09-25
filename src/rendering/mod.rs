@@ -14,6 +14,7 @@ mod sun_lighting;
 mod dynamic_lights;
 mod environment;
 mod fog;
+mod gameplay_asset_preload;
 mod lighting;
 mod mesh_allocator_diagnostics;
 mod sky;
@@ -35,11 +36,14 @@ use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
 
+pub(crate) use gameplay_asset_preload::GameplayAssetPreloads;
+
 pub(crate) struct RenderingPlugin;
 
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
+        app.init_resource::<GameplayAssetPreloads>()
+            .add_plugins((
             MaterialPlugin::<TerrainMaterial>::default(),
             MaterialPlugin::<BlockModelMaterial>::default(),
         ))
