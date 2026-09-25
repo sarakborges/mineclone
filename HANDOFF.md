@@ -1,3 +1,15 @@
+## 2026-09-25 — Grass em pixel art com textura real
+
+### Grass object — cards rígidos, alpha mask e detalhe preservado
+- o modelo anterior usava prismas afunilados com quatro rings e deslocamento quadrático, produzindo lâminas organicamente curvas que destoavam do estilo pixel art;
+- o generator v3 usa 13 cards verticais rígidos com alturas, larguras e yaw variados; não há bend, curve ou lean na geometria;
+- o próprio GLB agora embute uma textura RGBA 8x16 em grayscale com silhouette em degraus, bordas escuras e pixels internos claros/escuros;
+- o sampler usa nearest-neighbor e o material usa alpha mask + double-sided, preservando pixel edges nítidos;
+- a textura neutra é multiplicada pelo grass tint do bioma no material existente, então a cor continua data-driven sem apagar o detalhe visual;
+- o novo mesh caiu de geometria volumétrica para 52 vértices / 26 triângulos, mantendo 13 lâminas e reduzindo custo visual/runtime.
+
+VERSION: `0.68.1`.
+
 ## 2026-09-25 — Objects com altura real e tiling vertical
 
 ### Correção de CI — consumidor de held item atualizado
