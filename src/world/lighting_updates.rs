@@ -15,6 +15,7 @@ use crate::voxel::{
 
 use super::{
     chunk_remesh::ChunkRemeshQueue, chunk_remesh_tasks::ChunkRemeshTasks,
+    chunk_rendering::ChunkRenderPool,
     chunk_system_params::VoxelContent,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
@@ -38,6 +39,7 @@ pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bo
 
 pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
+    render_pool: Res<ChunkRenderPool>,
     mut changed_chunks: Local<HashSet<IVec3>>,
     mut changed_positions: Local<HashSet<IVec3>>,
     mut dirty_meshlets: Local<HashMap<IVec3, ChunkMeshletMask>>,
@@ -59,6 +61,7 @@ pub(super) fn process_dynamic_lighting(
         &content.secondary_properties,
         &mut changed_chunks,
         &mut changed_positions,
+        &|coord| render_pool.contains(coord),
         |processed_voxels| {
             budget.record(processed_voxels.saturating_sub(recorded_voxels));
             recorded_voxels = processed_voxels;
