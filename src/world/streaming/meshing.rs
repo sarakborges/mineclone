@@ -14,8 +14,8 @@ use crate::{
 };
 
 use super::{
-    ChunkStreamingQueues, ChunkStreamingWork, chunk_load_priority,
-    seed_loaded_chunk_lighting,
+    ChunkStreamingQueues, ChunkStreamingWork, activate_loaded_chunk_for_initial_mesh,
+    chunk_load_priority,
 };
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
@@ -58,7 +58,7 @@ pub(super) fn dispatch_initial_mesh_tasks(
             continue;
         };
 
-        seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
+        activate_loaded_chunk_for_initial_mesh(coord, content, work, queues, current_tick);
 
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {
