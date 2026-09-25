@@ -52,20 +52,11 @@ pub(super) fn collect_generated_chunks(
         if !process_streaming_fluid_settling(content, work) {
             return;
         }
-        if extend_generation_wave_for_fluid_closure(
-            content,
-            work,
-            queues,
-            current_tick,
-        ) {
-            return;
-        }
         let completion = work
             .state
             .fluid_settling
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
-        let completion = work.state.merge_settling_rounds(completion);
         begin_settled_wave_publication(completion, work, queues, current_tick);
         if !work.state.has_settled_publication() {
             work.state.finish_generation_wave();
@@ -165,69 +156,16 @@ pub(super) fn collect_generated_chunks(
         .begin(world, content.fluids(), staged);
 
     if process_streaming_fluid_settling(content, work) {
-        if extend_generation_wave_for_fluid_closure(
-            content,
-            work,
-            queues,
-            current_tick,
-        ) {
-            return;
-        }
         let completion = work
             .state
             .fluid_settling
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
-        let completion = work.state.merge_settling_rounds(completion);
         begin_settled_wave_publication(completion, work, queues, current_tick);
         if !work.state.has_settled_publication() {
             work.state.finish_generation_wave();
         }
     }
-}
-
-fn extend_generation_wave_for_fluid_closure(
-    content: &ChunkContent<'_>,
-    work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
-) -> bool {
-    let required = work
-        .state
-        .fluid_settling
-        .required_unloaded_frontier_chunks(&work.world)
-        .into_iter()
-        .filter(|coord| work.state.keeps_loaded(*coord))
-        .filter(|coord| work.world.chunk(*coord).is_none())
-        .collect::<Vec<_>>();
-
-    if required.is_empty() {
-        return false;
-    }
-
-    let completion = work
-        .state
-        .fluid_settling
-        .take_completion()
-        .expect("fluid closure extension requires completed settling");
-    work.state.retain_settling_round(completion);
-
-    for coord in required {
-        if work.world.has_resident_or_persisted_chunk(coord) {
-            work.state.remove_pending(coord);
-            assert!(
-                work.world.restore_chunk(coord),
-                "fluid dependency chunk must restore from archived state: {coord:?}"
-            );
-            seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
-            work.state.mark_ready(coord);
-            continue;
-        }
-
-        work.state.adopt_generation_wave_target(coord);
-    }
-
-    true
 }
 
 fn process_streaming_fluid_settling(
