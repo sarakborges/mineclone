@@ -66,8 +66,10 @@ pub(super) fn collect_generated_chunks(
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
         let completion = work.state.merge_settling_rounds(completion);
-        publish_settled_wave(completion, content, work, queues, current_tick);
-        work.state.finish_generation_wave();
+        begin_settled_wave_publication(completion, work, queues, current_tick);
+        if !work.state.has_settled_publication() {
+            work.state.finish_generation_wave();
+        }
         return;
     }
 
@@ -177,8 +179,10 @@ pub(super) fn collect_generated_chunks(
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
         let completion = work.state.merge_settling_rounds(completion);
-        publish_settled_wave(completion, content, work, queues, current_tick);
-        work.state.finish_generation_wave();
+        begin_settled_wave_publication(completion, work, queues, current_tick);
+        if !work.state.has_settled_publication() {
+            work.state.finish_generation_wave();
+        }
     }
 }
 
