@@ -1,3 +1,23 @@
+## 2026-09-24 — World-object sync consulta apenas colunas carregadas no raio relevante
+
+`sync_world_objects` não enumera mais todo o mapa 3D de chunks residentes quando o player
+cruza uma fronteira de chunk ou quando a render distance muda.
+
+- `VoxelWorld` expõe `loaded_chunk_coords_in_horizontal_radius`, usando diretamente o
+  índice autoritativo `loaded_chunk_columns`;
+- a consulta percorre somente colunas X/Z dentro do círculo pedido e expande apenas os Y
+  realmente carregados daquela coluna;
+- world-object sync consulta o hide radius, preservando corretamente a faixa de hysteresis;
+- chunks novos entre show/hide continuam ignorados, enquanto chunks já materializados nessa
+  faixa continuam elegíveis para revision updates;
+- o warning de slow sync agora reporta `candidate_chunks`, não um falso total de chunks
+  carregados;
+- foi adicionado teste cobrindo múltiplos Y, coluna diagonal fora do círculo e coluna além
+  do raio.
+
+Isso remove o scan O(total de chunks carregados) do hot path de mudança de player chunk e o
+substitui por trabalho proporcional apenas à área onde world objects podem existir no ECS.
+
 ## 2026-09-24 — World objects saem da varredura global de chunk visibility
 
 World-object render entities não carregam mais `ChunkRenderCoord`.

@@ -380,8 +380,10 @@ fn sync_world_objects(
     }
 
     let sync_started = Instant::now();
-    let loaded_coords = content.world.loaded_chunk_coords().collect::<Vec<_>>();
-    let loaded_chunk_count = loaded_coords.len();
+    let candidate_coords = content
+        .world
+        .loaded_chunk_coords_in_horizontal_radius(center, hide_radius);
+    let candidate_chunk_count = candidate_coords.len();
     let retired = store
         .synced_chunk_revisions
         .keys()
@@ -396,7 +398,7 @@ fn sync_world_objects(
         store.synced_chunk_revisions.remove(&coord);
     }
 
-    for coord in loaded_coords {
+    for coord in candidate_coords {
         let already_materialized = store.synced_chunk_revisions.contains_key(&coord);
         let radius = if already_materialized {
             hide_radius
@@ -474,8 +476,8 @@ fn sync_world_objects(
     let elapsed = sync_started.elapsed();
     if elapsed >= SLOW_WORLD_OBJECT_SYNC_WARNING {
         warn!(
-            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} loaded_chunks={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
-            loaded_chunk_count,
+            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
+            candidate_chunk_count,
             store.materialized_chunk_count(),
             store.materialized_object_count(),
             elapsed.as_secs_f64() * 1_000.0,

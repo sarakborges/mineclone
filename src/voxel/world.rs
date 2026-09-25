@@ -110,6 +110,39 @@ impl VoxelWorld {
         self.chunks.keys().copied()
     }
 
+    pub(crate) fn loaded_chunk_coords_in_horizontal_radius(
+        &self,
+        center: IVec2,
+        radius: i32,
+    ) -> Vec<IVec3> {
+        if radius < 0 {
+            return Vec::new();
+        }
+
+        let radius_squared = radius * radius;
+        let diameter = (radius * 2 + 1) as usize;
+        let mut coords = Vec::with_capacity(diameter * diameter);
+
+        for z in (center.y - radius)..=(center.y + radius) {
+            for x in (center.x - radius)..=(center.x + radius) {
+                let horizontal = IVec2::new(x, z);
+                if (horizontal - center).length_squared() > radius_squared {
+                    continue;
+                }
+                let Some(ys) = self.loaded_chunk_columns.get(&horizontal) else {
+                    continue;
+                };
+                coords.extend(
+                    ys.iter()
+                        .copied()
+                        .map(|y| IVec3::new(horizontal.x, y, horizontal.y)),
+                );
+            }
+        }
+
+        coords
+    }
+
     pub(crate) fn loaded_chunk_coords_below(
         &self,
         coord: IVec3,
@@ -736,6 +769,32 @@ mod tests {
 
         world.archive_chunk(low);
         assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
+    }
+
+    #[test]
+    fn loaded_chunk_coords_in_horizontal_radius_uses_column_index() {
+        let mut world = VoxelWorld::default();
+        for coord in [
+            IVec3::new(0, 0, 0),
+            IVec3::new(0, 2, 0),
+            IVec3::new(1, 1, 0),
+            IVec3::new(1, 3, 1),
+            IVec3::new(2, 0, 0),
+        ] {
+            world.insert_chunk(coord, VoxelChunk::empty());
+        }
+
+        let mut coords = world.loaded_chunk_coords_in_horizontal_radius(IVec2::ZERO, 1);
+        coords.sort_by_key(|coord| (coord.x, coord.z, coord.y));
+
+        assert_eq!(
+            coords,
+            vec![
+                IVec3::new(0, 0, 0),
+                IVec3::new(0, 2, 0),
+                IVec3::new(1, 1, 0),
+            ],
+        );
     }
 
     #[test]
