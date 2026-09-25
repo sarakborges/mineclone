@@ -1,3 +1,44 @@
+## 2026-09-25 — Streaming 0.68.40 mantém generation workers alimentados e elimina rescans O(n)
+
+- o log 0.68.39 confirmou que o sync esparso de world objects funcionou: `world_object_chunks`
+  ficou aproximadamente em 92..230 durante o teste, em vez de caminhar até todos os ~3130 chunks
+  renderizados; portanto a contabilidade anterior de milhares de chunks vazios foi removida;
+- o gargalo visual restante ficou ainda mais claro:
+  `stream_pending_renderable` cresceu de 380 para 1691, 2255 e 2705 enquanto o jogador se movia,
+  e `active_chunks` caiu de 3792 para 2907 e depois ~1833..1859;
+- ao mesmo tempo, generation estava barata depois do warmup (tipicamente ~1.7..3.4 ms/task), mas
+  snapshots repetidos mostravam `generation_tasks=0..4` com `async_chunk_work=0/4` e
+  `generation_wave_pending` ainda contendo vários targets;
+- isso revelou um sawtooth de alimentação do AsyncComputeTaskPool: Gameplay despachava generation
+  apenas no `Update`; tasks curtas terminavam poucos milissegundos depois, liberavam os permits e
+  os workers ficavam sem novos targets até o frame seguinte;
+- foi adicionado `refill_generation_workers` no schedule `Last`:
+  - ele agenda SOMENTE targets já escolhidos em `generation_wave_pending`;
+  - não faz novo priority scan e não aumenta a generation wave;
+  - respeita `MAX_GENERATION_TASKS_IN_FLIGHT`, `ChunkAsyncWorkLimiter` e `keeps_loaded`;
+  - se não há permit, requeuea o target e encerra imediatamente em vez de tentar o restante da fila;
+  - assim permits liberados ao longo do frame podem alimentar uma segunda leva antes do próximo
+    `Update`, inclusive durante o intervalo de apresentação/VSync;
+- o caminho normal de dispatch e o late refill agora compartilham
+  `schedule_generation_wave_pending`, mantendo as mesmas invariantes;
+- havia um segundo custo crescente: `pop_pending_by_priority()` fazia um scan O(n) de toda a fila
+  PARA CADA target escolhido; com ~3600 pending, o log mediu média de ~191 us e pico ~356 us por
+  scan;
+- `ChunkStreamingState` agora possui `PendingPriorityCache`: a pending queue é ordenada uma vez
+  por combinação de queue revision + selection revision e os próximos targets são consumidos dessa
+  ordem cacheada;
+- pops feitos pela própria cache atualizam a revision armazenada e não provocam rebuild; qualquer
+  enqueue/remove externo ou mudança de selection continua invalidando a ordem corretamente;
+- mudanças de structure-top que alteram a seleção já chamam `mark_selection_rebuilt()`, portanto
+  também invalidam a cache sem precisar de estado paralelo;
+- removido o helper `DeduplicatedQueue::pop_min_by_key` que ficou sem consumidor; o
+  `pop_min_where_by_key` continua existindo porque a fila ready ainda precisa dele;
+- CI funcional do conjunto, run `36195211579`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.40`.
+
 ## 2026-09-25 — Streaming 0.68.39 remove seed de preload e corta churn de retirement/remesh
 
 - o log 0.68.38 mostrou que o backlog `ready` total não era mais o gargalo visual:
