@@ -7,21 +7,36 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use super::quantized_object_tint;
+use crate::app::game_state::GameState;
+
+use super::color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS};
 
 const MAX_EXTRUDED_SPRITE_PIXELS: u64 = 65_536;
 const MAX_EXTRUDED_SPRITE_QUADS: usize = 131_072;
 
+pub(crate) struct ExtrudedSpritePlugin;
+
+impl Plugin for ExtrudedSpritePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ExtrudedSpriteMeshCache>()
+            .init_resource::<ExtrudedSpriteMaterialCache>()
+            .add_systems(
+                PostUpdate,
+                configure_pending_extruded_sprites.run_if(in_state(GameState::Gameplay)),
+            );
+    }
+}
+
 #[derive(Clone, Copy)]
-pub(super) struct ExtrudedSpriteGeometry {
-    pub(super) size: [f32; 2],
-    pub(super) height: f32,
-    pub(super) base_offset: f32,
-    pub(super) alpha_cutoff: f32,
+pub(crate) struct ExtrudedSpriteGeometry {
+    pub(crate) size: [f32; 2],
+    pub(crate) height: f32,
+    pub(crate) base_offset: f32,
+    pub(crate) alpha_cutoff: f32,
 }
 
 #[derive(Component)]
-pub(super) struct PendingExtrudedSprite {
+pub(crate) struct PendingExtrudedSprite {
     texture: Handle<Image>,
     geometry: ExtrudedSpriteGeometry,
     tint: Color,
@@ -29,7 +44,7 @@ pub(super) struct PendingExtrudedSprite {
 }
 
 impl PendingExtrudedSprite {
-    pub(super) fn new(
+    pub(crate) fn new(
         texture: Handle<Image>,
         geometry: ExtrudedSpriteGeometry,
         tint: Color,
@@ -83,7 +98,7 @@ impl ExtrudedSpriteMaterialCache {
 }
 
 #[derive(SystemParam)]
-pub(super) struct ExtrudedSpriteAssets<'w> {
+struct ExtrudedSpriteAssets<'w> {
     images: Res<'w, Assets<Image>>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -91,7 +106,7 @@ pub(super) struct ExtrudedSpriteAssets<'w> {
     material_cache: ResMut<'w, ExtrudedSpriteMaterialCache>,
 }
 
-pub(super) fn configure_pending_extruded_sprites(
+fn configure_pending_extruded_sprites(
     mut commands: Commands,
     pending: Query<(Entity, &PendingExtrudedSprite)>,
     mut assets: ExtrudedSpriteAssets,
@@ -121,7 +136,7 @@ pub(super) fn configure_pending_extruded_sprites(
             mesh
         };
 
-        let (tint, tint_key) = quantized_object_tint(pending.tint);
+        let (tint, tint_key) = quantize_srgba(pending.tint, MATERIAL_TINT_RGB_LEVELS);
         let material_key = ExtrudedSpriteMaterialKey {
             texture: pending.texture.id(),
             tint: tint_key,

@@ -1,3 +1,19 @@
+## 2026-09-25 — Drops de extrudedSprite reutilizam o visual real do object
+
+- a aparência ruim de Pebble/Stick como item dropado vinha do renderer genérico de world item: qualquer object era reduzido ao campo `icon` e desenhado em um `Rectangle` vertical quadrado, diferente do visual usado pelo object colocado no mundo;
+- isso criava mudança de geometria, perspectiva/foreshortening durante o spin e a impressão de textura esticada/degradada; o projeto já usa `ImagePlugin::default_nearest()`, então não havia motivo para trocar filtro;
+- o primitive `extrudedSprite` foi movido de `world_objects` para `rendering`, tornando-se infraestrutura compartilhada por world objects e world items;
+- mesh/material caches e o system que materializa `PendingExtrudedSprite` agora pertencem ao `ExtrudedSpritePlugin` registrado pelo `RenderingPlugin`;
+- world objects continuam usando o mesmo primitive, sem mudança visual;
+- quando um world item corresponde a um object `extrudedSprite`, o drop usa exatamente a mesma texture, alpha contour, mesh e material cache do object em vez do `icon` genérico;
+- o drop aplica apenas escala uniforme para caber no tamanho visual padrão de item, preservando aspect ratio e UVs; por isso Pebble e Stick compartilham o mesh original sem gerar uma geometria alternativa;
+- a base do mesh é alinhada ao limite inferior do collider do world item, evitando que o sprite extrudado fino fique flutuando no centro da hitbox;
+- objects model-backed continuam usando o icon genérico como antes;
+- a quantização de tint compartilhada foi centralizada em `rendering/color.rs`, evitando duplicação entre materiais de models e extruded sprites;
+- teste cobre que a normalização do drop preserva aspect ratio.
+
+VERSION: `0.68.18`.
+
 ## 2026-09-25 — Lighting inicial separa direct seed da propagação
 
 - o teste de runtime após 0.68.15 mostrou Fluid Settling praticamente instantâneo, enquanto

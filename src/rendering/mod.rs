@@ -10,6 +10,7 @@ pub(crate) mod camera_stack;
 mod celestial;
 mod celestial_path;
 pub(crate) mod color;
+pub(crate) mod extruded_sprite;
 mod sun_lighting;
 mod dynamic_lights;
 mod environment;
@@ -29,6 +30,7 @@ use celestial::CelestialPlugin;
 use sun_lighting::SunLightingPlugin;
 use dynamic_lights::DynamicLightsPlugin;
 use environment::EnvironmentPlugin;
+use extruded_sprite::ExtrudedSpritePlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
 use mesh_allocator_diagnostics::MeshAllocatorDiagnosticsPlugin;
@@ -50,6 +52,7 @@ impl Plugin for RenderingPlugin {
         .add_systems(Startup, setup_block_model_assets)
         .add_plugins((
             AssetUploadPlugin,
+            ExtrudedSpritePlugin,
             MeshAllocatorDiagnosticsPlugin,
             EnvironmentPlugin,
             LightingPlugin,

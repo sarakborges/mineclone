@@ -33,7 +33,11 @@ use crate::{
         camera::GameplayCamera,
         item_stack::{ItemStack, MAX_STACK_SIZE},
     },
-    rendering::block_tint::block_tint_at,
+    rendering::{
+        block_tint::block_tint_at,
+        color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS},
+        extruded_sprite::{ExtrudedSpriteGeometry, PendingExtrudedSprite},
+    },
     voxel::{
         cell::VoxelCell,
         chunk::CHUNK_SIZE,
@@ -54,12 +58,6 @@ use crate::{
     world_items::WorldItemSpawnRequest,
 };
 
-mod extruded_sprite;
-
-use extruded_sprite::{
-    configure_pending_extruded_sprites, ExtrudedSpriteGeometry, PendingExtrudedSprite,
-};
-pub(crate) use extruded_sprite::{ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache};
 
 #[derive(Clone, Copy)]
 struct MaterializedWorldObject {
@@ -237,8 +235,6 @@ impl Plugin for WorldObjectsPlugin {
         app.init_resource::<WorldObjectStore>()
             .init_resource::<TargetedWorldObject>()
             .init_resource::<ObjectMaterialCache>()
-            .init_resource::<ExtrudedSpriteMeshCache>()
-            .init_resource::<ExtrudedSpriteMaterialCache>()
             .add_message::<WorldObjectPlaceRequest>()
             .add_message::<WorldObjectRemoveRequest>()
             .add_systems(
@@ -248,7 +244,6 @@ impl Plugin for WorldObjectsPlugin {
                     apply_object_removal_requests,
                     sync_world_objects,
                     configure_pending_object_model_materials,
-                    configure_pending_extruded_sprites,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -723,7 +718,7 @@ fn configure_pending_object_model_materials(
     mut cache: ResMut<ObjectMaterialCache>,
 ) {
     for (entity, pending, appearance) in &pending {
-        let (tint, tint_key) = quantized_object_tint(appearance.tint);
+        let (tint, tint_key) = quantize_srgba(appearance.tint, MATERIAL_TINT_RGB_LEVELS);
         let key = ObjectMaterialKey {
             material: pending.source.id(),
             tint: tint_key,
@@ -748,29 +743,6 @@ fn configure_pending_object_model_materials(
             .remove::<PendingObjectModelMaterial>()
             .remove::<WorldObjectAppearance>();
     }
-}
-
-const OBJECT_TINT_RGB_LEVELS: f32 = 31.0;
-
-fn quantized_object_tint(color: Color) -> (Color, [u8; 4]) {
-    let rgba = color.to_srgba();
-    let quantize_rgb = |value: f32| {
-        (value.clamp(0.0, 1.0) * OBJECT_TINT_RGB_LEVELS).round() as u8
-    };
-    let red = quantize_rgb(rgba.red);
-    let green = quantize_rgb(rgba.green);
-    let blue = quantize_rgb(rgba.blue);
-    let alpha = (rgba.alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
-
-    (
-        Color::srgba(
-            f32::from(red) / OBJECT_TINT_RGB_LEVELS,
-            f32::from(green) / OBJECT_TINT_RGB_LEVELS,
-            f32::from(blue) / OBJECT_TINT_RGB_LEVELS,
-            f32::from(alpha) / 255.0,
-        ),
-        [red, green, blue, alpha],
-    )
 }
 
 fn apply_shadow_flags(root: &mut EntityCommands<'_>, definition: &ObjectDefinition) {

@@ -1,4 +1,8 @@
-use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    light::{NotShadowCaster, NotShadowReceiver},
+    prelude::*,
+};
 
 use crate::{
     app::{
@@ -11,7 +15,7 @@ use crate::{
         builtin_ids::BIOME_TINT_METADATA_KEY,
         item::ItemRegistry,
         layer::LayerRegistry,
-        object::ObjectRegistry,
+        object::{ObjectRegistry, ObjectVisualDefinition},
         tool::ToolRegistry,
     },
     gameplay::availability::world_interaction_available,
@@ -28,7 +32,9 @@ use crate::{
             set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
+        block_tint::block_tint_at,
         block_visual_content::BlockVisualContent,
+        extruded_sprite::{ExtrudedSpriteGeometry, PendingExtrudedSprite},
     },
     targeting::block::BlockTargetingSet,
     voxel::{
@@ -347,6 +353,10 @@ fn spawn_world_item_visual(
         return;
     }
 
+    if spawn_extruded_object_item(root, request, &content) {
+        return;
+    }
+
     let icon = content.items
         .get(item_id)
         .map(|definition| definition.icon.as_str())
@@ -395,6 +405,67 @@ fn spawn_world_item_visual(
         Transform::default(),
         NotShadowCaster,
     ));
+}
+
+fn spawn_extruded_object_item(
+    root: &mut ChildSpawnerCommands,
+    request: &WorldItemSpawnRequest,
+    content: &WorldItemVisualContent<'_, '_>,
+) -> bool {
+    let Some(definition) = content.objects.get(request.stack.id()) else {
+        return false;
+    };
+    let ObjectVisualDefinition::ExtrudedSprite {
+        texture,
+        base_offset,
+        height,
+        size,
+        alpha_cutoff,
+    } = &definition.visual
+    else {
+        return false;
+    };
+
+    let horizontal = Vec2::new(request.position.x, request.position.z);
+    let tint = block_tint_at(
+        definition.tint,
+        horizontal,
+        &content.block_content.biome_field,
+        &content.block_content.biomes,
+    );
+    let scale = world_item_extruded_sprite_scale(*size);
+    let translation =
+        Vec3::Y * (-ITEM_HALF_EXTENT - *base_offset * scale);
+
+    let mut visual = root.spawn((
+        WorldItemVisual,
+        PendingExtrudedSprite::new(
+            content
+                .block_content
+                .asset_server
+                .load(texture.clone()),
+            ExtrudedSpriteGeometry {
+                size: *size,
+                height: *height,
+                base_offset: *base_offset,
+                alpha_cutoff: *alpha_cutoff,
+            },
+            tint,
+            definition.unlit,
+        ),
+        Transform::from_translation(translation).with_scale(Vec3::splat(scale)),
+        Visibility::default(),
+        NotShadowCaster,
+    ));
+    if !definition.receives_shadow {
+        visual.insert(NotShadowReceiver);
+    }
+
+    true
+}
+
+fn world_item_extruded_sprite_scale(size: [f32; 2]) -> f32 {
+    ITEM_SPRITE_SIZE / size[0].max(size[1])
 }
 
 fn move_world_items(
@@ -529,6 +600,16 @@ mod tests {
     #[test]
     fn natural_world_items_default_to_interact_pickup() {
         assert!(matches!(WorldItemPickup::default(), WorldItemPickup::Interact));
+    }
+
+    #[test]
+    fn extruded_object_item_scale_preserves_sprite_aspect_ratio() {
+        let size = [0.68, 0.42];
+        let scale = world_item_extruded_sprite_scale(size);
+        let scaled = [size[0] * scale, size[1] * scale];
+
+        assert!((scaled[0].max(scaled[1]) - ITEM_SPRITE_SIZE).abs() < f32::EPSILON);
+        assert!((scaled[0] / scaled[1] - size[0] / size[1]).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -8,11 +8,11 @@ use bevy::{ecs::system::SystemParam, prelude::*, text::FontAtlasSet};
 
 use crate::{
     app::{crash_log::append_runtime_diagnostic, game_state::GameState},
-    rendering::terrain_material::TerrainMaterial,
-    world_objects::{
-        ObjectMaterialCache, ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache,
-        WorldObjectStore,
+    rendering::{
+        extruded_sprite::{ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache},
+        terrain_material::TerrainMaterial,
     },
+    world_objects::{ObjectMaterialCache, WorldObjectStore},
 };
 
 use super::{
