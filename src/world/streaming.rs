@@ -583,6 +583,27 @@ impl ChunkStreamingState {
         )
     }
 
+    pub(super) fn diagnostic_renderable_backlog_counts(&self) -> (usize, usize, usize) {
+        let Some(center) = self.center else {
+            return (0, 0, 0);
+        };
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let renderable = |coord: IVec3| {
+            self.keeps_loaded(coord)
+                && chunk_is_inside_render_radius(center, coord, show_radius)
+        };
+
+        (
+            self.pending.values().filter(|coord| renderable(*coord)).count(),
+            self.ready.values().filter(|coord| renderable(*coord)).count(),
+            self.generation_wave_targets
+                .iter()
+                .copied()
+                .filter(|coord| renderable(*coord))
+                .count(),
+        )
+    }
+
     fn mark_selection_rebuilt(&mut self) {
         self.selection_revision = self
             .selection_revision
