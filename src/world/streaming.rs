@@ -823,7 +823,6 @@ pub(super) fn stream_chunks(
             &renderer.pool,
             &mut work,
             &mut queues,
-            current_tick,
         );
     }
 }
