@@ -602,6 +602,7 @@ fn rebuild_desired_chunk_coords_incremental(
         );
     }
 
+    no_longer_desired.retain(|coord| !desired.contains(coord));
     newly_desired.extend(desired.difference(previous_desired).copied());
 }
 
