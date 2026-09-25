@@ -588,6 +588,25 @@ impl ChunkStreamingState {
         })
     }
 
+    pub(crate) fn has_renderable_streaming_backlog(&self) -> bool {
+        let Some(center) = self.center else {
+            return false;
+        };
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let renderable = |coord: IVec3| {
+            self.keeps_loaded(coord)
+                && chunk_is_inside_render_radius(center, coord, show_radius)
+        };
+
+        self.ready.values().any(renderable)
+            || self.pending.values().any(renderable)
+            || self
+                .generation_wave_targets
+                .iter()
+                .copied()
+                .any(renderable)
+    }
+
     pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
             self.pending.len(),
@@ -1124,5 +1143,23 @@ mod tests {
         state.abandon_generation_wave_target(visible);
         state.ready.enqueue(visible);
         assert!(state.has_renderable_initial_mesh_backlog());
+    }
+
+    #[test]
+    fn renderable_streaming_backlog_includes_generation_work() {
+        let visible = IVec3::new(3, 0, 0);
+        let preload_only = IVec3::new(20, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            horizontal_radius: 12,
+            ..default()
+        };
+        state.desired.extend([visible, preload_only]);
+
+        state.pending.enqueue(preload_only);
+        assert!(!state.has_renderable_streaming_backlog());
+
+        state.pending.enqueue(visible);
+        assert!(state.has_renderable_streaming_backlog());
     }
 }
