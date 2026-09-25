@@ -95,7 +95,7 @@ use save_session::{
 pub(crate) use seed::WorldSeed;
 pub(crate) use setup::{WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState};
 use setup::{begin_world_loading, setup_world};
-use streaming::{ChunkStreamingState, stream_chunks};
+use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
 use warp::{PendingWarp, resolve_pending_warp};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 pub(crate) use work_budget::WorldFrameWorkBudget;
@@ -220,6 +220,10 @@ impl Plugin for WorldPlugin {
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Last,
+                refill_generation_workers.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, advance_deferred_mesh_asset_retirements)
             .add_systems(
