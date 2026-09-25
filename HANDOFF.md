@@ -1,5 +1,18 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — frame time entra no diagnóstico periódico
+- o log `render assets` tinha backlog, assets e tempos async, mas não registrava a distribuição de
+  frame time da mesma janela; isso impedia correlacionar spikes visíveis com o subsystem ativo;
+- gameplay agora coleta uma amostra leve de frame time por frame em um ring buffer limitado;
+- a cada diagnóstico de 10 s, as amostras são drenadas e o log publica quantidade, média, FPS
+  equivalente da média, p50, p95, p99 e máximo em microssegundos;
+- a coleta é resetada ao iniciar Loading e não muda scheduling, budgets ou worldgen.
+
+Campos novos: `frame_samples`, `frame_avg_us`, `frame_avg_fps`, `frame_p50_us`,
+`frame_p95_us`, `frame_p99_us` e `frame_max_us`.
+
+VERSION: `0.67.5`.
+
 ### Follow-up — diagnostics medem o custo da seleção lazy de prioridade
 - a troca dos sorts globais por `pop_min_by_key` removeu o pico `O(n log n)` do rebuild, mas cada
   dispatch ainda pode varrer toda a fila ativa antes de o budget ser reavaliado;

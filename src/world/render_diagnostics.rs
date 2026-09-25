@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use bevy::{ecs::system::SystemParam, prelude::*, text::FontAtlasSet};
 
@@ -24,6 +24,69 @@ use super::{
 const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
+const FRAME_TIME_SAMPLE_CAPACITY: usize = 4096;
+
+#[derive(Resource, Default)]
+pub(super) struct FrameTimeSamples {
+    micros: VecDeque<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FrameTimeDiagnostic {
+    count: usize,
+    average_micros: u64,
+    p50_micros: u64,
+    p95_micros: u64,
+    p99_micros: u64,
+    max_micros: u64,
+}
+
+impl FrameTimeSamples {
+    fn record(&mut self, elapsed_micros: u64) {
+        if self.micros.len() >= FRAME_TIME_SAMPLE_CAPACITY {
+            self.micros.pop_front();
+        }
+        self.micros.push_back(elapsed_micros);
+    }
+
+    fn take_diagnostic(&mut self) -> FrameTimeDiagnostic {
+        if self.micros.is_empty() {
+            return FrameTimeDiagnostic::default();
+        }
+
+        let mut values = self.micros.drain(..).collect::<Vec<_>>();
+        values.sort_unstable();
+        let count = values.len();
+        let total = values
+            .iter()
+            .fold(0_u128, |sum, value| sum + u128::from(*value));
+        FrameTimeDiagnostic {
+            count,
+            average_micros: (total / count as u128).min(u128::from(u64::MAX)) as u64,
+            p50_micros: percentile_micros(&values, 50),
+            p95_micros: percentile_micros(&values, 95),
+            p99_micros: percentile_micros(&values, 99),
+            max_micros: values.last().copied().unwrap_or(0),
+        }
+    }
+}
+
+fn percentile_micros(sorted: &[u64], percentile: usize) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+    let rank = (sorted.len().saturating_mul(percentile).saturating_add(99) / 100)
+        .clamp(1, sorted.len());
+    sorted[rank - 1]
+}
+
+pub(super) fn record_frame_time(
+    time: Res<Time<Real>>,
+    mut samples: ResMut<FrameTimeSamples>,
+) {
+    let elapsed_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
+    samples.record(elapsed_micros);
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RenderDiagnosticSnapshot {
@@ -53,6 +116,7 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     object_materials: Res<'w, ObjectMaterialCache>,
     stacked_object_meshes: Res<'w, StackedSpriteMeshCache>,
     stacked_object_materials: Res<'w, StackedSpriteMaterialCache>,
+    frame_times: ResMut<'w, FrameTimeSamples>,
 }
 
 pub(super) fn render_diagnostics_due(
@@ -71,7 +135,7 @@ pub(super) fn render_diagnostics_due(
 }
 
 pub(super) fn log_render_asset_pressure(
-    assets: RenderDiagnosticAssets,
+    mut assets: RenderDiagnosticAssets,
     mut previous: Local<Option<RenderDiagnosticSnapshot>>,
 ) {
     let active_chunks = assets.pool.active_count();
@@ -91,6 +155,12 @@ pub(super) fn log_render_asset_pressure(
     ) = assets.streaming.diagnostic_counts();
     let (pending_priority_scan, ready_priority_scan) =
         assets.streaming.take_priority_scan_diagnostics();
+    let frame_times = assets.frame_times.take_diagnostic();
+    let average_fps = if frame_times.average_micros == 0 {
+        0.0
+    } else {
+        1_000_000.0 / frame_times.average_micros as f64
+    };
     let generation_tasks = assets.generation_tasks.pending_count();
     let async_chunk_work = assets.async_work.in_flight();
     let async_chunk_work_limit = assets.async_work.limit();
@@ -150,8 +220,15 @@ pub(super) fn log_render_asset_pressure(
     });
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} stacked_object_mesh_cache={} stacked_object_material_cache={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} stacked_object_mesh_cache={} stacked_object_material_cache={}",
         assets.state.get(),
+        frame_times.count,
+        frame_times.average_micros,
+        average_fps,
+        frame_times.p50_micros,
+        frame_times.p95_micros,
+        frame_times.p99_micros,
+        frame_times.max_micros,
         pending_priority_scan.count,
         pending_priority_scan.average_micros,
         pending_priority_scan.max_micros,

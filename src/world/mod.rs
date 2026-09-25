@@ -81,7 +81,9 @@ pub(crate) use new_world::{
     WorldGenerationMode, WorldGenerationSettings, is_valid_biome_size_multiplier,
     snap_biome_size_multiplier,
 };
-use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
+use render_diagnostics::{
+    FrameTimeSamples, log_render_asset_pressure, record_frame_time, render_diagnostics_due,
+};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 use save_catalog::WorldDirectoryLock;
@@ -128,6 +130,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<PendingFluidUpdates>()
             .init_resource::<PendingWarp>()
             .init_resource::<WorldFrameWorkBudget>()
+            .init_resource::<FrameTimeSamples>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
             .add_systems(
@@ -140,6 +143,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
                     reset_resource::<PendingWarp>,
+                    reset_resource::<FrameTimeSamples>,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
                     begin_world_loading,
@@ -180,6 +184,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 PreUpdate,
                 (
+                    record_frame_time,
                     begin_world_frame_work_budget,
                     tune_chunk_async_work,
                     advance_world_ticks.in_set(WorldTickSet),
