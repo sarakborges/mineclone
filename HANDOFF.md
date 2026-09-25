@@ -1,3 +1,13 @@
+### CI follow-up — HUD/highlight também usam support voxel
+
+O primeiro CI do desacoplamento gameplay↔render encontrou as duas últimas dependências de
+`WorldObjectInstance`: Target HUD e target highlight.
+
+- Target HUD resolve `ObjectCell` diretamente por `TargetedWorldObject.support`;
+- highlight reconstrói posição/AABB pelo mesmo helper determinístico do render;
+- ambos deixam de consultar Entity/Transform visual;
+- não restam consumidores de gameplay do antigo componente de render.
+
 ## 2026-09-24 — World-object gameplay identity desacoplada do render Entity
 
 Targeting, pick-block e remoção de world objects agora usam o support voxel (`IVec3`) como

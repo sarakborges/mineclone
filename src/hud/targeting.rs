@@ -24,7 +24,7 @@ use crate::{
     },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
-    world_objects::{TargetedWorldObject, WorldObjectInstance},
+    world_objects::TargetedWorldObject,
 };
 
 use super::{HudSettings, TargetBlockPosition};
@@ -110,7 +110,6 @@ struct TargetObjectHudSnapshot {
 struct TargetHudState<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
     object_target: Res<'w, TargetedWorldObject>,
-    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -346,12 +345,11 @@ fn update_target_hud(
         return;
     }
 
-    if let Some(entity) = state.object_target.0
-        && let Ok(instance) = state.object_instances.get(entity)
-        && let Some(object) = content.objects.get(instance.object_id())
+    if let Some(support) = state.object_target.0
+        && let Some(object_cell) = state.world.object_at(support)
+        && let Some(object) = content.objects.get(object_cell.object_id)
     {
         let language = state.language.get();
-        let support = instance.support();
         let light = state.world.light_at(support + IVec3::Y);
         let light_level = light.sky().max(light.block());
         let tint_position = Vec2::new(support.x as f32 + 0.5, support.z as f32 + 0.5);

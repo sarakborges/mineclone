@@ -14,6 +14,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         builtin_ids::DYED_PROPERTY_ID,
+        object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
         tool_behavior::{
@@ -23,7 +24,7 @@ use crate::{
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
-    world_objects::{TargetedWorldObject, WorldObjectInstance},
+    world_objects::{TargetedWorldObject, world_object_position},
     voxel::{
         log_variant::is_hollow_log_id,
         microblock::{
@@ -110,7 +111,6 @@ struct ArtisansKitPlacementGhost;
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
     targeted_object: Res<'w, TargetedWorldObject>,
-    world_objects: Query<'w, 's, (&'static WorldObjectInstance, &'static GlobalTransform)>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
 }
@@ -118,6 +118,7 @@ struct TargetHighlightInput<'w, 's> {
 #[derive(SystemParam)]
 struct TargetHighlightContent<'w> {
     blocks: Res<'w, BlockRegistry>,
+    objects: Res<'w, ObjectRegistry>,
     tools: Res<'w, ToolRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
 }
@@ -231,15 +232,22 @@ fn update_highlight(
         material.base_color = highlight_color;
     }
 
-    if let Some(entity) = input.targeted_object.0
-        && let Ok((object, transform)) = input.world_objects.get(entity)
+    if let Some(support) = input.targeted_object.0
+        && let Some(object_cell) = input.scene.world().object_at(support)
+        && let Some(object) = content.objects.get(object_cell.object_id)
     {
         hide_if_visible(&mut view.brush_ghost.1);
         hide_if_visible(&mut view.artisans_kit_placement.1);
-        let (minimum, maximum) = object.target_bounds(transform.translation());
-        let size = (maximum - minimum) * HIGHLIGHT_SCALE;
-        let translation = (minimum + maximum) * 0.5;
-        view.highlight.0.translation = translation;
+        let position = world_object_position(
+            support,
+            input.scene.world().cell_at(support),
+            object_cell,
+            object,
+        );
+        let center = position + Vec3::from_array(object.target.center_offset);
+        let half = Vec3::from_array(object.target.size) * 0.5;
+        let size = half * 2.0 * HIGHLIGHT_SCALE;
+        view.highlight.0.translation = center;
         view.highlight.0.scale = size;
         show_if_hidden(&mut view.highlight.1);
         return;
