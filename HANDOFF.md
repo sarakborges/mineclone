@@ -1,3 +1,22 @@
+## 2026-09-25 — Natural creature spawn resolve biome no ponto candidato, incluindo volume biome
+
+- natural spawn escolhia a regra de criatura a partir de `CurrentBiome` do jogador antes de
+  escolher a posição; depois procurava qualquer chão válido a 8..32 blocos;
+- isso permitia que uma regra de Slime de um surface biome fosse reutilizada sobre uma Floating
+  Island próxima, porque o biome do ponto real de spawn nunca era consultado;
+- a ordem foi invertida: cada tentativa primeiro escolhe a coluna/chão candidato, depois resolve o
+  biome naquele suporte e só então seleciona uma `CreatureSpawnRule`;
+- a resolução consulta o `VolumeBiomeRegion` cacheado para a generation region do candidato e
+  dá precedência ao volume biome quando `volume_selection_in_region` encontra um;
+- se houver volume biome, suas próprias `creatureSpawns` são autoritativas; Floating Islands e
+  Caverns atualmente não declaram nenhuma, então bloqueiam natural spawn por herança de surface;
+- sem volume biome, permanece o `primary_id` efetivo do surface biome, incluindo surface margins;
+- regras de light, spacing, maxPerType e maxEntities continuam aplicadas depois da resolução local;
+- spawn explícito/manual por comando não foi alterado, pois não é natural spawn;
+- nenhuma identidade de worldgen/terrain foi alterada.
+
+VERSION: `0.68.28`.
+
 ### Correção de compilação — cache de system-font handles
 
 - o primeiro patch usava um `matches!` com binding presente em apenas um dos patterns;
