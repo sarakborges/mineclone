@@ -15,7 +15,7 @@ pub(crate) mod transition;
 pub(crate) mod typography;
 pub(crate) mod visibility;
 
-use bevy::{prelude::*, text::FontCx};
+use bevy::{prelude::*, text::FontCx, ui::UiSystems};
 
 #[derive(Resource)]
 struct UiFontFaces {
@@ -42,12 +42,15 @@ impl Plugin for UiDesignSystemPlugin {
             .add_systems(
                 Update,
                 (
-                    pin_ui_font_handles,
                     button::animate_buttons,
                     cosmic_background::animate_stars,
                     transition::animate_screen_transition
                         .run_if(transition::screen_transition_active),
                 ),
+            )
+            .add_systems(
+                PostUpdate,
+                pin_ui_font_handles.before(UiSystems::Content),
             )
             .add_systems(Last, scrollbar::sync_auto_scrollbars);
     }
@@ -68,7 +71,7 @@ fn pin_ui_font_handles(
     mut ui_fonts: ResMut<UiFontFaces>,
     mut font_context: ResMut<FontCx>,
     mut font_assets: ResMut<Assets<Font>>,
-    mut text_fonts: Query<&mut TextFont, Added<TextFont>>,
+    mut text_fonts: Query<&mut TextFont, Changed<TextFont>>,
 ) {
     for mut text_font in &mut text_fonts {
         let uses_ui_font = match &text_font.font {
