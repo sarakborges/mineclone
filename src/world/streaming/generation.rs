@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{
     platform::collections::HashSet,
-    prelude::{IVec2, IVec3},
+    prelude::{IVec2, IVec3, Res, ResMut},
 };
 
 use crate::{
@@ -13,7 +13,8 @@ use crate::{
         },
     },
     world::{
-        chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
+        chunk_async_work::ChunkAsyncWorkLimiter,
+        chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
         chunk_rendering::ChunkRenderPool,
         chunk_system_params::ChunkContent,
         fluid_updates::GeneratedFluidSettlingCompletion,
@@ -286,34 +287,85 @@ pub(super) fn dispatch_generation_tasks(
         select_generation_wave(render_pool, work, &mut budget);
     }
 
-    let attempts = work.state.generation_wave_pending.len();
+    schedule_generation_wave_pending(
+        &mut work.state,
+        &mut work.generation_tasks,
+        &work.async_work,
+        Some(&mut budget),
+    );
+}
+
+fn schedule_generation_wave_pending(
+    state: &mut super::ChunkStreamingState,
+    generation_tasks: &mut ChunkGenerationTasks,
+    async_work: &ChunkAsyncWorkLimiter,
+    mut budget: Option<&mut FrameWorkBudget>,
+) {
+    let attempts = state.generation_wave_pending.len();
     for _ in 0..attempts {
-        if budget.exhausted()
-            || work.generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT
+        if generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT
+            || budget.as_ref().is_some_and(|budget| budget.exhausted())
         {
             break;
         }
 
-        let Some(coord) = work.state.generation_wave_pending.pop() else {
+        let Some(coord) = state.generation_wave_pending.pop() else {
             break;
         };
-        if !work.state.keeps_loaded(coord) {
-            work.state.abandon_generation_wave_target(coord);
-            budget.record(1);
+        if !state.keeps_loaded(coord) {
+            state.abandon_generation_wave_target(coord);
+            if let Some(budget) = budget.as_deref_mut() {
+                budget.record(1);
+            }
             continue;
         }
-        if work.generation_tasks.contains(coord) {
-            budget.record(1);
+        if generation_tasks.contains(coord) {
+            if let Some(budget) = budget.as_deref_mut() {
+                budget.record(1);
+            }
             continue;
         }
 
-        if work.generation_tasks.schedule(coord, &work.async_work) {
-            budget.record(1);
+        if generation_tasks.schedule(coord, async_work) {
+            if let Some(budget) = budget.as_deref_mut() {
+                budget.record(1);
+            }
         } else {
-            work.state.generation_wave_pending.enqueue(coord);
-            budget.record(1);
+            state.generation_wave_pending.enqueue(coord);
+            if let Some(budget) = budget.as_deref_mut() {
+                budget.record(1);
+            }
+            // With the task-count cap checked above, schedule failure means
+            // the shared async limiter has no free permit. Retrying other
+            // targets in the same pass only burns main-thread time.
+            break;
         }
     }
+}
+
+pub(super) fn refill_generation_workers(
+    mut state: ResMut<super::ChunkStreamingState>,
+    mut generation_tasks: ResMut<ChunkGenerationTasks>,
+    async_work: Res<ChunkAsyncWorkLimiter>,
+) {
+    if state.fluid_settling.is_active()
+        || !state.settled_publication_chunks.is_empty()
+        || state.generation_wave_pending.len() == 0
+    {
+        return;
+    }
+
+    // Generation tasks are short once caches are warm. A second dispatch point
+    // late in the frame lets workers consume already-selected wave targets
+    // instead of idling until the next Update after their permits are released.
+    // This does no priority scanning and never grows the wave beyond its
+    // existing target set.
+    schedule_generation_wave_pending(
+        &mut state,
+        &mut generation_tasks,
+        &async_work,
+        None,
+    );
 }
 
 fn generated_chunk_requires_fluid_settling(
