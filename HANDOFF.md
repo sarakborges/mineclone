@@ -1,3 +1,18 @@
+## 2026-09-25 — Loading mostra a pipeline completa sem substituir fases
+
+- a loading screen deixou de mostrar uma única linha agregada que era substituída conforme o
+  bootstrap avançava;
+- as sete fases reais ficam visíveis simultaneamente e empilhadas: chunk generation, fluid
+  settling, lighting, meshing, asset loading, render finalization e player spawning;
+- cada linha exibe estado `PENDING / ACTIVE / DONE`; fases com contador próprio também mantêm o
+  progresso numérico atual/final;
+- `WorldLoadingStage` agregado foi removido e a UI passa a consumir diretamente
+  `WorldLoadingPhase`, evitando duas representações divergentes da pipeline;
+- o texto de uma linha só é reatribuído quando seu conteúdo realmente muda, evitando churn de UI
+  desnecessário durante o carregamento.
+
+VERSION: `0.68.9`.
+
 ### CI follow-up — helper de volume legado removido
 
 - após corrigir os imports, Clippy expôs `chunk_coords_in_volume` como código morto: o bootstrap deixou de usá-lo quando passou a compartilhar a seleção surface-aware do streaming;

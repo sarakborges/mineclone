@@ -9,8 +9,8 @@ use super::fluid_updates::GeneratedFluidSettling;
 pub(super) use bootstrap::begin_world_loading;
 pub(super) use progress::setup_world;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum WorldLoadingPhase {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WorldLoadingPhase {
     Generating,
     SettlingFluids,
     Lighting,
@@ -20,12 +20,35 @@ enum WorldLoadingPhase {
     Spawning,
 }
 
+impl WorldLoadingPhase {
+    pub(crate) const ALL: [Self; 7] = [
+        Self::Generating,
+        Self::SettlingFluids,
+        Self::Lighting,
+        Self::Meshing,
+        Self::Assets,
+        Self::Finalizing,
+        Self::Spawning,
+    ];
+
+    fn ordinal(self) -> u8 {
+        match self {
+            Self::Generating => 0,
+            Self::SettlingFluids => 1,
+            Self::Lighting => 2,
+            Self::Meshing => 3,
+            Self::Assets => 4,
+            Self::Finalizing => 5,
+            Self::Spawning => 6,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum WorldLoadingStage {
-    Terrain,
-    Chunks,
-    Assets,
-    Finalizing,
+pub(crate) enum WorldLoadingPhaseStatus {
+    Pending,
+    Active,
+    Done,
 }
 
 #[derive(Resource)]
@@ -52,26 +75,32 @@ impl WorldLoadingState {
         self.coords.len()
     }
 
-    pub(crate) fn stage(&self) -> WorldLoadingStage {
-        match self.phase {
-            WorldLoadingPhase::Generating
-            | WorldLoadingPhase::SettlingFluids
-            | WorldLoadingPhase::Lighting => WorldLoadingStage::Terrain,
-            WorldLoadingPhase::Meshing => WorldLoadingStage::Chunks,
-            WorldLoadingPhase::Assets => WorldLoadingStage::Assets,
-            WorldLoadingPhase::Finalizing | WorldLoadingPhase::Spawning => WorldLoadingStage::Finalizing,
+    pub(crate) fn phase_status(&self, phase: WorldLoadingPhase) -> WorldLoadingPhaseStatus {
+        if phase == self.phase {
+            if phase == WorldLoadingPhase::Spawning && self.transition_requested {
+                WorldLoadingPhaseStatus::Done
+            } else {
+                WorldLoadingPhaseStatus::Active
+            }
+        } else if phase.ordinal() < self.phase.ordinal() {
+            WorldLoadingPhaseStatus::Done
+        } else {
+            WorldLoadingPhaseStatus::Pending
         }
     }
 
-    pub(crate) fn stage_progress(&self) -> (usize, usize) {
-        match self.stage() {
-            WorldLoadingStage::Terrain => (self.generated, self.total()),
-            WorldLoadingStage::Chunks => (self.meshed, self.total()),
-            WorldLoadingStage::Assets => (self.assets_loaded, self.assets_total),
-            WorldLoadingStage::Finalizing => (
+    pub(crate) fn phase_progress(&self, phase: WorldLoadingPhase) -> Option<(usize, usize)> {
+        match phase {
+            WorldLoadingPhase::Generating => Some((self.generated, self.total())),
+            WorldLoadingPhase::SettlingFluids => None,
+            WorldLoadingPhase::Lighting => Some((self.lit, self.total())),
+            WorldLoadingPhase::Meshing => Some((self.meshed, self.total())),
+            WorldLoadingPhase::Assets => Some((self.assets_loaded, self.assets_total)),
+            WorldLoadingPhase::Finalizing => Some((
                 usize::from(self.finalization_frames),
                 usize::from(progress::INITIAL_FINALIZATION_FRAMES),
-            ),
+            )),
+            WorldLoadingPhase::Spawning => None,
         }
     }
 
