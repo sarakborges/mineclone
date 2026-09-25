@@ -317,7 +317,7 @@ pub(super) fn dispatch_generation_tasks(
         .with_global_deadline(deadline)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
-    if work.state.generation_wave_targets.is_empty() {
+    if work.state.generation_wave_accepts_new_targets() {
         select_generation_wave(
             content,
             render_pool,

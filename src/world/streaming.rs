@@ -274,9 +274,14 @@ impl ChunkStreamingState {
             || self.fluid_settling.is_active()
     }
 
+    fn generation_wave_accepts_new_targets(&self) -> bool {
+        !self.fluid_settling.is_active() && self.staged_generated_chunks.is_empty()
+    }
+
     fn generation_dispatch_work_exists(&self) -> bool {
-        (self.generation_wave_pending.len() > 0 || self.pending.len() > 0)
-            && !self.fluid_settling.is_active()
+        !self.fluid_settling.is_active()
+            && (self.generation_wave_pending.len() > 0
+                || (self.pending.len() > 0 && self.generation_wave_accepts_new_targets()))
     }
 
     fn stage_generated_chunk(&mut self, coord: IVec3) {

@@ -1,3 +1,24 @@
+## 2026-09-25 — Streaming budget mede o próprio pipeline e dry waves mantêm workers ocupados
+
+- o log 0.68.27 mostrava 3.500..5.100 chunks em `stream_pending`, mas normalmente só 0..1
+  generation task e `async_work=0/2`; os workers estavam ociosos apesar do backlog;
+- o `WorldFrameWorkBudget` era iniciado em PreUpdate, enquanto streaming só roda em Update e
+  fluid/lighting/remesh em PostUpdate; como o budget é um deadline absoluto, tempo gasto por
+  sistemas alheios ao world pipeline expirava os 2..4 ms antes de geração/meshing chegarem nele;
+- o budget agora é iniciado imediatamente no início da chain autoritativa de streaming em Update,
+  portanto seus 2..4 ms medem trabalho do pipeline que ele realmente governa, não o intervalo
+  inteiro desde PreUpdate;
+- generation waves só selecionavam novos targets quando o set inteiro ficava vazio; conforme dry
+  chunks concluíam, uma wave de 4/8 podia degradar para 1 task ativa e esperar o último target;
+- enquanto nenhum chunk da wave exigir fluid settling, o dispatcher agora repõe targets até o
+  limite existente, mantendo os worker slots utilizados em terreno seco;
+- assim que algum chunk é staged para fluid settling, o refill para: os tasks já pertencentes à
+  wave drenam e a convergência de fluidos começa exatamente como antes;
+- o settling continua incremental/budgeted e nenhuma wave passa do limite já existente;
+- nenhuma distância de render, fidelidade de worldgen ou limite de fluid propagation foi reduzido.
+
+VERSION: `0.68.31`.
+
 ### Correção de Clippy — contexto de finalização no spawning
 
 - `spawn_loaded_world` passou de oito argumentos após incluir apresentação inicial;

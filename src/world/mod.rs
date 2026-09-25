@@ -186,7 +186,6 @@ impl Plugin for WorldPlugin {
                 (
                     record_frame_time,
                     record_slow_frame_context.run_if(slow_frame_context_due),
-                    begin_world_frame_work_budget,
                     tune_chunk_async_work,
                     advance_world_ticks.in_set(WorldTickSet),
                 )
@@ -196,6 +195,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 Update,
                 (
+                    begin_world_frame_work_budget,
                     stream_chunks,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
