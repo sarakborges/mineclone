@@ -798,9 +798,10 @@ pub(super) fn stream_chunks(
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
-    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave_active() {
-        collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
-    }
+    // Presentation is foreground work. Drain/publish already-built meshes and
+    // feed initial meshing before integrating more generation results; otherwise
+    // direct-light seeding for newly generated chunks can consume the shared
+    // frame deadline while hundreds of render-ready chunks wait in `ready`.
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
     }
@@ -812,6 +813,9 @@ pub(super) fn stream_chunks(
             &mut queues,
             current_tick,
         );
+    }
+    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave_active() {
+        collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.state.generation_dispatch_work_exists() {
         dispatch_generation_tasks(
