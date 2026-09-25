@@ -1,3 +1,9 @@
+### CI follow-up — visibilidade do estado de retirement
+
+O CI do retirement budgetado falhou apenas por `private-interfaces`: o system
+`retire_distant_chunk_meshes` é `pub(super)`, mas seu `Local<RenderRetirementState>`
+usava um tipo privado ao módulo. O estado local agora possui a mesma visibilidade do system.
+
 ## 2026-09-24 — Retirement de chunk render é incremental e budgetado
 
 A troca de seleção ainda concentrava outro custo síncrono no mesmo frame do queue rebuild:

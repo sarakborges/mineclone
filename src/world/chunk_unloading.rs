@@ -35,7 +35,7 @@ const MIN_UNLOAD_RETENTION_MARGIN_CHUNKS: i32 = 10;
 const MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME: usize = 8;
 
 #[derive(Default)]
-struct RenderRetirementState {
+pub(super) struct RenderRetirementState {
     selection_revision: Option<u64>,
     pending: Vec<IVec3>,
     queued: HashSet<IVec3>,
