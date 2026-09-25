@@ -1208,4 +1208,33 @@ mod tests {
         state.pending.enqueue(visible);
         assert!(state.has_renderable_streaming_backlog());
     }
+
+    #[test]
+    fn prefetched_generation_is_reserved_and_promoted_to_next_wave() {
+        let coord = IVec3::new(4, 0, -2);
+        let mut state = ChunkStreamingState::default();
+
+        state.mark_generation_prefetched(coord);
+        assert!(state.generated_chunk_is_unpublished(coord));
+        assert_eq!(state.diagnostic_generation_prefetch_count(), 1);
+        assert!(!state.generation_wave_targets.contains(&coord));
+
+        state.finish_generation_wave();
+
+        assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
+        assert!(state.generation_wave_targets.contains(&coord));
+        assert!(state.generated_chunk_is_unpublished(coord));
+    }
+
+    #[test]
+    fn abandoning_generation_removes_prefetch_reservation() {
+        let coord = IVec3::new(-5, 1, 7);
+        let mut state = ChunkStreamingState::default();
+
+        state.mark_generation_prefetched(coord);
+        state.abandon_generation_target(coord);
+
+        assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
+        assert!(!state.generated_chunk_is_unpublished(coord));
+    }
 }
