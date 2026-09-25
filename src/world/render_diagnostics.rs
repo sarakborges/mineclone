@@ -1,6 +1,6 @@
 use std::{
     cmp::Reverse,
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     time::Instant,
 };
 
@@ -29,6 +29,7 @@ use super::{
 const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
+const FONT_ATLAS_SIZE_SAMPLE_LIMIT: usize = 8;
 const FRAME_TIME_SAMPLE_CAPACITY: usize = 4096;
 const SLOW_FRAME_CONTEXT_THRESHOLD_MICROS: u64 = 20_000;
 const SLOW_FRAME_CONTEXT_CAPACITY: usize = 8;
@@ -203,6 +204,66 @@ pub(super) fn record_slow_frame_context(
     });
 }
 
+#[derive(Debug)]
+struct FontAtlasKeyDiagnostic {
+    faces: usize,
+    sizes: usize,
+    variations: usize,
+    raster_modes: usize,
+    size_range: Option<(f32, f32)>,
+    top_sizes: Vec<(f32, usize)>,
+}
+
+fn font_atlas_key_diagnostic(font_atlases: &FontAtlasSet) -> FontAtlasKeyDiagnostic {
+    let mut faces = HashSet::new();
+    let mut size_counts = HashMap::<u32, usize>::new();
+    let mut variations = HashSet::new();
+    let mut raster_modes = HashSet::new();
+
+    for key in font_atlases.keys() {
+        faces.insert((key.id, key.index));
+        *size_counts.entry(key.font_size_bits).or_default() += 1;
+        variations.insert(key.variations_hash);
+        raster_modes.insert((key.hinting, key.font_smoothing));
+    }
+
+    let mut sizes = size_counts
+        .iter()
+        .map(|(&bits, &count)| (bits, count))
+        .collect::<Vec<_>>();
+    sizes.sort_unstable_by(|left, right| {
+        right
+            .1
+            .cmp(&left.1)
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    let top_sizes = sizes
+        .iter()
+        .take(FONT_ATLAS_SIZE_SAMPLE_LIMIT)
+        .map(|(bits, count)| (f32::from_bits(*bits), *count))
+        .collect();
+
+    let mut resolved_sizes = size_counts
+        .keys()
+        .copied()
+        .map(f32::from_bits)
+        .collect::<Vec<_>>();
+    resolved_sizes.sort_by(f32::total_cmp);
+    let size_range = resolved_sizes
+        .first()
+        .copied()
+        .zip(resolved_sizes.last().copied());
+
+    FontAtlasKeyDiagnostic {
+        faces: faces.len(),
+        sizes: size_counts.len(),
+        variations: variations.len(),
+        raster_modes: raster_modes.len(),
+        size_range,
+        top_sizes,
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RenderDiagnosticSnapshot {
     runtime_images: usize,
@@ -316,6 +377,7 @@ pub(super) fn log_render_asset_pressure(
     runtime_top_shapes.truncate(RUNTIME_IMAGE_SHAPE_LIMIT);
 
     let font_atlas_keys = assets.font_atlases.len();
+    let font_atlas_key_diagnostic = font_atlas_key_diagnostic(&assets.font_atlases);
     let font_atlas_count = assets.font_atlases.values().map(Vec::len).sum::<usize>();
     let font_atlas_bytes = assets.font_atlases.total_bytes(&assets.images);
     let non_font_runtime_images = runtime_images.saturating_sub(font_atlas_count);
@@ -338,7 +400,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     let diagnostic = format!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} sprite_prism_mesh_cache={} sprite_prism_material_cache={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_ready={stream_ready} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlas_faces={} font_atlas_sizes={} font_atlas_variations={} font_atlas_raster_modes={} font_atlas_size_range={:?} font_atlas_top_sizes={:?} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} sprite_prism_mesh_cache={} sprite_prism_material_cache={}",
         assets.state.get(),
         *previous_diagnostic_micros,
         frame_times.count,
@@ -359,6 +421,12 @@ pub(super) fn log_render_asset_pressure(
         async_timings.generation,
         async_timings.initial_mesh,
         async_timings.remesh,
+        font_atlas_key_diagnostic.faces,
+        font_atlas_key_diagnostic.sizes,
+        font_atlas_key_diagnostic.variations,
+        font_atlas_key_diagnostic.raster_modes,
+        font_atlas_key_diagnostic.size_range,
+        font_atlas_key_diagnostic.top_sizes,
         assets.standard_materials.len(),
         assets.terrain_materials.len(),
         assets.world_objects.materialized_object_count(),

@@ -1,3 +1,17 @@
+## 2026-09-25 — Diagnóstico separa a explosão de font atlases
+
+- o primeiro relatório persistido de runtime mostrou crescimento contínuo de font atlases durante
+  gameplay: de 55 para 618 atlases, chegando a ~648 MB em pouco mais de um minuto;
+- os hitches de 50–65 ms continuaram aparecendo em janelas nas quais generation/mesh/remesh tasks
+  estavam zeradas, então o crescimento de texto virou uma hipótese mensurável prioritária;
+- o diagnóstico de 10 s agora separa as dimensões da `FontAtlasKey`: número de faces, tamanhos
+  rasterizados, hashes de variação e modos de rasterização, além do range e dos tamanhos mais
+  frequentes;
+- isso permite distinguir churn de resolução de `SystemUi` de churn de tamanho/scale antes de
+  alterar a tipografia; nenhuma política de UI, streaming, worldgen ou render foi modificada.
+
+VERSION: `0.68.3`.
+
 ## 2026-09-25 — Loading bloqueia gameplay até assets visuais estarem prontos
 
 - o bootstrap agora possui um owner único de preload para assets visuais necessários ao gameplay;
