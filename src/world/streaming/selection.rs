@@ -620,28 +620,13 @@ mod tests {
     #[test]
     fn pending_entries_use_stable_coordinate_tiebreaker() {
         let priority = (1, 0, 1, 0, 0, 1, 9, 0, 0, 9);
-        let mut pending = [
-            PendingEntry {
-                coord: IVec3::new(3, 0, 0),
-                priority,
-            },
-            PendingEntry {
-                coord: IVec3::new(-3, 0, 0),
-                priority,
-            },
-        ];
+        let left = IVec3::new(-3, 0, 0);
+        let right = IVec3::new(3, 0, 0);
 
-        pending.sort_unstable_by_key(|entry| {
-            (
-                entry.priority,
-                entry.coord.y,
-                entry.coord.z,
-                entry.coord.x,
-            )
-        });
+        let left_key = (priority, left.y, left.z, left.x);
+        let right_key = (priority, right.y, right.z, right.x);
 
-        assert_eq!(pending[0].coord, IVec3::new(-3, 0, 0));
-        assert_eq!(pending[1].coord, IVec3::new(3, 0, 0));
+        assert!(left_key < right_key);
     }
 
     #[test]

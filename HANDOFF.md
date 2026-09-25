@@ -1,3 +1,9 @@
+### CI follow-up — teste de priority sem PendingEntry
+
+O primeiro CI da seleção lazy falhou porque um teste ainda instanciava o antigo
+`PendingEntry`. O teste agora compara diretamente `(PendingPriority, y, z, x)`, que é
+exatamente a chave usada pelo `pop_pending_by_priority`.
+
 ## 2026-09-24 — Pending streaming priority deixa o frame de queue rebuild
 
 O queue rebuild ainda ordenava toda a lista de chunks pendentes em cada mudança de centro, mesmo
