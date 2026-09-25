@@ -1,5 +1,16 @@
 ## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
 
+### Follow-up — diagnósticos de runtime persistem no session log
+- o arquivo em `logs/` era apenas um registro de sessão/crash; por isso um teste limpo continha
+  somente START e CLEAN SHUTDOWN mesmo com os diagnósticos `render assets` aparecendo no console;
+- a linha periódica `render assets` agora é formatada uma única vez e enviada tanto ao logger do
+  Bevy quanto ao arquivo da sessão, com timestamp UTC em uma linha `[RUNTIME ...]`;
+- o arquivo continua preservando os blocos especiais de panic/native exception e o marcador de
+  encerramento limpo; não foi adicionado logging por frame nem I/O novo no hot path;
+- com isso o relatório de FPS/stutter pode ser entregue simplesmente anexando o .txt da sessão.
+
+VERSION: `0.67.10`.
+
 ### Follow-up — piores frames passam a carregar contexto de streaming
 - os percentis de 10 s mostram que houve um hitch, mas ainda podiam esconder em que estado do
   pipeline o pior frame aconteceu;

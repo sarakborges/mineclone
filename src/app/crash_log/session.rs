@@ -104,6 +104,13 @@ pub(super) fn append_session_line(line: &str) -> bool {
     })
 }
 
+pub(super) fn append_runtime_line(line: &str) -> bool {
+    with_session_file(|file| {
+        let timestamp = format_timestamp(SystemTime::now());
+        let _ = writeln!(file, "[RUNTIME {}] {line}", timestamp.display);
+    })
+}
+
 pub(super) fn with_session_file(write: impl FnOnce(&mut File)) -> bool {
     let Some(path) = SESSION_LOG_PATH.get() else {
         return false;

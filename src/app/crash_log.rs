@@ -14,7 +14,7 @@ use std::{
 };
 
 use self::{
-    session::{append_session_line, initialize_session_log, with_session_file},
+    session::{append_runtime_line, append_session_line, initialize_session_log, with_session_file},
     timestamp::format_timestamp,
 };
 
@@ -49,6 +49,10 @@ pub fn write_caught_panic(payload: &(dyn Any + Send)) {
 
 pub fn mark_clean_shutdown() {
     let _ = append_session_line("CLEAN SHUTDOWN");
+}
+
+pub(crate) fn append_runtime_diagnostic(line: &str) -> bool {
+    append_runtime_line(line)
 }
 
 fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
