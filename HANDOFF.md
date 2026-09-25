@@ -1,3 +1,38 @@
+## 2026-09-25 — Fluid settling não expande mais generation wave por fronteiras descarregadas
+
+- o log 0.68.34 confirmou a regressão principal restante do streaming: durante movimento,
+  `generation_wave_targets` cresceu progressivamente para 532, 601, 617 e até ~659 chunks,
+  enquanto centenas de chunks ficavam `staged` e `mesh_tasks` frequentemente permanecia em zero;
+- a causa era `required_unloaded_frontier_chunks` + `extend_generation_wave_for_fluid_closure`:
+  depois de uma wave convergir localmente, qualquer source/dynamic fluid capaz de atravessar uma
+  borda para um chunk ainda ausente forçava esse chunk a ser gerado dentro da MESMA wave;
+- cada chunk adicional podia descobrir novas fronteiras descarregadas, fazendo uma wave originalmente
+  limitada a poucos targets crescer recursivamente por uma região inteira conectada por fluido;
+- como todos os chunks dessa closure permaneciam unpublished até a convergência global, terrain
+  visível podia ficar ausente por muito tempo mesmo com geração local já concluída;
+- removida integralmente a expansão para chunks descarregados: generated-fluid settling agora
+  converge somente o domínio residente atual (generated chunks + chunks vizinhos já residentes e
+  mutáveis);
+- fronteiras para chunks ainda descarregados não são mais dependência de publicação e não criam
+  generation targets;
+- continuidade de fluido em seams continua preservada: quando o chunk vizinho realmente carrega,
+  `visit_loaded_fluid_frontier_targets` revisita tanto o próprio frontier quanto os fluidos nas
+  bordas dos chunks cardinalmente vizinhos já residentes antes da publicação do novo chunk;
+- o settling ainda pode assumir temporariamente chunks existentes não persistentes que já estejam
+  residentes, mantendo simetria de seam no domínio disponível; chunks persistentes continuam
+  runtime-owned;
+- removidos também todo o estado legado de múltiplas closure rounds
+  (`generation_wave_changed_existing_positions`, `generation_wave_owned_existing_chunks`,
+  retain/merge helpers, unloaded-frontier visitor e adoption helpers);
+- publication incremental de 0.68.33 permanece: uma wave com fluido só publica seus próprios
+  generated chunks após convergir, mas a wave não cresce mais recursivamente por chunks ausentes;
+- CI do refactor run `36187724060`: success;
+- CI do HEAD versionado run `36187831770`: success em localization audit, structure content
+  reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.36`.
+
 ## 2026-09-25 — World objects seguem publicação visual dos chunks
 
 - o log 0.68.34 mostrou chunks de terreno desaparecendo/ficando ainda não publicados enquanto
