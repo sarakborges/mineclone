@@ -281,7 +281,6 @@ pub(super) fn dispatch_generation_tasks(
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
 ) {
     if work.state.fluid_settling.is_active() {
         return;
@@ -298,7 +297,6 @@ pub(super) fn dispatch_generation_tasks(
             render_pool,
             work,
             queues,
-            current_tick,
             &mut budget,
         );
     }
@@ -379,7 +377,6 @@ fn select_generation_wave(
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
     budget: &mut FrameWorkBudget,
 ) {
     let target_limit = generation_wave_target_limit(&mut work.state);
