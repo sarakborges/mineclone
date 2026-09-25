@@ -167,8 +167,7 @@ pub(super) fn relax_budgeted(
             registries,
             position,
             (cell, fluid),
-            chunk,
-            local_position,
+            (chunk, local_position),
             context,
             is_chunk_active,
         );
@@ -233,12 +232,12 @@ fn desired_light(
     registries: LightingRegistries<'_>,
     position: IVec3,
     medium: (Option<VoxelCell>, Option<FluidCell>),
-    chunk: &VoxelChunk,
-    local_position: IVec3,
+    local: (&VoxelChunk, IVec3),
     context: &mut LightingContext,
     is_chunk_active: &impl Fn(IVec3) -> bool,
 ) -> VoxelLight {
     let (cell, fluid) = medium;
+    let (chunk, local_position) = local;
     let dampening = medium_dampening_for_cells(cell, fluid, registries.blocks, registries.fluids);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
     let emitted = mix_strongest_block_lights([
