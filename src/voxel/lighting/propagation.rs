@@ -110,6 +110,7 @@ pub(super) fn relax(
             &mut settling_changed_chunks,
             &mut settling_changed_positions,
         ),
+        &|_| true,
         |_| false,
     );
     changed_chunks
@@ -121,6 +122,7 @@ pub(super) fn relax_budgeted(
     queue: &mut LightingQueue,
     context: &mut LightingContext,
     changes: LightingChangeSets<'_>,
+    is_chunk_active: &impl Fn(IVec3) -> bool,
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changes.frame.clear();
@@ -149,6 +151,9 @@ pub(super) fn relax_budgeted(
         processed += 1;
 
         let (chunk_coord, local_position) = split_world_position(position);
+        if !is_chunk_active(chunk_coord) {
+            continue;
+        }
         let Some(chunk) = world.chunk(chunk_coord) else {
             continue;
         };
@@ -165,6 +170,7 @@ pub(super) fn relax_budgeted(
             chunk,
             local_position,
             context,
+            is_chunk_active,
         );
 
         if current == desired {
@@ -230,6 +236,7 @@ fn desired_light(
     chunk: &VoxelChunk,
     local_position: IVec3,
     context: &mut LightingContext,
+    is_chunk_active: &impl Fn(IVec3) -> bool,
 ) -> VoxelLight {
     let (cell, fluid) = medium;
     let dampening = medium_dampening_for_cells(cell, fluid, registries.blocks, registries.fluids);
@@ -244,7 +251,8 @@ fn desired_light(
     }
 
     let attenuation = dampening.max(1);
-    let neighbor_lights = cardinal_neighbor_lights(world, position, chunk, local_position);
+    let neighbor_lights =
+        cardinal_neighbor_lights(world, position, chunk, local_position, is_chunk_active);
     let sky = context
         .direct_sky_light(
             world,
@@ -267,6 +275,7 @@ fn cardinal_neighbor_lights(
     position: IVec3,
     chunk: &VoxelChunk,
     local_position: IVec3,
+    is_chunk_active: &impl Fn(IVec3) -> bool,
 ) -> [VoxelLight; CARDINAL_NEIGHBORS.len()] {
     CARDINAL_NEIGHBORS.map(|direction| {
         let local_neighbor = local_position + direction;
@@ -279,7 +288,13 @@ fn cardinal_neighbor_lights(
         {
             chunk.light_at(local_neighbor.x, local_neighbor.y, local_neighbor.z)
         } else {
-            world.light_at(position + direction)
+            let neighbor_position = position + direction;
+            let (neighbor_coord, _) = split_world_position(neighbor_position);
+            if is_chunk_active(neighbor_coord) {
+                world.light_at(neighbor_position)
+            } else {
+                VoxelLight::DARK
+            }
         }
     })
 }
