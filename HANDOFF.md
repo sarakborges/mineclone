@@ -1,3 +1,9 @@
+### Correção de Clippy — fixture de FluidDefinition
+
+- a fixture de lighting que constrói `FluidDefinition` manualmente foi atualizada com
+  `immersion_tint: None`;
+- nenhum comportamento de runtime mudou; VERSION permanece `0.68.23`.
+
 ## 2026-09-25 — Lava laranja e tint de imersão data-driven por fluido
 
 - a lava estava configurada em HSI `28° / 0.96 / 0.72`; essa intensidade fazia o canal vermelho

@@ -417,6 +417,7 @@ fn test_fluids() -> FluidRegistry {
         metallic: 0.0,
         light_dampening: 2,
         light_emission: 0,
+        immersion_tint: None,
         spread_speed: 1.0,
         max_spread: 8,
     });
