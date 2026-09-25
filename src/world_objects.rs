@@ -357,6 +357,8 @@ fn apply_object_removal_requests(
     }
 }
 
+const WORLD_OBJECT_SYNC_BUDGET: Duration = Duration::from_millis(2);
+const MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME: usize = 2;
 const SLOW_WORLD_OBJECT_SYNC_WARNING: Duration = Duration::from_millis(4);
 
 fn sync_world_objects(
@@ -393,97 +395,122 @@ fn sync_world_objects(
                 || !chunk_inside_object_radius(*coord, center, hide_radius)
         })
         .collect::<Vec<_>>();
+    let mut processed_chunks = 0;
+    let mut deferred = false;
+
     for coord in retired {
+        if world_object_sync_budget_exhausted(sync_started, processed_chunks) {
+            deferred = true;
+            break;
+        }
         despawn_chunk_objects(&mut commands, coord, &mut store);
         store.synced_chunk_revisions.remove(&coord);
+        processed_chunks += 1;
     }
 
-    for coord in candidate_coords {
-        let already_materialized = store.synced_chunk_revisions.contains_key(&coord);
-        let radius = if already_materialized {
-            hide_radius
-        } else {
-            show_radius
-        };
-        if !chunk_inside_object_radius(coord, center, radius) {
-            continue;
-        }
-
-        let revision = content
-            .world
-            .chunk_object_revision(coord)
-            .expect("loaded chunk must expose an object revision");
-        if store.synced_chunk_revisions.get(&coord).copied() == Some(revision) {
-            continue;
-        }
-
-        let Some(chunk) = content.world.chunk(coord) else {
-            continue;
-        };
-        let chunk_origin = coord * CHUNK_SIZE as i32;
-        let existing_supports = store
-            .by_chunk
-            .get(&coord)
-            .cloned()
-            .unwrap_or_default();
-        let mut desired_supports = HashSet::new();
-
-        for (x, y, z, object) in chunk.object_voxels() {
-            let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-            desired_supports.insert(support);
-            let support_cell = content.world.cell_at(support);
-            if store.by_support.get(&support).is_some_and(|existing| {
-                existing.object == object && existing.support_cell == support_cell
-            }) {
+    if !deferred {
+        for coord in candidate_coords {
+            let already_materialized = store.synced_chunk_revisions.contains_key(&coord);
+            let radius = if already_materialized {
+                hide_radius
+            } else {
+                show_radius
+            };
+            if !chunk_inside_object_radius(coord, center, radius) {
                 continue;
             }
 
-            if let Some(entity) = store.remove_support(support) {
-                commands.entity(entity).despawn();
+            let revision = content
+                .world
+                .chunk_object_revision(coord)
+                .expect("loaded chunk must expose an object revision");
+            if store.synced_chunk_revisions.get(&coord).copied() == Some(revision) {
+                continue;
             }
-            let Some(definition) = content.objects.get(object.object_id) else {
+            if world_object_sync_budget_exhausted(sync_started, processed_chunks) {
+                deferred = true;
+                break;
+            }
+
+            let Some(chunk) = content.world.chunk(coord) else {
                 continue;
             };
-            let entity = spawn_world_object(
-                &mut commands,
-                support,
-                support_cell,
-                object,
-                definition,
-                &content,
-                &mut assets,
-            );
-            store.insert(support, object, support_cell, entity);
-        }
+            let chunk_origin = coord * CHUNK_SIZE as i32;
+            let existing_supports = store
+                .by_chunk
+                .get(&coord)
+                .cloned()
+                .unwrap_or_default();
+            let mut desired_supports = HashSet::new();
 
-        for support in existing_supports {
-            if desired_supports.contains(&support) {
-                continue;
-            }
-            if let Some(entity) = store.remove_support(support) {
-                commands.entity(entity).despawn();
-            }
-        }
+            for (x, y, z, object) in chunk.object_voxels() {
+                let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                desired_supports.insert(support);
+                let support_cell = content.world.cell_at(support);
+                if store.by_support.get(&support).is_some_and(|existing| {
+                    existing.object == object && existing.support_cell == support_cell
+                }) {
+                    continue;
+                }
 
-        store.synced_chunk_revisions.insert(coord, revision);
+                if let Some(entity) = store.remove_support(support) {
+                    commands.entity(entity).despawn();
+                }
+                let Some(definition) = content.objects.get(object.object_id) else {
+                    continue;
+                };
+                let entity = spawn_world_object(
+                    &mut commands,
+                    support,
+                    support_cell,
+                    object,
+                    definition,
+                    &content,
+                    &mut assets,
+                );
+                store.insert(support, object, support_cell, entity);
+            }
+
+            for support in existing_supports {
+                if desired_supports.contains(&support) {
+                    continue;
+                }
+                if let Some(entity) = store.remove_support(support) {
+                    commands.entity(entity).despawn();
+                }
+            }
+
+            store.synced_chunk_revisions.insert(coord, revision);
+            processed_chunks += 1;
+        }
     }
 
-    store.synced_world_revision = world_revision;
-    store.materialized_center = Some(center);
-    store.materialized_show_radius = show_radius;
-    store.materialized_hide_radius = hide_radius;
+    if !deferred {
+        store.synced_world_revision = world_revision;
+        store.materialized_center = Some(center);
+        store.materialized_show_radius = show_radius;
+        store.materialized_hide_radius = hide_radius;
+    }
 
     let elapsed = sync_started.elapsed();
     if elapsed >= SLOW_WORLD_OBJECT_SYNC_WARNING {
         warn!(
-            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
+            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} processed_chunks={} deferred={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
             candidate_chunk_count,
+            processed_chunks,
+            deferred,
             store.materialized_chunk_count(),
             store.materialized_object_count(),
             elapsed.as_secs_f64() * 1_000.0,
         );
     }
 }
+
+fn world_object_sync_budget_exhausted(started: Instant, processed_chunks: usize) -> bool {
+    processed_chunks >= MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME
+        || (processed_chunks > 0 && started.elapsed() >= WORLD_OBJECT_SYNC_BUDGET)
+}
+
 
 fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool {
     if radius < 0 {

@@ -1,3 +1,21 @@
+## 2026-09-24 — Materialização de world objects ganha frame budget
+
+`sync_world_objects` não tenta mais materializar/desmaterializar todos os chunks alterados no
+mesmo PostUpdate.
+
+- orçamento local de 2 ms para trabalho de object sync;
+- no máximo 2 chunks com mudanças visuais por frame;
+- pelo menos um chunk progride por execução, mesmo se uma unidade individual ultrapassar o budget;
+- retirement por mudança de centro/warp usa o mesmo orçamento;
+- quando o budget acaba, `synced_world_revision` e o estado de materialization center não são
+  marcados como completos, então o sistema continua o catch-up no frame seguinte;
+- chunks já sincronizados são pulados e não consomem o limite;
+- diagnostics de slow sync agora mostram `processed_chunks` e `deferred`.
+
+Como targeting, HUD, highlight e interaction já usam ObjectCell diretamente no VoxelWorld, esse
+catch-up visual pode ser adiado sem atrasar gameplay/worldgen. Isso evita spikes quando vários
+chunks com foliage terminam geração no mesmo frame ou após um warp.
+
 ## 2026-09-24 — Cave/Volume connector chains são cacheadas pela root 3D
 
 O mesmo desperdício removido das structures Surface existia nas structures Volume: uma cave
