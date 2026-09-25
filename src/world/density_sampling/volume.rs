@@ -31,18 +31,20 @@ pub(super) fn volume_biome_density_delta(
 
     density_modifier_delta(
         modifier,
-        current_density,
-        position,
-        selection.local_position,
-        seed,
-        cave_depth_strength,
-        allow_caverns,
-        allow_solids,
+        DensityModifierContext {
+            current_density,
+            position,
+            local_position: selection.local_position,
+            seed,
+            cave_depth_strength,
+            allow_caverns,
+            allow_solids,
+        },
     ) * selection.strength
 }
 
-fn density_modifier_delta(
-    modifier: BiomeDensityModifier,
+#[derive(Clone, Copy)]
+struct DensityModifierContext {
     current_density: f32,
     position: Vec3,
     local_position: Vec3,
@@ -50,7 +52,22 @@ fn density_modifier_delta(
     cave_depth_strength: f32,
     allow_caverns: bool,
     allow_solids: bool,
+}
+
+fn density_modifier_delta(
+    modifier: BiomeDensityModifier,
+    context: DensityModifierContext,
 ) -> f32 {
+    let DensityModifierContext {
+        current_density,
+        position,
+        local_position,
+        seed,
+        cave_depth_strength,
+        allow_caverns,
+        allow_solids,
+    } = context;
+
     match modifier {
         BiomeDensityModifier::Cavern {
             carve_strength,
@@ -154,6 +171,26 @@ fn coverage_mask(noise: f32, coverage: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn modifier_context(
+        current_density: f32,
+        position: Vec3,
+        local_position: Vec3,
+        seed: u64,
+        cave_depth_strength: f32,
+        allow_caverns: bool,
+        allow_solids: bool,
+    ) -> DensityModifierContext {
+        DensityModifierContext {
+            current_density,
+            position,
+            local_position,
+            seed,
+            cave_depth_strength,
+            allow_caverns,
+            allow_solids,
+        }
+    }
     use crate::world::density_sampling::{
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH, CAVERN_MINIMUM_SURFACE_DEPTH, depth_strength,
     };
@@ -168,13 +205,7 @@ mod tests {
                 noise_scale: 0.01,
                 openness: 1.0,
             },
-            current_density,
-            position,
-            Vec3::ZERO,
-            7,
-            1.0,
-            true,
-            true,
+            modifier_context(current_density, position, Vec3::ZERO, 7, 1.0, true, true),
         );
         let solid = density_modifier_delta(
             BiomeDensityModifier::Solid {
@@ -182,13 +213,7 @@ mod tests {
                 noise_scale: 0.01,
                 coverage: 1.0,
             },
-            current_density,
-            position,
-            Vec3::ZERO,
-            7,
-            1.0,
-            true,
-            true,
+            modifier_context(current_density, position, Vec3::ZERO, 7, 1.0, true, true),
         );
 
         assert!(current_density + cavern < 0.0);
@@ -207,33 +232,39 @@ mod tests {
 
         let center_top = density_modifier_delta(
             modifier,
-            density,
-            Vec3::ZERO,
-            Vec3::new(0.0, 0.0, 0.0),
-            7,
-            1.0,
-            true,
-            true,
+            modifier_context(
+                density,
+                Vec3::ZERO,
+                Vec3::new(0.0, 0.0, 0.0),
+                7,
+                1.0,
+                true,
+                true,
+            ),
         );
         let center_lower = density_modifier_delta(
             modifier,
-            density,
-            Vec3::ZERO,
-            Vec3::new(0.0, -0.72, 0.0),
-            7,
-            1.0,
-            true,
-            true,
+            modifier_context(
+                density,
+                Vec3::ZERO,
+                Vec3::new(0.0, -0.72, 0.0),
+                7,
+                1.0,
+                true,
+                true,
+            ),
         );
         let edge_lower = density_modifier_delta(
             modifier,
-            density,
-            Vec3::ZERO,
-            Vec3::new(0.92, -0.72, 0.0),
-            7,
-            1.0,
-            true,
-            true,
+            modifier_context(
+                density,
+                Vec3::ZERO,
+                Vec3::new(0.92, -0.72, 0.0),
+                7,
+                1.0,
+                true,
+                true,
+            ),
         );
 
         assert!(density + center_top > 0.0);
@@ -251,17 +282,19 @@ mod tests {
                 noise_scale: 0.01,
                 openness: 1.0,
             },
-            current_density,
-            position,
-            Vec3::ZERO,
-            7,
-            depth_strength(
+            modifier_context(
                 current_density,
-                CAVERN_MINIMUM_SURFACE_DEPTH,
-                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+                position,
+                Vec3::ZERO,
+                7,
+                depth_strength(
+                    current_density,
+                    CAVERN_MINIMUM_SURFACE_DEPTH,
+                    CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+                ),
+                true,
+                true,
             ),
-            true,
-            true,
         );
 
         assert_eq!(cavern, 0.0);

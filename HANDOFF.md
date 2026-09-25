@@ -1,3 +1,12 @@
+### Correção de Clippy — contexto de density modifier
+
+- o CI rejeitou a primeira implementação de Floating Islands porque `density_modifier_delta`
+  havia crescido para oito argumentos;
+- os inputs foram agrupados em `DensityModifierContext`, removendo o excesso de parâmetros sem
+  suppression de Clippy e deixando a API preparada para outros modifiers volumétricos;
+- nenhuma forma/parâmetro de ilha mudou nesta correção;
+- VERSION permanece `0.68.22`.
+
 ### Correção do pedaço de font atlas — lockfile preservado
 
 - `system_font_discovery` foi restaurado na lista de features do Bevy porque removê-lo altera o
