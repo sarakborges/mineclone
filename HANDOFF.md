@@ -1,3 +1,12 @@
+### Correção de compilação — cache de system-font handles
+
+- o primeiro patch usava um `matches!` com binding presente em apenas um dos patterns;
+- a detecção de SystemUi/family concreta agora usa `match` explícito;
+- Bevy 0.19.1 mantém tipos próprios de FontWidth/FontStyle/FontWeight e fornece conversões para
+  os tipos usados internamente pelo fontique; `match_font` agora usa essas conversões `.into()`;
+- a estratégia de handles concretos e o comportamento de runtime permanecem os mesmos;
+- VERSION permanece `0.68.27`.
+
 ## 2026-09-25 — UI fixa handles concretos dos system-font faces
 
 - o log de 0.68.25 confirmou que a tentativa anterior de fixar apenas o nome da família não

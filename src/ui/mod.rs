@@ -71,10 +71,12 @@ fn pin_ui_font_handles(
     mut text_fonts: Query<&mut TextFont, Added<TextFont>>,
 ) {
     for mut text_font in &mut text_fonts {
-        if !matches!(
-            &text_font.font,
-            FontSource::SystemUi | FontSource::Family(family) if family.as_str() == ui_fonts.family
-        ) {
+        let uses_ui_font = match &text_font.font {
+            FontSource::SystemUi => true,
+            FontSource::Family(family) => family.as_str() == ui_fonts.family,
+            _ => false,
+        };
+        if !uses_ui_font {
             continue;
         }
 
@@ -92,7 +94,12 @@ fn pin_ui_font_handles(
             .family_by_name(&ui_fonts.family)
             .unwrap_or_else(|| panic!("resolved system UI family disappeared: {}", ui_fonts.family));
         let face = family
-            .match_font(text_font.width, text_font.style, text_font.weight, true)
+            .match_font(
+                text_font.width.into(),
+                text_font.style.into(),
+                text_font.weight.into(),
+                true,
+            )
             .unwrap_or_else(|| {
                 panic!(
                     "system UI family {} has no face matching {:?} {:?} {:?}",
