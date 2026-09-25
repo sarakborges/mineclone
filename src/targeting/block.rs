@@ -8,6 +8,7 @@ use super::{
 };
 use crate::{
     app::game_state::GameState,
+    content::object::ObjectRegistry,
     creatures::{CreatureInstance, CreatureTargetCollider},
     entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
@@ -18,7 +19,7 @@ use crate::{
         world::VoxelWorld,
     },
     world_items::{TargetedWorldItem, WorldItem, target_bounds},
-    world_objects::{TargetedWorldObject, WorldObjectInstance, WorldObjectStore},
+    world_objects::{TargetedWorldObject, world_object_position},
 };
 
 const TARGET_RANGE: f32 = 8.0;
@@ -85,12 +86,6 @@ type TargetedCreatureQuery<'w, 's> = Query<
     With<CreatureInstance>,
 >;
 
-type WorldObjectQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform, &'static WorldObjectInstance),
->;
-
 type InteractWorldItemQuery<'w, 's> =
     Query<'w, 's, (Entity, &'static Transform), With<WorldItem>>;
 
@@ -98,8 +93,7 @@ type InteractWorldItemQuery<'w, 's> =
 struct TargetCandidates<'w, 's> {
     creatures: TargetedCreatureQuery<'w, 's>,
     world_items: InteractWorldItemQuery<'w, 's>,
-    objects: WorldObjectQuery<'w, 's>,
-    object_store: Res<'w, WorldObjectStore>,
+    objects: Res<'w, ObjectRegistry>,
 }
 
 #[derive(SystemParam)]
@@ -114,7 +108,7 @@ struct TargetSelection<'w> {
 enum TargetKind {
     Creature(Entity),
     WorldItem(Entity),
-    Object(Entity),
+    Object(IVec3),
 }
 
 fn update_targets(
@@ -152,9 +146,9 @@ fn update_targets(
         )
         .unwrap_or(0.0)
     });
-    // Re-evaluate scene targets every frame. World objects are entities rather
-    // than voxels, so nearest-hit arbitration decides whether the object or the
-    // terrain behind it receives the interaction.
+    // Re-evaluate scene targets every frame. World objects are voxel-backed;
+    // nearest-hit arbitration decides whether the object or the terrain behind
+    // it receives the interaction.
     let creature_hits = candidates.creatures.iter().filter_map(
         |(entity, transform, collider, health)| {
             if health.is_dead() {
@@ -172,13 +166,8 @@ fn update_targets(
             .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
             .map(|distance| (TargetKind::WorldItem(entity), distance))
     });
-    let object_hit = closest_world_object_hit(
-        &candidates.object_store,
-        &candidates.objects,
-        origin,
-        direction,
-        block_distance,
-    );
+    let object_hit =
+        closest_world_object_hit(&world, &candidates.objects, origin, direction, block_distance);
     let closest = creature_hits
         .chain(world_item_hits)
         .chain(object_hit)
@@ -194,7 +183,7 @@ fn update_targets(
         _ => None,
     };
     let next_object = match closest {
-        Some(TargetKind::Object(entity)) => Some(entity),
+        Some(TargetKind::Object(support)) => Some(support),
         _ => None,
     };
     let next_block = if closest.is_none() { block_hit } else { None };
@@ -213,8 +202,8 @@ fn update_targets(
 }
 
 fn closest_world_object_hit(
-    store: &WorldObjectStore,
-    objects: &WorldObjectQuery<'_, '_>,
+    world: &VoxelWorld,
+    objects: &ObjectRegistry,
     origin: Vec3,
     direction: Vec3,
     block_distance: f32,
@@ -230,15 +219,27 @@ fn closest_world_object_hit(
         for z in minimum.z..=maximum.z {
             for x in minimum.x..=maximum.x {
                 let coord = IVec3::new(x, y, z);
-                for entity in store.entities_in_chunk(coord) {
-                    let Ok((entity, transform, object)) = objects.get(entity) else {
+                let Some(chunk) = world.chunk(coord) else {
+                    continue;
+                };
+                let chunk_origin = coord * crate::voxel::chunk::CHUNK_SIZE as i32;
+                for (local_x, local_y, local_z, object) in chunk.object_voxels() {
+                    let support = chunk_origin
+                        + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
+                    let Some(definition) = objects.get(object.object_id) else {
                         continue;
                     };
-                    let (min, max) = object.target_bounds(transform.translation);
-                    let Some(distance) = ray_box_distance(origin, direction, min, max)
-                        .filter(|distance| {
-                            *distance <= TARGET_RANGE && *distance <= block_distance
-                        })
+                    let support_cell =
+                        chunk.cell_at(local_x as i32, local_y as i32, local_z as i32);
+                    let position =
+                        world_object_position(support, support_cell, object, definition);
+                    let center = position + Vec3::from_array(definition.target.center_offset);
+                    let half = Vec3::from_array(definition.target.size) * 0.5;
+                    let Some(distance) =
+                        ray_box_distance(origin, direction, center - half, center + half)
+                            .filter(|distance| {
+                                *distance <= TARGET_RANGE && *distance <= block_distance
+                            })
                     else {
                         continue;
                     };
@@ -246,7 +247,7 @@ fn closest_world_object_hit(
                         .as_ref()
                         .is_none_or(|(_, best_distance)| distance < *best_distance)
                     {
-                        closest = Some((TargetKind::Object(entity), distance));
+                        closest = Some((TargetKind::Object(support), distance));
                     }
                 }
             }

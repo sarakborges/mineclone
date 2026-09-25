@@ -56,39 +56,6 @@ use crate::{
     world_items::WorldItemSpawnRequest,
 };
 
-#[derive(Component)]
-pub(crate) struct WorldObjectInstance {
-    object_id: &'static str,
-    support: IVec3,
-    target_size: Vec3,
-    target_center_offset: Vec3,
-}
-
-impl WorldObjectInstance {
-    fn new(object_id: &'static str, support: IVec3, definition: &ObjectDefinition) -> Self {
-        Self {
-            object_id,
-            support,
-            target_size: Vec3::from_array(definition.target.size),
-            target_center_offset: Vec3::from_array(definition.target.center_offset),
-        }
-    }
-
-    pub(crate) fn object_id(&self) -> &'static str {
-        self.object_id
-    }
-
-    pub(crate) fn support(&self) -> IVec3 {
-        self.support
-    }
-
-    pub(crate) fn target_bounds(&self, origin: Vec3) -> (Vec3, Vec3) {
-        let center = origin + self.target_center_offset;
-        let half = self.target_size * 0.5;
-        (center - half, center + half)
-    }
-}
-
 #[derive(Clone, Copy)]
 struct MaterializedWorldObject {
     entity: Entity,
@@ -114,14 +81,6 @@ impl WorldObjectStore {
 
     pub(crate) fn materialized_chunk_count(&self) -> usize {
         self.synced_chunk_revisions.len()
-    }
-
-    pub(crate) fn entities_in_chunk(&self, coord: IVec3) -> impl Iterator<Item = Entity> + '_ {
-        self.by_chunk
-            .get(&coord)
-            .into_iter()
-            .flatten()
-            .filter_map(|support| self.by_support.get(support).map(|entry| entry.entity))
     }
 
     fn insert(
@@ -173,7 +132,7 @@ impl WorldObjectStore {
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct TargetedWorldObject(pub(crate) Option<Entity>);
+pub(crate) struct TargetedWorldObject(pub(crate) Option<IVec3>);
 
 #[derive(Message)]
 pub(crate) struct WorldObjectPlaceRequest {
@@ -183,17 +142,15 @@ pub(crate) struct WorldObjectPlaceRequest {
 
 #[derive(Message)]
 pub(crate) struct WorldObjectRemoveRequest {
-    pub(crate) entity: Entity,
+    pub(crate) support: IVec3,
     pub(crate) drop_loot: bool,
 }
 
-
 #[derive(SystemParam)]
-struct WorldObjectRemovalRuntime<'w, 's> {
+struct WorldObjectRemovalRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     store: ResMut<'w, WorldObjectStore>,
     world_ticks: Res<'w, WorldTickClock>,
-    instances: Query<'w, 's, (&'static WorldObjectInstance, &'static Transform)>,
     drops: MessageWriter<'w, WorldItemSpawnRequest>,
 }
 
@@ -370,28 +327,34 @@ fn apply_object_removal_requests(
     mut runtime: WorldObjectRemovalRuntime,
 ) {
     for request in requests.read() {
-        let Ok((instance, transform)) = runtime.instances.get(request.entity) else {
+        let Some(object) = runtime.world.object_at(request.support) else {
             continue;
         };
-        let Some((_chunk, removed)) = runtime.world.remove_object_at(instance.support) else {
+        let Some(definition) = content.objects.get(object.object_id) else {
+            continue;
+        };
+        let support_cell = runtime.world.cell_at(request.support);
+        let loot_position =
+            world_object_position(request.support, support_cell, object, definition)
+                + Vec3::Y * 0.25;
+        let Some((_chunk, removed)) = runtime.world.remove_object_at(request.support) else {
             continue;
         };
 
-        let removed_entity = runtime.store.remove_support(instance.support);
-        debug_assert_eq!(removed_entity, Some(request.entity));
-        if request.drop_loot
-            && let Some(definition) = content.objects.get(removed.object_id)
-        {
+        if let Some(entity) = runtime.store.remove_support(request.support) {
+            commands.entity(entity).despawn();
+        }
+        if request.drop_loot {
             spawn_object_loot(
                 definition,
-                instance.support,
-                transform.translation + Vec3::Y * 0.25,
+                request.support,
+                loot_position,
                 runtime.world_ticks.current_tick(),
                 &content,
                 &mut runtime.drops,
             );
         }
-        commands.entity(request.entity).despawn();
+        debug_assert_eq!(removed.object_id, object.object_id);
     }
 }
 
@@ -548,20 +511,7 @@ fn spawn_world_object(
     content: &WorldObjectSceneContent<'_>,
     assets: &mut WorldObjectSceneAssets<'_>,
 ) -> Entity {
-    let hollow_orientation = support_cell
-        .filter(|cell| is_hollow_log_id(cell.block_id))
-        .filter(|_| object.face == crate::content::object::ObjectPlacementFace::Top)
-        .map(|cell| cell.orientation);
-    let base_position = if hollow_orientation.is_some() {
-        support.as_vec3()
-            + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
-    } else {
-        support.as_vec3()
-            + Vec3::splat(0.5)
-            + object.face.normal().as_vec3() * 0.5
-    };
-    let position =
-        base_position + object_position_jitter(definition, support, hollow_orientation);
+    let position = world_object_position(support, support_cell, object, definition);
     let tint = block_tint_at(
         definition.tint,
         Vec2::new(position.x, position.z),
@@ -573,7 +523,6 @@ fn spawn_world_object(
 
     let mut root = commands.spawn((
         Name::new(format!("World Object ({})", definition.id)),
-        WorldObjectInstance::new(object.object_id, support, definition),
         transform,
         Visibility::Hidden,
         ChunkRenderCoord(chunk_coord_from_world(support)),
@@ -667,6 +616,27 @@ fn spawn_world_object(
     root.id()
 }
 
+
+pub(crate) fn world_object_position(
+    support: IVec3,
+    support_cell: Option<VoxelCell>,
+    object: ObjectCell,
+    definition: &ObjectDefinition,
+) -> Vec3 {
+    let hollow_orientation = support_cell
+        .filter(|cell| is_hollow_log_id(cell.block_id))
+        .filter(|_| object.face == crate::content::object::ObjectPlacementFace::Top)
+        .map(|cell| cell.orientation);
+    let base_position = if hollow_orientation.is_some() {
+        support.as_vec3()
+            + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
+    } else {
+        support.as_vec3()
+            + Vec3::splat(0.5)
+            + object.face.normal().as_vec3() * 0.5
+    };
+    base_position + object_position_jitter(definition, support, hollow_orientation)
+}
 
 fn object_position_jitter(
     definition: &ObjectDefinition,

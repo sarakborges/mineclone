@@ -1,3 +1,20 @@
+## 2026-09-24 — World-object gameplay identity desacoplada do render Entity
+
+Targeting, pick-block e remoção de world objects agora usam o support voxel (`IVec3`) como
+identidade autoritativa, em vez da Entity criada apenas para render.
+
+- `TargetedWorldObject` guarda `Option<IVec3>`;
+- targeting consulta `ObjectCell` diretamente nos chunks do `VoxelWorld` atravessados pelo
+  range curto de interação e calcula o mesmo AABB authored pela posição determinística;
+- `WorldObjectRemoveRequest` carrega support, não Entity;
+- pickup/break/middle-click consultam o ObjectCell autoritativo no world;
+- loot position é reconstruída por support block + face/rotation + jitter;
+- `WorldObjectInstance` foi removido; render entities não carregam metadata de gameplay;
+- se o object estiver materializado, remoção ainda despawna sua render entity via store.
+
+Essa separação permite trocar as entities visuais por batches estáticos por chunk sem alterar
+novamente targeting/interação.
+
 ### CI follow-up — stable signed ceiling division
 
 A toolchain atual ainda rejeita `i32::div_ceil` como unstable. Como o search radius é

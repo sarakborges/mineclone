@@ -22,8 +22,7 @@ use crate::{
     },
     world_items::TargetedWorldItem,
     world_objects::{
-        TargetedWorldObject, WorldObjectInstance, WorldObjectPlaceRequest,
-        WorldObjectRemoveRequest,
+        TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest,
     },
 };
 
@@ -62,7 +61,6 @@ struct BlockEditInput<'w, 's> {
     creature_target: Res<'w, super::block::TargetedCreature>,
     world_item_target: Res<'w, TargetedWorldItem>,
     object_target: ResMut<'w, TargetedWorldObject>,
-    object_instances: Query<'w, 's, &'static WorldObjectInstance>,
 }
 
 #[derive(SystemParam)]
@@ -123,13 +121,13 @@ fn edit_targeted_block(
         return;
     }
     if middle_pressed && game_mode.has_creative_inventory() {
-        if let Some(entity) = input.object_target.0
-            && let Ok(instance) = input.object_instances.get(entity)
-            && definitions.objects.get(instance.object_id()).is_some()
+        if let Some(support) = input.object_target.0
+            && let Some(object) = runtime.world().object_at(support)
+            && definitions.objects.get(object.object_id).is_some()
         {
             input
                 .hotbar
-                .set_selected_stack(Some(ItemStack::new(instance.object_id())));
+                .set_selected_stack(Some(ItemStack::new(object.object_id)));
             return;
         }
 
@@ -155,19 +153,19 @@ fn edit_targeted_block(
         .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
-    if let Some(entity) = input.object_target.0
-        && let Ok(instance) = input.object_instances.get(entity)
-        && let Some(definition) = definitions.objects.get(instance.object_id())
+    if let Some(support) = input.object_target.0
+        && let Some(object) = runtime.world().object_at(support)
+        && let Some(definition) = definitions.objects.get(object.object_id)
     {
         match definition.interaction {
             ObjectInteraction::Pickup if right_pressed => {
                 if input
                     .hotbar
-                    .try_insert_stack(ItemStack::new(instance.object_id()))
+                    .try_insert_stack(ItemStack::new(object.object_id))
                     .is_ok()
                 {
                     actions.object_removals.write(WorldObjectRemoveRequest {
-                        entity,
+                        support,
                         drop_loot: false,
                     });
                     input.object_target.0 = None;
@@ -178,7 +176,7 @@ fn edit_targeted_block(
             ObjectInteraction::Pickup if left_pressed => return,
             ObjectInteraction::Break if left_pressed => {
                 actions.object_removals.write(WorldObjectRemoveRequest {
-                    entity,
+                    support,
                     drop_loot: *game_mode == GameMode::Survival,
                 });
                 input.object_target.0 = None;
