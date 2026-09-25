@@ -1,3 +1,11 @@
+### CI correction — nunca executar testes/link completo no workflow
+
+- removido do `Rust validation` o step `cargo test --locked loading_progress_system_initializes_without_query_conflicts`;
+- esse gate havia sido adicionado apesar da regra já estabelecida de manter o CI rápido e sem testes/link completo do Bevy;
+- o workflow volta ao contrato autoritativo: audits estáticos de conteúdo/localization, Clippy com warnings como erro e `cargo check --locked`;
+- regressões ECS que exigem inicialização/runtime podem continuar existindo como testes locais, mas não entram no CI sem instrução explícita;
+- esta é correção de CI da versão atual; VERSION permanece `0.68.18`.
+
 ## 2026-09-25 — Drops de extrudedSprite reutilizam o visual real do object
 
 - a aparência ruim de Pebble/Stick como item dropado vinha do renderer genérico de world item: qualquer object era reduzido ao campo `icon` e desenhado em um `Rectangle` vertical quadrado, diferente do visual usado pelo object colocado no mundo;
