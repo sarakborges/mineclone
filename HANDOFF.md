@@ -1,3 +1,81 @@
+## 2026-09-25 — Checkpoint consolidado: investigação de FPS, stutters e /warp
+
+Estado desta frente no `develop`: o gargalo não era Bevy/wgpu/OpenGL em si, e sim trabalho
+demais sendo executado ou preparado no caminho crítico do frame. A investigação já virou uma
+sequência de correções arquiteturais, não apenas tuning de números.
+
+### Worldgen / structures
+- o streaming não resolve mais structure candidates/connector forests na main thread;
+- structure top passa a ser calculado nos workers e consultado de forma não bloqueante;
+- `StructureField` separa o mapa procedural barato de roots/anchors da resolução pesada de
+  ground-fit, conflicts, Structure Groups e connectors;
+- connector forests por root já possuem cache compartilhado;
+- isso remove o risco anterior de a main thread entrar em `OnceLock::get_or_init` de trabalho
+  pesado de worldgen.
+
+### /warp
+- warp usa bootstrap de streaming pequeno em vez de saltar imediatamente para a render distance
+  normal inteira;
+- o salto remoto não ativa forward preload como se fosse movimento normal;
+- a busca de posição segura é incremental e budgetada;
+- a busca deixou de enumerar shells cúbicas completas e agora usa priority queue por distância
+  real, começando no target exato;
+- candidato mais próximo ainda não carregado é aguardado antes de pesquisar posições mais
+  distantes;
+- Y explícito continua autoritativo, preservando warp para cavernas/alturas específicas.
+
+### Streaming / stutters ao cruzar chunks
+O antigo `rebuild_queue()` concentrava trabalho síncrono demais no frame de mudança de chunk.
+Essa frente foi quebrada em partes:
+- o shape horizontal de seleção é pré-computado/cacheado;
+- movimento contínuo para chunk adjacente usa diff incremental do conjunto `desired`;
+- somente a borda nova faz surface/vertical-range work pesado;
+- pending chunks não são mais globalmente ordenados no rebuild; prioridade é escolhida lazy no
+  dispatch de geração;
+- ready chunks também não são mais globalmente reordenados por selection revision;
+- retirement de chunk render virou fila incremental, budgetada e revalidada antes do despawn;
+- o custo pesado que antes aparecia como uma rajada ao cruzar fronteira foi distribuído pelos
+  budgets normais de streaming.
+
+### Frame budget / workers
+- o orçamento de main-thread world work deixou de ser 8 ms fixos;
+- agora ele é adaptativo: 4 ms com frame folgado, 3 ms intermediário e 2 ms quando o frame já
+  passou do orçamento de 60 FPS;
+- chunk generation/meshing usa aproximadamente 60% do AsyncComputeTaskPool como teto base em vez
+  de ~75%, reservando CPU para render/support work;
+- adaptação começa após 2 frames acima de ~18,2 ms, em vez de esperar 4 frames abaixo de 45 FPS;
+- recuperação é deliberadamente lenta para evitar voltar imediatamente à saturação.
+
+### World objects / ECS
+- targeting deixou de ray-testar todos os world objects carregados;
+- object sync é revision-driven/incremental, com índice por chunk/coluna;
+- materialização visual possui raio/hysteresis e budget;
+- grass/stick/pebble foram achatados para uma única render entity por object; stacked sprites não
+  criam mais quatro child entities;
+- tint/material foi quantizado/cacheado para reduzir fragmentação de materiais;
+- gameplay de objects (target, pickup, break, middle-click, HUD e highlight) usa o support voxel
+  autoritativo e não depende mais da render Entity;
+- world objects foram retirados da varredura global de `ChunkRenderCoord`;
+- isso deixa batching/instancing futuro possível sem reescrever gameplay, mas a densidade authored
+  atual de grass não justificou ainda trocar imediatamente para um renderer instanciado custom.
+
+### Creatures
+- colisão creature↔creature deixou de ser all-pairs O(n²) em até quatro passes;
+- existe broadphase espacial por grid e somente pares que compartilham células chegam ao mesmo
+  narrow-phase/resolver de antes.
+
+### Estado de validação
+- HEAD observado antes deste checkpoint: `dae7078bf521d26a4407a8ad4401c0d9b85f8c47`;
+- workflow `Rust validation` desse HEAD concluiu com sucesso;
+- audits de localization/structure content, Clippy e Check estão verdes.
+
+### Próxima etapa
+A arquitetura dos maiores hot paths identificados já foi corrigida. O próximo passo não deve ser
+mais otimização especulativa: executar o jogo com os diagnostics atuais e comparar, durante
+movimento normal e `/warp`, FPS/frame time, slow streaming rebuilds, async generation/mesh
+tempos, backlog de streaming e world-object materialization. Qualquer próximo refactor deve ser
+guiado pelo maior custo que ainda aparecer nesses dados.
+
 ### CI follow-up — import removido com ReadyPriorityCache
 
 A remoção do `ReadyPriorityCache` deixou `VecDeque` sem uso em `streaming.rs`. O import
