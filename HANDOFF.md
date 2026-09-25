@@ -1,3 +1,9 @@
+### CI follow-up — wrapper de set_block fica test-only
+
+- após a mutação detalhada virar o caminho runtime, `VoxelChunk::set_block` ficou necessário apenas para fixtures de testes;
+- o wrapper foi movido para `#[cfg(test)]` em vez de receber suppression de dead code; runtime usa exclusivamente `set_block_with_detached_object`;
+- VERSION permanece `0.68.16`.
+
 ## 2026-09-25 — Quebrar suporte destaca world object como loot
 
 - a mutação de bloco removia `ObjectCell` silenciosamente dentro do storage sempre que o ID do bloco-suporte mudava; por isso Pebble/Stick desapareciam ao quebrar o bloco sob eles, antes de qualquer sistema de loot poder observá-los;

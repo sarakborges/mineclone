@@ -1002,6 +1002,7 @@ impl VoxelChunk {
         edit(&mut content)
     }
 
+    #[cfg(test)]
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         let _ = self.set_block_with_detached_object(x, y, z, block);
     }
