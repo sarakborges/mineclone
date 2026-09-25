@@ -144,6 +144,7 @@ pub(super) struct ChunkStreamingState {
     fluid_settling: GeneratedFluidSettling,
     generation_wave_targets: HashSet<IVec3>,
     generation_wave_pending: DeduplicatedQueue<IVec3>,
+    generation_prefetch_targets: HashSet<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     settled_publication_chunks: Vec<IVec3>,
     selection_revision: u64,
@@ -353,9 +354,18 @@ impl ChunkStreamingState {
         self.staged_generated_chunks.insert(coord);
     }
 
-    fn abandon_generation_wave_target(&mut self, coord: IVec3) {
+    fn abandon_generation_target(&mut self, coord: IVec3) {
         self.generation_wave_pending.remove(coord);
         self.generation_wave_targets.remove(&coord);
+        self.generation_prefetch_targets.remove(&coord);
+    }
+
+    fn mark_generation_prefetched(&mut self, coord: IVec3) {
+        debug_assert!(
+            !self.generation_wave_targets.contains(&coord),
+            "prefetched generation cannot already belong to the active wave"
+        );
+        self.generation_prefetch_targets.insert(coord);
     }
 
     fn complete_generation_wave_target(&mut self, coord: IVec3) {
@@ -419,10 +429,14 @@ impl ChunkStreamingState {
             "generation wave cannot finish with unresolved target reservations: {:?}",
             self.generation_wave_targets
         );
+
+        self.generation_wave_targets
+            .extend(self.generation_prefetch_targets.drain());
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
         self.generation_wave_targets.contains(&coord)
+            || self.generation_prefetch_targets.contains(&coord)
             || self.staged_generated_chunks.contains(&coord)
             || self.fluid_settling.contains(coord)
     }
@@ -641,6 +655,16 @@ impl ChunkStreamingState {
         )
     }
 
+    pub(super) fn diagnostic_generation_prefetch_count(&self) -> usize {
+        self.generation_prefetch_targets.len()
+    }
+
+    pub(super) fn diagnostic_fluid_settling_counts(
+        &self,
+    ) -> (bool, usize, usize, usize, usize, usize, usize) {
+        self.fluid_settling.diagnostic_counts()
+    }
+
     pub(super) fn diagnostic_renderable_backlog_counts(&self) -> (usize, usize, usize) {
         let Some(center) = self.center else {
             return (0, 0, 0);
@@ -816,7 +840,7 @@ pub(super) fn stream_chunks(
                 .cancel_where(|coord| !state.keeps_loaded(coord))
         };
         for coord in cancelled_generation {
-            work.state.abandon_generation_wave_target(coord);
+            work.state.abandon_generation_target(coord);
         }
 
         let cancelled_meshes = {
