@@ -426,17 +426,12 @@ fn generated_chunk_requires_fluid_settling(
     false
 }
 
-fn generation_wave_target_limit(state: &super::ChunkStreamingState) -> usize {
-    let Some(center) = state.center else {
+fn generation_wave_target_limit(state: &mut super::ChunkStreamingState) -> usize {
+    if state.center.is_none() {
         return MAX_GENERATION_TASKS_IN_FLIGHT;
-    };
+    }
 
-    let has_critical_pending = state
-        .pending
-        .values()
-        .any(|coord| super::is_critical_streaming_coord(coord, center));
-
-    if has_critical_pending {
+    if state.has_critical_pending() {
         MAX_CRITICAL_GENERATION_WAVE_TARGETS.min(MAX_GENERATION_TASKS_IN_FLIGHT)
     } else {
         MAX_GENERATION_TASKS_IN_FLIGHT
@@ -451,7 +446,7 @@ fn select_generation_wave(
     current_tick: u64,
     budget: &mut FrameWorkBudget,
 ) {
-    let target_limit = generation_wave_target_limit(&work.state);
+    let target_limit = generation_wave_target_limit(&mut work.state);
     while work.state.generation_wave_targets.len() < target_limit {
         if budget.exhausted() {
             break;
@@ -528,14 +523,14 @@ mod tests {
         state.pending.enqueue(center + IVec3::X);
 
         assert_eq!(
-            generation_wave_target_limit(&state),
+            generation_wave_target_limit(&mut state),
             MAX_CRITICAL_GENERATION_WAVE_TARGETS,
         );
 
         state.pending.clear();
         state.pending.enqueue(center + IVec3::new(4, 0, 0));
         assert_eq!(
-            generation_wave_target_limit(&state),
+            generation_wave_target_limit(&mut state),
             MAX_GENERATION_TASKS_IN_FLIGHT,
         );
     }
