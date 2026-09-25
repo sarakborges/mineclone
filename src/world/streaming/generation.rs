@@ -245,9 +245,8 @@ fn process_streaming_fluid_settling(
         .process(world, content.fluids(), &mut settling_budget)
 }
 
-fn publish_settled_wave(
+fn begin_settled_wave_publication(
     completion: GeneratedFluidSettlingCompletion,
-    content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
@@ -263,16 +262,42 @@ fn publish_settled_wave(
         queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
     }
 
-    for coord in completion.generated_chunks {
+    work.state
+        .begin_settled_publication(completion.generated_chunks);
+}
+
+fn process_settled_wave_publication(
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
+) -> bool {
+    let deadline = work.frame_budget.deadline();
+    let mut budget = FrameWorkBudget::new(
+        SETTLED_PUBLICATION_BUDGET,
+        MIN_SETTLED_PUBLICATIONS_PER_FRAME,
+    )
+    .with_global_deadline(deadline)
+    .with_maximum_items(MAX_SETTLED_PUBLICATIONS_PER_FRAME);
+
+    while !budget.exhausted() {
+        let Some(coord) = work.state.pop_settled_publication_chunk() else {
+            return true;
+        };
+        budget.record(1);
+
         if !work.state.keeps_loaded(coord) {
             work.world.archive_chunk(coord);
             work.state.complete_generation_wave_target(coord);
             continue;
         }
+
         seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
         work.state.mark_ready(coord);
         work.state.complete_generation_wave_target(coord);
     }
+
+    !work.state.has_settled_publication()
 }
 
 fn reconcile_existing_fluid_changes(
