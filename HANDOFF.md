@@ -1,3 +1,11 @@
+### CI follow-up — remove limpeza de lighting que ficou morta
+
+- a migração do bootstrap para direct-light seed tornou `VoxelChunk::clear_light` e
+  `VoxelWorld::clear_chunk_light` completamente órfãos;
+- os dois helpers foram removidos em vez de receber suppressions de dead-code;
+- nenhuma lógica de lighting mudou além do que já foi introduzido em 0.68.15; VERSION permanece
+  `0.68.15`.
+
 ## 2026-09-25 — Bootstrap mantém workers ocupados e evita lighting voxel-a-voxel desnecessário
 
 - o relatório de runtime mostrou generation com apenas ~3 jobs de chunk em voo e initial meshing

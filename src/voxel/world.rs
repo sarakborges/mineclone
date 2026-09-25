@@ -360,17 +360,6 @@ impl VoxelWorld {
         true
     }
 
-    pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
-        {
-            let Some(chunk) = self.chunks.get_mut(&coord) else {
-                return false;
-            };
-            chunk.clear_light();
-        }
-        self.bump_chunk_mesh_revision(coord);
-        true
-    }
-
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
         if world_position.y < 0 {
             return false;
