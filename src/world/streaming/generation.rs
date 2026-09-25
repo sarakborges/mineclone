@@ -96,12 +96,12 @@ pub(super) fn collect_generated_chunks(
             {
                 work.state.generation_wave_pending.enqueue(completed.coord);
             } else {
-                work.state.abandon_generation_wave_target(completed.coord);
+                work.state.abandon_generation_target(completed.coord);
             }
             continue;
         }
         if !work.state.keeps_loaded(completed.coord) {
-            work.state.abandon_generation_wave_target(completed.coord);
+            work.state.abandon_generation_target(completed.coord);
             continue;
         }
         if work.world.has_resident_or_persisted_chunk(completed.coord) {
@@ -313,7 +313,7 @@ fn schedule_generation_wave_pending(
             break;
         };
         if !state.keeps_loaded(coord) {
-            state.abandon_generation_wave_target(coord);
+            state.abandon_generation_target(coord);
             if let Some(budget) = budget.as_deref_mut() {
                 budget.record(1);
             }
@@ -344,28 +344,85 @@ fn schedule_generation_wave_pending(
 }
 
 pub(in crate::world) fn refill_generation_workers(
+    mut world: ResMut<crate::voxel::world::VoxelWorld>,
     mut state: ResMut<super::ChunkStreamingState>,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     async_work: Res<ChunkAsyncWorkLimiter>,
 ) {
-    if state.fluid_settling.is_active()
-        || !state.settled_publication_chunks.is_empty()
-        || state.generation_wave_pending.len() == 0
-    {
+    let settling_or_publishing =
+        state.fluid_settling.is_active() || !state.settled_publication_chunks.is_empty();
+
+    if settling_or_publishing {
+        prefetch_next_generation_wave(
+            &mut world,
+            &mut state,
+            &mut generation_tasks,
+            &async_work,
+        );
+        return;
+    }
+
+    if state.generation_wave_pending.len() == 0 {
         return;
     }
 
     // Generation tasks are short once caches are warm. A second dispatch point
     // late in the frame lets workers consume already-selected wave targets
     // instead of idling until the next Update after their permits are released.
-    // This does no priority scanning and never grows the wave beyond its
-    // existing target set.
+    // This does no priority scanning and never grows the active wave.
     schedule_generation_wave_pending(
         &mut state,
         &mut generation_tasks,
         &async_work,
         None,
     );
+}
+
+fn prefetch_next_generation_wave(
+    world: &mut crate::voxel::world::VoxelWorld,
+    state: &mut super::ChunkStreamingState,
+    generation_tasks: &mut ChunkGenerationTasks,
+    async_work: &ChunkAsyncWorkLimiter,
+) {
+    let mut attempts = MAX_GENERATION_DISPATCH_WORK_PER_FRAME;
+
+    while attempts > 0
+        && generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
+        && state.generation_prefetch_targets.len() < MAX_GENERATION_TASKS_IN_FLIGHT
+    {
+        attempts -= 1;
+
+        let Some(coord) = state.pop_pending_by_priority() else {
+            break;
+        };
+        if !state.keeps_loaded(coord) {
+            continue;
+        }
+        if generation_tasks.contains(coord)
+            || state.generation_prefetch_targets.contains(&coord)
+            || state.generation_wave_targets.contains(&coord)
+        {
+            continue;
+        }
+
+        if world.has_resident_or_persisted_chunk(coord) {
+            if world.chunk(coord).is_none() {
+                assert!(
+                    world.restore_chunk(coord),
+                    "resident or persisted chunk must remain resident or archived: {coord:?}"
+                );
+            }
+            state.mark_ready(coord);
+            continue;
+        }
+
+        if generation_tasks.schedule(coord, async_work) {
+            state.mark_generation_prefetched(coord);
+        } else {
+            state.requeue(coord);
+            break;
+        }
+    }
 }
 
 fn generated_chunk_requires_fluid_settling(
