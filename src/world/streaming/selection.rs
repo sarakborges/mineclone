@@ -43,6 +43,7 @@ struct HorizontalSelectionShapeKey {
 #[derive(Default)]
 pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
+    retained: HashSet<IVec3>,
     pending: Vec<IVec3>,
     retired: Vec<IVec3>,
     newly_desired: Vec<IVec3>,
@@ -147,6 +148,12 @@ pub(super) fn rebuild_queue(
             &mut streaming.surface_support_minimums,
             &mut streaming.structure_top_chunks,
         );
+        scratch.no_longer_desired.extend(
+            streaming
+                .desired
+                .difference(&scratch.desired)
+                .copied(),
+        );
     }
     if prune_caches {
         context.feature_fields.retain_for_chunks(&scratch.desired);
@@ -179,16 +186,21 @@ pub(super) fn rebuild_queue(
         );
     }
 
+    scratch.retained.clear();
+    scratch
+        .retained
+        .extend(scratch.no_longer_desired.iter().copied());
+
     collect_retired_chunk_coords(
         &streaming.retained,
         &scratch.desired,
-        &streaming.desired,
+        &scratch.retained,
         center,
         &mut scratch.retired,
     );
 
-    std::mem::swap(&mut streaming.retained, &mut scratch.desired);
-    std::mem::swap(&mut streaming.desired, &mut streaming.retained);
+    std::mem::swap(&mut streaming.desired, &mut scratch.desired);
+    std::mem::swap(&mut streaming.retained, &mut scratch.retained);
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
@@ -590,6 +602,7 @@ fn rebuild_desired_chunk_coords_incremental(
         );
     }
 
+    no_longer_desired.retain(|coord| !desired.contains(coord));
     newly_desired.extend(desired.difference(previous_desired).copied());
 }
 
@@ -907,11 +920,12 @@ mod tests {
     fn retired_chunks_exclude_both_live_selection_generations() {
         let far = IVec3::new(4, 0, 0);
         let nearer = IVec3::new(3, 0, 0);
-        let still_desired = IVec3::new(2, 0, 0);
-        let still_retained = IVec3::new(1, 0, 0);
-        let previous_retained = HashSet::from([far, nearer, still_desired, still_retained]);
-        let desired = HashSet::from([still_desired]);
-        let retained = HashSet::from([still_retained]);
+        let reentered_desired = IVec3::new(2, 0, 0);
+        let renewed_retention = IVec3::new(1, 0, 0);
+        let previous_retained =
+            HashSet::from([far, nearer, reentered_desired, renewed_retention]);
+        let desired = HashSet::from([reentered_desired]);
+        let retained = HashSet::from([renewed_retention]);
         let mut retired = Vec::new();
 
         collect_retired_chunk_coords(
@@ -923,6 +937,33 @@ mod tests {
         );
 
         assert_eq!(retired, vec![far, nearer]);
+    }
+
+    #[test]
+    fn retained_delta_preserves_previous_selection_union() {
+        let previous_desired = HashSet::from([
+            IVec3::new(0, 0, 0),
+            IVec3::new(1, 0, 0),
+            IVec3::new(2, 0, 0),
+        ]);
+        let desired = HashSet::from([
+            IVec3::new(1, 0, 0),
+            IVec3::new(2, 0, 0),
+            IVec3::new(3, 0, 0),
+        ]);
+        let retained = previous_desired
+            .difference(&desired)
+            .copied()
+            .collect::<HashSet<_>>();
+
+        let live = desired.union(&retained).copied().collect::<HashSet<_>>();
+        let expected = desired
+            .union(&previous_desired)
+            .copied()
+            .collect::<HashSet<_>>();
+
+        assert_eq!(retained, HashSet::from([IVec3::ZERO]));
+        assert_eq!(live, expected);
     }
 
     #[test]
