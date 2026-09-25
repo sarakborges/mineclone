@@ -1,3 +1,24 @@
+## 2026-09-24 — Warp safe-position search usa prioridade por distância real
+
+A busca de destino seguro do `/warp` deixa de enumerar shells Chebyshev completas. Mesmo com
+budget de 1 ms por frame, o algoritmo antigo ainda podia atravessar um domínio de até
+65³ = 274.625 posições e transformar custo em latência percebida.
+
+- a busca agora usa priority queue por distância euclidiana quadrada;
+- começa no target exato e expande apenas os 6 vizinhos de candidatos já descartados;
+- o primeiro candidato válido retirado da fila é o ponto seguro mais próximo dentro do mesmo
+  cubo de ±32 usado anteriormente;
+- candidato ainda não carregado é recolocado no topo e retorna Pending, evitando pesquisar
+  posições mais distantes enquanto o streaming ainda resolve a mais próxima;
+- `search.radius` representa o maior raio realmente alcançado e continua alimentando o
+  crescimento incremental do streaming;
+- o visited usa um bit-vector fixo do domínio máximo (~34 KiB), sem HashSet;
+- Y explícito continua autoritativo: não existe snap obrigatório para superfície, preservando
+  warp para cavernas e alturas específicas.
+
+No caso normal de target seguro, o warp termina após um único probe em vez de completar uma
+shell inteira.
+
 ## 2026-09-24 — Materialização de world objects ganha frame budget
 
 `sync_world_objects` não tenta mais materializar/desmaterializar todos os chunks alterados no

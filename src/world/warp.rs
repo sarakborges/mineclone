@@ -1,5 +1,6 @@
 use std::{
-    collections::VecDeque,
+    cmp::Reverse,
+    collections::BinaryHeap,
     time::{Duration, Instant},
 };
 
@@ -22,6 +23,9 @@ use crate::{
 };
 
 const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
+const WARP_SEARCH_DIAMETER: usize = (WARP_SEARCH_RADIUS_BLOCKS * 2 + 1) as usize;
+const WARP_SEARCH_VOLUME: usize =
+    WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER;
 const WARP_STREAMING_MIN_RADIUS_CHUNKS: i32 = 1;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
@@ -32,9 +36,8 @@ const WARP_SEARCH_BUDGET_CHECK_INTERVAL: usize = 64;
 #[derive(Default)]
 struct WarpSearchState {
     radius: i32,
-    remaining: VecDeque<IVec3>,
-    unloaded: Vec<IVec3>,
-    best: Option<(i32, Vec3)>,
+    frontier: BinaryHeap<Reverse<(i32, i32, i32, i32)>>,
+    visited: Vec<bool>,
 }
 
 impl WarpSearchState {
@@ -42,26 +45,68 @@ impl WarpSearchState {
         *self = Self::default();
     }
 
-    fn prepare_current_shell(&mut self) {
-        debug_assert!(self.remaining.is_empty());
-        debug_assert!(self.unloaded.is_empty());
-        let radius = self.radius;
-        for y in -radius..=radius {
-            for z in -radius..=radius {
-                for x in -radius..=radius {
-                    if radius > 0 && x.abs().max(y.abs()).max(z.abs()) != radius {
-                        continue;
-                    }
-                    self.remaining.push_back(IVec3::new(x, y, z));
-                }
-            }
+    fn ensure_started(&mut self) {
+        if !self.visited.is_empty() {
+            return;
         }
+        self.visited = vec![false; WARP_SEARCH_VOLUME];
+        self.enqueue(IVec3::ZERO);
     }
 
-    fn prepare_unloaded_retry(&mut self) {
-        debug_assert!(self.remaining.is_empty());
-        self.remaining.extend(self.unloaded.drain(..));
+    fn enqueue(&mut self, offset: IVec3) {
+        let Some(index) = warp_offset_index(offset) else {
+            return;
+        };
+        if self.visited[index] {
+            return;
+        }
+        self.visited[index] = true;
+        self.frontier.push(warp_queue_entry(offset));
     }
+
+    fn requeue(&mut self, offset: IVec3) {
+        debug_assert!(warp_offset_index(offset).is_some());
+        self.frontier.push(warp_queue_entry(offset));
+    }
+
+    fn pop_nearest(&mut self) -> Option<IVec3> {
+        let Reverse((_distance_squared, x, y, z)) = self.frontier.pop()?;
+        Some(IVec3::new(x, y, z))
+    }
+
+    fn expand_from(&mut self, offset: IVec3) {
+        for direction in [
+            IVec3::X,
+            IVec3::NEG_X,
+            IVec3::Y,
+            IVec3::NEG_Y,
+            IVec3::Z,
+            IVec3::NEG_Z,
+        ] {
+            self.enqueue(offset + direction);
+        }
+    }
+}
+
+fn warp_queue_entry(offset: IVec3) -> Reverse<(i32, i32, i32, i32)> {
+    Reverse((
+        offset.length_squared(),
+        offset.x,
+        offset.y,
+        offset.z,
+    ))
+}
+
+fn warp_offset_index(offset: IVec3) -> Option<usize> {
+    if offset.abs().max_element() > WARP_SEARCH_RADIUS_BLOCKS {
+        return None;
+    }
+
+    let shift = WARP_SEARCH_RADIUS_BLOCKS;
+    let x = (offset.x + shift) as usize;
+    let y = (offset.y + shift) as usize;
+    let z = (offset.z + shift) as usize;
+    Some(x + y * WARP_SEARCH_DIAMETER + z * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER)
 }
 
 #[derive(Resource, Default)]
@@ -171,66 +216,41 @@ fn advance_safe_eye_position_search(
 ) -> WarpSearchResult {
     let frame_started = Instant::now();
     let mut candidates_since_budget_check = 0_usize;
+    search.ensure_started();
 
     loop {
-        if search.remaining.is_empty() {
-            if !search.unloaded.is_empty() {
-                search.prepare_unloaded_retry();
-            } else if search.radius > WARP_SEARCH_RADIUS_BLOCKS {
-                return search.best.map_or(WarpSearchResult::Exhausted, |(_, eye)| {
-                    WarpSearchResult::Found(eye)
-                });
-            } else {
-                search.prepare_current_shell();
+        let Some(offset) = search.pop_nearest() else {
+            return WarpSearchResult::Exhausted;
+        };
+        search.radius = search.radius.max(offset.abs().max_element());
+
+        let Some(feet) = target
+            .x
+            .checked_add(offset.x)
+            .zip(target.y.checked_add(offset.y))
+            .zip(target.z.checked_add(offset.z))
+            .map(|((x, y), z)| IVec3::new(x, y, z))
+        else {
+            search.expand_from(offset);
+            continue;
+        };
+
+        match candidate_state(world, feet) {
+            CandidateState::Unloaded => {
+                search.requeue(offset);
+                return WarpSearchResult::Pending;
+            }
+            CandidateState::Invalid => search.expand_from(offset),
+            CandidateState::Valid(eye) => return WarpSearchResult::Found(eye),
+        }
+
+        candidates_since_budget_check += 1;
+        if candidates_since_budget_check >= WARP_SEARCH_BUDGET_CHECK_INTERVAL {
+            candidates_since_budget_check = 0;
+            if frame_started.elapsed() >= WARP_SEARCH_FRAME_BUDGET {
+                return WarpSearchResult::Pending;
             }
         }
-
-        while let Some(offset) = search.remaining.pop_front() {
-            let Some(feet) = target
-                .x
-                .checked_add(offset.x)
-                .zip(target.y.checked_add(offset.y))
-                .zip(target.z.checked_add(offset.z))
-                .map(|((x, y), z)| IVec3::new(x, y, z))
-            else {
-                continue;
-            };
-
-            match candidate_state(world, feet) {
-                CandidateState::Unloaded => search.unloaded.push(offset),
-                CandidateState::Invalid => {}
-                CandidateState::Valid(eye) => {
-                    let distance_squared = offset.length_squared();
-                    if search
-                        .best
-                        .as_ref()
-                        .is_none_or(|(best_distance, _)| distance_squared < *best_distance)
-                    {
-                        search.best = Some((distance_squared, eye));
-                    }
-                }
-            }
-
-            candidates_since_budget_check += 1;
-            if candidates_since_budget_check >= WARP_SEARCH_BUDGET_CHECK_INTERVAL {
-                candidates_since_budget_check = 0;
-                if frame_started.elapsed() >= WARP_SEARCH_FRAME_BUDGET {
-                    return WarpSearchResult::Pending;
-                }
-            }
-        }
-
-        if let Some((distance_squared, eye)) = search.best
-            && distance_squared <= (search.radius + 1).pow(2)
-        {
-            return WarpSearchResult::Found(eye);
-        }
-
-        if !search.unloaded.is_empty() {
-            return WarpSearchResult::Pending;
-        }
-
-        search.radius += 1;
     }
 }
 
@@ -305,33 +325,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn warp_shell_contains_only_the_requested_chebyshev_radius() {
-        let mut search = WarpSearchState {
-            radius: 2,
-            ..default()
-        };
-        search.prepare_current_shell();
+    fn warp_priority_queue_visits_offsets_by_non_decreasing_distance() {
+        let mut search = WarpSearchState::default();
+        search.ensure_started();
 
-        assert!(!search.remaining.is_empty());
-        assert!(search.remaining.iter().all(|offset| {
-            offset.x.abs().max(offset.y.abs()).max(offset.z.abs()) == 2
-        }));
-        assert_eq!(search.remaining.len(), 5_usize.pow(3) - 3_usize.pow(3));
+        let mut previous_distance = 0;
+        for index in 0..64 {
+            let offset = search.pop_nearest().expect("search frontier must continue");
+            let distance = offset.length_squared();
+            if index == 0 {
+                assert_eq!(offset, IVec3::ZERO);
+            } else {
+                assert!(distance >= previous_distance);
+            }
+            previous_distance = distance;
+            search.expand_from(offset);
+        }
     }
 
     #[test]
-    fn warp_search_retries_only_offsets_that_were_unloaded() {
-        let mut search = WarpSearchState {
-            radius: 3,
-            unloaded: vec![IVec3::new(1, 2, 3), IVec3::new(-2, 0, 3)],
-            ..default()
-        };
-        search.prepare_unloaded_retry();
+    fn unloaded_candidate_can_be_requeued_without_expanding_search() {
+        let mut search = WarpSearchState::default();
+        search.ensure_started();
+        let candidate = search.pop_nearest().expect("origin candidate must exist");
+        assert_eq!(candidate, IVec3::ZERO);
 
-        assert!(search.unloaded.is_empty());
-        assert_eq!(search.remaining.len(), 2);
-        assert_eq!(search.remaining.pop_front(), Some(IVec3::new(1, 2, 3)));
-        assert_eq!(search.remaining.pop_front(), Some(IVec3::new(-2, 0, 3)));
+        search.requeue(candidate);
+
+        assert_eq!(search.pop_nearest(), Some(IVec3::ZERO));
+        assert_eq!(search.frontier.len(), 0);
+    }
+
+    #[test]
+    fn warp_search_never_enqueues_offsets_outside_maximum_cube() {
+        let mut search = WarpSearchState::default();
+        search.ensure_started();
+        search.enqueue(IVec3::new(WARP_SEARCH_RADIUS_BLOCKS + 1, 0, 0));
+        assert_eq!(search.frontier.len(), 1);
     }
 
     #[test]
@@ -352,15 +382,19 @@ mod tests {
     fn requesting_a_new_warp_resets_previous_search_progress() {
         let mut pending = PendingWarp::default();
         pending.request(IVec3::new(10, 20, 30));
+        pending.search.ensure_started();
+        let origin = pending
+            .search
+            .pop_nearest()
+            .expect("origin candidate must exist before reset");
+        pending.search.expand_from(origin);
         pending.search.radius = 8;
-        pending.search.unloaded.push(IVec3::ONE);
 
         pending.request(IVec3::new(-4, 7, 9));
 
         assert_eq!(pending.target, Some(IVec3::new(-4, 7, 9)));
         assert_eq!(pending.search.radius, 0);
-        assert!(pending.search.remaining.is_empty());
-        assert!(pending.search.unloaded.is_empty());
-        assert!(pending.search.best.is_none());
+        assert!(pending.search.frontier.is_empty());
+        assert!(pending.search.visited.is_empty());
     }
 }
