@@ -1,3 +1,22 @@
+## 2026-09-25 — Rendering 0.68.44 remove segundo anel invisível além do fog
+
+- a continuação da auditoria de FPS após 0.68.43 não encontrou prepasses, SSAO, Bloom, TAA/SMAA/FXAA ou MSAA ativos na câmera do mundo; GPU occlusion/frustum culling experimental continua desligado por causa do flicker já confirmado em QA;
+- HDR também não foi removido por hipótese: ele faz parte do stack explícito world -> viewmodel -> UI e já teve regressão histórica quando alterado isoladamente;
+- foi encontrado, porém, um custo de renderização objetivo em `chunk_visibility_radii`:
+  - render distance nominal 12 mantinha chunks no show radius até 14 e no hide radius até 15;
+  - o fog nominal já termina em 98% do raio configurado, isto é, ~11.76 chunks no default;
+  - portanto o segundo anel de margem ficava completamente atrás de fog opaco, mas continuava mantendo mesh/entity visível e elegível para o renderer;
+- o centro de streaming é um chunk inteiro, não a posição exata do player. Um único chunk de margem cobre o deslocamento máximo do player dentro do chunk e ainda preserva a borda nominal sem buraco;
+- os raios agora são fixos em `show = nominal + 1` e `hide = show + 1`:
+  - 4 chunks: continua `5 / 6`;
+  - 12 chunks: `14 / 15 -> 13 / 14`;
+  - 24 chunks: `26 / 27 -> 25 / 26`;
+- no default, isso reduz a área horizontal potencial do show circle de raio² 196 para 169 (~13.8%) e do hide circle de 225 para 196 (~12.9%), sem reduzir a distância nominal visível;
+- o guard dinâmico do fog continua verificando colunas ausentes dentro do raio nominal e recua o fog durante streaming incompleto, então a mudança não depende de chunks distantes para esconder holes;
+- os diagnostics de 0.68.43 (`main_work_*`) permanecem intactos. O próximo log ainda deve ser usado para separar definitivamente CPU/Main de renderer/GPU/present, agora com menos geometria invisível residente.
+
+VERSION: `0.68.44`.
+
 ## 2026-09-25 — Runtime 0.68.43 remove degrau FIFO 60→30 e separa main-thread de present/GPU
 
 - o log 0.68.42 confirmou que o leak de font atlas foi resolvido:
