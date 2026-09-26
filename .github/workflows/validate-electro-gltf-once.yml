@@ -30,22 +30,27 @@ jobs:
           const fs = require('fs');
           const validator = require('gltf-validator');
 
-          const files = [
-            'assets/models/creatures/slime_electro/slime_electro.glb',
-            'assets/models/creatures/slime_electro_large/slime_electro_large.glb',
-          ];
+          (async () => {
+            const files = [
+              'assets/models/creatures/slime_electro/slime_electro.glb',
+              'assets/models/creatures/slime_electro_large/slime_electro_large.glb',
+            ];
 
-          let failed = false;
-          for (const file of files) {
-            const bytes = new Uint8Array(fs.readFileSync(file));
-            const report = await validator.validateBytes(bytes, {
-              uri: file,
-              format: 'glb',
-              maxIssues: 0,
-              writeTimestamp: false,
-            });
-            console.log(`=== ${file} ===`);
-            console.log(JSON.stringify(report, null, 2));
-            if ((report.issues?.numErrors ?? 0) > 0) failed = true;
-          }
-          if (failed) process.exit(1);
+            let failed = false;
+            for (const file of files) {
+              const bytes = new Uint8Array(fs.readFileSync(file));
+              const report = await validator.validateBytes(bytes, {
+                uri: file,
+                format: 'glb',
+                maxIssues: 0,
+                writeTimestamp: false,
+              });
+              console.log(`=== ${file} ===`);
+              console.log(JSON.stringify(report, null, 2));
+              if ((report.issues?.numErrors ?? 0) > 0) failed = true;
+            }
+            if (failed) process.exit(1);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
