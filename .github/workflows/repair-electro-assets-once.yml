@@ -1,3 +1,4 @@
+# Registered workflow; this edit intentionally triggers the one-shot repair.
 name: Repair Electro assets once
 
 on:
@@ -24,7 +25,6 @@ jobs:
           import base64
           import copy
           import json
-          import math
           import struct
           import subprocess
           from pathlib import Path
@@ -60,11 +60,6 @@ jobs:
               15: 5380, 16: 5392, 17: 5428, 18: 5440, 19: 5476, 20: 5488,
           }
 
-          def accessor_size(accessor, count=None):
-              count = accessor["count"] if count is None else count
-              _, component_size = COMPONENT[accessor["componentType"]]
-              return WIDTH[accessor["type"]] * component_size * count
-
           def unpack(buf, accessor, offset, count=None):
               count = accessor["count"] if count is None else count
               fmt_char, _ = COMPONENT[accessor["componentType"]]
@@ -86,9 +81,6 @@ jobs:
               accessor["min"] = [float(min(row[j] for row in rows)) for j in range(width)]
               accessor["max"] = [float(max(row[j] for row in rows)) for j in range(width)]
 
-          # Recover the valid large Electro details mesh. The old JSON declared 276
-          # indices, but the binary contains 252 valid indices followed immediately
-          # by animation floats. The details position/color blocks are shifted +48.
           large_detail_pos_accessor = large_source["accessors"][6]
           large_detail_color_accessor = large_source["accessors"][7]
           large_detail_index_accessor = large_source["accessors"][8]
@@ -98,9 +90,6 @@ jobs:
           assert max(large_detail_indices) < large_detail_pos_accessor["count"]
           assert len(large_detail_indices) == 252
 
-          # Map the valid large detail silhouette into the exact authored bounds of
-          # the normal Electro details. This preserves the Electro-specific shape
-          # while discarding the stale normal detail metadata/buffer fragment.
           normal_target_min = normal_source["accessors"][6]["min"]
           normal_target_max = normal_source["accessors"][6]["max"]
           large_width = WIDTH[large_detail_pos_accessor["type"]]
@@ -132,8 +121,6 @@ jobs:
                           raise RuntimeError(f"missing recovered offset for accessor {index} in {output}")
                       values = unpack(source_buf, accessor, offsets[index])
 
-                  # Round floats through their actual on-disk representation before
-                  # calculating bounds, so metadata and bytes agree exactly.
                   if accessor["componentType"] == 5126:
                       values = [float32(value) for value in values]
                   data = pack(accessor, values)
@@ -150,7 +137,6 @@ jobs:
                   accessor.pop("byteOffset", None)
                   refresh_bounds(accessor, values)
 
-              # Verify primitive attribute counts and index ranges before packaging.
               for mesh in doc.get("meshes", []):
                   for primitive in mesh.get("primitives", []):
                       position_index = primitive["attributes"]["POSITION"]
