@@ -1,3 +1,49 @@
+## 2026-09-25 — Runtime 0.68.43 remove degrau FIFO 60→30 e separa main-thread de present/GPU
+
+- o log 0.68.42 confirmou que o leak de font atlas foi resolvido:
+  `font_atlas_faces` permaneceu em 1 e `font_atlases` em 10..11 durante toda a sessão;
+  `font_atlas_bytes` estabilizou em ~11 MiB em vez de crescer continuamente;
+- streaming também não explica a queda persistente: longos períodos com
+  `stream_pending_renderable=0`, generation/mesh/remesh zerados e
+  `fluid_settling_active=false` ainda caíam para ~30 FPS;
+- o padrão de frame time mostrou uma assinatura de presentation/VSync:
+  - regiões leves ficaram em ~16.79 ms/frame (~59.5 FPS);
+  - depois de ultrapassar ligeiramente o orçamento de um refresh de 60 Hz, o p50 saltou para
+    ~29..32 ms e o FPS aparente caiu para ~30..35;
+  - a quantidade de mesh resident aumentou apenas ~8% nesse ponto, insuficiente para explicar
+    sozinha uma queda quase pela metade;
+- a primary Window não configurava `present_mode`, portanto usava o default do Bevy
+  (`AutoVsync`, com fallback para FIFO);
+- no backend Windows/DX12 já imposto pelo projeto, o primary window agora usa
+  `PresentMode::Mailbox`:
+  - Mailbox é suportado no path DX11/12 do Windows;
+  - não produz tearing;
+  - mantém uma fila de um frame e substitui frames antigos, evitando o degrau rígido do FIFO
+    quando um frame perde um vblank;
+- plataformas não-Windows mantêm `PresentMode::AutoVsync`;
+- diagnostics agora medem também o tempo real de trabalho do Main Schedule:
+  `main_work_avg_us`, `main_work_p50_us`, `main_work_p95_us`,
+  `main_work_p99_us` e `main_work_max_us`;
+- essa medição começa em `First` e termina em `Last`, separando trabalho ECS/main-thread do
+  `Time<Real>::delta`, que também pode refletir espera do renderer/present;
+- isso permite que o próximo log diga diretamente:
+  - frame alto + main_work baixo => renderer/GPU/present é o limitador;
+  - frame alto + main_work alto => CPU/Main Schedule ainda precisa ser perfilado;
+- câmeras 3D extras foram verificadas:
+  - Player HUD usa exclusivamente render layer 3;
+  - Character Info usa exclusivamente render layer 4;
+  - thumbnail camera isolation só roda durante captura de thumbnail;
+  - portanto nenhuma delas estava duplicando o terrain pass normal;
+- directional/held-light shadow maps também continuam desabilitados, então CSM/cubemap shadow
+  render não explica a queda;
+- `StandardMaterial` cresceu no começo da sessão, mas estabilizou em ~303 enquanto o FPS ainda
+  variava fortemente; não há evidência neste log de que seja o gargalo dominante;
+- CI funcional run `36204035283`: success em localization audit, structure content reference
+  audit, Clippy `--locked --all-targets --all-features -- -D warnings` e
+  `cargo check --locked`.
+
+VERSION: `0.68.43`.
+
 ## 2026-09-25 — UI 0.68.42 elimina race que recriava system-font faces antes do layout
 
 - o log 0.68.41 mostrou que o gargalo dominante já não era streaming:
