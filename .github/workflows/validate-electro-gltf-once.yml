@@ -1,0 +1,51 @@
+name: Validate Electro glTF once
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/validate-electro-gltf-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Khronos glTF validator
+        run: npm install --no-save gltf-validator@2.0.0-dev.3.10
+
+      - name: Validate Electro assets
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const validator = require('gltf-validator');
+
+          const files = [
+            'assets/models/creatures/slime_electro/slime_electro.glb',
+            'assets/models/creatures/slime_electro_large/slime_electro_large.glb',
+          ];
+
+          let failed = false;
+          for (const file of files) {
+            const bytes = new Uint8Array(fs.readFileSync(file));
+            const report = await validator.validateBytes(bytes, {
+              uri: file,
+              format: 'glb',
+              maxIssues: 0,
+              writeTimestamp: false,
+            });
+            console.log(`=== ${file} ===`);
+            console.log(JSON.stringify(report, null, 2));
+            if ((report.issues?.numErrors ?? 0) > 0) failed = true;
+          }
+          if (failed) process.exit(1);
