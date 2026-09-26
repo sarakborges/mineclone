@@ -41,6 +41,7 @@ use app::{
 use bevy::{
     app::{TaskPoolOptions, TaskPoolPlugin},
     prelude::*,
+    window::PresentMode,
 };
 #[cfg(target_os = "windows")]
 use bevy::render::{
@@ -139,10 +140,25 @@ fn primary_window() -> Window {
     let mut window = Window {
         title: "Asteria".into(),
         mode: bevy::window::WindowMode::Windowed,
+        present_mode: primary_present_mode(),
         ..default()
     };
     window.set_maximized(true);
     window
+}
+
+fn primary_present_mode() -> PresentMode {
+    // The Windows renderer is explicitly DX12. Mailbox is supported by the
+    // DX11/12 presentation path and avoids FIFO's hard 60 -> 30 FPS step when
+    // a frame narrowly misses a vblank, while still presenting without tearing.
+    #[cfg(target_os = "windows")]
+    {
+        PresentMode::Mailbox
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        PresentMode::AutoVsync
+    }
 }
 
 fn voxel_task_pool_options() -> TaskPoolOptions {
