@@ -153,7 +153,11 @@ fn primary_present_mode() -> PresentMode {
     // a frame narrowly misses a vblank, while still presenting without tearing.
     #[cfg(target_os = "windows")]
     {
-        PresentMode::Mailbox
+        if std::env::var_os("WGPU_BACKEND").is_none() {
+            PresentMode::Mailbox
+        } else {
+            PresentMode::AutoVsync
+        }
     }
     #[cfg(not(target_os = "windows"))]
     {
