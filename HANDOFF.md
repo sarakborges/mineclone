@@ -2,38 +2,51 @@
 
 > Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
 
-## 2026-09-25/26 — 0.68.47 reconstrói Electro GLBs e adiciona auditoria estrutural
+## 2026-09-25/26 — 0.68.48 repara semanticamente os Electro GLBs e endurece auditoria
 
-- QA da 0.68.46 ainda panicou no preload do Electro normal, agora em `slime_electro.glb`:
+- QA mostrou que a correção estrutural da 0.68.47 ainda não bastava: o preload do Electro normal continuava panicando dentro do `GltfLoader`, mesmo com header/chunks GLB formalmente válidos.
+- O validator oficial da Khronos foi executado contra os assets e revelou a causa real:
+  - Electro normal: 258 erros semânticos;
+  - Electro large: 47 erros semânticos;
+  - havia `bufferView`/accessor metadata stale apontando para regiões erradas do buffer, produzindo índices OOB, bounds incorretos e keyframes de animação lidos de bytes que não eram keyframes.
+- A investigação recuperou os dados válidos diretamente dos `.gltf` históricos do commit `35b8aaca906e1fdf48bae56feb4bb94b84814861`:
+  - no normal, body/face permaneciam válidos nos offsets originais e todos os 12 accessors de animação estavam intactos, deslocados +2720 bytes em relação ao metadata stale;
+  - o bloco de details do normal pertencia a outra revisão: metadata dizia 54 vértices, enquanto o bloco real de índices referenciava `0..167`; ele não foi remendado por alteração artificial do count;
+  - no large, body/face/details estavam recuperáveis; o details válido possui 62 vértices e exatamente 252 índices, todos dentro de range e sem triângulos degenerados;
+  - o metadata large dizia 276 índices e acabava lendo 24 valores de dentro do bloco de animação.
+- O reparo definitivo repacotou cada accessor em um buffer novo e sequencial, reconstruiu todos os `bufferViews`, recalculou bounds a partir dos bytes reais e validou relações entre primitives/accessors antes de escrever o GLB.
+- O details Electro válido do large foi usado como topologia canônica também no normal, remapeado para o bounding box authored do details normal. Body, face e animações normais continuam usando os dados recuperados do próprio normal; não foi copiado outro tipo de slime.
+- A face embedded histórica foi removida dos GLBs porque as definitions já aplicam `textures/creatures/slime_electro/face.png` externamente ao material `SlimeFace`; isso também eliminou os únicos warnings restantes do validator GLB.
+- Resultado do one-shot antes de publicar:
+  - `tools/check_glb_assets.py`: 22 assets validados;
+  - Khronos glTF Validator: Electro normal `0 errors / 0 warnings`;
+  - Khronos glTF Validator: Electro large `0 errors / 0 warnings`.
+- Assets finais publicados em `develop`:
+  - `6d8b22bdfcdaf8ba21592e961b03b5639efe94b2` — `Repair Electro GLB accessor layout`.
+- O audit permanente `tools/check_glb_assets.py` foi ampliado para validar, além do container:
+  - bounds reais de accessors contra `min/max` declarados;
+  - contagem de atributos de vertex contra `POSITION`;
+  - índices de primitives dentro do count de vértices;
+  - `COLOR_0` float dentro de `[0, 1]`;
+  - animation input como `FLOAT SCALAR`;
+  - key times finitos e estritamente crescentes.
+- O audit semântico novo passou em todos os 22 GLBs existentes e o CI completo do bloco passou no run `36212679301`, incluindo Clippy `-D warnings` e `cargo check --locked`.
+- Os três workflows temporários de validator/inspeção/reparo foram removidos após o diagnóstico. A proteção permanente ficou em `tools/check_glb_assets.py` + CI normal.
+- A instrumentação de performance da 0.68.45 (`frame`, `main_work`, `render work`) permanece intacta; depois de confirmar que Loading entra em Gameplay, a investigação de FPS volta exatamente desse ponto.
+
+VERSION: `0.68.48`.
+
+## 2026-09-25/26 — 0.68.47 corrigiu container GLB, mas não metadata semântico
+
+- QA da 0.68.46 panicou no preload do Electro normal com:
   `Gltf(Binary(Length { length: 8220, length_read: 8172 }))`.
-- A investigação confirmou que o problema era o asset gerado, não a referência nem o preload:
-  - o GLB normal declarava 8220 bytes no header, mas tinha só 8172 bytes; faltavam exatamente 48 bytes no final;
-  - o GLB large também estava truncado, com uma diferença muito maior;
-  - os `.gltf` anteriores também eram estruturalmente inválidos: o normal continha 7948 bytes decodificados no data-URI do buffer, mas declarava `byteLength=5228`; todos os bufferViews válidos terminavam em 5228, então havia lixo extra depois do buffer autoritativo.
-- Para não reparar binário por adivinhação, foi criado temporariamente um workflow one-shot que:
-  - faz checkout com histórico completo;
-  - recupera os `.gltf` fonte do commit `35b8aaca906e1fdf48bae56feb4bb94b84814861`;
-  - respeita o `buffers[0].byteLength` declarado e descarta bytes excedentes que não pertencem a nenhum bufferView;
-  - valida todos os bufferViews/accessors;
-  - move imagens data-URI para bufferViews GLB válidos;
-  - escreve GLB 2.0 com chunks JSON/BIN alinhados e header final consistente;
-  - valida novamente o container antes de escrever/commitar.
-- Primeiro run do rebuild falhou de forma segura ao detectar a inconsistência 7948 != 5228 e não publicou assets.
-- Segundo run passou e commitou os dois assets reconstruídos:
-  - `18e48e0625a8a61c54e8866a8510b9c6ccc34e0a` — `Rebuild Electro GLB containers`;
-  - Electro normal: header declara 11480 bytes e o arquivo tem exatamente 11480 bytes;
-  - Electro large: header declara 11780 bytes e o arquivo tem exatamente 11780 bytes.
-- O workflow one-shot foi removido depois do rebuild.
-- Para impedir recorrência, foi adicionado `tools/check_glb_assets.py` e o CI agora executa `Audit GLB assets` antes de instalar Rust. O audit verifica:
-  - magic/version/length do header;
-  - chunks JSON/BIN e alinhamento;
-  - parse do JSON;
-  - tamanho do buffer embedded;
-  - ranges de bufferViews;
-  - ranges/tamanho de accessors.
-- As definitions Electro continuam usando `.glb` + face externa `textures/creatures/slime_electro/face.png`.
-- A instrumentação de performance da 0.68.45 (`frame`, `main_work`, `render work`) permanece intacta.
-- CI funcional da 0.68.47: run `36211664885` — success em localizations, structure content references, novo `Audit GLB assets`, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
+- A investigação inicial confirmou que os GLBs tinham header/chunks truncados e foi feito um rebuild estrutural.
+- Commit do rebuild de container:
+  - `18e48e0625a8a61c54e8866a8510b9c6ccc34e0a` — `Rebuild Electro GLB containers`.
+- Também foi criado `tools/check_glb_assets.py` e o CI passou a executar `Audit GLB assets` antes de instalar Rust.
+- Essa auditoria inicial verificava magic/version/length, chunks JSON/BIN, alinhamento, buffer size e ranges de bufferViews/accessors.
+- O container reconstruído passou nessa auditoria, mas QA mostrou um novo `AssetLoaderPanic`; o validator Khronos então revelou que o conteúdo semântico continuava corrompido.
+- Portanto a 0.68.47 deve ser considerada a correção da camada de container, não a correção definitiva do Electro. O reparo semântico completo está na 0.68.48.
 
 VERSION: `0.68.47`.
 
@@ -43,7 +56,7 @@ VERSION: `0.68.47`.
 - `slime_electro.json` e `slime_electro_large.json` foram alterados para `.glb`.
 - Ambos receberam override explícito do material `SlimeFace` para `textures/creatures/slime_electro/face.png`.
 - Os `.gltf` quebrados foram removidos do HEAD.
-- Essa versão revelou que os `.glb` também haviam sido gerados incorretamente; a correção estrutural definitiva está na 0.68.47.
+- Essa versão revelou que os `.glb` também haviam sido gerados incorretamente; a correção definitiva está na 0.68.48.
 
 VERSION: `0.68.46`.
 
@@ -67,7 +80,7 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Rodar a **0.68.47** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
+1. Rodar a **0.68.48** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
 2. Gerar log de gameplay com período parado e movimento/streaming normal.
 3. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
 4. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.
