@@ -82,8 +82,9 @@ pub(crate) use new_world::{
     snap_biome_size_multiplier,
 };
 use render_diagnostics::{
-    FrameTimeSamples, log_render_asset_pressure, record_frame_time, record_slow_frame_context,
-    render_diagnostics_due, slow_frame_context_due,
+    FrameTimeSamples, MainFrameWorkSamples, begin_main_frame_work, log_render_asset_pressure,
+    record_frame_time, record_main_frame_work, record_slow_frame_context, render_diagnostics_due,
+    slow_frame_context_due,
 };
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
@@ -132,6 +133,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<PendingWarp>()
             .init_resource::<WorldFrameWorkBudget>()
             .init_resource::<FrameTimeSamples>()
+            .init_resource::<MainFrameWorkSamples>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
             .add_systems(
@@ -145,6 +147,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingFluidUpdates>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<FrameTimeSamples>,
+                    reset_resource::<MainFrameWorkSamples>,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
                     begin_world_loading,
@@ -161,6 +164,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
+                    reset_resource::<MainFrameWorkSamples>,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
                 )
@@ -181,6 +185,10 @@ impl Plugin for WorldPlugin {
                 ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
+            .add_systems(
+                First,
+                begin_main_frame_work.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 PreUpdate,
                 (
@@ -233,6 +241,12 @@ impl Plugin for WorldPlugin {
                     thumbnail::enforce_world_thumbnail_camera_isolation,
                 )
                     .chain()
+                    .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Last,
+                record_main_frame_work
+                    .before(log_render_asset_pressure)
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
