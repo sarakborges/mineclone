@@ -27,6 +27,7 @@ pub(crate) mod math;
 pub(crate) mod new_world;
 mod noise;
 mod render_diagnostics;
+mod render_work_diagnostics;
 pub(crate) mod render_distance;
 mod save;
 pub(crate) mod save_catalog;
@@ -87,6 +88,10 @@ use render_diagnostics::{
     slow_frame_context_due,
 };
 use render_distance::RenderDistanceSettings;
+use render_work_diagnostics::{
+    collect_render_frame_work, install_render_work_diagnostics, log_render_frame_work,
+    reset_render_frame_work_samples,
+};
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 use save_catalog::WorldDirectoryLock;
 use save_session::{
@@ -97,16 +102,18 @@ pub(crate) use seed::WorldSeed;
 pub(crate) use setup::{WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState};
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
-use warp::{PendingWarp, resolve_pending_warp};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 pub(crate) use work_budget::WorldFrameWorkBudget;
 use work_budget::begin_world_frame_work_budget;
+use warp::{PendingWarp, resolve_pending_warp};
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
+        install_render_work_diagnostics(app);
+
         app.init_resource::<CurrentDimension>()
             .init_resource::<DimensionEntityCounts>()
             .init_resource::<CurrentBiome>()
@@ -148,6 +155,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingWarp>,
                     reset_resource::<FrameTimeSamples>,
                     reset_resource::<MainFrameWorkSamples>,
+                    reset_render_frame_work_samples,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
                     begin_world_loading,
@@ -165,6 +173,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<MainFrameWorkSamples>,
+                    reset_render_frame_work_samples,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
                 )
@@ -243,13 +252,16 @@ impl Plugin for WorldPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
+            .add_systems(Last, collect_render_frame_work.before(record_main_frame_work))
             .add_systems(
                 Last,
                 record_main_frame_work
                     .before(log_render_asset_pressure)
+                    .before(log_render_frame_work)
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
+            .add_systems(Last, log_render_frame_work.run_if(render_diagnostics_due))
             .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(
                 Last,
@@ -259,36 +271,33 @@ impl Plugin for WorldPlugin {
 }
 
 fn prepare_world_session(
-    mut session: ResMut<WorldSession>,
-    mode: Res<WorldLoadMode>,
-    config: Res<NewWorldConfig>,
+    mut world: ResMut<VoxelWorld>,
+    mut render_pool: ResMut<ChunkRenderPool>,
+    mut terrain_materials: ResMut<TerrainMaterials>,
+    mut fluid_materials: ResMut<FluidMaterials>,
+    mut lighting_buffer: ResMut<TerrainLightingBuffer>,
+    mut biome_field: ResMut<BiomeField>,
+    mut feature_fields: ResMut<WorldFeatureFields>,
+    mut dimension: ResMut<CurrentDimension>,
+    mut counts: ResMut<DimensionEntityCounts>,
+    mut current_biome: ResMut<CurrentBiome>,
+    mut player_hotbar: ResMut<PlayerHotbar>,
+    mut world_lock: ResMut<WorldDirectoryLock>,
 ) {
-    if *mode == WorldLoadMode::New {
-        *session = WorldSession::new(config.name().to_owned());
-    }
+    world.clear();
+    render_pool.clear();
+    terrain_materials.clear();
+    fluid_materials.clear();
+    lighting_buffer.clear();
+    biome_field.clear();
+    feature_fields.clear();
+    dimension.reset();
+    counts.clear();
+    current_biome.clear();
+    player_hotbar.reset();
+    world_lock.release();
 }
 
-/// Called only upon returning to the starting screen, after the Leave World
-/// action has successfully published the snapshot. Never drop this state in
-/// the error path: the player must be able to retry the save.
-fn release_world_session(
-    mut commands: Commands,
-    terrain_materials: Option<Res<TerrainMaterials>>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if let Some(terrain_materials) = terrain_materials {
-        let _ = images.remove(&terrain_materials.texture_array_handle());
-    }
-
-    commands.remove_resource::<VoxelWorld>();
-    commands.remove_resource::<BiomeField>();
-    commands.remove_resource::<WorldFeatureFields>();
-    commands.remove_resource::<TerrainLightingBuffer>();
-    commands.remove_resource::<TerrainMaterials>();
-    commands.remove_resource::<FluidMaterials>();
-    commands.remove_resource::<WorldLoadingState>();
-    commands.remove_resource::<WorldDirectoryLock>();
-    commands.insert_resource(InMemoryWorldSave::default());
-    commands.insert_resource(WorldSession::default());
-    commands.insert_resource(PlayerHotbar::default());
+fn release_world_session(mut world_lock: ResMut<WorldDirectoryLock>) {
+    world_lock.release();
 }
