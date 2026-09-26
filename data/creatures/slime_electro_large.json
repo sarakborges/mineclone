@@ -5,7 +5,7 @@
     "portuguese_brazil": "Slime Electro Grande",
     "spanish": "Slime Electro Grande"
   },
-  "model": "models/creatures/slime_electro_large/slime_electro_large.glb",
+  "model": "models/creatures/slime_electro_large/slime_electro_large.gltf",
   "health": 30,
   "maxPerType": 2,
   "collider": {
@@ -31,9 +31,6 @@
       0.69,
       0
     ]
-  },
-  "textures": {
-    "SlimeFace": "textures/creatures/slime_electro/face.png"
   },
   "unlitMaterials": [
     "SlimeFace",
@@ -61,12 +58,7 @@
   "particleEffects": {
     "idle": {
       "count": 3,
-      "color": [
-        1,
-        0.88,
-        0.3,
-        0.68
-      ],
+      "color": [1, 0.88, 0.3, 0.68],
       "size": 0.0551,
       "lifetime": 1,
       "interval": 0.55,
@@ -80,12 +72,7 @@
     },
     "land": {
       "count": 12,
-      "color": [
-        1,
-        0.88,
-        0.3,
-        0.68
-      ],
+      "color": [1, 0.88, 0.3, 0.68],
       "size": 0.0696,
       "lifetime": 0.52,
       "spawnRadius": 0.5353,
@@ -98,12 +85,7 @@
     },
     "hurt": {
       "count": 10,
-      "color": [
-        1,
-        0.9304,
-        0.594,
-        0.78
-      ],
+      "color": [1, 0.9304, 0.594, 0.78],
       "size": 0.0725,
       "lifetime": 0.5,
       "spawnRadius": 0.47002,
@@ -116,12 +98,7 @@
     },
     "death": {
       "count": 28,
-      "color": [
-        1,
-        0.9304,
-        0.594,
-        0.78
-      ],
+      "color": [1, 0.9304, 0.594, 0.78],
       "size": 0.0899,
       "lifetime": 0.9,
       "spawnRadius": 0.6528,
