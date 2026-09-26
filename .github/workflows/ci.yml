@@ -24,13 +24,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Fail early on untranslated player-facing content, mismatched UI keys
-      # or broken placeholders. Do not spend time restoring Bevy for bad JSON.
+      # Fail early on malformed content/assets before spending time restoring
+      # the Rust toolchain and Bevy system dependencies.
       - name: Audit localizations
         run: python3 tools/check_localizations.py
 
       - name: Audit structure content references
         run: python3 tools/check_content_references.py
+
+      - name: Audit GLB assets
+        run: python3 tools/check_glb_assets.py
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -63,5 +66,3 @@ jobs:
 
       - name: Check
         run: cargo check --locked
-
-
