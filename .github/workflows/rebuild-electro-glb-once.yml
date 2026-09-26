@@ -105,17 +105,24 @@ jobs:
               buffer_uri = buffers[0].get("uri")
               if not buffer_uri or not buffer_uri.startswith("data:"):
                   raise ValueError(f"{source_path}: expected embedded buffer data URI")
-              _, raw_buffer = decode_data_uri(buffer_uri)
+              _, decoded_buffer = decode_data_uri(buffer_uri)
               declared_length = buffers[0]["byteLength"]
-              if len(raw_buffer) != declared_length:
+              if len(decoded_buffer) < declared_length:
                   raise ValueError(
-                      f"{source_path}: embedded buffer length {len(raw_buffer)} != declared {declared_length}"
+                      f"{source_path}: embedded buffer is truncated: "
+                      f"decoded={len(decoded_buffer)} declared={declared_length}"
                   )
+              if len(decoded_buffer) > declared_length:
+                  print(
+                      f"{source_path}: dropping {len(decoded_buffer) - declared_length} trailing "
+                      "bytes beyond declared buffer length"
+                  )
+              raw_buffer = decoded_buffer[:declared_length]
 
               binary = bytearray(raw_buffer)
               validate_document(doc, binary)
 
-              for image_index, image in enumerate(doc.get("images", [])):
+              for image in doc.get("images", []):
                   uri = image.get("uri")
                   if not uri or not uri.startswith("data:"):
                       continue
@@ -162,8 +169,7 @@ jobs:
               if bin_header + 8 + bin_len != len(output):
                   raise ValueError(f"{output_path}: GLB chunk lengths do not match file length")
 
-              target = pathlib.Path(output_path)
-              target.write_bytes(output)
+              pathlib.Path(output_path).write_bytes(output)
               print(
                   f"rebuilt {output_path}: source_buffer={len(raw_buffer)} "
                   f"final_bin={len(binary)} total={len(output)} images={len(doc.get('images', []))}"
