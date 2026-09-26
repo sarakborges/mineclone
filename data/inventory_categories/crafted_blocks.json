@@ -1,0 +1,10 @@
+{
+  "id": "crafted_blocks",
+  "displayName": {
+    "english": "Crafted Blocks",
+    "portuguese_brazil": "Blocos Fabricados",
+    "spanish": "Bloques Fabricados"
+  },
+  "order": 50,
+  "icon": "textures/creative_categories/crafted_blocks.png"
+}

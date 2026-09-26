@@ -1,63 +1,114 @@
 use bevy::prelude::*;
 
 pub const MIN_RENDER_DISTANCE_CHUNKS: i32 = 4;
-pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 8;
-pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 6;
+pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 24;
+pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 12;
+pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 2;
 
 #[derive(Resource)]
 pub struct RenderDistanceSettings {
-    chunks: i32,
+    horizontal_chunks: i32,
+    vertical_chunks: i32,
 }
 
 impl Default for RenderDistanceSettings {
     fn default() -> Self {
         Self {
-            chunks: DEFAULT_RENDER_DISTANCE_CHUNKS,
+            horizontal_chunks: DEFAULT_RENDER_DISTANCE_CHUNKS,
+            vertical_chunks: DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS,
         }
     }
 }
 
 impl RenderDistanceSettings {
     pub fn chunks(&self) -> i32 {
-        self.chunks
+        self.horizontal_chunks
+    }
+
+    pub fn vertical_chunks(&self) -> i32 {
+        self.vertical_chunks
     }
 
     pub fn set_chunks(&mut self, chunks: i32) {
-        self.chunks = chunks.clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS);
+        self.horizontal_chunks =
+            chunks.clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS);
     }
 }
 
-pub fn chunk_coords_in_cylinder(
+pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) {
+    let nominal_radius = render_distance_chunks.max(1);
+    // The player can stand anywhere inside the center chunk, so one extra chunk
+    // is enough to cover the nominal world-space radius without exposing a gap at
+    // the boundary. Fog already reaches full opacity inside the nominal radius;
+    // keeping a second visible guard ring only renders geometry the player cannot
+    // see.
+    let show_radius = nominal_radius.saturating_add(1);
+    // Keep one chunk of hysteresis so crossing a chunk boundary does not churn
+    // visibility/residency immediately.
+    let hide_radius = show_radius.saturating_add(1);
+
+    (show_radius, hide_radius)
+}
+
+
+pub(crate) fn chunk_is_in_volume(
     center: IVec3,
+    coord: IVec3,
     horizontal_radius: i32,
-    min_chunk_y: i32,
-    max_chunk_y: i32,
-) -> Vec<IVec3> {
-    assert!(min_chunk_y >= 0, "minimum chunk Y cannot be negative");
-    assert!(
-        min_chunk_y <= max_chunk_y,
-        "minimum chunk Y must be less than or equal to maximum chunk Y"
-    );
-
-    let mut coords = Vec::new();
-    let radius_squared = horizontal_radius * horizontal_radius;
-
-    for y in (min_chunk_y..=max_chunk_y).rev() {
-        for z in -horizontal_radius..=horizontal_radius {
-            for x in -horizontal_radius..=horizontal_radius {
-                if x * x + z * z <= radius_squared {
-                    coords.push(IVec3::new(center.x + x, y, center.z + z));
-                }
-            }
-        }
+    vertical_radius: i32,
+) -> bool {
+    if coord.y < 0 || horizontal_radius < 0 || vertical_radius < 0 {
+        return false;
     }
 
-    coords.sort_by_key(|coord| {
-        let dx = coord.x - center.x;
-        let dz = coord.z - center.z;
+    let delta_x = i64::from(coord.x) - i64::from(center.x);
+    let delta_y = i64::from(coord.y) - i64::from(center.y);
+    let delta_z = i64::from(coord.z) - i64::from(center.z);
+    let horizontal_squared = delta_x * delta_x + delta_z * delta_z;
+    let horizontal_radius = i64::from(horizontal_radius);
 
-        (dx * dx + dz * dz, -coord.y)
-    });
+    horizontal_squared <= horizontal_radius * horizontal_radius
+        && delta_y.abs() <= i64::from(vertical_radius)
+}
 
-    coords
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visibility_radii_scale_from_render_distance() {
+        assert_eq!(chunk_visibility_radii(4), (5, 6));
+        assert_eq!(chunk_visibility_radii(12), (13, 14));
+        assert_eq!(chunk_visibility_radii(24), (25, 26));
+    }
+
+    #[test]
+    fn volume_membership_respects_horizontal_and_vertical_bounds() {
+        let center = IVec3::new(2, 5, -3);
+
+        assert!(chunk_is_in_volume(
+            center,
+            center + IVec3::new(4, 2, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            center + IVec3::new(5, 0, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            center + IVec3::new(0, 3, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            IVec3::new(center.x, -1, center.z),
+            4,
+            2
+        ));
+    }
 }

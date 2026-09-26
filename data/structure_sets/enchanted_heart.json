@@ -1,0 +1,90 @@
+{
+  "id": "asteria:enchanted_heart",
+  "name": {
+    "english": "Enchanted Heart",
+    "portuguese_brazil": "Coração Encantado",
+    "spanish": "Corazón Encantado"
+  },
+  "locatable": true,
+  "priority": 100,
+  "conflictGroups": [
+    "heart",
+    "tree",
+    "landmark"
+  ],
+  "reserveSpace": true,
+  "elements": [
+    {
+      "id": "world_tree",
+      "structure": "asteria:world_tree",
+      "count": {
+        "min": 1,
+        "max": 1
+      },
+      "chance": 1,
+      "required": true,
+      "placement": {
+        "relativeTo": "origin",
+        "minDistance": 0,
+        "maxDistance": 0,
+        "minSeparation": 0,
+        "attempts": 1,
+        "allowOverlap": false
+      }
+    },
+    {
+      "id": "enchanted_springs",
+      "structure": "asteria:enchanted_spring",
+      "count": {
+        "min": 3,
+        "max": 4
+      },
+      "chance": 1,
+      "required": false,
+      "placement": {
+        "relativeTo": "origin",
+        "minDistance": 58,
+        "maxDistance": 142,
+        "minSeparation": 50,
+        "attempts": 512,
+        "allowOverlap": false
+      }
+    },
+    {
+      "id": "spring_enchanted_trees",
+      "structure": "asteria:tree_enchanted",
+      "count": {
+        "min": 10,
+        "max": 16
+      },
+      "chance": 1,
+      "required": false,
+      "placement": {
+        "relativeTo": "enchanted_springs",
+        "minDistance": 14,
+        "maxDistance": 30,
+        "minSeparation": 7,
+        "attempts": 512,
+        "allowOverlap": false
+      }
+    },
+    {
+      "id": "enchanted_trees",
+      "structure": "asteria:tree_enchanted",
+      "count": {
+        "min": 6,
+        "max": 10
+      },
+      "chance": 1,
+      "required": false,
+      "placement": {
+        "relativeTo": "origin",
+        "minDistance": 78,
+        "maxDistance": 112,
+        "minSeparation": 14,
+        "attempts": 128,
+        "allowOverlap": false
+      }
+    }
+  ]
+}

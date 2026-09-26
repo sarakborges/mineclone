@@ -1,0 +1,18 @@
+{
+  "id": "asteria:brush_rustic",
+  "name": {
+    "english": "Brush",
+    "portuguese_brazil": "Pincel",
+    "spanish": "Pincel"
+  },
+  "hint": {
+    "english": "Paints dyeable blocks or clears their dye.",
+    "portuguese_brazil": "Pinta blocos tingíveis ou remove sua tinta.",
+    "spanish": "Pinta bloques teñibles o elimina su tinte."
+  },
+  "category": "tools",
+  "icon": "textures/tools/brush.png",
+  "tintIcon": "textures/tools/brush-tint.png",
+  "leftBehavior": "asteria:brush/paint",
+  "rightBehavior": "asteria:brush/open_palette"
+}

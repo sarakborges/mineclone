@@ -9,6 +9,7 @@ pub enum DayNightPhase {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DayNightPhases<T> {
     pub dawn: T,
     pub day: T,

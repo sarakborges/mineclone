@@ -1,49 +1,598 @@
-use bevy::prelude::*;
+use std::{cmp::Reverse, time::Duration};
+
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::HashSet,
+    prelude::*,
+};
 
 use crate::{
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    voxel::{
+        chunk::VoxelChunk, coordinates::chunk_coord_from_position,
+        lighting::PendingLightingUpdates, world::VoxelWorld,
+    },
 };
 
 use super::{
-    chunk_rendering::ChunkRenderPool,
-    render_distance::RenderDistanceSettings,
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_remesh_tasks::ChunkRemeshTasks,
+    chunk_rendering::{
+        ChunkRenderPool, chunk_mesh_residency_high_bytes, chunk_mesh_residency_recovery_bytes,
+        chunk_mesh_residency_target_bytes, retire_chunk_render_allocation,
+    },
+    chunk_system_params::ChunkRenderer,
+    render_distance::{RenderDistanceSettings, chunk_visibility_radii},
+    streaming::ChunkStreamingState,
+    work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
-pub fn unload_chunk_meshes(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
+const RENDER_RETIREMENT_BUDGET: Duration = Duration::from_millis(1);
+const MAX_RENDER_RETIREMENTS_PER_FRAME: usize = 2;
+const MIN_UNLOAD_RETENTION_MARGIN_CHUNKS: i32 = 10;
+const MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME: usize = 8;
+
+#[derive(Default)]
+pub(super) struct RenderRetirementState {
+    selection_revision: Option<u64>,
+    pending: Vec<IVec3>,
+    queued: HashSet<IVec3>,
+}
+
+impl RenderRetirementState {
+    fn enqueue(&mut self, coord: IVec3) {
+        if self.queued.insert(coord) {
+            self.pending.push(coord);
+        }
+    }
+
+    fn sort_for_pop(&mut self) {
+        self.pending
+            .sort_unstable_by_key(|coord| Reverse((coord.y, coord.z, coord.x)));
+    }
+
+    fn pop(&mut self) -> Option<IVec3> {
+        let coord = self.pending.pop()?;
+        let removed = self.queued.remove(&coord);
+        debug_assert!(removed, "render retirement queue membership must stay synchronized");
+        Some(coord)
+    }
+}
+
+#[derive(Resource, Default)]
+pub(super) struct ChunkUnloadState {
+    bootstrapped: bool,
+}
+
+impl ChunkUnloadState {
+    fn bootstrap(
+        &mut self,
+        streaming: &mut ChunkStreamingState,
+        world: &VoxelWorld,
+        center: IVec3,
+    ) {
+        if self.bootstrapped {
+            return;
+        }
+
+        let mut pending = world
+            .loaded_chunk_coords()
+            .filter(|coord| !streaming.keeps_loaded(*coord))
+            .collect::<Vec<_>>();
+        pending.sort_by_key(|coord| -(*coord - center).length_squared());
+        for coord in pending {
+            streaming.enqueue_retired(coord);
+        }
+
+        self.bootstrapped = true;
+    }
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkUnloadRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    state: ResMut<'w, ChunkUnloadState>,
+    lighting: ResMut<'w, PendingLightingUpdates>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkMeshResidencyRuntime<'w> {
+    streaming: ResMut<'w, ChunkStreamingState>,
+    world: Res<'w, VoxelWorld>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
+}
+
+pub(super) fn retire_distant_chunk_meshes(
+    mut renderer: ChunkRenderer,
+    streaming: Res<ChunkStreamingState>,
+    world: Res<VoxelWorld>,
+    frame_budget: Res<WorldFrameWorkBudget>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut remesh_tasks: ResMut<ChunkRemeshTasks>,
+    mut state: Local<RenderRetirementState>,
+) {
+    // Do not churn render residency while the current show radius still has
+    // holes to fill. Normal distance retirement can catch up once visible
+    // streaming is complete; hard mesh-memory pressure is enforced separately
+    // by enforce_chunk_mesh_residency_budget in PostUpdate.
+    if streaming.has_renderable_streaming_backlog() {
+        return;
+    }
+
+    let selection_revision = streaming.selection_revision();
+    if state.selection_revision != Some(selection_revision) {
+        for coord in renderer.pool.active_coords() {
+            if !streaming.retains_render_mesh(coord) {
+                state.enqueue(coord);
+            }
+        }
+        state.sort_for_pop();
+        state.selection_revision = Some(selection_revision);
+    }
+
+    if state.pending.is_empty() {
+        return;
+    }
+
+    let mut budget = FrameWorkBudget::new(RENDER_RETIREMENT_BUDGET, 1)
+        .with_global_deadline(frame_budget.deadline())
+        .with_maximum_items(MAX_RENDER_RETIREMENTS_PER_FRAME);
+
+    while !budget.exhausted() {
+        let Some(coord) = state.pop() else {
+            break;
+        };
+        budget.record(1);
+
+        // Selection can change again while a retirement backlog is being
+        // drained. Revalidate just before destructive work so moving back
+        // toward a chunk cancels its stale retirement rather than causing
+        // unnecessary despawn/remesh churn.
+        if !renderer.pool.contains(coord) || streaming.retains_render_mesh(coord) {
+            continue;
+        }
+
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
+        remesh_queue.remove(coord);
+        remesh_tasks.cancel_coord(coord);
+        remesh_tasks.remove_lighting_revision(coord);
+        enqueue_retired_render_halo_remeshes(
+            coord,
+            &world,
+            &renderer.pool,
+            &streaming,
+            &mut remesh_queue,
+        );
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct MeshResidencyCandidate {
+    coord: IVec3,
+    bytes: usize,
+    visible: bool,
+    critical: bool,
+    horizontal_distance_squared: i64,
+    total_distance_squared: i64,
+    movement_alignment: i64,
+}
+
+pub(super) fn enforce_chunk_mesh_residency_budget(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
-    mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
+    mut renderer: ChunkRenderer,
+    mut runtime: ChunkMeshResidencyRuntime,
+    mut candidates: Local<Vec<MeshResidencyCandidate>>,
+    mut recovery: Local<Vec<IVec3>>,
 ) {
+    let before = renderer.pool.mesh_bytes();
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
-    let radius = render_distance.chunks();
-    let radius_squared = radius * radius;
-    let to_unload = render_pool
-        .active_coords()
-        .filter(|coord| {
-            let dx = coord.x - player_chunk.x;
-            let dz = coord.z - player_chunk.z;
-            dx * dx + dz * dz > radius_squared
+    let center = chunk_coord_from_position(feet_position);
+    let render_distance_chunks = render_distance.chunks();
+    let movement_direction = runtime.streaming.movement_direction();
+    let high_bytes = chunk_mesh_residency_high_bytes(render_distance_chunks);
+    let target_bytes = chunk_mesh_residency_target_bytes(render_distance_chunks);
+    let recovery_bytes = chunk_mesh_residency_recovery_bytes(render_distance_chunks);
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance_chunks);
+    let recovery_radius = i64::from(show_radius.max(1));
+    let recovery_radius_squared = recovery_radius * recovery_radius;
+    let visible_radius = i64::from(hide_radius.max(1));
+    let visible_radius_squared = visible_radius * visible_radius;
+
+    recovery.clear();
+    recovery.extend(
+        runtime
+            .streaming
+            .mesh_pressure_evicted_coords()
+            .filter(|coord| {
+                if !runtime.streaming.keeps_loaded(*coord) || renderer.pool.contains(*coord) {
+                    return false;
+                }
+                let dx = i64::from(coord.x) - i64::from(center.x);
+                let dz = i64::from(coord.z) - i64::from(center.z);
+                dx * dx + dz * dz <= recovery_radius_squared
+            }),
+    );
+
+    if !recovery.is_empty() {
+        recovery.sort_unstable_by_key(|coord| {
+            let delta = *coord - center;
+            let alignment = i64::from(delta.x) * i64::from(movement_direction.x)
+                + i64::from(delta.z) * i64::from(movement_direction.y);
+            (
+                delta.length_squared(),
+                -alignment,
+                coord.y,
+                coord.z,
+                coord.x,
+            )
+        });
+
+        let force_visible_recovery = before > recovery_bytes;
+        let mut planned_bytes = before;
+        let mut recovered = 0_usize;
+        for coord in recovery.iter().copied() {
+            if recovered >= MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME {
+                break;
+            }
+            let estimated_bytes = runtime
+                .streaming
+                .mesh_pressure_evicted_bytes(coord)
+                .unwrap_or_default();
+            if !force_visible_recovery
+                && planned_bytes.saturating_add(estimated_bytes) > target_bytes
+            {
+                continue;
+            }
+            if runtime.streaming.recover_mesh_after_pressure(coord) {
+                planned_bytes = planned_bytes.saturating_add(estimated_bytes);
+                recovered += 1;
+            }
+        }
+    }
+
+    if before <= high_bytes {
+        return;
+    }
+
+    candidates.clear();
+    candidates.extend(renderer.pool.active_coords().filter_map(|coord| {
+        let bytes = renderer.pool.mesh_bytes_for(coord);
+        if bytes == 0 {
+            return None;
+        }
+
+        let dx = i64::from(coord.x) - i64::from(center.x);
+        let dy = i64::from(coord.y) - i64::from(center.y);
+        let dz = i64::from(coord.z) - i64::from(center.z);
+        let horizontal_distance_squared =
+            dx.saturating_mul(dx).saturating_add(dz.saturating_mul(dz));
+        let total_distance_squared = horizontal_distance_squared
+            .saturating_add(dy.saturating_mul(dy));
+
+        let movement_alignment =
+            dx * i64::from(movement_direction.x)
+                + dz * i64::from(movement_direction.y);
+
+        let visible = horizontal_distance_squared <= visible_radius_squared;
+        if visible {
+            return None;
+        }
+
+        Some(MeshResidencyCandidate {
+            coord,
+            bytes,
+            visible,
+            critical: dx.abs() <= 1 && dy.abs() <= 1 && dz.abs() <= 1,
+            horizontal_distance_squared,
+            total_distance_squared,
+            movement_alignment,
         })
-        .collect::<Vec<_>>();
+    }));
 
-    for coord in to_unload {
-        let Some((entities, mesh_handles)) = render_pool.take(coord) else {
+    // Evict hysteresis/preload allocations first, then the farthest visible
+    // allocations. The 3x3x3 player neighborhood is the last resort, not an
+    // absolute exemption: preventing a render OOM is more important than
+    // retaining any individual chunk mesh.
+    candidates.sort_unstable_by(|left, right| {
+        left.visible
+            .cmp(&right.visible)
+            .then_with(|| left.critical.cmp(&right.critical))
+            .then_with(|| {
+                right
+                    .total_distance_squared
+                    .cmp(&left.total_distance_squared)
+            })
+            .then_with(|| {
+                right
+                    .horizontal_distance_squared
+                    .cmp(&left.horizontal_distance_squared)
+            })
+            // Among similarly distant chunks, retire the ones behind current
+            // movement before chunks the player is moving toward.
+            .then_with(|| left.movement_alignment.cmp(&right.movement_alignment))
+            .then_with(|| right.bytes.cmp(&left.bytes))
+            .then_with(|| left.coord.y.cmp(&right.coord.y))
+            .then_with(|| left.coord.z.cmp(&right.coord.z))
+            .then_with(|| left.coord.x.cmp(&right.coord.x))
+    });
+
+    let mut resident_bytes = before;
+    let mut evicted_chunks = 0_usize;
+    let mut evicted_bytes = 0_usize;
+
+    for candidate in candidates.iter().copied() {
+        if resident_bytes <= target_bytes {
+            break;
+        }
+        if !renderer.pool.contains(candidate.coord) {
             continue;
+        }
+
+        // Mesh retirement must stay deferred with the entity despawn. Removing
+        // the mesh asset immediately leaves a still-live Mesh3d component
+        // referencing a freed render-slab allocation until Commands flush.
+        retire_chunk_render_allocation(
+            &mut renderer.commands,
+            &mut renderer.pool,
+            candidate.coord,
+        );
+        runtime
+            .streaming
+            .suppress_mesh_for_pressure(candidate.coord, candidate.bytes);
+        runtime.remesh_queue.remove(candidate.coord);
+        runtime.remesh_tasks.cancel_coord(candidate.coord);
+        runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
+        enqueue_retired_render_halo_remeshes(
+            candidate.coord,
+            &runtime.world,
+            &renderer.pool,
+            &runtime.streaming,
+            &mut runtime.remesh_queue,
+        );
+
+        resident_bytes = resident_bytes.saturating_sub(candidate.bytes);
+        evicted_bytes = evicted_bytes.saturating_add(candidate.bytes);
+        evicted_chunks += 1;
+    }
+
+    if evicted_chunks > 0 {
+        warn!(
+            "chunk mesh residency pressure: before_bytes={before} after_bytes={} render_distance_chunks={render_distance_chunks} high_watermark_bytes={high_bytes} target_bytes={target_bytes} recovery_bytes={recovery_bytes} evicted_chunks={evicted_chunks} evicted_bytes={evicted_bytes}",
+            renderer.pool.mesh_bytes(),
+        );
+    }
+}
+
+pub(super) fn unload_chunk_meshes(
+    player: Single<&Transform, With<GameplayCamera>>,
+    render_distance: Res<RenderDistanceSettings>,
+    mut streaming: ResMut<ChunkStreamingState>,
+    mut renderer: ChunkRenderer,
+    mut runtime: ChunkUnloadRuntime,
+    mut unloaded: Local<Vec<IVec3>>,
+) {
+    unloaded.clear();
+
+    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let player_chunk = chunk_coord_from_position(feet_position);
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    let retention_radius = unload_retention_radius(render_distance.chunks());
+    runtime
+        .state
+        .bootstrap(&mut streaming, &runtime.world, center);
+
+    let mut budget = FrameWorkBudget::new(
+        CHUNK_UNLOAD_BUDGET,
+        MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
+    )
+    .with_global_deadline(runtime.frame_budget.deadline());
+
+    loop {
+        if budget.exhausted() {
+            break;
+        }
+
+        let Some(coord) = streaming.pop_retired_outside_horizontal_radius(center, retention_radius)
+        else {
+            break;
         };
-
-        for mesh_handle in mesh_handles {
-            let _ = meshes.remove(&mesh_handle);
+        if streaming.keeps_loaded(coord)
+            || streaming.generated_chunk_is_unpublished(coord)
+            || runtime.world.chunk(coord).is_none()
+        {
+            continue;
         }
 
-        for entity in entities {
-            commands.entity(entity).despawn();
+        let might_affect_direct_skylight = runtime
+            .world
+            .chunk(coord)
+            .is_some_and(chunk_might_affect_direct_skylight);
+
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
+        runtime.remesh_queue.remove(coord);
+        runtime.remesh_tasks.cancel_coord(coord);
+        runtime.remesh_tasks.remove_lighting_revision(coord);
+        runtime.world.archive_chunk(coord);
+
+        // Removing an empty section is equivalent to removing the missing-air
+        // section that direct skylight already assumed, so lower sections do
+        // not need a full relight. Non-empty sections remain conservative.
+        if might_affect_direct_skylight {
+            runtime
+                .lighting
+                .enqueue_loaded_column_below(&runtime.world, coord);
         }
 
-        world.archive_chunk(coord);
+        // Restored or newly generated chunks need a fresh direct-light seed,
+        // but an obsolete mesh retry while still resident must not reseed.
+        streaming.forget_initial_lighting_seeded(coord);
+        unloaded.push(coord);
+        budget.record(1);
+    }
+
+    if unloaded.is_empty() {
+        return;
+    }
+
+    runtime
+        .lighting
+        .enqueue_chunk_unloads(unloaded.as_slice());
+
+    for coord in unloaded.drain(..) {
+        enqueue_retired_render_halo_remeshes(
+            coord,
+            &runtime.world,
+            &renderer.pool,
+            &streaming,
+            &mut runtime.remesh_queue,
+        );
+    }
+}
+
+// Vertex lighting/AO and fluid corner heights use all 26 rendered neighbors,
+// not just the six cardinals. Retiring a render allocation must invalidate
+// neighboring mesh families even when the source chunk remains resident as
+// preload/cache data. Check only rendered neighbors with actual content on each
+// toward-source face.
+fn enqueue_retired_render_halo_remeshes(
+    coord: IVec3,
+    world: &VoxelWorld,
+    render_pool: &ChunkRenderPool,
+    streaming: &ChunkStreamingState,
+    remesh_queue: &mut ChunkRemeshQueue,
+) {
+    for y in -1..=1 {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let offset = IVec3::new(x, y, z);
+                if offset == IVec3::ZERO {
+                    continue;
+                }
+                let neighbor = coord + offset;
+                if neighbor.y < 0
+                    || !render_pool.contains(neighbor)
+                    || !streaming.retains_render_mesh(neighbor)
+                {
+                    continue;
+                }
+                let Some(chunk) = world.chunk(neighbor) else {
+                    continue;
+                };
+                let (geometry, fluid) = halo_remesh_needs(chunk, offset);
+                if geometry || fluid {
+                    remesh_queue.enqueue_halo_change(
+                        neighbor,
+                        -offset,
+                        geometry,
+                        fluid,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn halo_remesh_needs(chunk: &VoxelChunk, offset: IVec3) -> (bool, bool) {
+    let toward_faces = |has_face: fn(&VoxelChunk, IVec3) -> bool| {
+        (offset.x == 0 || has_face(chunk, IVec3::new(-offset.x, 0, 0)))
+            && (offset.y == 0 || has_face(chunk, IVec3::new(0, -offset.y, 0)))
+            && (offset.z == 0 || has_face(chunk, IVec3::new(0, 0, -offset.z)))
+    };
+    (
+        toward_faces(VoxelChunk::boundary_has_content),
+        toward_faces(VoxelChunk::boundary_has_fluid),
+    )
+}
+
+fn chunk_might_affect_direct_skylight(chunk: &VoxelChunk) -> bool {
+    !chunk.is_empty()
+}
+
+fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
+    let nominal_radius = render_distance_chunks.max(1);
+    let proportional_margin = (nominal_radius + 1) / 2;
+    nominal_radius.saturating_add(proportional_margin.max(MIN_UNLOAD_RETENTION_MARGIN_CHUNKS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_retirement_queue_deduplicates_and_preserves_stable_pop_order() {
+        let mut state = RenderRetirementState::default();
+        state.enqueue(IVec3::new(2, 1, 0));
+        state.enqueue(IVec3::new(2, 1, 0));
+        state.enqueue(IVec3::new(-1, 0, 4));
+        state.enqueue(IVec3::new(0, 0, 0));
+        state.sort_for_pop();
+
+        assert_eq!(state.pending.len(), 3);
+        assert_eq!(state.pop(), Some(IVec3::new(0, 0, 0)));
+        assert_eq!(state.pop(), Some(IVec3::new(-1, 0, 4)));
+        assert_eq!(state.pop(), Some(IVec3::new(2, 1, 0)));
+        assert!(state.pop().is_none());
+        assert!(state.queued.is_empty());
+    }
+    use crate::voxel::{
+        cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
+    };
+
+    #[test]
+    fn empty_chunk_cannot_change_direct_skylight_when_unloaded() {
+        assert!(!chunk_might_affect_direct_skylight(&VoxelChunk::empty()));
+    }
+
+    #[test]
+    fn occupied_chunk_stays_on_conservative_skylight_unload_path() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            1,
+            1,
+            1,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+
+        assert!(chunk_might_affect_direct_skylight(&chunk));
+    }
+
+    #[test]
+    fn unload_retention_scales_from_render_distance() {
+        assert_eq!(unload_retention_radius(4), 14);
+        assert_eq!(unload_retention_radius(12), 22);
+        assert_eq!(unload_retention_radius(24), 36);
+    }
+
+    #[test]
+    fn diagonal_unload_invalidates_only_toward_source_content() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            0,
+            0,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)), (false, false));
+    }
+
+    #[test]
+    fn fluid_halo_remesh_is_independent_of_terrain_content() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_fluid(0, 0, 7, Some(FluidCell::source(0, 8)));
+
+        // The generic content boundary counts include fluid occupancy too.
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (true, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
     }
 }

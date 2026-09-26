@@ -1,0 +1,68 @@
+name: Rust validation
+
+on:
+  pull_request:
+    paths-ignore:
+      - HANDOFF.md
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - HANDOFF.md
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # Keep the OS fixed: native package archives and compiler outputs are
+    # specific to the runner distribution and Rust toolchain.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Fail early on malformed content/assets before spending time restoring
+      # the Rust toolchain and Bevy system dependencies.
+      - name: Audit localizations
+        run: python3 tools/check_localizations.py
+
+      - name: Audit structure content references
+        run: python3 tools/check_content_references.py
+
+      - name: Audit GLB assets
+        run: python3 tools/check_glb_assets.py
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # The first run installs the Bevy system libraries; subsequent runs
+      # restore their installed files instead of repeating apt-get install.
+      - name: Cache Linux dependencies
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: >-
+            libasound2-dev libfontconfig1-dev libudev-dev libwayland-dev
+            libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
+          version: ubuntu-24.04-bevy-0.19-v1
+
+      # Cargo.lock is committed for reproducible executable builds.
+      - name: Report dependency lock
+        run: sha256sum Cargo.lock
+
+      # Cache downloaded crates and compiled dependency artifacts. The key
+      # includes the committed lockfile, so dependency versions remain stable.
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Check
+        run: cargo check --locked

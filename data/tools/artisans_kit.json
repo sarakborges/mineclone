@@ -1,0 +1,17 @@
+{
+  "id": "asteria:artisans_kit_rustic",
+  "name": {
+    "english": "Artisan's Kit",
+    "portuguese_brazil": "Kit de Artesão",
+    "spanish": "Kit de Artesano"
+  },
+  "hint": {
+    "english": "Sculpts fragmentable blocks.",
+    "portuguese_brazil": "Esculpe blocos fragmentáveis.",
+    "spanish": "Esculpe bloques fragmentables."
+  },
+  "category": "tools",
+  "icon": "textures/tools/artisans-kit.png",
+  "leftBehavior": "asteria:artisans_kit/remove",
+  "rightBehavior": "asteria:artisans_kit/restore"
+}

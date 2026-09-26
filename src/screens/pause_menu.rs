@@ -1,20 +1,26 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{
+        controls_state::ControlsState,
         game_state::GameState,
         pause_state::PauseState,
-        settings_state::SettingsState,
+        settings_state::{SettingsScreenMode, SettingsState},
     },
-    player::camera::GameplayCamera,
+    localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::menu_button,
-        surface,
-        theme,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
+        visibility::set_visibility,
     },
-    world::InMemoryWorldSave,
+    world::{
+        save_session::{WorldSaveContext, WorldSession},
+        thumbnail::{
+            WorldThumbnailCameraQuery, WorldThumbnailCapture, WorldThumbnailCompletion,
+            begin_world_thumbnail_capture,
+        },
+    },
 };
 
 pub struct PauseMenuPlugin;
@@ -22,16 +28,20 @@ pub struct PauseMenuPlugin;
 impl Plugin for PauseMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(PauseState::Paused), spawn_pause_menu)
-            .add_systems(OnEnter(SettingsState::Open), hide_pause_menu)
+            .add_systems(
+                OnEnter(SettingsState::Open),
+                set_visibility::<PauseMenuRoot, false>,
+            )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                show_pause_menu.run_if(in_state(PauseState::Paused)),
+                set_visibility::<PauseMenuRoot, true>.run_if(in_state(PauseState::Paused)),
             )
             .add_systems(
                 Update,
                 handle_pause_menu_buttons
                     .run_if(in_state(PauseState::Paused))
-                    .run_if(in_state(SettingsState::Closed)),
+                    .run_if(in_state(SettingsState::Closed))
+                    .run_if(in_state(ControlsState::Closed)),
             );
     }
 }
@@ -39,15 +49,26 @@ impl Plugin for PauseMenuPlugin {
 #[derive(Component)]
 struct PauseMenuRoot;
 
+#[derive(Component)]
+struct PauseSaveFeedback;
+
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
     Resume,
-    Settings,
+    WorldSettings,
+    GameSettings,
+    Controls,
     LeaveWorld,
     ExitGame,
 }
 
-fn spawn_pause_menu(mut commands: Commands) {
+fn spawn_pause_menu(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
+    let language = language.get();
+
     commands
         .spawn((
             DespawnOnExit(PauseState::Paused),
@@ -62,68 +83,148 @@ fn spawn_pause_menu(mut commands: Commands) {
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::OVERLAY),
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.68)),
+            GlobalZIndex(1000),
         ))
         .with_children(|root| {
-            root.spawn(surface::modal_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::title("PAUSED"),
+            root.spawn(Node {
+                width: px(360),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(12),
+                ..default()
+            })
+            .with_children(|menu| {
+                menu.spawn(button(
+                    localization.text(language, "pause.resume").to_owned(),
+                    PauseMenuAction::Resume,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn((
                     Node {
-                        margin: UiRect::bottom(px(10)),
+                        width: px(360),
+                        flex_direction: FlexDirection::Row,
+                        column_gap: px(12),
                         ..default()
                     },
+                    children![
+                        button(
+                            localization.text(language, "settings.section.worldSettings").to_owned(),
+                            PauseMenuAction::WorldSettings,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
+                        ),
+                        button(
+                            localization.text(language, "common.gameSettings").to_owned(),
+                            PauseMenuAction::GameSettings,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
+                        ),
+                    ],
                 ));
-                panel.spawn(menu_button("Resume", PauseMenuAction::Resume));
-                panel.spawn(menu_button("Settings", PauseMenuAction::Settings));
-                panel.spawn(menu_button("Leave World", PauseMenuAction::LeaveWorld));
-                panel.spawn(menu_button("Exit Game", PauseMenuAction::ExitGame));
+                menu.spawn(button(
+                    localization.text(language, "common.controls").to_owned(),
+                    PauseMenuAction::Controls,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn(button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn(button(
+                    localization.text(language, "common.exitGame").to_owned(),
+                    PauseMenuAction::ExitGame,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Danger,
+                ));
+                menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
         });
 }
 
-fn hide_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
-    }
+#[derive(SystemParam)]
+struct PauseMenuContext<'w, 's> {
+    session: Res<'w, WorldSession>,
+    thumbnail_cameras: WorldThumbnailCameraQuery<'w, 's>,
+    thumbnail_captures: Query<'w, 's, (), With<WorldThumbnailCapture>>,
+    settings_mode: ResMut<'w, SettingsScreenMode>,
+    feedback: Query<'w, 's, &'static mut Text, With<PauseSaveFeedback>>,
+    transition: ResMut<'w, ScreenTransition>,
+    app_exit: MessageWriter<'w, AppExit>,
 }
 
 fn handle_pause_menu_buttons(
+    mut commands: Commands,
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
-    player: Query<&Transform, With<GameplayCamera>>,
-    mut save: ResMut<InMemoryWorldSave>,
-    mut transition: ResMut<ScreenTransition>,
-    mut app_exit: MessageWriter<AppExit>,
+    snapshot: WorldSaveContext,
+    mut context: PauseMenuContext,
 ) {
+    if context.transition.is_active() || !context.thumbnail_captures.is_empty() {
+        return;
+    }
     for (interaction, action) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;
         }
-
         match action {
             PauseMenuAction::Resume => {
-                transition.request(ScreenTransitionTarget::pause(PauseState::Running));
+                context.transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
-            PauseMenuAction::Settings => {
-                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            PauseMenuAction::WorldSettings => {
+                *context.settings_mode = SettingsScreenMode::World;
+                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
-            PauseMenuAction::LeaveWorld => {
-                if let Ok(transform) = player.single() {
-                    save.save_player_position(transform.translation);
+            PauseMenuAction::GameSettings => {
+                *context.settings_mode = SettingsScreenMode::Game;
+                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            PauseMenuAction::Controls => {
+                context
+                    .transition
+                    .request(ScreenTransitionTarget::controls(ControlsState::Open));
+            }
+            PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
+                if let Err(error) = context.session.persist(&snapshot) {
+                    error!("World save failed; keeping current world loaded: {error}");
+                    if let Ok(mut label) = context.feedback.single_mut() {
+                        label.0 = format!("Save failed: {error}. World kept open.");
+                    }
+                    return;
                 }
-
-                transition.request(
-                    ScreenTransitionTarget::game(GameState::StartingScreen)
-                        .with_pause(PauseState::Running),
+                let completion = if matches!(action, PauseMenuAction::LeaveWorld) {
+                    WorldThumbnailCompletion::LeaveWorld
+                } else {
+                    WorldThumbnailCompletion::ExitGame
+                };
+                let Some(world_id) = context.session.id() else {
+                    error!("World was saved without an active world session id");
+                    if matches!(action, PauseMenuAction::LeaveWorld) {
+                        context.transition.request(
+                            ScreenTransitionTarget::game(GameState::StartingScreen)
+                                .with_pause(PauseState::Running),
+                        );
+                    } else {
+                        context.app_exit.write(AppExit::Success);
+                    }
+                    return;
+                };
+                begin_world_thumbnail_capture(
+                    &mut commands,
+                    &mut context.thumbnail_cameras,
+                    world_id,
+                    completion,
                 );
-            }
-            PauseMenuAction::ExitGame => {
-                app_exit.write(AppExit::Success);
+                return;
             }
         }
     }

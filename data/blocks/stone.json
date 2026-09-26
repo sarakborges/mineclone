@@ -1,0 +1,35 @@
+{
+  "id": "asteria:stone",
+  "name": {
+    "english": "Stone",
+    "portuguese_brazil": "Pedra",
+    "spanish": "Piedra"
+  },
+  "category": "stone_blocks",
+  "tags": [
+    "fragmentable"
+  ],
+  "textures": {
+    "top": "textures/blocks/stone.png",
+    "bottom": "textures/blocks/stone.png",
+    "left": "textures/blocks/stone.png",
+    "right": "textures/blocks/stone.png",
+    "front": "textures/blocks/stone.png",
+    "back": "textures/blocks/stone.png"
+  },
+  "lightDampening": 15,
+  "castsShadow": true,
+  "mining": {
+    "hardness": 2,
+    "requiredTools": [
+      "pickaxe"
+    ]
+  },
+  "lootTable": [
+    {
+      "item": "asteria:pebble",
+      "chance": 1,
+      "quantity": 4
+    }
+  ]
+}

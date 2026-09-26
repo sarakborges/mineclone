@@ -1,0 +1,10 @@
+{
+  "id": "asteria:enchanted_forest_spores",
+  "name": {
+    "english": "Enchanted Forest Spores",
+    "portuguese_brazil": "Esporos da Floresta Encantada",
+    "spanish": "Esporas del Bosque Encantado"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/spore-enchanted-forest.png"
+}

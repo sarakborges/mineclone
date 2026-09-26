@@ -1,10 +1,21 @@
 use serde::Deserialize;
 
 #[derive(Clone, Copy, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum BiomeTerrain {
     Rolling {
         base_height: f32,
+        amplitude: f32,
+        scale: f32,
+        detail_amplitude: f32,
+        detail_scale: f32,
+    },
+    Ocean {
+        depth: f32,
         amplitude: f32,
         scale: f32,
         detail_amplitude: f32,
@@ -16,10 +27,41 @@ pub enum BiomeTerrain {
         scale: f32,
         sharpness: f32,
     },
-    Ocean {
-        floor_depth: f32,
+    Gorge {
+        base_height: f32,
+        depth: f32,
+        wall_height: f32,
+        top_amplitude: f32,
+        top_scale: f32,
+        floor_amplitude: f32,
+        floor_scale: f32,
+    },
+    Alps {
+        base_height: f32,
         amplitude: f32,
         scale: f32,
+        sharpness: f32,
+        detail_amplitude: f32,
+        detail_scale: f32,
+    },
+    MountainBelt {
+        base_height: f32,
+        amplitude: f32,
+        scale: f32,
+        sharpness: f32,
+        detail_amplitude: f32,
+        detail_scale: f32,
+    },
+    Volcano {
+        base_height: f32,
+        height: f32,
+        crater_depth: f32,
+        crater_radius: f32,
+        irregularity: f32,
+        irregularity_scale: f32,
+        detail_irregularity: f32,
+        detail_scale: f32,
+        crater_irregularity: f32,
     },
 }
 
@@ -32,16 +74,46 @@ impl BiomeTerrain {
                 detail_amplitude,
                 ..
             } => base_height + amplitude.abs() + detail_amplitude.abs(),
+            Self::Ocean {
+                depth,
+                amplitude,
+                detail_amplitude,
+                ..
+            } => -depth + amplitude.abs() + detail_amplitude.abs(),
             Self::Mountains {
                 base_height,
                 amplitude,
                 ..
             } => base_height + amplitude.abs(),
-            Self::Ocean {
-                floor_depth,
-                amplitude,
+            Self::Gorge {
+                base_height,
+                wall_height,
+                top_amplitude,
+                floor_amplitude,
                 ..
-            } => -floor_depth + amplitude.abs(),
+            } => {
+                base_height
+                    + wall_height.max(0.0)
+                    + top_amplitude.max(0.0)
+                    + floor_amplitude.max(0.0)
+            },
+            Self::Alps {
+                base_height,
+                amplitude,
+                detail_amplitude,
+                ..
+            }
+            | Self::MountainBelt {
+                base_height,
+                amplitude,
+                detail_amplitude,
+                ..
+            } => base_height + amplitude.abs() + detail_amplitude.abs(),
+            Self::Volcano {
+                base_height,
+                height,
+                ..
+            } => base_height + height.max(0.0),
         }
     }
 
@@ -54,15 +126,46 @@ impl BiomeTerrain {
                 detail_scale,
                 ..
             } => {
-                assert!(amplitude >= 0.0, "biome {biome_id} rolling amplitude cannot be negative");
-                assert!(scale > 0.0, "biome {biome_id} rolling scale must be positive");
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} rolling amplitude cannot be negative"
+                );
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} rolling scale must be positive"
+                );
                 assert!(
                     detail_amplitude >= 0.0,
-                    "biome {biome_id} rolling detail_amplitude cannot be negative"
+                    "biome {biome_id} rolling detailAmplitude cannot be negative"
                 );
                 assert!(
                     detail_scale > 0.0,
-                    "biome {biome_id} rolling detail_scale must be positive"
+                    "biome {biome_id} rolling detailScale must be positive"
+                );
+            }
+            Self::Ocean {
+                depth,
+                amplitude,
+                scale,
+                detail_amplitude,
+                detail_scale,
+            } => {
+                assert!(depth > 0.0, "biome {biome_id} ocean depth must be positive");
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} ocean amplitude cannot be negative"
+                );
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} ocean scale must be positive"
+                );
+                assert!(
+                    detail_amplitude >= 0.0,
+                    "biome {biome_id} ocean detailAmplitude cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} ocean detailScale must be positive"
                 );
             }
             Self::Mountains {
@@ -75,26 +178,135 @@ impl BiomeTerrain {
                     amplitude >= 0.0,
                     "biome {biome_id} mountains amplitude cannot be negative"
                 );
-                assert!(scale > 0.0, "biome {biome_id} mountains scale must be positive");
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} mountains scale must be positive"
+                );
                 assert!(
                     sharpness > 0.0,
                     "biome {biome_id} mountains sharpness must be positive"
                 );
+            },
+            Self::Gorge {
+                depth,
+                wall_height,
+                top_amplitude,
+                top_scale,
+                floor_amplitude,
+                floor_scale,
+                ..
+            } => {
+                assert!(depth >= 0.0, "biome {biome_id} gorge depth cannot be negative");
+                assert!(
+                    wall_height >= 0.0,
+                    "biome {biome_id} gorge wallHeight cannot be negative"
+                );
+                assert!(
+                    top_amplitude >= 0.0,
+                    "biome {biome_id} gorge topAmplitude cannot be negative"
+                );
+                assert!(
+                    top_scale > 0.0,
+                    "biome {biome_id} gorge topScale must be positive"
+                );
+                assert!(
+                    floor_amplitude >= 0.0,
+                    "biome {biome_id} gorge floorAmplitude cannot be negative"
+                );
+                assert!(
+                    floor_scale > 0.0,
+                    "biome {biome_id} gorge floorScale must be positive"
+                );
             }
-            Self::Ocean {
-                floor_depth,
+            Self::Alps {
                 amplitude,
                 scale,
+                sharpness,
+                detail_amplitude,
+                detail_scale,
+                ..
+            } => {
+                assert!(amplitude >= 0.0, "biome {biome_id} alps amplitude cannot be negative");
+                assert!(scale > 0.0, "biome {biome_id} alps scale must be positive");
+                assert!(sharpness > 0.0, "biome {biome_id} alps sharpness must be positive");
+                assert!(
+                    detail_amplitude >= 0.0,
+                    "biome {biome_id} alps detailAmplitude cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} alps detailScale must be positive"
+                );
+            }
+            Self::MountainBelt {
+                amplitude,
+                scale,
+                sharpness,
+                detail_amplitude,
+                detail_scale,
+                ..
             } => {
                 assert!(
-                    floor_depth >= 0.0,
-                    "biome {biome_id} ocean floor_depth cannot be negative"
+                    amplitude >= 0.0,
+                    "biome {biome_id} mountainBelt amplitude cannot be negative"
                 );
                 assert!(
-                    amplitude >= 0.0,
-                    "biome {biome_id} ocean amplitude cannot be negative"
+                    scale > 0.0,
+                    "biome {biome_id} mountainBelt scale must be positive"
                 );
-                assert!(scale > 0.0, "biome {biome_id} ocean scale must be positive");
+                assert!(
+                    sharpness > 0.0,
+                    "biome {biome_id} mountainBelt sharpness must be positive"
+                );
+                assert!(
+                    detail_amplitude >= 0.0,
+                    "biome {biome_id} mountainBelt detailAmplitude cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} mountainBelt detailScale must be positive"
+                );
+            }
+            Self::Volcano {
+                height,
+                crater_depth,
+                crater_radius,
+                irregularity,
+                irregularity_scale,
+                detail_irregularity,
+                detail_scale,
+                crater_irregularity,
+                ..
+            } => {
+                assert!(height > 0.0, "biome {biome_id} volcano height must be positive");
+                assert!(
+                    crater_depth >= 0.0,
+                    "biome {biome_id} volcano craterDepth cannot be negative"
+                );
+                assert!(
+                    (0.0..1.0).contains(&crater_radius),
+                    "biome {biome_id} volcano craterRadius must be between 0 and 1"
+                );
+                assert!(
+                    irregularity >= 0.0,
+                    "biome {biome_id} volcano irregularity cannot be negative"
+                );
+                assert!(
+                    irregularity_scale > 0.0,
+                    "biome {biome_id} volcano irregularityScale must be positive"
+                );
+                assert!(
+                    detail_irregularity >= 0.0,
+                    "biome {biome_id} volcano detailIrregularity cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} volcano detailScale must be positive"
+                );
+                assert!(
+                    crater_irregularity >= 0.0,
+                    "biome {biome_id} volcano craterIrregularity cannot be negative"
+                );
             }
         }
     }

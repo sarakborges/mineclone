@@ -1,0 +1,136 @@
+{
+  "id": "asteria:slime_cryo",
+  "name": {
+    "english": "Cryo Slime",
+    "portuguese_brazil": "Slime Cryo",
+    "spanish": "Slime Cryo"
+  },
+  "model": "models/creatures/slime_cryo/slime_cryo.glb",
+  "health": 12,
+  "maxPerType": 3,
+  "collider": {
+    "size": [
+      0.78,
+      0.84,
+      0.7752
+    ],
+    "centerOffset": [
+      0,
+      0.42,
+      0
+    ]
+  },
+  "targetCollider": {
+    "size": [
+      1.2,
+      1,
+      1.14
+    ],
+    "centerOffset": [
+      0,
+      0.5,
+      0
+    ]
+  },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_cryo/face.png"
+  },
+  "unlitMaterials": [
+    "SlimeFace",
+    "ElementAccent",
+    "ElementPale",
+    "ElementDark",
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
+  ],
+  "animations": {
+    "idle": "Idle",
+    "anticipate": "Anticipate",
+    "airborne": "Airborne",
+    "land": "Land",
+    "hurt": "Hurt",
+    "death": "Death"
+  },
+  "jumpSpeed": 4.8,
+  "fallGravityScale": 0.92,
+  "moveSpeed": 1.25,
+  "jumpInterval": 2.25,
+  "anticipationSeconds": 0.25,
+  "landingSeconds": 0.34,
+  "particleEffects": {
+    "idle": {
+      "count": 2,
+      "color": [
+        0.76,
+        0.94,
+        1,
+        0.68
+      ],
+      "size": 0.038,
+      "lifetime": 1,
+      "interval": 0.55,
+      "spawnRadius": 0.408,
+      "yOffset": 0.48,
+      "horizontalSpeed": 0.09,
+      "verticalSpeed": 0.18,
+      "verticalJitter": 0.07,
+      "gravity": 0,
+      "endScale": 0.1
+    },
+    "land": {
+      "count": 8,
+      "color": [
+        0.76,
+        0.94,
+        1,
+        0.68
+      ],
+      "size": 0.048,
+      "lifetime": 0.52,
+      "spawnRadius": 0.33456,
+      "yOffset": 0.08,
+      "horizontalSpeed": 0.72,
+      "verticalSpeed": 0.46,
+      "verticalJitter": 0.2,
+      "gravity": -1.6,
+      "endScale": 0.05
+    },
+    "hurt": {
+      "count": 7,
+      "color": [
+        0.8608,
+        0.9652,
+        1,
+        0.78
+      ],
+      "size": 0.05,
+      "lifetime": 0.5,
+      "spawnRadius": 0.29376,
+      "yOffset": 0.45,
+      "horizontalSpeed": 0.66,
+      "verticalSpeed": 0.48,
+      "verticalJitter": 0.28,
+      "gravity": -1.25,
+      "endScale": 0.07
+    },
+    "death": {
+      "count": 18,
+      "color": [
+        0.8608,
+        0.9652,
+        1,
+        0.78
+      ],
+      "size": 0.062,
+      "lifetime": 0.9,
+      "spawnRadius": 0.408,
+      "yOffset": 0.42,
+      "horizontalSpeed": 0.92,
+      "verticalSpeed": 0.86,
+      "verticalJitter": 0.5,
+      "gravity": -1,
+      "endScale": 0
+    }
+  }
+}

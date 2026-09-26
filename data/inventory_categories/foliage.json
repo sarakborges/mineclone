@@ -1,0 +1,10 @@
+{
+  "id": "foliage",
+  "displayName": {
+    "english": "Foliage",
+    "portuguese_brazil": "Folhagem",
+    "spanish": "Follaje"
+  },
+  "order": 20,
+  "icon": "textures/creative_categories/foliage.png"
+}

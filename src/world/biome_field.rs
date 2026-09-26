@@ -1,70 +1,314 @@
-use bevy::prelude::*;
+mod constants;
+pub(crate) mod distribution;
+mod mountain_belt;
+mod mountain_peak;
+mod noise_band;
+mod selection;
+mod spatial;
+mod surface;
+mod visuals;
+mod volume;
 
-use crate::content::{
-    biome::{BiomeRegistry, BiomeUnderwaterTint},
-    color::Rgb,
-    dimension::DimensionDefinition,
+use std::sync::{Arc, RwLock};
+
+use arrayvec::ArrayVec;
+use bevy::{platform::collections::HashMap, prelude::*};
+
+use crate::{
+    content::{
+    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
+    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
+    biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier,
+    dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis, DimensionDefinition},
+    },
+    voxel::chunk::CHUNK_SIZE,
 };
 
-const BORDER_TRANSITION_WIDTH: f32 = 32.0;
-const BORDER_WARP_AMPLITUDE: f32 = 24.0;
-const SITE_JITTER_FRACTION: f32 = 0.32;
-const SITE_SEARCH_RADIUS: i32 = 2;
+pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
+use self::{
+    constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
+    spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
+};
+use super::{
+    macro_climate::MacroClimateField,
+    new_world::biome_size_multiplier_tenths,
+};
 
-#[derive(Resource)]
-pub struct BiomeField {
-    biome_ids: Vec<String>,
-    site_spacing: Vec2,
-    seed: u64,
+const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
+pub(crate) const MAX_SURFACE_INFLUENCES: usize =
+    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
+
+#[derive(Clone, Copy)]
+pub(super) struct SurfaceSiteCacheEntry {
+    pub(super) position: Vec2,
+    pub(super) biome_index: usize,
 }
 
+#[derive(Clone)]
+pub(super) struct BiomeFieldEntry {
+    pub id: String,
+    pub distributions: Vec<BiomeDistribution>,
+    pub size: DimensionBiomeSize,
+    pub weight: f32,
+    pub climate: BiomeClimate,
+    pub vertical_range: Option<BiomeVerticalRange>,
+    pub priority: i32,
+    pub terrain: Option<BiomeTerrain>,
+    pub terrain_modifiers: Vec<BiomeTerrainModifier>,
+    pub density_modifier: Option<BiomeDensityModifier>,
+    pub solid_block: Option<String>,
+    pub density_seed: u64,
+    pub avoid_near: Vec<String>,
+    pub require_near: Vec<String>,
+    pub exclusive_neighbor_group: Option<String>,
+    pub surface_margin: Option<SurfaceMarginField>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct SurfaceMarginField {
+    pub width: f32,
+    pub width_variation: f32,
+    pub variation_scale: f32,
+    pub noise_seed: u64,
+}
+
+#[derive(Resource, Clone)]
+pub struct BiomeField {
+    pub(super) surface_biomes: Arc<Vec<BiomeFieldEntry>>,
+    pub(super) volume_biomes: Arc<Vec<BiomeFieldEntry>>,
+    pub(super) surface_site_spacing: Vec2,
+    pub(super) volume_site_spacing: Option<Vec3>,
+    pub(super) climate: MacroClimateField,
+    pub(super) seed: u64,
+    pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, SurfaceSiteCacheEntry>>>,
+    forced_surface_biome: Option<ForcedSurfaceBiome>,
+    single_surface_biome: Option<usize>,
+    ocean_surface_index: Option<usize>,
+    spawn_oceans: bool,
+}
+
+#[derive(Clone, Copy)]
 pub struct BiomeInfluence<'a> {
     pub id: &'a str,
     pub weight: f32,
+    pub(crate) surface_index: usize,
+    pub(crate) terrain_strength: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SurfaceBoundarySample {
+    pub(crate) neighbor_surface_index: usize,
+    pub(crate) distance: f32,
 }
 
 pub struct BiomeFieldSample<'a> {
+    /// Effective surface identity at this position. A source biome's
+    /// surfaceMargin may own this identity across the regional boundary.
     pub primary_id: &'a str,
-    pub influences: Vec<BiomeInfluence<'a>>,
+    /// Regional terrain owner used by the blended terrain field.
+    pub(crate) primary_surface_index: usize,
+    /// Source biome whose authored margin owns this position, if any.
+    pub(crate) surface_margin_index: Option<usize>,
+    /// Index matching primary_id; equals primary_surface_index outside margins.
+    pub(crate) identity_surface_index: usize,
+    /// Regional terrain influences. These intentionally remain independent
+    /// from an effective margin identity so shoreline shape stays continuous.
+    pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ForcedSurfaceBiome {
+    biome_index: usize,
+    center: Vec2,
+    radii: Vec2,
+    warp_seed: u64,
+}
+
+impl ForcedSurfaceBiome {
+    fn warped_delta(self, position: Vec2) -> Vec2 {
+        let warped = warp_surface_position(position, self.warp_seed);
+        let warped_center = warp_surface_position(self.center, self.warp_seed);
+        warped - warped_center
+    }
+
+    fn normalized_distance(self, position: Vec2) -> f32 {
+        let delta = self.warped_delta(position);
+        Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length()
+    }
+
+    fn core_contains(self, position: Vec2) -> bool {
+        self.normalized_distance(position) <= 1.0
+    }
+
+    fn weight(self, position: Vec2) -> f32 {
+        let delta = self.warped_delta(position);
+        let normalized = Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length();
+        if normalized <= 1.0 {
+            return 1.0;
+        }
+
+        let radial_distance = delta.length();
+        let boundary_distance = radial_distance / normalized;
+        let outside_distance = (radial_distance - boundary_distance).max(0.0);
+        if outside_distance >= BORDER_TRANSITION_WIDTH {
+            return 0.0;
+        }
+
+        smoothstep(1.0 - outside_distance / BORDER_TRANSITION_WIDTH)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct VolumeBiomeAnchor<'a> {
+    pub id: &'a str,
+    pub position: Vec3,
 }
 
 impl BiomeField {
+    pub(crate) fn retain_surface_site_cache(
+        &self,
+        center_chunk: IVec2,
+        radius_chunks: i32,
+    ) {
+        let chunk_size = CHUNK_SIZE as i32;
+        let center_world = (center_chunk * chunk_size).as_vec2()
+            + Vec2::splat(CHUNK_SIZE as f32 * 0.5);
+        let center_cell = IVec2::new(
+            (center_world.x / self.surface_site_spacing.x).round() as i32,
+            (center_world.y / self.surface_site_spacing.y).round() as i32,
+        );
+        let world_radius = radius_chunks
+            .max(0)
+            .saturating_add(2)
+            .saturating_mul(chunk_size) as f32;
+        let padding = SITE_SEARCH_RADIUS + 2;
+        let radius_x =
+            (world_radius / self.surface_site_spacing.x).ceil() as i32 + padding;
+        let radius_z =
+            (world_radius / self.surface_site_spacing.y).ceil() as i32 + padding;
+
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|cell, _| {
+                (cell.x - center_cell.x).abs() <= radius_x
+                    && (cell.y - center_cell.y).abs() <= radius_z
+            });
+    }
+
     pub fn from_dimension(
         dimension: &DimensionDefinition,
         biomes: &BiomeRegistry,
         seed: u64,
+        biome_size_multiplier: f32,
     ) -> Self {
         assert!(
             !dimension.biomes.is_empty(),
             "dimension {} must define at least one biome",
             dimension.id
         );
+        let multiplier_tenths = biome_size_multiplier_tenths(biome_size_multiplier)
+            .unwrap_or_else(|| {
+                panic!(
+                    "biome size multiplier must be between 0.5 and 5.0 in 0.1 increments: {biome_size_multiplier}"
+                )
+            });
 
-        let mut minimum_radius = Vec2::ZERO;
+        let mut surface_biomes = Vec::new();
+        let mut volume_biomes = Vec::new();
+        let mut surface_minimum_radius = Vec2::ZERO;
+        let mut volume_minimum_radius = Vec3::ZERO;
+        let mut has_active_volume_biome = false;
 
-        for biome_id in &dimension.biomes {
+        for dimension_biome in &dimension.biomes {
+            let biome_id = &dimension_biome.id;
             let biome = biomes
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
-            validate_size_axis(biome_id, "x", biome.size.x.min, biome.size.x.max);
-            validate_size_axis(biome_id, "z", biome.size.z.min, biome.size.z.max);
+            let size = dimension_biome.size.unwrap_or_else(|| {
+                panic!(
+                    "dimension {} biome {} must define size",
+                    dimension.id, biome.id
+                )
+            });
+            let size = scaled_biome_size(size, multiplier_tenths);
+            let entry = BiomeFieldEntry {
+                id: biome.id.clone(),
+                distributions: biome.distributions.clone(),
+                size,
+                weight: dimension_biome.weight,
+                climate: biome.climate,
+                vertical_range: biome.vertical_range,
+                priority: biome.priority,
+                terrain: biome.terrain,
+                terrain_modifiers: biome.terrain_modifiers.clone(),
+                density_modifier: biome.density_modifier,
+                solid_block: biome.solid_block.clone(),
+                density_seed: biome_density_seed(seed, &biome.id),
+                avoid_near: dimension_biome.avoid_near.clone(),
+                require_near: dimension_biome.require_near.clone(),
+                exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
+                surface_margin: biome.surface_margin.as_ref().map(|margin| SurfaceMarginField {
+                    width: margin.width,
+                    width_variation: margin.width_variation,
+                    variation_scale: margin.variation_scale,
+                    noise_seed: biome_density_seed(
+                        seed ^ 0x9e37_79b9_7f4a_7c15,
+                        &biome.id,
+                    ),
+                }),
+            };
 
-            if let Some(vertical_size) = biome.size.y {
-                validate_size_axis(biome_id, "y", vertical_size.min, vertical_size.max);
+            match biome.kind {
+                BiomeKind::Surface => {
+                    if entry.weight > 0.0 {
+                        surface_minimum_radius.x = surface_minimum_radius.x.max(entry.size.x.min);
+                        surface_minimum_radius.y = surface_minimum_radius.y.max(entry.size.z.min);
+                    }
+                    surface_biomes.push(entry);
+                }
+                BiomeKind::Volume => {
+                    if entry.weight > 0.0 {
+                        let vertical_size = entry.size.y.unwrap_or_else(|| {
+                            panic!("volume biome {} must define dimension size.y", biome.id)
+                        });
+                        volume_minimum_radius.x = volume_minimum_radius.x.max(entry.size.x.min);
+                        volume_minimum_radius.y = volume_minimum_radius.y.max(vertical_size.min);
+                        volume_minimum_radius.z = volume_minimum_radius.z.max(entry.size.z.min);
+                        has_active_volume_biome = true;
+                    }
+                    volume_biomes.push(entry);
+                }
             }
-
-            minimum_radius.x = minimum_radius.x.max(biome.size.x.min);
-            minimum_radius.y = minimum_radius.y.max(biome.size.z.min);
         }
 
-        let border_allowance = BORDER_TRANSITION_WIDTH + BORDER_WARP_AMPLITUDE * 2.0;
-        let site_spacing = minimum_radius * 2.0 + Vec2::splat(border_allowance);
+        assert!(
+            surface_biomes.iter().any(|biome| biome.weight > 0.0),
+            "dimension {} must define at least one active surface biome",
+            dimension.id
+        );
 
+        let surface_site_spacing = surface_minimum_spacing(surface_minimum_radius);
+        let volume_site_spacing = has_active_volume_biome
+            .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
+        let ocean_surface_index = dimension
+            .ocean_biome
+            .as_deref()
+            .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
         Self {
-            biome_ids: dimension.biomes.clone(),
-            site_spacing,
+            surface_biomes: Arc::new(surface_biomes),
+            volume_biomes: Arc::new(volume_biomes),
+            surface_site_spacing,
+            volume_site_spacing,
+            climate: MacroClimateField::new(seed),
             seed,
+            surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
+            forced_surface_biome: None,
+            single_surface_biome: None,
+            ocean_surface_index,
+            spawn_oceans: true,
         }
     }
 
@@ -72,178 +316,179 @@ impl BiomeField {
         self.seed
     }
 
-    pub fn sample(&self, position: Vec2) -> BiomeFieldSample<'_> {
-        if self.biome_ids.len() == 1 {
-            let id = self.biome_ids[0].as_str();
-            return BiomeFieldSample {
-                primary_id: id,
-                influences: vec![BiomeInfluence { id, weight: 1.0 }],
-            };
+    pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
+        if self.spawn_oceans == spawn_oceans {
+            return;
         }
+        self.spawn_oceans = spawn_oceans;
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
 
-        let warped = warp_position(position, self.seed);
-        let center = IVec2::new(
-            (warped.x / self.site_spacing.x).round() as i32,
-            (warped.y / self.site_spacing.y).round() as i32,
+    pub(super) fn surface_biome_is_enabled(&self, index: usize) -> bool {
+        self.spawn_oceans || Some(index) != self.ocean_surface_index
+    }
+
+    pub(crate) fn set_single_surface_biome(&mut self, biome_id: &str) {
+        let biome_index = self
+            .surface_biomes
+            .iter()
+            .position(|biome| biome.id == biome_id)
+            .unwrap_or_else(|| panic!("single biome is not a surface biome: {biome_id}"));
+        self.single_surface_biome = Some(biome_index);
+        self.forced_surface_biome = None;
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+    }
+
+    pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {
+        let biome_index = self
+            .surface_biomes
+            .iter()
+            .position(|biome| biome.id == biome_id)
+            .unwrap_or_else(|| panic!("forced surface biome is not a surface biome: {biome_id}"));
+        let biome = &self.surface_biomes[biome_index];
+        let hash = biome_density_seed(self.seed ^ 0x6a09_e667_f3bc_c909, biome_id);
+        let radii = Vec2::new(
+            lerp(
+                biome.size.x.min,
+                biome.size.x.max,
+                hash_unit(hash.rotate_left(11)),
+            ),
+            lerp(
+                biome.size.z.min,
+                biome.size.z.max,
+                hash_unit(hash.rotate_left(37)),
+            ),
         );
-        let mut sites = Vec::new();
-        let mut nearest_distance = f32::MAX;
-        let mut primary_index = 0;
-
-        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                let cell = center + IVec2::new(x, z);
-                let site = site_position(cell, self.site_spacing, self.seed);
-                let distance = warped.distance(site);
-                let candidate_index = biome_index(cell, self.biome_ids.len(), self.seed);
-
-                if distance < nearest_distance {
-                    nearest_distance = distance;
-                    primary_index = candidate_index;
-                }
-
-                sites.push((candidate_index, distance));
-            }
-        }
-
-        let mut weights = vec![0.0_f32; self.biome_ids.len()];
-
-        for (candidate_index, distance) in sites {
-            let distance_gap = (distance - nearest_distance).max(0.0);
-            let border_progress =
-                1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
-            let smooth_progress =
-                border_progress * border_progress * (3.0 - 2.0 * border_progress);
-            let previous_weight = weights[candidate_index];
-
-            weights[candidate_index] = previous_weight.max(smooth_progress);
-        }
-
-        let total_weight: f32 = weights.iter().sum();
-        let influences = weights
-            .into_iter()
-            .enumerate()
-            .filter_map(|(index, weight)| {
-                if weight <= 0.0 {
-                    return None;
-                }
-
-                Some(BiomeInfluence {
-                    id: self.biome_ids[index].as_str(),
-                    weight: weight / total_weight,
-                })
-            })
-            .collect();
-
-        BiomeFieldSample {
-            primary_id: self.biome_ids[primary_index].as_str(),
-            influences,
-        }
+        self.forced_surface_biome = Some(ForcedSurfaceBiome {
+            biome_index,
+            center,
+            radii,
+            warp_seed: self.seed ^ hash.rotate_left(23),
+        });
     }
 
-    pub fn grass_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Rgb {
-        let sample = self.sample(position);
-        let mut color = Rgb {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        };
-
-        for influence in sample.influences {
-            let biome = biomes
-                .get(influence.id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let grass = biome.visuals.grass_color;
-
-            color.r += grass.r * influence.weight;
-            color.g += grass.g * influence.weight;
-            color.b += grass.b * influence.weight;
-        }
-
-        color
+    pub(crate) fn forced_surface_core_contains(&self, position: Vec2) -> bool {
+        self.forced_surface_biome
+            .is_some_and(|forced| forced.core_contains(position))
     }
 
-    pub fn underwater_tint(
+    pub(super) fn forced_surface_biome_at(&self, position: Vec2) -> Option<(usize, f32)> {
+        let forced = self.forced_surface_biome?;
+        let weight = forced.weight(position);
+        (weight > 0.0).then_some((forced.biome_index, weight))
+    }
+
+    pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
+        self.ocean_surface_index
+    }
+
+    pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
+        self.surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"))
+            .id
+            .as_str()
+    }
+
+
+    pub(crate) fn surface_terrain(
         &self,
-        position: Vec2,
-        biomes: &BiomeRegistry,
-    ) -> BiomeUnderwaterTint {
-        let sample = self.sample(position);
-        let mut color = Rgb {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        };
-        let mut opacity = 0.0;
+        index: usize,
+    ) -> (BiomeTerrain, &[BiomeTerrainModifier], u64) {
+        let biome = self
+            .surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"));
+        let terrain = biome
+            .terrain
+            .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id));
 
-        for influence in sample.influences {
-            let biome = biomes
-                .get(influence.id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let tint = biome.visuals.underwater_tint;
+        (terrain, &biome.terrain_modifiers, biome.density_seed)
+    }
 
-            color.r += tint.color.r * influence.weight;
-            color.g += tint.color.g * influence.weight;
-            color.b += tint.color.b * influence.weight;
-            opacity += tint.opacity * influence.weight;
-        }
-
-        BiomeUnderwaterTint { color, opacity }
+    pub(crate) fn volume_biome_id(&self, selection: VolumeBiomeSelection) -> &str {
+        self.volume_biomes
+            .get(selection.biome_index)
+            .unwrap_or_else(|| {
+                panic!(
+                    "volume biome index out of bounds: {}",
+                    selection.biome_index
+                )
+            })
+            .id
+            .as_str()
     }
 }
 
-fn validate_size_axis(biome_id: &str, axis: &str, min: f32, max: f32) {
-    assert!(min > 0.0, "biome {biome_id} size.{axis}.min must be positive");
-    assert!(
-        max >= min,
-        "biome {biome_id} size.{axis}.max must be greater than or equal to min"
-    );
+fn scaled_biome_size(size: DimensionBiomeSize, multiplier_tenths: u8) -> DimensionBiomeSize {
+    DimensionBiomeSize {
+        x: scaled_biome_size_axis(size.x, multiplier_tenths),
+        z: scaled_biome_size_axis(size.z, multiplier_tenths),
+        y: size
+            .y
+            .map(|axis| scaled_biome_size_axis(axis, multiplier_tenths)),
+    }
 }
 
-fn warp_position(position: Vec2, seed: u64) -> Vec2 {
-    let phase_x = hash_component(seed) * std::f32::consts::TAU;
-    let phase_z = hash_component(seed.rotate_left(31)) * std::f32::consts::TAU;
-
-    position
-        + Vec2::new(
-            (position.y * 0.011 + phase_x).sin() * BORDER_WARP_AMPLITUDE,
-            (position.x * 0.009 + phase_z).sin() * BORDER_WARP_AMPLITUDE,
-        )
+fn scaled_biome_size_axis(
+    size: DimensionBiomeSizeAxis,
+    multiplier_tenths: u8,
+) -> DimensionBiomeSizeAxis {
+    let scale = |value: f32| {
+        (value * f32::from(multiplier_tenths) / 10.0)
+            .round()
+            .max(1.0)
+    };
+    let min = scale(size.min);
+    let max = scale(size.max).max(min);
+    DimensionBiomeSizeAxis { min, max }
 }
 
-fn site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
-    let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
+fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
 
-    if cell == IVec2::ZERO {
-        return base;
+    for byte in biome_id.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
 
-    let hash = cell_hash(cell, seed);
-    let jitter_x = hash_component(hash) * spacing.x * SITE_JITTER_FRACTION;
-    let jitter_z = hash_component(hash.rotate_left(29)) * spacing.y * SITE_JITTER_FRACTION;
-
-    base + Vec2::new(jitter_x, jitter_z)
+    let mut mixed = seed ^ hash;
+    mixed ^= mixed >> 33;
+    mixed = mixed.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    mixed ^= mixed >> 33;
+    mixed = mixed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    mixed ^= mixed >> 33;
+    mixed
 }
 
-fn biome_index(cell: IVec2, biome_count: usize, seed: u64) -> usize {
-    if cell == IVec2::ZERO {
-        return 0;
+
+#[cfg(test)]
+mod biome_size_multiplier_tests {
+    use super::*;
+
+    #[test]
+    fn biome_size_multiplier_scales_and_rounds_every_axis() {
+        let scaled = scaled_biome_size(
+            DimensionBiomeSize {
+                x: DimensionBiomeSizeAxis { min: 75.0, max: 125.0 },
+                z: DimensionBiomeSizeAxis { min: 41.0, max: 99.0 },
+                y: Some(DimensionBiomeSizeAxis { min: 15.0, max: 35.0 }),
+            },
+            5,
+        );
+
+        assert_eq!(scaled.x.min, 38.0);
+        assert_eq!(scaled.x.max, 63.0);
+        assert_eq!(scaled.z.min, 21.0);
+        assert_eq!(scaled.z.max, 50.0);
+        let y = scaled.y.expect("scaled vertical size should remain defined");
+        assert_eq!(y.min, 8.0);
+        assert_eq!(y.max, 18.0);
     }
-
-    cell_hash(cell, seed) as usize % biome_count
-}
-
-fn cell_hash(cell: IVec2, seed: u64) -> u64 {
-    let mut hash = seed ^ 0xa076_1d64_78bd_642f;
-    hash ^= (cell.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
-    hash ^= (cell.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
-    hash ^= hash >> 33;
-    hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    hash ^= hash >> 33;
-    hash
-}
-
-fn hash_component(hash: u64) -> f32 {
-    let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
-    normalized * 2.0 - 1.0
 }

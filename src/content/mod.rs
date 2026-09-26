@@ -1,21 +1,53 @@
-pub mod biome;
-pub mod biome_sky_layer;
-pub mod biome_terrain;
-pub mod block;
-pub mod color;
-pub mod day_night_cycle;
-pub mod day_night_phase;
-pub mod dimension;
-pub mod fluid;
-pub mod sky;
+pub(crate) mod asset_path;
+pub(crate) mod attack;
+pub(crate) mod biome;
+pub(crate) mod biome_density;
+pub(crate) mod biome_distribution;
+pub(crate) mod biome_material;
+pub(crate) mod biome_sky_layer;
+pub(crate) mod biome_structure;
+pub(crate) mod biome_surface_fluid;
+pub(crate) mod biome_surface_margin;
+pub(crate) mod biome_terrain;
+pub(crate) mod biome_terrain_modifier;
+pub(crate) mod block;
+pub(crate) mod block_id;
+pub(crate) mod block_orientation;
+pub(crate) mod builtin_ids;
+pub(crate) mod color;
+pub(crate) mod creature;
+pub(crate) mod day_night_cycle;
+pub(crate) mod day_night_phase;
+pub(crate) mod dimension;
+pub(crate) mod fluid;
+pub(crate) mod inventory_category;
+pub(crate) mod item;
+pub(crate) mod item_id;
+pub(crate) mod layer;
+pub(crate) mod layer_id;
+pub(crate) mod loot;
+pub(crate) mod object;
+pub(crate) mod object_id;
+pub(crate) mod player;
 mod json_file;
 mod loader;
+mod registry;
+pub(crate) mod secondary_property;
+pub(crate) mod sky;
+pub(crate) mod structure;
+pub(crate) mod structure_rules;
+pub(crate) mod structure_set;
+pub(crate) mod tool;
+pub(crate) mod tool_behavior;
+pub(crate) mod tool_category;
+pub(crate) mod tool_id;
+mod validation;
 
 use bevy::prelude::*;
 use loader::load_content;
-pub(crate) use loader::read_content;
+pub(crate) use loader::{LoadedContent, read_content};
 
-pub struct ContentPlugin;
+pub(crate) struct ContentPlugin;
 
 impl Plugin for ContentPlugin {
     fn build(&self, app: &mut App) {

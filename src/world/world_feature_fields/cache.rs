@@ -1,0 +1,445 @@
+use std::{
+    hash::Hash,
+    sync::{Arc, Mutex, OnceLock, RwLock},
+};
+
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
+
+use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
+
+use super::{CachedStructureCandidate, CachedStructureForest};
+use super::super::{
+    biome_field::VolumeBiomeRegion,
+    generation::GenerationColumnSample,
+    generation_region::generation_region_coord,
+};
+
+const CACHE_REGION_MARGIN: i32 = 1;
+
+type StructureOriginEntry = Arc<OnceLock<Option<i32>>>;
+type StructureOriginAnchors = HashMap<(IVec2, StructureRotation), StructureOriginEntry>;
+type StructureOriginEntries = HashMap<String, StructureOriginAnchors>;
+
+struct ConcurrentCache<K, V> {
+    name: &'static str,
+    entries: RwLock<HashMap<K, Arc<OnceLock<V>>>>,
+}
+
+impl<K, V> ConcurrentCache<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            entries: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn get_or_insert_with(&self, key: K, factory: impl FnOnce() -> V) -> V {
+        let cached = self
+            .entries
+            .read()
+            .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
+            .get(&key)
+            .cloned();
+        let entry = cached.unwrap_or_else(|| {
+            let mut entries = self
+                .entries
+                .write()
+                .unwrap_or_else(|_| panic!("{} write lock was poisoned", self.name));
+
+            entries
+                .entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new()))
+                .clone()
+        });
+
+        entry.get_or_init(factory).clone()
+    }
+
+    fn get_if_initialized(&self, key: &K) -> Option<V> {
+        self.entries
+            .read()
+            .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
+            .get(key)
+            .and_then(|entry| entry.get())
+            .cloned()
+    }
+
+    #[cfg(test)]
+    fn is_initialized(&self, key: &K) -> bool {
+        self.get_if_initialized(key).is_some()
+    }
+
+    fn retain(&self, mut predicate: impl FnMut(&K) -> bool) {
+        self.entries
+            .write()
+            .unwrap_or_else(|_| panic!("{} write lock was poisoned", self.name))
+            .retain(|key, _| predicate(key));
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries
+            .read()
+            .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
+            .len()
+    }
+}
+
+struct StructureOriginCache {
+    entries: RwLock<StructureOriginEntries>,
+}
+
+impl StructureOriginCache {
+    fn new() -> Self {
+        Self {
+            entries: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn get_or_insert_with(
+        &self,
+        structure_id: &str,
+        rotation: StructureRotation,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<i32>,
+    ) -> Option<i32> {
+        let cached = self
+            .entries
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .get(structure_id)
+            .and_then(|anchors| anchors.get(&(anchor, rotation)))
+            .cloned();
+        let entry = cached.unwrap_or_else(|| {
+            let mut entries = self
+                .entries
+                .write()
+                .expect("structure origin cache write lock was poisoned");
+
+            if let Some(cached) = entries
+                .get(structure_id)
+                .and_then(|anchors| anchors.get(&(anchor, rotation)))
+                .cloned()
+            {
+                return cached;
+            }
+
+            let entry = Arc::new(OnceLock::new());
+            if let Some(anchors) = entries.get_mut(structure_id) {
+                anchors.insert((anchor, rotation), entry.clone());
+            } else {
+                entries.insert(structure_id.to_owned(), HashMap::from([((anchor, rotation), entry.clone())]));
+            }
+            entry
+        });
+
+        *entry.get_or_init(factory)
+    }
+
+    fn retain(&self, mut predicate: impl FnMut(IVec2) -> bool) {
+        let mut entries = self
+            .entries
+            .write()
+            .expect("structure origin cache write lock was poisoned");
+
+        for anchors in entries.values_mut() {
+            anchors.retain(|(anchor, _), _| predicate(*anchor));
+        }
+        entries.retain(|_, anchors| !anchors.is_empty());
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .values()
+            .map(HashMap::len)
+            .sum()
+    }
+}
+
+#[derive(Default)]
+struct RetentionScratch {
+    horizontal_chunks: HashSet<IVec2>,
+    generation_regions: HashSet<IVec3>,
+    retained_regions: HashSet<IVec3>,
+}
+
+pub(super) struct FeatureCaches {
+    generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
+    volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
+    structure_top_ys: ConcurrentCache<IVec2, i32>,
+    structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
+    surface_structure_placements:
+        ConcurrentCache<(String, String, IVec2), Arc<Option<CachedStructureForest>>>,
+    connected_structure_forests: ConcurrentCache<
+        (String, String, StructureRotation, IVec3),
+        Arc<CachedStructureForest>,
+    >,
+    structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
+    structure_origins: StructureOriginCache,
+    retention_scratch: Mutex<RetentionScratch>,
+}
+
+impl FeatureCaches {
+    pub(super) fn new() -> Self {
+        Self {
+            generation_columns: ConcurrentCache::new("generation column cache"),
+            volume_biomes: ConcurrentCache::new("volume biome cache"),
+            structure_top_ys: ConcurrentCache::new("structure top Y cache"),
+            structure_candidates: ConcurrentCache::new("structure candidate cache"),
+            surface_structure_placements: ConcurrentCache::new(
+                "surface structure placement cache",
+            ),
+            connected_structure_forests: ConcurrentCache::new(
+                "connected structure forest cache",
+            ),
+            structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
+            structure_origins: StructureOriginCache::new(),
+            retention_scratch: Mutex::new(RetentionScratch::default()),
+        }
+    }
+
+    pub(super) fn generation_columns(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> Vec<GenerationColumnSample>,
+    ) -> Arc<Vec<GenerationColumnSample>> {
+        self.generation_columns
+            .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    #[cfg(test)]
+    pub(super) fn generation_columns_initialized(&self, coord: IVec2) -> bool {
+        self.generation_columns.is_initialized(&coord)
+    }
+
+    pub(super) fn volume_biome_region(
+        &self,
+        coord: IVec3,
+        factory: impl FnOnce() -> VolumeBiomeRegion,
+    ) -> Arc<VolumeBiomeRegion> {
+        self.volume_biomes
+            .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    pub(super) fn structure_top_y(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> i32,
+    ) -> i32 {
+        self.structure_top_ys
+            .get_or_insert_with(coord, factory)
+    }
+
+    pub(super) fn structure_top_y_if_ready(&self, coord: IVec2) -> Option<i32> {
+        self.structure_top_ys.get_if_initialized(&coord)
+    }
+
+    pub(super) fn structure_candidates(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
+    ) -> Arc<Vec<CachedStructureCandidate>> {
+        self.structure_candidates
+            .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    pub(super) fn surface_structure_placement(
+        &self,
+        biome_id: &str,
+        placement_id: &str,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<CachedStructureForest>,
+    ) -> Arc<Option<CachedStructureForest>> {
+        self.surface_structure_placements.get_or_insert_with(
+            (biome_id.to_owned(), placement_id.to_owned(), anchor),
+            || Arc::new(factory()),
+        )
+    }
+
+    pub(super) fn connected_structure_forest(
+        &self,
+        biome_id: &str,
+        structure_id: &str,
+        rotation: StructureRotation,
+        origin: IVec3,
+        factory: impl FnOnce() -> CachedStructureForest,
+    ) -> Arc<CachedStructureForest> {
+        self.connected_structure_forests.get_or_insert_with(
+            (
+                biome_id.to_owned(),
+                structure_id.to_owned(),
+                rotation,
+                origin,
+            ),
+            || Arc::new(factory()),
+        )
+    }
+
+    pub(super) fn structure_placement_bounds(
+        &self,
+        reference: &str,
+        factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
+    ) -> Option<(IVec2, IVec2)> {
+        self.structure_placement_bounds
+            .get_or_insert_with(reference.to_owned(), factory)
+    }
+
+    pub(super) fn structure_origin_y(
+        &self,
+        structure_id: &str,
+        rotation: StructureRotation,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<i32>,
+    ) -> Option<i32> {
+        self.structure_origins
+            .get_or_insert_with(structure_id, rotation, anchor, factory)
+    }
+
+    pub(super) fn retain_for_chunks<'a>(
+        &self,
+        desired: impl IntoIterator<Item = &'a IVec3>,
+    ) {
+        let mut scratch = self
+            .retention_scratch
+            .lock()
+            .expect("feature cache retention scratch lock was poisoned");
+        let RetentionScratch {
+            horizontal_chunks,
+            generation_regions,
+            retained_regions,
+        } = &mut *scratch;
+
+        horizontal_chunks.clear();
+        generation_regions.clear();
+        for &coord in desired {
+            horizontal_chunks.insert(coord.xz());
+            generation_regions.insert(generation_region_coord(coord));
+        }
+
+        retained_regions.clear();
+        // Many desired chunks share one 8x8x8 generation region. Expand the
+        // cache margin once per unique region rather than once per chunk.
+        for region in generation_regions.drain() {
+            for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
+                for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
+                    for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
+                        retained_regions.insert(IVec3::new(x, y, z));
+                    }
+                }
+            }
+        }
+
+
+        self.generation_columns
+            .retain(|coord| horizontal_chunks.contains(coord));
+        self.structure_top_ys
+            .retain(|coord| horizontal_chunks.contains(coord));
+        self.structure_candidates
+            .retain(|coord| horizontal_chunks.contains(coord));
+        self.surface_structure_placements
+            .retain(|(_, _, anchor)| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec2::new(
+                    anchor.x.div_euclid(chunk_size),
+                    anchor.y.div_euclid(chunk_size),
+                );
+                retained_regions.contains(&generation_region_coord(IVec3::new(
+                    chunk.x,
+                    0,
+                    chunk.y,
+                )))
+            });
+        self.connected_structure_forests
+            .retain(|(_, _, _, origin)| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec3::new(
+                    origin.x.div_euclid(chunk_size),
+                    origin.y.div_euclid(chunk_size),
+                    origin.z.div_euclid(chunk_size),
+                );
+                retained_regions.contains(&generation_region_coord(chunk))
+            });
+        self.volume_biomes
+            .retain(|coord| retained_regions.contains(coord));
+        self.structure_origins.retain(|anchor| {
+            let chunk_size = CHUNK_SIZE as i32;
+            let chunk = IVec2::new(
+                anchor.x.div_euclid(chunk_size),
+                anchor.y.div_euclid(chunk_size),
+            );
+            horizontal_chunks.contains(&chunk)
+        });
+    }
+
+    #[cfg(test)]
+    pub(super) fn generation_column_count(&self) -> usize {
+        self.generation_columns.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn volume_biome_region_count(&self) -> usize {
+        self.volume_biomes.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn structure_origin_count(&self) -> usize {
+        self.structure_origins.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread,
+        time::Duration,
+    };
+
+    use super::ConcurrentCache;
+
+    #[test]
+    fn concurrent_cache_runs_factory_once_per_key() {
+        const WORKERS: usize = 8;
+
+        let cache = Arc::new(ConcurrentCache::<u32, u32>::new("test cache"));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(WORKERS));
+        let mut handles = Vec::with_capacity(WORKERS);
+
+        for _ in 0..WORKERS {
+            let cache = cache.clone();
+            let calls = calls.clone();
+            let start = start.clone();
+            handles.push(thread::spawn(move || {
+                start.wait();
+                let value = cache.get_or_insert_with(7, || {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    thread::sleep(Duration::from_millis(10));
+                    42
+                });
+                assert_eq!(value, 42);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("cache worker should finish");
+        }
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(cache.len(), 1);
+        assert!(cache.is_initialized(&7));
+    }
+}

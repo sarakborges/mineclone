@@ -1,31 +1,54 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::color::Rgb;
+use crate::localization::LocalizedText;
+
+use super::color::Hsi;
 
 pub type FluidId = u16;
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FluidImmersionTint {
+    pub color: Hsi,
+    pub opacity: f32,
+}
+
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FluidDefinition {
     pub id: String,
-    pub name: String,
-    pub color: Rgb,
+    pub name: LocalizedText,
+    pub color: Hsi,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]
     pub metallic: f32,
+    #[serde(default)]
+    pub light_dampening: u8,
+    #[serde(default)]
+    pub light_emission: u8,
+    #[serde(default)]
+    pub immersion_tint: Option<FluidImmersionTint>,
+    pub spread_speed: f32,
+    pub max_spread: u16,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct FluidRegistry {
-    definitions: Vec<FluidDefinition>,
-    ids: HashMap<String, FluidId>,
+    definitions: Arc<Vec<FluidDefinition>>,
+    ids: Arc<HashMap<String, FluidId>>,
 }
 
 impl FluidRegistry {
     pub fn insert(&mut self, definition: FluidDefinition) {
+        assert!(!definition.id.trim().is_empty(), "fluid id cannot be empty");
+        definition
+            .name
+            .validate(&format!("fluid {} name", definition.id));
+        assert!(definition.color.is_valid(), "fluid {} HSI color is invalid", definition.id);
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",
@@ -41,13 +64,43 @@ impl FluidRegistry {
             "fluid {} metallic must be between 0 and 1",
             definition.id
         );
-
-        if let Some(&fluid_id) = self.ids.get(&definition.id) {
-            self.definitions[fluid_id as usize] = definition;
-            return;
+        assert!(
+            definition.light_dampening <= 15,
+            "fluid {} light dampening must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.light_emission <= 15,
+            "fluid {} light emission must be between 0 and 15",
+            definition.id
+        );
+        if let Some(tint) = definition.immersion_tint {
+            assert!(
+                tint.color.is_valid(),
+                "fluid {} immersionTint.color HSI color is invalid",
+                definition.id
+            );
+            assert!(
+                tint.opacity.is_finite() && (0.0..=1.0).contains(&tint.opacity),
+                "fluid {} immersionTint.opacity must be between 0 and 1",
+                definition.id
+            );
         }
+        assert!(
+            definition.spread_speed.is_finite() && definition.spread_speed >= 0.0,
+            "fluid {} spread speed must be finite and non-negative",
+            definition.id
+        );
 
-        let index = self.definitions.len();
+        let ids = Arc::make_mut(&mut self.ids);
+        assert!(
+            !ids.contains_key(&definition.id),
+            "duplicate fluid definition id {}",
+            definition.id
+        );
+        let definitions = Arc::make_mut(&mut self.definitions);
+
+        let index = definitions.len();
         assert!(
             index <= u16::MAX as usize,
             "fluid registry cannot exceed {} definitions",
@@ -55,8 +108,8 @@ impl FluidRegistry {
         );
         let fluid_id = index as FluidId;
 
-        self.ids.insert(definition.id.clone(), fluid_id);
-        self.definitions.push(definition);
+        ids.insert(definition.id.clone(), fluid_id);
+        definitions.push(definition);
     }
 
     pub fn id_of(&self, id: &str) -> Option<FluidId> {

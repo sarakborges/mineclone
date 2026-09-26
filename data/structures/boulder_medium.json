@@ -1,0 +1,70 @@
+{
+  "id": "asteria:boulder_medium",
+  "name": {
+    "english": "Medium Boulder",
+    "portuguese_brazil": "Pedregulho médio",
+    "spanish": "Roca mediana"
+  },
+  "locatable": false,
+  "rotation": true,
+  "restrictions": {
+    "requiredBiomeCoverage": 1.0
+  },
+  "anchor": {
+    "x": 4,
+    "y": 0,
+    "z": 4
+  },
+  "palette": {
+    "S": {
+      "block": "asteria:stone"
+    },
+    "P": {
+      "object": "asteria:pebble"
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        ".........",
+        ".........",
+        ".P.SS..P.",
+        "..SSSS...",
+        "..SSSSS..",
+        "...SSSS..",
+        ".P..SS...",
+        ".......P.",
+        "....P...."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".........",
+        ".........",
+        "....SS...",
+        "...SSSS..",
+        "...SSS...",
+        "....SS...",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        "....SS...",
+        "....S....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    }
+  ]
+}

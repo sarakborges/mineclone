@@ -1,0 +1,46 @@
+{
+  "id": "asteria:grass",
+  "name": {
+    "english": "Grass",
+    "portuguese_brazil": "Grama",
+    "spanish": "Césped"
+  },
+  "category": "foliage",
+  "icon": "textures/objects/grass.png",
+  "tint": "grass",
+  "placementFaces": [
+    "top"
+  ],
+  "target": {
+    "size": [
+      0.62,
+      0.6,
+      0.56
+    ],
+    "centerOffset": [
+      0,
+      0.29,
+      0
+    ]
+  },
+  "unlit": true,
+  "castsShadow": false,
+  "receivesShadow": false,
+  "dropSelf": false,
+  "visual": {
+    "type": "model",
+    "path": "models/objects/grass/grass.glb"
+  },
+  "interaction": "break",
+  "positionJitter": [
+    0.28,
+    0.28
+  ],
+  "lootTable": [
+    {
+      "item": "asteria:plant_fiber",
+      "chance": 0.2,
+      "quantity": 1
+    }
+  ]
+}

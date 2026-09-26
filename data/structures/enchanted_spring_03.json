@@ -1,0 +1,200 @@
+{
+  "id": "asteria:enchanted_spring_03",
+  "group_id": "enchanted_spring",
+  "name": {
+    "english": "Enchanted Spring",
+    "portuguese_brazil": "Nascente Encantada",
+    "spanish": "Manantial Encantado"
+  },
+  "locatable": false,
+  "rotation": true,
+  "priority": 0,
+  "conflictGroups": [
+    "heart_feature"
+  ],
+  "restrictions": {
+    "groundBlocks": [
+      "asteria:grass_block",
+      "asteria:dirt"
+    ],
+    "maxSlope": 4,
+    "requiresDryGround": true
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 18,
+    "y": 0,
+    "z": 14
+  },
+  "groundAnchorY": 0,
+  "palette": {
+    "S": {
+      "block": "asteria:stone",
+      "surfaceLayers": [
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "top"
+          ],
+          "chance": 0.58
+        },
+        {
+          "layer": "asteria:moss",
+          "faces": [
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "chance": 0.12
+        }
+      ]
+    },
+    "W": {
+      "fluid": "asteria:water"
+    }
+  },
+  "layers": [
+    {
+      "y": -3,
+      "rows": [
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        "...................SSSSSSSSSSS.......",
+        "........SSSSSSSSSSSSSSSSSSSSSSSS.....",
+        "......SSSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        ".....SSSSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        "....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "..SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        ".....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "......SSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        ".......SSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        ".........SSSSSSSSSSSSSSSSSSSSSS......",
+        "...........SSSSSSSSSSSSSSSSSSS.......",
+        "................SSSSSSSSSSSSS........",
+        ".................SSSSSSSSSSS.........",
+        "....................SSSSSS...........",
+        "....................................."
+      ]
+    },
+    {
+      "y": -2,
+      "rows": [
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        "...................SSSSSSSSSSS.......",
+        "........SSSSSSSSSSSSSSSSSSSSSSSS.....",
+        "......SSSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        ".....SSSSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        "....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "...SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        "...SSSSSSSSSSSWWWWWWWWWWWWSSSSSSSS...",
+        "..SSSSSSSSSSWWWWWWWWWWWWWWWSSSSSSS...",
+        "..SSSSSSSSSWWWWWWWWWWWWWWWWSSSSSSS...",
+        "..SSSSSSSSSWWWWWWWWWWWWWWWWWSSSSSSS..",
+        "..SSSSSSSSSSWWWWWWWWWWWWWWWWSSSSSSS..",
+        "..SSSSSSSSSSSWWWWWWWWWWWWWWSSSSSSSS..",
+        "...SSSSSSSSSSSSWWWWWWWWWWSSSSSSSSSS..",
+        "...SSSSSSSSSSSSSSSSSSWWWSSSSSSSSSSS..",
+        "....SSSSSSSSSSSSSSSSSSWSSSSSSSSSSSS..",
+        ".....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+        "......SSSSSSSSSSSSSSSSSSSSSSSSSSSS...",
+        ".......SSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        ".........SSSSSSSSSSSSSSSSSSSSSS......",
+        "...........SSSSSSSSSSSSSSSSSSS.......",
+        "................SSSSSSSSSSSSS........",
+        ".................SSSSSSSSSSS.........",
+        "....................SSSSSS...........",
+        "....................................."
+      ]
+    },
+    {
+      "y": -1,
+      "rows": [
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        "...................SSSSSSSSSSS.......",
+        "........SSSSSSSSSSSSSSSSSSSSSSSS.....",
+        "......SSSSSSSSSSSSSSSSSSSSSSSSSSS....",
+        ".....SSSSSSSSSSSSSSSSSWWWWWSSSSSS....",
+        "....SSSSSSSWWWWWWWWWWWWWWWWWWSSSSS...",
+        "....SSSSSWWWWWWWWWWWWWWWWWWWWWSSSS...",
+        "...SSSSSWWWWWWWWWWWWWWWWWWWWWWSSSS...",
+        "...SSSSWWWWWWWWWWWWWWWWWWWWWWWWSSS...",
+        "..SSSSSWWWWWWWWWWWWWWWWWWWWWWWWSSS...",
+        "..SSSSWWWWWWWWWWWWWWWWWWWWWWWWWSSS...",
+        "..SSSSWWWWWWWWWWWWWWWWWWWWWWWWWSSSS..",
+        "..SSSSWWWWWWWWWWWWWWWWWWWWWWWWWSSSS..",
+        "..SSSSSWWWWWWWWWWWWWWWWWWWWWWWWSSSS..",
+        "...SSSSSWWWWWWWWWWWWWWWWWWWWWWWWSSS..",
+        "...SSSSSSWWWWWWWWWWWWWWWWWWWWWWSSSS..",
+        "....SSSSSSWWWWWWWWWWWWWWWWWWWWSSSSS..",
+        ".....SSSSSSSWWWWWWWWWWWWWWWWSSSSSSS..",
+        "......SSSSSSSSSSSSWWWWWWWWWSSSSSSS...",
+        ".......SSSSSSSSSSSSWWWWWWWSSSSSSS....",
+        ".........SSSSSSSSSSSWWWWWSSSSSS......",
+        "...........SSSSSSSSSSSSSSSSSSS.......",
+        "................SSSSSSSSSSSSS........",
+        ".................SSSSSSSSSSS.........",
+        "....................SSSSSS...........",
+        "....................................."
+      ]
+    },
+    {
+      "y": 0,
+      "rows": [
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        ".....................................",
+        "...................SSSSSSSSSSS.......",
+        "........SSSSSSSSSSSSWWWWWWWWWSSS.....",
+        "......SSSWWWWWWWWWWWWWWWWWWWWWWSS....",
+        ".....SSWWWWWWWWWWWWWWWWWWWWWWWWWS....",
+        "....SSWWWWWWWWWWWWWWWWWWWWWWWWWWSS...",
+        "....SWWWWWWWWWWWWWWWWWWWWWWWWWWWWS...",
+        "...SSWWWWWWWWWWWWWWWWWWWWWWWWWWWWS...",
+        "...SWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS...",
+        "..SSWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS...",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS...",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "..SWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "..SSWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "...SWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "...SSWWWWWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        "....SSWWWWWWWWWWWWWWWWWWWWWWWWWWWWS..",
+        ".....SSWWWWWWWWWWWWWWWWWWWWWWWWWWSS..",
+        "......SSWWWWWWWWWWWWWWWWWWWWWWWWSS...",
+        ".......SSSWWWWWWWWWWWWWWWWWWWWSSS....",
+        ".........SSSWWWSWWWWWWWWWWWWWSS......",
+        "...........SSSSSSWWWWWWWWWWWSS.......",
+        "................SSWWWWWWWWWSS........",
+        ".................SSSSWWWWSSS.........",
+        "....................SSSSSS...........",
+        "....................................."
+      ]
+    }
+  ],
+  "clearAbove": 3
+}

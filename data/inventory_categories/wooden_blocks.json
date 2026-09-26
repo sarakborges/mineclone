@@ -1,0 +1,10 @@
+{
+  "id": "wooden_blocks",
+  "displayName": {
+    "english": "Wooden Blocks",
+    "portuguese_brazil": "Blocos de Madeira",
+    "spanish": "Bloques de Madera"
+  },
+  "order": 30,
+  "icon": "textures/creative_categories/wooden_blocks.png"
+}

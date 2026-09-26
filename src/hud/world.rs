@@ -1,16 +1,18 @@
 mod banner;
-mod biome;
 mod coordinates;
-mod dimension;
 mod layout;
+mod named;
 
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
-use biome::update_biome_hud;
+use crate::{
+    app::game_state::GameState,
+    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    world::{biome::CurrentBiome, dimension::CurrentDimension},
+};
 use coordinates::update_coordinates_hud;
-use dimension::update_dimension_hud;
 use layout::spawn_world_hud;
+use named::{BiomeHudText, DimensionHudText, update_localized_name_hud};
 
 pub struct WorldHudPlugin;
 
@@ -20,8 +22,12 @@ impl Plugin for WorldHudPlugin {
             .add_systems(
                 Update,
                 (
-                    update_dimension_hud,
-                    update_biome_hud,
+                    update_localized_name_hud::<
+                        CurrentDimension,
+                        DimensionRegistry,
+                        DimensionHudText,
+                    >,
+                    update_localized_name_hud::<CurrentBiome, BiomeRegistry, BiomeHudText>,
                     update_coordinates_hud,
                 )
                     .run_if(in_state(GameState::Gameplay)),

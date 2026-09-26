@@ -1,0 +1,10 @@
+{
+  "id": "creative_tools",
+  "displayName": {
+    "english": "Creative Tools",
+    "portuguese_brazil": "Ferramentas Criativas",
+    "spanish": "Herramientas Creativas"
+  },
+  "order": 80,
+  "icon": "textures/creative_categories/creative_tools.png"
+}

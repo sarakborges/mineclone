@@ -1,0 +1,136 @@
+{
+  "id": "asteria:slime_hydro_large",
+  "name": {
+    "english": "Large Hydro Slime",
+    "portuguese_brazil": "Slime Hydro Grande",
+    "spanish": "Slime Hydro Grande"
+  },
+  "model": "models/creatures/slime_hydro_large/slime_hydro_large.glb",
+  "health": 33,
+  "maxPerType": 2,
+  "collider": {
+    "size": [
+      1.248,
+      1.26,
+      1.2376
+    ],
+    "centerOffset": [
+      0,
+      0.63,
+      0
+    ]
+  },
+  "targetCollider": {
+    "size": [
+      1.92,
+      1.5,
+      1.82
+    ],
+    "centerOffset": [
+      0,
+      0.75,
+      0
+    ]
+  },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_hydro/face.png"
+  },
+  "unlitMaterials": [
+    "SlimeFace",
+    "ElementAccent",
+    "ElementPale",
+    "ElementDark",
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
+  ],
+  "animations": {
+    "idle": "Idle",
+    "anticipate": "Anticipate",
+    "airborne": "Airborne",
+    "land": "Land",
+    "hurt": "Hurt",
+    "death": "Death"
+  },
+  "jumpSpeed": 4.4,
+  "fallGravityScale": 0.86,
+  "moveSpeed": 1.148,
+  "jumpInterval": 2.296,
+  "anticipationSeconds": 0.2875,
+  "landingSeconds": 0.375,
+  "particleEffects": {
+    "idle": {
+      "count": 3,
+      "color": [
+        0.62,
+        0.96,
+        1,
+        0.68
+      ],
+      "size": 0.0551,
+      "lifetime": 1,
+      "interval": 0.55,
+      "spawnRadius": 0.6528,
+      "yOffset": 0.72,
+      "horizontalSpeed": 0.09,
+      "verticalSpeed": 0.18,
+      "verticalJitter": 0.07,
+      "gravity": 0,
+      "endScale": 0.1
+    },
+    "land": {
+      "count": 12,
+      "color": [
+        0.62,
+        0.96,
+        1,
+        0.68
+      ],
+      "size": 0.0696,
+      "lifetime": 0.52,
+      "spawnRadius": 0.5353,
+      "yOffset": 0.08,
+      "horizontalSpeed": 0.72,
+      "verticalSpeed": 0.46,
+      "verticalJitter": 0.2,
+      "gravity": -1.6,
+      "endScale": 0.05
+    },
+    "hurt": {
+      "count": 10,
+      "color": [
+        0.7796,
+        0.9768,
+        1,
+        0.78
+      ],
+      "size": 0.0725,
+      "lifetime": 0.5,
+      "spawnRadius": 0.47002,
+      "yOffset": 0.675,
+      "horizontalSpeed": 0.66,
+      "verticalSpeed": 0.48,
+      "verticalJitter": 0.28,
+      "gravity": -1.25,
+      "endScale": 0.07
+    },
+    "death": {
+      "count": 28,
+      "color": [
+        0.7796,
+        0.9768,
+        1,
+        0.78
+      ],
+      "size": 0.0899,
+      "lifetime": 0.9,
+      "spawnRadius": 0.6528,
+      "yOffset": 0.63,
+      "horizontalSpeed": 0.92,
+      "verticalSpeed": 0.86,
+      "verticalJitter": 0.5,
+      "gravity": -1,
+      "endScale": 0
+    }
+  }
+}

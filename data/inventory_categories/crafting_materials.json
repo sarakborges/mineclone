@@ -1,0 +1,10 @@
+{
+  "id": "crafting_materials",
+  "displayName": {
+    "english": "Crafting Materials",
+    "portuguese_brazil": "Materiais de Fabricação",
+    "spanish": "Materiales de Fabricación"
+  },
+  "order": 60,
+  "icon": "textures/creative_categories/crafting_materials.png"
+}

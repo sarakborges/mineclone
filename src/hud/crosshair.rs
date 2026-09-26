@@ -1,38 +1,101 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{
         game_state::GameState,
+        keybinds::{KeybindAction, Keybinds},
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    ui::theme,
+    content::{
+        block::BlockRegistry,
+        builtin_ids::DYED_PROPERTY_ID,
+        secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
+        tool_behavior::{
+            ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
+            BRUSH_PAINT_BEHAVIOR_ID, LAYER_REMOVE_BEHAVIOR_ID,
+            STRUCTURE_SELECT_BEHAVIOR_ID,
+        },
+    },
+    gameplay::{
+        availability::world_interaction_available,
+        modal::GameplayModalState,
+    },
+    localization::{ActiveLanguage, UiLocalization},
+    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
+    targeting::block::{TargetedBlock, TargetedCreature},
+    tools::BrushMode,
+    ui::{theme, typography, visibility::set_visibility},
+    voxel::microblock::ArtisansKitResolution,
 };
+
+use super::{HintKind, HudSettings};
 
 pub struct CrosshairPlugin;
 
 impl Plugin for CrosshairPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_crosshair)
-            .add_systems(OnEnter(PauseState::Paused), hide_crosshair)
-            .add_systems(OnEnter(SettingsState::Open), hide_crosshair)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<CrosshairRoot, false>,
+            )
+            .add_systems(
+                OnEnter(SettingsState::Open),
+                set_visibility::<CrosshairRoot, false>,
+            )
+            .add_systems(
+                OnExit(GameplayModalState::Closed),
+                set_visibility::<CrosshairRoot, false>.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                update_action_hint
+                    .after(PlayerHotbarSet::Selection)
+                    .after(crate::targeting::block::BlockTargetingSet::Raycast)
+                    .run_if(world_interaction_available),
+            )
             .add_systems(
                 OnEnter(PauseState::Running),
-                show_crosshair
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(SettingsState::Closed)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                show_crosshair
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
+            )
+            .add_systems(
+                OnEnter(GameplayModalState::Closed),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             );
     }
 }
 
 #[derive(Component)]
 struct CrosshairRoot;
+
+#[derive(Component)]
+struct ActionHint;
+
+#[derive(SystemParam)]
+struct ActionHintRuntime<'w> {
+    hotbar: Res<'w, PlayerHotbar>,
+    settings: Res<'w, HudSettings>,
+    targeted: Res<'w, TargetedBlock>,
+    targeted_creature: Res<'w, TargetedCreature>,
+    brush_mode: Res<'w, BrushMode>,
+    artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
+    keybinds: Res<'w, Keybinds>,
+}
+
+#[derive(SystemParam)]
+struct ActionHintContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    secondary_properties: Res<'w, SecondaryPropertyRegistry>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
 
 fn spawn_crosshair(mut commands: Commands) {
     commands
@@ -68,17 +131,9 @@ fn spawn_crosshair(mut commands: Commands) {
                         top: px(8),
                         width: px(14),
                         height: px(2),
-                        border_radius: BorderRadius::MAX,
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
-                    BoxShadow(vec![ShadowStyle {
-                        color: theme::CYAN_GLOW,
-                        x_offset: px(0),
-                        y_offset: px(0),
-                        spread_radius: px(0),
-                        blur_radius: px(8),
-                    }]),
                 ));
                 crosshair.spawn((
                     Node {
@@ -87,30 +142,174 @@ fn spawn_crosshair(mut commands: Commands) {
                         top: px(2),
                         width: px(2),
                         height: px(14),
-                        border_radius: BorderRadius::MAX,
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
-                    BoxShadow(vec![ShadowStyle {
-                        color: theme::CYAN_GLOW,
-                        x_offset: px(0),
-                        y_offset: px(0),
-                        spread_radius: px(0),
-                        blur_radius: px(8),
-                    }]),
+                ));
+                crosshair.spawn((
+                    typography::crosshair_hint(""),
+                    TextLayout::justify(Justify::Center),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(26),
+                        left: px(-171),
+                        width: px(360),
+                        ..default()
+                    },
+                    ActionHint,
+                    Visibility::Hidden,
                 ));
             });
         });
 }
 
-fn hide_crosshair(mut roots: Query<&mut Visibility, With<CrosshairRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
+fn update_action_hint(
+    runtime: ActionHintRuntime,
+    content: ActionHintContent,
+    hint: Single<(&mut Text, &mut Visibility), With<ActionHint>>,
+) {
+    if !runtime.hotbar.is_changed()
+        && !runtime.settings.is_changed()
+        && !runtime.targeted.is_changed()
+        && !runtime.targeted_creature.is_changed()
+        && !runtime.brush_mode.is_changed()
+        && !runtime.artisans_kit_resolution.is_changed()
+        && !runtime.keybinds.is_changed()
+        && !content.blocks.is_changed()
+        && !content.tools.is_changed()
+        && !content.secondary_properties.is_changed()
+        && !content.localization.is_changed()
+        && !content.language.is_changed()
+    {
+        return;
     }
-}
 
-fn show_crosshair(mut roots: Query<&mut Visibility, With<CrosshairRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
+    let language = content.language.get();
+    let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
+    let selected_block = selected_item.and_then(|id| content.blocks.get(id));
+    let selected_tool = selected_item.and_then(|id| content.tools.get(id));
+    let uses_artisans_kit = selected_tool.is_some_and(|tool| {
+        tool.uses_behavior(ARTISANS_KIT_REMOVE_BEHAVIOR_ID)
+            || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
+    });
+    let uses_shears = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(LAYER_REMOVE_BEHAVIOR_ID));
+    let uses_structure_tool = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID));
+    let uses_brush = selected_tool
+        .is_some_and(|tool| tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID));
+    let tool_action = runtime.keybinds.label(KeybindAction::ToolAction);
+
+    let next_text = if runtime.targeted_creature.0.is_some() {
+        None
+    } else if uses_artisans_kit {
+        if !runtime.settings.hint_enabled(HintKind::ArtisansKit) {
+            None
+        } else {
+            let precision_key = match *runtime.artisans_kit_resolution {
+                ArtisansKitResolution::Thick => "artisansKit.precision.thick",
+                ArtisansKitResolution::Thin => "artisansKit.precision.thin",
+                ArtisansKitResolution::ExtraThin => "artisansKit.precision.extraThin",
+            };
+            Some(
+                content
+                    .localization
+                    .text(language, "hud.artisansKit")
+                    .replace(
+                        "{precision}",
+                        content.localization.text(language, precision_key),
+                    )
+                    .replace("{toolAction}", tool_action),
+            )
+        }
+    } else if uses_shears {
+        runtime
+            .settings
+            .hint_enabled(HintKind::Shears)
+            .then(|| content.localization.text(language, "hud.shears").to_owned())
+    } else if uses_structure_tool {
+        runtime
+            .settings
+            .hint_enabled(HintKind::StructureTool)
+            .then(|| content.localization.text(language, "hud.structureTool").to_owned())
+    } else if let Some(hit) = runtime.targeted.0 {
+        if uses_brush {
+            let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
+                block
+                    .secondary_properties
+                    .iter()
+                    .any(|property| property == DYED_PROPERTY_ID)
+            });
+            if !can_dye {
+                None
+            } else {
+                match runtime.brush_mode.dye_id() {
+                    None => runtime
+                        .settings
+                        .hint_enabled(HintKind::BrushClear)
+                        .then(|| content.localization.text(language, "hud.brushClear").to_owned()),
+                    Some(dye_id) => {
+                        if !runtime.settings.hint_enabled(HintKind::BrushPaint) {
+                            None
+                        } else {
+                            let color_name = content
+                                .secondary_properties
+                                .get(DYED_PROPERTY_ID, dye_id)
+                                .map_or(dye_id, |definition| definition.name.text(language));
+                            Some(
+                                content
+                                    .localization
+                                    .text(language, "hud.brushPaint")
+                                    .replace("{color}", color_name),
+                            )
+                        }
+                    }
+                }
+            }
+        } else if selected_block.is_some() {
+            runtime
+                .settings
+                .hint_enabled(HintKind::BreakOrPlaceBlock)
+                .then(|| {
+                    content
+                        .localization
+                        .text(language, "hud.breakOrPlaceBlock")
+                        .to_owned()
+                })
+        } else {
+            runtime
+                .settings
+                .hint_enabled(HintKind::BreakBlock)
+                .then(|| content.localization.text(language, "hud.breakBlock").to_owned())
+        }
+    } else if uses_brush {
+        None
+    } else {
+        selected_block
+            .filter(|block| block.is_rotatable())
+            .filter(|_| runtime.settings.hint_enabled(HintKind::RotateBlock))
+            .map(|_| {
+                content
+                    .localization
+                    .text(language, "hud.rotateBlock")
+                    .replace("{toolAction}", tool_action)
+            })
+    };
+
+    let (mut text, mut visibility) = hint.into_inner();
+    match next_text {
+        Some(next_text) => {
+            if text.0 != next_text {
+                text.0 = next_text;
+            }
+            if *visibility != Visibility::Visible {
+                *visibility = Visibility::Visible;
+            }
+        }
+        None => {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
+        }
     }
 }

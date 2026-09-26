@@ -1,0 +1,154 @@
+{
+  "id": "asteria:slime",
+  "name": {
+    "english": "Slime",
+    "portuguese_brazil": "Gosma",
+    "spanish": "Limo"
+  },
+  "model": "models/creatures/slime_blob/slime_blob.glb",
+  "health": 10,
+  "maxPerType": 4,
+  "collider": {
+    "size": [
+      0.78,
+      0.84,
+      0.78
+    ],
+    "centerOffset": [
+      0,
+      0.42,
+      0
+    ]
+  },
+  "unlitMaterials": [
+    "SlimeFace"
+  ],
+  "animations": {
+    "idle": "Idle",
+    "anticipate": "Anticipate",
+    "airborne": "Airborne",
+    "land": "Land",
+    "hurt": "Hurt",
+    "death": "Death"
+  },
+  "jumpSpeed": 5,
+  "moveSpeed": 1.5,
+  "jumpInterval": 2,
+  "anticipationSeconds": 0.24,
+  "landingSeconds": 0.34,
+  "textures": {
+    "SlimeFace": "textures/creatures/slime/face.png"
+  },
+  "particleEffects": {
+    "idle": {
+      "count": 1,
+      "color": [
+        0.62,
+        1,
+        0.82,
+        0.58
+      ],
+      "size": 0.045,
+      "lifetime": 0.9,
+      "interval": 0.65,
+      "spawnRadius": 0.42,
+      "yOffset": 0.44,
+      "horizontalSpeed": 0.06,
+      "verticalSpeed": 0.16,
+      "verticalJitter": 0.05,
+      "gravity": 0,
+      "endScale": 0.2
+    },
+    "anticipate": {
+      "count": 5,
+      "color": [
+        0.62,
+        1,
+        0.82,
+        0.72
+      ],
+      "size": 0.05,
+      "lifetime": 0.34,
+      "spawnRadius": 0.36,
+      "yOffset": 0.14,
+      "horizontalSpeed": 0.22,
+      "verticalSpeed": -0.16,
+      "verticalJitter": 0.07,
+      "gravity": -0.35,
+      "endScale": 0.08
+    },
+    "airborne": {
+      "count": 2,
+      "color": [
+        0.67,
+        1,
+        0.86,
+        0.58
+      ],
+      "size": 0.042,
+      "lifetime": 0.56,
+      "interval": 0.24,
+      "spawnRadius": 0.24,
+      "yOffset": 0.23,
+      "horizontalSpeed": 0.1,
+      "verticalSpeed": 0.04,
+      "verticalJitter": 0.06,
+      "gravity": -0.55,
+      "endScale": 0.12
+    },
+    "land": {
+      "count": 10,
+      "color": [
+        0.58,
+        1,
+        0.8,
+        0.76
+      ],
+      "size": 0.055,
+      "lifetime": 0.46,
+      "spawnRadius": 0.3,
+      "yOffset": 0.08,
+      "horizontalSpeed": 0.78,
+      "verticalSpeed": 0.52,
+      "verticalJitter": 0.2,
+      "gravity": -2.1,
+      "endScale": 0.05
+    },
+    "hurt": {
+      "count": 7,
+      "color": [
+        0.78,
+        1,
+        0.9,
+        0.82
+      ],
+      "size": 0.052,
+      "lifetime": 0.48,
+      "spawnRadius": 0.26,
+      "yOffset": 0.46,
+      "horizontalSpeed": 0.68,
+      "verticalSpeed": 0.48,
+      "verticalJitter": 0.3,
+      "gravity": -1.45,
+      "endScale": 0.08
+    },
+    "death": {
+      "count": 18,
+      "color": [
+        0.62,
+        1,
+        0.82,
+        0.82
+      ],
+      "size": 0.065,
+      "lifetime": 0.82,
+      "spawnRadius": 0.38,
+      "yOffset": 0.42,
+      "horizontalSpeed": 0.88,
+      "verticalSpeed": 0.82,
+      "verticalJitter": 0.46,
+      "gravity": -1.25,
+      "endScale": 0
+    }
+  }
+}

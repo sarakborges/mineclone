@@ -1,0 +1,10 @@
+{
+  "id": "light_sources",
+  "displayName": {
+    "english": "Light Sources",
+    "portuguese_brazil": "Fontes de Luz",
+    "spanish": "Fuentes de Luz"
+  },
+  "order": 60,
+  "icon": "textures/creative_categories/light_sources.png"
+}

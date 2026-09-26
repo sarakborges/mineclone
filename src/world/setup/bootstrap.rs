@@ -1,0 +1,741 @@
+use bevy::{
+    platform::collections::HashMap,
+    prelude::*,
+    render::storage::ShaderBuffer,
+};
+
+use crate::{
+    content::{
+        LoadedContent,
+        biome::{BiomeKind, BiomeRegistry},
+        block::BlockRegistry,
+        dimension::{DimensionDefinition, DimensionRegistry},
+        creature::CreatureRegistry,
+        fluid::FluidRegistry,
+        layer::LayerRegistry,
+        object::ObjectRegistry,
+        player::PlayerDefinition,
+        read_content,
+        structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
+    },
+    player::player_id::LOCAL_PLAYER_ID,
+    rendering::{
+        GameplayAssetPreloads,
+        terrain_material::{TerrainLightingBuffer, TerrainMaterial},
+    },
+    voxel::{
+        chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position,
+        spatial_search::find_map_square_rings, world::VoxelWorld,
+    },
+};
+
+use super::{
+    WorldLoadingPhase, WorldLoadingState,
+    system_params::{WorldBootstrapConfig, WorldBootstrapContent, WorldBootstrapPersistence},
+};
+use crate::world::{
+    InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
+    biome_field::BiomeField,
+    chunk_rendering::{FluidMaterials, TerrainMaterials},
+    generation::{
+        authored_surface_fluid_id_for_position, ocean_weight_from_surface,
+    },
+    render_distance::RenderDistanceSettings,
+    streaming::initial_streaming_chunk_coords,
+    terrain::{surface_height, surface_height_from_sample},
+    deterministic::mix_hash_u64,
+    structure_field::StructureField,
+    world_feature_fields::WorldFeatureFields,
+};
+
+const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
+const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
+const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+const RANDOM_SPAWN_BIOME_SALT: u64 = 0x8f3f_73b5_cf1c_9ade;
+
+struct BootstrapRegistries<'a> {
+    dimensions: &'a DimensionRegistry,
+    biomes: &'a BiomeRegistry,
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    fluids: &'a FluidRegistry,
+    structures: &'a StructureRegistry,
+    structure_sets: &'a StructureSetRegistry,
+}
+
+impl<'a> BootstrapRegistries<'a> {
+    fn resolve(
+        loaded: &'a WorldBootstrapContent<'_>,
+        fresh: Option<&'a LoadedContent>,
+    ) -> Self {
+        match fresh {
+            Some(fresh) => Self {
+                dimensions: &fresh.dimensions,
+                biomes: &fresh.biomes,
+                blocks: &fresh.blocks,
+                layers: &fresh.layers,
+                fluids: &fresh.fluids,
+                structures: &fresh.structures,
+                structure_sets: &fresh.structure_sets,
+            },
+            None => Self {
+                dimensions: &loaded.dimensions,
+                biomes: &loaded.biomes,
+                blocks: &loaded.blocks,
+                layers: &loaded.layers,
+                fluids: &loaded.fluids,
+                structures: &loaded.structures,
+                structure_sets: &loaded.structure_sets,
+            },
+        }
+    }
+}
+
+struct BootstrapVisualContent<'a> {
+    player: &'a PlayerDefinition,
+    creatures: &'a CreatureRegistry,
+    objects: &'a ObjectRegistry,
+}
+
+impl<'a> BootstrapVisualContent<'a> {
+    fn resolve(
+        loaded: &'a WorldBootstrapContent<'_>,
+        fresh: Option<&'a LoadedContent>,
+    ) -> Self {
+        match fresh {
+            Some(fresh) => Self {
+                player: &fresh.player,
+                creatures: &fresh.creatures,
+                objects: &fresh.objects,
+            },
+            None => Self {
+                player: &loaded.player,
+                creatures: &loaded.creatures,
+                objects: &loaded.objects,
+            },
+        }
+    }
+}
+
+struct BootstrapGenerationSettings {
+    forced_spawn_biome: Option<String>,
+    biome_size_multiplier: f32,
+    world_generation: WorldGenerationSettings,
+}
+
+impl BootstrapGenerationSettings {
+    fn resolve(
+        load_mode: WorldLoadMode,
+        new_world_config: &NewWorldConfig,
+        save: &InMemoryWorldSave,
+        dimension: &DimensionDefinition,
+        biomes: &BiomeRegistry,
+        seed: u64,
+    ) -> Self {
+        match load_mode {
+            WorldLoadMode::New => {
+                let world_generation = new_world_config.world_generation();
+                let forced_spawn_biome = new_world_config
+                    .spawn_biome()
+                    .map(str::to_owned)
+                    .or_else(|| Some(random_spawn_biome_id(dimension, biomes, seed).to_owned()));
+
+                Self {
+                    forced_spawn_biome,
+                    biome_size_multiplier: new_world_config.biome_size_multiplier(),
+                    world_generation,
+                }
+            }
+            WorldLoadMode::Load => Self {
+                forced_spawn_biome: save.spawn_biome().map(str::to_owned),
+                biome_size_multiplier: save.biome_size_multiplier(),
+                world_generation: save.world_generation(),
+            },
+        }
+    }
+}
+
+struct BootstrapWorldFields {
+    biome_field: BiomeField,
+    feature_fields: WorldFeatureFields,
+}
+
+impl BootstrapWorldFields {
+    fn build(
+        dimension: &DimensionDefinition,
+        biomes: &BiomeRegistry,
+        seed: u64,
+        biome_size_multiplier: f32,
+        world_generation: WorldGenerationSettings,
+        forced_spawn_biome: Option<&str>,
+        structure_field: StructureField,
+    ) -> Self {
+        let mut biome_field =
+            BiomeField::from_dimension(dimension, biomes, seed, biome_size_multiplier);
+        biome_field.set_spawn_oceans(world_generation.spawn_oceans());
+        if world_generation.single_biome() {
+            let biome_id =
+                forced_spawn_biome.expect("single-biome world requires a selected surface biome");
+            biome_field.set_single_surface_biome(biome_id);
+        } else if let Some(biome_id) = forced_spawn_biome {
+            biome_field.force_surface_biome(
+                biome_id,
+                DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
+            );
+        }
+
+        let feature_fields = WorldFeatureFields::new(seed).with_structure_field(structure_field);
+
+        Self {
+            biome_field,
+            feature_fields,
+        }
+    }
+}
+
+struct BootstrapRenderingContext<'a> {
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
+    fluids: &'a FluidRegistry,
+    asset_server: &'a AssetServer,
+}
+
+struct BootstrapRenderingResources {
+    terrain_lighting: TerrainLightingBuffer,
+    terrain_materials: TerrainMaterials,
+    fluid_materials: FluidMaterials,
+}
+
+impl BootstrapRenderingContext<'_> {
+    fn build(
+        self,
+        images: &mut Assets<Image>,
+        material_assets: &mut Assets<TerrainMaterial>,
+        shader_buffers: &mut Assets<ShaderBuffer>,
+    ) -> BootstrapRenderingResources {
+        let (roughness, metallic) = average_terrain_material(self.dimension, self.biomes);
+        let terrain_lighting = TerrainLightingBuffer::new(shader_buffers);
+        let terrain_materials = TerrainMaterials::from_registry(
+            self.blocks,
+            self.layers,
+            self.asset_server,
+            images,
+            material_assets,
+            &terrain_lighting,
+            roughness,
+            metallic,
+        );
+        let fluid_materials = FluidMaterials::from_registry(
+            self.fluids,
+            material_assets,
+            &terrain_lighting,
+            terrain_materials.texture_array_handle(),
+        );
+
+        BootstrapRenderingResources {
+            terrain_lighting,
+            terrain_materials,
+            fluid_materials,
+        }
+    }
+}
+
+struct BootstrapSpawnContext<'a> {
+    load_mode: WorldLoadMode,
+    world_generation: WorldGenerationSettings,
+    forced_spawn_biome: bool,
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    biome_field: &'a BiomeField,
+}
+
+struct BootstrapSpawn {
+    column: IVec2,
+    initial_center: IVec3,
+}
+
+impl BootstrapSpawnContext<'_> {
+    fn resolve(self, saved_player_position: Option<Vec3>) -> BootstrapSpawn {
+        let restored_column = saved_player_position
+            .map(spawn_column_from_position)
+            .unwrap_or(DEFAULT_SPAWN_COLUMN);
+        let column = if self.load_mode == WorldLoadMode::New
+            && self.world_generation.mode() == WorldGenerationMode::Normal
+        {
+            find_initial_spawn_column(
+                self.dimension,
+                self.biomes,
+                self.biome_field,
+                self.forced_spawn_biome && !self.world_generation.single_biome(),
+            )
+        } else {
+            restored_column
+        };
+
+        let initial_center = if self.world_generation.mode() == WorldGenerationMode::Void
+            && saved_player_position.is_none()
+        {
+            IVec3::ZERO
+        } else if self.load_mode == WorldLoadMode::Load {
+            saved_player_position
+                .map(restored_player_chunk)
+                .unwrap_or_else(|| {
+                    spawn_surface_chunk(
+                        column,
+                        surface_height(
+                            column,
+                            self.dimension,
+                            self.biomes,
+                            self.biome_field,
+                        ),
+                    )
+                })
+        } else {
+            let surface_y = if self.world_generation.mode() == WorldGenerationMode::Flat {
+                self.dimension.sea_level.max(1)
+            } else {
+                surface_height(column, self.dimension, self.biomes, self.biome_field)
+            };
+            spawn_surface_chunk(column, surface_y)
+        };
+
+        BootstrapSpawn {
+            column,
+            initial_center,
+        }
+    }
+}
+
+fn initialize_bootstrap_persistence(
+    commands: &mut Commands,
+    config: &mut WorldBootstrapConfig<'_>,
+    persistence: &mut WorldBootstrapPersistence<'_>,
+    forced_spawn_biome: Option<&str>,
+    biome_size_multiplier: f32,
+    world_generation: WorldGenerationSettings,
+) {
+    match *persistence.load_mode {
+        WorldLoadMode::New => {
+            commands.insert_resource(VoxelWorld::default());
+            persistence.save.begin_new_world(
+                *config.seed,
+                &config.current_dimension.id,
+                *config.game_rules,
+                forced_spawn_biome,
+                biome_size_multiplier,
+                world_generation,
+            );
+        }
+        WorldLoadMode::Load => {
+            assert!(
+                persistence.save.has_world(),
+                "cannot load a world that is not saved in memory"
+            );
+            assert!(
+                persistence.existing_world.is_some(),
+                "saved world voxel state is missing from memory"
+            );
+            *config.game_rules = persistence.save.game_rules();
+        }
+    }
+}
+
+pub(in crate::world) fn begin_world_loading(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
+    mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
+    content: WorldBootstrapContent,
+    mut config: WorldBootstrapConfig,
+    mut persistence: WorldBootstrapPersistence,
+) {
+    let fresh_content = if *persistence.load_mode == WorldLoadMode::New {
+        Some(read_content())
+    } else {
+        None
+    };
+    let visual_content = BootstrapVisualContent::resolve(&content, fresh_content.as_ref());
+    let gameplay_asset_preloads = GameplayAssetPreloads::from_content(
+        &content.asset_server,
+        visual_content.player,
+        visual_content.creatures,
+        visual_content.objects,
+    );
+    let gameplay_asset_count = gameplay_asset_preloads.total();
+
+    let BootstrapRegistries {
+        dimensions,
+        biomes,
+        blocks,
+        layers,
+        fluids,
+        structures,
+        structure_sets,
+    } = BootstrapRegistries::resolve(&content, fresh_content.as_ref());
+    let dimension = dimensions
+        .get(&config.current_dimension.id)
+        .unwrap_or_else(|| {
+            panic!(
+                "missing dimension definition: {}",
+                config.current_dimension.id
+            )
+        });
+
+    dimension.validate_biomes(biomes);
+    dimension.validate_fluid_references(fluids);
+
+    let BootstrapGenerationSettings {
+        forced_spawn_biome,
+        biome_size_multiplier,
+        world_generation,
+    } = BootstrapGenerationSettings::resolve(
+        *persistence.load_mode,
+        &persistence.new_world_config,
+        &persistence.save,
+        dimension,
+        biomes,
+        config.seed.0,
+    );
+    if let Some(biome_id) = forced_spawn_biome.as_deref() {
+        validate_forced_spawn_biome(dimension, biomes, biome_id);
+    }
+
+    let structure_field =
+        StructureField::from_content(config.seed.0, biomes, structures, structure_sets);
+    let BootstrapWorldFields {
+        biome_field,
+        feature_fields,
+    } = BootstrapWorldFields::build(
+        dimension,
+        biomes,
+        config.seed.0,
+        biome_size_multiplier,
+        world_generation,
+        forced_spawn_biome.as_deref(),
+        structure_field,
+    );
+    let BootstrapRenderingResources {
+        terrain_lighting,
+        terrain_materials,
+        fluid_materials,
+    } = BootstrapRenderingContext {
+        dimension,
+        biomes,
+        blocks,
+        layers,
+        fluids,
+        asset_server: &content.asset_server,
+    }
+    .build(
+        &mut images,
+        &mut terrain_material_assets,
+        &mut shader_buffers,
+    );
+    let saved_player_position = persistence.save.player_position(LOCAL_PLAYER_ID);
+    let BootstrapSpawn {
+        column: spawn_column,
+        initial_center,
+    } = BootstrapSpawnContext {
+        load_mode: *persistence.load_mode,
+        world_generation,
+        forced_spawn_biome: forced_spawn_biome.is_some(),
+        dimension,
+        biomes,
+        biome_field: &biome_field,
+    }
+    .resolve(saved_player_position);
+    // Saves persist only modified chunks. Untouched terrain is intentionally absent and
+    // must be regenerated from the pinned worldgen identity around the restored player.
+    let coords = bootstrap_chunk_coords(
+        initial_center,
+        &config.render_distance,
+        dimension,
+        biomes,
+        &biome_field,
+        &feature_fields,
+    );
+    let column_top_chunks = bootstrap_column_top_chunks(&coords);
+    let bootstrap_chunks = coords
+        .iter()
+        .copied()
+        .collect::<std::collections::HashSet<_>>();
+    feature_fields.retain_for_chunks(&bootstrap_chunks);
+
+    initialize_bootstrap_persistence(
+        &mut commands,
+        &mut config,
+        &mut persistence,
+        forced_spawn_biome.as_deref(),
+        biome_size_multiplier,
+        world_generation,
+    );
+
+    commands.insert_resource(world_generation);
+    commands.insert_resource(biome_field);
+    commands.insert_resource(feature_fields);
+    commands.insert_resource(terrain_lighting);
+    commands.insert_resource(terrain_materials);
+    commands.insert_resource(fluid_materials);
+    commands.insert_resource(gameplay_asset_preloads);
+    commands.insert_resource(WorldLoadingState {
+        coords,
+        generation_cursor: 0,
+        generated: 0,
+        lighting_seed_cursor: 0,
+        lighting_relaxation_cursor: 0,
+        lighting_relaxations: Vec::new(),
+        lit: 0,
+        mesh_cursor: 0,
+        meshed: 0,
+        assets_loaded: 0,
+        assets_total: gameplay_asset_count,
+        finalization_frames: 0,
+        column_top_chunks,
+        spawn_column,
+        fluid_settling: Default::default(),
+        phase: WorldLoadingPhase::Generating,
+        screen_rendered: false,
+        transition_requested: false,
+    });
+
+    if let Some(content) = fresh_content {
+        content.insert(&mut commands);
+    }
+}
+
+fn spawn_column_from_position(position: Vec3) -> IVec2 {
+    IVec2::new(position.x.floor() as i32, position.z.floor() as i32)
+}
+
+fn restored_player_chunk(position: Vec3) -> IVec3 {
+    let chunk = chunk_coord_from_position(position);
+    IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
+}
+
+fn spawn_surface_chunk(column: IVec2, surface_y: i32) -> IVec3 {
+    IVec3::new(
+        column.x.div_euclid(CHUNK_SIZE as i32),
+        surface_y.div_euclid(CHUNK_SIZE as i32),
+        column.y.div_euclid(CHUNK_SIZE as i32),
+    )
+}
+
+fn bootstrap_chunk_coords(
+    center: IVec3,
+    render_distance: &RenderDistanceSettings,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
+) -> Vec<IVec3> {
+    initial_streaming_chunk_coords(
+        center,
+        render_distance.chunks(),
+        render_distance.vertical_chunks(),
+        dimension,
+        biomes,
+        biome_field,
+        feature_fields,
+    )
+}
+
+fn bootstrap_column_top_chunks(coords: &[IVec3]) -> HashMap<IVec2, i32> {
+    let mut tops = HashMap::<IVec2, i32>::new();
+    for coord in coords {
+        tops.entry(coord.xz())
+            .and_modify(|top| *top = (*top).max(coord.y))
+            .or_insert(coord.y);
+    }
+    tops
+}
+
+fn random_spawn_biome_id<'a>(
+    dimension: &'a DimensionDefinition,
+    biomes: &BiomeRegistry,
+    seed: u64,
+) -> &'a str {
+    let ocean_biome = dimension.ocean_biome.as_deref();
+    let is_candidate = |entry: &&crate::content::dimension::DimensionBiome| {
+        entry.weight > f32::EPSILON
+            && entry.require_near.is_empty()
+            && ocean_biome != Some(entry.id.as_str())
+            && biomes
+                .get(&entry.id)
+                .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+    };
+
+    let candidate_count = dimension.biomes.iter().filter(is_candidate).count();
+    assert!(
+        candidate_count > 0,
+        "dimension {} must define at least one forceable non-ocean surface biome for random spawn",
+        dimension.id
+    );
+
+    let selected = random_spawn_candidate_index(seed, candidate_count);
+    dimension
+        .biomes
+        .iter()
+        .filter(is_candidate)
+        .nth(selected)
+        .map(|entry| entry.id.as_str())
+        .expect("random spawn biome index must resolve")
+}
+
+fn random_spawn_candidate_index(seed: u64, candidate_count: usize) -> usize {
+    assert!(candidate_count > 0, "random spawn requires at least one biome candidate");
+    (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) % candidate_count as u64) as usize
+}
+
+fn validate_forced_spawn_biome(
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_id: &str,
+) {
+    let biome = biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("requested spawn biome is missing: {biome_id}"));
+    assert!(
+        biome.kind == BiomeKind::Surface,
+        "requested spawn biome must be a surface biome: {biome_id}"
+    );
+    let dimension_biome = dimension
+        .biomes
+        .iter()
+        .find(|entry| entry.id == biome_id)
+        .unwrap_or_else(|| {
+            panic!(
+                "requested spawn biome is not part of dimension {}: {biome_id}",
+                dimension.id
+            )
+        });
+    assert!(
+        dimension_biome.require_near.is_empty(),
+        "requested spawn biome cannot be forced alone because it requires an adjacent biome: {biome_id}"
+    );
+}
+
+fn find_initial_spawn_column(
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    restrict_to_forced_region: bool,
+) -> IVec2 {
+    find_map_square_rings(
+        DEFAULT_SPAWN_COLUMN,
+        SPAWN_SEARCH_RADIUS_STEPS,
+        SPAWN_SEARCH_STEP_BLOCKS,
+        |candidate| {
+            let position = candidate.as_vec2() + Vec2::splat(0.5);
+            if restrict_to_forced_region && !biome_field.forced_surface_core_contains(position) {
+                return None;
+            }
+
+            (!spawn_column_has_surface_fluid(
+                candidate,
+                dimension,
+                biomes,
+                biome_field,
+            ))
+                .then_some(candidate)
+        },
+    )
+    .unwrap_or_else(|| {
+        if restrict_to_forced_region {
+            panic!("could not find a fluid-free spawn column inside the forced initial biome region")
+        }
+        panic!(
+            "could not find a fluid-free spawn column within {} blocks",
+            SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
+        )
+    })
+}
+
+fn spawn_column_has_surface_fluid(
+    column: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> bool {
+    if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
+        return true;
+    }
+
+    let position = column.as_vec2() + Vec2::splat(0.5);
+    let surface = biome_field.sample_surface(position);
+    let surface_height = surface_height_from_sample(column, dimension, biome_field, &surface) as f32;
+    if ocean_weight_from_surface(&surface, biome_field) > f32::EPSILON
+        && surface_height < dimension.sea_level as f32
+    {
+        return true;
+    }
+
+    false
+}
+
+fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
+    let mut roughness = 0.0;
+    let mut metallic = 0.0;
+    let mut count = 0.0;
+
+    for dimension_biome in &dimension.biomes {
+        let biome_id = &dimension_biome.id;
+        let biome = biomes
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+        if biome.kind != BiomeKind::Surface {
+            continue;
+        }
+
+        roughness += biome.visuals().terrain_roughness;
+        metallic += biome.visuals().terrain_metallic;
+        count += 1.0;
+    }
+
+    assert!(
+        count > 0.0,
+        "dimension {} must define at least one surface biome",
+        dimension.id
+    );
+
+    (roughness / count, metallic / count)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use bevy::prelude::{IVec2, IVec3};
+
+    use super::{bootstrap_column_top_chunks, random_spawn_candidate_index};
+
+    #[test]
+    fn bootstrap_column_tops_track_the_highest_selected_chunk() {
+        let tops = bootstrap_column_top_chunks(&[
+            IVec3::new(2, 1, -3),
+            IVec3::new(2, 4, -3),
+            IVec3::new(1, 2, 7),
+        ]);
+        assert_eq!(tops.get(&IVec2::new(2, -3)), Some(&4));
+        assert_eq!(tops.get(&IVec2::new(1, 7)), Some(&2));
+    }
+
+    #[test]
+    fn random_spawn_candidate_is_deterministic_for_same_seed() {
+        assert_eq!(
+            random_spawn_candidate_index(42, 7),
+            random_spawn_candidate_index(42, 7)
+        );
+    }
+
+    #[test]
+    fn random_spawn_candidate_changes_across_seeds() {
+        let first = random_spawn_candidate_index(0, 7);
+        assert!(
+            (1..64).any(|seed| random_spawn_candidate_index(seed, 7) != first),
+            "random spawn candidate must not collapse every seed to one biome"
+        );
+    }
+}

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::content::{
-    day_night_cycle::DayNightCycleDefinition,
-    sky::CelestialBodyDefinition,
-};
+use crate::content::{day_night_cycle::DayNightCycleDefinition, sky::CelestialBodyDefinition};
 
 pub fn celestial_direction(
     definition: &CelestialBodyDefinition,
@@ -20,8 +17,8 @@ pub fn celestial_direction(
         definition.set_azimuth_degrees.to_radians(),
         progress,
     );
-    let altitude = (progress * std::f32::consts::PI).sin()
-        * definition.max_altitude_degrees.to_radians();
+    let altitude =
+        (progress * std::f32::consts::PI).sin() * definition.max_altitude_degrees.to_radians();
     let horizontal_radius = altitude.cos();
 
     Some(
@@ -44,8 +41,7 @@ pub fn celestial_offset(
 }
 
 fn lerp_angle(start: f32, end: f32, t: f32) -> f32 {
-    let delta = (end - start + std::f32::consts::PI)
-        .rem_euclid(std::f32::consts::TAU)
+    let delta = (end - start + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
         - std::f32::consts::PI;
     start + delta * t
 }

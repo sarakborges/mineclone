@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::app::{
-    game_state::GameState,
-    pause_state::PauseState,
+    controls_state::ControlsState, game_state::GameState, pause_state::PauseState,
     settings_state::SettingsState,
 };
 
@@ -15,6 +14,7 @@ pub struct ScreenTransitionTarget {
     game_state: Option<GameState>,
     pause_state: Option<PauseState>,
     settings_state: Option<SettingsState>,
+    controls_state: Option<ControlsState>,
 }
 
 impl ScreenTransitionTarget {
@@ -35,6 +35,13 @@ impl ScreenTransitionTarget {
     pub fn settings(state: SettingsState) -> Self {
         Self {
             settings_state: Some(state),
+            ..default()
+        }
+    }
+
+    pub fn controls(state: ControlsState) -> Self {
+        Self {
+            controls_state: Some(state),
             ..default()
         }
     }
@@ -99,6 +106,10 @@ pub fn spawn_transition_overlay(mut commands: Commands) {
     ));
 }
 
+pub fn screen_transition_active(transition: Res<ScreenTransition>) -> bool {
+    transition.is_active()
+}
+
 pub fn animate_screen_transition(
     time: Res<Time<Real>>,
     mut transition: ResMut<ScreenTransition>,
@@ -106,18 +117,15 @@ pub fn animate_screen_transition(
     mut next_game_state: ResMut<NextState<GameState>>,
     mut next_pause_state: ResMut<NextState<PauseState>>,
     mut next_settings_state: ResMut<NextState<SettingsState>>,
+    mut next_controls_state: ResMut<NextState<ControlsState>>,
 ) {
     let Ok((mut background, mut visibility)) = overlay.single_mut() else {
         return;
     };
 
-    if transition.phase == ScreenTransitionPhase::Idle {
-        *visibility = Visibility::Hidden;
-        *background = theme::SCREEN_BACKGROUND.with_alpha(0.0).into();
-        return;
+    if *visibility != Visibility::Visible {
+        *visibility = Visibility::Visible;
     }
-
-    *visibility = Visibility::Visible;
     let step = time.delta_secs() / TRANSITION_HALF_SECONDS;
 
     match transition.phase {
@@ -125,7 +133,10 @@ pub fn animate_screen_transition(
         ScreenTransitionPhase::FadingOut => {
             transition.progress = (transition.progress + step).min(1.0);
             let alpha = ease_in_out_cubic(transition.progress);
-            *background = theme::SCREEN_BACKGROUND.with_alpha(alpha).into();
+            let next_background = BackgroundColor(theme::SCREEN_BACKGROUND.with_alpha(alpha));
+            if *background != next_background {
+                *background = next_background;
+            }
 
             if transition.progress >= 1.0 {
                 if let Some(target) = transition.target {
@@ -138,6 +149,9 @@ pub fn animate_screen_transition(
                     if let Some(state) = target.settings_state {
                         next_settings_state.set(state);
                     }
+                    if let Some(state) = target.controls_state {
+                        next_controls_state.set(state);
+                    }
                 }
 
                 transition.phase = ScreenTransitionPhase::FadingIn;
@@ -146,12 +160,17 @@ pub fn animate_screen_transition(
         ScreenTransitionPhase::FadingIn => {
             transition.progress = (transition.progress - step).max(0.0);
             let alpha = ease_in_out_cubic(transition.progress);
-            *background = theme::SCREEN_BACKGROUND.with_alpha(alpha).into();
+            let next_background = BackgroundColor(theme::SCREEN_BACKGROUND.with_alpha(alpha));
+            if *background != next_background {
+                *background = next_background;
+            }
 
             if transition.progress <= 0.0 {
                 transition.phase = ScreenTransitionPhase::Idle;
                 transition.target = None;
-                *visibility = Visibility::Hidden;
+                if *visibility != Visibility::Hidden {
+                    *visibility = Visibility::Hidden;
+                }
             }
         }
     }
