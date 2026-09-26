@@ -5,7 +5,7 @@
     "portuguese_brazil": "Slime Electro",
     "spanish": "Slime Electro"
   },
-  "model": "models/creatures/slime_electro/slime_electro.gltf",
+  "model": "models/creatures/slime_electro/slime_electro.glb",
   "health": 10,
   "maxPerType": 4,
   "collider": {
@@ -31,6 +31,9 @@
       0.5,
       0
     ]
+  },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_electro/face.png"
   },
   "unlitMaterials": [
     "SlimeFace",
