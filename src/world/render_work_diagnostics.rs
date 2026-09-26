@@ -16,10 +16,10 @@ use crate::app::crash_log::append_runtime_diagnostic;
 
 const RENDER_WORK_SAMPLE_CAPACITY: usize = 4096;
 const RENDER_WORK_MICROS_BITS: u32 = 32;
-const RENDER_WORK_MICROS_MASK: u64 = u32::MAX as u64;
+const RENDER_WORK_MICROS_MASK: u64 = u64::from(u32::MAX);
 
 #[derive(Resource, Clone, Default)]
-struct RenderFrameWorkBridge(Arc<AtomicU64>);
+pub(super) struct RenderFrameWorkBridge(Arc<AtomicU64>);
 
 #[derive(Resource, Default)]
 struct RenderFrameWorkTimer {

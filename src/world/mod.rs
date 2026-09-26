@@ -271,33 +271,36 @@ impl Plugin for WorldPlugin {
 }
 
 fn prepare_world_session(
-    mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
-    mut terrain_materials: ResMut<TerrainMaterials>,
-    mut fluid_materials: ResMut<FluidMaterials>,
-    mut lighting_buffer: ResMut<TerrainLightingBuffer>,
-    mut biome_field: ResMut<BiomeField>,
-    mut feature_fields: ResMut<WorldFeatureFields>,
-    mut dimension: ResMut<CurrentDimension>,
-    mut counts: ResMut<DimensionEntityCounts>,
-    mut current_biome: ResMut<CurrentBiome>,
-    mut player_hotbar: ResMut<PlayerHotbar>,
-    mut world_lock: ResMut<WorldDirectoryLock>,
+    mut session: ResMut<WorldSession>,
+    mode: Res<WorldLoadMode>,
+    config: Res<NewWorldConfig>,
 ) {
-    world.clear();
-    render_pool.clear();
-    terrain_materials.clear();
-    fluid_materials.clear();
-    lighting_buffer.clear();
-    biome_field.clear();
-    feature_fields.clear();
-    dimension.reset();
-    counts.clear();
-    current_biome.clear();
-    player_hotbar.reset();
-    world_lock.release();
+    if *mode == WorldLoadMode::New {
+        *session = WorldSession::new(config.name().to_owned());
+    }
 }
 
-fn release_world_session(mut world_lock: ResMut<WorldDirectoryLock>) {
-    world_lock.release();
+/// Called only upon returning to the starting screen, after the Leave World
+/// action has successfully published the snapshot. Never drop this state in
+/// the error path: the player must be able to retry the save.
+fn release_world_session(
+    mut commands: Commands,
+    terrain_materials: Option<Res<TerrainMaterials>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if let Some(terrain_materials) = terrain_materials {
+        let _ = images.remove(&terrain_materials.texture_array_handle());
+    }
+
+    commands.remove_resource::<VoxelWorld>();
+    commands.remove_resource::<BiomeField>();
+    commands.remove_resource::<WorldFeatureFields>();
+    commands.remove_resource::<TerrainLightingBuffer>();
+    commands.remove_resource::<TerrainMaterials>();
+    commands.remove_resource::<FluidMaterials>();
+    commands.remove_resource::<WorldLoadingState>();
+    commands.remove_resource::<WorldDirectoryLock>();
+    commands.insert_resource(InMemoryWorldSave::default());
+    commands.insert_resource(WorldSession::default());
+    commands.insert_resource(PlayerHotbar::default());
 }
