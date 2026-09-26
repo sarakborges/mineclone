@@ -14,13 +14,15 @@
     sozinha uma queda quase pela metade;
 - a primary Window não configurava `present_mode`, portanto usava o default do Bevy
   (`AutoVsync`, com fallback para FIFO);
-- no backend Windows/DX12 já imposto pelo projeto, o primary window agora usa
-  `PresentMode::Mailbox`:
+- no backend Windows/DX12 padrão imposto pelo projeto (quando `WGPU_BACKEND` não foi
+  sobrescrito), o primary window agora usa `PresentMode::Mailbox`:
   - Mailbox é suportado no path DX11/12 do Windows;
   - não produz tearing;
   - mantém uma fila de um frame e substitui frames antigos, evitando o degrau rígido do FIFO
     quando um frame perde um vblank;
-- plataformas não-Windows mantêm `PresentMode::AutoVsync`;
+- plataformas não-Windows mantêm `PresentMode::AutoVsync`; no Windows, um
+  `WGPU_BACKEND` explícito também preserva `AutoVsync` para não assumir suporte a Mailbox em
+  um backend de debugging escolhido pelo usuário;
 - diagnostics agora medem também o tempo real de trabalho do Main Schedule:
   `main_work_avg_us`, `main_work_p50_us`, `main_work_p95_us`,
   `main_work_p99_us` e `main_work_max_us`;
