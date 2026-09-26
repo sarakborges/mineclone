@@ -37,8 +37,7 @@ jobs:
           FMT = {5123: "H", 5126: "f"}
 
           def decode_buffer(doc):
-              uri = doc["buffers"][0]["uri"]
-              return base64.b64decode(uri.split(",", 1)[1])
+              return base64.b64decode(doc["buffers"][0]["uri"].split(",", 1)[1])
 
           def unpack_at(buf, offset, accessor):
               width = WIDTH[accessor["type"]]
@@ -59,17 +58,19 @@ jobs:
                       [max(row[j] for row in rows) for j in range(width)])
 
           for path in SOURCES:
-              source = subprocess.check_output(["git", "show", f"{SOURCE_REF}:{path}"], text=True)
-              doc = json.loads(source)
+              doc = json.loads(subprocess.check_output(["git", "show", f"{SOURCE_REF}:{path}"], text=True))
               buf = decode_buffer(doc)
               print(f"=== {path} decoded={len(buf)} declared={doc['buffers'][0]['byteLength']} ===")
               primitive_index_map = {}
+              semantics = {}
               for mesh_i, mesh in enumerate(doc.get("meshes", [])):
                   for prim_i, prim in enumerate(mesh.get("primitives", [])):
                       idx = prim.get("indices")
                       pos = prim.get("attributes", {}).get("POSITION")
                       if idx is not None and pos is not None:
                           primitive_index_map[idx] = (mesh_i, prim_i, doc["accessors"][pos]["count"])
+                      for semantic, accessor_index in prim.get("attributes", {}).items():
+                          semantics[accessor_index] = semantic
 
               animation_inputs = set()
               animation_outputs = set()
@@ -83,6 +84,7 @@ jobs:
                   declared = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
                   component = accessor["componentType"]
                   align = SIZE.get(component, 1)
+                  semantic = semantics.get(index)
                   candidates = []
                   for offset in range(0, len(buf), align):
                       values = unpack_at(buf, offset, accessor)
@@ -94,40 +96,47 @@ jobs:
                           _, _, vertex_count = primitive_index_map[index]
                           ok = all(0 <= value < vertex_count for value in values)
                           if ok:
-                              score += len(set(values))
+                              triangles = [values[i:i+3] for i in range(0, len(values), 3)]
+                              nondegenerate = sum(len(set(t)) == 3 for t in triangles)
+                              score += len(set(values)) + nondegenerate
                       elif index in animation_inputs:
                           ok = all(math.isfinite(v) and v >= 0 for v in values)
                           ok = ok and all(values[i] < values[i+1] for i in range(len(values)-1))
                           amin = accessor.get("min", [None])[0]
                           amax = accessor.get("max", [None])[0]
-                          if ok and amin is not None:
-                              ok = close(values[0], amin)
-                          if ok and amax is not None:
-                              ok = close(values[-1], amax)
-                          if ok:
-                              score += 100
+                          if ok and amin is not None: ok = close(values[0], amin)
+                          if ok and amax is not None: ok = close(values[-1], amax)
+                          if ok: score += 100
                       else:
                           width = WIDTH[accessor["type"]]
                           if component == 5126:
                               ok = all(math.isfinite(v) for v in values)
+                          if ok and semantic in ("COLOR_0", "TEXCOORD_0"):
+                              ok = all(-1e-6 <= v <= 1.000001 for v in values)
+                              if ok: score += 30
                           amin = accessor.get("min")
                           amax = accessor.get("max")
                           if ok and amin is not None and amax is not None:
                               actual_min, actual_max = vector_bounds(values, width)
                               ok = all(close(actual_min[j], amin[j]) and close(actual_max[j], amax[j]) for j in range(width))
-                              if ok:
-                                  score += 50
+                              if ok: score += 50
                           elif ok and index in animation_outputs:
                               ok = all(-0.01 <= v <= 2.0 for v in values)
-                              if ok:
-                                  score += 10
+                              if ok: score += 10
                       if ok:
-                          if offset == declared:
-                              score += 1000
+                          if offset == declared: score += 1000
                           candidates.append((score, offset))
                   candidates.sort(reverse=True)
-                  label = "indices" if index in primitive_index_map else "anim_in" if index in animation_inputs else "anim_out" if index in animation_outputs else "data"
-                  print(f"accessor={index:02d} kind={label:8s} declared={declared:4d} candidates={candidates[:8]}")
+                  label = "indices" if index in primitive_index_map else "anim_in" if index in animation_inputs else "anim_out" if index in animation_outputs else semantic or "data"
+                  print(f"accessor={index:02d} kind={label:10s} declared={declared:4d} candidates={candidates[:8]}")
+
+              # Inspect the suspicious normal-detail region and corresponding large offsets.
+              for offset in [2016, 2064, 2856, 2904, 2936, 2984, 2948, 2996, 3596, 3644, 3692, 3740, 4460, 4684, 4732, 7180, 7660]:
+                  if offset >= len(buf):
+                      continue
+                  chunk = buf[offset:offset+32]
+                  u16 = struct.unpack("<" + "H" * (len(chunk)//2), chunk[:len(chunk)//2*2])
+                  print(f"probe offset={offset}: hex={chunk[:16].hex()} u16={u16[:8]}")
 
       - name: Setup Node
         uses: actions/setup-node@v4
