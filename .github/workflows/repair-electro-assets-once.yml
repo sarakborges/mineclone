@@ -1,4 +1,4 @@
-# Registered workflow; this edit intentionally triggers the one-shot repair.
+# Registered workflow; this edit strips the redundant embedded face texture and retriggers the repair.
 name: Repair Electro assets once
 
 on:
@@ -107,6 +107,18 @@ jobs:
           def repack(doc, source_buf, offsets, output, overrides=None):
               doc = copy.deepcopy(doc)
               overrides = overrides or {}
+
+              # Runtime creature definitions replace SlimeFace with the external
+              # assets/textures/creatures/slime_electro/face.png. Keeping the old
+              # embedded data URI is redundant and produces a GLB validator warning.
+              for material in doc.get("materials", []):
+                  pbr = material.get("pbrMetallicRoughness")
+                  if isinstance(pbr, dict):
+                      pbr.pop("baseColorTexture", None)
+              doc.pop("images", None)
+              doc.pop("textures", None)
+              doc.pop("samplers", None)
+
               new_binary = bytearray()
               new_views = []
 
