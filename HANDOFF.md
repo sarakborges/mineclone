@@ -33,6 +33,7 @@
   - ranges/tamanho de accessors.
 - As definitions Electro continuam usando `.glb` + face externa `textures/creatures/slime_electro/face.png`.
 - A instrumentação de performance da 0.68.45 (`frame`, `main_work`, `render work`) permanece intacta.
+- CI funcional da 0.68.47: run `36211664885` — success em localizations, structure content references, novo `Audit GLB assets`, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
 
 VERSION: `0.68.47`.
 
@@ -66,8 +67,7 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Confirmar CI verde da **0.68.47**, incluindo o novo `Audit GLB assets`, Clippy `-D warnings` e `cargo check --locked`.
-2. Rodar a 0.68.47 e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
-3. Gerar log de gameplay com período parado e movimento/streaming normal.
-4. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
-5. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.
+1. Rodar a **0.68.47** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
+2. Gerar log de gameplay com período parado e movimento/streaming normal.
+3. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
+4. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.
