@@ -25,8 +25,9 @@ jobs:
         run: npm install --no-save gltf-validator@2.0.0-dev.3.10
 
       - name: Validate Electro assets
-        shell: node {0}
+        shell: bash
         run: |
+          cat > validate-electro-gltf.cjs <<'NODE'
           const fs = require('fs');
           const validator = require('gltf-validator');
 
@@ -54,3 +55,5 @@ jobs:
             console.error(error);
             process.exit(1);
           });
+          NODE
+          node ./validate-electro-gltf.cjs
