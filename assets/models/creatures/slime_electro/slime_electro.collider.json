@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "asteria:slime_electro",
-  "asset": "slime_electro.glb",
+  "asset": "slime_electro.gltf",
   "units": "meters",
   "world_up": "+Y",
   "forward": "-Z",
@@ -9,15 +9,15 @@
   "model_bounds_rest": {
     "size": [
       1.2,
-      1,
+      1.163,
       1.14
     ],
     "center": [
       0,
-      0.5,
+      0.5815,
       0
     ],
-    "approximate_visual_height": 1
+    "approximate_visual_height": 1.163
   },
   "collider": {
     "type": "aabb",
@@ -41,59 +41,32 @@
       0.84,
       0.3876
     ],
-    "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLB animation",
+    "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLTF animation",
     "solid_world_collision": true,
     "targeting": true
   },
   "animation": {
     "clips": {
-      "Idle": {
-        "duration_s": 2,
-        "loop": true
-      },
-      "Anticipate": {
-        "duration_s": 0.24,
-        "loop": false
-      },
-      "Airborne": {
-        "duration_s": 0.72,
-        "loop": true
-      },
-      "Land": {
-        "duration_s": 0.34,
-        "loop": false
-      },
-      "Hurt": {
-        "duration_s": 0.38,
-        "loop": false
-      },
-      "Death": {
-        "duration_s": 0.75,
-        "loop": false
-      }
+      "Idle": {"duration_s": 2,"loop": true},
+      "Anticipate": {"duration_s": 0.24,"loop": false},
+      "Airborne": {"duration_s": 0.72,"loop": true},
+      "Land": {"duration_s": 0.34,"loop": false},
+      "Hurt": {"duration_s": 0.38,"loop": false},
+      "Death": {"duration_s": 0.75,"loop": false}
     },
     "root_motion": false,
     "visual_root": "BodyPivot",
-    "jump_sequence": [
-      "Anticipate",
-      "Airborne",
-      "Land",
-      "Idle"
-    ],
+    "jump_sequence": ["Anticipate","Airborne","Land","Idle"],
     "transition_rule": "Movement simulation owns lift, gravity, collision and landing; visual animation never moves the collider."
   },
   "materials": {
     "face": "SlimeFace",
-    "expression": "texture derived from the original relaxed Anemo face design",
+    "expression": "energetic closed-eye Electro expression derived from the relaxed Anemo face language",
     "unlit": true
   },
   "authoring": {
-    "voxel_resolution": [
-      24,
-      20,
-      22
-    ],
-    "construction": "sampled rounded voxel body + reference-driven blocky element details + textured face quad",
+    "voxel_resolution": [24,20,22],
+    "construction": "rounded low-poly slime body + reference-driven curved electro antenna with bright terminal + embedded pixel face",
     "base_language": "slime_blob"
   }
 }
