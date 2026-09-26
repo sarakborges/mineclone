@@ -2,6 +2,27 @@
 
 > Handoff corrente. O histórico integral anterior a este arquivo foi preservado byte por byte em `HANDOFF_ARCHIVE_2026-09-25.md` (blob original `c06357d3f869a09effb14de27c6712dc11dc086c`). Consulte o arquivo histórico apenas quando a tarefa exigir contexto antigo; para continuidade normal, comece por este arquivo.
 
+## 2026-09-25/26 — 0.68.46 corrige crash de preload dos Electro Slimes
+
+- QA da 0.68.45 não chegou ao gameplay porque `setup_world` panicou no preload de `models/creatures/slime_electro/slime_electro.gltf` com `AssetLoaderPanic` do `bevy_gltf::loader::GltfLoader`.
+- O diretório Electro tinha dois formatos ao mesmo tempo (`.gltf` e `.glb`), mas as definitions normal/large eram as únicas da família recente apontando para `.gltf`; os demais slimes data-driven usam `.glb`.
+- `data/creatures/slime_electro.json` agora aponta para `models/creatures/slime_electro/slime_electro.glb`.
+- `data/creatures/slime_electro_large.json` agora aponta para `models/creatures/slime_electro_large/slime_electro_large.glb`.
+- As duas definitions também receberam o mesmo contrato de face externa usado pelos outros slimes:
+  `"textures": { "SlimeFace": "textures/creatures/slime_electro/face.png" }`.
+  Isso garante que a face Electro editada recentemente seja realmente usada pelo runtime, em vez de depender da imagem embedded no modelo.
+- Os dois `.gltf` quebrados foram removidos para evitar regressão por referência futura acidental; os `.glb` permanecem como assets autoritativos.
+- Commits do fix:
+  - `588dbe971d308a52b7f7913af401201bcde24df3` — Electro normal usa `.glb` + face externa;
+  - `ae5efce8cc8d156b048719d618594f59b2f6e521` — Electro large usa `.glb` + face externa;
+  - `9a62a460e72c944fa945c9358b961209196fde4a` — remove `.gltf` quebrado normal;
+  - `fbdcffb187b979e73703fa1621659c13f790f499` — remove `.gltf` quebrado large;
+  - `0372fd8811591fcff11268017b1f2d31fef65a93` — VERSION 0.68.46.
+- Antes de retomar qualquer otimização de FPS, CI deste HEAD precisa ficar verde sem warnings e o runtime deve confirmar que Loading entra em Gameplay.
+- A instrumentação `render work` da 0.68.45 permanece intacta; o próximo log útil de performance deve portanto ser produzido já na 0.68.46.
+
+VERSION: `0.68.46`.
+
 ## 2026-09-25/26 — Rendering diagnostics 0.68.45 mede o Render schedule separadamente
 
 - Continuação direta da investigação de FPS após 0.68.44.
@@ -30,7 +51,6 @@
   - `4d05911084079a15f58db7b12e927d7534009c7d` — restaura wiring correto de `world/mod.rs` após o primeiro CI encontrar integração incorreta;
   - `07bc32b256da7434417c63cb7aa5b9cd93d68469` — corrige const mask para Rust 1.98.1.
 - CI funcional final: run `36207686674` — success em localization audit, structure content reference audit, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
-- Não avançar para outra otimização por hipótese antes de analisar um runtime log produzido pela 0.68.45; agora há informação suficiente para escolher o domínio correto do próximo profiling.
 
 VERSION: `0.68.45`.
 
@@ -67,11 +87,12 @@ VERSION: `0.68.42`.
 
 ## Continuidade imediata
 
-1. Rodar/obter um log de gameplay da **0.68.45** com período parado e movimento/streaming normal.
-2. Comparar, no mesmo intervalo, `frame_*`, `main_work_*` e a nova linha `render work`.
-3. Só então escolher o próximo alvo:
+1. Confirmar CI verde da **0.68.46**.
+2. Rodar/obter um log de gameplay da 0.68.46 com período parado e movimento/streaming normal; Loading precisa chegar a Gameplay sem o panic Electro.
+3. Comparar, no mesmo intervalo, `frame_*`, `main_work_*` e a nova linha `render work`.
+4. Só então escolher o próximo alvo:
    - Main Schedule systems;
    - Render schedule/submit;
    - presentation/GPU/driver;
    - ou, se os dados contradisserem a hipótese atual, ampliar a instrumentação antes de otimizar.
-4. Manter a regra do projeto: antes de cada próximo bloco de alteração, CI sem erros e sem warnings.
+5. Manter a regra do projeto: antes de cada próximo bloco de alteração, CI sem erros e sem warnings.
