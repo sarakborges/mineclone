@@ -9,37 +9,37 @@
   "model_bounds_rest": {
     "size": [
       1.92,
-      1.52,
-      1.8
+      1.38,
+      1.82
     ],
     "center": [
       0,
-      0.76,
+      0.69,
       0
     ],
-    "approximate_visual_height": 1.52
+    "approximate_visual_height": 1.38
   },
   "collider": {
     "type": "aabb",
     "size": [
       1.248,
-      1.2768,
-      1.224
+      1.1592,
+      1.2376
     ],
     "center_offset": [
       0,
-      0.6384,
+      0.5796,
       0
     ],
     "min_offset": [
       -0.624,
       0,
-      -0.612
+      -0.6188
     ],
     "max_offset": [
       0.624,
-      1.2768,
-      0.612
+      1.1592,
+      0.6188
     ],
     "follows": "SlimeRoot world transform, NOT BodyPivot scale or GLB animation",
     "solid_world_collision": true,
@@ -83,19 +83,17 @@
     "transition_rule": "Movement simulation owns lift, gravity, collision and landing; visual animation never moves the collider."
   },
   "materials": {
-    "face_light": "FaceLight",
-    "face_dark": "FaceDark",
-    "face_accent": "FaceAccent",
-    "expression": "authored as opaque pixel geometry; no texture override required",
+    "face": "SlimeFace",
+    "expression": "texture derived from the original relaxed Anemo face design",
     "unlit": true
   },
   "authoring": {
     "voxel_resolution": [
+      24,
       20,
-      16,
-      18
+      22
     ],
-    "construction": "sampled rounded voxel volume + exposed-face meshing + cuboid element details + pixel-expression quads",
+    "construction": "sampled rounded voxel body + reference-driven blocky element details + textured face quad",
     "base_language": "slime_blob"
   }
 }

@@ -19,7 +19,8 @@ Creature animation particle effects are authored in the creature JSON through `p
 
 ## Elemental slime family
 
-The elemental family follows the rounded `slime_blob` body language and ships Electro, Dendro, Geo, Hydro, Anemo, Cryo and Pyro in small and large forms. Every variant owns a GLB and collider metadata in its own sibling directory and a creature definition under `data/creatures/`. The reference pass keeps the small and large silhouettes closer to the supplied elemental slime lineup.
+The elemental family follows the rounded `slime_blob` body language and now ships nine elements in small and large forms: Electro, Dendro, Geo, Hydro, Anemo, Cryo, Pyro, Lumen and Tenebra.
 
-Faces are opaque pixel geometry instead of texture-only eye decals: every variant has element-specific eyes plus brows, mouth and/or cheeks, with a distinct expression and blocky elemental silhouette details. The active Anemo asset was rebuilt with the family and no longer depends on the old Anemo face texture. The obsolete legacy-Anemo model and definition were removed.
+All elemental faces use the same visual language as the original relaxed Anemo face. The active Anemo reuses that original face texture directly; the other elements use expression variants derived from the same closed-eye, soft-cheek, minimal-mouth design. Faces are texture-driven through the shared `SlimeFace` material instead of bespoke face geometry.
 
+The latest palette pass makes Electro yellow/gold, reserves purple for Tenebra, and gives Lumen a white/pink palette. Lumen uses angelic wings plus a halo; Tenebra uses bat wings plus small horns. Elemental silhouette details otherwise stay reference-driven and avoid unrelated horn-like decoration.

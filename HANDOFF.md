@@ -16925,3 +16925,14 @@ mas foram corrigidos primeiro para manter a regra de CI verde entre partes.
 - Element-specific face expressions remain geometry-authored, but were simplified to stay closer to the source visual language.
 - Removed `asteria:slime_electro_mutant` completely (model, collider metadata and creature definition). The family is now exactly 7 elements × 2 sizes = 14 variants.
 
+## 2026-09-25 — Elemental slime face unification + Lumen/Tenebra
+
+- Rebuilt the full elemental slime family around the original relaxed Anemo face language.
+- Active Anemo reuses the exact previous `slime_anemo/face.png`; all other elemental faces are derived expression variants with the same closed-eye/soft-cheek/minimal-mouth design.
+- Replaced the recent per-model face geometry with a textured `SlimeFace` material and per-element face PNG mapping.
+- Electro palette changed from purple to yellow/gold.
+- Added `asteria:slime_lumen` + `asteria:slime_lumen_large`: white/pink palette, angelic wings, halo.
+- Added `asteria:slime_tenebra` + `asteria:slime_tenebra_large`: distinct dark purple palette, bat wings, small horns.
+- Existing Dendro/Geo/Hydro/Anemo/Cryo/Pyro adornments remain reference-driven; no generic horn treatment is applied.
+- Family is now 9 elements x 2 sizes = 18 variants.
+

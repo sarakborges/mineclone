@@ -11,37 +11,38 @@
   "collider": {
     "size": [
       1.248,
-      1.2768,
-      1.224
+      1.1592,
+      1.2376
     ],
     "centerOffset": [
       0,
-      0.6384,
+      0.5796,
       0
     ]
   },
   "targetCollider": {
     "size": [
       1.92,
-      1.52,
-      1.8
+      1.38,
+      1.82
     ],
     "centerOffset": [
       0,
-      0.76,
+      0.69,
       0
     ]
   },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_electro/face.png"
+  },
   "unlitMaterials": [
-    "FaceLight",
-    "FaceDark",
-    "FaceAccent",
+    "SlimeFace",
     "ElementAccent",
     "ElementPale",
     "ElementDark",
-    "ElementWarm",
-    "LeafGreen",
-    "ElementWhite"
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
   ],
   "animations": {
     "idle": "Idle",
@@ -61,16 +62,16 @@
     "idle": {
       "count": 3,
       "color": [
-        0.96,
-        0.52,
         1,
+        0.88,
+        0.3,
         0.68
       ],
       "size": 0.0551,
       "lifetime": 1,
       "interval": 0.55,
       "spawnRadius": 0.6528,
-      "yOffset": 0.7296,
+      "yOffset": 0.6624,
       "horizontalSpeed": 0.09,
       "verticalSpeed": 0.18,
       "verticalJitter": 0.07,
@@ -80,9 +81,9 @@
     "land": {
       "count": 12,
       "color": [
-        0.96,
-        0.52,
         1,
+        0.88,
+        0.3,
         0.68
       ],
       "size": 0.0696,
@@ -98,15 +99,15 @@
     "hurt": {
       "count": 10,
       "color": [
-        0.9768,
-        0.7216,
         1,
+        0.9304,
+        0.594,
         0.78
       ],
       "size": 0.0725,
       "lifetime": 0.5,
       "spawnRadius": 0.47002,
-      "yOffset": 0.684,
+      "yOffset": 0.621,
       "horizontalSpeed": 0.66,
       "verticalSpeed": 0.48,
       "verticalJitter": 0.28,
@@ -116,15 +117,15 @@
     "death": {
       "count": 28,
       "color": [
-        0.9768,
-        0.7216,
         1,
+        0.9304,
+        0.594,
         0.78
       ],
       "size": 0.0899,
       "lifetime": 0.9,
       "spawnRadius": 0.6528,
-      "yOffset": 0.6384,
+      "yOffset": 0.5796,
       "horizontalSpeed": 0.92,
       "verticalSpeed": 0.86,
       "verticalJitter": 0.5,

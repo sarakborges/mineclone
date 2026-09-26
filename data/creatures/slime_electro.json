@@ -32,16 +32,17 @@
       0
     ]
   },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_electro/face.png"
+  },
   "unlitMaterials": [
-    "FaceLight",
-    "FaceDark",
-    "FaceAccent",
+    "SlimeFace",
     "ElementAccent",
     "ElementPale",
     "ElementDark",
-    "ElementWarm",
-    "LeafGreen",
-    "ElementWhite"
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
   ],
   "animations": {
     "idle": "Idle",
@@ -61,9 +62,9 @@
     "idle": {
       "count": 2,
       "color": [
-        0.96,
-        0.52,
         1,
+        0.88,
+        0.3,
         0.68
       ],
       "size": 0.038,
@@ -80,9 +81,9 @@
     "land": {
       "count": 8,
       "color": [
-        0.96,
-        0.52,
         1,
+        0.88,
+        0.3,
         0.68
       ],
       "size": 0.048,
@@ -98,9 +99,9 @@
     "hurt": {
       "count": 7,
       "color": [
-        0.9768,
-        0.7216,
         1,
+        0.9304,
+        0.594,
         0.78
       ],
       "size": 0.05,
@@ -116,9 +117,9 @@
     "death": {
       "count": 18,
       "color": [
-        0.9768,
-        0.7216,
         1,
+        0.9304,
+        0.594,
         0.78
       ],
       "size": 0.062,

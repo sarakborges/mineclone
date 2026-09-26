@@ -11,37 +11,38 @@
   "collider": {
     "size": [
       1.248,
-      1.2768,
-      1.224
+      1.2012,
+      1.2376
     ],
     "centerOffset": [
       0,
-      0.6384,
+      0.6006,
       0
     ]
   },
   "targetCollider": {
     "size": [
       1.92,
-      1.52,
-      1.8
+      1.43,
+      1.82
     ],
     "centerOffset": [
       0,
-      0.76,
+      0.715,
       0
     ]
   },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_cryo/face.png"
+  },
   "unlitMaterials": [
-    "FaceLight",
-    "FaceDark",
-    "FaceAccent",
+    "SlimeFace",
     "ElementAccent",
     "ElementPale",
     "ElementDark",
-    "ElementWarm",
-    "LeafGreen",
-    "ElementWhite"
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
   ],
   "animations": {
     "idle": "Idle",
@@ -70,7 +71,7 @@
       "lifetime": 1,
       "interval": 0.55,
       "spawnRadius": 0.6528,
-      "yOffset": 0.7296,
+      "yOffset": 0.6864,
       "horizontalSpeed": 0.09,
       "verticalSpeed": 0.18,
       "verticalJitter": 0.07,
@@ -106,7 +107,7 @@
       "size": 0.0725,
       "lifetime": 0.5,
       "spawnRadius": 0.47002,
-      "yOffset": 0.684,
+      "yOffset": 0.6435,
       "horizontalSpeed": 0.66,
       "verticalSpeed": 0.48,
       "verticalJitter": 0.28,
@@ -124,7 +125,7 @@
       "size": 0.0899,
       "lifetime": 0.9,
       "spawnRadius": 0.6528,
-      "yOffset": 0.6384,
+      "yOffset": 0.6006,
       "horizontalSpeed": 0.92,
       "verticalSpeed": 0.86,
       "verticalJitter": 0.5,

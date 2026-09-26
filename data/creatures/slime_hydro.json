@@ -32,16 +32,17 @@
       0
     ]
   },
+  "textures": {
+    "SlimeFace": "textures/creatures/slime_hydro/face.png"
+  },
   "unlitMaterials": [
-    "FaceLight",
-    "FaceDark",
-    "FaceAccent",
+    "SlimeFace",
     "ElementAccent",
     "ElementPale",
     "ElementDark",
-    "ElementWarm",
-    "LeafGreen",
-    "ElementWhite"
+    "ElementWhite",
+    "ElementRose",
+    "FlowerOrange"
   ],
   "animations": {
     "idle": "Idle",
