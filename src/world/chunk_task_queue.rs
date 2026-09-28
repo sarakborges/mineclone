@@ -5,14 +5,36 @@ use bevy::{
     tasks::{Task, futures::check_ready},
 };
 
+/// Identifies the immutable input snapshot used by an asynchronous chunk task.
+///
+/// Keeping this distinct from arbitrary counters prevents task publication code
+/// from accidentally comparing a completed job against an unrelated world,
+/// content, or presentation revision. Callers may continue supplying their
+/// existing `u64` snapshot counters while migration is in progress; the task
+/// boundary converts them immediately into this domain type.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct TaskInputRevision(u64);
+
+impl From<u64> for TaskInputRevision {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl PartialEq<u64> for TaskInputRevision {
+    fn eq(&self, other: &u64) -> bool {
+        self.0 == *other
+    }
+}
+
 pub(crate) struct CompletedChunkTask<T> {
     pub(crate) coord: IVec3,
-    pub(crate) revision: u64,
+    pub(crate) revision: TaskInputRevision,
     pub(crate) output: T,
 }
 
 struct PendingChunkTask<T> {
-    revision: u64,
+    revision: TaskInputRevision,
     task: Task<T>,
 }
 
@@ -72,8 +94,13 @@ impl<T> ChunkTaskQueue<T> {
             return false;
         }
 
-        self.pending
-            .insert(coord, PendingChunkTask { revision, task });
+        self.pending.insert(
+            coord,
+            PendingChunkTask {
+                revision: revision.into(),
+                task,
+            },
+        );
         true
     }
 
