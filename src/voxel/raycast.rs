@@ -4,7 +4,7 @@ use super::{
     cell::VoxelCell,
     log_variant::is_hollow_log_id,
     microblock::{HOLLOW_LOG_EDGE, MICROBLOCK_EDGE, MicroblockMask},
-    world::VoxelWorld,
+    read::VoxelRead,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub(crate) struct MicroVoxelHit {
 }
 
 pub fn raycast_voxels(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     origin: Vec3,
     direction: Vec3,
     max_distance: f32,
@@ -38,7 +38,7 @@ pub fn raycast_voxels(
 }
 
 pub(crate) fn raycast_micro_voxels(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     origin: Vec3,
     direction: Vec3,
     max_distance: f32,
@@ -107,7 +107,7 @@ pub(crate) fn raycast_micro_voxels(
 }
 
 fn occupied_raycast_cell(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     fine: IVec3,
 ) -> Option<(VoxelCell, IVec3, IVec3)> {
     let voxel = IVec3::new(
