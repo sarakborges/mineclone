@@ -10,6 +10,8 @@ use crate::voxel::{
     deduplicated_queue::DeduplicatedQueue,
 };
 
+use super::residency::ResidencySelectionRevision;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct CriticalPendingScanKey {
     queue_revision: u64,
@@ -19,7 +21,7 @@ struct CriticalPendingScanKey {
 #[derive(Default)]
 struct PendingPriorityCache {
     queue_revision: u64,
-    selection_revision: u64,
+    selection_revision: ResidencySelectionRevision,
     pending: VecDeque<ChunkCoord>,
 }
 
@@ -97,6 +99,7 @@ impl PendingChunkQueue {
         selection_revision: u64,
         mut priority: impl FnMut(IVec3) -> K,
     ) -> (Option<IVec3>, Option<(Duration, usize)>) {
+        let selection_revision = ResidencySelectionRevision::from_raw(selection_revision);
         let queue_revision = self.queue.revision();
         let mut scan = None;
         if self.priority_cache.queue_revision != queue_revision
