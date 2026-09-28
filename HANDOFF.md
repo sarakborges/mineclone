@@ -5,7 +5,7 @@
 ## 2026-09-28 — Asteria Core rebuild / Phase 1 concluída, Phase 2 em andamento
 
 - Branch ativa: `architecture/asteria-core-rebuild`.
-- Baseline da reconstrução: `develop@5038934a97a51cdd8cdc94fc61314cb650d96d` (`0.68.48`).
+- Baseline da reconstrução: `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
 - Decisão arquitetural permanece: **Rust + Bevy**, com Bevy como host/framework e Asteria possuindo world core, metadata/generation, streaming, simulation boundaries e voxel presentation.
 - Não é rewrite cego do jogo inteiro. Gameplay, content, assets, UI e sistemas válidos devem ser preservados/adaptados enquanto a fundação é substituída por cutovers explícitos.
 - Hydrology legado continua removido e **não deve voltar**. Rivers/lakes/cave entrances e features longos futuros pertencem ao sistema generalizado de structures/connectors/structure groups + metadata. Dynamic fluid simulation continua separada.
@@ -60,9 +60,11 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 ### Revision/dirty domains — diagnóstico Phase 2
 
 - Object scene invalidation é um domínio real: `world_objects.rs` usa revision global para fast-path da cena e revision por chunk para atualização incremental. Esses valores foram agrupados em `ObjectRevisionState` e tipados internamente.
-- `chunk_mesh_revisions` **não deve ganhar owner novo**. O getter é test-only e não existe leitura de produção desse counter; a apresentação real já invalida por `ChunkRemeshTasks`/`ChunkRemeshQueue`, inclusive lighting por meshlet em `lighting_updates.rs`.
-- `lighting::propagation` ainda chama `commit_deferred_light_mesh_revisions()` por herança do mecanismo antigo, mas o trabalho efetivo de remesh vem dos changed positions -> meshlet masks -> remesh task revisions/queue. Próximo cut deve remover esse contador legado e renomear o setter de light que ainda menciona “deferred mesh revision”.
-- `block_content_revision` ainda precisa ter seus consumidores/semantics confirmados antes de ser extraído ou removido.
+- `chunk_mesh_revisions` foi confirmado como estado legado e **removido**, em vez de receber owner artificial. Não existia leitura de produção desse counter; a apresentação real já invalida por `ChunkRemeshTasks`/`ChunkRemeshQueue`, inclusive lighting por meshlet em `lighting_updates.rs`.
+- `lighting::propagation` agora apenas altera light data e publica `changed_*` quando a lane pode ser apresentada. O antigo `commit_deferred_light_mesh_revisions()` desapareceu; os changed positions continuam sendo convertidos em meshlet masks e revisions no owner real de remesh.
+- Os testes de interactive/settling continuam verificando as semantics corretas de publicação: interactive expõe mudanças por frame; generated-fluid settling mantém mudanças privadas até a lane convergir.
+- `ChunkMeshSnapshot` continua dependendo somente de `ChunkContentRevision`; lighting não invalida content dependencies. O teste residual que consultava `chunk_mesh_revision()` foi migrado para essa invariante real.
+- `block_content_revision` ainda precisa ter seus consumidores/semantics confirmados antes de ser extraído, tipado ou removido.
 
 ### Cutovers verdes mais recentes
 
@@ -93,6 +95,8 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore` passa a possuir resident chunks + column index; CI `36490280435` success.
 - `3f072dd12db3f456b1060a890730f4457a7a847c` — scene + per-chunk object revisions agrupadas em `ObjectRevisionState`; CI `36491139143` success.
 - `d240f50368cf76147638cf00039f5de8eb84eec6` — object scene/chunk revisions tipadas internamente mantendo adapter `u64`; CI `36491654054` success.
+- `665117027f333364fd0cb0ef3c3cde4f9cb0c224` — remove `chunk_mesh_revisions`, o publish no-op de lighting e os bumps redundantes; o primeiro gate `36492307348` encontrou apenas um teste residual.
+- `90319e4031c4db656f685667f626a7cf39a332b7` — teste residual de mesh snapshot migrado da revisão morta para a invariante real de content dependency; CI `36492502160` success.
 
 ### Phase 1 — encerrada
 
@@ -114,15 +118,15 @@ Já concluído nesta phase:
 - persistence/archive state separado;
 - content revision nominal end-to-end;
 - mutation gameplay facade sem escape hatch para `VoxelWorld` inteiro;
-- object-scene/per-chunk object invalidation com owner explícito e revisions semanticamente distintas internamente.
+- object-scene/per-chunk object invalidation com owner explícito e revisions semanticamente distintas internamente;
+- remoção do counter global/per-chunk de mesh que não tinha consumidor de produção, deixando presentation dirtiness no remesh scheduler/queue.
 
 Próximos cortes devem seguir as tarefas da Phase 2:
 
-1. remover `chunk_mesh_revisions` legado em vez de criar owner artificial; presentation dirtiness já pertence ao remesh scheduler/queue;
-2. confirmar callers/semantics de `block_content_revision` e então extrair, tipar ou remover conforme uso real;
-3. centralizar cada mutation effect exatamente uma vez: content revision, persistence promotion, simulation/presentation dirtiness e object-scene effects;
-4. tornar lookup semantics explícitas para resident / absent / known-but-not-resident onde o código realmente precisa dessa distinção;
-5. definir/bound cache e eviction ownership sem acoplar isso aos render entities.
+1. confirmar callers/semantics de `block_content_revision` e então extrair, tipar ou remover conforme uso real;
+2. centralizar cada mutation effect exatamente uma vez: content revision, persistence promotion, simulation/presentation dirtiness e object-scene effects;
+3. tornar lookup semantics explícitas para resident / absent / known-but-not-resident onde o código realmente precisa dessa distinção;
+4. definir/bound cache e eviction ownership sem acoplar isso aos render entities.
 
 `VoxelWorld` ainda é um facade/coordenador útil e não deve ser explodido num megadiff. A meta agora é reduzir responsabilidades internas por owners concretos, preservando a API externa enquanto os callers migram.
 
@@ -135,7 +139,7 @@ Próximos cortes devem seguir as tarefas da Phase 2:
 ## Continuidade imediata
 
 1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
-2. Remover o mesh revision counter legado e o publish no-op de lighting, preservando `ChunkRemeshTasks`/`ChunkRemeshQueue` como owner real de presentation dirtiness.
-3. Mapear callers e semantics de `block_content_revision` antes de tipar/extrair.
+2. Mapear callers e semantics de `block_content_revision`; não criar owner se o counter não tiver consumidor real.
+3. Se o revision for redundante, removê-lo e preservar a invariante/teste que motivou sua existência; se for real, extrair owner estreito antes de tipar.
 4. Não misturar object-scene, block-content e simulation/presentation dirtiness no mesmo commit.
 5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
