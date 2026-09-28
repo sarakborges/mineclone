@@ -219,7 +219,7 @@ impl WorldSaveContext<'_, '_> {
         WorldSnapshot::capture(SnapshotSource {
             id,
             seed: self.state.seed.0,
-            dimension_id: &self.state.dimension.id,
+            dimension_id: self.state.dimension.id.as_str(),
             spawn_biome: self.state.save.spawn_biome(),
             current_biome: Some(self.state.biome.id.as_str()),
             biome_size_multiplier: self.state.save.biome_size_multiplier(),
