@@ -38,9 +38,7 @@ use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
-    generation::{
-        authored_surface_fluid_id_for_position, ocean_weight_from_surface,
-    },
+    generation::{authored_surface_fluid_id_for_position, ocean_weight_from_surface},
     render_distance::RenderDistanceSettings,
     streaming::initial_streaming_chunk_coords,
     terrain::{surface_height, surface_height_from_sample},
@@ -322,7 +320,7 @@ fn initialize_bootstrap_persistence(
             commands.insert_resource(VoxelWorld::default());
             persistence.save.begin_new_world(
                 *config.seed,
-                &config.current_dimension.id,
+                config.current_dimension.id.as_str(),
                 *config.game_rules,
                 forced_spawn_biome,
                 biome_size_multiplier,
@@ -376,7 +374,7 @@ pub(in crate::world) fn begin_world_loading(
         structure_sets,
     } = BootstrapRegistries::resolve(&content, fresh_content.as_ref());
     let dimension = dimensions
-        .get(&config.current_dimension.id)
+        .get(config.current_dimension.id.as_str())
         .unwrap_or_else(|| {
             panic!(
                 "missing dimension definition: {}",
@@ -703,7 +701,6 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
 
     (roughness / count, metallic / count)
 }
-
 
 #[cfg(test)]
 mod tests {
