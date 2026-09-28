@@ -175,7 +175,11 @@ pub(crate) fn publish_generation_world_chunks(
     fluids: &FluidRegistry,
 ) -> io::Result<()> {
     publish_generation_storage(world_directory, generation, |staging| {
-        write_generation_world_chunks_to_staging(staging, world, fluids)
+        write_generation_chunk_source_to_staging(
+            staging,
+            world.persistent_chunk_coords().collect(),
+            |coord| world.save_persistent_chunk(coord, fluids),
+        )
     })
 }
 
@@ -512,12 +516,25 @@ fn noncanonical_region_path(path: PathBuf) -> io::Error {
     )
 }
 
-fn write_generation_world_chunks_to_staging(
+/// Writes one generation from a narrow persistence source instead of depending
+/// on the runtime world container. The source contract is coordinates plus a
+/// serializer for one canonical persistent chunk at a time, keeping memory
+/// bounded to one region's payload rather than cloning the whole world.
+fn write_generation_chunk_source_to_staging(
     staging: &Path,
-    world: &VoxelWorld,
-    fluids: &FluidRegistry,
+    mut coords: Vec<IVec3>,
+    mut save_chunk: impl FnMut(IVec3) -> io::Result<DiskChunk>,
 ) -> io::Result<()> {
-    let mut coords = world.persistent_chunk_coords().collect::<Vec<_>>();
+    let mut identities = HashSet::with_capacity(coords.len());
+    for coord in &coords {
+        if !identities.insert(*coord) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("duplicate persisted chunk coordinate: {coord:?}"),
+            ));
+        }
+    }
+
     coords.sort_unstable_by_key(|coord| {
         let region = ChunkRegionIdentity::from_chunk_position(*coord).region_position;
         (region.y, region.z, region.x, coord.y, coord.z, coord.x)
@@ -535,7 +552,17 @@ fn write_generation_world_chunks_to_staging(
 
         let mut chunks = Vec::with_capacity(end - start);
         for &coord in &coords[start..end] {
-            chunks.push(world.save_persistent_chunk(coord, fluids)?);
+            let chunk = save_chunk(coord)?;
+            let actual = ChunkDiskIdentity::from_disk_chunk(&chunk)?.chunk_position();
+            if actual != coord {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "persistent chunk source returned {actual:?} for requested coordinate {coord:?}"
+                    ),
+                ));
+            }
+            chunks.push(chunk);
         }
         write_region_file(staging, identity, &chunks)?;
         start = end;
@@ -546,43 +573,26 @@ fn write_generation_world_chunks_to_staging(
 
 #[cfg(test)]
 fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> io::Result<()> {
-    let mut identities = HashSet::with_capacity(chunks.len());
-    let mut regions = HashMap::<ChunkRegionIdentity, Vec<DiskChunk>>::new();
-
+    let mut by_coord = HashMap::with_capacity(chunks.len());
     for chunk in chunks {
-        let identity = ChunkDiskIdentity::from_disk_chunk(chunk)?;
-        if !identities.insert(identity) {
-            let position = identity.chunk_position();
+        let coord = ChunkDiskIdentity::from_disk_chunk(chunk)?.chunk_position();
+        if by_coord.insert(coord, chunk.clone()).is_some() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("duplicate persisted chunk coordinate: {position:?}"),
+                format!("duplicate persisted chunk coordinate: {coord:?}"),
             ));
         }
-
-        let position = identity.chunk_position();
-        regions
-            .entry(ChunkRegionIdentity::from_chunk_position(position))
-            .or_default()
-            .push(chunk.clone());
     }
 
-    let mut regions = regions.into_iter().collect::<Vec<_>>();
-    regions.sort_unstable_by_key(|(identity, _)| {
-        let position = identity.region_position;
-        (position.y, position.z, position.x)
-    });
-
-    for (identity, mut region_chunks) in regions {
-        region_chunks.sort_unstable_by_key(|chunk| {
-            let coord = chunk
-                .coord()
-                .expect("validated test chunk identity must remain readable");
-            (coord.y, coord.z, coord.x)
-        });
-        write_region_file(staging, identity, &region_chunks)?;
-    }
-
-    sync_directory_tree(staging)
+    let coords = by_coord.keys().copied().collect::<Vec<_>>();
+    write_generation_chunk_source_to_staging(staging, coords, |coord| {
+        by_coord.remove(&coord).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("missing test persistence source chunk: {coord:?}"),
+            )
+        })
+    })
 }
 
 fn write_region_file(
@@ -876,6 +886,25 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!root.join(generation_directory_name(11)).exists());
         assert!(!root.join(staging_generation_directory_name(11)).exists());
+        fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+
+    #[test]
+    fn persistence_source_rejects_chunk_identity_mismatch() {
+        let root = temp_directory("chunk-source-mismatch");
+        fs::create_dir_all(root.as_path()).expect("temp root must be created");
+        let staging = root.join("staging");
+        fs::create_dir(&staging).expect("staging must be created");
+
+        let requested = IVec3::new(1, 2, 3);
+        let error = write_generation_chunk_source_to_staging(
+            staging.as_path(),
+            vec![requested],
+            |_| Ok(disk_chunk(IVec3::new(4, 5, 6))),
+        )
+        .expect_err("source identity mismatch must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
         fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
