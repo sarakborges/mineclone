@@ -176,56 +176,8 @@ impl ChunkStreamingState {
         selected
     }
 
-    fn start_generation_wave_target(&mut self, coord: IVec3) {
-        self.generation_wave.start_target(coord);
-    }
-
-    fn generation_wave_active(&self) -> bool {
-        self.generation_wave.is_active()
-    }
-
-    fn generation_wave_accepts_new_targets(&self) -> bool {
-        self.generation_wave.accepts_new_targets()
-    }
-
     fn generation_dispatch_work_exists(&self) -> bool {
         self.generation_wave.dispatch_work_exists(self.pending.len())
-    }
-
-    fn stage_generated_chunk(&mut self, coord: IVec3) {
-        self.generation_wave.stage_generated_chunk(coord);
-    }
-
-    fn abandon_generation_target(&mut self, coord: IVec3) {
-        self.generation_wave.abandon_target(coord);
-    }
-
-    fn mark_generation_prefetched(&mut self, coord: IVec3) {
-        self.generation_wave.mark_prefetched(coord);
-    }
-
-    fn complete_generation_wave_target(&mut self, coord: IVec3) {
-        self.generation_wave.complete_target(coord);
-    }
-
-    fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
-        self.generation_wave.take_staged_generated_chunks()
-    }
-
-    fn begin_settled_publication(&mut self, chunks: Vec<IVec3>) {
-        self.generation_wave.begin_settled_publication(chunks);
-    }
-
-    fn has_settled_publication(&self) -> bool {
-        self.generation_wave.has_settled_publication()
-    }
-
-    fn pop_settled_publication_chunk(&mut self) -> Option<IVec3> {
-        self.generation_wave.pop_settled_publication_chunk()
-    }
-
-    fn finish_generation_wave(&mut self) {
-        self.generation_wave.finish();
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
@@ -608,7 +560,7 @@ pub(super) fn stream_chunks(
                 .cancel_where(|coord| !state.keeps_loaded(coord))
         };
         for coord in cancelled_generation {
-            work.state.abandon_generation_target(coord);
+            work.state.generation_wave.abandon_target(coord);
         }
 
         let cancelled_meshes = {
@@ -643,7 +595,7 @@ pub(super) fn stream_chunks(
             current_tick,
         );
     }
-    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave_active() {
+    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave.is_active() {
         collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.state.generation_dispatch_work_exists() {
@@ -938,12 +890,12 @@ mod tests {
         let coord = IVec3::new(4, 0, -2);
         let mut state = ChunkStreamingState::default();
 
-        state.mark_generation_prefetched(coord);
+        state.generation_wave.mark_prefetched(coord);
         assert!(state.generated_chunk_is_unpublished(coord));
         assert_eq!(state.diagnostic_generation_prefetch_count(), 1);
         assert!(!state.generation_wave.contains_target(coord));
 
-        state.finish_generation_wave();
+        state.generation_wave.finish();
 
         assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
         assert!(state.generation_wave.contains_target(coord));
@@ -955,8 +907,8 @@ mod tests {
         let coord = IVec3::new(-5, 1, 7);
         let mut state = ChunkStreamingState::default();
 
-        state.mark_generation_prefetched(coord);
-        state.abandon_generation_target(coord);
+        state.generation_wave.mark_prefetched(coord);
+        state.generation_wave.abandon_target(coord);
 
         assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
         assert!(!state.generated_chunk_is_unpublished(coord));
