@@ -1,8 +1,4 @@
-use std::ops::{Deref, DerefMut};
-
 use bevy::{platform::collections::HashSet, prelude::*};
-
-use super::ChunkStreamingState;
 
 /// Owns the logical chunk residency selection independently from the streaming
 /// scheduler. A chunk may be logically resident without being generated,
@@ -28,23 +24,5 @@ impl ChunkResidencyState {
             .revision
             .checked_add(1)
             .expect("chunk residency selection revision exhausted");
-    }
-}
-
-// Migration bridge: selection code still reads `streaming.desired` and
-// `streaming.retained` while residency ownership moves out of the scheduler.
-// Remove these impls once the remaining queue/selection call sites consume the
-// residency owner explicitly.
-impl Deref for ChunkStreamingState {
-    type Target = ChunkResidencyState;
-
-    fn deref(&self) -> &Self::Target {
-        &self.residency
-    }
-}
-
-impl DerefMut for ChunkStreamingState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.residency
     }
 }
