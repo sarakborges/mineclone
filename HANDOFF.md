@@ -38,6 +38,7 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `WorldId`: `WorldSession` armazena identidade tipada; catálogo/snapshot/thumbnail recebem `&str` somente nas bordas existentes.
 - `VoxelCoord`: conversão voxel -> chunk agora distingue semanticamente world voxel coordinate de `ChunkCoord`; APIs Bevy-facing continuam com adapters `IVec3` durante a migração.
 - `ChunkContentRevision`: agora é nominal também no map/counter autoritativo de `VoxelWorld`, no cache de lighting, na verificação de fluid settling e nos dependency snapshots. O caminho de content revision não converte mais de/para `u64` cru.
+- Object invalidation agora possui owner próprio (`ObjectRevisionState`). Scene revision e per-chunk object revision deixaram de ser campos soltos do `VoxelWorld`; internamente são domínios nominais distintos, mantendo `u64` apenas na API temporária consumida por `world_objects.rs`.
 
 ### Authoritative read / mutation / storage boundaries
 
@@ -55,6 +56,13 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - As semantics de persistence foram preservadas: chunk gerado e não modificado é descartado ao archive; chunk persistent é arquivado/restaurável; save serializa somente chunks persistent; generated-fluid settling não pode promover/alterar chunk já persistent pelo caminho derivado.
 - `VoxelWorld` ainda coordena mutation, lighting e revision effects; o resident store não absorveu side effects laterais.
 - Os testes de boundary de `streaming/meshing.rs` foram preservados. Durante o cutover uma regravação truncada removeu dois testes; isso foi detectado pelo diff, restaurado em `f20ae0a6`, e o checkpoint corrigido passou CI antes de continuar.
+
+### Revision/dirty domains — diagnóstico Phase 2
+
+- Object scene invalidation é um domínio real: `world_objects.rs` usa revision global para fast-path da cena e revision por chunk para atualização incremental. Esses valores foram agrupados em `ObjectRevisionState` e tipados internamente.
+- `chunk_mesh_revisions` **não deve ganhar owner novo**. O getter é test-only e não existe leitura de produção desse counter; a apresentação real já invalida por `ChunkRemeshTasks`/`ChunkRemeshQueue`, inclusive lighting por meshlet em `lighting_updates.rs`.
+- `lighting::propagation` ainda chama `commit_deferred_light_mesh_revisions()` por herança do mecanismo antigo, mas o trabalho efetivo de remesh vem dos changed positions -> meshlet masks -> remesh task revisions/queue. Próximo cut deve remover esse contador legado e renomear o setter de light que ainda menciona “deferred mesh revision”.
+- `block_content_revision` ainda precisa ter seus consumidores/semantics confirmados antes de ser extraído ou removido.
 
 ### Cutovers verdes mais recentes
 
@@ -83,6 +91,8 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `fc011ac18d3f0de80fdd2551cf0ff6430377b99b` — `ChunkPersistenceState` passa a possuir persistent set + archived payloads; CI `36489367228` success.
 - `ba0d53326c2beb1d4203d82f57443e9da7a543f4` — loaded chunk column index extraído; CI `36489860888` success.
 - `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore` passa a possuir resident chunks + column index; CI `36490280435` success.
+- `3f072dd12db3f456b1060a890730f4457a7a847c` — scene + per-chunk object revisions agrupadas em `ObjectRevisionState`; CI `36491139143` success.
+- `d240f50368cf76147638cf00039f5de8eb84eec6` — object scene/chunk revisions tipadas internamente mantendo adapter `u64`; CI `36491654054` success.
 
 ### Phase 1 — encerrada
 
@@ -103,14 +113,16 @@ Já concluído nesta phase:
 - authoritative resident chunk store explícito;
 - persistence/archive state separado;
 - content revision nominal end-to-end;
-- mutation gameplay facade sem escape hatch para `VoxelWorld` inteiro.
+- mutation gameplay facade sem escape hatch para `VoxelWorld` inteiro;
+- object-scene/per-chunk object invalidation com owner explícito e revisions semanticamente distintas internamente.
 
 Próximos cortes devem seguir as tarefas da Phase 2:
 
-1. mapear e separar os revision/dirty domains restantes (`chunk_mesh_revisions`, `chunk_object_revisions`, `object_scene_revision`, `block_content_revision`) pelo significado real, não apenas trocar `u64` por newtypes;
-2. centralizar cada mutation effect exatamente uma vez: content revision, persistence promotion, simulation/presentation dirtiness e object-scene effects;
-3. tornar lookup semantics explícitas para resident / absent / known-but-not-resident onde o código realmente precisa dessa distinção;
-4. definir/bound cache e eviction ownership sem acoplar isso aos render entities.
+1. remover `chunk_mesh_revisions` legado em vez de criar owner artificial; presentation dirtiness já pertence ao remesh scheduler/queue;
+2. confirmar callers/semantics de `block_content_revision` e então extrair, tipar ou remover conforme uso real;
+3. centralizar cada mutation effect exatamente uma vez: content revision, persistence promotion, simulation/presentation dirtiness e object-scene effects;
+4. tornar lookup semantics explícitas para resident / absent / known-but-not-resident onde o código realmente precisa dessa distinção;
+5. definir/bound cache e eviction ownership sem acoplar isso aos render entities.
 
 `VoxelWorld` ainda é um facade/coordenador útil e não deve ser explodido num megadiff. A meta agora é reduzir responsabilidades internas por owners concretos, preservando a API externa enquanto os callers migram.
 
@@ -123,7 +135,7 @@ Próximos cortes devem seguir as tarefas da Phase 2:
 ## Continuidade imediata
 
 1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
-2. Mapear callers e semantics dos revision/dirty fields restantes antes de tipá-los ou extraí-los.
-3. Escolher o primeiro domain owner real (provavelmente presentation/mesh dirty ou object-scene revision), migrar de forma estreita e preservar ordering/invalidation.
-4. Não misturar revisão de presentation, object-scene e simulation no mesmo commit.
+2. Remover o mesh revision counter legado e o publish no-op de lighting, preservando `ChunkRemeshTasks`/`ChunkRemeshQueue` como owner real de presentation dirtiness.
+3. Mapear callers e semantics de `block_content_revision` antes de tipar/extrair.
+4. Não misturar object-scene, block-content e simulation/presentation dirtiness no mesmo commit.
 5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
