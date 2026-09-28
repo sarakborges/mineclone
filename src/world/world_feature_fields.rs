@@ -123,7 +123,9 @@ impl WorldFeatureFields {
         reference: &str,
         factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
     ) -> Option<(IVec2, IVec2)> {
-        self.caches.structure_placement_bounds(reference, factory)
+        self.structure_metadata
+            .reference_bounds(reference)
+            .or_else(factory)
     }
 
     pub(crate) fn structure_origin_y(

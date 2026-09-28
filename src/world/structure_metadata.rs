@@ -1,5 +1,7 @@
 use std::{ops::Deref, sync::Arc};
 
+use bevy::prelude::IVec2;
+
 use super::structure_field::StructureField;
 
 /// Deterministic authored structure intent for a world.
@@ -27,6 +29,10 @@ impl StructureMetadata {
 
     pub(crate) fn field(&self) -> &StructureField {
         &self.field
+    }
+
+    pub(crate) fn reference_bounds(&self, reference: &str) -> Option<(IVec2, IVec2)> {
+        self.field.reference_bounds(reference)
     }
 
     #[cfg(test)]

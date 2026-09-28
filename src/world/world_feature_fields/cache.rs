@@ -187,7 +187,6 @@ pub(super) struct FeatureCaches {
         (String, String, StructureRotation, IVec3),
         Arc<CachedStructureForest>,
     >,
-    structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -205,7 +204,6 @@ impl FeatureCaches {
             connected_structure_forests: ConcurrentCache::new(
                 "connected structure forest cache",
             ),
-            structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -287,15 +285,6 @@ impl FeatureCaches {
             ),
             || Arc::new(factory()),
         )
-    }
-
-    pub(super) fn structure_placement_bounds(
-        &self,
-        reference: &str,
-        factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
-    ) -> Option<(IVec2, IVec2)> {
-        self.structure_placement_bounds
-            .get_or_insert_with(reference.to_owned(), factory)
     }
 
     pub(super) fn structure_origin_y(

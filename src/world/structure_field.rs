@@ -25,6 +25,7 @@ pub(crate) struct SurfaceStructureFieldEntry {
 pub(crate) struct StructureField {
     seed: u64,
     surface_entries: Arc<Vec<SurfaceStructureFieldEntry>>,
+    reference_bounds: Arc<HashMap<String, (IVec2, IVec2)>>,
 }
 
 impl StructureField {
@@ -32,6 +33,7 @@ impl StructureField {
         Self {
             seed,
             surface_entries: Arc::new(Vec::new()),
+            reference_bounds: Arc::new(HashMap::new()),
         }
     }
 
@@ -45,26 +47,23 @@ impl StructureField {
         let mut surface_entries = Vec::new();
 
         for biome_structure in biomes.structure_placements() {
+            let reference = biome_structure.structure_id.as_str();
+            let horizontal_bounds = cached_structure_reference_bounds(
+                &mut reference_bounds,
+                structures,
+                structure_sets,
+                reference,
+            );
+
             let BiomeStructurePlacementRules::Surface(placement) = biome_structure.placement else {
                 continue;
             };
-            let reference = biome_structure.structure_id.as_str();
-            let horizontal_bounds = if let Some(set) = structure_sets.get(reference) {
-                set.horizontal_bounds_with(|member_reference| {
-                    cached_reference_bounds(&mut reference_bounds, structures, member_reference)
-                })
-                .unwrap_or_else(|| {
-                    panic!("structure set {reference} has no resolvable horizontal bounds")
-                })
-            } else {
-                cached_reference_bounds(&mut reference_bounds, structures, reference)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "surface biome {} references missing structure or structure group: {reference}",
-                            biome_structure.biome_id
-                        )
-                    })
-            };
+            let horizontal_bounds = horizontal_bounds.unwrap_or_else(|| {
+                panic!(
+                    "surface biome {} references missing structure or structure group: {reference}",
+                    biome_structure.biome_id
+                )
+            });
 
             surface_entries.push(SurfaceStructureFieldEntry {
                 biome_id: biome_structure.biome_id.clone(),
@@ -83,11 +82,16 @@ impl StructureField {
         Self {
             seed,
             surface_entries: Arc::new(surface_entries),
+            reference_bounds: Arc::new(reference_bounds),
         }
     }
 
     pub(crate) fn surface_entries(&self) -> &[SurfaceStructureFieldEntry] {
         &self.surface_entries
+    }
+
+    pub(crate) fn reference_bounds(&self, reference: &str) -> Option<(IVec2, IVec2)> {
+        self.reference_bounds.get(reference).copied()
     }
 
     pub(crate) fn visit_surface_anchors_intersecting(
@@ -130,6 +134,27 @@ impl StructureField {
             }
         }
     }
+}
+
+fn cached_structure_reference_bounds(
+    cache: &mut HashMap<String, (IVec2, IVec2)>,
+    structures: &StructureRegistry,
+    structure_sets: &StructureSetRegistry,
+    reference: &str,
+) -> Option<(IVec2, IVec2)> {
+    if let Some(bounds) = cache.get(reference) {
+        return Some(*bounds);
+    }
+
+    let bounds = if let Some(set) = structure_sets.get(reference) {
+        set.horizontal_bounds_with(|member_reference| {
+            cached_reference_bounds(cache, structures, member_reference)
+        })?
+    } else {
+        connected_horizontal_bounds_for_reference(structures, reference)?
+    };
+    cache.insert(reference.to_owned(), bounds);
+    Some(bounds)
 }
 
 fn cached_reference_bounds(
