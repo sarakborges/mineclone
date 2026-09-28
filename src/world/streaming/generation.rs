@@ -42,9 +42,9 @@ pub(super) fn collect_generated_chunks(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
-    if work.state.has_settled_publication() {
+    if work.state.generation_wave.has_settled_publication() {
         if process_settled_wave_publication(work) {
-            work.state.finish_generation_wave();
+            work.state.generation_wave.finish();
         }
         return;
     }
@@ -60,8 +60,8 @@ pub(super) fn collect_generated_chunks(
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
         begin_settled_wave_publication(completion, work, queues, current_tick);
-        if !work.state.has_settled_publication() {
-            work.state.finish_generation_wave();
+        if !work.state.generation_wave.has_settled_publication() {
+            work.state.generation_wave.finish();
         }
         return;
     }
@@ -97,12 +97,12 @@ pub(super) fn collect_generated_chunks(
             {
                 work.state.generation_wave.enqueue_pending(completed.coord);
             } else {
-                work.state.abandon_generation_target(completed.coord);
+                work.state.generation_wave.abandon_target(completed.coord);
             }
             continue;
         }
         if !work.state.keeps_loaded(completed.coord) {
-            work.state.abandon_generation_target(completed.coord);
+            work.state.generation_wave.abandon_target(completed.coord);
             continue;
         }
         if work.world.has_resident_or_persisted_chunk(completed.coord) {
@@ -114,7 +114,7 @@ pub(super) fn collect_generated_chunks(
                 );
             }
             work.state.mark_ready(completed.coord);
-            work.state.complete_generation_wave_target(completed.coord);
+            work.state.generation_wave.complete_target(completed.coord);
             continue;
         }
 
@@ -125,10 +125,10 @@ pub(super) fn collect_generated_chunks(
         );
         work.world.insert_chunk(completed.coord, completed.output);
         if requires_fluid_settling {
-            work.state.stage_generated_chunk(completed.coord);
+            work.state.generation_wave.stage_generated_chunk(completed.coord);
         } else {
             work.state.mark_ready(completed.coord);
-            work.state.complete_generation_wave_target(completed.coord);
+            work.state.generation_wave.complete_target(completed.coord);
         }
     }
 
@@ -138,9 +138,9 @@ pub(super) fn collect_generated_chunks(
         return;
     }
 
-    let staged = work.state.take_staged_generated_chunks();
+    let staged = work.state.generation_wave.take_staged_generated_chunks();
     if staged.is_empty() {
-        work.state.finish_generation_wave();
+        work.state.generation_wave.finish();
         return;
     }
 
@@ -158,8 +158,8 @@ pub(super) fn collect_generated_chunks(
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
         begin_settled_wave_publication(completion, work, queues, current_tick);
-        if !work.state.has_settled_publication() {
-            work.state.finish_generation_wave();
+        if !work.state.generation_wave.has_settled_publication() {
+            work.state.generation_wave.finish();
         }
     }
 }
@@ -202,6 +202,7 @@ fn begin_settled_wave_publication(
     }
 
     work.state
+        .generation_wave
         .begin_settled_publication(completion.generated_chunks);
 }
 
@@ -217,14 +218,14 @@ fn process_settled_wave_publication(
     .with_maximum_items(MAX_SETTLED_PUBLICATIONS_PER_FRAME);
 
     while !budget.exhausted() {
-        let Some(coord) = work.state.pop_settled_publication_chunk() else {
+        let Some(coord) = work.state.generation_wave.pop_settled_publication_chunk() else {
             return true;
         };
         budget.record(1);
 
         if !work.state.keeps_loaded(coord) {
             work.world.archive_chunk(coord);
-            work.state.complete_generation_wave_target(coord);
+            work.state.generation_wave.complete_target(coord);
             continue;
         }
 
@@ -232,10 +233,10 @@ fn process_settled_wave_publication(
         // uninitialized until initial publication; dynamic propagation treats
         // unpublished chunks as outside its active domain.
         work.state.mark_ready(coord);
-        work.state.complete_generation_wave_target(coord);
+        work.state.generation_wave.complete_target(coord);
     }
 
-    !work.state.has_settled_publication()
+    !work.state.generation_wave.has_settled_publication()
 }
 
 fn reconcile_existing_fluid_changes(
@@ -287,7 +288,7 @@ pub(super) fn dispatch_generation_tasks(
         .with_global_deadline(deadline)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
-    if work.state.generation_wave_accepts_new_targets() {
+    if work.state.generation_wave.accepts_new_targets() {
         select_generation_wave(render_pool, work, &mut budget);
     }
 
@@ -317,7 +318,7 @@ fn schedule_generation_wave_pending(
             break;
         };
         if !state.keeps_loaded(coord) {
-            state.abandon_generation_target(coord);
+            state.generation_wave.abandon_target(coord);
             if let Some(budget) = budget.as_deref_mut() {
                 budget.record(1);
             }
@@ -419,7 +420,7 @@ fn prefetch_next_generation_wave(
         }
 
         if generation_tasks.schedule(coord, async_work) {
-            state.mark_generation_prefetched(coord);
+            state.generation_wave.mark_prefetched(coord);
         } else {
             state.requeue(coord);
             break;
@@ -502,7 +503,7 @@ fn select_generation_wave(
             continue;
         }
 
-        work.state.start_generation_wave_target(coord);
+        work.state.generation_wave.start_target(coord);
         budget.record(1);
     }
 }
