@@ -2,6 +2,27 @@
 
 > Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
 
+## 2026-09-28 — Phase 1 avança identidade semântica de chunk pelos boundaries de runtime
+
+- A branch ativa continua sendo `architecture/asteria-core-rebuild`; HEAD funcional antes deste handoff: `3802282b8190a95c5c9b0b219cd0400ab0cfed53`.
+- O objetivo do bloco foi expandir `ChunkCoord` por owners pequenos e autoritativos sem fazer um megacutover do `VoxelWorld` nem alterar política de streaming/rendering.
+- `ChunkTaskQueue` agora usa `HashMap<ChunkCoord, ...>` internamente. Generation, initial-mesh e remesh schedulers mantêm adapters explícitos para `IVec3` apenas em suas APIs externas enquanto consumidores legados ainda não foram migrados.
+- O resultado async foi generalizado como `CompletedChunkTask<T, C>`; a fila retorna `C = ChunkCoord` e os schedulers convertem com `into_runtime()` para o runtime legado. Isso eliminou o vazamento de `IVec3` dentro da fila sem duplicar structs de resultado.
+- Cutovers publicados neste bloco:
+  - `00c425ebcddedac2e7c5d907632e0723d35f8952` — async queue/schedulers com `ChunkCoord` interno; CI `36477699634` success.
+  - `5a85ee7388ae85c753f279fdd082cea35e3a54e0` — retired residency queue tipada; CI `36478092904` success.
+  - `0a574bafc0db7283b6458fef73a5007d6ac92c60` — pending streaming queue + priority cache tipados; CI `36478253194` success.
+  - `fa3b494cc51bda18418d7a23f18a01c7ddbcd87a` — ready/presentation queue tipada; CI `36478397317` success.
+  - `f158b9f3b361e7f44890447b76c1516c88326cef` — initial presentation state (`lighting_seeded`, seed results, activation, mesh catch-up) tipado; CI `36478531501` success.
+  - `b9fa917c45de9c749982b615ca8a1f7f7e9f974b` — mesh-pressure eviction state tipado; CI `36478719478` success.
+  - `e0cf88a44bd9993f5ed749f2b0761faa17170964` — generation wave targets/pending/prefetch/staged/publication tipados; dynamic fluid settling continua deliberadamente em seu boundary separado `IVec3`; CI `36478958760` success.
+  - `3802282b8190a95c5c9b0b219cd0400ab0cfed53` — streaming selection center tipado internamente; CI `36479165269` success.
+- Invariante do bloco: `IVec3` continua válido para aritmética espacial, offsets, posições de voxel e APIs ainda legadas; `ChunkCoord` deve representar identidade de chunk em storage/queues/state onde a semântica é de ID e não de vetor arbitrário.
+- Não foi alterado o algoritmo de prioridade, render radius, retention, generation-wave batching, fluid settling, mesh-pressure policy ou selection shape. Os cutovers foram de ownership/tipagem, não de comportamento.
+- `VoxelWorld` ainda é o próximo boundary grande e **não deve** ser convertido em um único megadiff. Ele ainda mistura resident chunks, archive/persistence, revisions, mutações de block/fluid/object e spatial access; a migração deve primeiro fechar tipos/revisions/dependencies menores e depois separar authoritative storage/mutation ownership.
+- `desired`/`retained` em `ChunkResidencyState` também permanecem `HashSet<IVec3>` por enquanto porque atravessam intensamente `streaming/selection.rs`; migrá-los deve ocorrer como um cutover próprio com CI, não junto de outra mudança.
+- Próximo passo exato: continuar Phase 1 em boundaries pequenos de **chunk dependencies/revisions** (começando por mesh dependency identity/revision semantics), mantendo CI verde antes de avançar para Phase 2 authoritative storage.
+
 ## 2026-09-28 — branch de reconstrução controlada do Asteria Core
 
 - Foi criada a branch `architecture/asteria-core-rebuild` a partir de `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d`.
@@ -93,7 +114,8 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Nesta branch, seguir `docs/asteria-core-rebuild.md` e iniciar pela **Phase 0 — baseline and architectural freeze**.
-2. Registrar novos logs de gameplay com período parado, movimento/streaming normal e warp usando `frame_*`, `main_work_*` e `render work`.
-3. Mapear os módulos atuais em `reuse / adapt / replace / delete` antes de alterar ownership do world core.
-4. Manter CI sem erros e sem warnings antes de cada novo bloco de alteração.
+1. Continuar na branch `architecture/asteria-core-rebuild`, seguindo `docs/asteria-core-rebuild.md`.
+2. Phase 1 está em execução: expandir core types/boundaries por cutovers estreitos, mantendo adapters explícitos para APIs legadas.
+3. Próximo passo: tipar dependencies/revisions de chunk sem alterar comportamento; só depois iniciar o cutover de authoritative resident storage do `VoxelWorld`.
+4. Não migrar `desired/retained` nem o `VoxelWorld` inteiro junto com outro bloco; cada um precisa de boundary próprio e CI verde.
+5. Manter CI sem erros e sem warnings antes de cada novo bloco de alteração.
