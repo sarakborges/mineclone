@@ -86,7 +86,10 @@ impl StreamingSelectionState {
         let Some(previous_center) = self.center else {
             return;
         };
-        let delta = center.xz() - previous_center.xz();
+        let delta = IVec2::new(
+            center.x - previous_center.x,
+            center.z - previous_center.z,
+        );
         if delta == IVec2::ZERO {
             return;
         }
