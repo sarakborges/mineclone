@@ -11,6 +11,7 @@ use crate::{
         coordinates::{
             chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
         },
+        world::VoxelWorld,
     },
     world::{
         chunk_async_work::ChunkAsyncWorkLimiter,
@@ -35,6 +36,23 @@ const MAX_STREAMING_FLUID_SETTLING_UPDATES: usize = 128;
 const SETTLED_PUBLICATION_BUDGET: Duration = Duration::from_millis(1);
 const MIN_SETTLED_PUBLICATIONS_PER_FRAME: usize = 1;
 const MAX_SETTLED_PUBLICATIONS_PER_FRAME: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChunkAvailability {
+    Resident,
+    Archived,
+    Absent,
+}
+
+fn chunk_availability(world: &VoxelWorld, coord: IVec3) -> ChunkAvailability {
+    if world.chunk(coord).is_some() {
+        ChunkAvailability::Resident
+    } else if world.has_resident_or_persisted_chunk(coord) {
+        ChunkAvailability::Archived
+    } else {
+        ChunkAvailability::Absent
+    }
+}
 
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
@@ -105,17 +123,23 @@ pub(super) fn collect_generated_chunks(
             work.state.generation_wave.abandon_target(completed.coord);
             continue;
         }
-        if work.world.has_resident_or_persisted_chunk(completed.coord) {
-            if work.world.chunk(completed.coord).is_none() {
+        match chunk_availability(&work.world, completed.coord) {
+            ChunkAvailability::Resident => {
+                work.state.mark_ready(completed.coord);
+                work.state.generation_wave.complete_target(completed.coord);
+                continue;
+            }
+            ChunkAvailability::Archived => {
                 assert!(
                     work.world.restore_chunk(completed.coord),
-                    "resident or persisted chunk must remain resident or archived: {:?}",
+                    "archived chunk must remain restorable: {:?}",
                     completed.coord
                 );
+                work.state.mark_ready(completed.coord);
+                work.state.generation_wave.complete_target(completed.coord);
+                continue;
             }
-            work.state.mark_ready(completed.coord);
-            work.state.generation_wave.complete_target(completed.coord);
-            continue;
+            ChunkAvailability::Absent => {}
         }
 
         let requires_fluid_settling = generated_chunk_requires_fluid_settling(
@@ -206,9 +230,7 @@ fn begin_settled_wave_publication(
         .begin_settled_publication(completion.generated_chunks);
 }
 
-fn process_settled_wave_publication(
-    work: &mut ChunkStreamingWork<'_>,
-) -> bool {
+fn process_settled_wave_publication(work: &mut ChunkStreamingWork<'_>) -> bool {
     let deadline = work.frame_budget.deadline();
     let mut budget = FrameWorkBudget::new(
         SETTLED_PUBLICATION_BUDGET,
@@ -349,7 +371,7 @@ fn schedule_generation_wave_pending(
 }
 
 pub(in crate::world) fn refill_generation_workers(
-    mut world: ResMut<crate::voxel::world::VoxelWorld>,
+    mut world: ResMut<VoxelWorld>,
     mut state: ResMut<super::ChunkStreamingState>,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     async_work: Res<ChunkAsyncWorkLimiter>,
@@ -381,7 +403,7 @@ pub(in crate::world) fn refill_generation_workers(
 }
 
 fn prefetch_next_generation_wave(
-    world: &mut crate::voxel::world::VoxelWorld,
+    world: &mut VoxelWorld,
     state: &mut super::ChunkStreamingState,
     generation_tasks: &mut ChunkGenerationTasks,
     async_work: &ChunkAsyncWorkLimiter,
@@ -408,15 +430,20 @@ fn prefetch_next_generation_wave(
             continue;
         }
 
-        if world.has_resident_or_persisted_chunk(coord) {
-            if world.chunk(coord).is_none() {
+        match chunk_availability(world, coord) {
+            ChunkAvailability::Resident => {
+                state.mark_ready(coord);
+                continue;
+            }
+            ChunkAvailability::Archived => {
                 assert!(
                     world.restore_chunk(coord),
-                    "resident or persisted chunk must remain resident or archived: {coord:?}"
+                    "archived chunk must remain restorable: {coord:?}"
                 );
+                state.mark_ready(coord);
+                continue;
             }
-            state.mark_ready(coord);
-            continue;
+            ChunkAvailability::Absent => {}
         }
 
         if generation_tasks.schedule(coord, async_work) {
@@ -429,7 +456,7 @@ fn prefetch_next_generation_wave(
 }
 
 fn generated_chunk_requires_fluid_settling(
-    world: &crate::voxel::world::VoxelWorld,
+    world: &VoxelWorld,
     coord: IVec3,
     chunk: &VoxelChunk,
 ) -> bool {
@@ -493,14 +520,22 @@ fn select_generation_wave(
             continue;
         }
 
-        if work.world.has_resident_or_persisted_chunk(coord) {
-            assert!(
-                work.world.restore_chunk(coord),
-                "resident or persisted chunk must remain resident or archived: {coord:?}"
-            );
-            work.state.mark_ready(coord);
-            budget.record(1);
-            continue;
+        match chunk_availability(&work.world, coord) {
+            ChunkAvailability::Resident => {
+                work.state.mark_ready(coord);
+                budget.record(1);
+                continue;
+            }
+            ChunkAvailability::Archived => {
+                assert!(
+                    work.world.restore_chunk(coord),
+                    "archived chunk must remain restorable: {coord:?}"
+                );
+                work.state.mark_ready(coord);
+                budget.record(1);
+                continue;
+            }
+            ChunkAvailability::Absent => {}
         }
 
         work.state.generation_wave.start_target(coord);
@@ -511,13 +546,45 @@ fn select_generation_wave(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::fluid::FluidCell;
+    use crate::voxel::{cell::VoxelCell, fluid::FluidCell};
+
+    #[test]
+    fn chunk_availability_distinguishes_resident_archived_and_absent() {
+        let coord = IVec3::new(3, 2, -4);
+        let mut world = VoxelWorld::default();
+        assert_eq!(chunk_availability(&world, coord), ChunkAvailability::Absent);
+
+        world.insert_chunk(coord, VoxelChunk::empty());
+        assert_eq!(
+            chunk_availability(&world, coord),
+            ChunkAvailability::Resident
+        );
+
+        let world_position = coord * crate::voxel::chunk::CHUNK_SIZE as i32 + IVec3::ONE;
+        assert!(world
+            .set_block_at(
+                world_position,
+                Some(VoxelCell::new("stone", Default::default())),
+            )
+            .is_some());
+        world.archive_chunk(coord);
+        assert_eq!(
+            chunk_availability(&world, coord),
+            ChunkAvailability::Archived
+        );
+
+        assert!(world.restore_chunk(coord));
+        assert_eq!(
+            chunk_availability(&world, coord),
+            ChunkAvailability::Resident
+        );
+    }
 
     #[test]
     fn dry_generated_chunks_skip_settling_only_without_fluid_neighbors() {
         let coord = IVec3::new(3, 2, -4);
         let dry = VoxelChunk::empty();
-        let mut world = crate::voxel::world::VoxelWorld::default();
+        let mut world = VoxelWorld::default();
 
         assert!(!generated_chunk_requires_fluid_settling(&world, coord, &dry));
 
