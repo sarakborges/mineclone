@@ -1,6 +1,5 @@
 mod persistence;
-
-use std::collections::BTreeSet;
+mod resident_index;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 
@@ -9,7 +8,10 @@ use crate::content::{
     object::ObjectRegistry,
 };
 
-use self::persistence::ChunkPersistenceState;
+use self::{
+    persistence::ChunkPersistenceState,
+    resident_index::LoadedChunkColumnIndex,
+};
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
@@ -24,7 +26,7 @@ use super::{
 #[derive(Resource, Default, Clone)]
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
-    loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
+    loaded_chunk_columns: LoadedChunkColumnIndex,
     persistence: ChunkPersistenceState,
     chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
     next_chunk_content_revision: ChunkContentRevision,
@@ -44,7 +46,7 @@ impl VoxelWorld {
             "worldgen cannot overwrite a resident or persisted chunk: {coord:?}"
         );
         self.chunks.insert(coord, chunk);
-        self.track_loaded_chunk(coord);
+        self.loaded_chunk_columns.insert(coord);
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
@@ -111,21 +113,14 @@ impl VoxelWorld {
         &self,
         coord: IVec3,
     ) -> impl Iterator<Item = IVec3> + '_ {
-        self.loaded_chunk_columns
-            .get(&coord.xz())
-            .into_iter()
-            .flat_map(move |ys| {
-                ys.range(..coord.y)
-                    .copied()
-                    .map(move |y| IVec3::new(coord.x, y, coord.z))
-            })
+        self.loaded_chunk_columns.coords_below(coord)
     }
 
     pub fn archive_chunk(&mut self, coord: IVec3) {
         let Some(chunk) = self.chunks.remove(&coord) else {
             return;
         };
-        self.untrack_loaded_chunk(coord);
+        self.loaded_chunk_columns.remove(coord);
         let removed_content_revision = self.chunk_content_revisions.remove(&coord);
         debug_assert!(
             removed_content_revision.is_some(),
@@ -156,7 +151,7 @@ impl VoxelWorld {
         };
 
         self.chunks.insert(coord, chunk);
-        self.track_loaded_chunk(coord);
+        self.loaded_chunk_columns.insert(coord);
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
@@ -336,13 +331,8 @@ impl VoxelWorld {
         world_z: i32,
     ) -> Option<i32> {
         let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z)).xz();
-        let highest_chunk_y = self
-            .loaded_chunk_columns
-            .get(&horizontal_chunk)?
-            .last()
-            .copied()?;
-
-        Some((highest_chunk_y + 1) * CHUNK_SIZE as i32 - 1)
+        self.loaded_chunk_columns
+            .highest_world_y_in_column(horizontal_chunk)
     }
 
     #[cfg(test)]
@@ -668,25 +658,6 @@ impl VoxelWorld {
             .expect("chunk mesh revision counter exhausted");
         self.chunk_mesh_revisions
             .insert(coord, self.next_chunk_mesh_revision);
-    }
-
-    fn track_loaded_chunk(&mut self, coord: IVec3) {
-        self.loaded_chunk_columns
-            .entry(coord.xz())
-            .or_default()
-            .insert(coord.y);
-    }
-
-    fn untrack_loaded_chunk(&mut self, coord: IVec3) {
-        let horizontal = coord.xz();
-        let Some(ys) = self.loaded_chunk_columns.get_mut(&horizontal) else {
-            return;
-        };
-
-        ys.remove(&coord.y);
-        if ys.is_empty() {
-            self.loaded_chunk_columns.remove(&horizontal);
-        }
     }
 }
 
