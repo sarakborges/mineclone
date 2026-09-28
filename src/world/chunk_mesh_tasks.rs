@@ -21,13 +21,17 @@ pub(crate) struct ChunkMeshTaskOutput {
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct ChunkMeshTasks {
+pub(crate) struct PresentationScheduler {
     revision: TaskInputRevision,
     snapshot: Option<Arc<MeshContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
-impl ChunkMeshTasks {
+/// Transitional compatibility name while initial-mesh call sites are migrated
+/// to the explicit presentation scheduler owner.
+pub(crate) type ChunkMeshTasks = PresentationScheduler;
+
+impl PresentationScheduler {
     pub(crate) fn sync_snapshot(&mut self, content: &ChunkContent<'_>) {
         if self.snapshot.is_some() && !content.mesh_inputs_changed() {
             return;
