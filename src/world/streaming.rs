@@ -1,4 +1,5 @@
 mod generation;
+mod generation_wave;
 mod meshing;
 mod pending;
 mod ready;
@@ -31,6 +32,7 @@ use crate::{
 
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
+    generation_wave::GenerationWaveState,
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
     pending::PendingChunkQueue,
     ready::ReadyChunkQueue,
@@ -49,7 +51,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::{GeneratedFluidSettling, PendingFluidUpdates},
+    fluid_updates::PendingFluidUpdates,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     work_budget::WorldFrameWorkBudget,
@@ -123,12 +125,7 @@ pub(super) struct ChunkStreamingState {
     initial_lighting_activated: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
     mesh_pressure_evicted: HashMap<IVec3, usize>,
-    fluid_settling: GeneratedFluidSettling,
-    generation_wave_targets: HashSet<IVec3>,
-    generation_wave_pending: DeduplicatedQueue<IVec3>,
-    generation_prefetch_targets: HashSet<IVec3>,
-    staged_generated_chunks: HashSet<IVec3>,
-    settled_publication_chunks: Vec<IVec3>,
+    generation_wave: GenerationWaveState,
     priority_diagnostics: StreamingPriorityDiagnostics,
 }
 
@@ -228,134 +225,68 @@ impl ChunkStreamingState {
     }
 
     fn start_generation_wave_target(&mut self, coord: IVec3) {
-        if self.generation_wave_targets.insert(coord) {
-            self.generation_wave_pending.enqueue(coord);
-        }
+        self.generation_wave.start_target(coord);
     }
 
     fn generation_wave_active(&self) -> bool {
-        !self.generation_wave_targets.is_empty()
-            || !self.staged_generated_chunks.is_empty()
-            || !self.settled_publication_chunks.is_empty()
-            || self.fluid_settling.is_active()
+        self.generation_wave.is_active()
     }
 
     fn generation_wave_accepts_new_targets(&self) -> bool {
-        !self.fluid_settling.is_active()
-            && self.staged_generated_chunks.is_empty()
-            && self.settled_publication_chunks.is_empty()
+        self.generation_wave.accepts_new_targets()
     }
 
     fn generation_dispatch_work_exists(&self) -> bool {
-        !self.fluid_settling.is_active()
-            && self.settled_publication_chunks.is_empty()
-            && (self.generation_wave_pending.len() > 0
-                || (self.pending.len() > 0 && self.generation_wave_accepts_new_targets()))
+        self.generation_wave.dispatch_work_exists(self.pending.len())
     }
 
     fn stage_generated_chunk(&mut self, coord: IVec3) {
-        debug_assert!(
-            self.generation_wave_targets.contains(&coord),
-            "only an active generation-wave target may become staged"
-        );
-        self.staged_generated_chunks.insert(coord);
+        self.generation_wave.stage_generated_chunk(coord);
     }
 
     fn abandon_generation_target(&mut self, coord: IVec3) {
-        self.generation_wave_pending.remove(coord);
-        self.generation_wave_targets.remove(&coord);
-        self.generation_prefetch_targets.remove(&coord);
+        self.generation_wave.abandon_target(coord);
     }
 
     fn mark_generation_prefetched(&mut self, coord: IVec3) {
-        debug_assert!(
-            !self.generation_wave_targets.contains(&coord),
-            "prefetched generation cannot already belong to the active wave"
-        );
-        self.generation_prefetch_targets.insert(coord);
+        self.generation_wave.mark_prefetched(coord);
     }
 
     fn complete_generation_wave_target(&mut self, coord: IVec3) {
-        debug_assert!(
-            !self.staged_generated_chunks.contains(&coord),
-            "completed generation-wave target cannot remain staged"
-        );
-        debug_assert!(
-            !self.fluid_settling.contains(coord),
-            "completed generation-wave target cannot remain settling-owned"
-        );
-        let removed = self.generation_wave_targets.remove(&coord);
-        debug_assert!(
-            removed,
-            "completed generation-wave target must still own its reservation: {coord:?}"
-        );
+        self.generation_wave.complete_target(coord);
     }
 
     fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
-        let mut staged = self.staged_generated_chunks.drain().collect::<Vec<_>>();
-        staged.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        staged
+        self.generation_wave.take_staged_generated_chunks()
     }
 
-    fn begin_settled_publication(&mut self, mut chunks: Vec<IVec3>) {
-        debug_assert!(
-            self.settled_publication_chunks.is_empty(),
-            "settled publication queue must be empty before a new wave is staged"
-        );
-        chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        self.settled_publication_chunks = chunks;
+    fn begin_settled_publication(&mut self, chunks: Vec<IVec3>) {
+        self.generation_wave.begin_settled_publication(chunks);
     }
 
     fn has_settled_publication(&self) -> bool {
-        !self.settled_publication_chunks.is_empty()
+        self.generation_wave.has_settled_publication()
     }
 
     fn pop_settled_publication_chunk(&mut self) -> Option<IVec3> {
-        self.settled_publication_chunks.pop()
+        self.generation_wave.pop_settled_publication_chunk()
     }
 
     fn finish_generation_wave(&mut self) {
-        assert!(
-            self.staged_generated_chunks.is_empty(),
-            "generation wave cannot finish with unpublished generated chunks"
-        );
-        assert!(
-            self.settled_publication_chunks.is_empty(),
-            "generation wave cannot finish with settled chunks awaiting publication"
-        );
-        assert!(
-            self.generation_wave_pending.len() == 0,
-            "generation wave cannot finish with unscheduled targets"
-        );
-        assert!(
-            !self.fluid_settling.is_active(),
-            "generation wave cannot finish while fluid settling is active"
-        );
-        assert!(
-            self.generation_wave_targets.is_empty(),
-            "generation wave cannot finish with unresolved target reservations: {:?}",
-            self.generation_wave_targets
-        );
-
-        self.generation_wave_targets
-            .extend(self.generation_prefetch_targets.drain());
+        self.generation_wave.finish();
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.generation_wave_targets.contains(&coord)
-            || self.generation_prefetch_targets.contains(&coord)
-            || self.staged_generated_chunks.contains(&coord)
-            || self.fluid_settling.contains(coord)
+        self.generation_wave.contains_unpublished(coord)
     }
 
     pub(in crate::world) fn generated_fluid_settling_owns_mutation(&self, coord: IVec3) -> bool {
-        self.fluid_settling.owns_mutation(coord)
+        self.generation_wave.fluid_settling.owns_mutation(coord)
     }
 
     fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunks.contains(&coord)
-            || self.settled_publication_chunks.contains(&coord)
-            || self.fluid_settling.contains(coord)
+        self.generation_wave
+            .resident_generated_chunk_is_unpublished(coord)
     }
 
     fn adopt_structure_top_chunk(&mut self, horizontal: IVec2, top_chunk: i32) {
@@ -531,32 +462,30 @@ impl ChunkStreamingState {
 
         self.ready.values().any(renderable)
             || self.pending.values().any(renderable)
-            || self
-                .generation_wave_targets
-                .iter()
-                .copied()
-                .any(renderable)
+            || self.generation_wave.targets().any(renderable)
     }
 
     pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
+        let (generation_pending, generation_targets, staged_generated) =
+            self.generation_wave.diagnostic_counts();
         (
             self.pending.len(),
             self.ready.len(),
-            self.generation_wave_pending.len(),
-            self.generation_wave_targets.len(),
-            self.staged_generated_chunks.len(),
+            generation_pending,
+            generation_targets,
+            staged_generated,
             self.mesh_pressure_evicted.len(),
         )
     }
 
     pub(super) fn diagnostic_generation_prefetch_count(&self) -> usize {
-        self.generation_prefetch_targets.len()
+        self.generation_wave.prefetch_count()
     }
 
     pub(super) fn diagnostic_fluid_settling_counts(
         &self,
     ) -> (bool, usize, usize, usize, usize, usize, usize) {
-        self.fluid_settling.diagnostic_counts()
+        self.generation_wave.fluid_settling.diagnostic_counts()
     }
 
     pub(super) fn diagnostic_renderable_backlog_counts(&self) -> (usize, usize, usize) {
@@ -572,9 +501,8 @@ impl ChunkStreamingState {
         (
             self.pending.values().filter(|coord| renderable(*coord)).count(),
             self.ready.values().filter(|coord| renderable(*coord)).count(),
-            self.generation_wave_targets
-                .iter()
-                .copied()
+            self.generation_wave
+                .targets()
                 .filter(|coord| renderable(*coord))
                 .count(),
         )
@@ -1093,12 +1021,12 @@ mod tests {
         state.mark_generation_prefetched(coord);
         assert!(state.generated_chunk_is_unpublished(coord));
         assert_eq!(state.diagnostic_generation_prefetch_count(), 1);
-        assert!(!state.generation_wave_targets.contains(&coord));
+        assert!(!state.generation_wave.contains_target(coord));
 
         state.finish_generation_wave();
 
         assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
-        assert!(state.generation_wave_targets.contains(&coord));
+        assert!(state.generation_wave.contains_target(coord));
         assert!(state.generated_chunk_is_unpublished(coord));
     }
 
