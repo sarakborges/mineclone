@@ -27,6 +27,7 @@ use crate::{
             MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
         },
         raycast::raycast_micro_voxels,
+        read::VoxelRead,
     },
 };
 
@@ -84,7 +85,7 @@ fn handle_artisans_kit_use(
         }
 
         let Some(hit) = raycast_micro_voxels(
-            runtime.world(),
+            &runtime.read(),
             camera.translation(),
             camera.forward().as_vec3(),
             8.0,
@@ -96,7 +97,7 @@ fn handle_artisans_kit_use(
             target.voxel == hit.voxel
                 && target.block_id == hit.block_id
                 && target.normal == hit.normal
-        }) || runtime.world().block_id_at(hit.voxel) != Some(hit.block_id)
+        }) || runtime.read().block_id_at(hit.voxel) != Some(hit.block_id)
         {
             continue;
         }
@@ -113,7 +114,7 @@ fn handle_artisans_kit_use(
             hit.fine
         };
         let voxel = parent_voxel(fine);
-        if voxel.y < 0 || !runtime.world().is_loaded_at(voxel) {
+        if voxel.y < 0 || !runtime.read().is_loaded_at(voxel) {
             continue;
         }
         let Some(source) = runtime.cell_at(voxel) else {
