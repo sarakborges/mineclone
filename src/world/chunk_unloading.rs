@@ -91,13 +91,17 @@ impl ChunkUnloadState {
 }
 
 #[derive(SystemParam)]
-pub(super) struct ChunkUnloadRuntime<'w> {
+pub(super) struct ChunkEvictionRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkUnloadState>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkEvictionPresentationRuntime<'w> {
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
-    frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
 #[derive(SystemParam)]
@@ -277,8 +281,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             .saturating_add(dy.saturating_mul(dy));
 
         let movement_alignment =
-            dx * i64::from(movement_direction.x)
-                + dz * i64::from(movement_direction.y);
+            dx * i64::from(movement_direction.x) + dz * i64::from(movement_direction.y);
 
         let visible = horizontal_distance_squared <= visible_radius_squared;
         if visible {
@@ -370,12 +373,17 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     }
 }
 
-pub(super) fn unload_chunk_meshes(
+/// Coordinates the final cutover from resident world data to archived/absent
+/// storage. Residency owns the retirement decision; authoritative storage and
+/// presentation teardown stay in separate capability sets but execute in this
+/// single budgeted system so there is no one-frame split-brain state.
+pub(super) fn evict_distant_chunks(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
     mut streaming: ResMut<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
-    mut runtime: ChunkUnloadRuntime,
+    mut eviction: ChunkEvictionRuntime,
+    mut presentation: ChunkEvictionPresentationRuntime,
     mut unloaded: Local<Vec<IVec3>>,
 ) {
     unloaded.clear();
@@ -384,15 +392,15 @@ pub(super) fn unload_chunk_meshes(
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let retention_radius = unload_retention_radius(render_distance.chunks());
-    runtime
+    eviction
         .state
-        .bootstrap(&mut streaming, &runtime.world, center);
+        .bootstrap(&mut streaming, &eviction.world, center);
 
     let mut budget = FrameWorkBudget::new(
         CHUNK_UNLOAD_BUDGET,
         MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
     )
-    .with_global_deadline(runtime.frame_budget.deadline());
+    .with_global_deadline(eviction.frame_budget.deadline());
 
     loop {
         if budget.exhausted() {
@@ -405,29 +413,29 @@ pub(super) fn unload_chunk_meshes(
         };
         if streaming.keeps_loaded(coord)
             || streaming.generated_chunk_is_unpublished(coord)
-            || runtime.world.chunk(coord).is_none()
+            || eviction.world.chunk(coord).is_none()
         {
             continue;
         }
 
-        let might_affect_direct_skylight = runtime
+        let might_affect_direct_skylight = eviction
             .world
             .chunk(coord)
             .is_some_and(chunk_might_affect_direct_skylight);
 
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
-        runtime.remesh_queue.remove(coord);
-        runtime.remesh_tasks.cancel_coord(coord);
-        runtime.remesh_tasks.remove_lighting_revision(coord);
-        runtime.world.archive_chunk(coord);
+        presentation.remesh_queue.remove(coord);
+        presentation.remesh_tasks.cancel_coord(coord);
+        presentation.remesh_tasks.remove_lighting_revision(coord);
+        eviction.world.archive_chunk(coord);
 
         // Removing an empty section is equivalent to removing the missing-air
         // section that direct skylight already assumed, so lower sections do
         // not need a full relight. Non-empty sections remain conservative.
         if might_affect_direct_skylight {
-            runtime
+            presentation
                 .lighting
-                .enqueue_loaded_column_below(&runtime.world, coord);
+                .enqueue_loaded_column_below(&eviction.world, coord);
         }
 
         // Restored or newly generated chunks need a fresh direct-light seed,
@@ -441,17 +449,17 @@ pub(super) fn unload_chunk_meshes(
         return;
     }
 
-    runtime
+    presentation
         .lighting
         .enqueue_chunk_unloads(unloaded.as_slice());
 
     for coord in unloaded.drain(..) {
         enqueue_retired_render_halo_remeshes(
             coord,
-            &runtime.world,
+            &eviction.world,
             &renderer.pool,
             &streaming,
-            &mut runtime.remesh_queue,
+            &mut presentation.remesh_queue,
         );
     }
 }
@@ -487,12 +495,7 @@ fn enqueue_retired_render_halo_remeshes(
                 };
                 let (geometry, fluid) = halo_remesh_needs(chunk, offset);
                 if geometry || fluid {
-                    remesh_queue.enqueue_halo_change(
-                        neighbor,
-                        -offset,
-                        geometry,
-                        fluid,
-                    );
+                    remesh_queue.enqueue_halo_change(neighbor, -offset, geometry, fluid);
                 }
             }
         }
@@ -580,9 +583,18 @@ mod tests {
             Some(VoxelCell::new("asteria:test", TextureRotation::default())),
         );
 
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, false));
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)), (false, false));
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)),
+            (true, false)
+        );
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)),
+            (false, false)
+        );
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)),
+            (false, false)
+        );
     }
 
     #[test]
@@ -591,8 +603,17 @@ mod tests {
         chunk.set_fluid(0, 0, 7, Some(FluidCell::source(0, 8)));
 
         // The generic content boundary counts include fluid occupancy too.
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, true));
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (true, true));
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)),
+            (true, true)
+        );
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)),
+            (true, true)
+        );
+        assert_eq!(
+            halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)),
+            (false, false)
+        );
     }
 }
