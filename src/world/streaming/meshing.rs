@@ -98,7 +98,6 @@ pub(super) fn dispatch_initial_mesh_tasks(
             work.state.defer_ready(coord);
             break;
         }
-
     }
 }
 
@@ -207,12 +206,7 @@ pub(super) fn collect_built_chunk_meshes(
             .initial_catchup_meshlets_with(&work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
             });
-        if let Some(seed_catchup) = work
-            .state
-            .initial_mesh_seed_catchup
-            .get(&completed.coord)
-            .copied()
-        {
+        if let Some(seed_catchup) = work.state.initial_mesh_seed_catchup(completed.coord) {
             catchup_meshlets = catchup_meshlets.union(seed_catchup);
         }
         let render_context = content.render_context(
@@ -229,7 +223,7 @@ pub(super) fn collect_built_chunk_meshes(
             completed.output.meshes,
             &render_context,
         );
-        work.state.initial_mesh_seed_catchup.remove(&completed.coord);
+        work.state.clear_initial_mesh_seed_catchup(completed.coord);
         if !catchup_meshlets.is_empty() {
             queues.remesh.enqueue_geometry_meshlets_priority(
                 completed.coord,
