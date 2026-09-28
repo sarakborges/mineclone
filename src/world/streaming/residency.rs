@@ -1,6 +1,9 @@
 use bevy::{platform::collections::HashSet, prelude::*};
 
-use crate::voxel::deduplicated_queue::DeduplicatedQueue;
+use crate::voxel::{
+    coordinates::ChunkCoord,
+    deduplicated_queue::DeduplicatedQueue,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RetiredScanKey {
@@ -12,13 +15,13 @@ struct RetiredScanKey {
 
 #[derive(Default)]
 struct RetiredChunkQueue {
-    queue: DeduplicatedQueue<IVec3>,
+    queue: DeduplicatedQueue<ChunkCoord>,
     scan_miss: Option<RetiredScanKey>,
 }
 
 impl RetiredChunkQueue {
     fn enqueue(&mut self, coord: IVec3) {
-        self.queue.enqueue(coord);
+        self.queue.enqueue(ChunkCoord::from_ivec3(coord));
     }
 
     fn pop_outside_horizontal_radius(
@@ -40,6 +43,7 @@ impl RetiredChunkQueue {
         }
 
         let coord = self.queue.pop_where(|coord| {
+            let coord = coord.as_ivec3();
             if desired.contains(&coord) || retained.contains(&coord) {
                 return false;
             }
@@ -53,7 +57,7 @@ impl RetiredChunkQueue {
         } else {
             Some(scan_key)
         };
-        coord
+        coord.map(ChunkCoord::as_ivec3)
     }
 }
 
