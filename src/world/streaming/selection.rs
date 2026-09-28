@@ -174,7 +174,7 @@ pub(super) fn rebuild_queue(
     if incremental_rebuild {
         rebuild_desired_chunk_coords_incremental(
             &mut scratch.desired,
-            &streaming.desired,
+            &streaming.residency.desired,
             previous_center.expect("incremental rebuild requires previous center"),
             desired_selection,
             movement_direction,
@@ -200,6 +200,7 @@ pub(super) fn rebuild_queue(
         );
         scratch.no_longer_desired.extend(
             streaming
+                .residency
                 .desired
                 .difference(&scratch.desired)
                 .copied(),
@@ -242,15 +243,15 @@ pub(super) fn rebuild_queue(
         .extend(scratch.no_longer_desired.iter().copied());
 
     collect_retired_chunk_coords(
-        &streaming.retained,
+        &streaming.residency.retained,
         &scratch.desired,
         &scratch.retained,
         center,
         &mut scratch.retired,
     );
 
-    std::mem::swap(&mut streaming.desired, &mut scratch.desired);
-    std::mem::swap(&mut streaming.retained, &mut scratch.retained);
+    std::mem::swap(&mut streaming.residency.desired, &mut scratch.desired);
+    std::mem::swap(&mut streaming.residency.retained, &mut scratch.retained);
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
