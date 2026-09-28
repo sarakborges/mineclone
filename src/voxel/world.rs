@@ -21,6 +21,7 @@ use super::{
     layer::LayerCell,
     light::VoxelLight,
     object::ObjectCell,
+    revision::ChunkContentRevision,
 };
 
 #[derive(Resource, Default, Clone)]
@@ -62,14 +63,14 @@ impl VoxelWorld {
         self.chunks.get(&coord)
     }
 
-    pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<u64> {
+    pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<ChunkContentRevision> {
         self.chunk(coord)?;
-        Some(
+        Some(ChunkContentRevision::from_raw(
             *self
                 .chunk_content_revisions
                 .get(&coord)
                 .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
-        )
+        ))
     }
 
     #[cfg(test)]

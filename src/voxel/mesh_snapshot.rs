@@ -32,7 +32,7 @@ impl ChunkSnapshotSource for VoxelWorld {
     }
 
     fn chunk_content_revision(&self, coord: ChunkCoord) -> Option<ChunkContentRevision> {
-        VoxelWorld::chunk_content_revision(self, coord.as_ivec3()).map(ChunkContentRevision::from_raw)
+        VoxelWorld::chunk_content_revision(self, coord.as_ivec3())
     }
 }
 
