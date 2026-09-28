@@ -1,21 +1,18 @@
 mod persistence;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
-use bevy::{
-    platform::collections::{HashMap, HashSet},
-    prelude::*,
-};
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
     layer::{LayerFace, LayerRegistry},
     object::ObjectRegistry,
 };
 
+use self::persistence::ChunkPersistenceState;
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    chunk_archive::ArchivedChunk,
     coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
     layer::LayerCell,
@@ -28,8 +25,7 @@ use super::{
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
     loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
-    archived_chunks: HashMap<IVec3, Arc<ArchivedChunk>>,
-    persistent_chunks: HashSet<IVec3>,
+    persistence: ChunkPersistenceState,
     chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
     next_chunk_content_revision: ChunkContentRevision,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
@@ -147,11 +143,7 @@ impl VoxelWorld {
         );
         self.bump_block_content_revision();
         self.bump_object_scene_revision();
-
-        if self.persistent_chunks.contains(&coord) {
-            self.archived_chunks
-                .insert(coord, Arc::new(ArchivedChunk::from_chunk(&chunk)));
-        }
+        self.persistence.archive_if_persistent(coord, &chunk);
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
@@ -159,11 +151,11 @@ impl VoxelWorld {
             return true;
         }
 
-        let Some(archived) = self.archived_chunks.remove(&coord) else {
+        let Some(chunk) = self.persistence.restore(coord) else {
             return false;
         };
 
-        self.chunks.insert(coord, archived.restore());
+        self.chunks.insert(coord, chunk);
         self.track_loaded_chunk(coord);
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
@@ -173,8 +165,7 @@ impl VoxelWorld {
     }
 
     pub fn has_resident_or_persisted_chunk(&self, coord: IVec3) -> bool {
-        coord.y >= 0
-            && (self.chunks.contains_key(&coord) || self.archived_chunks.contains_key(&coord))
+        coord.y >= 0 && (self.chunks.contains_key(&coord) || self.persistence.has_archived(coord))
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
@@ -400,7 +391,7 @@ impl VoxelWorld {
             }
         }
 
-        self.persistent_chunks.insert(chunk_coord);
+        self.persistence.mark_persistent(chunk_coord);
         if block_changed {
             self.bump_block_content_revision();
             self.mark_chunk_objects_changed(chunk_coord);
@@ -409,7 +400,6 @@ impl VoxelWorld {
         self.bump_chunk_mesh_revision(chunk_coord);
         Some((chunk_coord, previous_block, detached_object))
     }
-
 
     pub(crate) fn add_layer_at(
         &mut self,
@@ -441,7 +431,7 @@ impl VoxelWorld {
             return None;
         }
 
-        self.persistent_chunks.insert(chunk_coord);
+        self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
@@ -487,7 +477,7 @@ impl VoxelWorld {
             return None;
         }
 
-        self.persistent_chunks.insert(chunk_coord);
+        self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
@@ -521,7 +511,7 @@ impl VoxelWorld {
             return None;
         }
 
-        self.persistent_chunks.insert(chunk_coord);
+        self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.mark_chunk_objects_changed(chunk_coord);
         Some(chunk_coord)
@@ -545,7 +535,7 @@ impl VoxelWorld {
             )?
         };
 
-        self.persistent_chunks.insert(chunk_coord);
+        self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.mark_chunk_objects_changed(chunk_coord);
         Some((chunk_coord, removed))
@@ -572,7 +562,7 @@ impl VoxelWorld {
             return None;
         }
         let chunk_coord = chunk_coord_from_world(world_position);
-        if self.persistent_chunks.contains(&chunk_coord) {
+        if self.persistence.is_persistent(chunk_coord) {
             return None;
         }
         self.set_fluid_at_internal(world_position, fluid, false)
@@ -581,7 +571,7 @@ impl VoxelWorld {
     pub(crate) fn derived_fluid_chunk_is_mutable(&self, coord: IVec3) -> bool {
         coord.y >= 0
             && self.chunks.contains_key(&coord)
-            && !self.persistent_chunks.contains(&coord)
+            && !self.persistence.is_persistent(coord)
     }
 
     fn set_fluid_at_internal(
@@ -615,7 +605,7 @@ impl VoxelWorld {
         }
 
         if persistent {
-            self.persistent_chunks.insert(chunk_coord);
+            self.persistence.mark_persistent(chunk_coord);
         }
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
