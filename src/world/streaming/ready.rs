@@ -2,7 +2,10 @@ use std::time::{Duration, Instant};
 
 use bevy::prelude::{IVec2, IVec3};
 
-use crate::voxel::deduplicated_queue::DeduplicatedQueue;
+use crate::voxel::{
+    coordinates::ChunkCoord,
+    deduplicated_queue::DeduplicatedQueue,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ReadyScanKey {
@@ -17,7 +20,7 @@ struct ReadyScanKey {
 /// cannot survive either queue mutation or a new residency selection.
 #[derive(Default)]
 pub(super) struct ReadyChunkQueue {
-    queue: DeduplicatedQueue<IVec3>,
+    queue: DeduplicatedQueue<ChunkCoord>,
     scan_miss: Option<ReadyScanKey>,
 }
 
@@ -27,23 +30,23 @@ impl ReadyChunkQueue {
     }
 
     pub(super) fn contains(&self, coord: IVec3) -> bool {
-        self.queue.contains(coord)
+        self.queue.contains(ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn enqueue(&mut self, coord: IVec3) {
-        self.queue.enqueue(coord);
+        self.queue.enqueue(ChunkCoord::from_ivec3(coord));
     }
 
     pub(super) fn enqueue_front(&mut self, coord: IVec3) {
-        self.queue.enqueue_front(coord);
+        self.queue.enqueue_front(ChunkCoord::from_ivec3(coord));
     }
 
     pub(super) fn remove(&mut self, coord: IVec3) -> bool {
-        self.queue.remove(coord)
+        self.queue.remove(ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn values(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.queue.values()
+        self.queue.values().map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn pop_min_where_by_key<K: Ord>(
@@ -51,8 +54,8 @@ impl ReadyChunkQueue {
         selection_revision: u64,
         center: IVec2,
         radius_squared: i64,
-        predicate: impl FnMut(IVec3) -> bool,
-        key: impl FnMut(IVec3) -> K,
+        mut predicate: impl FnMut(IVec3) -> bool,
+        mut key: impl FnMut(IVec3) -> K,
     ) -> (Option<IVec3>, Option<(Duration, usize)>) {
         let scan_key = ReadyScanKey {
             queue_revision: self.queue.revision(),
@@ -66,13 +69,16 @@ impl ReadyChunkQueue {
 
         let queue_len = self.queue.len();
         let started = Instant::now();
-        let selected = self.queue.pop_min_where_by_key(predicate, key);
+        let selected = self.queue.pop_min_where_by_key(
+            |coord| predicate(coord.as_ivec3()),
+            |coord| key(coord.as_ivec3()),
+        );
         let scan = Some((started.elapsed(), queue_len));
         self.scan_miss = if selected.is_some() {
             None
         } else {
             Some(scan_key)
         };
-        (selected, scan)
+        (selected.map(ChunkCoord::as_ivec3), scan)
     }
 }
