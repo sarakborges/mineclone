@@ -2,6 +2,44 @@ use bevy::prelude::*;
 
 use super::chunk::CHUNK_SIZE;
 
+/// Stable chunk identity at world/runtime boundaries.
+///
+/// The representation is deliberately primitive-only so chunk identity is not
+/// itself a Bevy ECS/render type. Conversion to and from Bevy math stays at the
+/// adapter boundary while existing runtime systems are migrated incrementally.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct ChunkCoord {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl ChunkCoord {
+    pub(crate) const fn new(x: i32, y: i32, z: i32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub(crate) const fn x(self) -> i32 {
+        self.x
+    }
+
+    pub(crate) const fn y(self) -> i32 {
+        self.y
+    }
+
+    pub(crate) const fn z(self) -> i32 {
+        self.z
+    }
+
+    pub(crate) fn from_ivec3(coord: IVec3) -> Self {
+        Self::new(coord.x, coord.y, coord.z)
+    }
+
+    pub(crate) fn as_ivec3(self) -> IVec3 {
+        IVec3::new(self.x, self.y, self.z)
+    }
+}
+
 pub(crate) fn chunk_coord_from_position(position: Vec3) -> IVec3 {
     let chunk_size = CHUNK_SIZE as f32;
     IVec3::new(
@@ -73,6 +111,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn chunk_coord_preserves_negative_identity_across_bevy_adapter() {
+        let coord = IVec3::new(-3, 7, -11);
+        let typed = ChunkCoord::from_ivec3(coord);
+
+        assert_eq!(typed.x(), -3);
+        assert_eq!(typed.y(), 7);
+        assert_eq!(typed.z(), -11);
+        assert_eq!(typed.as_ivec3(), coord);
+    }
+
+    #[test]
     fn integer_world_position_splits_with_euclidean_coordinates() {
         let world = IVec3::new(-1, 17, -17);
         let (chunk, local) = split_world_position(world);
@@ -117,5 +166,4 @@ mod tests {
         expected.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         assert_eq!(corner_chunks, expected);
     }
-
 }
