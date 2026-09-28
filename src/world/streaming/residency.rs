@@ -2,9 +2,18 @@ use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::voxel::deduplicated_queue::DeduplicatedQueue;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RetiredScanKey {
+    queue_revision: u64,
+    selection_revision: u64,
+    center: IVec2,
+    radius_squared: i64,
+}
+
 #[derive(Default)]
 pub(super) struct RetiredChunkQueue {
     queue: DeduplicatedQueue<IVec3>,
+    scan_miss: Option<RetiredScanKey>,
 }
 
 impl RetiredChunkQueue {
@@ -18,6 +27,41 @@ impl RetiredChunkQueue {
 
     pub(super) fn pop_where(&mut self, predicate: impl FnMut(IVec3) -> bool) -> Option<IVec3> {
         self.queue.pop_where(predicate)
+    }
+
+    fn pop_outside_horizontal_radius(
+        &mut self,
+        selection_revision: u64,
+        center: IVec2,
+        radius_squared: i64,
+        desired: &HashSet<IVec3>,
+        retained: &HashSet<IVec3>,
+    ) -> Option<IVec3> {
+        let scan_key = RetiredScanKey {
+            queue_revision: self.queue.revision(),
+            selection_revision,
+            center,
+            radius_squared,
+        };
+        if self.scan_miss == Some(scan_key) {
+            return None;
+        }
+
+        let coord = self.queue.pop_where(|coord| {
+            if desired.contains(&coord) || retained.contains(&coord) {
+                return false;
+            }
+
+            let delta_x = i64::from(coord.x) - i64::from(center.x);
+            let delta_z = i64::from(coord.z) - i64::from(center.y);
+            delta_x * delta_x + delta_z * delta_z > radius_squared
+        });
+        self.scan_miss = if coord.is_some() {
+            None
+        } else {
+            Some(scan_key)
+        };
+        coord
     }
 }
 
@@ -39,6 +83,32 @@ impl ChunkResidencyState {
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
+    }
+
+    pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.retired.enqueue(coord);
+        }
+    }
+
+    pub(super) fn pop_retired_outside_horizontal_radius(
+        &mut self,
+        center: IVec3,
+        horizontal_radius: i32,
+    ) -> Option<IVec3> {
+        let center = center.xz();
+        let radius = i64::from(horizontal_radius.max(0));
+        let radius_squared = radius * radius;
+        let selection_revision = self.revision;
+        let desired = &self.desired;
+        let retained = &self.retained;
+        self.retired.pop_outside_horizontal_radius(
+            selection_revision,
+            center,
+            radius_squared,
+            desired,
+            retained,
+        )
     }
 
     pub(super) fn mark_rebuilt(&mut self) {
