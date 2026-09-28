@@ -3,7 +3,11 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::builtin_ids::BIOME_TINT_METADATA_KEY,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    voxel::{raycast::VoxelHit, world::VoxelWorld},
+    voxel::{
+        raycast::VoxelHit,
+        revision::BlockTopologyRevision,
+        world::VoxelWorld,
+    },
 };
 
 use super::block::TargetedBlock;
@@ -14,7 +18,7 @@ pub(crate) struct BlockTargetingVisualSnapshot {
     selected_slot: usize,
     selected_item: Option<&'static str>,
     player_translation: Vec3,
-    block_content_revision: u64,
+    block_topology_revision: BlockTopologyRevision,
 }
 
 #[derive(SystemParam)]
@@ -67,7 +71,7 @@ impl BlockTargetingScene<'_, '_> {
             selected_slot,
             selected_item: self.hotbar.item_at(selected_slot),
             player_translation: self.player_translation(),
-            block_content_revision: self.world.block_content_revision(),
+            block_topology_revision: self.world.block_topology_revision(),
         }
     }
 }
