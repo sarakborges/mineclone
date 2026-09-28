@@ -45,12 +45,12 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         face: LayerFace,
         layer: LayerCell,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         let chunk = self
             .world
             .add_layer_at(world_position, face, layer, &self.layers)?;
         self.remesh_queue.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        Some(ChunkCoord::from_ivec3(chunk))
     }
 
     pub(crate) fn remove_top_layer(
@@ -67,9 +67,9 @@ impl VoxelMutationRuntime<'_> {
         &mut self,
         world_position: IVec3,
         block: Option<VoxelCell>,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         self.set_block_detailed(world_position, block)
-            .map(|mutation| mutation.chunk.as_ivec3())
+            .map(|mutation| mutation.chunk)
     }
 
     pub(crate) fn set_block_detailed(
@@ -95,12 +95,12 @@ impl VoxelMutationRuntime<'_> {
         &mut self,
         world_position: IVec3,
         fluid: Option<FluidCell>,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         let chunk = self.world.set_fluid_at(world_position, fluid)?;
         self.lighting.enqueue_medium_edit(world_position);
         self.remesh_queue.enqueue_voxel_edit(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        Some(ChunkCoord::from_ivec3(chunk))
     }
 }
 
@@ -120,7 +120,9 @@ impl VoxelTopologyRuntime<'_> {
         face: LayerFace,
         layer: LayerCell,
     ) -> Option<IVec3> {
-        self.mutation.add_layer(world_position, face, layer)
+        self.mutation
+            .add_layer(world_position, face, layer)
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn remove_top_layer(
@@ -136,7 +138,9 @@ impl VoxelTopologyRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
-        self.mutation.set_block(world_position, block)
+        self.mutation
+            .set_block(world_position, block)
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn set_block_detailed(
@@ -152,6 +156,8 @@ impl VoxelTopologyRuntime<'_> {
         world_position: IVec3,
         fluid: Option<FluidCell>,
     ) -> Option<IVec3> {
-        self.mutation.set_fluid(world_position, fluid)
+        self.mutation
+            .set_fluid(world_position, fluid)
+            .map(ChunkCoord::as_ivec3)
     }
 }
