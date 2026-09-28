@@ -17,6 +17,7 @@ use super::{
     chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    revision::TaskInputRevision,
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
@@ -68,7 +69,7 @@ pub(crate) struct ChunkMeshTaskOutput {
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkMeshTasks {
-    revision: u64,
+    revision: TaskInputRevision,
     snapshot: Option<Arc<MeshContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
@@ -79,11 +80,11 @@ impl ChunkMeshTasks {
             return;
         }
 
-        self.revision = self.revision.wrapping_add(1).max(1);
+        self.revision = self.revision.next();
         self.snapshot = Some(Arc::new(MeshContentSnapshot::from_content(content)));
     }
 
-    pub(crate) fn revision(&self) -> u64 {
+    pub(crate) fn revision(&self) -> TaskInputRevision {
         self.revision
     }
 
