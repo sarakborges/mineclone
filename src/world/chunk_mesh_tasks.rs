@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot};
+use crate::voxel::{
+    coordinates::ChunkCoord,
+    mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+};
 
 pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
 use super::{
@@ -50,7 +53,7 @@ impl PresentationScheduler {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains(coord)
+        self.pending.contains(ChunkCoord::from_ivec3(coord))
     }
 
     pub(crate) fn schedule(
@@ -60,7 +63,7 @@ impl PresentationScheduler {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             world,
             MAX_MESH_TASKS_IN_FLIGHT,
             || limiter.try_acquire_initial_mesh(),
@@ -74,7 +77,7 @@ impl PresentationScheduler {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             world,
             limiter.loading_queue_limit(),
             || limiter.try_acquire_loading_initial_mesh(),
@@ -83,7 +86,7 @@ impl PresentationScheduler {
 
     fn schedule_with_permit(
         &mut self,
-        coord: IVec3,
+        coord: ChunkCoord,
         world: ChunkMeshSnapshot,
         pending_limit: usize,
         acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
@@ -109,7 +112,7 @@ impl PresentationScheduler {
             // into another 18³ shell here only duplicates the same traversal.
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
-                meshes: build_chunk_render_meshes(coord, world.chunk(), &context),
+                meshes: build_chunk_render_meshes(coord.as_ivec3(), world.chunk(), &context),
                 dependencies,
             }
         });
@@ -119,31 +122,41 @@ impl PresentationScheduler {
 
     pub(crate) fn cancel_where(
         &mut self,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending.cancel_where(predicate)
+        self.pending
+            .cancel_where(|coord| predicate(coord.as_ivec3()))
+            .into_iter()
+            .map(ChunkCoord::as_ivec3)
+            .collect()
     }
 
     pub(crate) fn cancel_farthest_where(
         &mut self,
         center: IVec3,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Option<IVec3> {
-        self.pending.cancel_farthest_where(center, predicate)
+        self.pending
+            .cancel_farthest_where(ChunkCoord::from_ivec3(center), |coord| {
+                predicate(coord.as_ivec3())
+            })
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn best_coord_by_key<K: Ord>(
         &self,
-        key: impl FnMut(IVec3) -> K,
+        mut key: impl FnMut(IVec3) -> K,
     ) -> Option<IVec3> {
-        self.pending.best_coord_by_key(key)
+        self.pending
+            .best_coord_by_key(|coord| key(coord.as_ivec3()))
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn poll_ready_by_key<K: Ord>(
         &mut self,
-        key: impl FnMut(IVec3) -> K,
+        mut key: impl FnMut(IVec3) -> K,
     ) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready_by_key(key)
+        self.pending.poll_ready_by_key(|coord| key(coord.as_ivec3()))
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
