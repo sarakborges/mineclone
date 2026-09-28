@@ -1,4 +1,5 @@
 mod persistence;
+mod resident;
 mod resident_index;
 
 use bevy::{platform::collections::HashMap, prelude::*};
@@ -8,10 +9,7 @@ use crate::content::{
     object::ObjectRegistry,
 };
 
-use self::{
-    persistence::ChunkPersistenceState,
-    resident_index::LoadedChunkColumnIndex,
-};
+use self::{persistence::ChunkPersistenceState, resident::ResidentChunkStore};
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
@@ -25,8 +23,7 @@ use super::{
 
 #[derive(Resource, Default, Clone)]
 pub struct VoxelWorld {
-    chunks: HashMap<IVec3, VoxelChunk>,
-    loaded_chunk_columns: LoadedChunkColumnIndex,
+    resident: ResidentChunkStore,
     persistence: ChunkPersistenceState,
     chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
     next_chunk_content_revision: ChunkContentRevision,
@@ -45,8 +42,7 @@ impl VoxelWorld {
             !self.has_resident_or_persisted_chunk(coord),
             "worldgen cannot overwrite a resident or persisted chunk: {coord:?}"
         );
-        self.chunks.insert(coord, chunk);
-        self.loaded_chunk_columns.insert(coord);
+        self.resident.insert(coord, chunk);
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
@@ -58,7 +54,7 @@ impl VoxelWorld {
             return None;
         }
 
-        self.chunks.get(&coord)
+        self.resident.get(coord)
     }
 
     pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<ChunkContentRevision> {
@@ -106,21 +102,20 @@ impl VoxelWorld {
     }
 
     pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.chunks.keys().copied()
+        self.resident.coords()
     }
 
     pub(crate) fn loaded_chunk_coords_below(
         &self,
         coord: IVec3,
     ) -> impl Iterator<Item = IVec3> + '_ {
-        self.loaded_chunk_columns.coords_below(coord)
+        self.resident.coords_below(coord)
     }
 
     pub fn archive_chunk(&mut self, coord: IVec3) {
-        let Some(chunk) = self.chunks.remove(&coord) else {
+        let Some(chunk) = self.resident.remove(coord) else {
             return;
         };
-        self.loaded_chunk_columns.remove(coord);
         let removed_content_revision = self.chunk_content_revisions.remove(&coord);
         debug_assert!(
             removed_content_revision.is_some(),
@@ -142,7 +137,7 @@ impl VoxelWorld {
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
-        if self.chunks.contains_key(&coord) {
+        if self.resident.contains(coord) {
             return true;
         }
 
@@ -150,8 +145,7 @@ impl VoxelWorld {
             return false;
         };
 
-        self.chunks.insert(coord, chunk);
-        self.loaded_chunk_columns.insert(coord);
+        self.resident.insert(coord, chunk);
         self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
@@ -160,7 +154,7 @@ impl VoxelWorld {
     }
 
     pub fn has_resident_or_persisted_chunk(&self, coord: IVec3) -> bool {
-        coord.y >= 0 && (self.chunks.contains_key(&coord) || self.persistence.has_archived(coord))
+        coord.y >= 0 && (self.resident.contains(coord) || self.persistence.has_archived(coord))
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
@@ -170,8 +164,8 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
 
-        self.chunks
-            .get(&chunk_coord)?
+        self.resident
+            .get(chunk_coord)?
             .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
@@ -181,7 +175,7 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        self.chunks.get(&chunk_coord)?.object_at(
+        self.resident.get(chunk_coord)?.object_at(
             local_position.x,
             local_position.y,
             local_position.z,
@@ -197,7 +191,7 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        self.chunks.get(&chunk_coord).map_or(&[], |chunk| {
+        self.resident.get(chunk_coord).map_or(&[], |chunk| {
             chunk.layers_at(local_position.x, local_position.y, local_position.z)
         })
     }
@@ -209,7 +203,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
 
-        self.chunks.get(&chunk_coord)?.fluid_at(
+        self.resident.get(chunk_coord)?.fluid_at(
             local_position.x,
             local_position.y,
             local_position.z,
@@ -225,7 +219,7 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        let chunk = self.chunks.get(&chunk_coord)?;
+        let chunk = self.resident.get(chunk_coord)?;
 
         chunk.sample_local(local_position.x, local_position.y, local_position.z)
     }
@@ -236,7 +230,7 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        let Some(chunk) = self.chunks.get(&chunk_coord) else {
+        let Some(chunk) = self.resident.get(chunk_coord) else {
             return VoxelLight::DARK;
         };
 
@@ -253,7 +247,7 @@ impl VoxelWorld {
         debug_assert!(local_position.y >= 0 && local_position.y < CHUNK_SIZE as i32);
         debug_assert!(local_position.z >= 0 && local_position.z < CHUNK_SIZE as i32);
 
-        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
+        let Some(chunk) = self.resident.get_mut(chunk_coord) else {
             return false;
         };
 
@@ -280,7 +274,7 @@ impl VoxelWorld {
         light_at: impl FnMut(usize, usize, usize, Option<VoxelCell>, Option<FluidCell>) -> VoxelLight,
     ) -> bool {
         {
-            let Some(chunk) = self.chunks.get_mut(&coord) else {
+            let Some(chunk) = self.resident.get_mut(coord) else {
                 return false;
             };
             chunk.rebuild_light(light_at);
@@ -295,7 +289,7 @@ impl VoxelWorld {
         sky_by_column: &[u8; CHUNK_SIZE * CHUNK_SIZE],
     ) -> bool {
         {
-            let Some(chunk) = self.chunks.get_mut(&coord) else {
+            let Some(chunk) = self.resident.get_mut(coord) else {
                 return false;
             };
             chunk.rebuild_empty_light_columns(sky_by_column);
@@ -307,7 +301,7 @@ impl VoxelWorld {
     #[cfg(test)]
     pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
         {
-            let Some(chunk) = self.chunks.get_mut(&coord) else {
+            let Some(chunk) = self.resident.get_mut(coord) else {
                 return false;
             };
             chunk.clear_light();
@@ -321,8 +315,8 @@ impl VoxelWorld {
             return false;
         }
 
-        self.chunks
-            .contains_key(&chunk_coord_from_world(world_position))
+        self.resident
+            .contains(chunk_coord_from_world(world_position))
     }
 
     pub(crate) fn highest_loaded_world_y_in_column(
@@ -331,8 +325,7 @@ impl VoxelWorld {
         world_z: i32,
     ) -> Option<i32> {
         let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z)).xz();
-        self.loaded_chunk_columns
-            .highest_world_y_in_column(horizontal_chunk)
+        self.resident.highest_world_y_in_column(horizontal_chunk)
     }
 
     #[cfg(test)]
@@ -360,7 +353,7 @@ impl VoxelWorld {
         let detached_object;
 
         {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             let x = local_position.x as usize;
             let y = local_position.y as usize;
             let z = local_position.z as usize;
@@ -408,7 +401,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
         let changed = {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             chunk.add_layer(
                 local_position.x as usize,
                 local_position.y as usize,
@@ -454,7 +447,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
         let changed = {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             chunk.remove_layer(
                 local_position.x as usize,
                 local_position.y as usize,
@@ -489,7 +482,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(support_position);
         let changed = {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             chunk.set_object(
                 local_position.x as usize,
                 local_position.y as usize,
@@ -517,7 +510,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(support_position);
         let removed = {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             chunk.remove_object(
                 local_position.x as usize,
                 local_position.y as usize,
@@ -560,7 +553,7 @@ impl VoxelWorld {
 
     pub(crate) fn derived_fluid_chunk_is_mutable(&self, coord: IVec3) -> bool {
         coord.y >= 0
-            && self.chunks.contains_key(&coord)
+            && self.resident.contains(coord)
             && !self.persistence.is_persistent(coord)
     }
 
@@ -576,7 +569,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
         {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let chunk = self.resident.get_mut(chunk_coord)?;
             let x = local_position.x as usize;
             let y = local_position.y as usize;
             let z = local_position.z as usize;
@@ -636,7 +629,7 @@ impl VoxelWorld {
 
     fn bump_chunk_content_revision(&mut self, coord: IVec3) {
         debug_assert!(
-            self.chunks.contains_key(&coord),
+            self.resident.contains(coord),
             "content revision bump requires a loaded chunk: {coord:?}"
         );
         self.next_chunk_content_revision = self
@@ -649,7 +642,7 @@ impl VoxelWorld {
 
     fn bump_chunk_mesh_revision(&mut self, coord: IVec3) {
         debug_assert!(
-            self.chunks.contains_key(&coord),
+            self.resident.contains(coord),
             "mesh revision bump requires a loaded chunk: {coord:?}"
         );
         self.next_chunk_mesh_revision = self

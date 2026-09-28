@@ -78,7 +78,7 @@ impl VoxelWorld {
             ));
         }
 
-        if let Some(chunk) = self.chunks.get(&coord) {
+        if let Some(chunk) = self.resident.get(coord) {
             DiskChunk::from_chunk(coord, chunk, fluids)
         } else if let Some(archived) = self.persistence.archived_chunk(coord) {
             DiskChunk::from_archived_chunk(coord, archived, fluids)
