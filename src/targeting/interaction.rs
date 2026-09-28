@@ -21,7 +21,9 @@ use crate::{
         layer::LayerCell,
         object::ObjectCell,
         log_variant::is_hollow_log_id,
-        raycast::VoxelHit, texture_rotation::TextureRotation,
+        raycast::VoxelHit,
+        read::{VoxelRead, VoxelTopologyRead},
+        texture_rotation::TextureRotation,
     },
     world_items::{TargetedWorldItem, WorldItemSpawnRequest},
     world_objects::{
@@ -127,7 +129,7 @@ fn edit_targeted_block(
     }
     if middle_pressed && game_mode.has_creative_inventory() {
         if let Some(support) = input.object_target.0
-            && let Some(object) = runtime.world().object_at(support)
+            && let Some(object) = runtime.read().object_at(support)
             && definitions.objects.get(object.object_id).is_some()
         {
             input
@@ -140,7 +142,7 @@ fn edit_targeted_block(
             && definitions.blocks.get(hit.block_id).is_some()
         {
             let mut stack = ItemStack::new(hit.block_id);
-            if let Some(cell) = runtime.world().cell_at(hit.voxel)
+            if let Some(cell) = runtime.read().cell_at(hit.voxel)
                 && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
             {
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
@@ -159,7 +161,7 @@ fn edit_targeted_block(
         .map(str::to_owned);
 
     if let Some(support) = input.object_target.0
-        && let Some(object) = runtime.world().object_at(support)
+        && let Some(object) = runtime.read().object_at(support)
         && let Some(definition) = definitions.objects.get(object.object_id)
     {
         match definition.interaction {
@@ -241,7 +243,7 @@ fn edit_targeted_block(
             .get(object_id)
             .expect("selected object definition must exist");
         if let Some((support, face)) =
-            object_placement_attachment(hit, definition, runtime.world())
+            object_placement_attachment(hit, definition, &runtime.read())
         {
             actions.object_placements.write(WorldObjectPlaceRequest {
                 support,
@@ -393,7 +395,7 @@ fn edit_targeted_voxel(
     let Some(block_id) = request.selected_item else {
         return VoxelEditOutcome::Consumed;
     };
-    let Some(voxel) = placement_voxel(request.hit, runtime.world(), request.player_position) else {
+    let Some(voxel) = placement_voxel(request.hit, &runtime.read(), request.player_position) else {
         return VoxelEditOutcome::Consumed;
     };
     let Some(block) = blocks.get(block_id) else {
@@ -413,12 +415,10 @@ fn edit_targeted_voxel(
     }
 }
 
-
-
 fn object_placement_attachment(
     hit: VoxelHit,
     definition: &crate::content::object::ObjectDefinition,
-    world: &crate::voxel::world::VoxelWorld,
+    world: &impl VoxelTopologyRead,
 ) -> Option<(IVec3, ObjectPlacementFace)> {
     if definition.supports_placement_face(ObjectPlacementFace::Top) {
         if hollow_log_accepts_object(hit.voxel, definition, world) {
@@ -448,7 +448,7 @@ fn object_placement_attachment(
 fn hollow_log_accepts_object(
     voxel: IVec3,
     definition: &crate::content::object::ObjectDefinition,
-    world: &crate::voxel::world::VoxelWorld,
+    world: &impl VoxelTopologyRead,
 ) -> bool {
     let Some(cell) = world.cell_at(voxel) else {
         return false;
