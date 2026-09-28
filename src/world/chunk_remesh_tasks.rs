@@ -53,7 +53,7 @@ pub(super) enum ChunkRemeshPublication {
 
 #[derive(Clone)]
 struct LightingRemeshDependencies {
-    center: IVec3,
+    center: ChunkCoord,
     meshlets: ChunkMeshletMask,
     expected: [u64; 8],
 }
@@ -62,8 +62,9 @@ impl LightingRemeshDependencies {
     fn capture(
         center: IVec3,
         meshlets: ChunkMeshletMask,
-        revisions: &HashMap<IVec3, [u64; 8]>,
+        revisions: &HashMap<ChunkCoord, [u64; 8]>,
     ) -> Self {
+        let center = ChunkCoord::from_ivec3(center);
         Self {
             center,
             meshlets,
@@ -71,7 +72,7 @@ impl LightingRemeshDependencies {
         }
     }
 
-    fn is_current(&self, current: &HashMap<IVec3, [u64; 8]>) -> bool {
+    fn is_current(&self, current: &HashMap<ChunkCoord, [u64; 8]>) -> bool {
         let revisions = current.get(&self.center).copied().unwrap_or([0; 8]);
         (0..8).all(|index| {
             !self.meshlets.contains_index(index) || revisions[index] == self.expected[index]
@@ -89,7 +90,7 @@ impl ChunkRemeshDependencies {
         center: IVec3,
         meshlets: ChunkMeshletMask,
         world: &ChunkMeshSnapshot,
-        revisions: &HashMap<IVec3, [u64; 8]>,
+        revisions: &HashMap<ChunkCoord, [u64; 8]>,
     ) -> Self {
         Self {
             content: world.dependencies().for_meshlets(meshlets),
@@ -145,7 +146,7 @@ pub(crate) struct ChunkRemeshTasks {
     terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     poll_fluid_first: bool,
-    lighting_revisions: HashMap<IVec3, [u64; 8]>,
+    lighting_revisions: HashMap<ChunkCoord, [u64; 8]>,
 }
 
 impl Default for ChunkRemeshTasks {
@@ -229,7 +230,8 @@ impl ChunkRemeshTasks {
     }
 
     pub(crate) fn remove_lighting_revision(&mut self, coord: IVec3) {
-        self.lighting_revisions.remove(&coord);
+        self.lighting_revisions
+            .remove(&ChunkCoord::from_ivec3(coord));
     }
 
     pub(crate) fn schedule(
@@ -327,7 +329,7 @@ impl ChunkRemeshTasks {
 }
 
 fn bump_lighting_revision_mask(
-    revisions: &mut HashMap<IVec3, [u64; 8]>,
+    revisions: &mut HashMap<ChunkCoord, [u64; 8]>,
     coord: IVec3,
     meshlets: ChunkMeshletMask,
 ) {
@@ -335,7 +337,9 @@ fn bump_lighting_revision_mask(
         return;
     }
 
-    let entry = revisions.entry(coord).or_insert([0; 8]);
+    let entry = revisions
+        .entry(ChunkCoord::from_ivec3(coord))
+        .or_insert([0; 8]);
     for (index, revision) in entry.iter_mut().enumerate() {
         if meshlets.contains_index(index) {
             *revision = revision.wrapping_add(1).max(1);
