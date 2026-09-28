@@ -1,9 +1,7 @@
 use bevy::{platform::collections::HashSet, prelude::IVec3};
 
-use crate::{
-    voxel::deduplicated_queue::DeduplicatedQueue,
-    world::fluid_updates::GeneratedFluidSettling,
-};
+use super::DeduplicatedQueue;
+use crate::world::fluid_updates::GeneratedFluidSettling;
 
 /// Owns the lifecycle of one generation publication wave independently from
 /// chunk selection and presentation queues. `GeneratedFluidSettling` remains
