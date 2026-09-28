@@ -29,6 +29,7 @@ mod noise;
 mod render_diagnostics;
 mod render_work_diagnostics;
 pub(crate) mod render_distance;
+mod revision;
 mod save;
 pub(crate) mod save_catalog;
 pub(crate) mod save_session;
