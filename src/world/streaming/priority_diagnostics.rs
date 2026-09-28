@@ -4,11 +4,11 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct StreamingPriorityScanDiagnostic {
-    pub(super) count: u64,
-    pub(super) average_micros: u64,
-    pub(super) max_micros: u64,
-    pub(super) max_queue_len: usize,
+pub(in crate::world) struct StreamingPriorityScanDiagnostic {
+    pub(in crate::world) count: u64,
+    pub(in crate::world) average_micros: u64,
+    pub(in crate::world) max_micros: u64,
+    pub(in crate::world) max_queue_len: usize,
 }
 
 #[derive(Default)]
