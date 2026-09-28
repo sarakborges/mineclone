@@ -71,8 +71,8 @@ use chunk_rendering::{
     advance_deferred_mesh_asset_retirements, clear_chunk_render_pool,
 };
 use chunk_unloading::{
-    ChunkUnloadState, enforce_chunk_mesh_residency_budget, retire_distant_chunk_meshes,
-    unload_chunk_meshes,
+    ChunkUnloadState, enforce_chunk_mesh_residency_budget, evict_distant_chunks,
+    retire_distant_chunk_meshes,
 };
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
 use day_night::DayNightPlugin;
@@ -220,7 +220,7 @@ impl Plugin for WorldPlugin {
                     stream_chunks,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
-                    unload_chunk_meshes,
+                    evict_distant_chunks,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
