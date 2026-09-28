@@ -33,7 +33,6 @@ pub struct VoxelWorld {
     chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
     next_chunk_content_revision: ChunkContentRevision,
     object_revisions: ObjectRevisionState,
-    block_content_revision: u64,
 }
 
 impl VoxelWorld {
@@ -44,7 +43,6 @@ impl VoxelWorld {
             "worldgen cannot overwrite a resident or persisted chunk: {coord:?}"
         );
         self.resident.insert(coord, chunk);
-        self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.mark_chunk_objects_changed(coord);
     }
@@ -65,10 +63,6 @@ impl VoxelWorld {
                 .get(&coord)
                 .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
         )
-    }
-
-    pub(crate) fn block_content_revision(&self) -> u64 {
-        self.block_content_revision
     }
 
     pub(crate) fn object_scene_revision(&self) -> u64 {
@@ -109,7 +103,6 @@ impl VoxelWorld {
             removed_object_revision.is_some(),
             "archived loaded chunk should have an object revision: {coord:?}"
         );
-        self.bump_block_content_revision();
         self.persistence.archive_if_persistent(coord, &chunk);
     }
 
@@ -123,7 +116,6 @@ impl VoxelWorld {
         };
 
         self.resident.insert(coord, chunk);
-        self.bump_block_content_revision();
         self.bump_chunk_content_revision(coord);
         self.mark_chunk_objects_changed(coord);
         true
@@ -334,7 +326,6 @@ impl VoxelWorld {
 
         self.persistence.mark_persistent(chunk_coord);
         if block_changed {
-            self.bump_block_content_revision();
             self.mark_chunk_objects_changed(chunk_coord);
         }
         self.bump_chunk_content_revision(chunk_coord);
@@ -557,13 +548,6 @@ impl VoxelWorld {
         self.cell_at(world_position).map(|cell| cell.block_id)
     }
 
-    fn bump_block_content_revision(&mut self) {
-        self.block_content_revision = self
-            .block_content_revision
-            .checked_add(1)
-            .expect("block content revision counter exhausted");
-    }
-
     fn mark_chunk_objects_changed(&mut self, coord: IVec3) {
         self.object_revisions.mark_chunk_changed(coord);
     }
@@ -660,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn layer_mutation_tracks_content_without_changing_block_revision() {
+    fn layer_mutation_advances_chunk_content_revision() {
         let mut world = VoxelWorld::default();
         let coord = IVec3::ZERO;
         let position = IVec3::new(1, 2, 3);
@@ -688,7 +672,9 @@ mod tests {
             casts_shadow: false,
         });
 
-        let block_revision = world.block_content_revision();
+        let content_revision = world
+            .chunk_content_revision(coord)
+            .expect("chunk should have a content revision");
         assert_eq!(
             world.add_layer_at(
                 position,
@@ -698,7 +684,12 @@ mod tests {
             ),
             Some(coord),
         );
-        assert_eq!(world.block_content_revision(), block_revision);
+        assert!(
+            world
+                .chunk_content_revision(coord)
+                .expect("chunk should have a content revision")
+                > content_revision
+        );
         assert_eq!(world.layers_at(position).len(), 1);
     }
 
