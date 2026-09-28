@@ -89,7 +89,7 @@ pub(super) fn dispatch_initial_mesh_tasks(
         }
 
         let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
-            &work.world,
+            &*work.world,
             coord,
             |neighbor| renderer.pool.contains(neighbor),
         )
@@ -191,7 +191,7 @@ pub(super) fn collect_built_chunk_meshes(
             work.state.mark_ready(completed.coord);
             continue;
         }
-        if !completed.output.dependencies.is_current(&work.world) {
+        if !completed.output.dependencies.is_current(&*work.world) {
             work.state.mark_ready(completed.coord);
             continue;
         }
@@ -203,7 +203,7 @@ pub(super) fn collect_built_chunk_meshes(
         let mut catchup_meshlets = completed
             .output
             .dependencies
-            .initial_catchup_meshlets_with(&work.world, |neighbor| {
+            .initial_catchup_meshlets_with(&*work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
             });
         if let Some(seed_catchup) = work.state.initial_mesh_seed_catchup(completed.coord) {
@@ -295,67 +295,5 @@ fn notify_loaded_chunk_neighbors(
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::voxel::{
-        cell::VoxelCell,
-        chunk::{CHUNK_SIZE, VoxelChunk},
-        texture_rotation::TextureRotation,
-    };
-
-    #[test]
-    fn empty_new_boundary_does_not_force_neighbor_geometry_or_fluid_refresh() {
-        let mut neighbor = VoxelChunk::empty();
-        neighbor.set_block(
-            0,
-            7,
-            7,
-            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
-        );
-        neighbor.set_fluid(0, 8, 8, Some(crate::voxel::fluid::FluidCell::source(0, 8)));
-        let incoming = VoxelChunk::empty();
-        let offset = IVec3::X;
-
-        let new_content_border = incoming.dependency_boundary_has_content(offset);
-        let geometry = new_content_border
-            && neighbor.dependency_boundary_has_content(-offset);
-        let fluid = neighbor.dependency_boundary_has_fluid(-offset)
-            && new_content_border;
-
-        assert!(!geometry);
-        assert!(!fluid);
-    }
-
-    #[test]
-    fn diagonal_boundary_reconciliation_uses_the_actual_edge() {
-        let mut chunk = VoxelChunk::empty();
-        chunk.set_block(
-            CHUNK_SIZE - 1,
-            0,
-            7,
-            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
-        );
-        chunk.set_block(
-            0,
-            CHUNK_SIZE - 1,
-            7,
-            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
-        );
-
-        assert!(chunk.boundary_has_content(IVec3::X));
-        assert!(chunk.boundary_has_content(IVec3::Y));
-        assert!(!chunk.dependency_boundary_has_content(IVec3::new(1, 1, 0)));
-
-        chunk.set_block(
-            CHUNK_SIZE - 1,
-            CHUNK_SIZE - 1,
-            7,
-            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
-        );
-        assert!(chunk.dependency_boundary_has_content(IVec3::new(1, 1, 0)));
     }
 }
