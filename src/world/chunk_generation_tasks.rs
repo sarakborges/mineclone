@@ -133,6 +133,6 @@ impl GenerationScheduler {
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
-        self.pending.poll_ready()
+        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
     }
 }
