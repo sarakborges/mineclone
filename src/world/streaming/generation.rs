@@ -49,12 +49,13 @@ pub(super) fn collect_generated_chunks(
         return;
     }
 
-    if work.state.fluid_settling.is_active() {
+    if work.state.generation_wave.fluid_settling.is_active() {
         if !process_streaming_fluid_settling(content, work) {
             return;
         }
         let completion = work
             .state
+            .generation_wave
             .fluid_settling
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
@@ -92,9 +93,9 @@ pub(super) fn collect_generated_chunks(
 
         if completed.revision != current_revision {
             if work.state.keeps_loaded(completed.coord)
-                && work.state.generation_wave_targets.contains(&completed.coord)
+                && work.state.generation_wave.contains_target(completed.coord)
             {
-                work.state.generation_wave_pending.enqueue(completed.coord);
+                work.state.generation_wave.enqueue_pending(completed.coord);
             } else {
                 work.state.abandon_generation_target(completed.coord);
             }
@@ -132,7 +133,7 @@ pub(super) fn collect_generated_chunks(
     }
 
     if work.generation_tasks.pending_count() > 0
-        || work.state.generation_wave_pending.len() > 0
+        || work.state.generation_wave.pending_len() > 0
     {
         return;
     }
@@ -145,12 +146,14 @@ pub(super) fn collect_generated_chunks(
 
     let world = &work.world;
     work.state
+        .generation_wave
         .fluid_settling
         .begin(world, content.fluids(), staged);
 
     if process_streaming_fluid_settling(content, work) {
         let completion = work
             .state
+            .generation_wave
             .fluid_settling
             .take_completion()
             .expect("completed streaming fluid settling must own its generation wave");
@@ -176,6 +179,7 @@ fn process_streaming_fluid_settling(
     let state = &mut work.state;
     let world = &mut work.world;
     state
+        .generation_wave
         .fluid_settling
         .process(world, content.fluids(), &mut settling_budget)
 }
@@ -274,7 +278,7 @@ pub(super) fn dispatch_generation_tasks(
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
 ) {
-    if work.state.fluid_settling.is_active() {
+    if work.state.generation_wave.fluid_settling.is_active() {
         return;
     }
 
@@ -301,7 +305,7 @@ fn schedule_generation_wave_pending(
     async_work: &ChunkAsyncWorkLimiter,
     mut budget: Option<&mut FrameWorkBudget>,
 ) {
-    let attempts = state.generation_wave_pending.len();
+    let attempts = state.generation_wave.pending_len();
     for _ in 0..attempts {
         if generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT
             || budget.as_ref().is_some_and(|budget| budget.exhausted())
@@ -309,7 +313,7 @@ fn schedule_generation_wave_pending(
             break;
         }
 
-        let Some(coord) = state.generation_wave_pending.pop() else {
+        let Some(coord) = state.generation_wave.pop_pending() else {
             break;
         };
         if !state.keeps_loaded(coord) {
@@ -331,7 +335,7 @@ fn schedule_generation_wave_pending(
                 budget.record(1);
             }
         } else {
-            state.generation_wave_pending.enqueue(coord);
+            state.generation_wave.enqueue_pending(coord);
             if let Some(budget) = budget.as_deref_mut() {
                 budget.record(1);
             }
@@ -349,10 +353,7 @@ pub(in crate::world) fn refill_generation_workers(
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     async_work: Res<ChunkAsyncWorkLimiter>,
 ) {
-    let settling_or_publishing =
-        state.fluid_settling.is_active() || !state.settled_publication_chunks.is_empty();
-
-    if settling_or_publishing {
+    if state.generation_wave.settling_or_publishing() {
         prefetch_next_generation_wave(
             &mut world,
             &mut state,
@@ -362,7 +363,7 @@ pub(in crate::world) fn refill_generation_workers(
         return;
     }
 
-    if state.generation_wave_pending.len() == 0 {
+    if state.generation_wave.pending_len() == 0 {
         return;
     }
 
@@ -389,7 +390,7 @@ fn prefetch_next_generation_wave(
 
     while attempts > 0
         && generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
-        && state.generation_prefetch_targets.len() < prefetch_limit
+        && state.generation_wave.prefetch_len() < prefetch_limit
     {
         attempts -= 1;
 
@@ -400,8 +401,8 @@ fn prefetch_next_generation_wave(
             continue;
         }
         if generation_tasks.contains(coord)
-            || state.generation_prefetch_targets.contains(&coord)
-            || state.generation_wave_targets.contains(&coord)
+            || state.generation_wave.contains_prefetch(coord)
+            || state.generation_wave.contains_target(coord)
         {
             continue;
         }
@@ -473,7 +474,7 @@ fn select_generation_wave(
     budget: &mut FrameWorkBudget,
 ) {
     let target_limit = generation_wave_target_limit(&mut work.state);
-    while work.state.generation_wave_targets.len() < target_limit {
+    while work.state.generation_wave.target_len() < target_limit {
         if budget.exhausted() {
             break;
         }
