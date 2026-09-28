@@ -10,19 +10,11 @@ use super::{
     light::VoxelLight,
     meshlet::ChunkMeshletMask,
     read::VoxelRead,
+    revision::ChunkContentRevision,
     world::VoxelWorld,
 };
 
 type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ChunkContentRevision(u64);
-
-impl ChunkContentRevision {
-    fn from_raw(raw: u64) -> Self {
-        Self(raw)
-    }
-}
 
 /// Narrow read capability required to capture and validate mesh snapshots.
 ///
