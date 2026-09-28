@@ -1,6 +1,10 @@
-use bevy::{platform::collections::{HashMap, HashSet}, prelude::IVec3};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::IVec3,
+};
 
 use crate::voxel::{
+    coordinates::ChunkCoord,
     lighting::DirectLightingSeedResult,
     meshlet::ChunkMeshletMask,
 };
@@ -10,15 +14,15 @@ use crate::voxel::{
 /// never authoritative world data.
 #[derive(Default)]
 pub(super) struct InitialPresentationState {
-    lighting_seeded: HashSet<IVec3>,
-    lighting_seed_results: HashMap<IVec3, DirectLightingSeedResult>,
-    lighting_activated: HashSet<IVec3>,
-    mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
+    lighting_seeded: HashSet<ChunkCoord>,
+    lighting_seed_results: HashMap<ChunkCoord, DirectLightingSeedResult>,
+    lighting_activated: HashSet<ChunkCoord>,
+    mesh_seed_catchup: HashMap<ChunkCoord, ChunkMeshletMask>,
 }
 
 impl InitialPresentationState {
     pub(super) fn mark_lighting_seeded(&mut self, coord: IVec3) -> bool {
-        self.lighting_seeded.insert(coord)
+        self.lighting_seeded.insert(ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn store_lighting_seed_result(
@@ -26,21 +30,25 @@ impl InitialPresentationState {
         coord: IVec3,
         result: DirectLightingSeedResult,
     ) {
-        self.lighting_seed_results.insert(coord, result);
+        self.lighting_seed_results
+            .insert(ChunkCoord::from_ivec3(coord), result);
     }
 
     pub(super) fn take_lighting_seed_result(
         &mut self,
         coord: IVec3,
     ) -> Option<DirectLightingSeedResult> {
-        self.lighting_seed_results.remove(&coord)
+        self.lighting_seed_results
+            .remove(&ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn mark_lighting_activated(&mut self, coord: IVec3) -> bool {
-        self.lighting_activated.insert(coord)
+        self.lighting_activated
+            .insert(ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn add_mesh_seed_catchup(&mut self, coord: IVec3, meshlets: ChunkMeshletMask) {
+        let coord = ChunkCoord::from_ivec3(coord);
         let combined = self
             .mesh_seed_catchup
             .get(&coord)
@@ -51,14 +59,18 @@ impl InitialPresentationState {
     }
 
     pub(super) fn mesh_seed_catchup(&self, coord: IVec3) -> Option<ChunkMeshletMask> {
-        self.mesh_seed_catchup.get(&coord).copied()
+        self.mesh_seed_catchup
+            .get(&ChunkCoord::from_ivec3(coord))
+            .copied()
     }
 
     pub(super) fn clear_mesh_seed_catchup(&mut self, coord: IVec3) {
-        self.mesh_seed_catchup.remove(&coord);
+        self.mesh_seed_catchup
+            .remove(&ChunkCoord::from_ivec3(coord));
     }
 
     pub(super) fn forget(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         self.lighting_seeded.remove(&coord);
         self.lighting_seed_results.remove(&coord);
         self.lighting_activated.remove(&coord);
