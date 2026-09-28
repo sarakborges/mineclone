@@ -1,12 +1,14 @@
 use bevy::prelude::{IVec2, IVec3};
 
+use crate::voxel::coordinates::ChunkCoord;
+
 /// Owns the current streaming selection pose independently from logical
 /// residency, generation queues and render presentation. The values here
 /// describe where selection is centered and how its preload policy is oriented;
 /// they do not imply that any chunk is resident or rendered.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct StreamingSelectionState {
-    center: Option<IVec3>,
+    center: Option<ChunkCoord>,
     movement_direction: IVec2,
     horizontal_radius: i32,
     vertical_radius: i32,
@@ -14,7 +16,7 @@ pub(super) struct StreamingSelectionState {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct StreamingSelectionSnapshot {
-    center: Option<IVec3>,
+    center: Option<ChunkCoord>,
     movement_direction: IVec2,
     horizontal_radius: i32,
     vertical_radius: i32,
@@ -22,7 +24,7 @@ pub(super) struct StreamingSelectionSnapshot {
 
 impl StreamingSelectionState {
     pub(super) fn center(&self) -> Option<IVec3> {
-        self.center
+        self.center.map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn movement_direction(&self) -> IVec2 {
@@ -39,7 +41,7 @@ impl StreamingSelectionState {
         horizontal_radius: i32,
         vertical_radius: i32,
     ) -> bool {
-        self.center != Some(center)
+        self.center != Some(ChunkCoord::from_ivec3(center))
             || self.horizontal_radius != horizontal_radius
             || self.vertical_radius != vertical_radius
     }
@@ -64,7 +66,7 @@ impl StreamingSelectionState {
         horizontal_radius: i32,
         vertical_radius: i32,
     ) {
-        self.center = Some(center);
+        self.center = Some(ChunkCoord::from_ivec3(center));
         self.horizontal_radius = horizontal_radius;
         self.vertical_radius = vertical_radius;
     }
@@ -79,7 +81,7 @@ impl StreamingSelectionState {
     }
 
     fn update_movement_direction(&mut self, center: IVec3) {
-        let Some(previous_center) = self.center else {
+        let Some(previous_center) = self.center.map(ChunkCoord::as_ivec3) else {
             return;
         };
         let delta = IVec2::new(
@@ -101,7 +103,7 @@ impl StreamingSelectionState {
         vertical_radius: i32,
     ) -> Self {
         Self {
-            center,
+            center: center.map(ChunkCoord::from_ivec3),
             movement_direction,
             horizontal_radius,
             vertical_radius,
@@ -111,7 +113,7 @@ impl StreamingSelectionState {
 
 impl StreamingSelectionSnapshot {
     pub(super) fn center(self) -> Option<IVec3> {
-        self.center
+        self.center.map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn movement_direction(self) -> IVec2 {
