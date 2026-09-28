@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    coordinates::chunk_origin,
+    coordinates::{ChunkCoord, chunk_origin},
     fluid::FluidCell,
     light::VoxelLight,
     meshlet::ChunkMeshletMask,
@@ -17,7 +17,7 @@ type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkMeshDependencies {
-    center: IVec3,
+    center: ChunkCoord,
     content_revisions: [[[Option<u64>; 3]; 3]; 3],
     required_offsets: [[[bool; 3]; 3]; 3],
 }
@@ -38,6 +38,7 @@ impl ChunkMeshDependencies {
     }
 
     pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
+        let center = self.center.as_ivec3();
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
                 for offset_x in -1..=1 {
@@ -54,7 +55,7 @@ impl ChunkMeshDependencies {
                         // that new halo without starving the streaming frontier.
                         continue;
                     };
-                    let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
+                    let coord = center + IVec3::new(offset_x, offset_y, offset_z);
                     if world.chunk_content_revision(coord) != Some(expected) {
                         return false;
                     }
@@ -91,6 +92,7 @@ impl ChunkMeshDependencies {
         mut neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> ChunkMeshletMask {
         let mut meshlets = ChunkMeshletMask::default();
+        let center = self.center.as_ivec3();
 
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
@@ -108,7 +110,7 @@ impl ChunkMeshDependencies {
                     }
 
                     let offset = IVec3::new(offset_x, offset_y, offset_z);
-                    let coord = self.center + offset;
+                    let coord = center + offset;
                     if neighbor_is_visible(coord) && world.chunk(coord).is_some() {
                         meshlets = meshlets.union(
                             ChunkMeshletMask::for_dependency_offset(offset),
@@ -208,7 +210,7 @@ impl ChunkMeshSnapshot {
             chunk,
             neighbor_chunks: Arc::new(neighbor_chunks),
             dependencies: ChunkMeshDependencies {
-                center: coord,
+                center: ChunkCoord::from_ivec3(coord),
                 content_revisions,
                 required_offsets,
             }
@@ -266,7 +268,6 @@ impl ChunkMeshSnapshot {
             local.z.rem_euclid(chunk_size),
         )
     }
-
 }
 
 impl VoxelRead for ChunkMeshSnapshot {
@@ -465,6 +466,4 @@ mod tests {
         );
         assert!(snapshot.dependencies().is_current(&world));
     }
-
-
 }
