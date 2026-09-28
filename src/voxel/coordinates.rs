@@ -19,18 +19,6 @@ impl ChunkCoord {
         Self { x, y, z }
     }
 
-    pub(crate) const fn x(self) -> i32 {
-        self.x
-    }
-
-    pub(crate) const fn y(self) -> i32 {
-        self.y
-    }
-
-    pub(crate) const fn z(self) -> i32 {
-        self.z
-    }
-
     pub(crate) fn from_ivec3(coord: IVec3) -> Self {
         Self::new(coord.x, coord.y, coord.z)
     }
@@ -115,9 +103,7 @@ mod tests {
         let coord = IVec3::new(-3, 7, -11);
         let typed = ChunkCoord::from_ivec3(coord);
 
-        assert_eq!(typed.x(), -3);
-        assert_eq!(typed.y(), 7);
-        assert_eq!(typed.z(), -11);
+        assert_eq!(typed, ChunkCoord::new(-3, 7, -11));
         assert_eq!(typed.as_ivec3(), coord);
     }
 
