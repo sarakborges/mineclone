@@ -322,7 +322,7 @@ impl ChunkRemeshTasks {
         if ready.is_some() {
             self.poll_fluid_first = !fluid_first;
         }
-        ready
+        ready.map(CompletedChunkTask::into_runtime)
     }
 }
 
