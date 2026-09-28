@@ -131,7 +131,6 @@ pub(super) struct ChunkStreamingState {
     horizontal_radius: i32,
     vertical_radius: i32,
     residency: ChunkResidencyState,
-    retired: DeduplicatedQueue<IVec3>,
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
@@ -182,7 +181,7 @@ impl ChunkStreamingState {
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
         if coord.y >= 0 {
-            self.retired.enqueue(coord);
+            self.residency.retired.enqueue(coord);
         }
     }
 
@@ -195,7 +194,7 @@ impl ChunkStreamingState {
         let radius = i64::from(horizontal_radius.max(0));
         let radius_squared = radius * radius;
         let scan_key = SelectionScanKey {
-            queue_revision: self.retired.revision(),
+            queue_revision: self.residency.retired.revision(),
             selection_revision: self.residency.revision(),
             center,
             radius_squared,
@@ -206,7 +205,7 @@ impl ChunkStreamingState {
 
         let desired = &self.residency.desired;
         let retained = &self.residency.retained;
-        let coord = self.retired.pop_where(|coord| {
+        let coord = self.residency.retired.pop_where(|coord| {
             if desired.contains(&coord) || retained.contains(&coord) {
                 return false;
             }

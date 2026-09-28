@@ -1,12 +1,15 @@
 use bevy::{platform::collections::HashSet, prelude::*};
 
-/// Owns the logical chunk residency selection independently from the streaming
-/// scheduler. A chunk may be logically resident without being generated,
-/// meshed, visible, or backed by a Bevy entity.
+use crate::voxel::deduplicated_queue::DeduplicatedQueue;
+
+/// Owns logical chunk residency independently from generation, presentation,
+/// and Bevy entity lifetime. Selection and retirement are world-runtime facts:
+/// a chunk may remain resident without being generated, meshed, or visible.
 #[derive(Default)]
 pub(super) struct ChunkResidencyState {
     pub(super) desired: HashSet<IVec3>,
     pub(super) retained: HashSet<IVec3>,
+    pub(super) retired: DeduplicatedQueue<IVec3>,
     revision: u64,
 }
 
