@@ -338,3 +338,112 @@ fn bump_lighting_revision_mask(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::chunk::VoxelChunk;
+
+    #[test]
+    fn fluid_and_terrain_remeshes_can_share_a_chunk_in_flight() {
+        let tasks = ChunkRemeshTasks::default();
+        let coord = IVec3::new(3, 2, 5);
+
+        assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Fluid));
+        assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Geometry));
+        assert!(tasks.can_schedule(ChunkRemeshTaskKind::Fluid));
+        assert!(tasks.can_schedule(ChunkRemeshTaskKind::Geometry));
+    }
+
+    #[test]
+    fn lighting_dependencies_detect_halo_revision_changes() {
+        let mut tasks = ChunkRemeshTasks::default();
+        let center = IVec3::new(3, 2, 5);
+        let dependencies = LightingRemeshDependencies::capture(
+            center,
+            ChunkMeshletMask::ALL,
+            &tasks.lighting_revisions,
+        );
+
+        assert!(dependencies.is_current(&tasks.lighting_revisions));
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(center, VoxelChunk::empty());
+        tasks.bump_lighting_revisions_for_positions(&world, [center * 16 + IVec3::new(4, 4, 4)]);
+        assert!(!dependencies.is_current(&tasks.lighting_revisions));
+    }
+
+    #[test]
+    fn remesh_dependencies_track_content_and_lighting_freshness_independently() {
+        let center = IVec3::new(3, 2, 5);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(center, VoxelChunk::empty());
+        let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
+        let mut tasks = ChunkRemeshTasks::default();
+        let dependencies = ChunkRemeshDependencies::capture(
+            center,
+            ChunkMeshletMask::ALL,
+            &snapshot,
+            &tasks.lighting_revisions,
+        );
+
+        assert!(dependencies.content_is_current(&world));
+        assert!(dependencies.lighting_is_current(&tasks));
+
+        tasks.bump_lighting_revisions_for_positions(
+            &world,
+            [center * 16 + IVec3::new(4, 4, 4)],
+        );
+
+        assert!(dependencies.content_is_current(&world));
+        assert!(!dependencies.lighting_is_current(&tasks));
+    }
+
+    #[test]
+    fn fluid_publication_survives_lighting_churn_but_never_stale_content() {
+        let center = IVec3::ZERO;
+        let position = IVec3::new(4, 4, 4);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(center, VoxelChunk::empty());
+        let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
+        let mut tasks = ChunkRemeshTasks::default();
+        let dependencies = ChunkRemeshDependencies::capture(
+            center,
+            ChunkMeshletMask::ALL,
+            &snapshot,
+            &tasks.lighting_revisions,
+        );
+        let kinds = [
+            ChunkRemeshTaskKind::Geometry,
+            ChunkRemeshTaskKind::Lighting,
+            ChunkRemeshTaskKind::Fluid,
+        ];
+        for kind in kinds {
+            assert_eq!(
+                dependencies.publication(kind, &world, &tasks),
+                ChunkRemeshPublication::Ready,
+            );
+        }
+
+        for _ in 0..3 {
+            tasks.bump_lighting_revisions_for_positions(&world, [position]);
+            assert_eq!(
+                dependencies.publication(ChunkRemeshTaskKind::Fluid, &world, &tasks),
+                ChunkRemeshPublication::FluidWithLightingCatchup,
+            );
+            for kind in [ChunkRemeshTaskKind::Geometry, ChunkRemeshTaskKind::Lighting] {
+                assert_eq!(
+                    dependencies.publication(kind, &world, &tasks),
+                    ChunkRemeshPublication::Retry(ChunkRemeshTaskKind::Lighting),
+                );
+            }
+        }
+
+        world.set_fluid_at(position, Some(crate::voxel::fluid::FluidCell::source(0, 8)));
+        for kind in kinds {
+            assert_eq!(
+                dependencies.publication(kind, &world, &tasks),
+                ChunkRemeshPublication::Retry(kind),
+            );
+        }
+    }
+}
