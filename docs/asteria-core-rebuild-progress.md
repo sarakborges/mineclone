@@ -54,6 +54,29 @@ Key findings:
 - Tests now validate externally observable invalidation behavior instead of reaching into cache internals.
 - Verified checkpoint: commit `94deec65b69d9a3f70ea74ef59b39eb7ed93b1a2`, `Rust validation` run `36459086884` — success.
 
+### Generation-wave lifecycle cutover
+
+- Added `GenerationWaveState` as the owner of active generation target reservations, dispatch-pending targets, prefetch reservations, staged generated chunks and the settled-publication queue.
+- Generated-fluid settling remains the dynamic simulation implementation; the generation-wave lifecycle now owns the fact that an active generation wave is waiting on that solver instead of leaving unrelated lifecycle fields spread across `ChunkStreamingState`.
+- Existing cancellation, stale-result handling, critical-player wave sizing, prefetch promotion and publication budgets were preserved.
+- Verified checkpoint: commit `568ee2849e607d05bc8e6bc65655922c35a95aea`, `Rust validation` run `36460032390` — success.
+
+### Initial-presentation cutover
+
+- Added `InitialPresentationState`.
+- Initial direct-light seeding membership, retained seed results, first runtime activation and targeted mesh-seed catch-up masks now have one presentation owner.
+- Initial meshing consumes this state through narrow scheduler methods instead of manipulating four independent collections.
+- Logical residency and generation publication remain independent from initial presentation readiness.
+- Verified checkpoint: commit `9518985ba4f8aa03bc10e80351a6acaccde3cca9`, `Rust validation` run `36460842927` — success.
+
+### Mesh-pressure residency cutover
+
+- Added `MeshPressureState` for GPU/presentation meshes evicted only because the mesh-memory high watermark was exceeded.
+- Mesh-pressure suppression/recovery no longer stores a raw `HashMap` directly in the streaming orchestrator.
+- Logical chunk residency remains unaffected by mesh-memory pressure; recovery only requeues presentation when the chunk is still logically resident.
+- Selection pruning and diagnostics now delegate to the mesh-pressure owner.
+- Verified checkpoint: commit `75d98f788f04396cbba4a3474421a791f0f2266e`, `Rust validation` run `36461205950` — success.
+
 ## Current ownership shape
 
 ```text
@@ -75,25 +98,38 @@ ChunkStreamingState (orchestrator, still being reduced)
 |   +-- presentation-ready membership
 |   +-- renderable scan cache
 |
-+-- remaining legacy concentration to extract
-    +-- generation wave reservations/prefetch/publication
-    +-- generated-fluid settling ownership
-    +-- initial presentation/lighting activation state
-    +-- mesh-pressure eviction state
++-- GenerationWaveState
+|   +-- target reservations
+|   +-- dispatch-pending queue
+|   +-- prefetch reservations
+|   +-- staged generated chunks
+|   +-- settling/publication lifecycle
+|
++-- InitialPresentationState
+|   +-- initial direct-light seed state/results
+|   +-- first runtime activation
+|   +-- mesh-seed catch-up masks
+|
++-- MeshPressureState
+|   +-- pressure-only presentation evictions
+|   +-- retained byte accounting
+|
++-- remaining concentration to extract
     +-- surface/structure selection caches
+    +-- selection pose/radii orchestration
     +-- cross-owner diagnostics/orchestration
 ```
 
 ## Next implementation block
 
-Extract generation-wave lifecycle from `ChunkStreamingState` without changing generation behavior:
+Extract the surface/structure selection caches from `ChunkStreamingState` without changing desired-residency behavior:
 
-1. group active generation targets, dispatch-pending targets and prefetch reservations under one owner;
-2. move staged generated chunks and settled-publication queue into the same lifecycle owner;
-3. retain dynamic generated-fluid settling as a simulation concern, but give the generation-wave owner an explicit boundary for waiting on / consuming settling completion rather than leaving unrelated fields in the streaming orchestrator;
-4. preserve cancellation, prefetch promotion and stale-result semantics;
-5. keep the existing work budgets and generation priority policy unchanged during this ownership cutover;
-6. run full CI before moving to initial presentation/lighting ownership.
+1. give surface ranges, surrounding support minima and discovered structure-top columns one explicit owner;
+2. move cache pruning and column lookup/invalidation behind that owner;
+3. keep incremental selection behavior, surface priority ordering and structure-top adoption unchanged;
+4. do not turn discovered structure-top data into a new structure-planning system — authoritative structure intent still belongs to world metadata;
+5. preserve current streaming preload/retention radii and work policy during the ownership-only cutover;
+6. run full CI before reducing selection pose/radii and diagnostics further.
 
 ## Rules still in force
 
