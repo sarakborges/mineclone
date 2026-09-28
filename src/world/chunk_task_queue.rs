@@ -69,18 +69,18 @@ impl<T> ChunkTaskQueue<T> {
             .min_by_key(|coord| key(*coord))
     }
 
-    pub(crate) fn insert(&mut self, coord: IVec3, revision: u64, task: Task<T>) -> bool {
+    pub(crate) fn insert(
+        &mut self,
+        coord: IVec3,
+        revision: TaskInputRevision,
+        task: Task<T>,
+    ) -> bool {
         if self.pending.contains_key(&coord) {
             return false;
         }
 
-        self.pending.insert(
-            coord,
-            PendingChunkTask {
-                revision: revision.into(),
-                task,
-            },
-        );
+        self.pending
+            .insert(coord, PendingChunkTask { revision, task });
         true
     }
 
