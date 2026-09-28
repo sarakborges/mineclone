@@ -27,6 +27,7 @@ mod material_field;
 pub(crate) mod math;
 pub(crate) mod new_world;
 mod noise;
+mod presentation_snapshot;
 mod render_diagnostics;
 mod render_work_diagnostics;
 pub(crate) mod render_distance;
