@@ -44,36 +44,37 @@ use super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
     structure_field::StructureField,
+    structure_metadata::StructureMetadata,
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
     caches: Arc<FeatureCaches>,
-    structure_field: Arc<StructureField>,
+    structure_metadata: StructureMetadata,
 }
 
 impl WorldFeatureFields {
     pub(crate) fn new(seed: u64) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
-            structure_field: Arc::new(StructureField::empty(seed)),
+            structure_metadata: StructureMetadata::new(seed),
         }
     }
 
     pub(crate) fn with_structure_field(mut self, structure_field: StructureField) -> Self {
-        self.structure_field = Arc::new(structure_field);
+        self.structure_metadata = self.structure_metadata.with_field(structure_field);
         self
     }
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
-            structure_field: self.structure_field.clone(),
+            structure_metadata: self.structure_metadata.clone(),
         }
     }
 
     pub(crate) fn structure_field(&self) -> &StructureField {
-        &self.structure_field
+        self.structure_metadata.field()
     }
 
     pub(crate) fn generation_columns(
