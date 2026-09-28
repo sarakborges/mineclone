@@ -176,7 +176,7 @@ pub(super) fn relax_budgeted(
             continue;
         }
 
-        if !world.set_light_at_deferred_mesh_revision(chunk_coord, local_position, desired) {
+        if !world.set_light_at(chunk_coord, local_position, desired) {
             continue;
         }
         match lane {
@@ -198,9 +198,9 @@ pub(super) fn relax_budgeted(
 
     if processing_lane == LightingLane::Interactive {
         // Publish each completed frame's voxel changes even if a large edit
-        // still has interactive relaxation queued. Deferring mesh revisions
-        // until the entire lane drains leaves visible meshes stale under
-        // repeated edits; the next batch will enqueue another deduplicated
+        // still has interactive relaxation queued. Deferring presentation
+        // dirtiness until the entire lane drains leaves visible meshes stale
+        // under repeated edits; the next batch will enqueue another deduplicated
         // remesh if convergence changes these voxels again.
         changes.interactive.retain(|coord| world.chunk(*coord).is_some());
         changes
@@ -211,9 +211,9 @@ pub(super) fn relax_budgeted(
             .frame_positions
             .extend(changes.interactive_positions.drain());
     } else if processing_lane == LightingLane::Settling && !queue.has_settling_work() {
-        // Generated-fluid settling is a batch. Keep its mesh revisions private
-        // until the entire derived-light propagation converges so async remesh
-        // cannot repeatedly capture intermediate lighting states.
+        // Generated-fluid settling is a batch. Keep its presentation changes
+        // private until the entire derived-light propagation converges so async
+        // remesh cannot repeatedly capture intermediate lighting states.
         changes.settling.retain(|coord| world.chunk(*coord).is_some());
         changes
             .settling_positions
@@ -223,8 +223,6 @@ pub(super) fn relax_budgeted(
             .frame_positions
             .extend(changes.settling_positions.drain());
     }
-
-    world.commit_deferred_light_mesh_revisions(changes.frame.iter().copied());
 }
 
 fn desired_light(
@@ -439,7 +437,6 @@ mod tests {
     fn budgeted_interactive_changes_publish_before_the_queue_drains() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        let initial_revision = world.chunk_mesh_revision(IVec3::ZERO).unwrap();
         let blocks = BlockRegistry::default();
         let fluids = FluidRegistry::default();
         let secondary_properties = SecondaryPropertyRegistry::default();
@@ -476,15 +473,15 @@ mod tests {
 
         assert!(queue.has_interactive_work());
         assert!(changed.contains(&IVec3::ZERO));
+        assert!(!changed_positions.is_empty());
         assert!(interactive_changed.is_empty());
-        assert!(world.chunk_mesh_revision(IVec3::ZERO).unwrap() > initial_revision);
+        assert!(interactive_changed_positions.is_empty());
     }
 
     #[test]
-    fn budgeted_settling_changes_publish_revision_only_after_lane_converges() {
+    fn budgeted_settling_changes_publish_only_after_lane_converges() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        let initial_revision = world.chunk_mesh_revision(IVec3::ZERO).unwrap();
         let blocks = BlockRegistry::default();
         let fluids = FluidRegistry::default();
         let secondary_properties = SecondaryPropertyRegistry::default();
@@ -521,7 +518,7 @@ mod tests {
 
         assert!(queue.has_settling_work());
         assert!(changed.is_empty());
-        assert_eq!(world.chunk_mesh_revision(IVec3::ZERO).unwrap(), initial_revision);
+        assert!(changed_positions.is_empty());
 
         while queue.has_settling_work() {
             relax_budgeted(
@@ -543,7 +540,8 @@ mod tests {
         }
 
         assert!(changed.contains(&IVec3::ZERO));
+        assert!(!changed_positions.is_empty());
         assert!(settling_changed.is_empty());
-        assert!(world.chunk_mesh_revision(IVec3::ZERO).unwrap() > initial_revision);
+        assert!(settling_changed_positions.is_empty());
     }
 }
