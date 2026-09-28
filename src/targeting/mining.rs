@@ -26,7 +26,7 @@ use crate::{
         item_stack::{ItemStack, MAX_STACK_SIZE},
         viewmodel::ViewModelAnimation,
     },
-    voxel::edit::VoxelTopologyRuntime,
+    voxel::{edit::VoxelTopologyRuntime, read::VoxelRead},
     world::tick::WorldTickClock,
     world_items::WorldItemSpawnRequest,
     world_objects::detached_object_drop_request,
@@ -126,7 +126,7 @@ fn advance_survival_mining(
         runtime.mining.reset();
         return;
     };
-    if runtime.world.world().block_id_at(hit.voxel) != Some(hit.block_id) {
+    if runtime.world.read().block_id_at(hit.voxel) != Some(hit.block_id) {
         runtime.mining.reset();
         return;
     }
@@ -181,7 +181,7 @@ fn advance_survival_mining(
 
     let biome_tint = runtime
         .world
-        .world()
+        .read()
         .cell_at(hit.voxel)
         .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
