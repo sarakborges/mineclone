@@ -156,10 +156,12 @@ impl PresentationScheduler {
         &mut self,
         mut key: impl FnMut(IVec3) -> K,
     ) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready_by_key(|coord| key(coord.as_ivec3()))
+        self.pending
+            .poll_ready_by_key(|coord| key(coord.as_ivec3()))
+            .map(CompletedChunkTask::into_runtime)
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready()
+        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
     }
 }
