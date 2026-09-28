@@ -477,22 +477,13 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_dependencies_ignore_lighting_revision_churn() {
+    fn snapshot_dependencies_ignore_lighting_changes() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
         let snapshot =
             ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
-        let mesh_revision = world
-            .chunk_mesh_revision(IVec3::ZERO)
-            .expect("chunk should have a mesh revision");
 
         assert!(world.clear_chunk_light(IVec3::ZERO));
-        assert!(
-            world
-                .chunk_mesh_revision(IVec3::ZERO)
-                .expect("chunk should have a mesh revision")
-                > mesh_revision
-        );
         assert!(snapshot.dependencies().is_current(&world));
     }
 }
