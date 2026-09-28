@@ -1,11 +1,11 @@
 mod generation;
 mod meshing;
+mod pending;
 mod residency;
 mod selection;
 mod surface_cache;
 
 use std::{
-    collections::VecDeque,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
@@ -31,6 +31,7 @@ use crate::{
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
+    pending::PendingChunkQueue,
     residency::ChunkResidencyState,
     selection::rebuild_queue,
 };
@@ -111,19 +112,6 @@ struct SelectionScanKey {
     radius_squared: i64,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CriticalPendingScanKey {
-    queue_revision: u64,
-    center: IVec3,
-}
-
-#[derive(Default)]
-struct PendingPriorityCache {
-    queue_revision: u64,
-    selection_revision: u64,
-    pending: VecDeque<IVec3>,
-}
-
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -131,7 +119,7 @@ pub(super) struct ChunkStreamingState {
     horizontal_radius: i32,
     vertical_radius: i32,
     residency: ChunkResidencyState,
-    pending: DeduplicatedQueue<IVec3>,
+    pending: PendingChunkQueue,
     ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: HashMap<IVec2, i32>,
@@ -147,8 +135,6 @@ pub(super) struct ChunkStreamingState {
     generation_prefetch_targets: HashSet<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     settled_publication_chunks: Vec<IVec3>,
-    pending_critical_scan_miss: Option<CriticalPendingScanKey>,
-    pending_priority_cache: PendingPriorityCache,
     ready_scan_miss: Option<SelectionScanKey>,
     priority_diagnostics: StreamingPriorityDiagnostics,
 }
@@ -201,91 +187,51 @@ impl ChunkStreamingState {
         let Some(center) = self.center else {
             return false;
         };
-        let scan_key = CriticalPendingScanKey {
-            queue_revision: self.pending.revision(),
-            center,
-        };
-        if self.pending_critical_scan_miss == Some(scan_key) {
-            return false;
-        }
-
-        let found = self
-            .pending
-            .values()
-            .any(|coord| is_critical_streaming_coord(coord, center));
-        if found {
-            self.pending_critical_scan_miss = None;
-        } else {
-            self.pending_critical_scan_miss = Some(scan_key);
-        }
-        found
+        self.pending
+            .has_critical(center, |coord| is_critical_streaming_coord(coord, center))
     }
 
     fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
         let center = self.center?;
-        let queue_revision = self.pending.revision();
         let selection_revision = self.residency.revision();
+        let movement_direction = self.movement_direction;
+        let visible_radius = self.horizontal_radius;
+        let center_structure_top_chunk = self
+            .structure_top_chunks
+            .get(&center.xz())
+            .copied()
+            .unwrap_or(0);
+        let prioritize_surface = selection::player_is_above_surface(
+            center,
+            center_structure_top_chunk,
+            &self.surface_ranges,
+        );
+        let structure_top_chunks = &self.structure_top_chunks;
+        let surface_ranges = &self.surface_ranges;
 
-        if self.pending_priority_cache.queue_revision != queue_revision
-            || self.pending_priority_cache.selection_revision != selection_revision
-        {
-            let movement_direction = self.movement_direction;
-            let visible_radius = self.horizontal_radius;
-            let center_structure_top_chunk = self
-                .structure_top_chunks
-                .get(&center.xz())
-                .copied()
-                .unwrap_or(0);
-            let prioritize_surface = selection::player_is_above_surface(
-                center,
-                center_structure_top_chunk,
-                &self.surface_ranges,
-            );
-            let structure_top_chunks = &self.structure_top_chunks;
-            let surface_ranges = &self.surface_ranges;
-
-            let queue_len = self.pending.len();
-            let started = Instant::now();
-            let mut ordered = self.pending.values().collect::<Vec<_>>();
-            ordered.sort_unstable_by_key(|coord| {
-                (
-                    selection::pending_priority(
-                        *coord,
-                        center,
-                        visible_radius,
-                        structure_top_chunks
-                            .get(&coord.xz())
-                            .copied()
-                            .unwrap_or(0),
-                        movement_direction,
-                        prioritize_surface,
-                        surface_ranges,
-                    ),
-                    coord.y,
-                    coord.z,
-                    coord.x,
-                )
-            });
-            self.priority_diagnostics
-                .pending
-                .record(started.elapsed(), queue_len);
-            self.pending_priority_cache.pending = ordered.into();
-            self.pending_priority_cache.queue_revision = queue_revision;
-            self.pending_priority_cache.selection_revision = selection_revision;
+        let (selected, scan) = self.pending.pop_by_priority(selection_revision, |coord| {
+            (
+                selection::pending_priority(
+                    coord,
+                    center,
+                    visible_radius,
+                    structure_top_chunks
+                        .get(&coord.xz())
+                        .copied()
+                        .unwrap_or(0),
+                    movement_direction,
+                    prioritize_surface,
+                    surface_ranges,
+                ),
+                coord.y,
+                coord.z,
+                coord.x,
+            )
+        });
+        if let Some((elapsed, queue_len)) = scan {
+            self.priority_diagnostics.pending.record(elapsed, queue_len);
         }
-
-        while let Some(coord) = self.pending_priority_cache.pending.pop_front() {
-            if !self.pending.contains(coord) {
-                continue;
-            }
-
-            let removed = self.pending.remove(coord);
-            debug_assert!(removed, "pending priority cache must reference an active chunk");
-            self.pending_priority_cache.queue_revision = self.pending.revision();
-            return Some(coord);
-        }
-
-        None
+        selected
     }
 
     fn start_generation_wave_target(&mut self, coord: IVec3) {
@@ -1118,12 +1064,7 @@ mod tests {
         state.pending.enqueue(middle);
 
         assert_eq!(state.pop_pending_by_priority(), Some(near));
-        let cached_selection_revision = state.pending_priority_cache.selection_revision;
         assert_eq!(state.pop_pending_by_priority(), Some(middle));
-        assert_eq!(
-            state.pending_priority_cache.selection_revision,
-            cached_selection_revision
-        );
         assert_eq!(state.pop_pending_by_priority(), Some(far));
         assert_eq!(state.pop_pending_by_priority(), None);
     }
@@ -1138,20 +1079,15 @@ mod tests {
         state.pending.enqueue(far);
 
         assert!(!state.has_critical_pending());
-        let first_miss = state.pending_critical_scan_miss;
-        assert!(first_miss.is_some());
         assert!(!state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, first_miss);
 
         state.pending.enqueue(IVec3::X);
         assert!(state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, None);
 
         state.pending.remove(IVec3::X);
         assert!(!state.has_critical_pending());
         state.center = Some(IVec3::new(9, 0, 0));
         assert!(state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, None);
     }
 
     #[test]
