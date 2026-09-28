@@ -2,65 +2,18 @@ use std::sync::Arc;
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::{
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
-    },
-    rendering::block_texture::TerrainTextureTable,
-    voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
-};
+use crate::voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot};
 
 use super::{
-    biome_field::BiomeField,
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
-    chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
+    chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    presentation_snapshot::PresentationContentSnapshot,
     revision::TaskInputRevision,
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
-
-pub(crate) struct MeshContentSnapshot {
-    blocks: BlockRegistry,
-    layers: LayerRegistry,
-    fluids: FluidRegistry,
-    biomes: BiomeRegistry,
-    secondary_properties: SecondaryPropertyRegistry,
-    biome_field: BiomeField,
-    texture_table: TerrainTextureTable,
-}
-
-impl MeshContentSnapshot {
-    pub(crate) fn from_content(content: &ChunkContent<'_>) -> Self {
-        Self {
-            blocks: content.blocks().clone(),
-            layers: content.layers().clone(),
-            fluids: content.fluids().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
-            secondary_properties: content.secondary_properties().clone(),
-            biome_field: content.biome_field.as_ref().clone(),
-            texture_table: TerrainTextureTable::from_blocks(content.blocks()),
-        }
-    }
-
-    pub(crate) fn context<'a>(
-        &'a self,
-        world: &'a ChunkMeshSnapshot,
-    ) -> ChunkMeshBuildContext<'a, ChunkMeshSnapshot> {
-        ChunkMeshBuildContext {
-            world,
-            blocks: &self.blocks,
-            layers: &self.layers,
-            fluids: &self.fluids,
-            biomes: &self.biomes,
-            secondary_properties: &self.secondary_properties,
-            biome_field: &self.biome_field,
-            texture_table: &self.texture_table,
-        }
-    }
-}
 
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
@@ -70,7 +23,7 @@ pub(crate) struct ChunkMeshTaskOutput {
 #[derive(Resource, Default)]
 pub(crate) struct ChunkMeshTasks {
     revision: TaskInputRevision,
-    snapshot: Option<Arc<MeshContentSnapshot>>,
+    snapshot: Option<Arc<PresentationContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
@@ -81,7 +34,7 @@ impl ChunkMeshTasks {
         }
 
         self.revision = self.revision.next();
-        self.snapshot = Some(Arc::new(MeshContentSnapshot::from_content(content)));
+        self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
     }
 
     pub(crate) fn revision(&self) -> TaskInputRevision {
