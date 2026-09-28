@@ -123,6 +123,16 @@ The original roadmap still requires stable world/dimension/region/chunk/voxel id
 - Generation runtime cutover: commit `09aeab959c8b0316234eb826a16b7f8301c38c1d`; orchestrator cleanup: `9f52523deea6c52f33e884181891695df07c7be5`.
 - Verified checkpoint: `Rust validation` run `36471295828` — success.
 
+### Typed dimension identity cutover
+
+- Added framework-light `DimensionId` as the stable runtime identity for dimensions; raw authored/save text is converted at the content/persistence boundary instead of remaining the runtime identity type.
+- `CurrentDimension` now owns `DimensionId` rather than `String`, and `CurrentDimensionContext::id()` exposes the typed identity.
+- Natural spawning, HUD lookup, new-world creation, world activation, save snapshot capture and bootstrap now convert explicitly with `as_str()` only when calling textual content/save APIs.
+- No `Deref<str>`, duplicated string field or compatibility shim was introduced to hide boundary conversions.
+- Identity introduction: commit `030826eea9892d4ea1e1add63822871e56e8dd7b`; context cutover: `2649d49f5744b59e77eea8309b4e2a07a4c4cc23`; consumer migrations: `8df93109086b6d9213107534ff8bd157a6adcfec`, `f796a83db07310b5ed9dfdb55b058a75e3f45ba9`, `a288e85ee67e3d234945e48b63419b4080e486d6`, `2c69209e6ed4412a5e7ad33edaf8a589415e1539`, `8bd5e5e49d47e2ade9f52ca019cad274943be8f9`, `03e71810de7f3e74c8e42c65454a06890c578927`.
+- Focused tests cover valid identity preservation and blank-ID rejection.
+- Verified checkpoint: `Rust validation` run `36474736729` — success.
+
 ## Current ownership shape
 
 ```text
@@ -187,7 +197,7 @@ ChunkStreamingState (resource-level composition root)
 
 The next work follows the original Phase 1 roadmap instead of jumping ahead to optimization:
 
-1. introduce a stable `DimensionId` runtime/domain type and cut `CurrentDimension` plus its consumers over from raw `String` identity;
+1. **completed:** stable `DimensionId` runtime/domain type and cutover of `CurrentDimension` plus consumers from raw `String` identity;
 2. establish typed world/chunk/voxel coordinate contracts around the existing Euclidean conversion rules, migrating one complete boundary at a time rather than adding unused parallel types;
 3. continue replacing semantically distinct raw revision counters at async/storage boundaries with explicit revision types where the distinction prevents invalid publication/mutation;
 4. keep authored content deserialization and Bevy resources as adapters around the domain contracts rather than making Bevy resource shape the identity itself;
