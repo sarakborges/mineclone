@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::voxel::{
+    coordinates::ChunkCoord,
     fluid_mesh::ChunkFluidMesh,
     mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
     meshlet::ChunkMeshletMask,
@@ -190,6 +191,7 @@ impl ChunkRemeshTasks {
     }
 
     pub(crate) fn contains(&self, coord: IVec3, kind: ChunkRemeshTaskKind) -> bool {
+        let coord = ChunkCoord::from_ivec3(coord);
         match kind {
             ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
                 self.terrain_pending.contains(coord)
@@ -257,6 +259,7 @@ impl ChunkRemeshTasks {
             &world,
             &self.lighting_revisions,
         );
+        let task_coord = ChunkCoord::from_ivec3(coord);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             // Neighbor chunks captured in the snapshot are immutable for this
@@ -293,13 +296,14 @@ impl ChunkRemeshTasks {
 
         match kind {
             ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
-                self.terrain_pending.insert(coord, revision, task)
+                self.terrain_pending.insert(task_coord, revision, task)
             }
-            ChunkRemeshTaskKind::Fluid => self.fluid_pending.insert(coord, revision, task),
+            ChunkRemeshTaskKind::Fluid => self.fluid_pending.insert(task_coord, revision, task),
         }
     }
 
     pub(crate) fn cancel_coord(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         self.terrain_pending.cancel(coord);
         self.fluid_pending.cancel(coord);
     }
