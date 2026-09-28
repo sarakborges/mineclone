@@ -11,22 +11,14 @@ struct RetiredScanKey {
 }
 
 #[derive(Default)]
-pub(super) struct RetiredChunkQueue {
+struct RetiredChunkQueue {
     queue: DeduplicatedQueue<IVec3>,
     scan_miss: Option<RetiredScanKey>,
 }
 
 impl RetiredChunkQueue {
-    pub(super) fn enqueue(&mut self, coord: IVec3) {
+    fn enqueue(&mut self, coord: IVec3) {
         self.queue.enqueue(coord);
-    }
-
-    pub(super) fn revision(&self) -> u64 {
-        self.queue.revision()
-    }
-
-    pub(super) fn pop_where(&mut self, predicate: impl FnMut(IVec3) -> bool) -> Option<IVec3> {
-        self.queue.pop_where(predicate)
     }
 
     fn pop_outside_horizontal_radius(
@@ -72,7 +64,7 @@ impl RetiredChunkQueue {
 pub(super) struct ChunkResidencyState {
     pub(super) desired: HashSet<IVec3>,
     pub(super) retained: HashSet<IVec3>,
-    pub(super) retired: RetiredChunkQueue,
+    retired: RetiredChunkQueue,
     revision: u64,
 }
 
