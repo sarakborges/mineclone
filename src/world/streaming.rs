@@ -1,6 +1,7 @@
 mod generation;
 mod meshing;
 mod pending;
+mod ready;
 mod residency;
 mod selection;
 mod surface_cache;
@@ -32,6 +33,7 @@ use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
     pending::PendingChunkQueue,
+    ready::ReadyChunkQueue,
     residency::ChunkResidencyState,
     selection::rebuild_queue,
 };
@@ -104,14 +106,6 @@ struct StreamingPriorityDiagnostics {
 
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct SelectionScanKey {
-    queue_revision: u64,
-    selection_revision: u64,
-    center: IVec2,
-    radius_squared: i64,
-}
-
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -120,7 +114,7 @@ pub(super) struct ChunkStreamingState {
     vertical_radius: i32,
     residency: ChunkResidencyState,
     pending: PendingChunkQueue,
-    ready: DeduplicatedQueue<IVec3>,
+    ready: ReadyChunkQueue,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
@@ -135,7 +129,6 @@ pub(super) struct ChunkStreamingState {
     generation_prefetch_targets: HashSet<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     settled_publication_chunks: Vec<IVec3>,
-    ready_scan_miss: Option<SelectionScanKey>,
     priority_diagnostics: StreamingPriorityDiagnostics,
 }
 
@@ -458,34 +451,22 @@ impl ChunkStreamingState {
         let movement_direction = self.movement_direction;
         let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
         let radius = i64::from(show_radius.max(0));
-        let scan_key = SelectionScanKey {
-            queue_revision: self.ready.revision(),
-            selection_revision: self.residency.revision(),
-            center: center.xz(),
-            radius_squared: radius * radius,
-        };
-        if self.ready_scan_miss == Some(scan_key) {
-            return None;
-        }
-
+        let radius_squared = radius * radius;
+        let selection_revision = self.residency.revision();
         let desired = &self.residency.desired;
         let retained = &self.residency.retained;
-        let queue_len = self.ready.len();
-        let started = Instant::now();
-        let selected = self.ready.pop_min_where_by_key(
+        let (selected, scan) = self.ready.pop_min_where_by_key(
+            selection_revision,
+            center.xz(),
+            radius_squared,
             |coord| {
                 (desired.contains(&coord) || retained.contains(&coord))
                     && chunk_is_inside_render_radius(center, coord, show_radius)
             },
             |coord| chunk_load_priority(coord, center, movement_direction),
         );
-        self.priority_diagnostics
-            .ready
-            .record(started.elapsed(), queue_len);
-        if selected.is_some() {
-            self.ready_scan_miss = None;
-        } else {
-            self.ready_scan_miss = Some(scan_key);
+        if let Some((elapsed, queue_len)) = scan {
+            self.priority_diagnostics.ready.record(elapsed, queue_len);
         }
         selected
     }
@@ -888,6 +869,7 @@ pub(super) fn activate_published_chunk_runtime(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn ready_queue_prioritizes_distance_before_movement_direction() {
         let background = IVec3::new(-4, 0, 0);
@@ -1030,22 +1012,17 @@ mod tests {
         state.mark_ready(preload_only);
 
         assert_eq!(state.pop_ready(), None);
-        let first_miss = state.ready_scan_miss;
-        assert!(first_miss.is_some());
         assert_eq!(state.pop_ready(), None);
-        assert_eq!(state.ready_scan_miss, first_miss);
 
         let visible = IVec3::X;
         state.residency.desired.insert(visible);
         state.mark_ready(visible);
         assert_eq!(state.pop_ready(), Some(visible));
-        assert_eq!(state.ready_scan_miss, None);
 
         assert_eq!(state.pop_ready(), None);
         state.center = Some(IVec3::new(6, 0, 0));
         state.mark_selection_rebuilt();
         assert_eq!(state.pop_ready(), Some(preload_only));
-        assert_eq!(state.ready_scan_miss, None);
     }
 
     #[test]
