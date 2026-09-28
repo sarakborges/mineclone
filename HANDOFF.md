@@ -37,6 +37,14 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `GenerationRegionCoord`: volume-biome cache e retention scratch não confundem mais region identity com `IVec3` arbitrário.
 - `WorldId`: `WorldSession` armazena identidade tipada; catálogo/snapshot/thumbnail recebem `&str` somente nas bordas existentes.
 - `VoxelCoord`: conversão voxel -> chunk agora distingue semanticamente world voxel coordinate de `ChunkCoord`; APIs Bevy-facing continuam com adapters `IVec3` durante a migração.
+- `ChunkContentRevision`: dependency snapshots usam revisão nominal pertencente ao domínio voxel, não `u64` cru nem tipo privado do mesher.
+
+### Authoritative read boundary já iniciado
+
+- `ChunkMeshSnapshot` e `ChunkMeshDependencies` não dependem mais concretamente de todo o `VoxelWorld`; eles dependem da capability estreita `ChunkSnapshotSource`.
+- Essa capability expõe somente leitura imutável de chunk + content revision. Mutation, archive/persistence, lighting, objects e demais APIs do container autoritativo não vazam para presentation por esse caminho.
+- `VoxelWorld` é hoje um adapter/implementação dessa capability; Bevy `ResMut<VoxelWorld>` é desreferenciado explicitamente nos adapters de setup/streaming, em vez de contaminar o core trait com ECS wrapper types.
+- Os testes de boundary de `streaming/meshing.rs` foram preservados. Durante o cutover uma regravação truncada removeu dois testes; isso foi detectado pelo diff, restaurado em `f20ae0a6`, e o checkpoint corrigido passou CI antes de continuar.
 
 ### Cutovers verdes mais recentes
 
@@ -52,6 +60,9 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `69d485a6b645655d09107c022ccd1f069c44cc6f` — generation-region cache identity tipada; CI `36480324199` success.
 - `0dd65711aa13c6063f10aa943c70cb6826ff42f9` — active world session identity tipada (`WorldId`); CI `36480551060` success.
 - `74b4af045278a76d5deb827b7854c0e7b249ad9f` — typed voxel-coordinate conversion core; CI `36480786611` success.
+- `05efa4c33cc6ae050a6ebe625a4ed7e58412d714` — mesh dependency content revisions deixam de usar `Option<u64>` cru; CI `36481297442` success.
+- `f20ae0a60fe7f0ecf8bc78d9f92c0729ff9cf994` — `ChunkSnapshotSource` boundary finalizado com Bevy adapters e testes restaurados; CI `36482186553` success.
+- `4555045f10293a60c500d75eed3361655d6d20b1` — `ChunkContentRevision` promovida para `voxel::revision`; CI `36483058849` success.
 
 ### Invariantes preservados
 
@@ -63,10 +74,11 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 
 ### Phase 1 ainda não terminou
 
-Ainda faltam os dois cortes mais importantes antes da Phase 2:
+Ainda faltam os cortes de mutation/storage antes da Phase 2:
 
-1. **authoritative chunk-content API**: criar/usar uma boundary estreita para leitura/mutação/revisions sem consumidores dependerem da implementação interna de `VoxelWorld`;
-2. **chunk content / simulation / presentation revision semantics**: reduzir `u64` crus restantes em dependencies e preparar a centralização de mutation ownership.
+1. **authoritative chunk-content mutation boundary**: separar mutation/revision ownership para que consumidores não dependam da implementação interna de `VoxelWorld`;
+2. **storage-owned revision semantics**: mover gradualmente revision storage/counters para tipos nominais sem reescrever `VoxelWorld` inteiro;
+3. **read boundary expansion somente quando justificado**: novas capabilities devem representar consumidores reais, não traits cosméticos.
 
 `VoxelWorld` **não deve** ser convertido num megadiff. Hoje ele ainda mistura resident chunks, archived/persistent chunks, revision maps, block/fluid/object mutation e spatial access. O cutover deve separar essas responsabilidades de forma incremental, com behavior-preserving adapters.
 
@@ -81,7 +93,7 @@ Ainda faltam os dois cortes mais importantes antes da Phase 2:
 ## Continuidade imediata
 
 1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
-2. Continuar Phase 1 pela **authoritative chunk-content read/dependency boundary**, sem reescrever `VoxelWorld` inteiro.
-3. Tipar content/dependency revisions de forma incremental e manter adapters explícitos para APIs legadas.
+2. Continuar Phase 1 pelo **authoritative chunk-content mutation/revision boundary**, evitando edição ampla de `VoxelWorld`.
+3. Preferir owners/adapters pequenos e tipar storage revisions de forma incremental.
 4. Depois fechar o contract de mutation ownership necessário para iniciar **Phase 2 — Authoritative chunk/world storage**.
 5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
