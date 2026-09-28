@@ -12,6 +12,12 @@ use crate::{
 const SURFACE_CACHE_MARGIN_CHUNKS: i32 = 2;
 const SURFACE_RANGE_GUARD_BLOCKS: i32 = CHUNK_SIZE as i32;
 
+type StreamingSelectionCacheParts<'a> = (
+    &'a mut HashMap<IVec2, (i32, i32)>,
+    &'a mut HashMap<IVec2, i32>,
+    &'a mut HashMap<IVec2, i32>,
+);
+
 /// Owns transient column information used only to select and prioritize
 /// streaming residency. These caches are derived from deterministic world data;
 /// they are not authoritative biome/structure metadata themselves.
@@ -23,13 +29,7 @@ pub(super) struct StreamingSelectionCache {
 }
 
 impl StreamingSelectionCache {
-    pub(super) fn parts_mut(
-        &mut self,
-    ) -> (
-        &mut HashMap<IVec2, (i32, i32)>,
-        &mut HashMap<IVec2, i32>,
-        &mut HashMap<IVec2, i32>,
-    ) {
+    pub(super) fn parts_mut(&mut self) -> StreamingSelectionCacheParts<'_> {
         (
             &mut self.surface_ranges,
             &mut self.surface_support_minimums,
