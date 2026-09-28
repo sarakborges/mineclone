@@ -8,7 +8,7 @@ This file records implementation checkpoints for the long-lived rebuild branch. 
 
 ## Phase 0 — ownership inventory
 
-Status: **completed enough to drive Phase 1 cutovers**.
+Status: **completed**.
 
 Key findings:
 
@@ -20,7 +20,11 @@ Key findings:
 
 ## Phase 1 — boundaries and ownership cutovers
 
-### Completed
+Status: **completed**.
+
+The streaming resource remains the composition root, but authoritative/runtime facts now have explicit owners. Remaining `ChunkStreamingState` methods are intentional boundaries, cross-owner invariants or diagnostics aggregation; no further wrapper removal is justified solely to reduce method count.
+
+### Foundation boundaries
 
 - Introduced typed async task input revisions instead of passing unqualified `u64` revisions through generation/mesh/remesh scheduling.
 - Extracted immutable generation-input snapshot ownership from the generation scheduler.
@@ -107,10 +111,20 @@ Key findings:
 - Owner introduction: commit `51106617a677f607dbc3cfcadb9f446aa0de7adc`; orchestrator cutover: `c247ed41dccaabed74b3295b0ca429212081bb4e`; visibility follow-up: `4d8198e7b3451a6e651f6d1c4d0b5acef07be487`.
 - Verified checkpoint: `Rust validation` run `36470540393` — success.
 
+### Generation-wave delegation cleanup
+
+- `generation.rs` now operates directly on `GenerationWaveState` for lifecycle-local operations such as target reservation, staging, completion, publication, prefetch and cancellation.
+- Removed the corresponding pass-through methods from `ChunkStreamingState`.
+- Kept `generation_dispatch_work_exists()` because it intentionally combines generation-wave state with the pending request queue.
+- Kept `generated_chunk_is_unpublished()` and `generated_fluid_settling_owns_mutation()` as `world`-level boundaries used outside the streaming submodule.
+- Kept `mark_ready()` because it enforces a cross-owner invariant across unpublished generation state, mesh-pressure suppression, logical residency and the presentation-ready queue.
+- Generation runtime cutover: commit `09aeab959c8b0316234eb826a16b7f8301c38c1d`; orchestrator cleanup: `9f52523deea6c52f33e884181891695df07c7be5`.
+- Verified checkpoint: `Rust validation` run `36471295828` — success.
+
 ## Current ownership shape
 
 ```text
-ChunkStreamingState (orchestrator, still being reduced)
+ChunkStreamingState (resource-level composition root)
 |
 +-- StreamingSelectionState
 |   +-- center
@@ -156,23 +170,28 @@ ChunkStreamingState (orchestrator, still being reduced)
 |   +-- discovered structure-top columns
 |
 +-- StreamingPriorityDiagnostics
-|   +-- pending priority-scan metrics
-|   +-- ready priority-scan metrics
-|
-+-- remaining concentration to reduce
-    +-- orchestration/delegation methods
+    +-- pending priority-scan metrics
+    +-- ready priority-scan metrics
 ```
 
-## Next implementation block
+### Why the remaining facade methods stay
 
-Reduce pass-through orchestration only where the boundary becomes clearer rather than merely shorter:
+- residency and mesh-pressure methods used by `chunk_unloading` are intentional boundaries from sibling world systems into streaming state;
+- `adopt_structure_top_chunk`, `mark_ready`, `requeue`, `pop_pending_by_priority`, `pop_ready` and renderable-backlog calculations coordinate multiple owners or enforce ordering/invariants;
+- initial-presentation methods name the publication/activation protocol, while `forget_initial_lighting_seeded()` is explicitly required by unload/reload lifecycle;
+- diagnostics aggregation intentionally reads several owners and therefore belongs at the composition layer.
 
-1. identify `ChunkStreamingState` methods that perform no cross-owner invariant and are used by one specialized streaming submodule;
-2. let those submodules use the narrow owner directly when doing so does not expose owner internals outside `world::streaming`;
-3. retain orchestrator methods that coordinate multiple owners or enforce invariants such as logical residency + presentation pressure/readiness;
-4. keep `ChunkStreamingState` as the resource-level composition root for streaming owners instead of replacing it with a new mega-context;
-5. preserve all budgets, priorities, preload/retention policy and publication ordering;
-6. run full CI, then reassess whether Phase 1 has a meaningful ownership concentration left before beginning measured optimization work.
+## Next phase — measured runtime optimization
+
+Phase 1 deliberately avoided changing streaming policy while ownership was being repaired. The next work must be measurement-led rather than another architecture rewrite.
+
+1. establish a stable runtime diagnostics baseline for normal movement, warp and initial world entry;
+2. measure frame-time/hitch contribution from selection rebuilds, generation dispatch/integration, fluid settling/publication, initial meshing, remesh work and render residency management;
+3. record logical/CPU/render residency counts separately so memory and visibility pressure cannot be confused with world existence;
+4. expose async queue depth, in-flight work, result integration latency and cancellation/stale-result counts where they are still missing;
+5. measure mesh residency bytes, mesh publish/upload volume and render-side chunk counts alongside CPU streaming work;
+6. optimize the largest measured stalls one subsystem at a time, preserving the explicit ownership boundaries from Phase 1;
+7. keep a green CI checkpoint between each optimization block and update this progress document with before/after evidence.
 
 ## Rules still in force
 
@@ -182,5 +201,6 @@ Reduce pass-through orchestration only where the boundary becomes clearer rather
 - one authoritative owner per fact;
 - logical world, resident world and rendered world are distinct;
 - every async result remains revisioned/cancellable;
-- each ownership cutover must preserve behavior first, then optimization can be measured separately;
-- CI must be green before the next cutover.
+- ownership boundaries must not be collapsed to make an optimization easier;
+- performance changes require measurements before/after, not intuition-only tuning;
+- CI must be green before the next block.
