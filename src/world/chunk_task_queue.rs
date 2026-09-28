@@ -5,6 +5,8 @@ use bevy::{
     tasks::{Task, futures::check_ready},
 };
 
+use crate::voxel::coordinates::ChunkCoord;
+
 use super::revision::TaskInputRevision;
 
 pub(crate) struct CompletedChunkTask<T> {
@@ -19,7 +21,7 @@ struct PendingChunkTask<T> {
 }
 
 pub(crate) struct ChunkTaskQueue<T> {
-    pending: HashMap<IVec3, PendingChunkTask<T>>,
+    pending: HashMap<ChunkCoord, PendingChunkTask<T>>,
 }
 
 impl<T> Default for ChunkTaskQueue<T> {
@@ -36,11 +38,13 @@ impl<T> ChunkTaskQueue<T> {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains_key(&coord)
+        self.pending.contains_key(&ChunkCoord::from_ivec3(coord))
     }
 
     pub(crate) fn cancel(&mut self, coord: IVec3) -> bool {
-        self.pending.remove(&coord).is_some()
+        self.pending
+            .remove(&ChunkCoord::from_ivec3(coord))
+            .is_some()
     }
 
     pub(crate) fn cancel_where(
@@ -51,12 +55,12 @@ impl<T> ChunkTaskQueue<T> {
             .pending
             .keys()
             .copied()
-            .filter(|coord| predicate(*coord))
+            .filter(|coord| predicate(coord.as_ivec3()))
             .collect::<Vec<_>>();
         for coord in &coords {
             self.pending.remove(coord);
         }
-        coords
+        coords.into_iter().map(ChunkCoord::as_ivec3).collect()
     }
 
     pub(crate) fn best_coord_by_key<K: Ord>(
@@ -66,7 +70,8 @@ impl<T> ChunkTaskQueue<T> {
         self.pending
             .keys()
             .copied()
-            .min_by_key(|coord| key(*coord))
+            .min_by_key(|coord| key(coord.as_ivec3()))
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn insert(
@@ -75,6 +80,7 @@ impl<T> ChunkTaskQueue<T> {
         revision: TaskInputRevision,
         task: Task<T>,
     ) -> bool {
+        let coord = ChunkCoord::from_ivec3(coord);
         if self.pending.contains_key(&coord) {
             return false;
         }
@@ -93,13 +99,14 @@ impl<T> ChunkTaskQueue<T> {
             .pending
             .keys()
             .copied()
-            .filter(|coord| predicate(*coord))
+            .filter(|coord| predicate(coord.as_ivec3()))
             .max_by_key(|coord| {
-                let delta = *coord - center;
+                let coord = coord.as_ivec3();
+                let delta = coord - center;
                 (delta.length_squared(), coord.x, coord.y, coord.z)
             })?;
         self.pending.remove(&coord);
-        Some(coord)
+        Some(coord.as_ivec3())
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
@@ -111,7 +118,7 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.remove(&coord);
 
         Some(CompletedChunkTask {
-            coord,
+            coord: coord.as_ivec3(),
             revision,
             output,
         })
@@ -122,7 +129,7 @@ impl<T> ChunkTaskQueue<T> {
         mut key: impl FnMut(IVec3) -> K,
     ) -> Option<CompletedChunkTask<T>> {
         let mut coords = self.pending.keys().copied().collect::<Vec<_>>();
-        coords.sort_unstable_by_key(|coord| key(*coord));
+        coords.sort_unstable_by_key(|coord| key(coord.as_ivec3()));
 
         for coord in coords {
             let pending = self
@@ -136,7 +143,7 @@ impl<T> ChunkTaskQueue<T> {
             self.pending.remove(&coord);
 
             return Some(CompletedChunkTask {
-                coord,
+                coord: coord.as_ivec3(),
                 revision,
                 output,
             });
