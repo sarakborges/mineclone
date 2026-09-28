@@ -7,10 +7,12 @@ use crate::voxel::{
     deduplicated_queue::DeduplicatedQueue,
 };
 
+use super::residency::ResidencySelectionRevision;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ReadyScanKey {
     queue_revision: u64,
-    selection_revision: u64,
+    selection_revision: ResidencySelectionRevision,
     center: IVec2,
     radius_squared: i64,
 }
@@ -57,6 +59,7 @@ impl ReadyChunkQueue {
         mut predicate: impl FnMut(IVec3) -> bool,
         mut key: impl FnMut(IVec3) -> K,
     ) -> (Option<IVec3>, Option<(Duration, usize)>) {
+        let selection_revision = ResidencySelectionRevision::from_raw(selection_revision);
         let scan_key = ReadyScanKey {
             queue_revision: self.queue.revision(),
             selection_revision,
