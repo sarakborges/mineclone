@@ -40,35 +40,47 @@ use super::{
     tick::WorldTickClock,
 };
 
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct WorldId(String);
+
+impl WorldId {
+    pub(crate) fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct WorldSession {
-    pub(crate) id: Option<String>,
+    pub(crate) id: Option<WorldId>,
     pub(crate) pending_clock: Option<(u64, u64)>,
 }
 
 impl WorldSession {
     pub(crate) fn id(&self) -> Option<&str> {
-        self.id.as_deref()
+        self.id.as_ref().map(WorldId::as_str)
     }
 
     pub(crate) fn new(id: String) -> Self {
         Self {
-            id: Some(id),
+            id: Some(WorldId::new(id)),
             ..Self::default()
         }
     }
 
     pub(crate) fn loaded(id: String, day: u64, tick_in_day: u64) -> Self {
         Self {
-            id: Some(id),
+            id: Some(WorldId::new(id)),
             pending_clock: Some((day, tick_in_day)),
         }
     }
 
     pub(crate) fn persist(&self, snapshot: &WorldSaveContext<'_, '_>) -> io::Result<()> {
         let id = self
-            .id
-            .as_deref()
+            .id()
             .ok_or_else(|| io::Error::other("no active world"))?;
         let capture_started = Instant::now();
         let captured = snapshot.capture(id)?;
