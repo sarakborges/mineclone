@@ -40,6 +40,7 @@ mod setup;
 mod storage_durability;
 mod streaming;
 mod structure_field;
+mod structure_metadata;
 pub(crate) mod terrain;
 pub(crate) mod tick;
 pub(crate) mod thumbnail;
