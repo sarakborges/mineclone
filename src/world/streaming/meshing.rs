@@ -59,11 +59,11 @@ pub(super) fn dispatch_initial_mesh_tasks(
         };
 
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
-            let Some(center) = work.state.center else {
+            let Some(center) = work.state.center() else {
                 work.state.defer_ready(coord);
                 break;
             };
-            let movement_direction = work.state.movement_direction;
+            let movement_direction = work.state.movement_direction();
             let candidate_priority = chunk_load_priority(coord, center, movement_direction);
             let Some(preempted) = work.mesh_tasks.cancel_farthest_where(center, |task_coord| {
                 chunk_load_priority(task_coord, center, movement_direction) > candidate_priority
@@ -149,10 +149,10 @@ pub(super) fn collect_built_chunk_meshes(
             break;
         }
 
-        let Some(center) = work.state.center else {
+        let Some(center) = work.state.center() else {
             break;
         };
-        let movement_direction = work.state.movement_direction;
+        let movement_direction = work.state.movement_direction();
         let Some(next_coord) = work.mesh_tasks.best_coord_by_key(|coord| {
             chunk_load_priority(coord, center, movement_direction)
         }) else {

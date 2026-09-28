@@ -105,17 +105,14 @@ pub(super) fn rebuild_queue(
     scratch: &mut QueueRebuildScratch,
     context: &QueueRebuildContext<'_>,
 ) {
-    let previous_center = streaming.center;
-    let previous_movement_direction = streaming.movement_direction;
-    let previous_horizontal_radius = streaming.horizontal_radius;
-    let previous_vertical_radius = streaming.vertical_radius;
-
-    if allow_forward_preload {
-        update_movement_direction(streaming, center);
-    } else {
-        streaming.movement_direction = IVec2::ZERO;
-    }
-    let movement_direction = streaming.movement_direction;
+    let previous_selection = streaming
+        .selection_state
+        .prepare_rebuild(center, allow_forward_preload);
+    let previous_center = previous_selection.center();
+    let previous_movement_direction = previous_selection.movement_direction();
+    let previous_horizontal_radius = previous_selection.horizontal_radius();
+    let previous_vertical_radius = previous_selection.vertical_radius();
+    let movement_direction = streaming.selection_state.movement_direction();
     let prune_caches = should_prune_streaming_caches(
         previous_center,
         previous_horizontal_radius,
@@ -252,9 +249,9 @@ pub(super) fn rebuild_queue(
 
     std::mem::swap(&mut streaming.residency.desired, &mut scratch.desired);
     std::mem::swap(&mut streaming.residency.retained, &mut scratch.retained);
-    streaming.center = Some(center);
-    streaming.horizontal_radius = horizontal_radius;
-    streaming.vertical_radius = vertical_radius;
+    streaming
+        .selection_state
+        .commit_rebuild(center, horizontal_radius, vertical_radius);
     streaming.mark_selection_rebuilt();
 
     if !incremental_rebuild {
@@ -268,18 +265,6 @@ pub(super) fn rebuild_queue(
     for coord in scratch.retired.drain(..) {
         streaming.enqueue_retired(coord);
     }
-}
-
-fn update_movement_direction(streaming: &mut ChunkStreamingState, center: IVec3) {
-    let Some(previous_center) = streaming.center else {
-        return;
-    };
-    let delta = center.xz() - previous_center.xz();
-    if delta == IVec2::ZERO {
-        return;
-    }
-
-    streaming.movement_direction = IVec2::new(delta.x.signum(), delta.y.signum());
 }
 
 fn should_prune_streaming_caches(

@@ -457,7 +457,7 @@ fn generated_chunk_requires_fluid_settling(
 }
 
 fn generation_wave_target_limit(state: &mut super::ChunkStreamingState) -> usize {
-    if state.center.is_none() {
+    if state.center().is_none() {
         return MAX_GENERATION_TASKS_IN_FLIGHT;
     }
 
@@ -543,7 +543,12 @@ mod tests {
     fn critical_generation_frontier_uses_smaller_publication_waves() {
         let center = IVec3::new(10, 2, -4);
         let mut state = super::super::ChunkStreamingState {
-            center: Some(center),
+            selection_state: super::super::selection_state::StreamingSelectionState::configured(
+                Some(center),
+                IVec2::ZERO,
+                0,
+                0,
+            ),
             ..Default::default()
         };
         state.pending.enqueue(center + IVec3::X);
