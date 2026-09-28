@@ -1,5 +1,6 @@
 mod generation;
 mod generation_wave;
+mod initial_presentation;
 mod meshing;
 mod pending;
 mod ready;
@@ -33,6 +34,7 @@ use crate::{
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
     generation_wave::GenerationWaveState,
+    initial_presentation::InitialPresentationState,
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
     pending::PendingChunkQueue,
     ready::ReadyChunkQueue,
@@ -120,10 +122,7 @@ pub(super) struct ChunkStreamingState {
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
-    initial_lighting_seeded: HashSet<IVec3>,
-    initial_lighting_seed_results: HashMap<IVec3, DirectLightingSeedResult>,
-    initial_lighting_activated: HashSet<IVec3>,
-    initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
+    initial_presentation: InitialPresentationState,
     mesh_pressure_evicted: HashMap<IVec3, usize>,
     generation_wave: GenerationWaveState,
     priority_diagnostics: StreamingPriorityDiagnostics,
@@ -409,7 +408,7 @@ impl ChunkStreamingState {
     }
 
     fn mark_initial_lighting_seeded(&mut self, coord: IVec3) -> bool {
-        self.initial_lighting_seeded.insert(coord)
+        self.initial_presentation.mark_lighting_seeded(coord)
     }
 
     fn store_initial_lighting_seed_result(
@@ -417,25 +416,36 @@ impl ChunkStreamingState {
         coord: IVec3,
         result: DirectLightingSeedResult,
     ) {
-        self.initial_lighting_seed_results.insert(coord, result);
+        self.initial_presentation
+            .store_lighting_seed_result(coord, result);
     }
 
     fn take_initial_lighting_seed_result(
         &mut self,
         coord: IVec3,
     ) -> Option<DirectLightingSeedResult> {
-        self.initial_lighting_seed_results.remove(&coord)
+        self.initial_presentation.take_lighting_seed_result(coord)
     }
 
     fn mark_initial_lighting_activated(&mut self, coord: IVec3) -> bool {
-        self.initial_lighting_activated.insert(coord)
+        self.initial_presentation.mark_lighting_activated(coord)
+    }
+
+    fn add_initial_mesh_seed_catchup(&mut self, coord: IVec3, meshlets: ChunkMeshletMask) {
+        self.initial_presentation
+            .add_mesh_seed_catchup(coord, meshlets);
+    }
+
+    pub(super) fn initial_mesh_seed_catchup(&self, coord: IVec3) -> Option<ChunkMeshletMask> {
+        self.initial_presentation.mesh_seed_catchup(coord)
+    }
+
+    pub(super) fn clear_initial_mesh_seed_catchup(&mut self, coord: IVec3) {
+        self.initial_presentation.clear_mesh_seed_catchup(coord);
     }
 
     pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
-        self.initial_lighting_seeded.remove(&coord);
-        self.initial_lighting_seed_results.remove(&coord);
-        self.initial_lighting_activated.remove(&coord);
-        self.initial_mesh_seed_catchup.remove(&coord);
+        self.initial_presentation.forget(coord);
     }
 
     pub(super) fn take_priority_scan_diagnostics(
@@ -668,7 +678,7 @@ pub(super) fn stream_chunks(
                 .cancel_where(|coord| !state.retains_render_mesh(coord))
         };
         for coord in cancelled_meshes {
-            work.state.initial_mesh_seed_catchup.remove(&coord);
+            work.state.clear_initial_mesh_seed_catchup(coord);
         }
     }
 
@@ -676,10 +686,6 @@ pub(super) fn stream_chunks(
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
-    // Presentation is foreground work. Drain/publish already-built meshes and
-    // feed initial meshing before integrating more generation results; otherwise
-    // direct-light seeding for newly generated chunks can consume the shared
-    // frame deadline while hundreds of render-ready chunks wait in `ready`.
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(
             &content,
@@ -706,9 +712,6 @@ pub(super) fn stream_chunks(
     }
 }
 
-// Direct lighting is presentation preparation. Unpublished preload chunks stay
-// outside the dynamic-lighting domain, so they can remain unseeded without
-// leaking DARK halo values into visible chunks.
 pub(super) fn seed_loaded_chunk_direct_lighting(
     coord: IVec3,
     content: &ChunkContent<'_>,
@@ -729,9 +732,6 @@ pub(super) fn seed_loaded_chunk_direct_lighting(
     work.state
         .store_initial_lighting_seed_result(coord, lighting_seed);
 
-    // A mesh task may already have captured this position as missing air.
-    // Remember only the affected meshlets; the finished task can publish and
-    // receive a targeted catch-up instead of being cancelled.
     for y in -1..=1 {
         for z in -1..=1 {
             for x in -1..=1 {
@@ -742,16 +742,7 @@ pub(super) fn seed_loaded_chunk_direct_lighting(
                 let neighbor = coord + offset;
                 if work.mesh_tasks.contains(neighbor) {
                     let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
-                    let combined = work
-                        .state
-                        .initial_mesh_seed_catchup
-                        .get(&neighbor)
-                        .copied()
-                        .unwrap_or_default()
-                        .union(meshlets);
-                    work.state
-                        .initial_mesh_seed_catchup
-                        .insert(neighbor, combined);
+                    work.state.add_initial_mesh_seed_catchup(neighbor, meshlets);
                 }
             }
         }
@@ -894,12 +885,10 @@ mod tests {
 
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.mark_initial_lighting_seeded(coord));
-        state
-            .initial_mesh_seed_catchup
-            .insert(coord, ChunkMeshletMask::ALL);
+        state.add_initial_mesh_seed_catchup(coord, ChunkMeshletMask::ALL);
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
-        assert!(!state.initial_mesh_seed_catchup.contains_key(&coord));
+        assert!(state.initial_mesh_seed_catchup(coord).is_none());
     }
 
     #[test]
