@@ -30,8 +30,8 @@ pub struct VoxelWorld {
     loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
     archived_chunks: HashMap<IVec3, Arc<ArchivedChunk>>,
     persistent_chunks: HashSet<IVec3>,
-    chunk_content_revisions: HashMap<IVec3, u64>,
-    next_chunk_content_revision: u64,
+    chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
+    next_chunk_content_revision: ChunkContentRevision,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
     chunk_object_revisions: HashMap<IVec3, u64>,
@@ -65,12 +65,12 @@ impl VoxelWorld {
 
     pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<ChunkContentRevision> {
         self.chunk(coord)?;
-        Some(ChunkContentRevision::from_raw(
+        Some(
             *self
                 .chunk_content_revisions
                 .get(&coord)
                 .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
-        ))
+        )
     }
 
     #[cfg(test)]
@@ -661,7 +661,7 @@ impl VoxelWorld {
         );
         self.next_chunk_content_revision = self
             .next_chunk_content_revision
-            .checked_add(1)
+            .checked_next()
             .expect("chunk content revision counter exhausted");
         self.chunk_content_revisions
             .insert(coord, self.next_chunk_content_revision);
