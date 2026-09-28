@@ -16,63 +16,26 @@
 
 ## Fase
 
-- **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução já existem.
-- **Phase 2 — Authoritative chunk/world storage em andamento.**
+- **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
+- **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
+- **Phase 3 — Deterministic world metadata iniciando.**
 
-## Ownership já separado
+## Phase 2 — estado final
 
-### Streaming / async / presentation
+### Authoritative storage owners
 
-O antigo `ChunkStreamingState` já perdeu ownership direto de:
-
-- logical residency (`desired` / `retained` / retirement);
-- pending generation queue + priority caches;
-- ready/initial-presentation queue;
-- generation-wave lifecycle (targets, prefetch, staged, settling, publication);
-- initial presentation state;
-- mesh-pressure residency;
-- selection pose / selection caches;
-- priority diagnostics.
-
-Generation e presentation possuem snapshot boundaries explícitos. Async work usa revisions tipadas e stale-result rejection.
-
-### Core identities / revisions
-
-Existem e devem ser preservados como domínios distintos:
-
-- `DimensionId`
-- `WorldId`
-- `ChunkCoord`
-- `VoxelCoord`
-- `GenerationRegionCoord`
-- `TaskInputRevision`
-- `ResidencySelectionRevision`
-- `ChunkContentRevision`
-- `BlockTopologyRevision`
-
-Não colapsar revisions semanticamente diferentes em `u64` genérico só porque hoje ambos são counters.
-
-### Authoritative world storage
-
-`VoxelWorld` continua como facade/coordenador, mas não possui mais diretamente vários containers:
+`VoxelWorld` continua como facade/coordenador, mas os containers concretos têm owners separados:
 
 - `ResidentChunkStore`: resident chunks + vertical column index.
-- `LoadedChunkColumnIndex`: query/index de Y por coluna, encapsulado no resident store.
+- `LoadedChunkColumnIndex`: query/index de Y por coluna.
 - `ChunkPersistenceState`: persistent set + archived payloads.
 - `ContentRevisionState`: map/counter de `ChunkContentRevision` por resident chunk.
 - `ObjectRevisionState`: scene revision + per-chunk object revision.
-- `BlockRevisionState`: global block-topology revision.
+- `BlockRevisionState`: global `BlockTopologyRevision`.
 
-`VoxelWorld` continua coordenando invariantes multi-owner: insert/archive/restore, persistence promotion, semantic revisions e mutations autoritativas.
+`VoxelWorld` coordena apenas invariantes multi-owner: insert/archive/restore, persistence promotion, revisions semânticas e mutation autoritativa.
 
-## Read / mutation boundaries
-
-- `ChunkMeshSnapshot` / `ChunkMeshDependencies` dependem de `ChunkSnapshotSource`, não do container inteiro.
-- `VoxelRead` cobre leitura voxel estreita.
-- `VoxelTopologyRead` adiciona object lookup.
-- `VoxelTopologyReader` é o view entregue por `VoxelTopologyRuntime::read()`.
-- Os antigos `VoxelMutationRuntime::world()` / `VoxelTopologyRuntime::world()` foram removidos.
-- Collision, raycast, targeting/tool reads etc. não devem recuperar acesso irrestrito ao `VoxelWorld` através do facade de mutation.
+### Mutation / dirty ownership
 
 Gameplay/interação usa `VoxelMutationRuntime` para combinar mutation autoritativa com side effects de simulation/presentation:
 
@@ -80,101 +43,80 @@ Gameplay/interação usa `VoxelMutationRuntime` para combinar mutation autoritat
 - layer edit -> remesh;
 - interactive fluid edit -> lighting + remesh + fluid scheduling.
 
-Bypasses diretos já inspecionados e considerados **intencionais**:
+Bypasses diretos inspecionados e considerados intencionais:
 
-- `world_objects.rs`: `set_object_at` / `remove_object_at`; object presentation é separada e invalidada por `ObjectRevisionState`.
-- `voxel/lighting/propagation.rs`: escreve light diretamente; publication real vem de changed positions -> meshlet masks -> `ChunkRemeshTasks`/`ChunkRemeshQueue`.
-- `world/fluid_updates.rs`: runtime de fluid simulation escreve `set_fluid_at` diretamente e possui seu próprio lighting/remesh/reschedule pipeline.
-- generated-fluid settling usa caminho derivado próprio e reconcilia lighting/remesh/frontier na publication; não deve ser forçado pelo gameplay facade.
+- `world_objects.rs`: object mutation + `ObjectRevisionState`; object presentation é separada de voxel mesh.
+- `voxel/lighting/propagation.rs`: light data muda diretamente; changed positions alimentam meshlet remesh.
+- `world/fluid_updates.rs`: fluid simulation possui seu próprio lighting/remesh/reschedule pipeline.
+- generated-fluid settling usa mutation derivada e só reconcilia lighting/remesh/frontier na publication.
 
-Não criar um `DirtyState` genérico para fundir esses domínios.
+Não criar `DirtyState` genérico. Simulation dirtiness hoje é representada por owners/queues específicos (`PendingLightingUpdates`, `PendingFluidUpdates`) porque não existe consumidor real para uma revisão escalar genérica.
 
-## Revision / dirty ownership atual
+### Revision domains
 
-### `ChunkContentRevision`
+- `ChunkContentRevision`: conteúdo voxel de resident chunk; lighting não avança; block/layer/object/fluid avançam.
+- `BlockTopologyRevision`: invalida block targeting visual; avança em chunk insert/archive/restore e mudança real de block; layer/fluid/object/light não avançam.
+- Object scene/chunk revisions continuam semanticamente separadas internamente.
+- O antigo `chunk_mesh_revisions` foi removido: presentation dirtiness pertence ao remesh scheduler/queue.
 
-- Representa mudança de conteúdo voxel de um resident chunk relevante para immutable snapshots/dependencies.
-- Lighting **não** muda content revision.
-- Blocks, layers, objects e fluids mudam content revision.
-- Map/counter agora pertencem a `ContentRevisionState`; `VoxelWorld` apenas valida resident ownership e delega bump/remove/read.
+Importante: o experimento `7e97ec39` removeu erroneamente a antiga block revision. CI revelou o caller real em targeting; `e50519bb` restaurou a semantic e `8f729481` a transformou em `BlockTopologyRevision` + `BlockRevisionState`. Não repetir o diagnóstico de “estado morto”.
 
-### `BlockTopologyRevision`
+### Read / lookup boundaries
 
-O antigo `block_content_revision: u64` **não era estado morto**.
+- `ChunkMeshSnapshot` / `ChunkMeshDependencies` dependem de `ChunkSnapshotSource`, não do container inteiro.
+- `VoxelRead` e `VoxelTopologyRead` são capabilities estreitas.
+- `VoxelMutationRuntime::world()` / `VoxelTopologyRuntime::world()` não existem mais.
+- Generation distingue explicitamente `Resident / Archived / Absent`; `ChunkAvailability` fica local em `streaming/generation.rs` enquanto só esse consumidor precisar dos três estados.
 
-Durante um cut experimental (`7e97ec39`) ele foi removido; CI falhou porque `src/targeting/scene.rs` realmente o usa para invalidar o `BlockTargetingVisualSnapshot`. O estado funcional foi restaurado em `e50519bb`, CI `36493480313` success.
+### Residency / eviction ownership
 
-O domínio foi então corrigido semanticamente:
+- `ChunkResidencyState` possui `desired`, `retained`, retired queue e selection revision. Render entity lifetime não define world residency.
+- Resident retention é finita em função da streaming selection + unload retention radius.
+- `ChunkRenderPool` é presentation-only.
+- `evict_distant_chunks` é o cross-boundary coordinator final: residency decide retirement; `ChunkEvictionRuntime` possui authoritative world/state/budget; `ChunkEvictionPresentationRuntime` possui lighting/remesh cleanup. Os dois capability sets executam no mesmo budgeted system para não abrir um frame de split-brain.
+- Mesh-pressure eviction continua presentation-only e não arquiva world truth.
 
-- tipo nominal: `BlockTopologyRevision`;
-- owner: `BlockRevisionState`;
-- targeting armazena o tipo nominal, não `u64`;
-- avança em insert/archive/restore de chunk e mudança real de block;
-- **não** avança por layer/fluid/object/light.
+### Phase 2 exit criteria
 
-Commit: `8f729481cd5ab14521a2f4d404ca4c82daedbde1`; CI `36493814557` success.
+Atendidos:
 
-### Object revisions
+- chunks podem existir/mutar em testes sem render entities;
+- todas as mutations de world truth passam pela boundary autoritativa `VoxelWorld`, com facades especializados apenas coordenando side effects;
+- presentation pode ser removida sem remover world truth; mesh-pressure/distance render retirement são independentes de resident chunk lifetime;
+- storage/revision/lookup/eviction owners estão explícitos e testados.
 
-- `ObjectRevisionState` possui scene invalidation + per-chunk object revision.
-- Scene e chunk revisions são tipos internos distintos; adapter `u64` externo ainda existe em `world_objects.rs` e pode ser removido em cut posterior se trouxer valor real.
+## Checkpoints verdes mais recentes
 
-### Mesh revisions
-
-O antigo `chunk_mesh_revisions` foi confirmado como estado legado e removido.
-
-- não existia reader de produção;
-- presentation dirtiness real já pertence a `ChunkRemeshTasks` / `ChunkRemeshQueue`;
-- lighting invalida meshlets diretamente;
-- interactive lighting publica changed positions por frame;
-- generated-fluid settling mantém mudanças privadas até convergir e só depois publica.
-
-`66511702` removeu o estado; `90319e40` corrigiu um teste residual; CI `36492502160` success.
-
-## Storage semantics preservadas
-
-- Chunk gerado e não modificado pode ser descartado ao archive.
-- Chunk promovido a persistent é arquivado/restaurável.
-- Save serializa somente chunks persistent.
-- Generated-fluid convergence não pode promover chunk para persistent pelo caminho derivado.
-- `ResidentChunkStore::insert` não substitui resident chunk silenciosamente.
-- Archive remove content/object revisions do resident chunk.
-- Restore recebe revisions novas.
-
-Generation/streaming agora torna explícita a distinção que antes era inferida por duas queries:
-
-- `Resident`
-- `Archived` / known-but-not-resident
-- `Absent`
-
-Por enquanto `ChunkAvailability` fica local em `streaming/generation.rs`, porque esse é o único consumidor conhecido que precisa dos três estados. Não promover para um enum global sem segundo consumidor real.
-
-## Últimos checkpoints relevantes
-
-- `bb2afe5e8d4fc17a423b9d8545d74de48b10ba05` — fecha full-world mutation escape hatch; CI `36485808944` success.
-- `576b770822ee8919b6cd7a1864308e159d4d3547` — content revision nominal no storage; CI `36488836153` success.
-- `fc011ac18d3f0de80fdd2551cf0ff6430377b99b` — `ChunkPersistenceState`; CI `36489367228` success.
-- `ba0d53326c2beb1d4203d82f57443e9da7a543f4` — loaded column index; CI `36489860888` success.
 - `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore`; CI `36490280435` success.
 - `3f072dd12db3f456b1060a890730f4457a7a847c` — `ObjectRevisionState`; CI `36491139143` success.
-- `d240f50368cf76147638cf00039f5de8eb84eec6` — object revisions nominal internally; CI `36491654054` success.
+- `d240f50368cf76147638cf00039f5de8eb84eec6` — object revisions nominais internamente; CI `36491654054` success.
 - `90319e4031c4db656f685667f626a7cf39a332b7` — dead mesh revision cleanup finalizado; CI `36492502160` success.
-- `e50519bb6e60feb9b393368c6171bc916d1458e4` — restaura a real block-targeting revision após CI revelar o caller; CI `36493480313` success.
+- `e50519bb6e60feb9b393368c6171bc916d1458e4` — restaura block-targeting revision após CI revelar caller; CI `36493480313` success.
 - `8f729481cd5ab14521a2f4d404ca4c82daedbde1` — `BlockTopologyRevision` + `BlockRevisionState`; CI `36493814557` success.
-- `a26a8304823e17acb6b798581595c3f2585b65ca` + `b753efe537b1b806159af358f76cb64cfb445177` — `ContentRevisionState` passa a possuir map/counter de content revisions; CI `36494360805` success.
-- `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation distingue `Resident / Archived / Absent` explicitamente e testa a transição de storage; CI `36496987975` success.
+- `a26a8304823e17acb6b798581595c3f2585b65ca` + `b753efe537b1b806159af358f76cb64cfb445177` — `ContentRevisionState`; CI `36494360805` success.
+- `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation explicita `Resident / Archived / Absent`; CI `36496987975` success.
+- `99d53e940a6cdc2eb9b94f3b5a5ca11d7d6b125a` + `73383a52f8f8c9c4a4043274161dc36cb5ec1340` — eviction coordinator separa authoritative vs presentation capabilities e corrige naming do system; CI `36497504684` success.
 
-## Próximo corte — Phase 2
+## Phase 3 — próximo corte
 
-Lookup semantics e os mutation bypasses relevantes já foram classificados. O próximo bloco deve revisar **cache/eviction ownership** sem acoplar logical/resident world a render entities.
+Meta: deterministic world metadata precisa poder responder “o que pertence aqui?” sem materializar/renderizar chunk.
 
-Prioridades:
+Primeiro mapear o que já existe antes de criar qualquer abstração:
 
-1. localizar caches autoritativos/derived ainda sem owner/bound explícito;
-2. separar cache eviction de render entity lifetime quando ainda estiver misturado;
-3. preservar `VoxelWorld` como facade/coordenador e evitar megadiff;
-4. não criar abstração nova sem consumidor/invariante real;
-5. encerrar Phase 2 somente quando storage, revisions, lookup semantics e eviction ownership estiverem claros e testados.
+- `BiomeField`: biome-volume metadata e caches;
+- `WorldFeatureFields`: deterministic feature calculations/caches;
+- `StructureMetadata` / `StructureField`: structure intent existente;
+- generation snapshot e spawn consumers que já consultam esses owners.
+
+Próximas decisões devem distinguir:
+
+1. metadata lógico determinístico de caches derivados descartáveis;
+2. queries que podem rodar sem resident/render chunk;
+3. cache validity + memory bounds explícitos;
+4. structure intent/reservation vs structure materialization;
+5. biome-volume query como fonte para spawn rules, nunca biome visual inferido de chunk renderizado.
+
+Não criar um `WorldMetadata` mega-container só para agrupar resources existentes. Primeiro localizar invariantes e consumers reais.
 
 ## Regras de continuidade
 
