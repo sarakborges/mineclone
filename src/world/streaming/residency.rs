@@ -5,10 +5,31 @@ use crate::voxel::{
     deduplicated_queue::DeduplicatedQueue,
 };
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct ResidencySelectionRevision(u64);
+
+impl ResidencySelectionRevision {
+    fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("chunk residency selection revision exhausted"),
+        )
+    }
+
+    pub(super) fn from_raw(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub(super) fn raw(self) -> u64 {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RetiredScanKey {
     queue_revision: u64,
-    selection_revision: u64,
+    selection_revision: ResidencySelectionRevision,
     center: IVec2,
     radius_squared: i64,
 }
@@ -26,7 +47,7 @@ impl RetiredChunkQueue {
 
     fn pop_outside_horizontal_radius(
         &mut self,
-        selection_revision: u64,
+        selection_revision: ResidencySelectionRevision,
         center: IVec2,
         radius_squared: i64,
         desired: &HashSet<IVec3>,
@@ -69,12 +90,12 @@ pub(super) struct ChunkResidencyState {
     pub(super) desired: HashSet<IVec3>,
     pub(super) retained: HashSet<IVec3>,
     retired: RetiredChunkQueue,
-    revision: u64,
+    revision: ResidencySelectionRevision,
 }
 
 impl ChunkResidencyState {
     pub(super) fn revision(&self) -> u64 {
-        self.revision
+        self.revision.raw()
     }
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
@@ -108,9 +129,6 @@ impl ChunkResidencyState {
     }
 
     pub(super) fn mark_rebuilt(&mut self) {
-        self.revision = self
-            .revision
-            .checked_add(1)
-            .expect("chunk residency selection revision exhausted");
+        self.revision = self.revision.next();
     }
 }
