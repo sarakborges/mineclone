@@ -150,7 +150,6 @@ pub(super) struct ChunkStreamingState {
     pending_critical_scan_miss: Option<CriticalPendingScanKey>,
     pending_priority_cache: PendingPriorityCache,
     ready_scan_miss: Option<SelectionScanKey>,
-    retired_scan_miss: Option<SelectionScanKey>,
     priority_diagnostics: StreamingPriorityDiagnostics,
 }
 
@@ -180,9 +179,7 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            self.residency.retired.enqueue(coord);
-        }
+        self.residency.enqueue_retired(coord);
     }
 
     pub(super) fn pop_retired_outside_horizontal_radius(
@@ -190,36 +187,8 @@ impl ChunkStreamingState {
         center: IVec3,
         horizontal_radius: i32,
     ) -> Option<IVec3> {
-        let center = center.xz();
-        let radius = i64::from(horizontal_radius.max(0));
-        let radius_squared = radius * radius;
-        let scan_key = SelectionScanKey {
-            queue_revision: self.residency.retired.revision(),
-            selection_revision: self.residency.revision(),
-            center,
-            radius_squared,
-        };
-        if self.retired_scan_miss == Some(scan_key) {
-            return None;
-        }
-
-        let desired = &self.residency.desired;
-        let retained = &self.residency.retained;
-        let coord = self.residency.retired.pop_where(|coord| {
-            if desired.contains(&coord) || retained.contains(&coord) {
-                return false;
-            }
-
-            let delta_x = i64::from(coord.x) - i64::from(center.x);
-            let delta_z = i64::from(coord.z) - i64::from(center.y);
-            delta_x * delta_x + delta_z * delta_z > radius_squared
-        });
-        if coord.is_some() {
-            self.retired_scan_miss = None;
-        } else {
-            self.retired_scan_miss = Some(scan_key);
-        }
-        coord
+        self.residency
+            .pop_retired_outside_horizontal_radius(center, horizontal_radius)
     }
 
     fn requeue(&mut self, coord: IVec3) {
@@ -1006,14 +975,10 @@ mod tests {
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
             None
         );
-        let first_miss = state.retired_scan_miss;
-        assert!(first_miss.is_some());
-
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
             None
         );
-        assert_eq!(state.retired_scan_miss, first_miss);
 
         state.residency.retained.remove(&coord);
         state.mark_selection_rebuilt();
