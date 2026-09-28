@@ -18,7 +18,7 @@
 
 - **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
 - **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
-- **Phase 3 — Deterministic world metadata iniciando.**
+- **Phase 3 — Deterministic world metadata em andamento.**
 
 ## Phase 2 — estado final
 
@@ -85,6 +85,45 @@ Atendidos:
 - presentation pode ser removida sem remover world truth; mesh-pressure/distance render retirement são independentes de resident chunk lifetime;
 - storage/revision/lookup/eviction owners estão explícitos e testados.
 
+## Phase 3 — progresso
+
+Meta: deterministic world metadata precisa responder “o que pertence aqui?” sem materializar/renderizar chunk.
+
+### Biome metadata vs cache
+
+`BiomeField` já era capaz de consultar surface/volume biome em posições arbitrárias sem resident/render chunk, mas misturava metadata determinístico com um `Arc<RwLock<HashMap<...>>>` cru de surface-site selection.
+
+O primeiro cut da Phase 3 extraiu esse storage para `SurfaceSiteCache`:
+
+- `BiomeField` agora contém `surface_site_cache: SurfaceSiteCache`, em vez do lock/map cru;
+- clones de `BiomeField` continuam compartilhando o mesmo cache, preservando reuse entre generation snapshots;
+- cache miss continua recalculando a mesma seleção determinística;
+- `retain_around` possui explicitamente o bound derivado da janela de streaming;
+- `spawn_oceans` e single-biome invalidam o cache através do owner;
+- sampling mantém read/write batching, portanto a extração não adiciona lock por site;
+- testes cobrem compartilhamento/invalidation entre clones e eviction de sites fora do bound.
+
+`499d33aa1098da8edb63c9b85f5462f545840a45` introduziu o owner. O primeiro gate `36498239706` encontrou apenas um mismatch de visibilidade (`private_interfaces`); `2c12c9e67abb8d24bb310e9654ec3f658ad6f33a` alinhou a visibilidade sem `allow`. CI `36498438529` success.
+
+### Spawn metadata
+
+`src/creatures/natural_spawn.rs` já usa o metadata layer correto:
+
+- resolve `generation_region_coord`;
+- consulta `WorldFeatureFields::volume_biome_region`;
+- aplica `BiomeField::volume_selection_in_region`;
+- usa volume biome quando aplicável e só cai para surface metadata quando nenhum volume domina.
+
+Não inferir biome a partir de chunk visual/renderizado e não refatorar esse path só por estética.
+
+### Structure metadata — diagnóstico atual
+
+- `StructureMetadata` já é separado dos disposable `FeatureCaches` e possui o deterministic `StructureField`.
+- `StructureField` pode visitar candidate surface anchors/bounds sem materializar chunks.
+- `generation/structures.rs` resolve/filtra accepted structure candidates deterministicamente e só depois rasteriza em `VoxelChunk`.
+- O gap atual é de boundary/API: generation ainda chega ao metadata via `WorldFeatureFields::structure_field()`, fazendo metadata lógico parecer parte do cache facade.
+- Não mover o resolver inteiro nem duplicar structure planning. O próximo cut deve tornar a query de `StructureMetadata` explícita, preservando exatamente os caches de accepted placement/forest onde eles são derivados e descartáveis.
+
 ## Checkpoints verdes mais recentes
 
 - `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore`; CI `36490280435` success.
@@ -95,28 +134,18 @@ Atendidos:
 - `8f729481cd5ab14521a2f4d404ca4c82daedbde1` — `BlockTopologyRevision` + `BlockRevisionState`; CI `36493814557` success.
 - `a26a8304823e17acb6b798581595c3f2585b65ca` + `b753efe537b1b806159af358f76cb64cfb445177` — `ContentRevisionState`; CI `36494360805` success.
 - `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation explicita `Resident / Archived / Absent`; CI `36496987975` success.
-- `99d53e940a6cdc2eb9b94f3b5a5ca11d7d6b125a` + `73383a52f8f8c9c4a4043274161dc36cb5ec1340` — eviction coordinator separa authoritative vs presentation capabilities e corrige naming do system; CI `36497504684` success.
+- `99d53e940a6cdc2eb9b94f3b5a5ca11d7d6b125a` + `73383a52f8f8c9c4a4043274161dc36cb5ec1340` — eviction coordinator separa authoritative vs presentation capabilities; CI `36497504684` success.
+- `499d33aa1098da8edb63c9b85f5462f545840a45` + `2c12c9e67abb8d24bb310e9654ec3f658ad6f33a` — `SurfaceSiteCache` separa biome metadata de cache descartável; CI `36498438529` success.
 
-## Phase 3 — próximo corte
+## Próximo corte
 
-Meta: deterministic world metadata precisa poder responder “o que pertence aqui?” sem materializar/renderizar chunk.
+1. tornar `StructureMetadata` a API explícita para surface structure intent queries, sem mudar placement/conflict algorithms;
+2. manter accepted-placement/forest caches em `WorldFeatureFields` como derivados descartáveis, não promovê-los a world truth;
+3. adicionar teste de que fresh feature caches preservam o mesmo structure metadata/intent;
+4. continuar exigindo queries independentes de resident/render chunks;
+5. depois revisar volume-structure intent para garantir o mesmo contract antes de encerrar Phase 3.
 
-Primeiro mapear o que já existe antes de criar qualquer abstração:
-
-- `BiomeField`: biome-volume metadata e caches;
-- `WorldFeatureFields`: deterministic feature calculations/caches;
-- `StructureMetadata` / `StructureField`: structure intent existente;
-- generation snapshot e spawn consumers que já consultam esses owners.
-
-Próximas decisões devem distinguir:
-
-1. metadata lógico determinístico de caches derivados descartáveis;
-2. queries que podem rodar sem resident/render chunk;
-3. cache validity + memory bounds explícitos;
-4. structure intent/reservation vs structure materialization;
-5. biome-volume query como fonte para spawn rules, nunca biome visual inferido de chunk renderizado.
-
-Não criar um `WorldMetadata` mega-container só para agrupar resources existentes. Primeiro localizar invariantes e consumers reais.
+Não criar um `WorldMetadata` mega-container só para agrupar resources existentes.
 
 ## Regras de continuidade
 
