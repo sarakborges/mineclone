@@ -63,6 +63,7 @@ impl PendingChunkQueue {
         self.queue.values()
     }
 
+    #[cfg(test)]
     pub(super) fn values_in_order(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.queue.values_in_order()
     }
