@@ -13,8 +13,8 @@ use crate::{
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
-        fluid::{FluidCell, MAX_FLUID_LEVEL}, texture_rotation::TextureRotation,
-        world::VoxelWorld,
+        fluid::{FluidCell, MAX_FLUID_LEVEL}, read::VoxelRead,
+        texture_rotation::TextureRotation,
     },
     world::{
         generation::{
@@ -73,7 +73,7 @@ fn player_bounds(eye: Vec3) -> (Vec3, Vec3) {
 /// adjacent voxel when a maximum bound lies exactly on a grid boundary.
 /// Every intersected voxel must be loaded and empty; player relocation also
 /// requires dry space, whereas creature spawn may take place in fluids.
-fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3), require_dry: bool) -> bool {
+fn clear_volume(world: &impl VoxelRead, bounds: (Vec3, Vec3), require_dry: bool) -> bool {
     let minimum = (bounds.0 + Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
     let maximum = (bounds.1 - Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
     for y in minimum.y..=maximum.y {
@@ -92,13 +92,13 @@ fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3), require_dry: bool) -> 
     true
 }
 
-fn has_support(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+fn has_support(world: &impl VoxelRead, bounds: (Vec3, Vec3)) -> bool {
     let offset = Vec3::Y * SUPPORT_PROBE;
     collides_aabb(world, bounds.0 - offset, bounds.1 - offset)
 }
 
 fn clear_destination(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     eye: Vec3,
     blocked: (Vec3, Vec3),
     existing: &ExistingCreatures<'_, '_>,
@@ -123,7 +123,7 @@ fn clear_destination(
 /// until a dry, loaded destination for the whole player is found. Spawning in
 /// midair must not require the displaced player to be standing on the ground.
 fn displaced_eye(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     initial_eye: Vec3,
     blocked: (Vec3, Vec3),
     existing: &ExistingCreatures<'_, '_>,
@@ -160,12 +160,12 @@ fn displaced_eye(
 /// Inspect the *loaded* world instead of procedural terrain. Manual /place
 /// deliberately ignores terrain type, slope and fluid restrictions; it only
 /// needs a loaded solid surface to anchor the structure above.
-fn loaded_surface_level(world: &VoxelWorld, feet: IVec3) -> Option<i32> {
+fn loaded_surface_level(world: &impl VoxelRead, feet: IVec3) -> Option<i32> {
     loaded_surface_level_at(world, feet.xz(), feet.y)
 }
 
 fn loaded_surface_level_at(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     horizontal: IVec2,
     search_top: i32,
 ) -> Option<i32> {
@@ -178,7 +178,7 @@ fn loaded_surface_level_at(
 }
 
 fn clear_destination_for_set(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     eye: Vec3,
     blocked: &[(Vec3, Vec3)],
     existing: &ExistingCreatures<'_, '_>,
@@ -200,7 +200,7 @@ fn clear_destination_for_set(
 }
 
 fn displaced_eye_for_set(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     initial_eye: Vec3,
     blocked: &[(Vec3, Vec3)],
     existing: &ExistingCreatures<'_, '_>,
@@ -271,7 +271,7 @@ fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64
 }
 
 fn connected_ground_fit_y(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     structure: &StructureDefinition,
     rotation: StructureRotation,
     geometric_origin: IVec3,
@@ -291,7 +291,7 @@ fn connected_ground_fit_y(
 }
 
 fn structure_space_is_available(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     structure: &StructureDefinition,
     rotation: StructureRotation,
     origin: IVec3,
@@ -390,8 +390,8 @@ impl ChatPlacementContext<'_, '_> {
         };
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         let blocked = definition.collider.bounds(feet);
-        let world = self.runtime.world();
-        let occupied = !clear_volume(world, blocked, false)
+        let world = self.runtime.read();
+        let occupied = !clear_volume(&world, blocked, false)
             || self.existing.iter().any(|(other, collider)| {
                 overlaps(blocked, collider.bounds(other.translation))
             })
@@ -402,7 +402,7 @@ impl ChatPlacementContext<'_, '_> {
             return format!("not enough space to spawn {id}");
         }
         let Some(destination) = displaced_eye(
-            world, player.translation, blocked, &self.existing, reserved, false,
+            &world, player.translation, blocked, &self.existing, reserved, false,
         ) else {
             return format!("not enough space to spawn {id}");
         };
@@ -459,13 +459,13 @@ impl ChatPlacementContext<'_, '_> {
             .select_for_manual_placement(reference, variation, hash)
             .expect("validated manual structure reference must resolve");
         let structure_rotation = structure.rotation_for_hash(hash);
-        let world = self.runtime.world();
+        let world = self.runtime.read();
 
         // /place is an explicit manual override. It does not apply biome,
         // proximity, Y-range, ground-block, dry-ground or slope restrictions.
         // The structure's lowest layer is simply anchored to the highest loaded
         // solid surface under the player.
-        let Some(surface_y) = loaded_surface_level(world, feet_block) else {
+        let Some(surface_y) = loaded_surface_level(&world, feet_block) else {
             return format!("no loaded ground available to place {reference}");
         };
         let origin_y = surface_y - structure.ground_anchor_y_offset();
@@ -478,7 +478,7 @@ impl ChatPlacementContext<'_, '_> {
             &self.structures,
             |child, child_rotation, geometric_origin| {
                 connected_ground_fit_y(
-                    world,
+                    &world,
                     child,
                     child_rotation,
                     geometric_origin,
@@ -491,7 +491,7 @@ impl ChatPlacementContext<'_, '_> {
             .collect::<Vec<_>>();
         let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
             structure_space_is_available(
-                world,
+                &world,
                 piece.structure,
                 piece.rotation,
                 piece.origin,
@@ -512,7 +512,7 @@ impl ChatPlacementContext<'_, '_> {
             Some(player.translation)
         } else {
             displaced_eye(
-                world,
+                &world,
                 player.translation,
                 blocked_union,
                 &self.existing,
@@ -565,7 +565,7 @@ impl ChatPlacementContext<'_, '_> {
         let placement_anchor = feet_block.xz();
         let search_top = feet_block.y.saturating_add(64);
 
-        let world = self.runtime.world();
+        let world = self.runtime.read();
         let Some(pieces) = resolve_set_pieces(
             self.seed.0,
             set,
@@ -573,7 +573,7 @@ impl ChatPlacementContext<'_, '_> {
             &self.structures,
             |structure, _rotation, anchor| {
                 let surface_y =
-                    loaded_surface_level_at(world, anchor, search_top)?;
+                    loaded_surface_level_at(&world, anchor, search_top)?;
                 Some(surface_y - structure.ground_anchor_y_offset())
             },
         ) else {
@@ -590,7 +590,7 @@ impl ChatPlacementContext<'_, '_> {
             &self.structures,
             |child, child_rotation, geometric_origin| {
                 connected_ground_fit_y(
-                    world,
+                    &world,
                     child,
                     child_rotation,
                     geometric_origin,
@@ -603,7 +603,7 @@ impl ChatPlacementContext<'_, '_> {
             .collect::<Vec<_>>();
         let all_loaded_and_entity_clear = connected_pieces.iter().all(|piece| {
             structure_space_is_available(
-                world,
+                &world,
                 piece.structure,
                 piece.rotation,
                 piece.origin,
@@ -623,7 +623,7 @@ impl ChatPlacementContext<'_, '_> {
             Some(player.translation)
         } else {
             displaced_eye_for_set(
-                world,
+                &world,
                 player.translation,
                 &blocked,
                 &self.existing,
