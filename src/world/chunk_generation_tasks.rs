@@ -18,6 +18,7 @@ use super::{
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
     new_world::WorldGenerationSettings,
+    revision::TaskInputRevision,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -75,7 +76,7 @@ impl GenerationSnapshot {
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkGenerationTasks {
-    revision: u64,
+    revision: TaskInputRevision,
     snapshot: Option<Arc<GenerationSnapshot>>,
     pending: ChunkTaskQueue<VoxelChunk>,
 }
@@ -93,7 +94,7 @@ impl ChunkGenerationTasks {
 
         let fresh_feature_caches =
             self.snapshot.is_some() && generation.world_generation.is_changed();
-        self.revision = self.revision.wrapping_add(1).max(1);
+        self.revision = self.revision.next();
         self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
             generation,
             content,
@@ -105,7 +106,7 @@ impl ChunkGenerationTasks {
         // Cold-cache readiness is queried directly from the shared OnceLocks.
     }
 
-    pub(crate) fn revision(&self) -> u64 {
+    pub(crate) fn revision(&self) -> TaskInputRevision {
         self.revision
     }
 
