@@ -720,7 +720,7 @@ pub(super) fn handle_new_world_footer(
     let (name, session_lock) = match create_new_world(
         &requested,
         seed,
-        &dimension.id,
+        dimension.id.as_str(),
         draft.config.biome_size_multiplier(),
         rules.ticks_per_second(),
         rules.spawn_creatures(),
