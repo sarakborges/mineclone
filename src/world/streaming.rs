@@ -1,5 +1,6 @@
 mod generation;
 mod meshing;
+mod residency;
 mod selection;
 mod surface_cache;
 
@@ -30,6 +31,7 @@ use crate::{
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
+    residency::ChunkResidencyState,
     selection::rebuild_queue,
 };
 pub(in crate::world) use self::{
@@ -128,8 +130,7 @@ pub(super) struct ChunkStreamingState {
     movement_direction: IVec2,
     horizontal_radius: i32,
     vertical_radius: i32,
-    desired: HashSet<IVec3>,
-    retained: HashSet<IVec3>,
+    residency: ChunkResidencyState,
     retired: DeduplicatedQueue<IVec3>,
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
@@ -147,7 +148,6 @@ pub(super) struct ChunkStreamingState {
     generation_prefetch_targets: HashSet<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     settled_publication_chunks: Vec<IVec3>,
-    selection_revision: u64,
     pending_critical_scan_miss: Option<CriticalPendingScanKey>,
     pending_priority_cache: PendingPriorityCache,
     ready_scan_miss: Option<SelectionScanKey>,
@@ -165,11 +165,11 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn selection_revision(&self) -> u64 {
-        self.selection_revision
+        self.residency.revision()
     }
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
-        self.desired.contains(&coord) || self.retained.contains(&coord)
+        self.residency.keeps_loaded(coord)
     }
 
     pub(super) fn retains_render_mesh(&self, coord: IVec3) -> bool {
@@ -196,7 +196,7 @@ impl ChunkStreamingState {
         let radius_squared = radius * radius;
         let scan_key = SelectionScanKey {
             queue_revision: self.retired.revision(),
-            selection_revision: self.selection_revision,
+            selection_revision: self.residency.revision(),
             center,
             radius_squared,
         };
@@ -204,8 +204,8 @@ impl ChunkStreamingState {
             return None;
         }
 
-        let desired = &self.desired;
-        let retained = &self.retained;
+        let desired = &self.residency.desired;
+        let retained = &self.residency.retained;
         let coord = self.retired.pop_where(|coord| {
             if desired.contains(&coord) || retained.contains(&coord) {
                 return false;
@@ -256,7 +256,7 @@ impl ChunkStreamingState {
     fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
         let center = self.center?;
         let queue_revision = self.pending.revision();
-        let selection_revision = self.selection_revision;
+        let selection_revision = self.residency.revision();
 
         if self.pending_priority_cache.queue_revision != queue_revision
             || self.pending_priority_cache.selection_revision != selection_revision
@@ -471,7 +471,7 @@ impl ChunkStreamingState {
         let mut changed = false;
         for y in start_y..=top_chunk {
             let coord = IVec3::new(horizontal.x, y, horizontal.y);
-            if !self.desired.insert(coord) {
+            if !self.residency.desired.insert(coord) {
                 continue;
             }
             changed = true;
@@ -536,7 +536,7 @@ impl ChunkStreamingState {
             desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
         });
         if self.mesh_pressure_evicted.len() != before {
-            }
+        }
     }
 
     fn pop_ready(&mut self) -> Option<IVec3> {
@@ -546,7 +546,7 @@ impl ChunkStreamingState {
         let radius = i64::from(show_radius.max(0));
         let scan_key = SelectionScanKey {
             queue_revision: self.ready.revision(),
-            selection_revision: self.selection_revision,
+            selection_revision: self.residency.revision(),
             center: center.xz(),
             radius_squared: radius * radius,
         };
@@ -554,8 +554,8 @@ impl ChunkStreamingState {
             return None;
         }
 
-        let desired = &self.desired;
-        let retained = &self.retained;
+        let desired = &self.residency.desired;
+        let retained = &self.residency.retained;
         let queue_len = self.ready.len();
         let started = Instant::now();
         let selected = self.ready.pop_min_where_by_key(
@@ -611,7 +611,6 @@ impl ChunkStreamingState {
         self.initial_lighting_activated.remove(&coord);
         self.initial_mesh_seed_catchup.remove(&coord);
     }
-
 
     pub(super) fn take_priority_scan_diagnostics(
         &self,
@@ -687,10 +686,7 @@ impl ChunkStreamingState {
     }
 
     fn mark_selection_rebuilt(&mut self) {
-        self.selection_revision = self
-            .selection_revision
-            .checked_add(1)
-            .expect("chunk streaming selection revision exhausted");
+        self.residency.mark_rebuilt();
     }
 }
 
@@ -827,7 +823,7 @@ pub(super) fn stream_chunks(
             warn!(
                 "slow streaming selection rebuild: center={center:?} radius={horizontal_radius} vertical_radius={vertical_radius} warp={} desired={} pending={} structure_columns={} elapsed_ms={:.2}",
                 !allow_forward_preload,
-                work.state.desired.len(),
+                work.state.residency.desired.len(),
                 work.state.pending.len(),
                 work.state.structure_top_chunks.len(),
                 rebuild_elapsed.as_secs_f64() * 1_000.0,
@@ -989,7 +985,7 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
-        state.desired.extend([background, forward, critical]);
+        state.residency.desired.extend([background, forward, critical]);
         state.ready.enqueue(background);
         state.ready.enqueue(forward);
         state.ready.enqueue(critical);
@@ -1005,7 +1001,7 @@ mod tests {
         let coord = IVec3::new(20, 0, 0);
         let mut state = ChunkStreamingState::default();
         state.enqueue_retired(coord);
-        state.retained.insert(coord);
+        state.residency.retained.insert(coord);
 
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
@@ -1020,7 +1016,7 @@ mod tests {
         );
         assert_eq!(state.retired_scan_miss, first_miss);
 
-        state.retained.remove(&coord);
+        state.residency.retained.remove(&coord);
         state.mark_selection_rebuilt();
 
         assert_eq!(
@@ -1057,14 +1053,14 @@ mod tests {
         let coord = IVec3::new(30, 0, 0);
         let mut state = ChunkStreamingState::default();
         state.enqueue_retired(coord);
-        state.desired.insert(coord);
+        state.residency.desired.insert(coord);
 
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             None
         );
 
-        state.desired.remove(&coord);
+        state.residency.desired.remove(&coord);
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             Some(coord)
@@ -1096,7 +1092,10 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
-        state.desired.extend([visible, hysteresis, preload_only]);
+        state
+            .residency
+            .desired
+            .extend([visible, hysteresis, preload_only]);
 
         assert!(state.retains_render_mesh(hysteresis));
         assert!(!state.retains_render_mesh(preload_only));
@@ -1117,7 +1116,7 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
-        state.desired.insert(preload_only);
+        state.residency.desired.insert(preload_only);
         state.mark_ready(preload_only);
 
         assert_eq!(state.pop_ready(), None);
@@ -1127,7 +1126,7 @@ mod tests {
         assert_eq!(state.ready_scan_miss, first_miss);
 
         let visible = IVec3::X;
-        state.desired.insert(visible);
+        state.residency.desired.insert(visible);
         state.mark_ready(visible);
         assert_eq!(state.pop_ready(), Some(visible));
         assert_eq!(state.ready_scan_miss, None);
@@ -1149,7 +1148,7 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
-        state.desired.extend([near, middle, far]);
+        state.residency.desired.extend([near, middle, far]);
         state.pending.enqueue(far);
         state.pending.enqueue(near);
         state.pending.enqueue(middle);
@@ -1200,7 +1199,7 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
-        state.desired.extend([visible, preload_only]);
+        state.residency.desired.extend([visible, preload_only]);
 
         state.pending.enqueue(preload_only);
         assert!(!state.has_renderable_streaming_backlog());
