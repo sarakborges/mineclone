@@ -75,9 +75,4 @@ impl ReadyChunkQueue {
         };
         (selected, scan)
     }
-
-    #[cfg(test)]
-    pub(super) fn scan_is_cached(&self) -> bool {
-        self.scan_miss.is_some()
-    }
 }
