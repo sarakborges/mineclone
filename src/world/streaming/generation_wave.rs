@@ -1,7 +1,10 @@
 use bevy::{platform::collections::HashSet, prelude::IVec3};
 
 use super::DeduplicatedQueue;
-use crate::world::fluid_updates::GeneratedFluidSettling;
+use crate::{
+    voxel::coordinates::ChunkCoord,
+    world::fluid_updates::GeneratedFluidSettling,
+};
 
 /// Owns the lifecycle of one generation publication wave independently from
 /// chunk selection and presentation queues. `GeneratedFluidSettling` remains
@@ -9,16 +12,17 @@ use crate::world::fluid_updates::GeneratedFluidSettling;
 /// active generation wave may currently be waiting on that solver.
 #[derive(Default)]
 pub(super) struct GenerationWaveState {
-    targets: HashSet<IVec3>,
-    pending: DeduplicatedQueue<IVec3>,
-    prefetch_targets: HashSet<IVec3>,
-    staged_generated_chunks: HashSet<IVec3>,
-    settled_publication_chunks: Vec<IVec3>,
+    targets: HashSet<ChunkCoord>,
+    pending: DeduplicatedQueue<ChunkCoord>,
+    prefetch_targets: HashSet<ChunkCoord>,
+    staged_generated_chunks: HashSet<ChunkCoord>,
+    settled_publication_chunks: Vec<ChunkCoord>,
     pub(super) fluid_settling: GeneratedFluidSettling,
 }
 
 impl GenerationWaveState {
     pub(super) fn start_target(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         if self.targets.insert(coord) {
             self.pending.enqueue(coord);
         }
@@ -45,6 +49,7 @@ impl GenerationWaveState {
     }
 
     pub(super) fn stage_generated_chunk(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         debug_assert!(
             self.targets.contains(&coord),
             "only an active generation-wave target may become staged"
@@ -53,12 +58,14 @@ impl GenerationWaveState {
     }
 
     pub(super) fn abandon_target(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         self.pending.remove(coord);
         self.targets.remove(&coord);
         self.prefetch_targets.remove(&coord);
     }
 
     pub(super) fn mark_prefetched(&mut self, coord: IVec3) {
+        let coord = ChunkCoord::from_ivec3(coord);
         debug_assert!(
             !self.targets.contains(&coord),
             "prefetched generation cannot already belong to the active wave"
@@ -67,15 +74,16 @@ impl GenerationWaveState {
     }
 
     pub(super) fn complete_target(&mut self, coord: IVec3) {
+        let chunk_coord = ChunkCoord::from_ivec3(coord);
         debug_assert!(
-            !self.staged_generated_chunks.contains(&coord),
+            !self.staged_generated_chunks.contains(&chunk_coord),
             "completed generation-wave target cannot remain staged"
         );
         debug_assert!(
             !self.fluid_settling.contains(coord),
             "completed generation-wave target cannot remain settling-owned"
         );
-        let removed = self.targets.remove(&coord);
+        let removed = self.targets.remove(&chunk_coord);
         debug_assert!(
             removed,
             "completed generation-wave target must still own its reservation: {coord:?}"
@@ -83,7 +91,11 @@ impl GenerationWaveState {
     }
 
     pub(super) fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
-        let mut staged = self.staged_generated_chunks.drain().collect::<Vec<_>>();
+        let mut staged = self
+            .staged_generated_chunks
+            .drain()
+            .map(ChunkCoord::as_ivec3)
+            .collect::<Vec<_>>();
         staged.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         staged
     }
@@ -94,7 +106,7 @@ impl GenerationWaveState {
             "settled publication queue must be empty before a new wave is staged"
         );
         chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        self.settled_publication_chunks = chunks;
+        self.settled_publication_chunks = chunks.into_iter().map(ChunkCoord::from_ivec3).collect();
     }
 
     pub(super) fn has_settled_publication(&self) -> bool {
@@ -102,7 +114,9 @@ impl GenerationWaveState {
     }
 
     pub(super) fn pop_settled_publication_chunk(&mut self) -> Option<IVec3> {
-        self.settled_publication_chunks.pop()
+        self.settled_publication_chunks
+            .pop()
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn finish(&mut self) {
@@ -132,15 +146,17 @@ impl GenerationWaveState {
     }
 
     pub(super) fn contains_unpublished(&self, coord: IVec3) -> bool {
-        self.targets.contains(&coord)
-            || self.prefetch_targets.contains(&coord)
-            || self.staged_generated_chunks.contains(&coord)
+        let chunk_coord = ChunkCoord::from_ivec3(coord);
+        self.targets.contains(&chunk_coord)
+            || self.prefetch_targets.contains(&chunk_coord)
+            || self.staged_generated_chunks.contains(&chunk_coord)
             || self.fluid_settling.contains(coord)
     }
 
     pub(super) fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunks.contains(&coord)
-            || self.settled_publication_chunks.contains(&coord)
+        let chunk_coord = ChunkCoord::from_ivec3(coord);
+        self.staged_generated_chunks.contains(&chunk_coord)
+            || self.settled_publication_chunks.contains(&chunk_coord)
             || self.fluid_settling.contains(coord)
     }
 
@@ -149,11 +165,11 @@ impl GenerationWaveState {
     }
 
     pub(super) fn pop_pending(&mut self) -> Option<IVec3> {
-        self.pending.pop()
+        self.pending.pop().map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn enqueue_pending(&mut self, coord: IVec3) {
-        self.pending.enqueue(coord);
+        self.pending.enqueue(ChunkCoord::from_ivec3(coord));
     }
 
     pub(super) fn target_len(&self) -> usize {
@@ -161,7 +177,7 @@ impl GenerationWaveState {
     }
 
     pub(super) fn contains_target(&self, coord: IVec3) -> bool {
-        self.targets.contains(&coord)
+        self.targets.contains(&ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn prefetch_len(&self) -> usize {
@@ -169,7 +185,8 @@ impl GenerationWaveState {
     }
 
     pub(super) fn contains_prefetch(&self, coord: IVec3) -> bool {
-        self.prefetch_targets.contains(&coord)
+        self.prefetch_targets
+            .contains(&ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn prefetch_count(&self) -> usize {
@@ -185,7 +202,7 @@ impl GenerationWaveState {
     }
 
     pub(super) fn targets(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.targets.iter().copied()
+        self.targets.iter().copied().map(ChunkCoord::as_ivec3)
     }
 
     pub(super) fn settling_or_publishing(&self) -> bool {
