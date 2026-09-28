@@ -97,6 +97,16 @@ Key findings:
 - Main cutover: commit `71a589299b41dfdf5cd2fb79cc43089059a49ed9`; compile/lint follow-ups: `911c8fa969d61c6f8f3d235ecf4d5d7f7b68ffe2`, `deb62eae5a261c55f6df3109ceb880cc30731fb6`.
 - Verified checkpoint: `Rust validation` run `36469505105` — success.
 
+### Streaming priority-diagnostics cutover
+
+- Added `StreamingPriorityDiagnostics` as the owner of pending/ready priority-scan timing metrics and drain/reset behavior.
+- `PendingChunkQueue` and `ReadyChunkQueue` still return optional scan samples and remain unaware of logging/aggregation.
+- `ChunkStreamingState` now only forwards scan samples to the diagnostics owner; it no longer contains atomics, timing accumulation or snapshot construction logic.
+- `render_diagnostics` continues consuming the same diagnostic snapshot fields with the same `crate::world` visibility as before the move.
+- Added focused coverage proving pending/ready samples accumulate and drain independently.
+- Owner introduction: commit `51106617a677f607dbc3cfcadb9f446aa0de7adc`; orchestrator cutover: `c247ed41dccaabed74b3295b0ca429212081bb4e`; visibility follow-up: `4d8198e7b3451a6e651f6d1c4d0b5acef07be487`.
+- Verified checkpoint: `Rust validation` run `36470540393` — success.
+
 ## Current ownership shape
 
 ```text
@@ -145,21 +155,24 @@ ChunkStreamingState (orchestrator, still being reduced)
 |   +-- surrounding support minima
 |   +-- discovered structure-top columns
 |
++-- StreamingPriorityDiagnostics
+|   +-- pending priority-scan metrics
+|   +-- ready priority-scan metrics
+|
 +-- remaining concentration to reduce
-    +-- cross-owner priority diagnostics
     +-- orchestration/delegation methods
 ```
 
 ## Next implementation block
 
-Reduce cross-owner diagnostics/orchestration without changing streaming policy:
+Reduce pass-through orchestration only where the boundary becomes clearer rather than merely shorter:
 
-1. move pending/ready priority-scan metrics out of the main orchestrator into a dedicated diagnostics owner;
-2. keep queue owners responsible only for queue/cache mechanics, with diagnostics observing returned scan samples rather than leaking atomics into scheduling code;
-3. reduce pass-through methods on `ChunkStreamingState` where a caller can use a narrow owner API without increasing coupling;
-4. do not merge generation, residency, selection and presentation lifecycles back into one mega-owner while simplifying delegation;
+1. identify `ChunkStreamingState` methods that perform no cross-owner invariant and are used by one specialized streaming submodule;
+2. let those submodules use the narrow owner directly when doing so does not expose owner internals outside `world::streaming`;
+3. retain orchestrator methods that coordinate multiple owners or enforce invariants such as logical residency + presentation pressure/readiness;
+4. keep `ChunkStreamingState` as the resource-level composition root for streaming owners instead of replacing it with a new mega-context;
 5. preserve all budgets, priorities, preload/retention policy and publication ordering;
-6. run full CI before considering Phase 1 complete or starting measured optimization work.
+6. run full CI, then reassess whether Phase 1 has a meaningful ownership concentration left before beginning measured optimization work.
 
 ## Rules still in force
 
