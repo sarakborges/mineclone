@@ -28,6 +28,32 @@ impl ChunkCoord {
     }
 }
 
+/// Integer world-space identity for one voxel position.
+///
+/// This is distinct from `ChunkCoord`: both are represented by three integers,
+/// but mixing them changes scale and is therefore a domain error. Existing
+/// Bevy-facing APIs still accept `IVec3` and adapt at this module boundary.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct VoxelCoord {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl VoxelCoord {
+    const fn new(x: i32, y: i32, z: i32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub(crate) fn from_ivec3(coord: IVec3) -> Self {
+        Self::new(coord.x, coord.y, coord.z)
+    }
+
+    pub(crate) fn as_ivec3(self) -> IVec3 {
+        IVec3::new(self.x, self.y, self.z)
+    }
+}
+
 pub(crate) fn chunk_coord_from_position(position: Vec3) -> IVec3 {
     let chunk_size = CHUNK_SIZE as f32;
     IVec3::new(
@@ -37,18 +63,24 @@ pub(crate) fn chunk_coord_from_position(position: Vec3) -> IVec3 {
     )
 }
 
-pub(crate) fn chunk_coord_from_world(world_position: IVec3) -> IVec3 {
+fn chunk_coord_from_voxel(world_position: VoxelCoord) -> ChunkCoord {
     let chunk_size = CHUNK_SIZE as i32;
-    IVec3::new(
+    let world_position = world_position.as_ivec3();
+    ChunkCoord::new(
         world_position.x.div_euclid(chunk_size),
         world_position.y.div_euclid(chunk_size),
         world_position.z.div_euclid(chunk_size),
     )
 }
 
-pub(crate) fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
+pub(crate) fn chunk_coord_from_world(world_position: IVec3) -> IVec3 {
+    chunk_coord_from_voxel(VoxelCoord::from_ivec3(world_position)).as_ivec3()
+}
+
+fn split_voxel_coord(world_position: VoxelCoord) -> (ChunkCoord, IVec3) {
     let chunk_size = CHUNK_SIZE as i32;
-    let chunk = chunk_coord_from_world(world_position);
+    let world_position = world_position.as_ivec3();
+    let chunk = chunk_coord_from_voxel(VoxelCoord::from_ivec3(world_position));
     let local = IVec3::new(
         world_position.x.rem_euclid(chunk_size),
         world_position.y.rem_euclid(chunk_size),
@@ -56,6 +88,11 @@ pub(crate) fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
     );
 
     (chunk, local)
+}
+
+pub(crate) fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
+    let (chunk, local) = split_voxel_coord(VoxelCoord::from_ivec3(world_position));
+    (chunk.as_ivec3(), local)
 }
 
 pub(crate) fn chunk_origin(coord: IVec3) -> IVec3 {
@@ -105,6 +142,15 @@ mod tests {
 
         assert_eq!(typed, ChunkCoord::new(-3, 7, -11));
         assert_eq!(typed.as_ivec3(), coord);
+    }
+
+    #[test]
+    fn voxel_coord_is_distinct_from_chunk_identity_during_split() {
+        let voxel = VoxelCoord::from_ivec3(IVec3::new(-1, 17, -17));
+        let (chunk, local) = split_voxel_coord(voxel);
+
+        assert_eq!(chunk, ChunkCoord::new(-1, 1, -2));
+        assert_eq!(local, IVec3::new(15, 1, 15));
     }
 
     #[test]
