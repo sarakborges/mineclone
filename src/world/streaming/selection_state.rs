@@ -33,10 +33,6 @@ impl StreamingSelectionState {
         self.horizontal_radius
     }
 
-    pub(super) fn vertical_radius(&self) -> i32 {
-        self.vertical_radius
-    }
-
     pub(super) fn needs_rebuild(
         &self,
         center: IVec3,
