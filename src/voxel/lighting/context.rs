@@ -7,6 +7,7 @@ use crate::content::{
 use crate::voxel::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     light::VoxelLight,
+    revision::ChunkContentRevision,
     world::VoxelWorld,
 };
 
@@ -24,7 +25,7 @@ pub(super) struct LightingContext {
 
 #[derive(Clone)]
 struct ChunkVerticalDampening {
-    content_revision: u64,
+    content_revision: ChunkContentRevision,
     by_column: [u8; CHUNK_AREA],
 }
 
