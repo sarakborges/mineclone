@@ -76,9 +76,9 @@ fn integrate_built_chunk_meshes(
         let coord = completed.coord;
         let output = completed.output;
         if completed.revision != current_revision
-            || !output.dependencies.is_current(&progress.world)
+            || !output.dependencies.is_current(&*progress.world)
         {
-            let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
+            let snapshot = ChunkMeshSnapshot::capture(&*progress.world, coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
             assert!(
                 mesh_tasks.schedule_loading(coord, snapshot, async_work),
@@ -155,7 +155,7 @@ fn dispatch_mesh_tasks(
             break;
         }
 
-        let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
+        let snapshot = ChunkMeshSnapshot::capture(&*progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         if !mesh_tasks.schedule_loading(coord, snapshot, async_work) {
             break;
