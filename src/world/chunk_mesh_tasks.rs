@@ -4,12 +4,12 @@ use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot};
 
+pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
 use super::{
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    presentation_snapshot::PresentationContentSnapshot,
     revision::TaskInputRevision,
 };
 
@@ -23,7 +23,7 @@ pub(crate) struct ChunkMeshTaskOutput {
 #[derive(Resource, Default)]
 pub(crate) struct ChunkMeshTasks {
     revision: TaskInputRevision,
-    snapshot: Option<Arc<PresentationContentSnapshot>>,
+    snapshot: Option<Arc<MeshContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
@@ -34,7 +34,7 @@ impl ChunkMeshTasks {
         }
 
         self.revision = self.revision.next();
-        self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
+        self.snapshot = Some(Arc::new(MeshContentSnapshot::capture(content)));
     }
 
     pub(crate) fn revision(&self) -> TaskInputRevision {
