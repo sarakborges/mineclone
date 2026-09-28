@@ -141,6 +141,14 @@ O antigo `chunk_mesh_revisions` foi confirmado como estado legado e removido.
 - Archive remove content/object revisions do resident chunk.
 - Restore recebe revisions novas.
 
+Generation/streaming agora torna explícita a distinção que antes era inferida por duas queries:
+
+- `Resident`
+- `Archived` / known-but-not-resident
+- `Absent`
+
+Por enquanto `ChunkAvailability` fica local em `streaming/generation.rs`, porque esse é o único consumidor conhecido que precisa dos três estados. Não promover para um enum global sem segundo consumidor real.
+
 ## Últimos checkpoints relevantes
 
 - `bb2afe5e8d4fc17a423b9d8545d74de48b10ba05` — fecha full-world mutation escape hatch; CI `36485808944` success.
@@ -154,33 +162,19 @@ O antigo `chunk_mesh_revisions` foi confirmado como estado legado e removido.
 - `e50519bb6e60feb9b393368c6171bc916d1458e4` — restaura a real block-targeting revision após CI revelar o caller; CI `36493480313` success.
 - `8f729481cd5ab14521a2f4d404ca4c82daedbde1` — `BlockTopologyRevision` + `BlockRevisionState`; CI `36493814557` success.
 - `a26a8304823e17acb6b798581595c3f2585b65ca` + `b753efe537b1b806159af358f76cb64cfb445177` — `ContentRevisionState` passa a possuir map/counter de content revisions; CI `36494360805` success.
+- `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation distingue `Resident / Archived / Absent` explicitamente e testa a transição de storage; CI `36496987975` success.
 
 ## Próximo corte — Phase 2
 
-O próximo problema já foi localizado em generation/streaming:
+Lookup semantics e os mutation bypasses relevantes já foram classificados. O próximo bloco deve revisar **cache/eviction ownership** sem acoplar logical/resident world a render entities.
 
-```rust
-if world.has_resident_or_persisted_chunk(coord) {
-    if world.chunk(coord).is_none() {
-        world.restore_chunk(coord);
-    }
-    ...
-}
-```
+Prioridades:
 
-Esse padrão usa duas queries para inferir três estados. O próximo cut deve tornar lookup semantics explícitas, sem alterar algoritmo:
-
-- `Resident`
-- `Archived` / known-but-not-resident
-- `Absent`
-
-Migrar primeiro apenas os pontos de generation/streaming que realmente precisam distinguir esses estados. Não espalhar enum abstrato pelo projeto sem consumidor.
-
-Depois disso:
-
-1. continuar centralizando side effects somente onde houver duplicação real;
-2. revisar cache/eviction ownership sem acoplar logical/resident world a render entities;
-3. manter CI verde e atualizar este handoff após cada bloco significativo.
+1. localizar caches autoritativos/derived ainda sem owner/bound explícito;
+2. separar cache eviction de render entity lifetime quando ainda estiver misturado;
+3. preservar `VoxelWorld` como facade/coordenador e evitar megadiff;
+4. não criar abstração nova sem consumidor/invariante real;
+5. encerrar Phase 2 somente quando storage, revisions, lookup semantics e eviction ownership estiverem claros e testados.
 
 ## Regras de continuidade
 
