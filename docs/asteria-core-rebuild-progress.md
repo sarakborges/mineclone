@@ -77,6 +77,16 @@ Key findings:
 - Selection pruning and diagnostics now delegate to the mesh-pressure owner.
 - Verified checkpoint: commit `75d98f788f04396cbba4a3474421a791f0f2266e`, `Rust validation` run `36461205950` — success.
 
+### Streaming selection-cache cutover
+
+- Added `StreamingSelectionCache` as the explicit owner of transient surface ranges, surrounding support minima and discovered structure-top columns used by residency selection/prioritization.
+- These values remain explicitly **derived streaming caches**, not authoritative biome/structure intent.
+- Cache pruning moved behind the owner while preserving the previous policy exactly: surface ranges retain their extra two-chunk margin; support minima and structure-top columns retain only the normal selection retention radius.
+- Structure-top adoption now delegates cache ownership while preserving the existing behavior that expands desired residency upward when an asynchronously discovered structure exceeds the cached surface column.
+- Full/incremental desired-selection algorithms and priority semantics were intentionally left unchanged.
+- Main cutover: commit `c0a0a1b2459617001fbfdc50fc1235ca7257054a`; lint-only follow-up: `fe955ad21609c03e8cc0e8c84446ee4998378cf6`.
+- Verified checkpoint: `Rust validation` run `36467167446` — success.
+
 ## Current ownership shape
 
 ```text
@@ -114,22 +124,26 @@ ChunkStreamingState (orchestrator, still being reduced)
 |   +-- pressure-only presentation evictions
 |   +-- retained byte accounting
 |
++-- StreamingSelectionCache
+|   +-- surface ranges
+|   +-- surrounding support minima
+|   +-- discovered structure-top columns
+|
 +-- remaining concentration to extract
-    +-- surface/structure selection caches
     +-- selection pose/radii orchestration
     +-- cross-owner diagnostics/orchestration
 ```
 
 ## Next implementation block
 
-Extract the surface/structure selection caches from `ChunkStreamingState` without changing desired-residency behavior:
+Extract the streaming selection pose from `ChunkStreamingState` without changing selection policy:
 
-1. give surface ranges, surrounding support minima and discovered structure-top columns one explicit owner;
-2. move cache pruning and column lookup/invalidation behind that owner;
-3. keep incremental selection behavior, surface priority ordering and structure-top adoption unchanged;
-4. do not turn discovered structure-top data into a new structure-planning system — authoritative structure intent still belongs to world metadata;
-5. preserve current streaming preload/retention radii and work policy during the ownership-only cutover;
-6. run full CI before reducing selection pose/radii and diagnostics further.
+1. give current center, movement direction, horizontal radius and vertical radius one owner;
+2. move rebuild-needed checks and movement-direction transitions behind that owner;
+3. preserve the exact behavior where radius-only changes keep the existing movement direction during normal gameplay, while warp disables forward preload/direction;
+4. keep forward preload geometry, selection radii and retention math unchanged;
+5. retain narrow scheduler accessors for generation/meshing priority until their call sites can be reduced independently;
+6. run full CI before touching diagnostics/orchestrator decomposition.
 
 ## Rules still in force
 
