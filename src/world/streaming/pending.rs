@@ -63,6 +63,10 @@ impl PendingChunkQueue {
         self.queue.values()
     }
 
+    pub(super) fn values_in_order(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.queue.values_in_order()
+    }
+
     pub(super) fn has_critical(
         &mut self,
         center: IVec3,
