@@ -1,145 +1,192 @@
 # HANDOFF — Asteria / Mineclone
 
-> Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo e por `docs/asteria-core-rebuild.md`.
+> Handoff corrente. Histórico anterior preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade arquitetural, leia também `docs/asteria-core-rebuild.md`.
 
-## 2026-09-28 — Asteria Core rebuild / Phase 1 concluída, Phase 2 em andamento
+## Estado atual — 2026-09-28
 
+- Repo: `sarakborges/mineclone`.
 - Branch ativa: `architecture/asteria-core-rebuild`.
+- PR draft: #22 `Asteria core rebuild` -> `develop`.
 - Baseline da reconstrução: `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
-- Decisão arquitetural permanece: **Rust + Bevy**, com Bevy como host/framework e Asteria possuindo world core, metadata/generation, streaming, simulation boundaries e voxel presentation.
-- Não é rewrite cego do jogo inteiro. Gameplay, content, assets, UI e sistemas válidos devem ser preservados/adaptados enquanto a fundação é substituída por cutovers explícitos.
-- Hydrology legado continua removido e **não deve voltar**. Rivers/lakes/cave entrances e features longos futuros pertencem ao sistema generalizado de structures/connectors/structure groups + metadata. Dynamic fluid simulation continua separada.
-- `VERSION` permanece `0.68.48`; estes commits são reconstrução arquitetural sem release de gameplay.
+- `VERSION` permanece `0.68.48` durante estes cutovers internos.
+- Rust + Bevy permanecem. Bevy é host/framework; Asteria deve possuir world core, metadata/generation, runtime streaming, simulation boundaries e voxel presentation.
+- Não ressuscitar hydrology legado. Rivers/lakes/cave entrances futuros pertencem ao sistema generalizado de structures/connectors/structure groups + deterministic metadata. Dynamic fluid simulation continua separada.
+- Não preservar legacy/compat scaffolding sem necessidade. Old saves não são prioridade.
+- CI precisa ficar verde entre migration blocks; não avançar sobre Clippy/check vermelho.
 
-### Ownership já separado
+## Fase
 
-O antigo `ChunkStreamingState` deixou de possuir diretamente vários estados que antes estavam misturados:
+- **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução já existem.
+- **Phase 2 — Authoritative chunk/world storage em andamento.**
+
+## Ownership já separado
+
+### Streaming / async / presentation
+
+O antigo `ChunkStreamingState` já perdeu ownership direto de:
 
 - logical residency (`desired` / `retained` / retirement);
-- pending generation queue + critical/priority scan caches;
-- ready/initial-presentation queue + scan cache;
-- generation-wave lifecycle (targets, pending, prefetch, staged, settled publication);
-- initial presentation activation state;
+- pending generation queue + priority caches;
+- ready/initial-presentation queue;
+- generation-wave lifecycle (targets, prefetch, staged, settling, publication);
+- initial presentation state;
 - mesh-pressure residency;
-- streaming selection pose;
-- surface/structure selection caches;
-- streaming priority diagnostics;
-- generation snapshot e presentation snapshot boundaries.
+- selection pose / selection caches;
+- priority diagnostics.
 
-O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-owner; wrappers puramente delegadores foram removidos quando não agregavam invariante.
+Generation e presentation possuem snapshot boundaries explícitos. Async work usa revisions tipadas e stale-result rejection.
 
-### Core identities / revisions concluídos até aqui
+### Core identities / revisions
 
-- `DimensionId`: `CurrentDimension` não armazena mais `String` arbitrária.
-- `ChunkCoord`: identidade primitive-backed usada internamente em async queues/schedulers e vários owners de streaming/presentation.
-- `TaskInputRevision`: revisão nominal do snapshot que originou trabalho async; stale results não usam `u64` cru nesse contract.
-- `ResidencySelectionRevision`: owner de residency e caches retired/pending/ready armazenam revisão semântica; o `u64` restante é somente adapter temporário do facade legado.
-- `GenerationRegionCoord`: volume-biome cache e retention scratch não confundem mais region identity com `IVec3` arbitrário.
-- `WorldId`: `WorldSession` armazena identidade tipada; catálogo/snapshot/thumbnail recebem `&str` somente nas bordas existentes.
-- `VoxelCoord`: conversão voxel -> chunk agora distingue semanticamente world voxel coordinate de `ChunkCoord`; APIs Bevy-facing continuam com adapters `IVec3` durante a migração.
-- `ChunkContentRevision`: agora é nominal também no map/counter autoritativo de `VoxelWorld`, no cache de lighting, na verificação de fluid settling e nos dependency snapshots. O caminho de content revision não converte mais de/para `u64` cru.
-- Object invalidation agora possui owner próprio (`ObjectRevisionState`). Scene revision e per-chunk object revision deixaram de ser campos soltos do `VoxelWorld`; internamente são domínios nominais distintos, mantendo `u64` apenas na API temporária consumida por `world_objects.rs`.
+Existem e devem ser preservados como domínios distintos:
 
-### Authoritative read / mutation / storage boundaries
+- `DimensionId`
+- `WorldId`
+- `ChunkCoord`
+- `VoxelCoord`
+- `GenerationRegionCoord`
+- `TaskInputRevision`
+- `ResidencySelectionRevision`
+- `ChunkContentRevision`
+- `BlockTopologyRevision`
 
-- `ChunkMeshSnapshot` e `ChunkMeshDependencies` não dependem mais concretamente de todo o `VoxelWorld`; eles dependem da capability estreita `ChunkSnapshotSource`.
-- Essa capability expõe somente leitura imutável de chunk + content revision. Mutation, archive/persistence, lighting, objects e demais APIs do container autoritativo não vazam para presentation por esse caminho.
-- `VoxelWorld` é hoje um adapter/implementação dessa capability; Bevy `ResMut<VoxelWorld>` é desreferenciado explicitamente nos adapters de setup/streaming, em vez de contaminar o core trait com ECS wrapper types.
-- `VoxelBlockMutation.chunk` e os resultados internos de `VoxelMutationRuntime::{add_layer,set_block,set_fluid}` usam `ChunkCoord`; `VoxelTopologyRuntime` mantém `IVec3` apenas como adapter externo onde ainda necessário.
-- Os antigos `VoxelMutationRuntime::world()` / `VoxelTopologyRuntime::world()` foram removidos. Gameplay/tools/chat não recebem mais acesso ao container inteiro através do mutation facade.
-- `VoxelRead` agora cobre leitura de sample/cell/fluid/loaded/solid/block-id; `VoxelTopologyRead` adiciona apenas object lookup. `VoxelTopologyReader` é um view restrito de leitura entregue por `runtime.read()`.
-- Collision, raycast e block placement dependem de `VoxelRead`, não de `VoxelWorld`. Targeting, mining, Artisan's Kit, carpenter's axe, shears e chat placement foram migrados para o view restrito.
-- Bevy `Res<VoxelWorld>` continua sendo explicitamente desreferenciado nos adapters que ainda recebem o resource diretamente; os traits core não conhecem `Res`/`ResMut`.
-- `ChunkPersistenceState` possui o persistent set + archived payloads. `VoxelWorld` coordena archive/restore com resident state/revisions, mas não possui diretamente o set/map de persistência.
-- `LoadedChunkColumnIndex` possui o índice vertical dos chunks residentes e as queries column-local/highest-Y.
-- `ResidentChunkStore` possui o `HashMap<IVec3, VoxelChunk>` residente + o índice de colunas; insert/remove mantêm collection/index consistentes atomicamente.
-- As semantics de persistence foram preservadas: chunk gerado e não modificado é descartado ao archive; chunk persistent é arquivado/restaurável; save serializa somente chunks persistent; generated-fluid settling não pode promover/alterar chunk já persistent pelo caminho derivado.
-- `VoxelWorld` ainda coordena mutation, lighting e revision effects; o resident store não absorveu side effects laterais.
-- Os testes de boundary de `streaming/meshing.rs` foram preservados. Durante o cutover uma regravação truncada removeu dois testes; isso foi detectado pelo diff, restaurado em `f20ae0a6`, e o checkpoint corrigido passou CI antes de continuar.
+Não colapsar revisions semanticamente diferentes em `u64` genérico só porque hoje ambos são counters.
 
-### Revision/dirty domains — diagnóstico Phase 2
+### Authoritative world storage
 
-- Object scene invalidation é um domínio real: `world_objects.rs` usa revision global para fast-path da cena e revision por chunk para atualização incremental. Esses valores foram agrupados em `ObjectRevisionState` e tipados internamente.
-- `chunk_mesh_revisions` foi confirmado como estado legado e **removido**, em vez de receber owner artificial. Não existia leitura de produção desse counter; a apresentação real já invalida por `ChunkRemeshTasks`/`ChunkRemeshQueue`, inclusive lighting por meshlet em `lighting_updates.rs`.
-- `lighting::propagation` agora apenas altera light data e publica `changed_*` quando a lane pode ser apresentada. O antigo `commit_deferred_light_mesh_revisions()` desapareceu; os changed positions continuam sendo convertidos em meshlet masks e revisions no owner real de remesh.
-- Os testes de interactive/settling continuam verificando as semantics corretas de publicação: interactive expõe mudanças por frame; generated-fluid settling mantém mudanças privadas até a lane convergir.
-- `ChunkMeshSnapshot` continua dependendo somente de `ChunkContentRevision`; lighting não invalida content dependencies. O teste residual que consultava `chunk_mesh_revision()` foi migrado para essa invariante real.
-- `block_content_revision` ainda precisa ter seus consumidores/semantics confirmados antes de ser extraído, tipado ou removido.
+`VoxelWorld` continua como facade/coordenador, mas não possui mais diretamente vários containers:
 
-### Cutovers verdes mais recentes
+- `ResidentChunkStore`: resident chunks + vertical column index.
+- `LoadedChunkColumnIndex`: query/index de Y por coluna, encapsulado no resident store.
+- `ChunkPersistenceState`: persistent set + archived payloads.
+- `ContentRevisionState`: map/counter de `ChunkContentRevision` por resident chunk.
+- `ObjectRevisionState`: scene revision + per-chunk object revision.
+- `BlockRevisionState`: global block-topology revision.
 
-- `00c425ebcddedac2e7c5d907632e0723d35f8952` — async queue/schedulers com `ChunkCoord` interno; CI `36477699634` success.
-- `5a85ee7388ae85c753f279fdd082cea35e3a54e0` — retired residency queue tipada; CI `36478092904` success.
-- `0a574bafc0db7283b6458fef73a5007d6ac92c60` — pending queue/cache tipados; CI `36478253194` success.
-- `fa3b494cc51bda18418d7a23f18a01c7ddbcd87a` — ready queue/cache tipados; CI `36478397317` success.
-- `f158b9f3b361e7f44890447b76c1516c88326cef` — initial-presentation state tipado; CI `36478531501` success.
-- `b9fa917c45de9c749982b615ca8a1f7f7e9f974b` — mesh-pressure state tipado; CI `36478719478` success.
-- `e0cf88a44bd9993f5ed749f2b0761faa17170964` — generation-wave identity tipada; CI `36478958760` success.
-- `3802282b8190a95c5c9b0b219cd0400ab0cfed53` — selection center usa `ChunkCoord` internamente; CI `36479165269` success.
-- `324d6215a264a7d7c40fd34d600ea3de6d95684f` — residency-selection revision nominal nos owners/caches; CI `36479931215` success.
-- `69d485a6b645655d09107c022ccd1f069c44cc6f` — generation-region cache identity tipada; CI `36480324199` success.
-- `0dd65711aa13c6063f10aa943c70cb6826ff42f9` — active world session identity tipada (`WorldId`); CI `36480551060` success.
-- `74b4af045278a76d5deb827b7854c0e7b249ad9f` — typed voxel-coordinate conversion core; CI `36480786611` success.
-- `05efa4c33cc6ae050a6ebe625a4ed7e58412d714` — mesh dependency content revisions deixam de usar `Option<u64>` cru; CI `36481297442` success.
-- `f20ae0a60fe7f0ecf8bc78d9f92c0729ff9cf994` — `ChunkSnapshotSource` boundary finalizado com Bevy adapters e testes restaurados; CI `36482186553` success.
-- `4555045f10293a60c500d75eed3361655d6d20b1` — `ChunkContentRevision` promovida para `voxel::revision`; CI `36483058849` success.
-- `72ce79c768a08009d259e9e5ca7f7604edf4bb5b` — detailed mutation result passa a usar `ChunkCoord`; CI `36483446796` success.
-- `5b6db802959255e635f75e2ea6a41e0da558b898` — mutation runtime internal chunk results tipados; CI `36483646178` success.
-- `bb2afe5e8d4fc17a423b9d8545d74de48b10ba05` — full-world mutation escape hatch fechado e consumidores migrados para narrow read capabilities; CI `36485808944` success.
-- `cb59a951256a91abf321e9b10750296c02aa9541` — `VoxelWorld::chunk_content_revision()` passa a expor `ChunkContentRevision` diretamente.
-- `e498900fddd8dfa782fa24aabe9497305e31fbf0` — lighting content-revision cache tipado.
-- `e5b36d4f79ea10cf2ed16467796e8763716af23a` — generated-fluid verification revisions tipadas; CI `36486908948` success.
-- `576b770822ee8919b6cd7a1864308e159d4d3547` — content-revision map/counter autoritativos tipados e adapter `from_raw` removido; CI `36488836153` success.
-- `fc011ac18d3f0de80fdd2551cf0ff6430377b99b` — `ChunkPersistenceState` passa a possuir persistent set + archived payloads; CI `36489367228` success.
-- `ba0d53326c2beb1d4203d82f57443e9da7a543f4` — loaded chunk column index extraído; CI `36489860888` success.
-- `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore` passa a possuir resident chunks + column index; CI `36490280435` success.
-- `3f072dd12db3f456b1060a890730f4457a7a847c` — scene + per-chunk object revisions agrupadas em `ObjectRevisionState`; CI `36491139143` success.
-- `d240f50368cf76147638cf00039f5de8eb84eec6` — object scene/chunk revisions tipadas internamente mantendo adapter `u64`; CI `36491654054` success.
-- `665117027f333364fd0cb0ef3c3cde4f9cb0c224` — remove `chunk_mesh_revisions`, o publish no-op de lighting e os bumps redundantes; o primeiro gate `36492307348` encontrou apenas um teste residual.
-- `90319e4031c4db656f685667f626a7cf39a332b7` — teste residual de mesh snapshot migrado da revisão morta para a invariante real de content dependency; CI `36492502160` success.
+`VoxelWorld` continua coordenando invariantes multi-owner: insert/archive/restore, persistence promotion, semantic revisions e mutations autoritativas.
 
-### Phase 1 — encerrada
+## Read / mutation boundaries
 
-Os exit criteria da Phase 1 estão atendidos para o cutover:
+- `ChunkMeshSnapshot` / `ChunkMeshDependencies` dependem de `ChunkSnapshotSource`, não do container inteiro.
+- `VoxelRead` cobre leitura voxel estreita.
+- `VoxelTopologyRead` adiciona object lookup.
+- `VoxelTopologyReader` é o view entregue por `VoxelTopologyRuntime::read()`.
+- Os antigos `VoxelMutationRuntime::world()` / `VoxelTopologyRuntime::world()` foram removidos.
+- Collision, raycast, targeting/tool reads etc. não devem recuperar acesso irrestrito ao `VoxelWorld` através do facade de mutation.
 
-- identities/coordinate conversions relevantes têm tipos semânticos onde já existe owner conhecido;
-- presentation/generation/mutation usam contracts estreitos em vez de receber o container inteiro;
-- async boundaries possuem revisions nominais e stale-result contracts explícitos;
-- authored definitions, deterministic metadata, mutable runtime data e presentation snapshots têm boundaries distintos;
-- os novos core contracts não dependem de `App` Bevy e os adapters ECS ficam nas bordas.
+Gameplay/interação usa `VoxelMutationRuntime` para combinar mutation autoritativa com side effects de simulation/presentation:
 
-Isso não significa que todo `IVec3`/`u64` legado já foi eliminado; significa que os tipos/boundaries necessários para migrar storage/simulation/presentation existem e não precisamos continuar expandindo abstrações sem consumidor real.
+- block edit -> lighting + remesh + fluid scheduling;
+- layer edit -> remesh;
+- interactive fluid edit -> lighting + remesh + fluid scheduling.
 
-### Phase 2 — Authoritative chunk/world storage em andamento
+Bypasses diretos já inspecionados e considerados **intencionais**:
 
-Já concluído nesta phase:
+- `world_objects.rs`: `set_object_at` / `remove_object_at`; object presentation é separada e invalidada por `ObjectRevisionState`.
+- `voxel/lighting/propagation.rs`: escreve light diretamente; publication real vem de changed positions -> meshlet masks -> `ChunkRemeshTasks`/`ChunkRemeshQueue`.
+- `world/fluid_updates.rs`: runtime de fluid simulation escreve `set_fluid_at` diretamente e possui seu próprio lighting/remesh/reschedule pipeline.
+- generated-fluid settling usa caminho derivado próprio e reconcilia lighting/remesh/frontier na publication; não deve ser forçado pelo gameplay facade.
 
-- authoritative resident chunk store explícito;
-- persistence/archive state separado;
-- content revision nominal end-to-end;
-- mutation gameplay facade sem escape hatch para `VoxelWorld` inteiro;
-- object-scene/per-chunk object invalidation com owner explícito e revisions semanticamente distintas internamente;
-- remoção do counter global/per-chunk de mesh que não tinha consumidor de produção, deixando presentation dirtiness no remesh scheduler/queue.
+Não criar um `DirtyState` genérico para fundir esses domínios.
 
-Próximos cortes devem seguir as tarefas da Phase 2:
+## Revision / dirty ownership atual
 
-1. confirmar callers/semantics de `block_content_revision` e então extrair, tipar ou remover conforme uso real;
-2. centralizar cada mutation effect exatamente uma vez: content revision, persistence promotion, simulation/presentation dirtiness e object-scene effects;
-3. tornar lookup semantics explícitas para resident / absent / known-but-not-resident onde o código realmente precisa dessa distinção;
-4. definir/bound cache e eviction ownership sem acoplar isso aos render entities.
+### `ChunkContentRevision`
 
-`VoxelWorld` ainda é um facade/coordenador útil e não deve ser explodido num megadiff. A meta agora é reduzir responsabilidades internas por owners concretos, preservando a API externa enquanto os callers migram.
+- Representa mudança de conteúdo voxel de um resident chunk relevante para immutable snapshots/dependencies.
+- Lighting **não** muda content revision.
+- Blocks, layers, objects e fluids mudam content revision.
+- Map/counter agora pertencem a `ContentRevisionState`; `VoxelWorld` apenas valida resident ownership e delega bump/remove/read.
 
-## Baseline/runtime que precisa continuar preservado
+### `BlockTopologyRevision`
 
-- Baseline `0.68.48` possui os Electro GLBs semanticamente reparados e auditados por `tools/check_glb_assets.py`.
-- Instrumentação de performance continua disponível: `frame_*`, `main_work_*` e `render work`.
-- Fresh Phase 0 gameplay logs (stationary, movement/streaming e warp) continuam úteis para comparação de performance; não inventar métricas quando execução local real não estiver disponível.
+O antigo `block_content_revision: u64` **não era estado morto**.
 
-## Continuidade imediata
+Durante um cut experimental (`7e97ec39`) ele foi removido; CI falhou porque `src/targeting/scene.rs` realmente o usa para invalidar o `BlockTargetingVisualSnapshot`. O estado funcional foi restaurado em `e50519bb`, CI `36493480313` success.
 
-1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
-2. Mapear callers e semantics de `block_content_revision`; não criar owner se o counter não tiver consumidor real.
-3. Se o revision for redundante, removê-lo e preservar a invariante/teste que motivou sua existência; se for real, extrair owner estreito antes de tipar.
-4. Não misturar object-scene, block-content e simulation/presentation dirtiness no mesmo commit.
-5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
+O domínio foi então corrigido semanticamente:
+
+- tipo nominal: `BlockTopologyRevision`;
+- owner: `BlockRevisionState`;
+- targeting armazena o tipo nominal, não `u64`;
+- avança em insert/archive/restore de chunk e mudança real de block;
+- **não** avança por layer/fluid/object/light.
+
+Commit: `8f729481cd5ab14521a2f4d404ca4c82daedbde1`; CI `36493814557` success.
+
+### Object revisions
+
+- `ObjectRevisionState` possui scene invalidation + per-chunk object revision.
+- Scene e chunk revisions são tipos internos distintos; adapter `u64` externo ainda existe em `world_objects.rs` e pode ser removido em cut posterior se trouxer valor real.
+
+### Mesh revisions
+
+O antigo `chunk_mesh_revisions` foi confirmado como estado legado e removido.
+
+- não existia reader de produção;
+- presentation dirtiness real já pertence a `ChunkRemeshTasks` / `ChunkRemeshQueue`;
+- lighting invalida meshlets diretamente;
+- interactive lighting publica changed positions por frame;
+- generated-fluid settling mantém mudanças privadas até convergir e só depois publica.
+
+`66511702` removeu o estado; `90319e40` corrigiu um teste residual; CI `36492502160` success.
+
+## Storage semantics preservadas
+
+- Chunk gerado e não modificado pode ser descartado ao archive.
+- Chunk promovido a persistent é arquivado/restaurável.
+- Save serializa somente chunks persistent.
+- Generated-fluid convergence não pode promover chunk para persistent pelo caminho derivado.
+- `ResidentChunkStore::insert` não substitui resident chunk silenciosamente.
+- Archive remove content/object revisions do resident chunk.
+- Restore recebe revisions novas.
+
+## Últimos checkpoints relevantes
+
+- `bb2afe5e8d4fc17a423b9d8545d74de48b10ba05` — fecha full-world mutation escape hatch; CI `36485808944` success.
+- `576b770822ee8919b6cd7a1864308e159d4d3547` — content revision nominal no storage; CI `36488836153` success.
+- `fc011ac18d3f0de80fdd2551cf0ff6430377b99b` — `ChunkPersistenceState`; CI `36489367228` success.
+- `ba0d53326c2beb1d4203d82f57443e9da7a543f4` — loaded column index; CI `36489860888` success.
+- `59de357997883148ffcc5df581f916f4632683b7` — `ResidentChunkStore`; CI `36490280435` success.
+- `3f072dd12db3f456b1060a890730f4457a7a847c` — `ObjectRevisionState`; CI `36491139143` success.
+- `d240f50368cf76147638cf00039f5de8eb84eec6` — object revisions nominal internally; CI `36491654054` success.
+- `90319e4031c4db656f685667f626a7cf39a332b7` — dead mesh revision cleanup finalizado; CI `36492502160` success.
+- `e50519bb6e60feb9b393368c6171bc916d1458e4` — restaura a real block-targeting revision após CI revelar o caller; CI `36493480313` success.
+- `8f729481cd5ab14521a2f4d404ca4c82daedbde1` — `BlockTopologyRevision` + `BlockRevisionState`; CI `36493814557` success.
+- `a26a8304823e17acb6b798581595c3f2585b65ca` + `b753efe537b1b806159af358f76cb64cfb445177` — `ContentRevisionState` passa a possuir map/counter de content revisions; CI `36494360805` success.
+
+## Próximo corte — Phase 2
+
+O próximo problema já foi localizado em generation/streaming:
+
+```rust
+if world.has_resident_or_persisted_chunk(coord) {
+    if world.chunk(coord).is_none() {
+        world.restore_chunk(coord);
+    }
+    ...
+}
+```
+
+Esse padrão usa duas queries para inferir três estados. O próximo cut deve tornar lookup semantics explícitas, sem alterar algoritmo:
+
+- `Resident`
+- `Archived` / known-but-not-resident
+- `Absent`
+
+Migrar primeiro apenas os pontos de generation/streaming que realmente precisam distinguir esses estados. Não espalhar enum abstrato pelo projeto sem consumidor.
+
+Depois disso:
+
+1. continuar centralizando side effects somente onde houver duplicação real;
+2. revisar cache/eviction ownership sem acoplar logical/resident world a render entities;
+3. manter CI verde e atualizar este handoff após cada bloco significativo.
+
+## Regras de continuidade
+
+- Trabalhar na branch `architecture/asteria-core-rebuild`, nunca direto em `develop`.
+- Commitar blocos coerentes e conferir diff quando arquivos grandes forem regravados.
+- Se CI falhar, abrir logs e corrigir root cause; não usar `allow` para esconder warning.
+- Não reintroduzir hydrology legado.
+- Não inventar performance claims sem gameplay logs reais.
+- Preservar gameplay/content/UI/assets válidos enquanto a fundação é substituída por boundaries explícitos.
