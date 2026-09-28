@@ -12,6 +12,7 @@ use super::{
     layer::LayerCell,
     lighting::PendingLightingUpdates,
     object::ObjectCell,
+    read::VoxelTopologyReader,
     world::VoxelWorld,
 };
 
@@ -32,6 +33,10 @@ pub(crate) struct VoxelMutationRuntime<'w> {
 }
 
 impl VoxelMutationRuntime<'_> {
+    pub(crate) fn read(&self) -> VoxelTopologyReader<'_> {
+        VoxelTopologyReader::new(&self.world)
+    }
+
     pub(crate) fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         self.world.cell_at(world_position)
     }
@@ -106,6 +111,10 @@ pub(crate) struct VoxelTopologyRuntime<'w> {
 }
 
 impl VoxelTopologyRuntime<'_> {
+    pub(crate) fn read(&self) -> VoxelTopologyReader<'_> {
+        self.mutation.read()
+    }
+
     pub(crate) fn add_layer(
         &mut self,
         world_position: IVec3,
