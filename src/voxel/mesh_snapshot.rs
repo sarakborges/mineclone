@@ -16,9 +16,18 @@ use super::{
 type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ChunkContentRevision(u64);
+
+impl ChunkContentRevision {
+    fn from_raw(raw: u64) -> Self {
+        Self(raw)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkMeshDependencies {
     center: ChunkCoord,
-    content_revisions: [[[Option<u64>; 3]; 3]; 3],
+    content_revisions: [[[Option<ChunkContentRevision>; 3]; 3]; 3],
     required_offsets: [[[bool; 3]; 3]; 3],
 }
 
@@ -56,7 +65,10 @@ impl ChunkMeshDependencies {
                         continue;
                     };
                     let coord = center + IVec3::new(offset_x, offset_y, offset_z);
-                    if world.chunk_content_revision(coord) != Some(expected) {
+                    let current = world
+                        .chunk_content_revision(coord)
+                        .map(ChunkContentRevision::from_raw);
+                    if current != Some(expected) {
                         return false;
                     }
                 }
@@ -164,6 +176,7 @@ impl ChunkMeshSnapshot {
         let center_chunk = world.chunk(coord)?;
         let center_revision = world
             .chunk_content_revision(coord)
+            .map(ChunkContentRevision::from_raw)
             .expect("loaded center chunk should have a content revision");
         let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
@@ -195,6 +208,7 @@ impl ChunkMeshSnapshot {
                     };
                     let revision = world
                         .chunk_content_revision(neighbor_coord)
+                        .map(ChunkContentRevision::from_raw)
                         .expect("loaded neighbor chunk should have a content revision");
                     let y = (offset_y + 1) as usize;
                     let z = (offset_z + 1) as usize;
