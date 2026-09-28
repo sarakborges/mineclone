@@ -6,13 +6,18 @@ use crate::{
 };
 
 use super::{
-    cell::VoxelCell, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
-    object::ObjectCell, world::VoxelWorld,
+    cell::VoxelCell,
+    coordinates::ChunkCoord,
+    fluid::FluidCell,
+    layer::LayerCell,
+    lighting::PendingLightingUpdates,
+    object::ObjectCell,
+    world::VoxelWorld,
 };
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct VoxelBlockMutation {
-    pub(crate) chunk: IVec3,
+    pub(crate) chunk: ChunkCoord,
     pub(crate) previous_cell: Option<VoxelCell>,
     pub(crate) detached_object: Option<ObjectCell>,
 }
@@ -64,7 +69,7 @@ impl VoxelMutationRuntime<'_> {
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
         self.set_block_detailed(world_position, block)
-            .map(|mutation| mutation.chunk)
+            .map(|mutation| mutation.chunk.as_ivec3())
     }
 
     pub(crate) fn set_block_detailed(
@@ -80,7 +85,7 @@ impl VoxelMutationRuntime<'_> {
         self.remesh_queue.enqueue_voxel_edit(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(VoxelBlockMutation {
-            chunk,
+            chunk: ChunkCoord::from_ivec3(chunk),
             previous_cell,
             detached_object,
         })
