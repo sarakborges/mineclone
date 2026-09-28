@@ -44,6 +44,10 @@ impl VoxelRead for VoxelWorld {
     ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
         VoxelWorld::sample_at(self, world_position)
     }
+
+    fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
+        VoxelWorld::block_id_at(self, world_position)
+    }
 }
 
 impl VoxelTopologyRead for VoxelWorld {
