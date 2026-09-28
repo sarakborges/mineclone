@@ -16,11 +16,31 @@ use super::{
 type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ChunkContentRevision(u64);
+pub(crate) struct ChunkContentRevision(u64);
 
 impl ChunkContentRevision {
     fn from_raw(raw: u64) -> Self {
         Self(raw)
+    }
+}
+
+/// Narrow read capability required to capture and validate mesh snapshots.
+///
+/// Presentation code should depend on immutable chunk content and its content
+/// revision, not on the full authoritative world container or any mutation,
+/// persistence, archive, lighting, or object APIs it also owns today.
+pub(crate) trait ChunkSnapshotSource {
+    fn snapshot_chunk(&self, coord: ChunkCoord) -> Option<&VoxelChunk>;
+    fn chunk_content_revision(&self, coord: ChunkCoord) -> Option<ChunkContentRevision>;
+}
+
+impl ChunkSnapshotSource for VoxelWorld {
+    fn snapshot_chunk(&self, coord: ChunkCoord) -> Option<&VoxelChunk> {
+        self.chunk(coord.as_ivec3())
+    }
+
+    fn chunk_content_revision(&self, coord: ChunkCoord) -> Option<ChunkContentRevision> {
+        VoxelWorld::chunk_content_revision(self, coord.as_ivec3()).map(ChunkContentRevision::from_raw)
     }
 }
 
@@ -46,7 +66,7 @@ impl ChunkMeshDependencies {
         self
     }
 
-    pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
+    pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
         let center = self.center.as_ivec3();
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
@@ -64,11 +84,10 @@ impl ChunkMeshDependencies {
                         // that new halo without starving the streaming frontier.
                         continue;
                     };
-                    let coord = center + IVec3::new(offset_x, offset_y, offset_z);
-                    let current = world
-                        .chunk_content_revision(coord)
-                        .map(ChunkContentRevision::from_raw);
-                    if current != Some(expected) {
+                    let coord = ChunkCoord::from_ivec3(
+                        center + IVec3::new(offset_x, offset_y, offset_z),
+                    );
+                    if source.chunk_content_revision(coord) != Some(expected) {
                         return false;
                     }
                 }
@@ -81,26 +100,26 @@ impl ChunkMeshDependencies {
     /// Once that first mesh is visible, reconcile its formerly absent halo rather
     /// than invalidating and repeatedly rescheduling the initial async task.
     #[cfg(test)]
-    pub(crate) fn needs_initial_catchup(&self, world: &VoxelWorld) -> bool {
+    pub(crate) fn needs_initial_catchup(&self, source: &impl ChunkSnapshotSource) -> bool {
         !self
-            .initial_catchup_meshlets_with(world, |_| true)
+            .initial_catchup_meshlets_with(source, |_| true)
             .is_empty()
     }
 
     #[cfg(test)]
     pub(crate) fn needs_initial_catchup_with(
         &self,
-        world: &VoxelWorld,
+        source: &impl ChunkSnapshotSource,
         neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> bool {
         !self
-            .initial_catchup_meshlets_with(world, neighbor_is_visible)
+            .initial_catchup_meshlets_with(source, neighbor_is_visible)
             .is_empty()
     }
 
     pub(crate) fn initial_catchup_meshlets_with(
         &self,
-        world: &VoxelWorld,
+        source: &impl ChunkSnapshotSource,
         mut neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> ChunkMeshletMask {
         let mut meshlets = ChunkMeshletMask::default();
@@ -123,7 +142,11 @@ impl ChunkMeshDependencies {
 
                     let offset = IVec3::new(offset_x, offset_y, offset_z);
                     let coord = center + offset;
-                    if neighbor_is_visible(coord) && world.chunk(coord).is_some() {
+                    if neighbor_is_visible(coord)
+                        && source
+                            .snapshot_chunk(ChunkCoord::from_ivec3(coord))
+                            .is_some()
+                    {
                         meshlets = meshlets.union(
                             ChunkMeshletMask::for_dependency_offset(offset),
                         );
@@ -145,9 +168,9 @@ pub(crate) struct ChunkMeshSnapshot {
 }
 
 impl ChunkMeshSnapshot {
-    pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
+    pub(crate) fn capture(source: &impl ChunkSnapshotSource, coord: IVec3) -> Option<Self> {
         Self::capture_with_neighbor_filter_and_meshlets(
-            world,
+            source,
             coord,
             |_| true,
             ChunkMeshletMask::ALL,
@@ -155,12 +178,12 @@ impl ChunkMeshSnapshot {
     }
 
     pub(crate) fn capture_with_neighbor_filter(
-        world: &VoxelWorld,
+        source: &impl ChunkSnapshotSource,
         coord: IVec3,
         include_neighbor: impl FnMut(IVec3) -> bool,
     ) -> Option<Self> {
         Self::capture_with_neighbor_filter_and_meshlets(
-            world,
+            source,
             coord,
             include_neighbor,
             ChunkMeshletMask::ALL,
@@ -168,15 +191,15 @@ impl ChunkMeshSnapshot {
     }
 
     pub(crate) fn capture_with_neighbor_filter_and_meshlets(
-        world: &VoxelWorld,
+        source: &impl ChunkSnapshotSource,
         coord: IVec3,
         mut include_neighbor: impl FnMut(IVec3) -> bool,
         meshlets: ChunkMeshletMask,
     ) -> Option<Self> {
-        let center_chunk = world.chunk(coord)?;
-        let center_revision = world
-            .chunk_content_revision(coord)
-            .map(ChunkContentRevision::from_raw)
+        let center_coord = ChunkCoord::from_ivec3(coord);
+        let center_chunk = source.snapshot_chunk(center_coord)?;
+        let center_revision = source
+            .chunk_content_revision(center_coord)
             .expect("loaded center chunk should have a content revision");
         let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
@@ -203,12 +226,12 @@ impl ChunkMeshSnapshot {
                     if !include_neighbor(neighbor_coord) {
                         continue;
                     }
-                    let Some(neighbor_chunk) = world.chunk(neighbor_coord) else {
+                    let neighbor_coord = ChunkCoord::from_ivec3(neighbor_coord);
+                    let Some(neighbor_chunk) = source.snapshot_chunk(neighbor_coord) else {
                         continue;
                     };
-                    let revision = world
+                    let revision = source
                         .chunk_content_revision(neighbor_coord)
-                        .map(ChunkContentRevision::from_raw)
                         .expect("loaded neighbor chunk should have a content revision");
                     let y = (offset_y + 1) as usize;
                     let z = (offset_z + 1) as usize;
@@ -224,7 +247,7 @@ impl ChunkMeshSnapshot {
             chunk,
             neighbor_chunks: Arc::new(neighbor_chunks),
             dependencies: ChunkMeshDependencies {
-                center: ChunkCoord::from_ivec3(coord),
+                center: center_coord,
                 content_revisions,
                 required_offsets,
             }
