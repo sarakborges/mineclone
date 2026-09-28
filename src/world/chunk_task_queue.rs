@@ -6,10 +6,20 @@ use crate::voxel::coordinates::ChunkCoord;
 
 use super::revision::TaskInputRevision;
 
-pub(crate) struct CompletedChunkTask<T> {
-    pub(crate) coord: ChunkCoord,
+pub(crate) struct CompletedChunkTask<T, C = bevy::prelude::IVec3> {
+    pub(crate) coord: C,
     pub(crate) revision: TaskInputRevision,
     pub(crate) output: T,
+}
+
+impl<T> CompletedChunkTask<T, ChunkCoord> {
+    pub(crate) fn into_runtime(self) -> CompletedChunkTask<T> {
+        CompletedChunkTask {
+            coord: self.coord.as_ivec3(),
+            revision: self.revision,
+            output: self.output,
+        }
+    }
 }
 
 struct PendingChunkTask<T> {
@@ -100,7 +110,7 @@ impl<T> ChunkTaskQueue<T> {
         Some(coord)
     }
 
-    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
+    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T, ChunkCoord>> {
         let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
             check_ready(&mut pending.task).map(|output| (*coord, pending.revision, output))
         })?;
@@ -117,7 +127,7 @@ impl<T> ChunkTaskQueue<T> {
     pub(crate) fn poll_ready_by_key<K: Ord>(
         &mut self,
         mut key: impl FnMut(ChunkCoord) -> K,
-    ) -> Option<CompletedChunkTask<T>> {
+    ) -> Option<CompletedChunkTask<T, ChunkCoord>> {
         let mut coords = self.pending.keys().copied().collect::<Vec<_>>();
         coords.sort_unstable_by_key(|coord| key(*coord));
 
