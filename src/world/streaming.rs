@@ -16,7 +16,7 @@ use std::{
 
 use bevy::{
     ecs::system::SystemParam,
-    platform::collections::{HashMap, HashSet},
+    platform::collections::HashSet,
     prelude::*,
 };
 
@@ -42,6 +42,7 @@ use self::{
     ready::ReadyChunkQueue,
     residency::ChunkResidencyState,
     selection::rebuild_queue,
+    surface_cache::StreamingSelectionCache,
 };
 pub(in crate::world) use self::{
     generation::refill_generation_workers,
@@ -121,9 +122,7 @@ pub(super) struct ChunkStreamingState {
     residency: ChunkResidencyState,
     pending: PendingChunkQueue,
     ready: ReadyChunkQueue,
-    surface_ranges: HashMap<IVec2, (i32, i32)>,
-    surface_support_minimums: HashMap<IVec2, i32>,
-    structure_top_chunks: HashMap<IVec2, i32>,
+    selection_cache: StreamingSelectionCache,
     initial_presentation: InitialPresentationState,
     mesh_pressure: MeshPressureState,
     generation_wave: GenerationWaveState,
@@ -187,18 +186,17 @@ impl ChunkStreamingState {
         let selection_revision = self.residency.revision();
         let movement_direction = self.movement_direction;
         let visible_radius = self.horizontal_radius;
-        let center_structure_top_chunk = self
-            .structure_top_chunks
+        let structure_top_chunks = self.selection_cache.structure_top_chunks();
+        let center_structure_top_chunk = structure_top_chunks
             .get(&center.xz())
             .copied()
             .unwrap_or(0);
+        let surface_ranges = self.selection_cache.surface_ranges();
         let prioritize_surface = selection::player_is_above_surface(
             center,
             center_structure_top_chunk,
-            &self.surface_ranges,
+            surface_ranges,
         );
-        let structure_top_chunks = &self.structure_top_chunks;
-        let surface_ranges = &self.surface_ranges;
 
         let (selected, scan) = self.pending.pop_by_priority(selection_revision, |coord| {
             (
@@ -291,21 +289,12 @@ impl ChunkStreamingState {
     }
 
     fn adopt_structure_top_chunk(&mut self, horizontal: IVec2, top_chunk: i32) {
-        let previous_top = self
-            .structure_top_chunks
-            .get(&horizontal)
-            .copied()
-            .unwrap_or(-1);
-        if top_chunk <= previous_top {
+        let Some((previous_top, surface_top_chunk)) = self
+            .selection_cache
+            .adopt_structure_top_chunk(horizontal, top_chunk)
+        else {
             return;
-        }
-        self.structure_top_chunks.insert(horizontal, top_chunk);
-
-        let surface_top_chunk = self
-            .surface_ranges
-            .get(&horizontal)
-            .map(|(_, maximum)| maximum.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32))
-            .unwrap_or(-1);
+        };
         let start_y = previous_top.max(surface_top_chunk).saturating_add(1).max(0);
         let mut changed = false;
         for y in start_y..=top_chunk {
@@ -656,7 +645,7 @@ pub(super) fn stream_chunks(
                 !allow_forward_preload,
                 work.state.residency.desired.len(),
                 work.state.pending.len(),
-                work.state.structure_top_chunks.len(),
+                work.state.selection_cache.structure_column_count(),
                 rebuild_elapsed.as_secs_f64() * 1_000.0,
             );
         }

@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     ChunkStreamingState, QueueRebuildContext,
-    surface_cache::{cached_surface_range, prune_surface_cache},
+    surface_cache::{StreamingSelectionCache, cached_surface_range},
 };
 
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 2;
@@ -79,17 +79,17 @@ pub(in crate::world) fn initial_streaming_chunk_coords(
     rebuild_horizontal_selection_offsets(&mut horizontal_offsets, horizontal_radius, IVec2::ZERO);
 
     let mut desired = HashSet::new();
-    let mut surface_ranges = HashMap::new();
-    let mut surface_support_minimums = HashMap::new();
-    let mut structure_top_chunks = HashMap::new();
+    let mut selection_cache = StreamingSelectionCache::default();
+    let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+        selection_cache.parts_mut();
     rebuild_desired_chunk_coords(
         &mut desired,
         selection,
         &horizontal_offsets,
         context,
-        &mut surface_ranges,
-        &mut surface_support_minimums,
-        &mut structure_top_chunks,
+        surface_ranges,
+        surface_support_minimums,
+        structure_top_chunks,
     );
     let mut coords = desired.into_iter().collect::<Vec<_>>();
     coords.sort_by_key(|coord| (*coord - center).length_squared());
@@ -133,14 +133,9 @@ pub(super) fn rebuild_queue(
             forward_preload
         };
     if prune_caches {
-        prune_surface_cache(&mut streaming.surface_ranges, center.xz(), retention_radius);
-        let retention_radius_squared = retention_radius * retention_radius;
-        streaming.surface_support_minimums.retain(|coord, _| {
-            (*coord - center.xz()).length_squared() <= retention_radius_squared
-        });
-        streaming.structure_top_chunks.retain(|coord, _| {
-            (*coord - center.xz()).length_squared() <= retention_radius_squared
-        });
+        streaming
+            .selection_cache
+            .prune(center.xz(), retention_radius);
     }
 
     sync_horizontal_selection_offsets(
@@ -172,31 +167,36 @@ pub(super) fn rebuild_queue(
         prune_caches,
     );
     if incremental_rebuild {
+        let previous_desired = &streaming.residency.desired;
+        let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+            streaming.selection_cache.parts_mut();
         rebuild_desired_chunk_coords_incremental(
             &mut scratch.desired,
-            &streaming.residency.desired,
+            previous_desired,
             previous_center.expect("incremental rebuild requires previous center"),
             desired_selection,
             movement_direction,
             &scratch.horizontal_offsets,
             surface_context,
-            &mut streaming.surface_ranges,
-            &mut streaming.surface_support_minimums,
-            &mut streaming.structure_top_chunks,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
             &mut scratch.newly_desired,
             &mut scratch.no_longer_desired,
         );
     } else {
         scratch.newly_desired.clear();
         scratch.no_longer_desired.clear();
+        let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+            streaming.selection_cache.parts_mut();
         rebuild_desired_chunk_coords(
             &mut scratch.desired,
             desired_selection,
             &scratch.horizontal_offsets,
             surface_context,
-            &mut streaming.surface_ranges,
-            &mut streaming.surface_support_minimums,
-            &mut streaming.structure_top_chunks,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
         );
         scratch.no_longer_desired.extend(
             streaming
