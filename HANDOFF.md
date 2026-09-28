@@ -37,7 +37,7 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `GenerationRegionCoord`: volume-biome cache e retention scratch não confundem mais region identity com `IVec3` arbitrário.
 - `WorldId`: `WorldSession` armazena identidade tipada; catálogo/snapshot/thumbnail recebem `&str` somente nas bordas existentes.
 - `VoxelCoord`: conversão voxel -> chunk agora distingue semanticamente world voxel coordinate de `ChunkCoord`; APIs Bevy-facing continuam com adapters `IVec3` durante a migração.
-- `ChunkContentRevision`: dependency snapshots usam revisão nominal pertencente ao domínio voxel, não `u64` cru nem tipo privado do mesher.
+- `ChunkContentRevision`: agora é nominal também no map/counter autoritativo de `VoxelWorld`, no cache de lighting, na verificação de fluid settling e nos dependency snapshots. O caminho de content revision não converte mais de/para `u64` cru.
 
 ### Authoritative read / mutation boundaries
 
@@ -71,6 +71,10 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 - `72ce79c768a08009d259e9e5ca7f7604edf4bb5b` — detailed mutation result passa a usar `ChunkCoord`; CI `36483446796` success.
 - `5b6db802959255e635f75e2ea6a41e0da558b898` — mutation runtime internal chunk results tipados; CI `36483646178` success.
 - `bb2afe5e8d4fc17a423b9d8545d74de48b10ba05` — full-world mutation escape hatch fechado e consumidores migrados para narrow read capabilities; CI `36485808944` success.
+- `cb59a951256a91abf321e9b10750296c02aa9541` — `VoxelWorld::chunk_content_revision()` passa a expor `ChunkContentRevision` diretamente.
+- `e498900fddd8dfa782fa24aabe9497305e31fbf0` — lighting content-revision cache tipado.
+- `e5b36d4f79ea10cf2ed16467796e8763716af23a` — generated-fluid verification revisions tipadas; CI `36486908948` success.
+- `576b770822ee8919b6cd7a1864308e159d4d3547` — content-revision map/counter autoritativos tipados e adapter `from_raw` removido; CI `36488836153` success.
 
 ### Invariantes preservados
 
@@ -82,13 +86,14 @@ O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-o
 
 ### Phase 1 ainda não terminou
 
-Ainda faltam os cortes de storage/revision antes da Phase 2:
+O content-revision storage cut está concluído. Ainda faltam os cortes de ownership antes da Phase 2:
 
-1. **storage-owned revision semantics**: mover gradualmente revision storage/counters para tipos nominais sem reescrever `VoxelWorld` inteiro;
-2. **authoritative chunk storage boundary**: separar resident chunk ownership/archive/persistence de spatial convenience APIs por cutovers behavior-preserving;
-3. **read boundary expansion somente quando justificado**: novas capabilities devem representar consumidores reais, não traits cosméticos.
+1. **persistence/archive owner**: separar `persistent_chunks` + `archived_chunks` do resident chunk container sem alterar save/restore/archive semantics;
+2. **authoritative resident chunk storage boundary**: separar resident chunk ownership de spatial convenience APIs por cutovers behavior-preserving;
+3. **outros revision domains** (`mesh`, `object`, block/object scene) só devem ser tipados/separados quando o owner correspondente for extraído — não num megadiff transversal;
+4. **read boundary expansion somente quando justificado**: novas capabilities devem representar consumidores reais, não traits cosméticos.
 
-`VoxelWorld` **não deve** ser convertido num megadiff. Hoje ele ainda mistura resident chunks, archived/persistent chunks, revision maps, block/fluid/object mutation e spatial access. O cutover deve separar essas responsabilidades de forma incremental, com behavior-preserving adapters.
+`VoxelWorld` **não deve** ser convertido num megadiff. Hoje ele ainda mistura resident chunks, archive/persistence state, mesh/object revision maps, block/fluid/object mutation e spatial access. O cutover deve separar essas responsabilidades de forma incremental, com behavior-preserving adapters.
 
 `desired`/`retained` também permanecem `HashSet<IVec3>` por enquanto porque atravessam intensamente `streaming/selection.rs`; isso precisa ser um cutover próprio, não uma mudança colateral.
 
@@ -101,7 +106,7 @@ Ainda faltam os cortes de storage/revision antes da Phase 2:
 ## Continuidade imediata
 
 1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
-2. Fazer `VoxelWorld::chunk_content_revision()` expor `ChunkContentRevision` diretamente e, se o diff continuar estreito, tipar também o map/counter de content revision.
-3. Não migrar `chunk_mesh_revisions`, `chunk_object_revisions`, block/object scene revisions no mesmo megadiff.
-4. Depois continuar separando authoritative chunk storage por owners/capabilities pequenos.
+2. Extrair `persistent_chunks` + `archived_chunks` para um owner explícito (`ChunkPersistenceState` ou nome equivalente) mantendo as APIs atuais como adapters.
+3. Preservar exatamente: untouched generated chunks são descartados ao archive; persistent chunks podem ser archived/restored; saves serializam somente chunks persistent.
+4. Não mover resident `chunks`, loaded-column index ou mesh/object revisions no mesmo corte.
 5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
