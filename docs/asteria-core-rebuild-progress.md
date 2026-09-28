@@ -133,6 +133,16 @@ The original roadmap still requires stable world/dimension/region/chunk/voxel id
 - Focused tests cover valid identity preservation and blank-ID rejection.
 - Verified checkpoint: `Rust validation` run `36474736729` — success.
 
+### Typed chunk identity — async task queue boundary
+
+- Added primitive-backed `ChunkCoord` as a distinct chunk identity while keeping Bevy `IVec3` conversion explicit at adapter edges.
+- `ChunkTaskQueue` now stores pending async work as `HashMap<ChunkCoord, ...>` rather than using raw `IVec3` as the identity key.
+- Existing scheduler APIs still accept/return `IVec3` for this first narrow cutover; queue entry, lookup, cancellation, priority selection and completed-result publication convert explicitly at the queue boundary.
+- No scheduling policy, priority ordering, cancellation behavior, task revision semantics or task limits changed.
+- Added focused coverage proving negative chunk coordinates survive the typed/Bevy adapter roundtrip.
+- Type introduction: commit `b97500563ccd5fc829fb96c17d1a4017d43b8521`; queue cutover: `d14c57b966ec77d6dca073e535804bd7dce3323a`; lint cleanup: `e8bfebd284e0f9822459cc037ae6b0da28aeb07f`.
+- Verified checkpoint: `Rust validation` run `36475544543` — success.
+
 ## Current ownership shape
 
 ```text
@@ -198,7 +208,7 @@ ChunkStreamingState (resource-level composition root)
 The next work follows the original Phase 1 roadmap instead of jumping ahead to optimization:
 
 1. **completed:** stable `DimensionId` runtime/domain type and cutover of `CurrentDimension` plus consumers from raw `String` identity;
-2. establish typed world/chunk/voxel coordinate contracts around the existing Euclidean conversion rules, migrating one complete boundary at a time rather than adding unused parallel types;
+2. **in progress:** typed world/chunk/voxel coordinate contracts around the existing Euclidean conversion rules, migrating one complete boundary at a time; the async task queue now owns typed chunk identity internally, while scheduler/storage cutovers remain to be evaluated separately;
 3. continue replacing semantically distinct raw revision counters at async/storage boundaries with explicit revision types where the distinction prevents invalid publication/mutation;
 4. keep authored content deserialization and Bevy resources as adapters around the domain contracts rather than making Bevy resource shape the identity itself;
 5. add focused unit/property tests for ID validity and negative-coordinate/chunk-boundary behavior;
