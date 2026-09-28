@@ -92,7 +92,10 @@ pub(super) fn natural_spawn_creatures(
             .filter(|(_, _, health)| !health.is_dead())
             .map(|(instance, _, _)| instance),
     );
-    let Some(dimension_definition) = context.dimensions.get(&context.current_dimension.id) else {
+    let Some(dimension_definition) = context
+        .dimensions
+        .get(context.current_dimension.id.as_str())
+    else {
         return;
     };
     let Some((feet, creature_id)) = find_natural_spawn(
