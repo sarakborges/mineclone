@@ -1,121 +1,87 @@
 # HANDOFF — Asteria / Mineclone
 
-> Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
+> Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo e por `docs/asteria-core-rebuild.md`.
 
-## 2026-09-28 — Phase 1 avança identidade semântica de chunk pelos boundaries de runtime
+## 2026-09-28 — Asteria Core rebuild / Phase 1 em andamento
 
-- A branch ativa continua sendo `architecture/asteria-core-rebuild`; HEAD funcional antes deste handoff: `3802282b8190a95c5c9b0b219cd0400ab0cfed53`.
-- O objetivo do bloco foi expandir `ChunkCoord` por owners pequenos e autoritativos sem fazer um megacutover do `VoxelWorld` nem alterar política de streaming/rendering.
-- `ChunkTaskQueue` agora usa `HashMap<ChunkCoord, ...>` internamente. Generation, initial-mesh e remesh schedulers mantêm adapters explícitos para `IVec3` apenas em suas APIs externas enquanto consumidores legados ainda não foram migrados.
-- O resultado async foi generalizado como `CompletedChunkTask<T, C>`; a fila retorna `C = ChunkCoord` e os schedulers convertem com `into_runtime()` para o runtime legado. Isso eliminou o vazamento de `IVec3` dentro da fila sem duplicar structs de resultado.
-- Cutovers publicados neste bloco:
-  - `00c425ebcddedac2e7c5d907632e0723d35f8952` — async queue/schedulers com `ChunkCoord` interno; CI `36477699634` success.
-  - `5a85ee7388ae85c753f279fdd082cea35e3a54e0` — retired residency queue tipada; CI `36478092904` success.
-  - `0a574bafc0db7283b6458fef73a5007d6ac92c60` — pending streaming queue + priority cache tipados; CI `36478253194` success.
-  - `fa3b494cc51bda18418d7a23f18a01c7ddbcd87a` — ready/presentation queue tipada; CI `36478397317` success.
-  - `f158b9f3b361e7f44890447b76c1516c88326cef` — initial presentation state (`lighting_seeded`, seed results, activation, mesh catch-up) tipado; CI `36478531501` success.
-  - `b9fa917c45de9c749982b615ca8a1f7f7e9f974b` — mesh-pressure eviction state tipado; CI `36478719478` success.
-  - `e0cf88a44bd9993f5ed749f2b0761faa17170964` — generation wave targets/pending/prefetch/staged/publication tipados; dynamic fluid settling continua deliberadamente em seu boundary separado `IVec3`; CI `36478958760` success.
-  - `3802282b8190a95c5c9b0b219cd0400ab0cfed53` — streaming selection center tipado internamente; CI `36479165269` success.
-- Invariante do bloco: `IVec3` continua válido para aritmética espacial, offsets, posições de voxel e APIs ainda legadas; `ChunkCoord` deve representar identidade de chunk em storage/queues/state onde a semântica é de ID e não de vetor arbitrário.
-- Não foi alterado o algoritmo de prioridade, render radius, retention, generation-wave batching, fluid settling, mesh-pressure policy ou selection shape. Os cutovers foram de ownership/tipagem, não de comportamento.
-- `VoxelWorld` ainda é o próximo boundary grande e **não deve** ser convertido em um único megadiff. Ele ainda mistura resident chunks, archive/persistence, revisions, mutações de block/fluid/object e spatial access; a migração deve primeiro fechar tipos/revisions/dependencies menores e depois separar authoritative storage/mutation ownership.
-- `desired`/`retained` em `ChunkResidencyState` também permanecem `HashSet<IVec3>` por enquanto porque atravessam intensamente `streaming/selection.rs`; migrá-los deve ocorrer como um cutover próprio com CI, não junto de outra mudança.
-- Próximo passo exato: continuar Phase 1 em boundaries pequenos de **chunk dependencies/revisions** (começando por mesh dependency identity/revision semantics), mantendo CI verde antes de avançar para Phase 2 authoritative storage.
+- Branch ativa: `architecture/asteria-core-rebuild`.
+- Baseline da reconstrução: `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
+- Decisão arquitetural permanece: **Rust + Bevy**, com Bevy como host/framework e Asteria possuindo world core, metadata/generation, streaming, simulation boundaries e voxel presentation.
+- Não é rewrite cego do jogo inteiro. Gameplay, content, assets, UI e sistemas válidos devem ser preservados/adaptados enquanto a fundação é substituída por cutovers explícitos.
+- Hydrology legado continua removido e **não deve voltar**. Rivers/lakes/cave entrances e features longos futuros pertencem ao sistema generalizado de structures/connectors/structure groups + metadata. Dynamic fluid simulation continua separada.
+- `VERSION` permanece `0.68.48`; estes commits são reconstrução arquitetural sem release de gameplay.
 
-## 2026-09-28 — branch de reconstrução controlada do Asteria Core
+### Ownership já separado
 
-- Foi criada a branch `architecture/asteria-core-rebuild` a partir de `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d`.
-- O baseline estava verde antes da criação da branch: `Rust validation` run `36212838598` — success.
-- A decisão arquitetural é manter **Rust + Bevy**, mas reposicionar Bevy como host/framework ao redor de subsistemas de mundo explicitamente pertencentes ao Asteria.
-- Isto **não é um rewrite cego do jogo inteiro**. Gameplay, assets, definitions, UI e demais sistemas válidos devem ser preservados/adaptados; a reconstrução é da fundação de world storage, generation, streaming, scheduling, simulation boundaries e voxel presentation.
-- Plano completo, fases, contratos, critérios de saída e ordem de execução: `docs/asteria-core-rebuild.md`.
-- Regra explícita: **o hydrology legado continua removido e não deve voltar**. Rios, lagos, cave entrances e outros features longos futuros devem usar o sistema generalizado de structures/connectors/structure groups + world metadata. Dynamic fluid simulation continua sendo um subsistema separado de runtime, não world-feature planning.
-- A implementação deve avançar por cutovers pequenos, com um owner autoritativo por fato, resultados async revisionados, filas/caches limitados, budgets independentes e CI verde antes da próxima fase.
-- Primeira execução definida no plano: Phase 0 (baseline + ownership inventory) -> mapa `reuse/adapt/replace/delete` -> Phase 1 (core types/boundaries). Não iniciar deletando toda a stack atual de world de uma vez.
-- A possibilidade de um voxel renderer próprio em `wgpu` fica apenas como **decision gate posterior**, condicionado a profiling provar que Render/GPU continua sendo o gargalo depois da reconstrução do runtime.
-- Esta branch começa como planejamento arquitetural; `VERSION` não foi alterado neste commit de documentação.
+O antigo `ChunkStreamingState` deixou de possuir diretamente vários estados que antes estavam misturados:
 
-## 2026-09-25/26 — 0.68.48 repara semanticamente os Electro GLBs e endurece auditoria
+- logical residency (`desired` / `retained` / retirement);
+- pending generation queue + critical/priority scan caches;
+- ready/initial-presentation queue + scan cache;
+- generation-wave lifecycle (targets, pending, prefetch, staged, settled publication);
+- initial presentation activation state;
+- mesh-pressure residency;
+- streaming selection pose;
+- surface/structure selection caches;
+- streaming priority diagnostics;
+- generation snapshot e presentation snapshot boundaries.
 
-- QA mostrou que a correção estrutural da 0.68.47 ainda não bastava: o preload do Electro normal continuava panicando dentro do `GltfLoader`, mesmo com header/chunks GLB formalmente válidos.
-- O validator oficial da Khronos foi executado contra os assets e revelou a causa real:
-  - Electro normal: 258 erros semânticos;
-  - Electro large: 47 erros semânticos;
-  - havia `bufferView`/accessor metadata stale apontando para regiões erradas do buffer, produzindo índices OOB, bounds incorretos e keyframes de animação lidos de bytes que não eram keyframes.
-- A investigação recuperou os dados válidos diretamente dos `.gltf` históricos do commit `35b8aaca906e1fdf48bae56feb4bb94b84814861`:
-  - no normal, body/face permaneciam válidos nos offsets originais e todos os 12 accessors de animação estavam intactos, deslocados +2720 bytes em relação ao metadata stale;
-  - o bloco de details do normal pertencia a outra revisão: metadata dizia 54 vértices, enquanto o bloco real de índices referenciava `0..167`; ele não foi remendado por alteração artificial do count;
-  - no large, body/face/details estavam recuperáveis; o details válido possui 62 vértices e exatamente 252 índices, todos dentro de range e sem triângulos degenerados;
-  - o metadata large dizia 276 índices e acabava lendo 24 valores de dentro do bloco de animação.
-- O reparo definitivo repacotou cada accessor em um buffer novo e sequencial, reconstruiu todos os `bufferViews`, recalculou bounds a partir dos bytes reais e validou relações entre primitives/accessors antes de escrever o GLB.
-- O details Electro válido do large foi usado como topologia canônica também no normal, remapeado para o bounding box authored do details normal. Body, face e animações normais continuam usando os dados recuperados do próprio normal; não foi copiado outro tipo de slime.
-- A face embedded histórica foi removida dos GLBs porque as definitions já aplicam `textures/creatures/slime_electro/face.png` externamente ao material `SlimeFace`; isso também eliminou os únicos warnings restantes do validator GLB.
-- Resultado do one-shot antes de publicar:
-  - `tools/check_glb_assets.py`: 22 assets validados;
-  - Khronos glTF Validator: Electro normal `0 errors / 0 warnings`;
-  - Khronos glTF Validator: Electro large `0 errors / 0 warnings`.
-- Assets finais publicados em `develop`:
-  - `6d8b22bdfcdaf8ba21592e961b03b5639efe94b2` — `Repair Electro GLB accessor layout`.
-- O audit permanente `tools/check_glb_assets.py` foi ampliado para validar, além do container:
-  - bounds reais de accessors contra `min/max` declarados;
-  - contagem de atributos de vertex contra `POSITION`;
-  - índices de primitives dentro do count de vértices;
-  - `COLOR_0` float dentro de `[0, 1]`;
-  - animation input como `FLOAT SCALAR`;
-  - key times finitos e estritamente crescentes.
-- O audit semântico novo passou em todos os 22 GLBs existentes e o CI completo do bloco passou no run `36212679301`, incluindo Clippy `-D warnings` e `cargo check --locked`.
-- Os três workflows temporários de validator/inspeção/reparo foram removidos após o diagnóstico. A proteção permanente ficou em `tools/check_glb_assets.py` + CI normal.
-- A instrumentação de performance da 0.68.45 (`frame`, `main_work`, `render work`) permanece intacta; depois de confirmar que Loading entra em Gameplay, a investigação de FPS volta exatamente desse ponto.
+O facade `ChunkStreamingState` ainda coordena owners quando existe regra multi-owner; wrappers puramente delegadores foram removidos quando não agregavam invariante.
 
-VERSION: `0.68.48`.
+### Core identities / revisions concluídos até aqui
 
-## 2026-09-25/26 — 0.68.47 corrigiu container GLB, mas não metadata semântico
+- `DimensionId`: `CurrentDimension` não armazena mais `String` arbitrária.
+- `ChunkCoord`: identidade primitive-backed usada internamente em async queues/schedulers e vários owners de streaming/presentation.
+- `TaskInputRevision`: revisão nominal do snapshot que originou trabalho async; stale results não usam `u64` cru nesse contract.
+- `ResidencySelectionRevision`: owner de residency e caches retired/pending/ready armazenam revisão semântica; o `u64` restante é somente adapter temporário do facade legado.
+- `GenerationRegionCoord`: volume-biome cache e retention scratch não confundem mais region identity com `IVec3` arbitrário.
+- `WorldId`: `WorldSession` armazena identidade tipada; catálogo/snapshot/thumbnail recebem `&str` somente nas bordas existentes.
+- `VoxelCoord`: conversão voxel -> chunk agora distingue semanticamente world voxel coordinate de `ChunkCoord`; APIs Bevy-facing continuam com adapters `IVec3` durante a migração.
 
-- QA da 0.68.46 panicou no preload do Electro normal com:
-  `Gltf(Binary(Length { length: 8220, length_read: 8172 }))`.
-- A investigação inicial confirmou que os GLBs tinham header/chunks truncados e foi feito um rebuild estrutural.
-- Commit do rebuild de container:
-  - `18e48e0625a8a61c54e8866a8510b9c6ccc34e0a` — `Rebuild Electro GLB containers`.
-- Também foi criado `tools/check_glb_assets.py` e o CI passou a executar `Audit GLB assets` antes de instalar Rust.
-- Essa auditoria inicial verificava magic/version/length, chunks JSON/BIN, alinhamento, buffer size e ranges de bufferViews/accessors.
-- O container reconstruído passou nessa auditoria, mas QA mostrou um novo `AssetLoaderPanic`; o validator Khronos então revelou que o conteúdo semântico continuava corrompido.
-- Portanto a 0.68.47 deve ser considerada a correção da camada de container, não a correção definitiva do Electro. O reparo semântico completo está na 0.68.48.
+### Cutovers verdes mais recentes
 
-VERSION: `0.68.47`.
+- `00c425ebcddedac2e7c5d907632e0723d35f8952` — async queue/schedulers com `ChunkCoord` interno; CI `36477699634` success.
+- `5a85ee7388ae85c753f279fdd082cea35e3a54e0` — retired residency queue tipada; CI `36478092904` success.
+- `0a574bafc0db7283b6458fef73a5007d6ac92c60` — pending queue/cache tipados; CI `36478253194` success.
+- `fa3b494cc51bda18418d7a23f18a01c7ddbcd87a` — ready queue/cache tipados; CI `36478397317` success.
+- `f158b9f3b361e7f44890447b76c1516c88326cef` — initial-presentation state tipado; CI `36478531501` success.
+- `b9fa917c45de9c749982b615ca8a1f7f7e9f974b` — mesh-pressure state tipado; CI `36478719478` success.
+- `e0cf88a44bd9993f5ed749f2b0761faa17170964` — generation-wave identity tipada; CI `36478958760` success.
+- `3802282b8190a95c5c9b0b219cd0400ab0cfed53` — selection center usa `ChunkCoord` internamente; CI `36479165269` success.
+- `324d6215a264a7d7c40fd34d600ea3de6d95684f` — residency-selection revision nominal nos owners/caches; CI `36479931215` success.
+- `69d485a6b645655d09107c022ccd1f069c44cc6f` — generation-region cache identity tipada; CI `36480324199` success.
+- `0dd65711aa13c6063f10aa943c70cb6826ff42f9` — active world session identity tipada (`WorldId`); CI `36480551060` success.
+- `74b4af045278a76d5deb827b7854c0e7b249ad9f` — typed voxel-coordinate conversion core; CI `36480786611` success.
 
-## 2026-09-25/26 — 0.68.46 corrige referência de preload dos Electro Slimes
+### Invariantes preservados
 
-- A 0.68.45 não chegou ao gameplay porque `setup_world` panicou no preload de `slime_electro.gltf`.
-- `slime_electro.json` e `slime_electro_large.json` foram alterados para `.glb`.
-- Ambos receberam override explícito do material `SlimeFace` para `textures/creatures/slime_electro/face.png`.
-- Os `.gltf` quebrados foram removidos do HEAD.
-- Essa versão revelou que os `.glb` também haviam sido gerados incorretamente; a correção definitiva está na 0.68.48.
+- Nenhum desses cutovers alterou priority order, render radius, retention radius, generation-wave batching, dynamic fluid settling, mesh-pressure policy ou selection shape.
+- `IVec3` continua válido para aritmética espacial e adapters ainda não migrados; ele não deve permanecer como identidade interna quando o owner já sabe que o valor é especificamente chunk/region/voxel identity.
+- Dynamic fluid settling continua deliberadamente separado do generation-wave identity owner.
+- Async work continua revisionado e stale results continuam rejeitados.
+- Cada bloco só avança após `Rust validation` verde, incluindo audits, Clippy `-D warnings` e `cargo check`.
 
-VERSION: `0.68.46`.
+### Phase 1 ainda não terminou
 
-## 2026-09-25/26 — Rendering diagnostics 0.68.45 mede o Render schedule separadamente
+Ainda faltam os dois cortes mais importantes antes da Phase 2:
 
-- Continuação da investigação de FPS após os logs mostrarem slow frames com streaming/generation/mesh/remesh zerados.
-- A 0.68.43 adicionou `main_work_*` e mudou Windows/DX12 para `PresentMode::Mailbox`.
-- A 0.68.44 reduziu o segundo anel de chunks invisíveis atrás do fog (`show/hide` default 14/15 -> 13/14).
-- A 0.68.45 adicionou `src/world/render_work_diagnostics.rs` para medir wall time do schedule `Render` separadamente do `Main`:
-  - timer antes de `RenderSystems::ExtractCommands`;
-  - fim depois de `RenderSystems::PostCleanup`;
-  - bridge latest-only por `Arc<AtomicU64>`, sem mutex/alocação por frame;
-  - logs `render work: samples=... skipped_samples=... avg_us=... p50_us=... p95_us=... p99_us=... max_us=...`.
-- Interpretação do próximo log:
-  - frame alto + main alto => perfilar Main systems;
-  - frame alto + main baixo + render alto => perfilar Render schedule/submit;
-  - frame alto + main baixo + render baixo => presentation/GPU/driver ou trabalho fora das janelas medidas.
-- CI funcional da implementação: run `36207686674` verde.
+1. **authoritative chunk-content API**: criar/usar uma boundary estreita para leitura/mutação/revisions sem consumidores dependerem da implementação interna de `VoxelWorld`;
+2. **chunk content / simulation / presentation revision semantics**: reduzir `u64` crus restantes em dependencies e preparar a centralização de mutation ownership.
 
-VERSION: `0.68.45`.
+`VoxelWorld` **não deve** ser convertido num megadiff. Hoje ele ainda mistura resident chunks, archived/persistent chunks, revision maps, block/fluid/object mutation e spatial access. O cutover deve separar essas responsabilidades de forma incremental, com behavior-preserving adapters.
+
+`desired`/`retained` também permanecem `HashSet<IVec3>` por enquanto porque atravessam intensamente `streaming/selection.rs`; isso precisa ser um cutover próprio, não uma mudança colateral.
+
+## Baseline/runtime que precisa continuar preservado
+
+- Baseline `0.68.48` possui os Electro GLBs semanticamente reparados e auditados por `tools/check_glb_assets.py`.
+- Instrumentação de performance continua disponível: `frame_*`, `main_work_*` e `render work`.
+- Fresh Phase 0 gameplay logs (stationary, movement/streaming e warp) continuam úteis para comparação de performance; não inventar métricas quando execução local real não estiver disponível.
 
 ## Continuidade imediata
 
-1. Continuar na branch `architecture/asteria-core-rebuild`, seguindo `docs/asteria-core-rebuild.md`.
-2. Phase 1 está em execução: expandir core types/boundaries por cutovers estreitos, mantendo adapters explícitos para APIs legadas.
-3. Próximo passo: tipar dependencies/revisions de chunk sem alterar comportamento; só depois iniciar o cutover de authoritative resident storage do `VoxelWorld`.
-4. Não migrar `desired/retained` nem o `VoxelWorld` inteiro junto com outro bloco; cada um precisa de boundary próprio e CI verde.
-5. Manter CI sem erros e sem warnings antes de cada novo bloco de alteração.
+1. Confirmar CI verde do último checkpoint antes de qualquer novo cutover.
+2. Continuar Phase 1 pela **authoritative chunk-content read/dependency boundary**, sem reescrever `VoxelWorld` inteiro.
+3. Tipar content/dependency revisions de forma incremental e manter adapters explícitos para APIs legadas.
+4. Depois fechar o contract de mutation ownership necessário para iniciar **Phase 2 — Authoritative chunk/world storage**.
+5. Atualizar este handoff após cada bloco significativo e não avançar com CI vermelho/warnings.
