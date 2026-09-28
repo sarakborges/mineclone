@@ -87,10 +87,26 @@ Key findings:
 - Main cutover: commit `c0a0a1b2459617001fbfdc50fc1235ca7257054a`; lint-only follow-up: `fe955ad21609c03e8cc0e8c84446ee4998378cf6`.
 - Verified checkpoint: `Rust validation` run `36467167446` — success.
 
+### Streaming selection-state cutover
+
+- Added `StreamingSelectionState` as the explicit owner of the current streaming center, movement direction, horizontal radius and vertical radius.
+- Rebuild-needed checks, movement-direction updates, warp direction reset and committed selection pose now live behind that owner.
+- Selection geometry, forward preload policy, retention radii, priority ordering and incremental rebuild rules were preserved.
+- Generation and meshing consume narrow selection accessors instead of reading raw pose/radius fields from the streaming orchestrator.
+- Removed staging artifacts used while resolving the cutover; no `.next` or temporary marker files remain in the final tree.
+- Main cutover: commit `71a589299b41dfdf5cd2fb79cc43089059a49ed9`; compile/lint follow-ups: `911c8fa969d61c6f8f3d235ecf4d5d7f7b68ffe2`, `deb62eae5a261c55f6df3109ceb880cc30731fb6`.
+- Verified checkpoint: `Rust validation` run `36469505105` — success.
+
 ## Current ownership shape
 
 ```text
 ChunkStreamingState (orchestrator, still being reduced)
+|
++-- StreamingSelectionState
+|   +-- center
+|   +-- movement direction
+|   +-- horizontal radius
+|   +-- vertical radius
 |
 +-- ChunkResidencyState
 |   +-- desired
@@ -129,21 +145,21 @@ ChunkStreamingState (orchestrator, still being reduced)
 |   +-- surrounding support minima
 |   +-- discovered structure-top columns
 |
-+-- remaining concentration to extract
-    +-- selection pose/radii orchestration
-    +-- cross-owner diagnostics/orchestration
++-- remaining concentration to reduce
+    +-- cross-owner priority diagnostics
+    +-- orchestration/delegation methods
 ```
 
 ## Next implementation block
 
-Extract the streaming selection pose from `ChunkStreamingState` without changing selection policy:
+Reduce cross-owner diagnostics/orchestration without changing streaming policy:
 
-1. give current center, movement direction, horizontal radius and vertical radius one owner;
-2. move rebuild-needed checks and movement-direction transitions behind that owner;
-3. preserve the exact behavior where radius-only changes keep the existing movement direction during normal gameplay, while warp disables forward preload/direction;
-4. keep forward preload geometry, selection radii and retention math unchanged;
-5. retain narrow scheduler accessors for generation/meshing priority until their call sites can be reduced independently;
-6. run full CI before touching diagnostics/orchestrator decomposition.
+1. move pending/ready priority-scan metrics out of the main orchestrator into a dedicated diagnostics owner;
+2. keep queue owners responsible only for queue/cache mechanics, with diagnostics observing returned scan samples rather than leaking atomics into scheduling code;
+3. reduce pass-through methods on `ChunkStreamingState` where a caller can use a narrow owner API without increasing coupling;
+4. do not merge generation, residency, selection and presentation lifecycles back into one mega-owner while simplifying delegation;
+5. preserve all budgets, priorities, preload/retention policy and publication ordering;
+6. run full CI before considering Phase 1 complete or starting measured optimization work.
 
 ## Rules still in force
 
