@@ -8,7 +8,7 @@ use crate::{
     gameplay::availability::world_interaction_available,
     player::viewmodel::ViewModelAnimation,
     targeting::{ToolUse, block::BlockTargetingSet},
-    voxel::edit::VoxelTopologyRuntime,
+    voxel::{edit::VoxelTopologyRuntime, read::VoxelRead},
 };
 
 pub(super) struct ShearsPlugin;
@@ -36,7 +36,7 @@ fn handle_shears_use(
         let Some(hit) = usage.target else {
             continue;
         };
-        if runtime.world().block_id_at(hit.voxel) != Some(hit.block_id) {
+        if runtime.read().block_id_at(hit.voxel) != Some(hit.block_id) {
             continue;
         }
         let Some(face) = LayerFace::from_normal(hit.normal) else {
