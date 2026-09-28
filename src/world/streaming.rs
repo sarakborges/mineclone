@@ -4,16 +4,14 @@ mod initial_presentation;
 mod mesh_pressure;
 mod meshing;
 mod pending;
+mod priority_diagnostics;
 mod ready;
 mod residency;
 mod selection;
 mod selection_state;
 mod surface_cache;
 
-use std::{
-    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use bevy::{
     ecs::system::SystemParam,
@@ -40,6 +38,7 @@ use self::{
     mesh_pressure::MeshPressureState,
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
     pending::PendingChunkQueue,
+    priority_diagnostics::{StreamingPriorityDiagnostics, StreamingPriorityScanDiagnostic},
     ready::ReadyChunkQueue,
     residency::ChunkResidencyState,
     selection::rebuild_queue,
@@ -68,50 +67,6 @@ use super::{
 
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 const SLOW_STREAMING_REBUILD_WARNING: Duration = Duration::from_millis(8);
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(super) struct StreamingPriorityScanDiagnostic {
-    pub(super) count: u64,
-    pub(super) average_micros: u64,
-    pub(super) max_micros: u64,
-    pub(super) max_queue_len: usize,
-}
-
-#[derive(Default)]
-struct StreamingPriorityScanMetrics {
-    count: AtomicU64,
-    total_nanos: AtomicU64,
-    max_nanos: AtomicU64,
-    max_queue_len: AtomicUsize,
-}
-
-impl StreamingPriorityScanMetrics {
-    fn record(&self, elapsed: Duration, queue_len: usize) {
-        let elapsed_nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-        self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
-        self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
-        self.max_queue_len.fetch_max(queue_len, Ordering::Relaxed);
-    }
-
-    fn take(&self) -> StreamingPriorityScanDiagnostic {
-        let count = self.count.swap(0, Ordering::Relaxed);
-        let total_nanos = self.total_nanos.swap(0, Ordering::Relaxed);
-        StreamingPriorityScanDiagnostic {
-            count,
-            average_micros: total_nanos.checked_div(count).unwrap_or(0) / 1_000,
-            max_micros: self.max_nanos.swap(0, Ordering::Relaxed) / 1_000,
-            max_queue_len: self.max_queue_len.swap(0, Ordering::Relaxed),
-        }
-    }
-}
-
-#[derive(Default)]
-struct StreamingPriorityDiagnostics {
-    pending: StreamingPriorityScanMetrics,
-    ready: StreamingPriorityScanMetrics,
-}
 
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
@@ -217,9 +172,7 @@ impl ChunkStreamingState {
                 coord.x,
             )
         });
-        if let Some((elapsed, queue_len)) = scan {
-            self.priority_diagnostics.pending.record(elapsed, queue_len);
-        }
+        self.priority_diagnostics.record_pending(scan);
         selected
     }
 
@@ -383,9 +336,7 @@ impl ChunkStreamingState {
             },
             |coord| chunk_load_priority(coord, center, movement_direction),
         );
-        if let Some((elapsed, queue_len)) = scan {
-            self.priority_diagnostics.ready.record(elapsed, queue_len);
-        }
+        self.priority_diagnostics.record_ready(scan);
         selected
     }
 
@@ -442,10 +393,7 @@ impl ChunkStreamingState {
         StreamingPriorityScanDiagnostic,
         StreamingPriorityScanDiagnostic,
     ) {
-        (
-            self.priority_diagnostics.pending.take(),
-            self.priority_diagnostics.ready.take(),
-        )
+        self.priority_diagnostics.take()
     }
 
     pub(crate) fn has_renderable_streaming_backlog(&self) -> bool {
