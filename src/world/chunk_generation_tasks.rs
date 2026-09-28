@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::voxel::chunk::VoxelChunk;
+use crate::voxel::{chunk::VoxelChunk, coordinates::ChunkCoord};
 
 use super::{
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
@@ -66,7 +66,7 @@ impl GenerationScheduler {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains(coord)
+        self.pending.contains(ChunkCoord::from_ivec3(coord))
     }
 
     pub(crate) fn schedule(
@@ -75,7 +75,7 @@ impl GenerationScheduler {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             MAX_GENERATION_TASKS_IN_FLIGHT,
             || limiter.try_acquire_generation(),
         )
@@ -87,7 +87,7 @@ impl GenerationScheduler {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             limiter.loading_queue_limit(),
             || limiter.try_acquire_loading_generation(),
         )
@@ -95,7 +95,7 @@ impl GenerationScheduler {
 
     fn schedule_with_permit(
         &mut self,
-        coord: IVec3,
+        coord: ChunkCoord,
         pending_limit: usize,
         acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
     ) -> bool {
@@ -115,7 +115,7 @@ impl GenerationScheduler {
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             let context = snapshot.context();
-            generate_chunk(coord, &context)
+            generate_chunk(coord.as_ivec3(), &context)
         });
 
         self.pending.insert(coord, revision, task)
@@ -123,9 +123,13 @@ impl GenerationScheduler {
 
     pub(crate) fn cancel_where(
         &mut self,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending.cancel_where(predicate)
+        self.pending
+            .cancel_where(|coord| predicate(coord.as_ivec3()))
+            .into_iter()
+            .map(ChunkCoord::as_ivec3)
+            .collect()
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
