@@ -1,10 +1,11 @@
 mod block_revision;
+mod content_revision;
 mod object_revision;
 mod persistence;
 mod resident;
 mod resident_index;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 
 use crate::content::{
     layer::{LayerFace, LayerRegistry},
@@ -13,6 +14,7 @@ use crate::content::{
 
 use self::{
     block_revision::BlockRevisionState,
+    content_revision::ContentRevisionState,
     object_revision::ObjectRevisionState,
     persistence::ChunkPersistenceState,
     resident::ResidentChunkStore,
@@ -32,8 +34,7 @@ use super::{
 pub struct VoxelWorld {
     resident: ResidentChunkStore,
     persistence: ChunkPersistenceState,
-    chunk_content_revisions: HashMap<IVec3, ChunkContentRevision>,
-    next_chunk_content_revision: ChunkContentRevision,
+    content_revisions: ContentRevisionState,
     object_revisions: ObjectRevisionState,
     block_revisions: BlockRevisionState,
 }
@@ -62,9 +63,8 @@ impl VoxelWorld {
     pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<ChunkContentRevision> {
         self.chunk(coord)?;
         Some(
-            *self
-                .chunk_content_revisions
-                .get(&coord)
+            self.content_revisions
+                .revision(coord)
                 .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
         )
     }
@@ -101,7 +101,7 @@ impl VoxelWorld {
         let Some(chunk) = self.resident.remove(coord) else {
             return;
         };
-        let removed_content_revision = self.chunk_content_revisions.remove(&coord);
+        let removed_content_revision = self.content_revisions.remove_chunk(coord);
         debug_assert!(
             removed_content_revision.is_some(),
             "archived loaded chunk should have a content revision: {coord:?}"
@@ -568,12 +568,7 @@ impl VoxelWorld {
             self.resident.contains(coord),
             "content revision bump requires a loaded chunk: {coord:?}"
         );
-        self.next_chunk_content_revision = self
-            .next_chunk_content_revision
-            .checked_next()
-            .expect("chunk content revision counter exhausted");
-        self.chunk_content_revisions
-            .insert(coord, self.next_chunk_content_revision);
+        self.content_revisions.mark_changed(coord);
     }
 }
 
