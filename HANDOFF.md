@@ -2,6 +2,19 @@
 
 > Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
 
+## 2026-09-28 — branch de reconstrução controlada do Asteria Core
+
+- Foi criada a branch `architecture/asteria-core-rebuild` a partir de `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d`.
+- O baseline estava verde antes da criação da branch: `Rust validation` run `36212838598` — success.
+- A decisão arquitetural é manter **Rust + Bevy**, mas reposicionar Bevy como host/framework ao redor de subsistemas de mundo explicitamente pertencentes ao Asteria.
+- Isto **não é um rewrite cego do jogo inteiro**. Gameplay, assets, definitions, UI e demais sistemas válidos devem ser preservados/adaptados; a reconstrução é da fundação de world storage, generation, streaming, scheduling, simulation boundaries e voxel presentation.
+- Plano completo, fases, contratos, critérios de saída e ordem de execução: `docs/asteria-core-rebuild.md`.
+- Regra explícita: **o hydrology legado continua removido e não deve voltar**. Rios, lagos, cave entrances e outros features longos futuros devem usar o sistema generalizado de structures/connectors/structure groups + world metadata. Dynamic fluid simulation continua sendo um subsistema separado de runtime, não world-feature planning.
+- A implementação deve avançar por cutovers pequenos, com um owner autoritativo por fato, resultados async revisionados, filas/caches limitados, budgets independentes e CI verde antes da próxima fase.
+- Primeira execução definida no plano: Phase 0 (baseline + ownership inventory) -> mapa `reuse/adapt/replace/delete` -> Phase 1 (core types/boundaries). Não iniciar deletando toda a stack atual de world de uma vez.
+- A possibilidade de um voxel renderer próprio em `wgpu` fica apenas como **decision gate posterior**, condicionado a profiling provar que Render/GPU continua sendo o gargalo depois da reconstrução do runtime.
+- Esta branch começa como planejamento arquitetural; `VERSION` não foi alterado neste commit de documentação.
+
 ## 2026-09-25/26 — 0.68.48 repara semanticamente os Electro GLBs e endurece auditoria
 
 - QA mostrou que a correção estrutural da 0.68.47 ainda não bastava: o preload do Electro normal continuava panicando dentro do `GltfLoader`, mesmo com header/chunks GLB formalmente válidos.
@@ -80,7 +93,7 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Rodar a **0.68.48** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
-2. Gerar log de gameplay com período parado e movimento/streaming normal.
-3. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
-4. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.
+1. Nesta branch, seguir `docs/asteria-core-rebuild.md` e iniciar pela **Phase 0 — baseline and architectural freeze**.
+2. Registrar novos logs de gameplay com período parado, movimento/streaming normal e warp usando `frame_*`, `main_work_*` e `render work`.
+3. Mapear os módulos atuais em `reuse / adapt / replace / delete` antes de alterar ownership do world core.
+4. Manter CI sem erros e sem warnings antes de cada novo bloco de alteração.
