@@ -32,10 +32,6 @@ pub(crate) struct VoxelMutationRuntime<'w> {
 }
 
 impl VoxelMutationRuntime<'_> {
-    pub(crate) fn world(&self) -> &VoxelWorld {
-        &self.world
-    }
-
     pub(crate) fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         self.world.cell_at(world_position)
     }
@@ -110,10 +106,6 @@ pub(crate) struct VoxelTopologyRuntime<'w> {
 }
 
 impl VoxelTopologyRuntime<'_> {
-    pub(crate) fn world(&self) -> &VoxelWorld {
-        self.mutation.world()
-    }
-
     pub(crate) fn add_layer(
         &mut self,
         world_position: IVec3,
