@@ -8,7 +8,7 @@ This file records implementation checkpoints for the long-lived rebuild branch. 
 
 ## Phase 0 — ownership inventory
 
-Status: **completed**.
+Status: **completed enough to drive the controlled migration**.
 
 Key findings:
 
@@ -18,13 +18,15 @@ Key findings:
 - structure intent belongs to world metadata, not disposable calculation caches;
 - legacy hydrology remains deleted and is not a migration target.
 
-## Phase 1 — boundaries and ownership cutovers
+## Phase 1 — core types and boundaries
 
-Status: **completed**.
+Status: **ownership cutover block completed; core-type contract work in progress**.
 
 The streaming resource remains the composition root, but authoritative/runtime facts now have explicit owners. Remaining `ChunkStreamingState` methods are intentional boundaries, cross-owner invariants or diagnostics aggregation; no further wrapper removal is justified solely to reduce method count.
 
-### Foundation boundaries
+The original roadmap still requires stable world/dimension/region/chunk/voxel identities and narrow framework-light contracts before Phase 1 can be considered complete. The ownership work below is therefore a completed sub-block of Phase 1, not permission to skip directly to performance tuning or authoritative-storage Phase 2.
+
+### Foundation boundaries completed so far
 
 - Introduced typed async task input revisions instead of passing unqualified `u64` revisions through generation/mesh/remesh scheduling.
 - Extracted immutable generation-input snapshot ownership from the generation scheduler.
@@ -181,17 +183,18 @@ ChunkStreamingState (resource-level composition root)
 - initial-presentation methods name the publication/activation protocol, while `forget_initial_lighting_seeded()` is explicitly required by unload/reload lifecycle;
 - diagnostics aggregation intentionally reads several owners and therefore belongs at the composition layer.
 
-## Next phase — measured runtime optimization
+## Next Phase 1 implementation block — typed core contracts
 
-Phase 1 deliberately avoided changing streaming policy while ownership was being repaired. The next work must be measurement-led rather than another architecture rewrite.
+The next work follows the original Phase 1 roadmap instead of jumping ahead to optimization:
 
-1. establish a stable runtime diagnostics baseline for normal movement, warp and initial world entry;
-2. measure frame-time/hitch contribution from selection rebuilds, generation dispatch/integration, fluid settling/publication, initial meshing, remesh work and render residency management;
-3. record logical/CPU/render residency counts separately so memory and visibility pressure cannot be confused with world existence;
-4. expose async queue depth, in-flight work, result integration latency and cancellation/stale-result counts where they are still missing;
-5. measure mesh residency bytes, mesh publish/upload volume and render-side chunk counts alongside CPU streaming work;
-6. optimize the largest measured stalls one subsystem at a time, preserving the explicit ownership boundaries from Phase 1;
-7. keep a green CI checkpoint between each optimization block and update this progress document with before/after evidence.
+1. introduce a stable `DimensionId` runtime/domain type and cut `CurrentDimension` plus its consumers over from raw `String` identity;
+2. establish typed world/chunk/voxel coordinate contracts around the existing Euclidean conversion rules, migrating one complete boundary at a time rather than adding unused parallel types;
+3. continue replacing semantically distinct raw revision counters at async/storage boundaries with explicit revision types where the distinction prevents invalid publication/mutation;
+4. keep authored content deserialization and Bevy resources as adapters around the domain contracts rather than making Bevy resource shape the identity itself;
+5. add focused unit/property tests for ID validity and negative-coordinate/chunk-boundary behavior;
+6. reassess the remaining Phase 1 exit criteria from `docs/asteria-core-rebuild.md` before entering authoritative-storage Phase 2.
+
+Measured runtime optimization remains mandatory later, but it must not replace or reorder the defined migration phases.
 
 ## Rules still in force
 
