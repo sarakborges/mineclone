@@ -14,7 +14,7 @@ use super::{SurfaceSiteCacheEntry, constants::SITE_SEARCH_RADIUS};
 /// reuse resolved sites. Clearing or retaining entries must never change the
 /// deterministic biome field; a cache miss simply recomputes the same result.
 #[derive(Clone, Default)]
-pub(super) struct SurfaceSiteCache {
+pub(crate) struct SurfaceSiteCache {
     entries: Arc<RwLock<HashMap<IVec2, SurfaceSiteCacheEntry>>>,
 }
 
