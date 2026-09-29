@@ -14,9 +14,10 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_remesh::ChunkRemeshQueue, chunk_remesh_tasks::ChunkRemeshTasks,
+    chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::VoxelContent,
+    presentation_snapshot::PresentationLightingRevisions,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
@@ -29,7 +30,7 @@ pub(super) struct DynamicLightingRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
-    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
+    lighting_revisions: ResMut<'w, PresentationLightingRevisions>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
@@ -82,13 +83,9 @@ pub(super) fn process_dynamic_lighting(
         });
     }
 
-    runtime
-        .remesh_tasks
-        .bump_lighting_revisions_for_meshlets(
-            dirty_meshlets
-                .iter()
-                .map(|(&coord, &meshlets)| (coord, meshlets)),
-        );
+    for (&coord, &meshlets) in dirty_meshlets.iter() {
+        runtime.lighting_revisions.bump(coord, meshlets);
+    }
     changed_chunks.clear();
 
     for (coord, meshlets) in dirty_meshlets.drain() {

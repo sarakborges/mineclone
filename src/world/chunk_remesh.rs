@@ -35,6 +35,7 @@ use super::{
         apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    presentation_snapshot::PresentationLightingRevisions,
     streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
@@ -48,6 +49,7 @@ struct RemeshDispatchContext<'a> {
     world: &'a VoxelWorld,
     render_pool: &'a ChunkRenderPool,
     streaming: &'a ChunkStreamingState,
+    lighting_revisions: &'a PresentationLightingRevisions,
     async_work: &'a ChunkAsyncWorkLimiter,
     center: Option<IVec3>,
     deadline: Instant,
@@ -60,6 +62,7 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
+    mut lighting_revisions: ResMut<PresentationLightingRevisions>,
     frame_budget: Res<WorldFrameWorkBudget>,
     async_work: Res<ChunkAsyncWorkLimiter>,
     streaming: Res<ChunkStreamingState>,
@@ -67,6 +70,9 @@ pub(super) fn process_chunk_remesh_queue(
     mut last_reconciled_selection: Local<Option<u64>>,
 ) {
     tasks.sync_snapshot(&content);
+    for coord in tasks.drain_lighting_revision_removals() {
+        lighting_revisions.remove(coord);
+    }
 
     let selection_revision = streaming.selection_revision();
     // Normal chunk and render retirement remove their remesh entries at the
@@ -102,6 +108,7 @@ pub(super) fn process_chunk_remesh_queue(
             &streaming,
             &mut queue,
             &mut tasks,
+            &lighting_revisions,
             frame_budget.deadline(),
         );
     }
@@ -123,6 +130,7 @@ pub(super) fn process_chunk_remesh_queue(
             world: &world,
             render_pool: &renderer.pool,
             streaming: &streaming,
+            lighting_revisions: &lighting_revisions,
             async_work: &async_work,
             center: streaming.center(),
             deadline: frame_budget.deadline(),
@@ -140,6 +148,7 @@ fn collect_completed_remesh_tasks(
     streaming: &ChunkStreamingState,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
+    lighting_revisions: &PresentationLightingRevisions,
     deadline: Instant,
 ) {
     let current_revision = tasks.revision();
@@ -177,7 +186,10 @@ fn collect_completed_remesh_tasks(
             continue;
         }
 
-        match output.dependencies.publication(kind, world, tasks) {
+        match output
+            .dependencies
+            .publication(kind, world, lighting_revisions)
+        {
             ChunkRemeshPublication::Ready => {}
             ChunkRemeshPublication::Retry(retry_kind) => {
                 queue.enqueue_task_meshlets_priority(coord, retry_kind, meshlets);
@@ -266,8 +278,7 @@ fn dispatch_remesh_tasks(
             deferred.push((coord, kind, meshlets));
             continue;
         }
-        let (kind, meshlets) =
-            queue.coalesce_terrain_work(coord, kind, meshlets);
+        let (kind, meshlets) = queue.coalesce_terrain_work(coord, kind, meshlets);
 
         if tasks.contains(coord, kind) {
             deferred.push((coord, kind, meshlets));
@@ -277,20 +288,25 @@ fn dispatch_remesh_tasks(
         let snapshot = if let Some(existing) = snapshots.get(&snapshot_key) {
             existing.clone()
         } else {
-            let Some(captured) =
-                ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
-                    context.world,
-                    coord,
-                    |neighbor| context.render_pool.contains(neighbor),
-                    meshlets,
-                )
-            else {
+            let Some(captured) = ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
+                context.world,
+                coord,
+                |neighbor| context.render_pool.contains(neighbor),
+                meshlets,
+            ) else {
                 continue;
             };
             snapshots.insert(snapshot_key, captured.clone());
             captured
         };
-        if !tasks.schedule(coord, kind, meshlets, snapshot, context.async_work) {
+        if !tasks.schedule(
+            coord,
+            kind,
+            meshlets,
+            snapshot,
+            context.lighting_revisions,
+            context.async_work,
+        ) {
             deferred.push((coord, kind, meshlets));
             // The per-kind and per-coordinate checks passed above, so shared
             // executor capacity is exhausted. Preserve the remaining queue.

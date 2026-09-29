@@ -81,6 +81,7 @@ use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
+use presentation_snapshot::PresentationLightingRevisions;
 pub(crate) use new_world::{
     DEFAULT_BIOME_SIZE_MULTIPLIER,
     MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
@@ -136,6 +137,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<GenerationScheduler>()
             .init_resource::<ChunkMeshTasks>()
             .init_resource::<ChunkRemeshTasks>()
+            .init_resource::<PresentationLightingRevisions>()
             .init_resource::<ChunkUnloadState>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<DeferredMeshAssetRetirements>()
@@ -154,6 +156,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
+                    reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
@@ -174,6 +177,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
+                    reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
@@ -191,6 +195,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
+                    reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,

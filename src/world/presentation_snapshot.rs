@@ -1,4 +1,7 @@
-use bevy::{platform::collections::HashMap, prelude::IVec3};
+use bevy::{
+    platform::collections::HashMap,
+    prelude::{IVec3, Resource},
+};
 
 use crate::{
     content::{
@@ -58,7 +61,7 @@ impl ChunkPresentationSource {
 /// Presentation-owned lighting revision state. Revisions are section-aware so
 /// a partial remesh can publish one meshlet without claiming untouched
 /// meshlets observed the same lighting state.
-#[derive(Clone, Default)]
+#[derive(Resource, Clone, Default)]
 pub(crate) struct PresentationLightingRevisions {
     revisions: HashMap<ChunkCoord, [u64; 8]>,
 }

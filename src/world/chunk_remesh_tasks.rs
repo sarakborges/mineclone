@@ -141,20 +141,23 @@ impl ChunkRemeshDependencies {
         self.content.is_current(world)
     }
 
-    pub(crate) fn lighting_is_current(&self, tasks: &ChunkRemeshTasks) -> bool {
-        self.lighting.is_current(&tasks.lighting_revisions)
+    pub(crate) fn lighting_is_current(
+        &self,
+        lighting_revisions: &PresentationLightingRevisions,
+    ) -> bool {
+        self.lighting.is_current(lighting_revisions)
     }
 
     pub(super) fn publication(
         &self,
         kind: ChunkRemeshTaskKind,
         world: &VoxelWorld,
-        tasks: &ChunkRemeshTasks,
+        lighting_revisions: &PresentationLightingRevisions,
     ) -> ChunkRemeshPublication {
         if !self.content_is_current(world) {
             return ChunkRemeshPublication::Retry(kind);
         }
-        if self.lighting_is_current(tasks) {
+        if self.lighting_is_current(lighting_revisions) {
             return ChunkRemeshPublication::Ready;
         }
 
@@ -184,7 +187,7 @@ pub(crate) struct ChunkRemeshTasks {
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     requests: ChunkRemeshTaskRequests,
     poll_fluid_first: bool,
-    lighting_revisions: PresentationLightingRevisions,
+    lighting_revision_removals: Vec<IVec3>,
 }
 
 impl Default for ChunkRemeshTasks {
@@ -196,7 +199,7 @@ impl Default for ChunkRemeshTasks {
             fluid_pending: ChunkTaskQueue::default(),
             requests: ChunkRemeshTaskRequests::default(),
             poll_fluid_first: true,
-            lighting_revisions: PresentationLightingRevisions::default(),
+            lighting_revision_removals: Vec::new(),
         }
     }
 }
@@ -240,35 +243,14 @@ impl ChunkRemeshTasks {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn bump_lighting_revisions_for_positions(
-        &mut self,
-        world: &VoxelWorld,
-        positions: impl IntoIterator<Item = IVec3>,
-    ) {
-        for position in positions {
-            visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
-                if world.chunk(coord).is_none() {
-                    return;
-                }
-
-                let meshlets = ChunkMeshletMask::for_world_position(coord, position);
-                self.lighting_revisions.bump(coord, meshlets);
-            });
-        }
-    }
-
-    pub(crate) fn bump_lighting_revisions_for_meshlets(
-        &mut self,
-        changes: impl IntoIterator<Item = (IVec3, ChunkMeshletMask)>,
-    ) {
-        for (coord, meshlets) in changes {
-            self.lighting_revisions.bump(coord, meshlets);
-        }
-    }
-
     pub(crate) fn remove_lighting_revision(&mut self, coord: IVec3) {
-        self.lighting_revisions.remove(coord);
+        if !self.lighting_revision_removals.contains(&coord) {
+            self.lighting_revision_removals.push(coord);
+        }
+    }
+
+    pub(crate) fn drain_lighting_revision_removals(&mut self) -> std::vec::Drain<'_, IVec3> {
+        self.lighting_revision_removals.drain(..)
     }
 
     pub(crate) fn schedule(
@@ -277,6 +259,7 @@ impl ChunkRemeshTasks {
         kind: ChunkRemeshTaskKind,
         meshlets: ChunkMeshletMask,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         if !self.can_schedule(kind) || self.contains(coord, kind) {
@@ -292,12 +275,8 @@ impl ChunkRemeshTasks {
             .unwrap_or_else(|| panic!("chunk remesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = ChunkRemeshDependencies::capture(
-            coord,
-            meshlets,
-            &world,
-            &self.lighting_revisions,
-        );
+        let dependencies =
+            ChunkRemeshDependencies::capture(coord, meshlets, &world, lighting_revisions);
         let request = ChunkRemeshTaskRequest {
             coord,
             kind,
@@ -400,6 +379,23 @@ mod tests {
     use super::*;
     use crate::voxel::chunk::VoxelChunk;
 
+    fn bump_lighting_revisions_for_positions(
+        lighting_revisions: &mut PresentationLightingRevisions,
+        world: &VoxelWorld,
+        positions: impl IntoIterator<Item = IVec3>,
+    ) {
+        for position in positions {
+            visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
+                if world.chunk(coord).is_none() {
+                    return;
+                }
+
+                let meshlets = ChunkMeshletMask::for_world_position(coord, position);
+                lighting_revisions.bump(coord, meshlets);
+            });
+        }
+    }
+
     #[test]
     fn fluid_and_terrain_remeshes_can_share_a_chunk_in_flight() {
         let tasks = ChunkRemeshTasks::default();
@@ -447,17 +443,19 @@ mod tests {
 
     #[test]
     fn lighting_dependencies_detect_halo_revision_changes() {
-        let mut tasks = ChunkRemeshTasks::default();
+        let mut lighting_revisions = PresentationLightingRevisions::default();
         let center = IVec3::new(3, 2, 5);
-        let dependencies = tasks
-            .lighting_revisions
-            .capture(center, ChunkMeshletMask::ALL);
+        let dependencies = lighting_revisions.capture(center, ChunkMeshletMask::ALL);
 
-        assert!(dependencies.is_current(&tasks.lighting_revisions));
+        assert!(dependencies.is_current(&lighting_revisions));
         let mut world = VoxelWorld::default();
         world.insert_chunk(center, VoxelChunk::empty());
-        tasks.bump_lighting_revisions_for_positions(&world, [center * 16 + IVec3::new(4, 4, 4)]);
-        assert!(!dependencies.is_current(&tasks.lighting_revisions));
+        bump_lighting_revisions_for_positions(
+            &mut lighting_revisions,
+            &world,
+            [center * 16 + IVec3::new(4, 4, 4)],
+        );
+        assert!(!dependencies.is_current(&lighting_revisions));
     }
 
     #[test]
@@ -466,24 +464,25 @@ mod tests {
         let mut world = VoxelWorld::default();
         world.insert_chunk(center, VoxelChunk::empty());
         let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
-        let mut tasks = ChunkRemeshTasks::default();
+        let mut lighting_revisions = PresentationLightingRevisions::default();
         let dependencies = ChunkRemeshDependencies::capture(
             center,
             ChunkMeshletMask::ALL,
             &snapshot,
-            &tasks.lighting_revisions,
+            &lighting_revisions,
         );
 
         assert!(dependencies.content_is_current(&world));
-        assert!(dependencies.lighting_is_current(&tasks));
+        assert!(dependencies.lighting_is_current(&lighting_revisions));
 
-        tasks.bump_lighting_revisions_for_positions(
+        bump_lighting_revisions_for_positions(
+            &mut lighting_revisions,
             &world,
             [center * 16 + IVec3::new(4, 4, 4)],
         );
 
         assert!(dependencies.content_is_current(&world));
-        assert!(!dependencies.lighting_is_current(&tasks));
+        assert!(!dependencies.lighting_is_current(&lighting_revisions));
     }
 
     #[test]
@@ -493,12 +492,12 @@ mod tests {
         let mut world = VoxelWorld::default();
         world.insert_chunk(center, VoxelChunk::empty());
         let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
-        let mut tasks = ChunkRemeshTasks::default();
+        let mut lighting_revisions = PresentationLightingRevisions::default();
         let dependencies = ChunkRemeshDependencies::capture(
             center,
             ChunkMeshletMask::ALL,
             &snapshot,
-            &tasks.lighting_revisions,
+            &lighting_revisions,
         );
         let kinds = [
             ChunkRemeshTaskKind::Geometry,
@@ -507,20 +506,24 @@ mod tests {
         ];
         for kind in kinds {
             assert_eq!(
-                dependencies.publication(kind, &world, &tasks),
+                dependencies.publication(kind, &world, &lighting_revisions),
                 ChunkRemeshPublication::Ready,
             );
         }
 
         for _ in 0..3 {
-            tasks.bump_lighting_revisions_for_positions(&world, [position]);
+            bump_lighting_revisions_for_positions(&mut lighting_revisions, &world, [position]);
             assert_eq!(
-                dependencies.publication(ChunkRemeshTaskKind::Fluid, &world, &tasks),
+                dependencies.publication(
+                    ChunkRemeshTaskKind::Fluid,
+                    &world,
+                    &lighting_revisions,
+                ),
                 ChunkRemeshPublication::FluidWithLightingCatchup,
             );
             for kind in [ChunkRemeshTaskKind::Geometry, ChunkRemeshTaskKind::Lighting] {
                 assert_eq!(
-                    dependencies.publication(kind, &world, &tasks),
+                    dependencies.publication(kind, &world, &lighting_revisions),
                     ChunkRemeshPublication::Retry(ChunkRemeshTaskKind::Lighting),
                 );
             }
@@ -529,7 +532,7 @@ mod tests {
         world.set_fluid_at(position, Some(crate::voxel::fluid::FluidCell::source(0, 8)));
         for kind in kinds {
             assert_eq!(
-                dependencies.publication(kind, &world, &tasks),
+                dependencies.publication(kind, &world, &lighting_revisions),
                 ChunkRemeshPublication::Retry(kind),
             );
         }

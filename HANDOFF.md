@@ -262,6 +262,8 @@ Commit `c3d35e3281f3e4b1abae7b2ef965d734102d06f6` (`Share presentation source wi
 
 ### Cut 4 — lighting source ganha owner semântico de presentation
 
+Commit `73d7d72c8dec0539cd2f6711a5b836697eebe2de` (`Define presentation lighting source ownership`), CI #10291 success.
+
 - `PresentationLightingRevisions` passa a encapsular o mapa de revisions por chunk/meshlet e `PresentationLightingSource` representa o stamp imutável capturado por uma task;
 - bump, removal, capture e freshness check passam ao domínio `presentation_snapshot`, em vez de serem implementados como detalhes internos do scheduler de remesh;
 - `ChunkRemeshTasks` ainda hospeda temporariamente `PresentationLightingRevisions` para manter o cut pequeno e preservar os call sites atuais, mas deixa de definir a semântica desse estado;
@@ -269,11 +271,21 @@ Commit `c3d35e3281f3e4b1abae7b2ef965d734102d06f6` (`Share presentation source wi
 - partial remesh continua section-aware: o lighting stamp contém mask + oito slots de revision, então publicar um subset não afirma freshness dos meshlets não reconstruídos;
 - nenhuma política de retry/publication, queue scheduling, asset patching ou render lifetime muda neste cut.
 
+### Cut 5 — lighting revisions viram resource físico de presentation
+
+- `PresentationLightingRevisions` agora é `Resource` do `WorldPlugin`, com lifecycle/reset explícito em Loading, Gameplay e saída do mundo;
+- `ChunkRemeshTasks` não armazena mais o mapa de revisions: ele volta a possuir somente scheduler/task metadata e uma fila transitória de cleanup para manter o retirement API estável durante a migração;
+- dynamic lighting incrementa diretamente o resource compartilhado por meshlet;
+- remesh captura e valida `PresentationLightingSource` contra o resource compartilhado tanto no dispatch quanto na publication;
+- retirement/unload continuam chamando `remove_lighting_revision` no scheduler apenas como bridge: o pedido é drenado no começo de `process_chunk_remesh_queue`, no mesmo frame para retirement de Update e no frame seguinte para mesh-pressure retirement de PostUpdate;
+- o mapa real deixa de estar acoplado ao scheduler, abrindo o mesmo owner para initial meshing e para os stamps persistidos no `ChunkRenderPool`;
+- nenhuma regra de lighting propagation, remesh retry, queue priority, mesh building, asset patching ou render lifetime foi alterada neste cut.
+
 ### Próximos cuts
 
-1. mover `PresentationLightingRevisions` fisicamente para um resource de presentation compartilhado por initial mesh, dynamic lighting, remesh e retirement;
+1. fazer initial mesh capturar o `PresentationLightingSource` baseline pelo resource compartilhado, sem colapsar lighting em content revision;
 2. fazer `ChunkRenderPool` preservar os content/lighting source stamps publicados por render section/meshlet, compatível com partial remesh;
-3. remover aliases/shims transitórios de presentation ownership depois que initial mesh/remesh compartilharem o vocabulário final;
+3. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
 4. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade
