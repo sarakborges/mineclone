@@ -166,14 +166,26 @@ Commit `fda250504219b413e27ac2e472d4615e9dafbeb6` (`Remove generation planning a
 - `restrictions.rs` e `support.rs` permanecem em generation porque ainda consomem terrain/`ChunkGenerationContext` e não são planning puro;
 - nenhum hashing, connector traversal, candidate selection, conflict policy, ground-fit, rasterização ou materialization mudou neste cut.
 
-CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizontal_bounds_for_reference`, agora importado diretamente do planner por `generation/structures.rs`, ainda é um re-export sem consumidor runtime. O corretivo mantém temporariamente um `const _` de type-check em `generation.rs`; ele não executa trabalho e será removido quando os re-exports públicos restantes de structures forem auditados/migrados. Os cinco arquivos-adapter continuam removidos.
+CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizontal_bounds_for_reference`, agora importado diretamente do planner por `generation/structures.rs`, ainda é um re-export sem consumidor runtime. Commit `b7c3a68fd25c0967927e2b443c713df9e898e860` (`Fix planning adapter cleanup Clippy gate`) mantém temporariamente um `const _` de type-check em `generation.rs`; ele não executa trabalho. CI #10280 passou audits + Clippy + Check. Os cinco arquivos-adapter continuam removidos.
+
+### Cut 7 — conflict/reservation contract cross-chunk
+
+Estado deste cut:
+
+- `planning/resolver.rs` documenta explicitamente que conflict resolution é **intent-based**, não acceptance-based: um target candidate perde para qualquer intent conflitante que o outranque, mesmo se esse intent estiver fora do target e não for materializado por aquela consulta;
+- o collector contract exige retornar todos os candidates cujos bounds completos intersectem o retângulo pedido; o resolver expande a consulta pelos bounds completos de cada direct candidate para incluir reservations que cruzam chunk boundaries;
+- ranking fica formalizado como priority descendente e, em empate, `placement_id`, `biome_id`, anchor X/Z e placement Y ascendentes;
+- `reserve_space` é direcional: somente um intent de maior rank com reserva bloqueia um inferior apenas por reservation; `conflict_groups` compartilhados são simétricos depois que ranking escolhe o vencedor;
+- cinco regressões cobrem: higher-priority reservation fora do target, shared conflict group fora do target, intent não relacionado, reservation inferior não bloqueando superior e deterministic tie-break em prioridade igual;
+- nenhuma linha da política de decisão foi alterada; este cut formaliza e prova a semântica existente;
+- testes continuam fora do CI automático; `cargo clippy --all-targets` deve ao menos compilar o código de teste.
 
 ### Próximos cuts
 
-1. formalizar reservation/conflict semantics atravessando chunk boundaries no planner e adicionar cobertura específica de boundary/priority sem ativar testes automáticos no CI;
-2. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
-3. auditar os re-exports públicos restantes de `generation` e eliminar também o `const _` temporário sem reintroduzir dependency inversion;
-4. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
+1. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
+2. auditar os re-exports públicos restantes de `generation` e eliminar também o `const _` temporário sem reintroduzir dependency inversion;
+3. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
+4. preparar o mesmo generalized feature path para futuros rivers/lakes, sem hydrology legado.
 
 ## Regras de continuidade
 

@@ -32,6 +32,22 @@ pub(crate) struct StructureCandidate<'a> {
     pub(crate) maximum_y: i32,
 }
 
+// Conflict resolution is intentionally intent-based rather than acceptance-based.
+// A target-intersecting candidate loses to any higher-ranked conflicting intent,
+// even when that intent lies outside the target bounds and would not itself be
+// materialized by this query. This keeps the decision independent of which chunk
+// asks first and avoids a recursive/global conflict walk whose result could vary
+// with the requested region.
+//
+// Collector contract: every call must append all candidates whose full placement
+// bounds intersect the requested rectangle. The resolver first collects candidates
+// intersecting the target, then asks again over each direct candidate's full bounds
+// so cross-boundary reservations participate in the decision.
+//
+// Ranking is deterministic: priority descending, then placement id, biome id,
+// placement anchor X/Z, and placement Y ascending. `reserve_space` is directional:
+// only a higher-ranked reserving intent blocks a lower-ranked intent solely by
+// reservation. Shared conflict groups are symmetric once ranking picks the winner.
 pub(crate) fn resolve_structure_placements<'a>(
     target_minimum: IVec2,
     target_maximum: IVec2,
@@ -44,10 +60,6 @@ pub(crate) fn resolve_structure_placements<'a>(
         return Vec::new();
     }
 
-    // Conflict resolution must see a higher-priority placement even when that
-    // placement itself lies outside the target chunk. The collector is free to
-    // use deterministic metadata to cheaply narrow which roots can intersect
-    // the requested bounds before materializing terrain-dependent details.
     let mut competitors = direct_candidates.clone();
     let mut seen = competitors
         .iter()
@@ -210,4 +222,244 @@ fn candidates_conflict(
     ) && higher.maximum_y >= lower.minimum_y
         && higher.minimum_y <= lower.maximum_y
         && candidates_may_conflict(higher, lower)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn structure_definition(id: &str) -> StructureDefinition {
+        serde_json::from_value(json!({
+            "id": id,
+            "name": {
+                "english": id,
+                "portuguese_brazil": id,
+                "spanish": id
+            },
+            "locatable": false,
+            "rotation": false,
+            "anchor": {"x": 0, "y": 0, "z": 0},
+            "palette": {
+                "S": {"block": "test:block"}
+            },
+            "layers": [{"y": 0, "rows": ["S"]}]
+        }))
+        .expect("test structure definition must deserialize")
+    }
+
+    fn candidate<'a>(
+        placement_id: &'a str,
+        structure: &'a StructureDefinition,
+        priority: i32,
+        reserve_space: bool,
+        conflict_groups: &'a [String],
+        bounds: (IVec2, IVec2),
+    ) -> StructureCandidate<'a> {
+        StructureCandidate {
+            biome_id: "test:biome",
+            placement_id,
+            structure,
+            rotation: StructureRotation::Degrees0,
+            placement_anchor: bounds.0,
+            placement_y: 0,
+            anchor: bounds.0,
+            origin_y: 0,
+            primary_placement_piece: true,
+            priority,
+            reserve_space,
+            conflict_groups,
+            minimum: bounds.0,
+            maximum: bounds.1,
+            minimum_y: 0,
+            maximum_y: 3,
+        }
+    }
+
+    fn resolve_from_candidates<'a>(
+        target_minimum: IVec2,
+        target_maximum: IVec2,
+        candidates: &[StructureCandidate<'a>],
+    ) -> Vec<ResolvedStructurePlacement> {
+        resolve_structure_placements(
+            target_minimum,
+            target_maximum,
+            |minimum, maximum, found| {
+                found.extend(candidates.iter().copied().filter(|candidate| {
+                    rectangles_overlap(
+                        candidate.minimum,
+                        candidate.maximum,
+                        minimum,
+                        maximum,
+                    )
+                }));
+            },
+        )
+    }
+
+    #[test]
+    fn higher_priority_reservation_outside_target_blocks_cross_boundary_candidate() {
+        let lower = structure_definition("test:lower");
+        let higher = structure_definition("test:higher");
+        let candidates = [
+            candidate(
+                "test:lower-placement",
+                &lower,
+                1,
+                false,
+                &[],
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:higher-placement",
+                &higher,
+                10,
+                true,
+                &[],
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+
+        let resolved = resolve_from_candidates(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            &candidates,
+        );
+
+        assert!(resolved.is_empty());
+    }
+
+    #[test]
+    fn shared_conflict_group_outside_target_blocks_lower_priority_candidate() {
+        let lower = structure_definition("test:lower");
+        let higher = structure_definition("test:higher");
+        let conflict_groups = vec!["test:landmark".to_owned()];
+        let candidates = [
+            candidate(
+                "test:lower-placement",
+                &lower,
+                1,
+                false,
+                &conflict_groups,
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:higher-placement",
+                &higher,
+                10,
+                false,
+                &conflict_groups,
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+
+        let resolved = resolve_from_candidates(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            &candidates,
+        );
+
+        assert!(resolved.is_empty());
+    }
+
+    #[test]
+    fn unrelated_cross_boundary_intent_does_not_block_candidate() {
+        let lower = structure_definition("test:lower");
+        let higher = structure_definition("test:higher");
+        let lower_groups = vec!["test:foliage".to_owned()];
+        let higher_groups = vec!["test:landmark".to_owned()];
+        let candidates = [
+            candidate(
+                "test:lower-placement",
+                &lower,
+                1,
+                false,
+                &lower_groups,
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:higher-placement",
+                &higher,
+                10,
+                false,
+                &higher_groups,
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+
+        let resolved = resolve_from_candidates(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            &candidates,
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].placement_id, "test:lower-placement");
+    }
+
+    #[test]
+    fn lower_priority_reservation_does_not_block_higher_priority_candidate() {
+        let higher = structure_definition("test:higher");
+        let lower = structure_definition("test:lower");
+        let candidates = [
+            candidate(
+                "test:higher-placement",
+                &higher,
+                10,
+                false,
+                &[],
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:lower-placement",
+                &lower,
+                1,
+                true,
+                &[],
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+
+        let resolved = resolve_from_candidates(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            &candidates,
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].placement_id, "test:higher-placement");
+    }
+
+    #[test]
+    fn equal_priority_cross_boundary_conflict_uses_deterministic_tie_breaker() {
+        let direct = structure_definition("test:direct");
+        let outside = structure_definition("test:outside");
+        let candidates = [
+            candidate(
+                "test:zeta-placement",
+                &direct,
+                5,
+                false,
+                &[],
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:alpha-placement",
+                &outside,
+                5,
+                true,
+                &[],
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+
+        let resolved = resolve_from_candidates(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            &candidates,
+        );
+
+        assert!(resolved.is_empty());
+    }
 }
