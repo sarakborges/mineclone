@@ -108,7 +108,7 @@ mod tests {
             center,
             show_radius,
             hide_radius,
-            IVec3::new(15, 0, 0),
+            IVec3::new(14, 0, 0),
             &mut visibility,
         );
         assert_eq!(visibility, Visibility::Hidden);
@@ -117,7 +117,7 @@ mod tests {
             center,
             show_radius,
             hide_radius,
-            IVec3::new(14, 0, 0),
+            IVec3::new(13, 0, 0),
             &mut visibility,
         );
         assert_eq!(visibility, Visibility::Visible);
@@ -133,7 +133,7 @@ mod tests {
             center,
             show_radius,
             hide_radius,
-            IVec3::new(15, 0, 0),
+            IVec3::new(14, 0, 0),
             &mut visibility,
         );
         assert_eq!(visibility, Visibility::Visible);
@@ -142,7 +142,7 @@ mod tests {
             center,
             show_radius,
             hide_radius,
-            IVec3::new(17, 0, 0),
+            IVec3::new(15, 0, 0),
             &mut visibility,
         );
         assert_eq!(visibility, Visibility::Hidden);
