@@ -411,6 +411,10 @@ pub(super) fn evict_distant_chunks(
         else {
             break;
         };
+        // Stale/nonresident retirement candidates are still main-thread work.
+        // Charge every pop before validation so a large warp/selection backlog
+        // cannot bypass the frame budget through early `continue` paths.
+        budget.record(1);
         if streaming.keeps_loaded(coord)
             || streaming.generated_chunk_is_unpublished(coord)
             || eviction.world.chunk(coord).is_none()
@@ -442,7 +446,6 @@ pub(super) fn evict_distant_chunks(
         // but an obsolete mesh retry while still resident must not reseed.
         streaming.forget_initial_lighting_seeded(coord);
         unloaded.push(coord);
-        budget.record(1);
     }
 
     if unloaded.is_empty() {
