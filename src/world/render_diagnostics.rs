@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::ChunkGenerationTasks,
+    chunk_generation_tasks::GenerationScheduler,
     chunk_mesh_tasks::ChunkMeshTasks,
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
@@ -206,7 +206,7 @@ pub(super) fn slow_frame_context_due(time: Res<Time<Real>>) -> bool {
 #[derive(SystemParam)]
 pub(super) struct SlowFrameContextAssets<'w> {
     streaming: Res<'w, ChunkStreamingState>,
-    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    generation_tasks: Res<'w, GenerationScheduler>,
     async_work: Res<'w, ChunkAsyncWorkLimiter>,
     mesh_tasks: Res<'w, ChunkMeshTasks>,
     remesh_queue: Res<'w, ChunkRemeshQueue>,
@@ -325,7 +325,7 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     asset_server: Res<'w, AssetServer>,
     pool: Res<'w, ChunkRenderPool>,
     streaming: Res<'w, ChunkStreamingState>,
-    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    generation_tasks: Res<'w, GenerationScheduler>,
     async_work: Res<'w, ChunkAsyncWorkLimiter>,
     mesh_tasks: Res<'w, ChunkMeshTasks>,
     remesh_queue: Res<'w, ChunkRemeshQueue>,
