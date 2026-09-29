@@ -18,6 +18,12 @@ struct CriticalPendingScanKey {
     center: ChunkCoord,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CriticalPendingScanResult {
+    key: CriticalPendingScanKey,
+    found: bool,
+}
+
 #[derive(Default)]
 struct PendingPriorityCache {
     queue_revision: u64,
@@ -31,7 +37,7 @@ struct PendingPriorityCache {
 #[derive(Default)]
 pub(super) struct PendingChunkQueue {
     queue: DeduplicatedQueue<ChunkCoord>,
-    critical_scan_miss: Option<CriticalPendingScanKey>,
+    critical_scan: Option<CriticalPendingScanResult>,
     priority_cache: PendingPriorityCache,
 }
 
@@ -82,15 +88,20 @@ impl PendingChunkQueue {
             queue_revision: self.queue.revision(),
             center: ChunkCoord::from_ivec3(center),
         };
-        if self.critical_scan_miss == Some(scan_key) {
-            return false;
+        if let Some(cached) = self.critical_scan
+            && cached.key == scan_key
+        {
+            return cached.found;
         }
 
         let found = self
             .queue
             .values()
             .any(|coord| is_critical(coord.as_ivec3()));
-        self.critical_scan_miss = if found { None } else { Some(scan_key) };
+        self.critical_scan = Some(CriticalPendingScanResult {
+            key: scan_key,
+            found,
+        });
         found
     }
 
@@ -127,5 +138,42 @@ impl PendingChunkQueue {
         }
 
         (None, scan)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn critical_scan_caches_positive_and_negative_results_until_membership_changes() {
+        let critical = IVec3::X;
+        let noncritical = IVec3::new(4, 0, 0);
+        let mut queue = PendingChunkQueue::default();
+        queue.enqueue(critical);
+        queue.enqueue(noncritical);
+
+        let predicate_calls = Cell::new(0_usize);
+        let is_critical = |coord: IVec3| {
+            predicate_calls.set(predicate_calls.get() + 1);
+            coord == critical
+        };
+
+        assert!(queue.has_critical(IVec3::ZERO, is_critical));
+        let calls_after_first_scan = predicate_calls.get();
+        assert!(calls_after_first_scan > 0);
+
+        assert!(queue.has_critical(IVec3::ZERO, is_critical));
+        assert_eq!(predicate_calls.get(), calls_after_first_scan);
+
+        assert!(queue.remove(critical));
+        assert!(!queue.has_critical(IVec3::ZERO, is_critical));
+        let calls_after_membership_change = predicate_calls.get();
+        assert!(calls_after_membership_change > calls_after_first_scan);
+
+        assert!(!queue.has_critical(IVec3::ZERO, is_critical));
+        assert_eq!(predicate_calls.get(), calls_after_membership_change);
     }
 }
