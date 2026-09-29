@@ -54,6 +54,10 @@ pub(super) fn process_chunk_remesh_queue(
 ) {
     tasks.sync_snapshot(&content);
 
+    if queue.has_background_work() {
+        queue.retain_resident(&world);
+    }
+
     if tasks.pending_count() > 0 {
         collect_completed_remesh_tasks(
             &content,
