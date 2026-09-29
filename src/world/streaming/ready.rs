@@ -47,6 +47,20 @@ impl ReadyChunkQueue {
         self.queue.remove(ChunkCoord::from_ivec3(coord))
     }
 
+    pub(super) fn retain(&mut self, mut predicate: impl FnMut(IVec3) -> bool) -> usize {
+        let removed = self
+            .queue
+            .values()
+            .filter(|coord| !predicate(coord.as_ivec3()))
+            .collect::<Vec<_>>();
+        let removed_count = removed.len();
+        for coord in removed {
+            let did_remove = self.queue.remove(coord);
+            debug_assert!(did_remove, "ready retention selected an active queue entry");
+        }
+        removed_count
+    }
+
     pub(super) fn values(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.queue.values().map(ChunkCoord::as_ivec3)
     }
@@ -83,5 +97,30 @@ impl ReadyChunkQueue {
             Some(scan_key)
         };
         (selected.map(ChunkCoord::as_ivec3), scan)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retention_removes_only_stale_ready_chunks() {
+        let stale = IVec3::new(-4, 0, 0);
+        let desired = IVec3::new(2, 0, 0);
+        let retained = IVec3::new(5, 0, 0);
+        let mut queue = ReadyChunkQueue::default();
+        queue.enqueue(stale);
+        queue.enqueue(desired);
+        queue.enqueue(retained);
+
+        assert_eq!(
+            queue.retain(|coord| coord == desired || coord == retained),
+            1
+        );
+        assert!(!queue.contains(stale));
+        assert!(queue.contains(desired));
+        assert!(queue.contains(retained));
+        assert_eq!(queue.len(), 2);
     }
 }

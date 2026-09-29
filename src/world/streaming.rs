@@ -410,6 +410,8 @@ impl ChunkStreamingState {
 
     fn mark_selection_rebuilt(&mut self) {
         self.residency.mark_rebuilt();
+        let residency = &self.residency;
+        self.ready.retain(|coord| residency.keeps_loaded(coord));
     }
 }
 
