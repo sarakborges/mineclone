@@ -62,7 +62,7 @@ use biome_field::BiomeField;
 use chunk_async_work::{
     ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work,
 };
-use chunk_generation_tasks::ChunkGenerationTasks;
+use chunk_generation_tasks::GenerationScheduler;
 use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
 use chunk_remesh_tasks::ChunkRemeshTasks;
@@ -132,7 +132,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkAsyncWorkLimiter>()
-            .init_resource::<ChunkGenerationTasks>()
+            .init_resource::<GenerationScheduler>()
             .init_resource::<ChunkMeshTasks>()
             .init_resource::<ChunkRemeshTasks>()
             .init_resource::<ChunkUnloadState>()
@@ -150,7 +150,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 OnEnter(GameState::Loading),
                 (
-                    reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkRemeshQueue>,
@@ -170,7 +170,7 @@ impl Plugin for WorldPlugin {
                 OnEnter(GameState::Gameplay),
                 (
                     reset_resource::<ChunkStreamingState>,
-                    reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
@@ -187,7 +187,7 @@ impl Plugin for WorldPlugin {
                 OnExit(GameState::Gameplay),
                 (
                     clear_chunk_render_pool,
-                    reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<GenerationScheduler>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
