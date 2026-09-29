@@ -45,6 +45,10 @@ impl RetiredChunkQueue {
         self.queue.enqueue(ChunkCoord::from_ivec3(coord));
     }
 
+    fn len(&self) -> usize {
+        self.queue.len()
+    }
+
     fn pop_outside_horizontal_radius(
         &mut self,
         selection_revision: ResidencySelectionRevision,
@@ -108,6 +112,10 @@ impl ChunkResidencyState {
         }
     }
 
+    pub(super) fn retired_len(&self) -> usize {
+        self.retired.len()
+    }
+
     pub(super) fn pop_retired_outside_horizontal_radius(
         &mut self,
         center: IVec3,
@@ -130,5 +138,11 @@ impl ChunkResidencyState {
 
     pub(super) fn mark_rebuilt(&mut self) {
         self.revision = self.revision.next();
+    }
+}
+
+impl super::ChunkStreamingState {
+    pub(super) fn diagnostic_retired_count(&self) -> usize {
+        self.residency.retired_len()
     }
 }
