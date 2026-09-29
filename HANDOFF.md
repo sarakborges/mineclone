@@ -135,7 +135,7 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 - initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
 - remesh publication/dispatch exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks (`17402d31753de978ac9499ee3e85784d279976ac`).
 - `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes sem confundir ausência de world residency com ausência de render mesh. O prune local acompanha voxel/fluid edits e o retain global roda no máximo uma vez por selection revision. CI `36581123163` success.
-- cut atual: `ChunkRemeshTasks` passa a possuir metadata explícita de cada request em voo (`coord + kind + meshlet mask`). Na mudança de selection revision, `process_chunk_remesh_queue` cancela tasks que saíram de `retains_render_mesh`; se o render allocation e world chunk ainda existem, re-enfileira exatamente os dirty meshlets. `cancel_coord` continua destrutivo para retirement/eviction. CI pendente para este cut.
+- `1ab39af00954862af6ff5b8471790ab10f22f2a9`: `ChunkRemeshTasks` passa a possuir metadata explícita de cada request em voo (`coord + kind + meshlet mask`). Na mudança de selection revision, `process_chunk_remesh_queue` cancela tasks que saíram de `retains_render_mesh`; se o render allocation e world chunk ainda existem, re-enfileira exatamente os dirty meshlets. `cancel_coord` continua destrutivo para retirement/eviction. CI `36593145821` success.
 
 ### Disjoint warp audit
 
@@ -143,6 +143,13 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 - chunks já staged/settling são world truth em processo de convergência e não são descartados por mudança de seleção; publication posterior ainda passa por residency/ready guards.
 - ready retained-work não compete com um warp disjunto: `pop_ready` exige estar dentro do show radius atual. Mesh task em voo só sobrevive dentro de `retains_render_mesh`/hide radius, preservando hysteresis sem publicar trabalho distante.
 - remesh em voo agora segue a mesma seleção de presentation: request metadata permite cancel/requeue sem perder invalidation, eliminando a ocupação de shared async permits por até 4 terrain + 4 fluid tasks da seleção antiga durante warp disjunto.
+
+### Prefetch promotion audit
+
+- `GenerationWaveState::finish()` só promove reservations que ainda permanecem em `prefetch_targets`.
+- selection rebuild cancela generation task-backed fora de `desired` e chama `abandon_target`, que também remove a reservation de `prefetch_targets` antes de `finish()`.
+- staged/settling/publication chunks não podem ser abandonados como async work porque já pertencem a world truth em convergência; os guards posteriores de publication/residency continuam responsáveis por eles.
+- não foi encontrado production hole nessa transição. Cut atual adiciona regressão focada provando que prefetch abandonado durante a wave não é promovido quando a wave termina, enquanto reservation ainda válida é promovida. CI pendente para este cut.
 
 ### Observabilidade existente
 
@@ -171,12 +178,13 @@ Adicionar nova métrica somente quando um próximo cut tiver uma hipótese que o
 - `1442fa3350c2a7d30eb9e30db4341c1f48dace16` — retired candidate path passa a forçar yield após progresso bounded; CI `36582996658` success.
 - `39ed517067eedf8506c8417fe4a57e032117b8a7` — selection rebuild cancela generation fora de `desired`; CI `36586304834` success.
 - `37920ff51c4add96f08d2a471163e1cf07dbb98b` — remove scan redundante de cancellation generation por frame; CI `36587932705` success.
+- `1ab39af00954862af6ff5b8471790ab10f22f2a9` — cancela/re-enfileira remesh em voo obsoleto preservando dirty metadata; CI `36593145821` success.
 
 ## Phase 4 — próximos cortes
 
-1. validar prefetch promotion em `GenerationWaveState::finish()` sob troca de seleção durante fluid settling/publication com teste focado se houver uma invariant ainda não coberta;
-2. revisar se selection-revision reconciliation de remesh precisa de diagnóstico próprio depois de gameplay logs; não adicionar métrica antes de haver hipótese não coberta pelos sinais existentes;
-3. continuar procurando priority rescans redundantes apenas depois de fechar o gate do remesh stale-work; não reescrever prioridade por estética.
+1. fechar o gate do teste de regressão de prefetch promotion; se verde, considerar a invariável de promotion coberta;
+2. usar gameplay logs reais para validar responsividade de warp/background work e os bounds já observáveis antes de declarar Phase 4 completa;
+3. só adicionar diagnóstico ou alterar priority scanning se esses logs mostrarem uma hipótese concreta não coberta pelos sinais existentes; não reescrever prioridade por estética.
 
 ## Regras de continuidade
 

@@ -239,6 +239,24 @@ mod tests {
     }
 
     #[test]
+    fn abandoned_prefetch_is_not_promoted_when_current_wave_finishes() {
+        let retained = IVec3::new(4, 1, -3);
+        let stale = IVec3::new(-9, 2, 8);
+        let mut wave = GenerationWaveState::default();
+        wave.mark_prefetched(retained);
+        wave.mark_prefetched(stale);
+
+        wave.abandon_target(stale);
+        wave.finish();
+
+        assert!(wave.contains_target(retained));
+        assert!(wave.contains_unpublished(retained));
+        assert!(!wave.contains_target(stale));
+        assert!(!wave.contains_unpublished(stale));
+        assert_eq!(wave.prefetch_count(), 0);
+    }
+
+    #[test]
     #[should_panic(expected = "generation target cannot be abandoned after world truth enters staged/settling/publication ownership")]
     fn staged_world_truth_cannot_be_abandoned_as_async_work() {
         let coord = IVec3::new(3, 1, -2);
