@@ -111,9 +111,9 @@ Audit do unload encontrou um overrun estrutural do budget:
 4. `enqueue_chunk_voxels` materializava imediatamente os 4096 voxels de um chunk 16³ em `VoxelUpdateQueue`;
 5. logo um único item do unload podia fazer dezenas de milhares de hash lookups/inserts antes da próxima checagem do budget.
 
-### Cut atual — lazy full-chunk lighting scan
+### Cut 3 — lazy full-chunk lighting scan
 
-`LightingQueue::enqueue_chunk_voxels` passa a registrar um full-chunk scan virtual em vez de inserir 4096 posições imediatamente.
+`ba7ddfdfd6de390c5bec9fed72f8e2097ec4fb0e` faz `LightingQueue::enqueue_chunk_voxels` registrar um full-chunk scan virtual em vez de inserir 4096 posições imediatamente. CI `36611123695` / #10245 success.
 
 - o scan guarda apenas o `origin` do chunk até ser consumido;
 - cada `pop` produz um voxel na mesma ordem y/z/x do eager path;
@@ -122,12 +122,41 @@ Audit do unload encontrou um overrun estrutural do budget:
 - a fronteira FIFO com background já existente é preservada por um watermark: trabalho anterior ao request fica antes do scan; trabalho adicionado depois fica atrás;
 - requests duplicados antes de iniciar o scan coalescem;
 - um novo request do mesmo chunk enquanto o scan está ativo agenda uma segunda passagem, evitando perder uma invalidação ocorrida no meio da primeira;
-- quando o scan virtual alcança uma posição explicitamente queued depois dele, remove a duplicata do background queue;
-- boundary-voxel/boundary-neighbor enqueue continua eager por enquanto; não ampliar o cut sem log que mostre necessidade.
+- quando o scan virtual alcança uma posição explicitamente queued depois dele, remove a duplicata do background queue.
 
-Regressões unitárias do cut cobrem: full 4096-voxel traversal lazy, ordem contra background preexistente, dedup antes do scan e requeue durante scan ativo.
+Regressões unitárias cobrem full 4096-voxel traversal lazy, ordem contra background preexistente, dedup antes do scan e requeue durante scan ativo.
 
-**Phase 4 continua empiricamente aberta até gameplay log da HEAD com este cut.** Se stalls severos permanecerem, investigar o próximo custo síncrono demonstrado pelo log; não voltar a otimizar selection/cache/remesh por hipótese.
+### Gameplay log 4 — unload boundary relight ainda escapa do budget
+
+`2026-09-29_18-22-20-833724900.txt`, já com `ba7ddfdf`, prova que o full-chunk scan lazy era correto mas insuficiente para fechar a responsividade:
+
+- janela intermediária estável em ~54.8–56.4 FPS;
+- houve stall de ~98.8 ms com `main_work_max_us=102833`;
+- na janela final houve frame de **244.628 ms** com `main_work_max_us=235316`;
+- no pior frame: `selection_revision=56`, `pending=2325`, `retired=7211`, `remesh_geometry=2412`;
+- `pending_priority_max_us=2650` e `ready_priority_max_us=17`, novamente muito menores que o stall.
+
+O audit encontrou outro trabalho de lighting expandido fora do budget de unload:
+
+1. `evict_distant_chunks` acumula coords arquivadas em `unloaded` durante o loop budgetado;
+2. depois de sair do loop, chama `PendingLightingUpdates::enqueue_chunk_unloads(unloaded)`;
+3. para cada coord, `LightingQueue::enqueue_chunk_boundary_neighbors` materializava imediatamente `6 * 16 * 16 = 1536` posições;
+4. portanto um batch com dezenas de unloads podia fazer dezenas de milhares de inserts/hash lookups **depois** que o budget de 4 ms já havia encerrado sua parte protegida.
+
+### Cut atual — lazy unload boundary lighting scans
+
+`LightingQueue` passa a tratar full-chunk scans e chunk-boundary-neighbor scans como requests virtuais do mesmo background scheduler.
+
+- `enqueue_chunk_boundary_neighbors` deixa de expandir 1536 posições no caller;
+- o request virtual produz as seis faces externas sob consumo de `relax_budgeted`, portanto o custo entra no check de budget a cada 64 posições;
+- o filtro histórico de `VoxelUpdateQueue` para `world_y < 0` é preservado durante materialização lazy;
+- requests idênticos pendentes coalescem; reinvalidação durante scan ativo continua podendo agendar outra passagem;
+- interactive e settling preservam prioridade sobre todos os scans background;
+- `enqueue_chunk_boundary_voxels` permanece eager: este cut não amplia escopo para um caller que o log atual não implicou.
+
+Regressões do cut cobrem as 1536 posições únicas das seis faces, filtragem lazy da face abaixo de Y=0 e dedup de boundary requests.
+
+**Phase 4 continua empiricamente aberta até gameplay log da HEAD com este cut.** Não declarar o problema resolvido apenas pela correção estrutural; repetir a caminhada longa e comparar `frame_max_us`/`main_work_max_us`.
 
 ## Phase 5 — Terrain generation v2
 
