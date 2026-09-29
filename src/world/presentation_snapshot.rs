@@ -1,10 +1,16 @@
+use bevy::prelude::IVec3;
+
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
-    voxel::mesh_snapshot::ChunkMeshSnapshot,
+    voxel::{
+        coordinates::ChunkCoord,
+        mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot, ChunkSnapshotSource},
+        meshlet::ChunkMeshletMask,
+    },
 };
 
 use super::{
@@ -12,6 +18,42 @@ use super::{
     chunk_rendering::ChunkMeshBuildContext,
     chunk_system_params::ChunkContent,
 };
+
+/// Immutable world-content identity captured by a presentation job. This is
+/// intentionally separate from authored/content-definition revisions and from
+/// lighting revisions, which have independent owners.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkPresentationSource {
+    coord: ChunkCoord,
+    revisions: ChunkMeshDependencies,
+}
+
+impl ChunkPresentationSource {
+    pub(crate) fn capture(coord: ChunkCoord, world: &ChunkMeshSnapshot) -> Self {
+        Self {
+            coord,
+            revisions: world.dependencies(),
+        }
+    }
+
+    pub(crate) fn for_meshlets(mut self, meshlets: ChunkMeshletMask) -> Self {
+        self.revisions = self.revisions.for_meshlets(meshlets);
+        self
+    }
+
+    pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
+        source.snapshot_chunk(self.coord).is_some() && self.revisions.is_current(source)
+    }
+
+    pub(crate) fn initial_catchup_meshlets_with(
+        &self,
+        source: &impl ChunkSnapshotSource,
+        neighbor_is_visible: impl FnMut(IVec3) -> bool,
+    ) -> ChunkMeshletMask {
+        self.revisions
+            .initial_catchup_meshlets_with(source, neighbor_is_visible)
+    }
+}
 
 /// Immutable authored/content inputs shared by background voxel presentation
 /// jobs. Mesh and remesh schedulers decide when to execute; this type owns the

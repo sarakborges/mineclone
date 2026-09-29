@@ -2,11 +2,7 @@ use std::sync::Arc;
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::voxel::{
-    coordinates::ChunkCoord,
-    mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot, ChunkSnapshotSource},
-    meshlet::ChunkMeshletMask,
-};
+use crate::voxel::{coordinates::ChunkCoord, mesh_snapshot::ChunkMeshSnapshot};
 
 pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
 use super::{
@@ -14,38 +10,11 @@ use super::{
     chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    presentation_snapshot::ChunkPresentationSource,
     revision::TaskInputRevision,
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ChunkPresentationSource {
-    coord: ChunkCoord,
-    revisions: ChunkMeshDependencies,
-}
-
-impl ChunkPresentationSource {
-    fn capture(coord: ChunkCoord, world: &ChunkMeshSnapshot) -> Self {
-        Self {
-            coord,
-            revisions: world.dependencies(),
-        }
-    }
-
-    pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
-        source.snapshot_chunk(self.coord).is_some() && self.revisions.is_current(source)
-    }
-
-    pub(crate) fn initial_catchup_meshlets_with(
-        &self,
-        source: &impl ChunkSnapshotSource,
-        neighbor_is_visible: impl FnMut(IVec3) -> bool,
-    ) -> ChunkMeshletMask {
-        self.revisions
-            .initial_catchup_meshlets_with(source, neighbor_is_visible)
-    }
-}
 
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
