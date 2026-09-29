@@ -55,6 +55,13 @@ struct RemeshDispatchContext<'a> {
     deadline: Instant,
 }
 
+struct RemeshCollectionContext<'a> {
+    world: &'a VoxelWorld,
+    streaming: &'a ChunkStreamingState,
+    lighting_revisions: &'a PresentationLightingRevisions,
+    deadline: Instant,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_chunk_remesh_queue(
     content: ChunkContent,
@@ -104,12 +111,14 @@ pub(super) fn process_chunk_remesh_queue(
         collect_completed_remesh_tasks(
             &content,
             &mut renderer,
-            &world,
-            &streaming,
             &mut queue,
             &mut tasks,
-            &lighting_revisions,
-            frame_budget.deadline(),
+            RemeshCollectionContext {
+                world: &world,
+                streaming: &streaming,
+                lighting_revisions: &lighting_revisions,
+                deadline: frame_budget.deadline(),
+            },
         );
     }
 
@@ -144,16 +153,13 @@ pub(super) fn process_chunk_remesh_queue(
 fn collect_completed_remesh_tasks(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
-    world: &VoxelWorld,
-    streaming: &ChunkStreamingState,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
-    lighting_revisions: &PresentationLightingRevisions,
-    deadline: Instant,
+    context: RemeshCollectionContext<'_>,
 ) {
     let current_revision = tasks.revision();
     let mut budget = FrameWorkBudget::new(REMESH_RESULT_INTEGRATION_BUDGET, 1)
-        .with_global_deadline(deadline)
+        .with_global_deadline(context.deadline)
         .with_maximum_items(MAX_REMESH_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
@@ -170,10 +176,10 @@ fn collect_completed_remesh_tasks(
         let output = completed.output;
         let kind = output.kind;
         let meshlets = output.meshlets;
-        if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
+        if !renderer.pool.contains(coord) || context.world.chunk(coord).is_none() {
             continue;
         }
-        if !streaming.retains_render_mesh(coord) {
+        if !context.streaming.retains_render_mesh(coord) {
             // Selection can reverse before the budgeted render-retirement pass
             // reaches this allocation. Preserve the dirty meshlets until the
             // allocation is actually retired, or until the chunk re-enters the
@@ -188,7 +194,7 @@ fn collect_completed_remesh_tasks(
 
         match output
             .dependencies
-            .publication(kind, world, lighting_revisions)
+            .publication(kind, context.world, context.lighting_revisions)
         {
             ChunkRemeshPublication::Ready => {}
             ChunkRemeshPublication::Retry(retry_kind) => {
@@ -201,7 +207,7 @@ fn collect_completed_remesh_tasks(
         }
 
         let render_context = content.render_context(
-            world,
+            context.world,
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
@@ -258,14 +264,12 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let Some((coord, kind, meshlets)) =
-            queue.pop_renderable_background(
-                context.render_pool,
-                context.center,
-                allow_terrain,
-                allow_fluid,
-            )
-        else {
+        let Some((coord, kind, meshlets)) = queue.pop_renderable_background(
+            context.render_pool,
+            context.center,
+            allow_terrain,
+            allow_fluid,
+        ) else {
             break;
         };
         // Deferred and stale candidates also consume main-thread work. Charge

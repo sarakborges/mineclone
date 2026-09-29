@@ -273,13 +273,16 @@ Commit `73d7d72c8dec0539cd2f6711a5b836697eebe2de` (`Define presentation lighting
 
 ### Cut 5 — lighting revisions viram resource físico de presentation
 
+Commit `eebf02f723bb6b49191e977c542430da3f0c7c5c` (`Move lighting revisions to presentation resource`).
+
 - `PresentationLightingRevisions` agora é `Resource` do `WorldPlugin`, com lifecycle/reset explícito em Loading, Gameplay e saída do mundo;
 - `ChunkRemeshTasks` não armazena mais o mapa de revisions: ele volta a possuir somente scheduler/task metadata e uma fila transitória de cleanup para manter o retirement API estável durante a migração;
 - dynamic lighting incrementa diretamente o resource compartilhado por meshlet;
 - remesh captura e valida `PresentationLightingSource` contra o resource compartilhado tanto no dispatch quanto na publication;
 - retirement/unload continuam chamando `remove_lighting_revision` no scheduler apenas como bridge: o pedido é drenado no começo de `process_chunk_remesh_queue`, no mesmo frame para retirement de Update e no frame seguinte para mesh-pressure retirement de PostUpdate;
 - o mapa real deixa de estar acoplado ao scheduler, abrindo o mesmo owner para initial meshing e para os stamps persistidos no `ChunkRenderPool`;
-- nenhuma regra de lighting propagation, remesh retry, queue priority, mesh building, asset patching ou render lifetime foi alterada neste cut.
+- nenhuma regra de lighting propagation, remesh retry, queue priority, mesh building, asset patching ou render lifetime foi alterada neste cut;
+- CI #10292 passou os audits e falhou somente no Clippy `too_many_arguments` de `collect_completed_remesh_tasks`; a correção agrupa os inputs imutáveis de publication em `RemeshCollectionContext`, sem `allow` e sem mudança de comportamento.
 
 ### Próximos cuts
 
