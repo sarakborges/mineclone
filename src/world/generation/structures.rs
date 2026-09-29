@@ -428,9 +428,9 @@ fn resolved_structure_placements(
     })
 }
 
-fn resolve_structure_placements_uncached<'a>(
+fn resolve_structure_placements_uncached(
     chunk_origin: IVec3,
-    context: &'a ChunkGenerationContext<'_>,
+    context: &ChunkGenerationContext<'_>,
 ) -> Vec<ResolvedStructurePlacement> {
     let chunk_size = CHUNK_SIZE as i32;
     let target_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);

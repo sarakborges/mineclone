@@ -144,7 +144,7 @@ Commit `972db610bb50566b15504b665331da5ad6ddd9ee` (`Bound connector expansion by
 
 ### Cut 5 — conflict resolution pertence ao planner
 
-Estado deste cut:
+Commit `70c04704383f789eff935e0525337be1a71302fd` (`Move structure conflict resolution into planner`).
 
 - novo `structure_metadata/planning/resolver.rs` possui `StructureCandidate`, identity/dedup, priority ordering, conflict/reservation checks e agrupamento final em `ResolvedStructurePlacement`;
 - `generation/structures.rs` não possui mais `Ordering`, `HashMap`, `HashSet`, `candidate_identity`, `candidate_order`, `candidates_conflict` ou grouping de accepted pieces;
@@ -153,6 +153,8 @@ Estado deste cut:
 - a saída continua sendo `Vec<ResolvedStructurePlacement>`; materialization e cache não mudam neste cut;
 - raster voxel, connector resolution, hashing, terrain fitting, volume eligibility e conflict policy permanecem semanticamente iguais;
 - a dependency continua inward: `planning::resolver` não conhece `ChunkGenerationContext`, terrain, render, ECS ou cache owner.
+
+CI #10277 passou todos os audits e falhou apenas no Clippy `needless_lifetimes` da assinatura do adapter `resolve_structure_placements_uncached`; o corretivo remove somente o lifetime explícito redundante, sem mudar tipos efetivos, ownership ou comportamento.
 
 ### Próximos cuts
 
