@@ -10,6 +10,7 @@ use super::hash::{avalanche, string_hash};
 
 const MAX_CONNECTOR_CHAIN_DEPTH: usize = 64;
 const MAX_RESOLVED_CONNECTOR_PIECES: usize = 256;
+const CONNECTOR_BOUND_STRENGTH_BUCKETS: u8 = 64;
 const CONNECTOR_INDEX_SALT: u64 = 0x9e37_79b1_85eb_ca87;
 const CONNECTOR_DEPTH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
 const CONNECTOR_ROTATION_SALT: u64 = 0x1656_67b1_9e37_79f9;
@@ -41,7 +42,7 @@ pub(crate) fn connected_horizontal_bounds_for_reference(
             let piece_bounds = connected_horizontal_bounds_for_piece(
                 structure,
                 rotation,
-                None,
+                CONNECTOR_BOUND_STRENGTH_BUCKETS,
                 0,
                 structures,
                 &mut memo,
@@ -56,30 +57,38 @@ pub(crate) fn connected_horizontal_bounds_for_reference(
 fn connected_horizontal_bounds_for_piece<'a>(
     structure: &'a StructureDefinition,
     rotation: StructureRotation,
-    remaining_strength: Option<f32>,
+    remaining_strength_bucket: u8,
     depth: usize,
     structures: &'a StructureRegistry,
-    memo: &mut HashMap<(&'a str, StructureRotation, u32, usize), (IVec2, IVec2)>,
+    memo: &mut HashMap<(&'a str, StructureRotation, u8, usize), (IVec2, IVec2)>,
 ) -> (IVec2, IVec2) {
-    let remaining_key = remaining_strength.map_or(u32::MAX, f32::to_bits);
-    let key = (structure.id.as_str(), rotation, remaining_key, depth);
+    // The bucket is rounded upward, so memo reuse can only widen bounds relative
+    // to an exact remaining-strength state. Combined with the depth cap, this
+    // gives each structure/rotation at most 65 * 65 semantic memo states instead
+    // of an effectively unbounded set of distinct f32 bit patterns.
+    let key = (
+        structure.id.as_str(),
+        rotation,
+        remaining_strength_bucket,
+        depth,
+    );
     if let Some(bounds) = memo.get(&key) {
         return *bounds;
     }
 
     let mut bounds = structure.horizontal_bounds_for_rotation(rotation);
-    if depth >= MAX_CONNECTOR_CHAIN_DEPTH {
+    if depth >= MAX_CONNECTOR_CHAIN_DEPTH || remaining_strength_bucket == 0 {
         memo.insert(key, bounds);
         return bounds;
     }
 
+    let remaining_strength = connector_strength_upper_bound(remaining_strength_bucket);
     for output in structure
         .connector_points()
         .iter()
         .filter(|connector| connector.target.is_some())
     {
-        let effective_strength = remaining_strength
-            .map_or(output.strength, |remaining| remaining.min(output.strength));
+        let effective_strength = remaining_strength.min(output.strength);
         if effective_strength <= 0.0 {
             continue;
         }
@@ -96,6 +105,7 @@ fn connected_horizontal_bounds_for_piece<'a>(
         let required_input_face = opposite_connector_face(world_face);
         let next_strength =
             (effective_strength - output.strength_loss_on_each_loop).max(0.0);
+        let next_strength_bucket = connector_strength_bucket(next_strength);
 
         for distance in connector_bound_distances(output.min_distance, output.max_distance) {
             let attachment_position =
@@ -107,7 +117,7 @@ fn connected_horizontal_bounds_for_piece<'a>(
                     let child_bounds = connected_horizontal_bounds_for_piece(
                         child,
                         child_rotation,
-                        Some(next_strength),
+                        next_strength_bucket,
                         depth + 1,
                         structures,
                         memo,
@@ -125,6 +135,21 @@ fn connected_horizontal_bounds_for_piece<'a>(
 
     memo.insert(key, bounds);
     bounds
+}
+
+fn connector_strength_bucket(strength: f32) -> u8 {
+    if strength <= 0.0 {
+        return 0;
+    }
+
+    let scaled =
+        (strength.clamp(0.0, 1.0) * f32::from(CONNECTOR_BOUND_STRENGTH_BUCKETS)).ceil();
+    (scaled as u8).clamp(1, CONNECTOR_BOUND_STRENGTH_BUCKETS)
+}
+
+fn connector_strength_upper_bound(bucket: u8) -> f32 {
+    debug_assert!(bucket <= CONNECTOR_BOUND_STRENGTH_BUCKETS);
+    f32::from(bucket) / f32::from(CONNECTOR_BOUND_STRENGTH_BUCKETS)
 }
 
 fn extend_bounds(
@@ -664,7 +689,7 @@ mod tests {
     #[test]
     fn explicit_piece_budget_caps_connector_expansion() {
         let registry = registry(vec![
-            root_definition("test:segment", 0.0),
+            root_definition("test:segment", 0.25),
             segment_definition("test:segment", None, true),
         ]);
         let root = registry.get("test:root").expect("root must exist");
@@ -708,6 +733,15 @@ mod tests {
         assert_eq!(pieces.len(), 2);
         assert_eq!(pieces[1].rotation, StructureRotation::Degrees90);
         assert_eq!(pieces[1].origin, IVec3::new(0, 0, 2));
+    }
+
+    #[test]
+    fn connector_strength_bucket_never_underestimates_remaining_strength() {
+        for strength in [0.0, 0.0001, 0.01, 0.249, 0.5, 0.9999, 1.0] {
+            let bucket = connector_strength_bucket(strength);
+            assert!(bucket <= CONNECTOR_BOUND_STRENGTH_BUCKETS);
+            assert!(connector_strength_upper_bound(bucket) + f32::EPSILON >= strength);
+        }
     }
 
     #[test]

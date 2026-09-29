@@ -139,8 +139,7 @@ Commit `972db610bb50566b15504b665331da5ad6ddd9ee` (`Bound connector expansion by
 - roots acima do budget são truncadas deterministicamente na ordem de entrada; o budget restante é compartilhado entre todas as branches do forest, então fan-out não multiplica o limite por root;
 - cada child aceito consome exatamente uma unidade antes de poder entrar na pending queue; quando o budget chega a zero, nenhuma seleção, ground-fit ou overlap adicional é executado;
 - `MAX_CONNECTOR_CHAIN_DEPTH = 64` continua como bound ortogonal de profundidade;
-- hashing, ordem de connector traversal, group selection, collision rejection e strength semantics permanecem iguais enquanto há budget;
-- `connected_horizontal_bounds_for_reference` permanece conservador e depth-bounded; qualquer futuro cap de estados do cálculo de bounds precisa preservar conservadorismo para não criar clipping falso.
+- hashing, ordem de connector traversal, group selection, collision rejection e strength semantics permanecem iguais enquanto há budget.
 
 ### Cut 5 — conflict resolution pertence ao planner
 
@@ -170,22 +169,34 @@ CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizont
 
 ### Cut 7 — conflict/reservation contract cross-chunk
 
-Estado deste cut:
+Commit `5f400382132001e162225f1c365ba95f8fcaded3` (`Formalize cross-chunk structure conflict contract`), CI #10281 success.
 
 - `planning/resolver.rs` documenta explicitamente que conflict resolution é **intent-based**, não acceptance-based: um target candidate perde para qualquer intent conflitante que o outranque, mesmo se esse intent estiver fora do target e não for materializado por aquela consulta;
 - o collector contract exige retornar todos os candidates cujos bounds completos intersectem o retângulo pedido; o resolver expande a consulta pelos bounds completos de cada direct candidate para incluir reservations que cruzam chunk boundaries;
 - ranking fica formalizado como priority descendente e, em empate, `placement_id`, `biome_id`, anchor X/Z e placement Y ascendentes;
 - `reserve_space` é direcional: somente um intent de maior rank com reserva bloqueia um inferior apenas por reservation; `conflict_groups` compartilhados são simétricos depois que ranking escolhe o vencedor;
-- cinco regressões cobrem: higher-priority reservation fora do target, shared conflict group fora do target, intent não relacionado, reservation inferior não bloqueando superior e deterministic tie-break em prioridade igual;
-- nenhuma linha da política de decisão foi alterada; este cut formaliza e prova a semântica existente;
-- testes continuam fora do CI automático; `cargo clippy --all-targets` deve ao menos compilar o código de teste.
+- cinco regressões cobrem higher-priority reservation fora do target, shared conflict group fora do target, intent não relacionado, reservation inferior não bloqueando superior e deterministic tie-break em prioridade igual;
+- nenhuma linha da política de decisão foi alterada; o cut formaliza e prova a semântica existente.
+
+### Cut 8 — connector metadata bounds com state-space explícito
+
+Estado deste cut:
+
+- `connected_horizontal_bounds_for_reference` deixa de usar `f32::to_bits()` como parte da memo key de remaining strength e passa a usar `CONNECTOR_BOUND_STRENGTH_BUCKETS = 64`;
+- strength é sempre arredondada **para cima** ao bucket seguinte, então o estado reutilizado representa um upper bound da força real e pode apenas ampliar o bounds calculado, nunca reduzir;
+- junto de `MAX_CONNECTOR_CHAIN_DEPTH = 64`, cada `structure + rotation` possui no máximo `65 strength buckets × 65 depth states` no memo, em vez de um conjunto praticamente ilimitado de bit patterns de `f32`;
+- a cardinalidade total continua multiplicada apenas pelo conteúdo carregado/rotações válidas, não por histórico de traversal;
+- o resolver/materializer real de connectors continua usando `f32` exato; bucketization existe somente no cálculo conservador de metadata bounds;
+- o teste `connector_strength_bucket_never_underestimates_remaining_strength` cobre o invariant de arredondamento conservador; o teste existente da chain continua exigindo bounds exato `(0,0)..(8,0)` no caso simples;
+- o fixture antigo de `explicit_piece_budget_caps_connector_expansion` foi corrigido de loss inválido para `0.25`, preservando cadeia suficiente para provar o budget de três pieces e respeitando o máximo de 64 loops;
+- nenhuma alteração em hashing, seleção de group member, connector traversal runtime, overlap rejection, ground-fit, conflict policy ou rasterization.
 
 ### Próximos cuts
 
-1. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
-2. auditar os re-exports públicos restantes de `generation` e eliminar também o `const _` temporário sem reintroduzir dependency inversion;
-3. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
-4. preparar o mesmo generalized feature path para futuros rivers/lakes, sem hydrology legado.
+1. auditar os re-exports públicos restantes de `generation` e eliminar o `const _` temporário sem reintroduzir dependency inversion;
+2. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
+3. auditar qualquer feature-generation paralelo restante e confirmar ausência de hydrology legado;
+4. fechar Phase 6 contra os exit criteria: intent atravessa regiões unloaded sem render, materialization determinística/chunk-boundary-safe e nenhum subsystem legado paralelo.
 
 ## Regras de continuidade
 
