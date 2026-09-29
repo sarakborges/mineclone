@@ -502,7 +502,8 @@ fn rebuild_horizontal_selection_offsets(
 
     let forward = movement_direction.as_vec2().normalize();
     let lateral = Vec2::new(-forward.y, forward.x);
-    let preload = forward_preload_chunks(horizontal_radius) as f32;
+    let preload_chunks = forward_preload_chunks(horizontal_radius);
+    let preload = preload_chunks as f32;
     let base = horizontal_radius as f32;
     let limit = base + preload;
     let near_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + preload * 0.5;
@@ -513,22 +514,25 @@ fn rebuild_horizontal_selection_offsets(
         forward * limit + lateral * far_width,
         forward * limit - lateral * far_width,
     ];
-    let minimum = corners
+    let search_radius = horizontal_radius + preload_chunks;
+    let minimum = (corners
         .iter()
         .copied()
         .reduce(Vec2::min)
         .expect("forward preload bounds require corners")
         .floor()
         .as_ivec2()
-        - IVec2::ONE;
-    let maximum = corners
+        - IVec2::ONE)
+        .max(IVec2::splat(-search_radius));
+    let maximum = (corners
         .iter()
         .copied()
         .reduce(Vec2::max)
         .expect("forward preload bounds require corners")
         .ceil()
         .as_ivec2()
-        + IVec2::ONE;
+        + IVec2::ONE)
+        .min(IVec2::splat(search_radius));
 
     for z in minimum.y..=maximum.y {
         for x in minimum.x..=maximum.x {
