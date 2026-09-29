@@ -31,8 +31,9 @@
 - **Phase 1 concluída:** core types/boundaries.
 - **Phase 2 concluída:** authoritative storage, revisions, lookup e eviction ownership.
 - **Phase 3 concluída:** biome/structure metadata independente de render/materialization; caches derivados bounded.
-- **Phase 4:** correctness e responsividade empírica do Streaming scheduler v2 validadas em gameplay; fechamento formal aguarda CI verde do corretivo de Clippy do último cut.
-- **Phase 5:** Terrain generation v2 em andamento; boundary/determinismo/benchmark prontos, publication/caller audit ainda precisa fechamento após o gate da Phase 4.
+- **Phase 4 concluída:** correctness, boundedness e responsividade empírica do Streaming scheduler v2 validadas em gameplay e CI.
+- **Phase 5 concluída:** Terrain generation v2 isolada em jobs determinísticos, benchmarkável e com publication revision/relevance-safe.
+- **Phase 6 é o próximo bloco:** structures/connectors/feature planning sobre metadata determinística, sem ressuscitar hydrology legado.
 
 ## Phase 2 — contracts que não devem regredir
 
@@ -170,13 +171,15 @@ CI `36613493499` / #10246 falhou somente no passo Clippy porque Rust 1.98 passou
 
 Conclusão empírica: a sequência selection delta -> remoção do retain full-scan -> deferred full-chunk lighting -> deferred unload boundary lighting removeu o stall severo de streaming/main thread sob a caminhada longa testada. O spike de render no startup fica como dívida separada de presentation/rendering e não reabre o Streaming scheduler v2.
 
-**Phase 4 está funcionalmente pronta; marcar como formalmente concluída somente depois que o CI do corretivo de Clippy deste cut ficar verde.**
+`0346ae55663f3bece534b9fe75a2f058d440d28f` corrige apenas o lint `manual_is_multiple_of` introduzido pelo Rust 1.98 no cut de lighting; CI `36615991956` / #10252 success.
+
+**Phase 4 concluída:** correctness, boundedness e responsividade empírica do Streaming scheduler v2 estão validadas. O spike de render startup permanece como dívida separada de presentation/rendering.
 
 ## Phase 5 — Terrain generation v2
 
 Meta: generation é job determinístico de authoritative world data, sem scheduling/ECS/render publication.
 
-### Concluído
+### Implementação concluída
 
 - `f602bdbd6b3c74cb77d54c291fd7b163effde6bc`: `ChunkGenerationJob` recebe `ChunkCoord + Arc<GenerationSnapshot>`; CI `36598783588` success.
 - scheduler possui revision/dedup/cap/permit/cancellation; job possui somente calculation.
@@ -184,15 +187,29 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 - caches derivados podem aquecer sem alterar o resultado autoritativo.
 - `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef`: benchmark manual/ignored só de `ChunkGenerationJob::run`; CI `36602768937` success.
 - benchmark: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
-- publication audit já confirmou guards de `TaskInputRevision` + `wants_generation` antes de `VoxelWorld::insert_chunk`; insert é atômico no nível de chunk e recusa overwrite resident/persisted.
-- não foi encontrado caller síncrono de generation no frame path já auditado.
 
-### Depois do gate da Phase 4
+### Audit final / exit criteria
 
-1. concluir caller audit de generation;
-2. decidir se coverage atual já trava publication stale/atomic ou adicionar regressão específica;
-3. fechar exit criteria da Phase 5;
-4. iniciar Phase 6 structures/connectors sem reintroduzir sistemas legados.
+- production runtime e loading usam o mesmo caminho `GenerationScheduler -> ChunkGenerationJob -> generate_chunk`; o audit não encontrou outro caller síncrono direto de `generate_chunk` no production/frame path.
+- `ChunkGenerationJob` recebe somente `ChunkCoord + Arc<GenerationSnapshot>` e retorna `VoxelChunk`; não possui ECS, render, entity spawn, UI ou publication side effects.
+- `GenerationSnapshot` captura inputs imutáveis de generation; mudança relevante de input incrementa `TaskInputRevision` no scheduler.
+- a revision viaja com cada task em `CompletedChunkTask`; `collect_generated_chunks` rejeita completion de revision stale antes de qualquer publication e só requeuea quando a coord ainda é desejada.
+- `wants_generation` exige `residency.desired`, portanto chunk apenas retained não inicia nem publica generation nova.
+- publication distingue `Resident`, `Archived` e `Absent`: resident não é sobrescrito; archived restaura a verdade persistida; somente absent pode publicar o output gerado.
+- `VoxelWorld::insert_chunk` reforça atomicidade no nível de chunk e rejeita overwrite de conteúdo resident/persisted.
+- depois do insert autoritativo, settling/staging assume ownership da world truth; abandonar async work não pode apagar chunk que já entrou nesse lifecycle.
+- coverage existente já trava os boundaries relevantes: determinismo do job, availability resident/archived/absent, retained não elegível para generation, ownership staged/settling e invariantes do storage. Não foi adicionada uma regressão Bevy sintética apenas para fechamento porque o audit não encontrou gap de comportamento ou ownership.
+- os exit criteria de `docs/asteria-core-rebuild.md` estão satisfeitos: terrain job é determinístico e benchmarkável independentemente, e generation calculation não cria meshes/entities nem muta estado de UI/render.
+
+**Phase 5 concluída.**
+
+### Próximo bloco — Phase 6
+
+1. auditar o planning/materialization atual de structures/connectors contra os contracts formais da Phase 6;
+2. separar metadata/planning determinístico de qualquer aplicação/materialization que ainda esteja acoplada;
+3. garantir budgets/caps explícitos para expansão de connector graphs e structure groups;
+4. manter rivers/lakes/cave entrances no modelo generalizado de structures/connectors, sem reintroduzir hydrology legado;
+5. atualizar este HANDOFF em cada cut e manter CI verde entre blocos.
 
 ## Regras de continuidade
 
