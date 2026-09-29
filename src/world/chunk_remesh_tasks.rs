@@ -26,7 +26,9 @@ use super::{
     },
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    presentation_snapshot::ChunkPresentationSource,
+    presentation_snapshot::{
+        ChunkPresentationSource, PresentationLightingRevisions, PresentationLightingSource,
+    },
     revision::TaskInputRevision,
 };
 
@@ -113,38 +115,9 @@ pub(super) enum ChunkRemeshPublication {
     FluidWithLightingCatchup,
 }
 
-#[derive(Clone)]
-struct LightingRemeshDependencies {
-    center: ChunkCoord,
-    meshlets: ChunkMeshletMask,
-    expected: [u64; 8],
-}
-
-impl LightingRemeshDependencies {
-    fn capture(
-        center: IVec3,
-        meshlets: ChunkMeshletMask,
-        revisions: &HashMap<ChunkCoord, [u64; 8]>,
-    ) -> Self {
-        let center = ChunkCoord::from_ivec3(center);
-        Self {
-            center,
-            meshlets,
-            expected: revisions.get(&center).copied().unwrap_or([0; 8]),
-        }
-    }
-
-    fn is_current(&self, current: &HashMap<ChunkCoord, [u64; 8]>) -> bool {
-        let revisions = current.get(&self.center).copied().unwrap_or([0; 8]);
-        (0..8).all(|index| {
-            !self.meshlets.contains_index(index) || revisions[index] == self.expected[index]
-        })
-    }
-}
-
 pub(crate) struct ChunkRemeshDependencies {
     content: ChunkPresentationSource,
-    lighting: LightingRemeshDependencies,
+    lighting: PresentationLightingSource,
 }
 
 impl ChunkRemeshDependencies {
@@ -152,14 +125,15 @@ impl ChunkRemeshDependencies {
         center: IVec3,
         meshlets: ChunkMeshletMask,
         world: &ChunkMeshSnapshot,
-        revisions: &HashMap<ChunkCoord, [u64; 8]>,
+        lighting_revisions: &PresentationLightingRevisions,
     ) -> Self {
         Self {
             content: ChunkPresentationSource::capture(ChunkCoord::from_ivec3(center), world)
                 .for_meshlets(meshlets),
-            // Revision slots are already expanded by the one-voxel lighting
-            // halo, so a partial task only depends on the meshlets it rebuilds.
-            lighting: LightingRemeshDependencies::capture(center, meshlets, revisions),
+            // Lighting revisions are section-aware independently from content
+            // revisions, so partial publication cannot mark untouched meshlets
+            // as if they observed the same lighting state.
+            lighting: lighting_revisions.capture(center, meshlets),
         }
     }
 
@@ -210,7 +184,7 @@ pub(crate) struct ChunkRemeshTasks {
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     requests: ChunkRemeshTaskRequests,
     poll_fluid_first: bool,
-    lighting_revisions: HashMap<ChunkCoord, [u64; 8]>,
+    lighting_revisions: PresentationLightingRevisions,
 }
 
 impl Default for ChunkRemeshTasks {
@@ -222,7 +196,7 @@ impl Default for ChunkRemeshTasks {
             fluid_pending: ChunkTaskQueue::default(),
             requests: ChunkRemeshTaskRequests::default(),
             poll_fluid_first: true,
-            lighting_revisions: HashMap::default(),
+            lighting_revisions: PresentationLightingRevisions::default(),
         }
     }
 }
@@ -272,7 +246,6 @@ impl ChunkRemeshTasks {
         world: &VoxelWorld,
         positions: impl IntoIterator<Item = IVec3>,
     ) {
-        let revisions = &mut self.lighting_revisions;
         for position in positions {
             visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
                 if world.chunk(coord).is_none() {
@@ -280,7 +253,7 @@ impl ChunkRemeshTasks {
                 }
 
                 let meshlets = ChunkMeshletMask::for_world_position(coord, position);
-                bump_lighting_revision_mask(revisions, coord, meshlets);
+                self.lighting_revisions.bump(coord, meshlets);
             });
         }
     }
@@ -290,13 +263,12 @@ impl ChunkRemeshTasks {
         changes: impl IntoIterator<Item = (IVec3, ChunkMeshletMask)>,
     ) {
         for (coord, meshlets) in changes {
-            bump_lighting_revision_mask(&mut self.lighting_revisions, coord, meshlets);
+            self.lighting_revisions.bump(coord, meshlets);
         }
     }
 
     pub(crate) fn remove_lighting_revision(&mut self, coord: IVec3) {
-        self.lighting_revisions
-            .remove(&ChunkCoord::from_ivec3(coord));
+        self.lighting_revisions.remove(coord);
     }
 
     pub(crate) fn schedule(
@@ -423,25 +395,6 @@ impl ChunkRemeshTasks {
     }
 }
 
-fn bump_lighting_revision_mask(
-    revisions: &mut HashMap<ChunkCoord, [u64; 8]>,
-    coord: IVec3,
-    meshlets: ChunkMeshletMask,
-) {
-    if meshlets.is_empty() {
-        return;
-    }
-
-    let entry = revisions
-        .entry(ChunkCoord::from_ivec3(coord))
-        .or_insert([0; 8]);
-    for (index, revision) in entry.iter_mut().enumerate() {
-        if meshlets.contains_index(index) {
-            *revision = revision.wrapping_add(1).max(1);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,11 +449,9 @@ mod tests {
     fn lighting_dependencies_detect_halo_revision_changes() {
         let mut tasks = ChunkRemeshTasks::default();
         let center = IVec3::new(3, 2, 5);
-        let dependencies = LightingRemeshDependencies::capture(
-            center,
-            ChunkMeshletMask::ALL,
-            &tasks.lighting_revisions,
-        );
+        let dependencies = tasks
+            .lighting_revisions
+            .capture(center, ChunkMeshletMask::ALL);
 
         assert!(dependencies.is_current(&tasks.lighting_revisions));
         let mut world = VoxelWorld::default();

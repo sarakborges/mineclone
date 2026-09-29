@@ -1,4 +1,4 @@
-use bevy::prelude::IVec3;
+use bevy::{platform::collections::HashMap, prelude::IVec3};
 
 use crate::{
     content::{
@@ -52,6 +52,69 @@ impl ChunkPresentationSource {
     ) -> ChunkMeshletMask {
         self.revisions
             .initial_catchup_meshlets_with(source, neighbor_is_visible)
+    }
+}
+
+/// Presentation-owned lighting revision state. Revisions are section-aware so
+/// a partial remesh can publish one meshlet without claiming untouched
+/// meshlets observed the same lighting state.
+#[derive(Clone, Default)]
+pub(crate) struct PresentationLightingRevisions {
+    revisions: HashMap<ChunkCoord, [u64; 8]>,
+}
+
+impl PresentationLightingRevisions {
+    pub(crate) fn capture(
+        &self,
+        center: IVec3,
+        meshlets: ChunkMeshletMask,
+    ) -> PresentationLightingSource {
+        let center = ChunkCoord::from_ivec3(center);
+        PresentationLightingSource {
+            center,
+            meshlets,
+            expected: self.revisions.get(&center).copied().unwrap_or([0; 8]),
+        }
+    }
+
+    pub(crate) fn bump(&mut self, coord: IVec3, meshlets: ChunkMeshletMask) {
+        if meshlets.is_empty() {
+            return;
+        }
+
+        let entry = self
+            .revisions
+            .entry(ChunkCoord::from_ivec3(coord))
+            .or_insert([0; 8]);
+        for (index, revision) in entry.iter_mut().enumerate() {
+            if meshlets.contains_index(index) {
+                *revision = revision.wrapping_add(1).max(1);
+            }
+        }
+    }
+
+    pub(crate) fn remove(&mut self, coord: IVec3) {
+        self.revisions.remove(&ChunkCoord::from_ivec3(coord));
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PresentationLightingSource {
+    center: ChunkCoord,
+    meshlets: ChunkMeshletMask,
+    expected: [u64; 8],
+}
+
+impl PresentationLightingSource {
+    pub(crate) fn is_current(&self, current: &PresentationLightingRevisions) -> bool {
+        let revisions = current
+            .revisions
+            .get(&self.center)
+            .copied()
+            .unwrap_or([0; 8]);
+        (0..8).all(|index| {
+            !self.meshlets.contains_index(index) || revisions[index] == self.expected[index]
+        })
     }
 }
 
