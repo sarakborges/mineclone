@@ -27,11 +27,13 @@ impl ChunkGenerationJob {
 
 #[cfg(test)]
 mod tests {
+    use std::{hint::black_box, time::Instant};
+
     use bevy::prelude::IVec3;
 
     use super::*;
     use crate::{
-        content::read_content,
+        content::{fluid::FluidRegistry, read_content},
         voxel::chunk_disk::DiskChunk,
         world::{
             biome_field::BiomeField,
@@ -45,8 +47,7 @@ mod tests {
     const TEST_SEED: u64 = 0x7d4a_21c8_95e3_b60f;
     const TEST_DIMENSION: &str = "asteria:overworld";
 
-    #[test]
-    fn same_snapshot_and_coord_produce_identical_authoritative_content() {
+    fn test_snapshot() -> (Arc<GenerationSnapshot>, FluidRegistry) {
         let content = read_content();
         let dimension = content
             .dimensions
@@ -80,18 +81,69 @@ mod tests {
             feature_fields: &feature_fields,
         };
         let snapshot = Arc::new(GenerationSnapshot::from_context(&context, false));
+
+        (snapshot, content.fluids.clone())
+    }
+
+    #[test]
+    fn same_snapshot_and_coord_produce_identical_authoritative_content() {
+        let (snapshot, fluids) = test_snapshot();
         let coord = ChunkCoord::from_ivec3(IVec3::new(0, 2, 0));
 
         let first = ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run();
         let second = ChunkGenerationJob::new(coord, snapshot).run();
-        let first_disk = DiskChunk::from_chunk(coord.as_ivec3(), &first, &content.fluids)
+        let first_disk = DiskChunk::from_chunk(coord.as_ivec3(), &first, &fluids)
             .expect("generated chunk must serialize to authoritative disk form");
-        let second_disk = DiskChunk::from_chunk(coord.as_ivec3(), &second, &content.fluids)
+        let second_disk = DiskChunk::from_chunk(coord.as_ivec3(), &second, &fluids)
             .expect("generated chunk must serialize to authoritative disk form");
 
         assert_eq!(
             serde_json::to_vec(&first_disk).expect("first generated chunk must serialize"),
             serde_json::to_vec(&second_disk).expect("second generated chunk must serialize"),
+        );
+    }
+
+    /// Manual job-only benchmark. Keep setup and cache warm-up outside the
+    /// measured region so this does not accidentally become a scheduler,
+    /// content-loading, or render benchmark.
+    ///
+    /// Run with:
+    /// `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`
+    #[test]
+    #[ignore]
+    fn benchmark_chunk_generation_job() {
+        let (snapshot, _) = test_snapshot();
+        let coords = [
+            ChunkCoord::new(0, 2, 0),
+            ChunkCoord::new(1, 2, 0),
+            ChunkCoord::new(-1, 2, 0),
+            ChunkCoord::new(0, 2, 1),
+            ChunkCoord::new(0, 2, -1),
+            ChunkCoord::new(1, 2, 1),
+            ChunkCoord::new(-1, 2, -1),
+            ChunkCoord::new(2, 2, 0),
+        ];
+
+        for &coord in &coords {
+            black_box(ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run());
+        }
+
+        let mut samples_ms = Vec::with_capacity(coords.len());
+        for &coord in &coords {
+            let started = Instant::now();
+            black_box(ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run());
+            samples_ms.push(started.elapsed().as_secs_f64() * 1_000.0);
+        }
+        samples_ms.sort_by(f64::total_cmp);
+
+        let average_ms = samples_ms.iter().sum::<f64>() / samples_ms.len() as f64;
+        let p50_ms = samples_ms[samples_ms.len() / 2];
+        let max_ms = *samples_ms
+            .last()
+            .expect("worldgen benchmark must record at least one sample");
+        println!(
+            "chunk_generation_job warm benchmark: samples={} avg_ms={average_ms:.3} p50_ms={p50_ms:.3} max_ms={max_ms:.3}",
+            samples_ms.len(),
         );
     }
 }

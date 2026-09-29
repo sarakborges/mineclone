@@ -164,7 +164,7 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `GenerationSnapshot` captura/clona a dependency surface permitida para background generation: registries/content, dimension, world-generation settings, biome field e feature metadata/caches.
 - `GenerationScheduler` despacha generation no `AsyncComputeTaskPool`; o frame path integra resultados depois de revision/selection relevance guards.
 - não foi encontrado caller síncrono de generation no frame path auditado.
-- não existe harness de benchmark independente (`benches/`/Criterion ausente no audit atual); o crate é hoje binary-only, então não fazer um refactor amplo para `lib.rs` apenas para satisfazer benchmark tooling.
+- o crate é hoje binary-only; não criar um refactor amplo para `lib.rs` apenas para satisfazer benchmark tooling.
 
 ### Job boundary
 
@@ -173,13 +173,21 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `GenerationScheduler` continua proprietário apenas de snapshot revision, dedup/cap, async permit, cancellation e result revision.
 - o job não recebe permit/revision e não publica no `VoxelWorld`; scheduling/publication ficam fora do cálculo.
 
-### Cut atual — determinismo / testabilidade
+### Determinismo / testabilidade
 
-- `GenerationSnapshot::from_context` passa a capturar inputs a partir de `ChunkGenerationContext`, sem exigir Bevy `SystemParam`; `capture` permanece o adapter runtime e delega ao mesmo boundary.
-- regressão executa duas vezes o mesmo `ChunkGenerationJob` para o mesmo snapshot/coord usando conteúdo real do Overworld.
+- `77cba7c7bcb8fe49aadd0f64a16d657277030c73` adiciona `GenerationSnapshot::from_context`, permitindo capturar inputs a partir do contexto de domínio sem exigir Bevy `SystemParam`; `capture` permanece o adapter runtime e delega ao mesmo boundary. CI `36600832740` success.
+- a regressão executa duas vezes o mesmo `ChunkGenerationJob` para o mesmo snapshot/coord usando conteúdo real do Overworld.
 - a comparação usa `DiskChunk` serializado, que representa blocks/layers/objects/fluids autoritativos e deliberadamente exclui lighting/runtime caches derivados; não adicionar `PartialEq` artificial em `VoxelChunk`.
-- usar o mesmo snapshot nas duas execuções também trava a invariant de que warming dos caches derivados não pode mudar o resultado autoritativo.
-- CI pendente para este cut.
+- usar o mesmo snapshot nas duas execuções trava também a invariant de que warming dos caches derivados não pode mudar o resultado autoritativo.
+
+### Cut atual — benchmark independente
+
+- adicionar benchmark manual/ignored no próprio boundary de `ChunkGenerationJob`; não faz parte do CI normal e não transforma runner compartilhado em performance gate ruidoso.
+- setup de conteúdo, criação de snapshot e warm-up dos mesmos chunks acontecem fora da janela medida.
+- a região medida contém somente construção do job + `ChunkGenerationJob::run()` e `black_box` do resultado; não mede scheduler, async permits, publication, mesh ou render.
+- amostra oito chunks de terreno ao redor da origem e reporta média, p50 e máximo em ms.
+- comando documentado no teste: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
+- CI pendente para este cut; o benchmark manual em release ainda não foi executado nesta sessão porque o ambiente local não possui checkout utilizável do repo.
 
 ### Publication audit
 
@@ -205,14 +213,14 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `1ab39af00954862af6ff5b8471790ab10f22f2a9` — cancela/re-enfileira remesh stale preservando dirty metadata; CI `36593145821` success.
 - `b1312808c3851865d5216d06e6b16a90dc1986a3` — trava invariável de prefetch promotion sob troca de seleção; CI `36595941232` success.
 - `f602bdbd6b3c74cb77d54c291fd7b163effde6bc` — separa generation calculation em `ChunkGenerationJob`; CI `36598783588` success.
+- `77cba7c7bcb8fe49aadd0f64a16d657277030c73` — snapshot domain-constructible + regressão de determinismo autoritativo; CI `36600832740` success.
 
 ## Phase 5 — próximos cortes
 
-1. fechar CI da regressão de determinismo e do constructor de snapshot por contexto de domínio;
-2. adicionar benchmark independente do `ChunkGenerationJob`, medindo somente `run()` depois do setup/warm-up e sem scheduler/render;
-3. continuar auditando callers para confirmar ausência de generation síncrona fora do caminho já inspecionado;
-4. adicionar teste de publication stale/atomic somente se a cobertura existente não travar a invariant de revisão/relevância de forma suficiente;
-5. fechar os exit criteria da Phase 5 e só então iniciar structures/connectors da Phase 6.
+1. fechar CI do benchmark harness;
+2. concluir audit de callers para confirmar ausência de generation síncrona fora do caminho já inspecionado;
+3. adicionar teste de publication stale/atomic somente se a cobertura existente não travar a invariant de revisão/relevância de forma suficiente;
+4. fechar os exit criteria da Phase 5 e só então iniciar structures/connectors da Phase 6.
 
 ## Regras de continuidade
 
