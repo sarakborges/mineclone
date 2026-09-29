@@ -19,7 +19,7 @@
 - **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
 - **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
 - **Phase 3 concluída.** Biome/structure metadata é consultável sem render/materialization e caches derivados possuem ownership/bounds explícitos.
-- **Phase 4 — código do Streaming scheduler v2 concluído.** Bounds, cancellation e stale-result guards estão cobertos por código/testes. O critério empírico de responsividade em gameplay/warp continua pendente de logs reais e não deve ser tratado como performance comprovada.
+- **Phase 4 — correctness do Streaming scheduler v2 concluído; responsividade empírica reaberta.** Bounds, cancellation e stale-result guards estão cobertos por código/testes. O log real de 2026-09-29 revelou stalls de main thread durante churn de seleção; o cut atual remove full rebuilds desnecessários em movimento adjacente, mas o critério empírico só fecha após novo gameplay log.
 - **Phase 5 — Terrain generation v2 em andamento.**
 
 ## Phase 2 — estado final
@@ -35,7 +35,7 @@
 - `ObjectRevisionState`: scene revision + per-chunk object revision.
 - `BlockRevisionState`: global `BlockTopologyRevision`.
 
-`VoxelWorld` coordena apenas invariantes multi-owner: insert/archive/restore, persistence promotion, revisions semânticas e mutation autoritativa.
+`VoxelWorld` coordena apenas invariants multi-owner: insert/archive/restore, persistence promotion, revisions semânticas e mutation autoritativa.
 
 ### Mutation / dirty ownership
 
@@ -132,7 +132,7 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 
 - generation nova pertence apenas a `desired`; `retained` preserva world truth/materialization temporária, mas não autoriza novo trabalho de generation.
 - `39ed517067eedf8506c8417fe4a57e032117b8a7` moveu cancellation generation stale para selection rebuild e usa membership em `desired`. CI `36586304834` success.
-- `37920ff51c4add96f08d2a471163e1cf07dbb98b` removeu o scan redundante de cancellation generation por frame; pending/prefetch/results revalidam `wants_generation`. CI `36587932705` success.
+- `37920ff51c4add96f08d2a471163e1cf07dbb98b` removeu o scan redundante de cancellation generation por frame; pending/prefetch/results revalidam `wants_generation`.
 - initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
 - remesh publication/dispatch exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks (`17402d31753de978ac9499ee3e85784d279976ac`).
 - `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes. CI `36581123163` success.
@@ -148,11 +148,18 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 - selection rebuild cancela task-backed prefetch fora de `desired`; `abandon_target` remove a reservation antes de `finish()`.
 - `b1312808c3851865d5216d06e6b16a90dc1986a3` adiciona regressão garantindo que prefetch abandonado não seja promovido, enquanto reservation ainda válida é promovida. CI `36595941232` success.
 
-### Observabilidade / dívida empírica
+### Observabilidade / validação empírica
 
 O diagnóstico existente cobre pending/ready/retired, wave/prefetch/staged, async task counts/shared limiter, remesh queues, priority scan count/avg/max/max queue e frame/main/render work percentiles com slow-frame context.
 
-Não há log de gameplay desta HEAD provando ainda o último exit criterion de Phase 4 (“gameplay remains responsive while background work progresses incrementally”). Por decisão explícita de seguir para Phase 5, isso fica registrado como **runtime validation debt**, não como performance já comprovada. Não adicionar métricas nem reabrir scheduler sem hipótese sustentada por logs.
+O log `2026-09-29_17-02-50-263036500.txt`, capturado em `0.68.48` sobre esta reconstrução, mostrou que o steady state já fica majoritariamente em ~53–58 FPS com p95 de frame em ~19–22 ms, mas ainda há stalls severos de **117 ms, 230 ms e 488 ms**. Nos piores frames, `main_work_max_us` acompanha quase integralmente o frame stall, enquanto generation/mesh async não aparece saturado o suficiente para explicar o bloqueio.
+
+Audit do path síncrono encontrou dois gatilhos que derrubavam movimento normal no full selection rebuild:
+
+- qualquer mudança em `movement_direction` invalidava o incremental path, reconstruindo toda a desired selection e toda a pending queue;
+- cruzar uma generation region de 8 chunks também invalidava o incremental path apenas porque os caches eram podados, embora cache misses já sejam reconstruídos de forma segura pelo próprio delta path.
+
+O cut atual mantém movimento horizontal adjacente no rebuild incremental mesmo ao virar ou cruzar generation-region boundary. A forma antiga é testada com `previous_movement_direction`, enquanto a forma nova continua usando a direção atual; full rebuild fica reservado para bootstrap, mudança de radius, movimento vertical/non-adjacent e warp. **Ainda não declarar a responsividade da Phase 4 validada sem novo gameplay log desta HEAD.**
 
 ## Phase 5 — Terrain generation v2
 
@@ -180,14 +187,15 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - a comparação usa `DiskChunk` serializado, que representa blocks/layers/objects/fluids autoritativos e deliberadamente exclui lighting/runtime caches derivados; não adicionar `PartialEq` artificial em `VoxelChunk`.
 - usar o mesmo snapshot nas duas execuções trava também a invariant de que warming dos caches derivados não pode mudar o resultado autoritativo.
 
-### Cut atual — benchmark independente
+### Benchmark independente
 
-- adicionar benchmark manual/ignored no próprio boundary de `ChunkGenerationJob`; não faz parte do CI normal e não transforma runner compartilhado em performance gate ruidoso.
+- `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef` adiciona benchmark manual/ignored no próprio boundary de `ChunkGenerationJob`; CI `36602768937` success.
+- o benchmark não faz parte do CI normal e não transforma runner compartilhado em performance gate ruidoso.
 - setup de conteúdo, criação de snapshot e warm-up dos mesmos chunks acontecem fora da janela medida.
 - a região medida contém somente construção do job + `ChunkGenerationJob::run()` e `black_box` do resultado; não mede scheduler, async permits, publication, mesh ou render.
 - amostra oito chunks de terreno ao redor da origem e reporta média, p50 e máximo em ms.
-- comando documentado no teste: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
-- CI pendente para este cut; o benchmark manual em release ainda não foi executado nesta sessão porque o ambiente local não possui checkout utilizável do repo.
+- comando: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
+- o benchmark manual em release ainda não foi executado nesta sessão porque o ambiente local não possui checkout utilizável do repo.
 
 ### Publication audit
 
@@ -214,10 +222,11 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `b1312808c3851865d5216d06e6b16a90dc1986a3` — trava invariável de prefetch promotion sob troca de seleção; CI `36595941232` success.
 - `f602bdbd6b3c74cb77d54c291fd7b163effde6bc` — separa generation calculation em `ChunkGenerationJob`; CI `36598783588` success.
 - `77cba7c7bcb8fe49aadd0f64a16d657277030c73` — snapshot domain-constructible + regressão de determinismo autoritativo; CI `36600832740` success.
+- `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef` — benchmark manual/ignored de `ChunkGenerationJob`; CI `36602768937` success.
 
 ## Phase 5 — próximos cortes
 
-1. fechar CI do benchmark harness;
+1. validar em gameplay o cut incremental de streaming motivado pelo log de 2026-09-29; se os stalls severos persistirem, usar o próximo log para isolar o restante do main-thread cost antes de declarar Phase 4 empiricamente fechada;
 2. concluir audit de callers para confirmar ausência de generation síncrona fora do caminho já inspecionado;
 3. adicionar teste de publication stale/atomic somente se a cobertura existente não travar a invariant de revisão/relevância de forma suficiente;
 4. fechar os exit criteria da Phase 5 e só então iniciar structures/connectors da Phase 6.

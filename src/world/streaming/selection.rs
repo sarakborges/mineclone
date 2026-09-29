@@ -155,13 +155,10 @@ pub(super) fn rebuild_queue(
         previous_center,
         previous_horizontal_radius,
         previous_vertical_radius,
-        previous_movement_direction,
         center,
         horizontal_radius,
         vertical_radius,
-        movement_direction,
         allow_forward_preload,
-        prune_caches,
     );
     if incremental_rebuild {
         let previous_desired = &streaming.residency.desired;
@@ -171,6 +168,7 @@ pub(super) fn rebuild_queue(
             &mut scratch.desired,
             previous_desired,
             previous_center.expect("incremental rebuild requires previous center"),
+            previous_movement_direction,
             desired_selection,
             movement_direction,
             &scratch.horizontal_offsets,
@@ -285,13 +283,10 @@ fn can_incrementally_rebuild_desired(
     previous_center: Option<IVec3>,
     previous_horizontal_radius: i32,
     previous_vertical_radius: i32,
-    previous_movement_direction: IVec2,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
-    movement_direction: IVec2,
     allow_forward_preload: bool,
-    prune_caches: bool,
 ) -> bool {
     let Some(previous_center) = previous_center else {
         return false;
@@ -299,10 +294,8 @@ fn can_incrementally_rebuild_desired(
     let delta = center - previous_center;
 
     allow_forward_preload
-        && !prune_caches
         && previous_horizontal_radius == horizontal_radius
         && previous_vertical_radius == vertical_radius
-        && previous_movement_direction == movement_direction
         && delta.y == 0
         && delta.x.abs() <= 1
         && delta.z.abs() <= 1
@@ -582,6 +575,7 @@ fn rebuild_desired_chunk_coords_incremental(
     desired: &mut HashSet<IVec3>,
     previous_desired: &HashSet<IVec3>,
     previous_center: IVec3,
+    previous_movement_direction: IVec2,
     selection: DesiredChunkSelection,
     movement_direction: IVec2,
     horizontal_offsets: &[IVec2],
@@ -621,8 +615,14 @@ fn rebuild_desired_chunk_coords_incremental(
     for &offset in horizontal_offsets {
         let horizontal = center_horizontal + offset;
         let previous_offset = horizontal - previous_horizontal;
-        let was_selected =
-            horizontal_offset_is_selected(previous_offset, selection.horizontal_radius, movement_direction);
+        // Compare against the shape that actually produced `previous_desired`.
+        // On a turn, the new preload direction can contain columns that did not
+        // exist in the previous shape and therefore still need to be inserted.
+        let was_selected = horizontal_offset_is_selected(
+            previous_offset,
+            selection.horizontal_radius,
+            previous_movement_direction,
+        );
         let has_cached_range = surface_ranges.contains_key(&horizontal)
             && surface_support_minimums.contains_key(&horizontal);
 
@@ -854,56 +854,82 @@ mod tests {
     }
 
     #[test]
-    fn incremental_rebuild_only_handles_adjacent_same_direction_motion() {
+    fn incremental_rebuild_handles_adjacent_direction_and_region_changes() {
         let previous = IVec3::new(10, 2, 10);
 
         assert!(can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
             previous + IVec3::X,
             12,
             2,
-            IVec2::X,
             true,
-            false,
         ));
+        assert!(can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            previous + IVec3::X,
+            12,
+            2,
+            true,
+        ));
+
+        let region_edge = IVec3::new(7, 2, 7);
+        assert!(should_prune_streaming_caches(
+            Some(region_edge),
+            12,
+            2,
+            region_edge + IVec3::X,
+            12,
+            2,
+        ));
+        assert!(can_incrementally_rebuild_desired(
+            Some(region_edge),
+            12,
+            2,
+            region_edge + IVec3::X,
+            12,
+            2,
+            true,
+        ));
+
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
             previous + IVec3::new(2, 0, 0),
             12,
             2,
-            IVec2::X,
             true,
-            false,
         ));
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
-            previous + IVec3::X,
+            previous + IVec3::Y,
             12,
             2,
-            IVec2::Y,
             true,
-            false,
         ));
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
+            previous + IVec3::X,
+            13,
+            2,
+            true,
+        ));
+        assert!(!can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
             previous + IVec3::X,
             12,
             2,
-            IVec2::X,
-            true,
-            true,
+            false,
         ));
     }
 
