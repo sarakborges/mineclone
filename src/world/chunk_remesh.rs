@@ -125,10 +125,15 @@ fn collect_completed_remesh_tasks(
         let output = completed.output;
         let kind = output.kind;
         let meshlets = output.meshlets;
-        if !streaming.retains_render_mesh(coord)
-            || !renderer.pool.contains(coord)
-            || world.chunk(coord).is_none()
-        {
+        if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
+            continue;
+        }
+        if !streaming.retains_render_mesh(coord) {
+            // Selection can reverse before the budgeted render-retirement pass
+            // reaches this allocation. Preserve the dirty meshlets until the
+            // allocation is actually retired, or until the chunk re-enters the
+            // render residency and becomes eligible for publication again.
+            queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
             continue;
         }
         if completed.revision != current_revision {
@@ -219,7 +224,10 @@ fn dispatch_remesh_tasks(
         // the attempt before any early return can bypass the frame budget.
         budget.record(1);
         if !context.streaming.retains_render_mesh(coord) {
-            queue.remove(coord);
+            // Keep invalidation attached to a still-live render allocation.
+            // Explicit render retirement removes it; a rapid reversal/warp
+            // can instead make it eligible again without losing dirty work.
+            deferred.push((coord, kind, meshlets));
             continue;
         }
         let (kind, meshlets) =
