@@ -6,11 +6,6 @@ mod restrictions;
 mod set;
 mod support;
 
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-};
-
 use bevy::prelude::*;
 use smallvec::SmallVec;
 
@@ -37,7 +32,11 @@ use crate::{
     },
     world::{
         structure_metadata::{
-            ResolvedStructurePlacement, ResolvedStructurePlan, ResolvedStructurePlanPiece,
+            ResolvedStructurePlacement,
+            planning::{
+                StructureCandidate,
+                resolve_structure_placements as resolve_planned_structure_placements,
+            },
         },
         world_feature_fields::{CachedStructureForest, CachedStructureForestPiece},
     },
@@ -69,26 +68,6 @@ use super::{ChunkGenerationContext, generation_surface_height};
 
 const COLUMN_INDEX_MIN_VOXELS: usize = 512;
 const STRUCTURE_OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
-
-#[derive(Clone, Copy)]
-struct StructureCandidate<'a> {
-    biome_id: &'a str,
-    placement_id: &'a str,
-    structure: &'a StructureDefinition,
-    rotation: StructureRotation,
-    placement_anchor: IVec2,
-    placement_y: i32,
-    anchor: IVec2,
-    origin_y: i32,
-    primary_placement_piece: bool,
-    priority: i32,
-    reserve_space: bool,
-    conflict_groups: &'a [String],
-    minimum: IVec2,
-    maximum: IVec2,
-    minimum_y: i32,
-    maximum_y: i32,
-}
 
 struct StructureRasterizationContext<'a> {
     base_occupied: &'a [u64; STRUCTURE_OCCUPANCY_WORDS],
@@ -449,113 +428,21 @@ fn resolved_structure_placements(
     })
 }
 
-fn resolve_structure_placements_uncached(
-    chunk_origin: IVec3,
-    context: &ChunkGenerationContext<'_>,
-) -> Vec<ResolvedStructurePlacement> {
-    let accepted = resolve_structure_candidates_uncached(chunk_origin, context);
-    let mut placement_indices = HashMap::<(&str, &str, IVec2, i32), usize>::new();
-    let mut placements = Vec::<ResolvedStructurePlacement>::new();
-
-    for candidate in accepted {
-        let key = (
-            candidate.biome_id,
-            candidate.placement_id,
-            candidate.placement_anchor,
-            candidate.placement_y,
-        );
-        let piece = ResolvedStructurePlanPiece {
-            structure_id: candidate.structure.id.clone(),
-            rotation: candidate.rotation,
-            anchor: candidate.anchor,
-            origin_y: candidate.origin_y,
-            primary_placement_piece: candidate.primary_placement_piece,
-        };
-
-        if let Some(&index) = placement_indices.get(&key) {
-            let placement = &mut placements[index];
-            debug_assert_eq!(placement.plan.minimum, candidate.minimum);
-            debug_assert_eq!(placement.plan.maximum, candidate.maximum);
-            debug_assert_eq!(placement.plan.minimum_y, candidate.minimum_y);
-            debug_assert_eq!(placement.plan.maximum_y, candidate.maximum_y);
-            placement.plan.pieces.push(piece);
-            continue;
-        }
-
-        placement_indices.insert(key, placements.len());
-        placements.push(ResolvedStructurePlacement {
-            placement_id: candidate.placement_id.to_owned(),
-            placement_anchor: candidate.placement_anchor,
-            placement_y: candidate.placement_y,
-            plan: ResolvedStructurePlan {
-                pieces: vec![piece],
-                minimum: candidate.minimum,
-                maximum: candidate.maximum,
-                minimum_y: candidate.minimum_y,
-                maximum_y: candidate.maximum_y,
-            },
-        });
-    }
-
-    placements
-}
-
-fn resolve_structure_candidates_uncached<'a>(
+fn resolve_structure_placements_uncached<'a>(
     chunk_origin: IVec3,
     context: &'a ChunkGenerationContext<'_>,
-) -> Vec<StructureCandidate<'a>> {
+) -> Vec<ResolvedStructurePlacement> {
     let chunk_size = CHUNK_SIZE as i32;
-    let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
-    let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
-    let mut direct_candidates = Vec::new();
+    let target_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
+    let target_maximum = target_minimum + IVec2::splat(chunk_size - 1);
 
-    collect_all_structure_candidates(chunk_min, chunk_max, context, &mut direct_candidates);
-
-    if direct_candidates.is_empty() {
-        return Vec::new();
-    }
-
-    // Conflict resolution must see a higher-priority candidate even when that
-    // candidate itself lies outside this chunk. The StructureField supplies
-    // cheap deterministic surface roots and static maximum bounds; only roots
-    // that can touch this area enter the expensive resolver below.
-    let mut competitors = direct_candidates.clone();
-    let mut seen = competitors
-        .iter()
-        .map(candidate_identity)
-        .collect::<HashSet<_>>();
-    for direct in direct_candidates.iter().copied() {
-        let mut overlapping = Vec::new();
-        collect_all_structure_candidates(
-            direct.minimum,
-            direct.maximum,
-            context,
-            &mut overlapping,
-        );
-        for candidate in overlapping {
-            if candidate.priority < direct.priority
-                || !candidates_may_conflict(&candidate, &direct)
-            {
-                continue;
-            }
-            if seen.insert(candidate_identity(&candidate)) {
-                competitors.push(candidate);
-            }
-        }
-    }
-
-    let mut accepted = direct_candidates
-        .into_iter()
-        .filter(|candidate| {
-            !competitors.iter().any(|other| {
-                !same_candidate(other, candidate)
-                    && candidate_outranks(other, candidate)
-                    && candidates_conflict(other, candidate)
-            })
-        })
-        .collect::<Vec<_>>();
-    accepted.sort_by(candidate_order);
-    accepted
+    resolve_planned_structure_placements(
+        target_minimum,
+        target_maximum,
+        |minimum, maximum, candidates| {
+            collect_all_structure_candidates(minimum, maximum, context, candidates);
+        },
+    )
 }
 
 pub(super) fn maximum_potential_structure_top_y_for_chunk(
@@ -1139,86 +1026,6 @@ fn connected_piece_bounds(
             None => (minimum, maximum, minimum_y, maximum_y),
         })
     })
-}
-
-fn candidate_identity<'a>(
-    candidate: &StructureCandidate<'a>,
-) -> (
-    &'a str,
-    &'a str,
-    IVec2,
-    i32,
-    &'a str,
-    IVec2,
-    StructureRotation,
-) {
-    (
-        candidate.biome_id,
-        candidate.placement_id,
-        candidate.placement_anchor,
-        candidate.placement_y,
-        candidate.structure.id.as_str(),
-        candidate.anchor,
-        candidate.rotation,
-    )
-}
-
-fn candidates_may_conflict(
-    higher: &StructureCandidate<'_>,
-    lower: &StructureCandidate<'_>,
-) -> bool {
-    higher.reserve_space
-        || higher.conflict_groups.iter().any(|group| {
-            lower
-                .conflict_groups
-                .iter()
-                .any(|candidate| candidate == group)
-        })
-}
-
-fn candidate_order(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> Ordering {
-    right
-        .priority
-        .cmp(&left.priority)
-        .then_with(|| left.placement_id.cmp(right.placement_id))
-        .then_with(|| left.biome_id.cmp(right.biome_id))
-        .then_with(|| left.placement_anchor.x.cmp(&right.placement_anchor.x))
-        .then_with(|| left.placement_anchor.y.cmp(&right.placement_anchor.y))
-        .then_with(|| left.placement_y.cmp(&right.placement_y))
-}
-
-fn candidate_outranks(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> bool {
-    candidate_order(left, right) == Ordering::Less
-}
-
-fn same_candidate(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> bool {
-    left.placement_id == right.placement_id
-        && left.biome_id == right.biome_id
-        && left.placement_anchor == right.placement_anchor
-        && left.placement_y == right.placement_y
-}
-
-fn candidates_conflict(
-    higher: &StructureCandidate<'_>,
-    lower: &StructureCandidate<'_>,
-) -> bool {
-    rectangles_overlap(
-        higher.minimum,
-        higher.maximum,
-        lower.minimum,
-        lower.maximum,
-    ) && higher.maximum_y >= lower.minimum_y
-        && higher.minimum_y <= lower.maximum_y
-        && candidates_may_conflict(higher, lower)
 }
 
 fn bit_get(bits: &[u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) -> bool {

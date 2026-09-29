@@ -93,7 +93,7 @@ Meta: generalized structures são o único mecanismo authored para world feature
 
 - `StructureField` já enumera roots deterministicamente sem materializar chunks.
 - connector/group resolution já é deterministic por seed/id/anchor/rotation e suporta target de structure/group.
-- `generation/structures.rs` ainda mistura placement planning, conflict resolution e rasterization.
+- `generation/structures.rs` ainda mistura coleta terrain-dependent com materialization; deterministic placement resolution está sendo removido desse owner.
 - antes dos cuts da Phase 6, `StructureField` importava planning de `world::generation`, invertendo a dependency direction.
 - connector graph possuía somente `MAX_CONNECTOR_CHAIN_DEPTH = 64`; total de pieces/nodes não era bounded explicitamente.
 - resolved placement plans são valores de domínio; caches podem armazená-los, mas não são owner da decisão.
@@ -116,12 +116,9 @@ Commit `a32795957d707e08042d891b80e0cc2c606ff91d` (`Move structure planning out 
 - owner inclui `connectors`, `placement`, `set`, `hash` e `geometry`;
 - `StructureField` passa a importar `connected_horizontal_bounds_for_reference` e `structure_candidate_anchor` diretamente de `structure_metadata::planning`, removendo a dependency `metadata -> generation`;
 - os paths antigos em `generation/structures/{connectors,placement,set,hash,geometry}.rs` tornam-se adapters mínimos de re-export para manter `generation/structures.rs` estável neste migration block;
-- algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais neste cut;
-- os adapters são temporários: devem sair quando os call sites restantes forem migrados para o planner owner.
+- algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais nesse cut.
 
-CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`; `5b00587b47d922aee09fbd306c96b566ff4df06c` removeu esse re-export externo.
-
-CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`. `c6954f0efbfd4eac08d350af8ad0c0fd764efa22` mantém temporariamente esse adapter type-checked por um `const _` em `generation.rs`: não há chamada/runtime cost, não há `allow`, e não se reintroduz a dependency `metadata -> generation`. CI #10268 passou audits + Clippy + Check. O `const _` deve desaparecer junto com os adapters no próximo cut que os remover.
+CI #10262 falhou apenas no Clippy por um re-export morto em `generation.rs`; `5b00587b47d922aee09fbd306c96b566ff4df06c` removeu esse re-export. CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`; `c6954f0efbfd4eac08d350af8ad0c0fd764efa22` mantém temporariamente esse adapter type-checked por um `const _` sem runtime cost. CI #10268 passou audits + Clippy + Check.
 
 ### Cut 3 — materialization consome placements resolvidos
 
@@ -129,32 +126,40 @@ Commit `df52ad68bda7ad07774ba61ac6c8b05ec4699a69` (`Make structure materializati
 
 - `ResolvedStructurePlacement` é o resultado aceito após deterministic conflict resolution: mantém `placement_id + placement_anchor + placement_y + ResolvedStructurePlan`;
 - biome identity, priority, `reserve_space` e conflict groups permanecem exclusivamente no resolver; não vazam para materialization;
-- o cache horizontal deixa de armazenar uma lista flat de `CachedStructureCandidate` por piece e passa a armazenar `Vec<ResolvedStructurePlacement>`;
-- conflict resolution continua usando a mesma identidade `(biome, placement_id, placement_anchor, placement_y)`, a mesma ordenação e os mesmos bounds 3D; depois da aceitação, todas as pieces daquele placement são agrupadas em um único plano imutável;
+- o cache horizontal deixa de armazenar uma lista flat por piece e passa a armazenar `Vec<ResolvedStructurePlacement>`;
 - o filtro final por piece/chunk saiu do resolver: o placement completo permanece no cache quando seus bounds cruzam o chunk, e cada consumidor filtra somente as pieces que realmente intersectam o chunk atual;
-- `rasterize_structures`, `maximum_potential_structure_top_y_for_chunk` e `located_structure_origins_in_chunk` passam a consumir `placement.plan.pieces`;
-- raster voxel, hashing, structure selection, connector expansion, terrain fitting e conflict policy não foram alterados nesse cut;
-- isso torna explícito o boundary planner -> accepted placement plan -> materialization, sem fazer o cache virar owner da decisão.
+- `rasterize_structures`, `maximum_potential_structure_top_y_for_chunk` e `located_structure_origins_in_chunk` consomem `placement.plan.pieces`;
+- raster voxel, hashing, structure selection, connector expansion, terrain fitting e conflict policy não foram alterados nesse cut.
 
 ### Cut 4 — connector expansion bounded por total de pieces
 
-Estado deste cut:
+Commit `972db610bb50566b15504b665331da5ad6ddd9ee` (`Bound connector expansion by piece budget`), CI #10276 success.
 
 - `MAX_RESOLVED_CONNECTOR_PIECES = 256` limita explicitamente o forest inteiro, contando roots e filhos conectados;
 - roots acima do budget são truncadas deterministicamente na ordem de entrada; o budget restante é compartilhado entre todas as branches do forest, então fan-out não multiplica o limite por root;
 - cada child aceito consome exatamente uma unidade antes de poder entrar na pending queue; quando o budget chega a zero, nenhuma seleção, ground-fit ou overlap adicional é executado;
 - `MAX_CONNECTOR_CHAIN_DEPTH = 64` continua como bound ortogonal de profundidade;
 - hashing, ordem de connector traversal, group selection, collision rejection e strength semantics permanecem iguais enquanto há budget;
-- o helper interno parametrizado permite cobertura direcionada do cap sem reduzir o limite de produção; teste novo usa budget 3 em uma chain que naturalmente produziria mais pieces;
-- `connected_horizontal_bounds_for_reference` permanece conservador e depth-bounded neste cut; um cap de estados do cálculo de bounds só deve ser adicionado se puder preservar bounds conservadores sem introduzir clipping falso.
+- `connected_horizontal_bounds_for_reference` permanece conservador e depth-bounded; qualquer futuro cap de estados do cálculo de bounds precisa preservar conservadorismo para não criar clipping falso.
+
+### Cut 5 — conflict resolution pertence ao planner
+
+Estado deste cut:
+
+- novo `structure_metadata/planning/resolver.rs` possui `StructureCandidate`, identity/dedup, priority ordering, conflict/reservation checks e agrupamento final em `ResolvedStructurePlacement`;
+- `generation/structures.rs` não possui mais `Ordering`, `HashMap`, `HashSet`, `candidate_identity`, `candidate_order`, `candidates_conflict` ou grouping de accepted pieces;
+- generation fornece apenas um collector callback `(bounds -> candidates)` porque biome sampling, ground-fit, volume restrictions e caches terrain-dependent ainda pertencem ao generation input adapter;
+- o planner chama esse collector tanto para o target inicial quanto para competitors que podem cruzar os bounds do placement, preservando exatamente a semântica cross-chunk anterior;
+- a saída continua sendo `Vec<ResolvedStructurePlacement>`; materialization e cache não mudam neste cut;
+- raster voxel, connector resolution, hashing, terrain fitting, volume eligibility e conflict policy permanecem semanticamente iguais;
+- a dependency continua inward: `planning::resolver` não conhece `ChunkGenerationContext`, terrain, render, ECS ou cache owner.
 
 ### Próximos cuts
 
-1. mover candidate/conflict resolution fisicamente para o planner owner agora que sua saída já é `ResolvedStructurePlacement`;
-2. remover os adapters `generation/structures/*` e o `const _` temporário quando os call sites restantes apontarem diretamente ao planner;
-3. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
-4. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
-5. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
+1. remover os adapters `generation/structures/{connectors,placement,set,hash,geometry}.rs` e o `const _` temporário; call sites devem apontar diretamente para `structure_metadata::planning`;
+2. formalizar reservation/conflict semantics atravessando chunk boundaries no planner e adicionar cobertura específica de boundary/priority sem ativar testes automáticos no CI;
+3. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
+4. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
 
 ## Regras de continuidade
 
