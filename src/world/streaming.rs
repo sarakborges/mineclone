@@ -52,7 +52,7 @@ pub(in crate::world) use self::{
 use super::{
     biome_field::BiomeField,
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::ChunkGenerationTasks,
+    chunk_generation_tasks::GenerationScheduler,
     chunk_mesh_tasks::ChunkMeshTasks,
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
@@ -475,7 +475,7 @@ struct QueueRebuildContext<'a> {
 pub(super) struct ChunkStreamingWork<'w> {
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkStreamingState>,
-    generation_tasks: ResMut<'w, ChunkGenerationTasks>,
+    generation_tasks: ResMut<'w, GenerationScheduler>,
     mesh_tasks: ResMut<'w, ChunkMeshTasks>,
     world_ticks: Res<'w, WorldTickClock>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
