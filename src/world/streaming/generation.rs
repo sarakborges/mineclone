@@ -54,12 +54,33 @@ fn chunk_availability(world: &VoxelWorld, coord: IVec3) -> ChunkAvailability {
     }
 }
 
+fn wants_generation(state: &super::ChunkStreamingState, coord: IVec3) -> bool {
+    state.residency.desired.contains(&coord)
+}
+
+fn cancel_generation_outside_desired(work: &mut ChunkStreamingWork<'_>) {
+    let cancelled = {
+        let desired = &work.state.residency.desired;
+        work.generation_tasks
+            .cancel_where(|coord| !desired.contains(&coord))
+    };
+    for coord in cancelled {
+        work.state.generation_wave.abandon_target(coord);
+    }
+}
+
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
+    // Logical retention preserves already-materialized world data, but it must
+    // never authorize new generation work. This matters most for a disjoint
+    // warp selection: old chunks can remain retained while their async jobs are
+    // cancelled immediately so worker capacity follows the new desired state.
+    cancel_generation_outside_desired(work);
+
     if work.state.generation_wave.has_settled_publication() {
         if process_settled_wave_publication(work) {
             work.state.generation_wave.finish();
@@ -110,7 +131,7 @@ pub(super) fn collect_generated_chunks(
         }
 
         if completed.revision != current_revision {
-            if work.state.keeps_loaded(completed.coord)
+            if wants_generation(&work.state, completed.coord)
                 && work.state.generation_wave.contains_target(completed.coord)
             {
                 work.state.generation_wave.enqueue_pending(completed.coord);
@@ -119,7 +140,7 @@ pub(super) fn collect_generated_chunks(
             }
             continue;
         }
-        if !work.state.keeps_loaded(completed.coord) {
+        if !wants_generation(&work.state, completed.coord) {
             work.state.generation_wave.abandon_target(completed.coord);
             continue;
         }
@@ -339,7 +360,7 @@ fn schedule_generation_wave_pending(
         let Some(coord) = state.generation_wave.pop_pending() else {
             break;
         };
-        if !state.keeps_loaded(coord) {
+        if !wants_generation(state, coord) {
             state.generation_wave.abandon_target(coord);
             if let Some(budget) = budget.as_deref_mut() {
                 budget.record(1);
@@ -420,7 +441,7 @@ fn prefetch_next_generation_wave(
         let Some(coord) = state.pop_pending_by_priority() else {
             break;
         };
-        if !state.keeps_loaded(coord) {
+        if !wants_generation(state, coord) {
             continue;
         }
         if generation_tasks.contains(coord)
@@ -510,6 +531,10 @@ fn select_generation_wave(
         let Some(coord) = work.state.pop_pending_by_priority() else {
             break;
         };
+        if !wants_generation(&work.state, coord) {
+            budget.record(1);
+            continue;
+        }
 
         if render_pool.contains(coord)
             || work.state.ready.contains(coord)
@@ -578,6 +603,19 @@ mod tests {
             chunk_availability(&world, coord),
             ChunkAvailability::Resident
         );
+    }
+
+    #[test]
+    fn retained_chunks_are_not_eligible_for_generation_work() {
+        let desired = IVec3::new(2, 0, 0);
+        let retained = IVec3::new(-2, 0, 0);
+        let mut state = super::super::ChunkStreamingState::default();
+        state.residency.desired.insert(desired);
+        state.residency.retained.insert(retained);
+
+        assert!(wants_generation(&state, desired));
+        assert!(!wants_generation(&state, retained));
+        assert!(state.keeps_loaded(retained));
     }
 
     #[test]
