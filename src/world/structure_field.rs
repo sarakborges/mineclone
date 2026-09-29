@@ -9,7 +9,7 @@ use crate::content::{
     structure_set::StructureSetRegistry,
 };
 
-use super::generation::{
+use super::structure_metadata::planning::{
     connected_horizontal_bounds_for_reference, structure_candidate_anchor,
 };
 

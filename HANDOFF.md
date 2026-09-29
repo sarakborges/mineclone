@@ -1,214 +1,89 @@
 # HANDOFF — Asteria / Mineclone
 
-> Handoff corrente. Histórico anterior está em `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura também estão em `docs/asteria-core-rebuild.md`.
+> Handoff corrente. Histórico anterior está em `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura em `docs/asteria-core-rebuild.md`.
 
 ## Estado atual — 2026-09-29
 
 - Repo: `sarakborges/mineclone`.
-- Branch ativa: `architecture/asteria-core-rebuild`.
+- Branch: `architecture/asteria-core-rebuild`.
 - PR draft: #22 `Asteria core rebuild` -> `develop`.
-- Baseline da reconstrução: `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
+- Baseline: `develop@5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
 - `VERSION` permanece `0.68.48` durante estes cutovers internos.
-- Rust + Bevy permanecem. Bevy é host/framework; Asteria possui world core, metadata/generation, streaming, simulation boundaries e voxel presentation.
-- Não ressuscitar hydrology legado. Rivers/lakes/cave entrances futuros pertencem a structures/connectors/structure groups + deterministic metadata. Dynamic fluids continuam separados.
+- Rust + Bevy permanecem; o rebuild troca boundaries/ownership, não a stack.
+- Hydrology legado foi removido deliberadamente e não deve voltar. Rivers/lakes/cave entrances futuros pertencem a structures/connectors/structure groups + deterministic metadata. Dynamic fluids continuam separados.
 - Old saves/legacy compatibility não são prioridade.
-- CI deste branch = audits + Clippy + Check. `cargo test` **não roda automaticamente neste branch**; testes só são executados manualmente quando explicitamente solicitados.
-- Não avançar sobre audits/Clippy/Check vermelhos ou em andamento.
+- CI deste branch = audits + Clippy + Check. `cargo test` não roda automaticamente; testes só quando explicitamente solicitados.
+- Não avançar com audits/Clippy/Check vermelhos ou em andamento.
 - Não declarar ganho de performance sem gameplay log real.
 
-## Invariantes da reconstrução
+## Invariantes
 
 - authoritative world != resident world != rendered presentation;
-- scheduling não possui generation calculation;
-- jobs async usam inputs imutáveis e resultados stale são descartáveis;
-- cancellation é caminho normal;
-- caches/queues precisam de owner e bound explícitos;
-- trabalho frame-sensitive precisa ser incremental/budgetado;
-- publication revalida revision + relevância/residência;
-- nenhum subsystem deve esconder full scan/mutation cross-layer em um path aparentemente barato.
+- jobs async usam inputs imutáveis e publication stale é rejeitada;
+- caches/queues têm owner e bound explícitos;
+- trabalho frame-sensitive é incremental/budgetado;
+- cancellation é normal;
+- generation não possui side effects de render/UI/ECS;
+- não esconder full scan/mutation cross-layer em path aparentemente barato;
+- cada migration block termina com HANDOFF + CI verde.
 
 ## Fases
 
-- **Phase 1 concluída:** core types/boundaries.
-- **Phase 2 concluída:** authoritative storage, revisions, lookup e eviction ownership.
-- **Phase 3 concluída:** biome/structure metadata independente de render/materialization; caches derivados bounded.
-- **Phase 4 concluída:** correctness, boundedness e responsividade empírica do Streaming scheduler v2 validadas em gameplay e CI.
-- **Phase 5 concluída:** Terrain generation v2 isolada em jobs determinísticos, benchmarkável e com publication revision/relevance-safe.
-- **Phase 6 em andamento:** structures/connectors/feature planning; primeiro cut separa o valor de plano resolvido do cache owner.
+- Phase 1 concluída: core types/boundaries.
+- Phase 2 concluída: authoritative storage, revisions, lookup e eviction ownership.
+- Phase 3 concluída: biome/structure metadata independente de render/materialization; caches derivados bounded.
+- Phase 4 concluída: Streaming scheduler v2 correctness + boundedness + responsiveness validados.
+- Phase 5 concluída: Terrain generation v2 isolada em jobs determinísticos e stale-safe.
+- Phase 6 em andamento: structures/connectors/feature planning.
 
-## Phase 2 — contracts que não devem regredir
+## Contracts que não devem regredir
 
-### Storage / revisions
+### Authoritative storage
 
-`VoxelWorld` coordena owners separados:
+`VoxelWorld` coordena owners separados para resident chunks, persistence/archive, content revisions, object revisions e block topology revisions. Gameplay mutations passam por `VoxelMutationRuntime`; presentation é derivada e descartável. `ChunkRenderPool` nunca é world truth.
 
-- `ResidentChunkStore`: resident chunks + vertical column index;
-- `ChunkPersistenceState`: persistent set + archived payloads;
-- `ContentRevisionState`: `ChunkContentRevision`;
-- `ObjectRevisionState`: scene/per-chunk object revisions;
-- `BlockRevisionState`: `BlockTopologyRevision`.
-
-`ChunkContentRevision` cobre conteúdo voxel resident; lighting é derivado. `BlockTopologyRevision` existe porque targeting depende de mudanças topológicas. Não repetir a remoção equivocada da antiga block revision (`7e97ec39`); `e50519bb`/`8f729481` corrigiram esse contract.
-
-### Mutation / presentation
-
-Gameplay usa `VoxelMutationRuntime` para mutation autoritativa + side effects de lighting/remesh/fluid. Bypasses intencionais continuam limitados aos owners especializados (`world_objects`, lighting propagation, fluid simulation/generated settling).
-
-`ChunkRenderPool` é presentation-only. `ChunkResidencyState` possui desired/retained/retired e selection revision. `evict_distant_chunks` é o coordinator de cutover resident -> archived/absent e faz teardown de presentation no mesmo path budgetado.
-
-## Phase 3 — contracts que não devem regredir
+### Deterministic metadata
 
 - `BiomeField` consulta surface/volume biomes sem resident/render chunks.
 - `SurfaceSiteCache` é derivado, descartável e spatially bounded.
-- `StructureMetadata` mantém deterministic `StructureField` separado de feature caches.
+- `StructureMetadata` possui deterministic `StructureField`, separado de caches derivados.
 - structure reference bounds são metadata precomputado por conteúdo.
-- `WorldFeatureFields::clone_with_fresh_caches()` preserva metadata e troca apenas caches derivados.
+- `WorldFeatureFields::clone_with_fresh_caches()` preserva metadata e troca somente caches.
 - natural spawn consulta volume-biome metadata antes de surface fallback.
-- connector/group planning usa seed/ids/anchors/rotation, deterministic hashing e depth bound explícito.
 
 ## Phase 4 — Streaming scheduler v2
 
-### Correctness / boundedness já fechados
+Principais cuts fechados:
 
-- `PendingChunkQueue` é mantida subset da seleção atual; requeue exige residency relevante.
-- `ReadyChunkQueue` é residency-bound (`84955d6b6496548cd24fce37a0bed87aea368af7`, CI `36502882704`).
-- generation async: máximo 8 tasks; wave/prefetch bounded.
-- initial mesh async: máximo 8 tasks.
-- remesh async: máximo 4 terrain + 4 fluid; shared `ChunkAsyncWorkLimiter` aplica limite global/adaptativo.
-- retired scan limita inspeção e retorno útil a 16 por poll (`1442fa3350c2a7d30eb9e30db4341c1f48dace16`, CI `36582996658`).
-- generation fora de `desired` é cancelada no selection rebuild (`39ed517067eedf8506c8417fe4a57e032117b8a7`); scan redundante por frame removido em `37920ff51c4add96f08d2a471163e1cf07dbb98b`.
-- remesh dispatch/publication exige `retains_render_mesh`; stale in-flight requests preservam dirty metadata ao cancelar/re-enfileirar (`1ab39af00954862af6ff5b8471790ab10f22f2a9`, CI `36593145821`).
-- prefetch abandonado não é promovido após troca de seleção (`b1312808c3851865d5216d06e6b16a90dc1986a3`, CI `36595941232`).
+- ready/pending queues residency-bound;
+- generation/remesh async com caps e stale/relevance checks;
+- selection delta incremental em movimento adjacente (`e78d4808...`);
+- remoção de remesh full scan em selection churn (`3cacbd6a...`);
+- full-chunk lighting scan lazy (`ba7ddfdf...`);
+- unload boundary lighting scan lazy (`a57b3fea...`);
+- lint fix Rust 1.98 (`0346ae55...`).
 
-### Gameplay log 1 — selection rebuild
+Gameplay final `2026-09-29_18-51-38-488208300.txt`: janela final 58.7 FPS médio, p95 18.947 ms, p99 20.856 ms e `main_work_max_us=11149` mesmo com backlog pesado. Os stalls anteriores de 100–500 ms de main_work não retornaram.
 
-`2026-09-29_17-02-50-263036500.txt` mostrou steady state ~53–58 FPS, mas stalls de 117/230/488 ms praticamente inteiros em `main_work`.
+Há spike separado de startup/render (~217 ms com ~188.7 ms em render work), dívida de presentation/rendering, não reabre Phase 4.
 
-Causa encontrada: movimento adjacente fazia full rebuild da seleção ao mudar direção ou cruzar generation-region boundary. `e78d4808eb55573ab72f0d0bd3e4687472b2e3b3` mantém esses movimentos no delta path; CI `36604894331` success.
-
-### Gameplay log 2 — remesh residency scan
-
-`2026-09-29_17-31-55-122428800.txt` não mostrou mais `slow streaming selection rebuild`, confirmando o primeiro fix. Ainda houve stalls ~103/343/423/128 ms, com remesh backlog em milhares e priority scans abaixo de ~4,5 ms.
-
-Causa encontrada: `process_chunk_remesh_queue` chamava `ChunkRemeshQueue::retain_resident` em toda `selection_revision`, percorrendo/sort/dedup geometry/fluid/lighting fora do budget. Selection change não é residency change; eviction/retirement já removem as entries no owner correto.
-
-`3cacbd6aca82d36448d3130f8cd983b1fe976553` remove o full scan do churn normal e mantém apenas reconciliação defensiva em revision regression. CI `36607710543` / #10244 success.
-
-### Gameplay log 3 — lighting work materializado durante unload
-
-`2026-09-29_17-55-12-178083400.txt`, já com `3cacbd6`, melhorou o cenário, mas ainda não fechava Phase 4:
-
-- janela final: ~53.1 FPS médio, p95 ~21.4 ms, p99 ~24.8 ms;
-- stall máximo: 235.464 ms, com `main_work_max_us=234758`;
-- outro stall: 109.656 ms;
-- no pior frame: `retired=5917`, `remesh_geometry=1331`, `selection_revision=31`;
-- `pending_priority_max_us=2304` e `ready_priority_max_us=141`, insuficientes para explicar 235 ms;
-- startup teve stall de render separado: frame 180 ms com main work ~26.7 ms, portanto não confundir com o stall de viagem.
-
-Audit do unload encontrou um overrun estrutural do budget:
-
-1. `evict_distant_chunks` tem budget de 4 ms e checa o deadline entre chunks;
-2. ao arquivar um chunk não-vazio, chama `PendingLightingUpdates::enqueue_loaded_column_below`;
-3. para cada chunk carregado abaixo, esse método chamava `LightingQueue::enqueue_chunk_voxels`;
-4. `enqueue_chunk_voxels` materializava imediatamente os 4096 voxels de um chunk 16³ em `VoxelUpdateQueue`;
-5. logo um único item do unload podia fazer dezenas de milhares de hash lookups/inserts antes da próxima checagem do budget.
-
-### Cut 3 — lazy full-chunk lighting scan
-
-`ba7ddfdfd6de390c5bec9fed72f8e2097ec4fb0e` faz `LightingQueue::enqueue_chunk_voxels` registrar um full-chunk scan virtual em vez de inserir 4096 posições imediatamente. CI `36611123695` / #10245 success.
-
-- o scan guarda apenas o `origin` do chunk até ser consumido;
-- cada `pop` produz um voxel na mesma ordem y/z/x do eager path;
-- `relax_budgeted` continua sendo o consumidor e já checa budget a cada 64 voxels, então o custo pesado migra para dentro do budget existente;
-- interactive e settling continuam preemptando background;
-- a fronteira FIFO com background já existente é preservada por um watermark: trabalho anterior ao request fica antes do scan; trabalho adicionado depois fica atrás;
-- requests duplicados antes de iniciar o scan coalescem;
-- um novo request do mesmo chunk enquanto o scan está ativo agenda uma segunda passagem, evitando perder uma invalidação ocorrida no meio da primeira;
-- quando o scan virtual alcança uma posição explicitamente queued depois dele, remove a duplicata do background queue.
-
-Regressões unitárias cobrem full 4096-voxel traversal lazy, ordem contra background preexistente, dedup antes do scan e requeue durante scan ativo.
-
-### Gameplay log 4 — unload boundary relight ainda escapa do budget
-
-`2026-09-29_18-22-20-833724900.txt`, já com `ba7ddfdf`, provou que o full-chunk scan lazy era correto mas insuficiente:
-
-- janela intermediária estável em ~54.8–56.4 FPS;
-- houve stall de ~98.8 ms com `main_work_max_us=102833`;
-- na janela final houve frame de **244.628 ms** com `main_work_max_us=235316`;
-- no pior frame: `selection_revision=56`, `pending=2325`, `retired=7211`, `remesh_geometry=2412`;
-- `pending_priority_max_us=2650` e `ready_priority_max_us=17`, novamente muito menores que o stall.
-
-O audit encontrou outro trabalho de lighting expandido fora do budget de unload:
-
-1. `evict_distant_chunks` acumula coords arquivadas em `unloaded` durante o loop budgetado;
-2. depois de sair do loop, chama `PendingLightingUpdates::enqueue_chunk_unloads(unloaded)`;
-3. para cada coord, `LightingQueue::enqueue_chunk_boundary_neighbors` materializava imediatamente `6 * 16 * 16 = 1536` posições;
-4. portanto um batch com dezenas de unloads podia fazer dezenas de milhares de inserts/hash lookups **depois** que o budget de 4 ms já havia encerrado sua parte protegida.
-
-### Cut 4 — lazy unload boundary lighting scans
-
-`a57b3fea5c642088dea6cdaa91ea973764c60e3e` faz `LightingQueue` tratar full-chunk scans e chunk-boundary-neighbor scans como requests virtuais do mesmo background scheduler.
-
-- `enqueue_chunk_boundary_neighbors` deixa de expandir 1536 posições no caller;
-- o request virtual produz as seis faces externas sob consumo de `relax_budgeted`, portanto o custo entra no check de budget a cada 64 posições;
-- o filtro histórico de `VoxelUpdateQueue` para `world_y < 0` é preservado durante materialização lazy;
-- requests idênticos pendentes coalescem; reinvalidação durante scan ativo continua podendo agendar outra passagem;
-- interactive e settling preservam prioridade sobre todos os scans background;
-- `enqueue_chunk_boundary_voxels` permanece eager: este cut não amplia escopo para um caller que o log atual não implicou.
-
-Regressões do cut cobrem as 1536 posições únicas das seis faces, filtragem lazy da face abaixo de Y=0 e dedup de boundary requests.
-
-CI `36613493499` / #10246 falhou somente no passo Clippy porque Rust 1.98 passou a exigir `usize::is_multiple_of(2)` em três expressões; Test/Check foram pulados. O corretivo substitui apenas essas três expressões, sem alterar a lógica do scheduler.
-
-### Gameplay log 5 — stalls de streaming/main thread removidos
-
-`2026-09-29_18-51-38-488208300.txt`, executado com o comportamento de `a57b3fea`, fornece a validação empírica que faltava:
-
-- startup ainda tem um frame de 217.296 ms, mas `render_work_max_us=188657` e `main_work_max_us=10059`, com `selection_revision=1` e sem backlog de streaming; isso é um spike de presentation/render startup, não o stall de scheduler investigado aqui;
-- na janela seguinte, já viajando/carregando, média de 50.9 FPS, `frame_max_us=38256` e `main_work_max_us=9242`, com `pending=1730` e `retired=3061`;
-- janela final: **58.7 FPS médio**, p95 18.947 ms, p99 20.856 ms, `frame_max_us=54882` e **`main_work_max_us=11149`**;
-- nessa mesma janela pesada havia `pending=2454`, `retired=5816`, `remesh_geometry=1254`, `remesh_fluid=338` e generation/remesh ainda ativos;
-- `pending_priority_max_us=3067` e `ready_priority_max_us=10`, compatíveis com o budget e sem qualquer retorno dos stalls de 100–500 ms de `main_work` vistos nos logs anteriores.
-
-Conclusão empírica: a sequência selection delta -> remoção do retain full-scan -> deferred full-chunk lighting -> deferred unload boundary lighting removeu o stall severo de streaming/main thread sob a caminhada longa testada. O spike de render no startup fica como dívida separada de presentation/rendering e não reabre o Streaming scheduler v2.
-
-`0346ae55663f3bece534b9fe75a2f058d440d28f` corrige apenas o lint `manual_is_multiple_of` introduzido pelo Rust 1.98 no cut de lighting; CI `36615991956` / #10252 success.
-
-**Phase 4 concluída:** correctness, boundedness e responsividade empírica do Streaming scheduler v2 estão validadas. O spike de render startup permanece como dívida separada de presentation/rendering.
+**Phase 4 concluída.**
 
 ## Phase 5 — Terrain generation v2
 
-Meta: generation é job determinístico de authoritative world data, sem scheduling/ECS/render publication.
-
-### Implementação concluída
-
-- `f602bdbd6b3c74cb77d54c291fd7b163effde6bc`: `ChunkGenerationJob` recebe `ChunkCoord + Arc<GenerationSnapshot>`; CI `36598783588` success.
+- `ChunkGenerationJob` recebe `ChunkCoord + Arc<GenerationSnapshot>` e retorna `VoxelChunk` (`f602bdbd...`).
 - scheduler possui revision/dedup/cap/permit/cancellation; job possui somente calculation.
-- `77cba7c7bcb8fe49aadd0f64a16d657277030c73`: `GenerationSnapshot::from_context` + regressão de determinismo autoritativo usando `DiskChunk`; CI `36600832740` success.
-- caches derivados podem aquecer sem alterar o resultado autoritativo.
-- `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef`: benchmark manual/ignored só de `ChunkGenerationJob::run`; CI `36602768937` success.
-- benchmark manual, somente quando explicitamente solicitado: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
-
-### Audit final / exit criteria
-
-- production runtime e loading usam o mesmo caminho `GenerationScheduler -> ChunkGenerationJob -> generate_chunk`; o audit não encontrou outro caller síncrono direto de `generate_chunk` no production/frame path.
-- `ChunkGenerationJob` recebe somente `ChunkCoord + Arc<GenerationSnapshot>` e retorna `VoxelChunk`; não possui ECS, render, entity spawn, UI ou publication side effects.
-- `GenerationSnapshot` captura inputs imutáveis de generation; mudança relevante de input incrementa `TaskInputRevision` no scheduler.
-- a revision viaja com cada task em `CompletedChunkTask`; `collect_generated_chunks` rejeita completion de revision stale antes de qualquer publication e só requeuea quando a coord ainda é desejada.
-- `wants_generation` exige `residency.desired`, portanto chunk apenas retained não inicia nem publica generation nova.
-- publication distingue `Resident`, `Archived` e `Absent`: resident não é sobrescrito; archived restaura a verdade persistida; somente absent pode publicar o output gerado.
-- `VoxelWorld::insert_chunk` reforça atomicidade no nível de chunk e rejeita overwrite de conteúdo resident/persisted.
-- depois do insert autoritativo, settling/staging assume ownership da world truth; abandonar async work não pode apagar chunk que já entrou nesse lifecycle.
-- coverage existente já trava os boundaries relevantes: determinismo do job, availability resident/archived/absent, retained não elegível para generation, ownership staged/settling e invariantes do storage. Não foi adicionada uma regressão Bevy sintética apenas para fechamento porque o audit não encontrou gap de comportamento ou ownership.
-- os exit criteria de `docs/asteria-core-rebuild.md` estão satisfeitos: terrain job é determinístico e benchmarkável independentemente, e generation calculation não cria meshes/entities nem muta estado de UI/render.
+- determinism regression usa output autoritativo canonicalizado (`77cba7c7...`).
+- benchmark manual/ignored de `ChunkGenerationJob::run` (`d6a9f7bd...`).
+- runtime/loading usam `GenerationScheduler -> ChunkGenerationJob -> generate_chunk`.
+- publication rejeita task revision stale e coord fora de `desired` antes do insert.
+- resident não é sobrescrito; archived restaura persistência; somente absent recebe generation output.
 
 **Phase 5 concluída.**
 
-### Correção da política de CI
+### Política de CI
 
-O workflow deste branch ainda continha indevidamente um step `Test` com `cargo test --locked`. Isso contrariava a decisão já estabelecida de não executar a suíte de testes automaticamente neste branch e fez o run #10253 entrar em `Test` após Clippy. O step foi removido em `7b02f1b0ac1adb7efe3fea29f2e8e609bfd736d9`; CI `36621055414` / #10254 passou audits + Clippy + Check sem step Test.
-
-Gate correto daqui para frente: audits de conteúdo/assets + Clippy + `cargo check`. `cargo test` permanece disponível apenas para execução manual e explícita, inclusive benchmarks/tests ignored específicos.
+O step automático `cargo test --locked` foi removido em `7b02f1b0ac1adb7efe3fea29f2e8e609bfd736d9`. CI #10254 confirmou audits + Clippy + Check sem Test. `cargo test` permanece somente manual/explícito.
 
 ## Phase 6 — Structures, connectors and feature planning
 
@@ -216,40 +91,49 @@ Meta: generalized structures são o único mecanismo authored para world feature
 
 ### Audit inicial
 
-O código já possui uma base forte herdada da Phase 3, mas os owners ainda estão misturados:
+- `StructureField` já enumera roots deterministicamente sem materializar chunks.
+- connector/group resolution já é deterministic por seed/id/anchor/rotation e suporta target de structure/group.
+- `generation/structures.rs` ainda mistura placement planning, conflict resolution e rasterization.
+- antes dos cuts da Phase 6, `StructureField` importava planning de `world::generation`, invertendo a dependency direction.
+- connector graph possui `MAX_CONNECTOR_CHAIN_DEPTH = 64`, mas ainda não possui cap explícito para total de pieces/nodes; fan-out continua dívida.
+- resolved placement plans são valores de domínio; caches podem armazená-los, mas não são owner da decisão.
 
-- `StructureField` é determinístico e consegue enumerar roots que intersectam uma área sem materializar chunks;
-- `StructureMetadata` é preservado quando `WorldFeatureFields` troca caches, portanto metadata já não depende da residency/rendering;
-- `generation/structures.rs` ainda concentra placement planning, conflict resolution e rasterization no mesmo módulo de ~49 KB;
-- `StructureField` ainda importa `connected_horizontal_bounds_for_reference` e `structure_candidate_anchor` de `world::generation`, invertendo a direção desejada entre metadata/planning e materialization;
-- connector/group resolution é determinístico por seed/id/anchor/rotation e suporta target de structure/group;
-- connector graph possui depth cap (`MAX_CONNECTOR_CHAIN_DEPTH = 64`), mas ainda não possui cap explícito para número total de pieces/nodes; fan-out continua sendo dívida da Phase 6;
-- resolved forests/candidates são cacheados em `WorldFeatureFields`; esses caches são derivados e bounded, mas os tipos de plano resolvido estavam definidos no próprio cache owner, confundindo lifetime de cache com ownership semântico do plano.
+### Cut 1 — resolved plan ownership
 
-### Cut 1 — resolved plan deixa de pertencer ao cache owner
+Commit `3434909e3a730b8a4108a190c19a35ffb76011b5` (`Define resolved structure plan ownership`), CI #10259 success.
 
-- `ResolvedStructurePlanPiece` passa a representar uma decisão imutável de `structure_id + rotation + anchor + origin_y` dentro de um placement resolvido;
-- `ResolvedStructurePlan` contém as pieces e bounds horizontal/vertical do placement inteiro, inclusive quando cruza chunks não residentes;
-- ambos vivem em `structure_metadata.rs`, junto ao domínio de intent/planning, e não em `world_feature_fields.rs`;
-- `WorldFeatureFields` mantém somente aliases de compatibilidade (`CachedStructureForest*`) enquanto os call sites de generation migram; o cache continua livre para descartar/recomputar o valor sem se tornar owner da decisão;
-- este cut não muda hashing, seleção, conflict resolution nem rasterization; é exclusivamente um cut de ownership/type boundary.
+- `ResolvedStructurePlanPiece` representa `structure_id + rotation + anchor + origin_y`.
+- `ResolvedStructurePlan` contém pieces e bounds horizontal/vertical do placement inteiro.
+- os tipos vivem em `structure_metadata.rs`, não em `WorldFeatureFields`.
+- `WorldFeatureFields` mantém aliases temporários `CachedStructureForest*` durante migration de call sites.
+- hashing/selection/conflict/rasterization não mudaram nesse cut.
+
+### Cut 2 — planning sai de generation
+
+Implementação atual deste cut:
+
+- planning puro passa para `src/world/structure_metadata/planning/`;
+- owner inclui `connectors`, `placement`, `set`, `hash` e `geometry`;
+- `StructureField` passa a importar `connected_horizontal_bounds_for_reference` e `structure_candidate_anchor` diretamente de `structure_metadata::planning`, removendo a dependency `metadata -> generation`;
+- os paths antigos em `generation/structures/{connectors,placement,set,hash,geometry}.rs` tornam-se adapters mínimos de re-export para manter `generation/structures.rs` estável neste migration block;
+- algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais neste cut;
+- os adapters são temporários: o próximo cut deve separar candidate/conflict resolution de rasterization e remover esses wrappers, em vez de transformá-los em compatibilidade permanente.
 
 ### Próximos cuts
 
-1. mover os módulos puros `connectors`, `placement`, `set`, `hash` e `geometry` para um owner explícito de structure planning fora de `generation`;
-2. fazer `StructureField` depender diretamente desse planner, removendo a dependência metadata -> generation;
-3. separar candidate/conflict resolution de `rasterize_structures`, fazendo materialization consumir `ResolvedStructurePlan` em vez de construir o plano;
-4. adicionar cap explícito de pieces/nodes e, se necessário, cap de estados avaliados nos bounds de connector graphs;
-5. depois migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por esse path generalizado, sem hydrology paralelo.
+1. separar candidate/conflict resolution de `rasterize_structures`; materialization deve consumir `ResolvedStructurePlan` em vez de construir o plano;
+2. remover os adapters `generation/structures/*` após migrar os call sites para o planner owner;
+3. adicionar cap explícito de total de pieces/nodes e, se necessário, cap dos estados avaliados em connector bounds;
+4. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
+5. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
 
 ## Regras de continuidade
 
 - trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
-- cada bloco coerente deve atualizar este `HANDOFF.md` no mesmo commit;
-- conferir diff de arquivos grandes regravados;
-- verificar CI antes do próximo migration block;
-- gate deste branch = audits + Clippy + Check; não executar/aguardar `cargo test` no CI;
-- se audits/Clippy/Check falharem, abrir logs e corrigir root cause; não esconder warning com `allow`;
+- cada bloco coerente deve terminar como um único commit com código + `HANDOFF.md`;
+- verificar CI antes de iniciar o próximo migration block;
+- gate = audits + Clippy + Check; não aguardar/executar `cargo test` automaticamente;
+- se o gate falhar, abrir logs e corrigir root cause; não esconder warnings com `allow`;
 - preservar gameplay/content/UI/assets válidos durante o rebuild;
 - não reintroduzir hydrology legado;
 - não inventar performance claims sem logs reais.

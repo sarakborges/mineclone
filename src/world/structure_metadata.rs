@@ -1,3 +1,5 @@
+pub(crate) mod planning;
+
 use std::{ops::Deref, sync::Arc};
 
 use bevy::prelude::IVec2;
