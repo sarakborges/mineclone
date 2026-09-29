@@ -158,20 +158,21 @@ CI #10277 passou todos os audits e falhou apenas no Clippy `needless_lifetimes` 
 
 ### Cut 6 — adapters de planning removidos de generation
 
-Estado deste cut:
+Commit `fda250504219b413e27ac2e472d4615e9dafbeb6` (`Remove generation planning adapters`).
 
 - `generation/structures.rs` importa `connectors`, `geometry`, `hash`, `placement` e `set` diretamente de `structure_metadata::planning`;
 - os cinco arquivos `generation/structures/{connectors,geometry,hash,placement,set}.rs`, que continham apenas re-exports de uma linha, foram removidos;
-- o `const _` temporário de type-check em `generation.rs` foi removido junto com o adapter que justificava sua existência;
 - `generation.rs` mantém seus re-exports públicos atuais de APIs de structures para não misturar cleanup de ownership com migração de consumidores externos neste cut;
 - `restrictions.rs` e `support.rs` permanecem em generation porque ainda consomem terrain/`ChunkGenerationContext` e não são planning puro;
 - nenhum hashing, connector traversal, candidate selection, conflict policy, ground-fit, rasterização ou materialization mudou neste cut.
+
+CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizontal_bounds_for_reference`, agora importado diretamente do planner por `generation/structures.rs`, ainda é um re-export sem consumidor runtime. O corretivo mantém temporariamente um `const _` de type-check em `generation.rs`; ele não executa trabalho e será removido quando os re-exports públicos restantes de structures forem auditados/migrados. Os cinco arquivos-adapter continuam removidos.
 
 ### Próximos cuts
 
 1. formalizar reservation/conflict semantics atravessando chunk boundaries no planner e adicionar cobertura específica de boundary/priority sem ativar testes automáticos no CI;
 2. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
-3. auditar os re-exports públicos restantes de `generation` e migrar consumidores somente onde isso melhorar ownership sem criar churn artificial;
+3. auditar os re-exports públicos restantes de `generation` e eliminar também o `const _` temporário sem reintroduzir dependency inversion;
 4. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
 
 ## Regras de continuidade
