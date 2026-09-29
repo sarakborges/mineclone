@@ -301,7 +301,7 @@ impl ChunkRemeshQueue {
             // A one-voxel lighting halo can only influence neighbor terrain
             // that actually touches the boundary facing the changed chunk.
             let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
-            if chunk.boundary_has_content(-offset) {
+            if chunk.has_terrain_content() && chunk.boundary_has_content(-offset) {
                 self.enqueue_lighting_meshlets(neighbor, meshlets, false);
             }
             if chunk.boundary_has_fluid(-offset) {
