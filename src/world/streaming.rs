@@ -776,6 +776,7 @@ mod tests {
         );
 
         state.residency.desired.remove(&coord);
+        state.mark_selection_rebuilt();
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             Some(coord)
@@ -797,8 +798,8 @@ mod tests {
 
     #[test]
     fn forward_preload_stays_resident_without_allocating_a_gpu_mesh() {
-        let visible = IVec3::new(14, 0, 0);
-        let hysteresis = IVec3::new(15, 0, 0);
+        let visible = IVec3::new(13, 0, 0);
+        let hysteresis = IVec3::new(14, 0, 0);
         let preload_only = IVec3::new(20, 0, 0);
         let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
         state
@@ -833,7 +834,7 @@ mod tests {
         assert_eq!(state.pop_ready(), Some(visible));
 
         assert_eq!(state.pop_ready(), None);
-        state.selection_state.commit_rebuild(IVec3::new(6, 0, 0), 12, 0);
+        state.selection_state.commit_rebuild(IVec3::new(7, 0, 0), 12, 0);
         state.mark_selection_rebuilt();
         assert_eq!(state.pop_ready(), Some(preload_only));
     }
