@@ -34,7 +34,8 @@
 - Phase 3 concluída: biome/structure metadata independente de render/materialization; caches derivados bounded.
 - Phase 4 concluída: Streaming scheduler v2 correctness + boundedness + responsiveness validados.
 - Phase 5 concluída: Terrain generation v2 isolada em jobs determinísticos e stale-safe.
-- Phase 6 em andamento: structures/connectors/feature planning.
+- Phase 6 concluída: structures/connectors/feature planning com ownership, boundedness e authored feature path auditados.
+- Phase 7 é a próxima: voxel presentation / meshing v2.
 
 ## Contracts que não devem regredir
 
@@ -202,11 +203,30 @@ Commit `ef651573aa8fa611e146ac21c23dab6c9d53e634` (`Remove final generation plan
 - nenhuma lógica de planning, metadata bounds, candidate collection, materialization, rasterization ou terrain fitting mudou neste cut;
 - com isso não resta bridge artificial criado pela migração Phase 6 entre `generation` e o owner de planning.
 
-### Próximos cuts
+### Audit final / exit criteria
 
-1. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
-2. auditar qualquer feature-generation paralelo restante e confirmar ausência de hydrology legado;
-3. revisar os exit criteria formais da Phase 6 e fechar a fase somente depois de ownership/boundedness/content-path audit completos.
+- conteúdo authored de cavernas já usa o mecanismo generalized: `asteria:overworld/caverns` referencia o group `asteria:cavern_entrance_start`; as cinco entrance variants pertencem a esse group e conectam para `asteria:cavern_tunnel_segment`; as nove tunnel variants pertencem a esse segundo group, incluindo straight, diagonals, curves e spirals;
+- não existe gerador especial de cave entrance/tunnel em `src/`; a cadeia authored entra pelo volume-structure collector, usa deterministic member selection + connector expansion + planner conflict resolution e só então materialization por chunk;
+- cavern carving em `density_sampling` é terrain/volume-biome shaping, não authored feature planning; ele só define o espaço cavernoso e não possui entrance/tunnel/connector graph;
+- `BiomeSurfaceFluid` contém somente `VolcanoCrater`; `generation/fluids.rs` trata sea + crater/spill local. Não existe river/lake escondido nesse path;
+- árvore de `src/` e `data/` não contém `hydrology`, `river` ou `lake`; não há subsystem legado/paralelo a remover no HEAD atual;
+- **intent sem render**: `StructureField` é construído de seed + biome/structure/set content, guarda reference bounds e enumera anchors intersecting sem resident/render chunks; `WorldFeatureFields` mantém `StructureMetadata` separado de caches descartáveis;
+- **materialization chunk-boundary-safe**: o cache mantém `ResolvedStructurePlacement` completo e consumers filtram pieces pela interseção do chunk; load/render order não decide o placement;
+- **connectors deterministic e bounded**: selection é seed/hash-driven, depth cap = 64, runtime forest cap = 256 pieces e metadata bounds usam strength buckets conservadores;
+- **interactions previsíveis**: priority/reservation/conflict groups pertencem ao planner e o contract cross-chunk está coberto no Cut 7;
+- futuros rivers/lakes continuam explicitamente destinados ao mesmo structures/connectors model; eles não são requisito de conteúdo para encerrar esta infraestrutura e hydrology paralelo continua proibido.
+
+**Phase 6 concluída.** Todos os exit criteria formais de `docs/asteria-core-rebuild.md` estão satisfeitos pelo architecture/content audit atual.
+
+### Próxima fase — Phase 7: Voxel presentation / meshing v2
+
+Próximo gate de trabalho após CI verde do fechamento da Phase 6:
+
+1. auditar render-section identity, source revision e ownership atuais;
+2. mapear snapshot/halo de meshing e publication stale checks;
+3. separar custo de meshing de custo de render submission/presentation;
+4. atacar primeiro o maior boundary incorreto medido, preservando authoritative world como owner único;
+5. manter o spike conhecido de startup/render (~217 ms, ~188.7 ms render work no último gameplay log) como dívida de presentation a investigar nesta fase, sem atribuir causa antes de profiling.
 
 ## Regras de continuidade
 
