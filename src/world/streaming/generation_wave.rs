@@ -58,10 +58,16 @@ impl GenerationWaveState {
     }
 
     pub(super) fn abandon_target(&mut self, coord: IVec3) {
-        let coord = ChunkCoord::from_ivec3(coord);
-        self.pending.remove(coord);
-        self.targets.remove(&coord);
-        self.prefetch_targets.remove(&coord);
+        let chunk_coord = ChunkCoord::from_ivec3(coord);
+        assert!(
+            !self.staged_generated_chunks.contains(&chunk_coord)
+                && !self.settled_publication_chunks.contains(&chunk_coord)
+                && !self.fluid_settling.contains(coord),
+            "generation target cannot be abandoned after world truth enters staged/settling/publication ownership: {coord:?}"
+        );
+        self.pending.remove(chunk_coord);
+        self.targets.remove(&chunk_coord);
+        self.prefetch_targets.remove(&chunk_coord);
     }
 
     pub(super) fn mark_prefetched(&mut self, coord: IVec3) {
@@ -207,5 +213,39 @@ impl GenerationWaveState {
 
     pub(super) fn settling_or_publishing(&self) -> bool {
         self.fluid_settling.is_active() || !self.settled_publication_chunks.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abandonment_clears_pending_and_prefetch_reservations() {
+        let pending = IVec3::new(1, 2, 3);
+        let prefetched = IVec3::new(-4, 1, 7);
+        let mut wave = GenerationWaveState::default();
+        wave.start_target(pending);
+        wave.mark_prefetched(prefetched);
+
+        wave.abandon_target(pending);
+        wave.abandon_target(prefetched);
+
+        assert_eq!(wave.pending_len(), 0);
+        assert!(!wave.contains_target(pending));
+        assert!(!wave.contains_prefetch(prefetched));
+        assert!(!wave.contains_unpublished(pending));
+        assert!(!wave.contains_unpublished(prefetched));
+    }
+
+    #[test]
+    #[should_panic(expected = "generation target cannot be abandoned after world truth enters staged/settling/publication ownership")]
+    fn staged_world_truth_cannot_be_abandoned_as_async_work() {
+        let coord = IVec3::new(3, 1, -2);
+        let mut wave = GenerationWaveState::default();
+        wave.start_target(coord);
+        wave.stage_generated_chunk(coord);
+
+        wave.abandon_target(coord);
     }
 }
