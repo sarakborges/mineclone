@@ -22,10 +22,6 @@ pub(crate) struct GenerationScheduler {
     pending: ChunkTaskQueue<VoxelChunk>,
 }
 
-/// Transitional compatibility name while call sites move from the old
-/// task-container vocabulary to the explicit scheduler owner.
-pub(crate) type ChunkGenerationTasks = GenerationScheduler;
-
 impl GenerationScheduler {
     pub(crate) fn sync_snapshot(
         &mut self,
