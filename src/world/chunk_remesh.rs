@@ -34,6 +34,7 @@ const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 struct RemeshDispatchContext<'a> {
     world: &'a VoxelWorld,
     render_pool: &'a ChunkRenderPool,
+    streaming: &'a ChunkStreamingState,
     async_work: &'a ChunkAsyncWorkLimiter,
     center: Option<IVec3>,
     deadline: Instant,
@@ -58,6 +59,7 @@ pub(super) fn process_chunk_remesh_queue(
             &content,
             &mut renderer,
             &world,
+            &streaming,
             &mut queue,
             &mut tasks,
             frame_budget.deadline(),
@@ -80,6 +82,7 @@ pub(super) fn process_chunk_remesh_queue(
         RemeshDispatchContext {
             world: &world,
             render_pool: &renderer.pool,
+            streaming: &streaming,
             async_work: &async_work,
             center: streaming.center(),
             deadline: frame_budget.deadline(),
@@ -94,6 +97,7 @@ fn collect_completed_remesh_tasks(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     world: &VoxelWorld,
+    streaming: &ChunkStreamingState,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deadline: Instant,
@@ -117,7 +121,10 @@ fn collect_completed_remesh_tasks(
         let output = completed.output;
         let kind = output.kind;
         let meshlets = output.meshlets;
-        if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
+        if !streaming.retains_render_mesh(coord)
+            || !renderer.pool.contains(coord)
+            || world.chunk(coord).is_none()
+        {
             continue;
         }
         if completed.revision != current_revision {
@@ -207,6 +214,10 @@ fn dispatch_remesh_tasks(
         // Deferred and stale candidates also consume main-thread work. Charge
         // the attempt before any early return can bypass the frame budget.
         budget.record(1);
+        if !context.streaming.retains_render_mesh(coord) {
+            queue.remove(coord);
+            continue;
+        }
         let (kind, meshlets) =
             queue.coalesce_terrain_work(coord, kind, meshlets);
 
