@@ -139,6 +139,41 @@ where
         None
     }
 
+    pub(crate) fn pop_where(&mut self, mut predicate: impl FnMut(T) -> bool) -> Option<T> {
+        self.compact_if_sparse();
+        let index = self.pending.iter().position(|(value, generation)| {
+            self.queued.get(value).copied() == Some(*generation) && predicate(*value)
+        })?;
+        Some(self.remove_active_index(index))
+    }
+
+    pub(crate) fn pop_min_where_by_key<K: Ord>(
+        &mut self,
+        mut predicate: impl FnMut(T) -> bool,
+        mut key: impl FnMut(T) -> K,
+    ) -> Option<T> {
+        self.compact_if_sparse();
+        let mut best: Option<(usize, K)> = None;
+
+        for (index, (value, generation)) in self.pending.iter().enumerate() {
+            if self.queued.get(value).copied() != Some(*generation)
+                || !predicate(*value)
+            {
+                continue;
+            }
+            let candidate_key = key(*value);
+            if best
+                .as_ref()
+                .is_none_or(|(_, best_key)| candidate_key < *best_key)
+            {
+                best = Some((index, candidate_key));
+            }
+        }
+
+        let (index, _) = best?;
+        Some(self.remove_active_index(index))
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.queued.len()
     }
@@ -155,6 +190,21 @@ where
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision
+    }
+
+    fn remove_active_index(&mut self, index: usize) -> T {
+        let (value, generation) = self
+            .pending
+            .remove(index)
+            .expect("located queue index must remain valid");
+        debug_assert_eq!(self.queued.get(&value).copied(), Some(generation));
+        self.queued.remove(&value);
+
+        if self.queued.is_empty() {
+            self.pending.clear();
+        }
+        self.bump_revision();
+        value
     }
 
     fn next_generation(&mut self) -> u64 {
@@ -262,6 +312,35 @@ mod tests {
         assert!(!queue.remove(3));
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn pop_where_preserves_deferred_entries() {
+        let mut queue = DeduplicatedQueue::default();
+        queue.enqueue(1);
+        queue.enqueue(2);
+        queue.enqueue(3);
+
+        assert_eq!(queue.pop_where(|value| value % 2 == 0), Some(2));
+        assert_eq!(queue.pop(), Some(1));
+        assert_eq!(queue.pop(), Some(3));
+    }
+
+    #[test]
+    fn pop_min_where_by_key_preserves_ineligible_values() {
+        let mut queue = DeduplicatedQueue::from(vec![7, 3, 9, 5]);
+
+        assert_eq!(
+            queue.pop_min_where_by_key(|value| value > 5, |value| value),
+            Some(7)
+        );
+        assert!(queue.contains(3));
+        assert!(queue.contains(5));
+        assert_eq!(
+            queue.pop_min_where_by_key(|value| value > 20, |value| value),
+            None
+        );
+        assert_eq!(queue.len(), 3);
     }
 
     #[test]
