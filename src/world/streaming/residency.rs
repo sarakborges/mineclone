@@ -142,7 +142,7 @@ impl ChunkResidencyState {
 }
 
 impl super::ChunkStreamingState {
-    pub(super) fn diagnostic_retired_count(&self) -> usize {
+    pub(in crate::world) fn diagnostic_retired_count(&self) -> usize {
         self.residency.retired_len()
     }
 }
