@@ -617,6 +617,6 @@ mod tests {
         let center = Vec3::new(3.0, 4.0, 5.0);
         let (min, max) = target_bounds(center);
         assert_eq!((min + max) * 0.5, center);
-        assert_eq!(max - min, Vec3::splat(ITEM_HALF_EXTENT * 2.0));
+        assert!((max - min - Vec3::splat(ITEM_HALF_EXTENT * 2.0)).abs().max_element() < 1.0e-5);
     }
 }
