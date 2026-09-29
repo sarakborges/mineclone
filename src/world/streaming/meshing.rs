@@ -153,21 +153,6 @@ pub(super) fn collect_built_chunk_meshes(
             break;
         };
         let movement_direction = work.state.movement_direction();
-        let Some(next_coord) = work.mesh_tasks.best_coord_by_key(|coord| {
-            chunk_load_priority(coord, center, movement_direction)
-        }) else {
-            break;
-        };
-
-        if !work.state.retains_render_mesh(next_coord) {
-            let cancelled = work.mesh_tasks.cancel_farthest_where(center, |coord| {
-                coord == next_coord
-            });
-            debug_assert_eq!(cancelled, Some(next_coord));
-            work.state.mark_ready(next_coord);
-            budget.record(1);
-            continue;
-        }
 
         // Publish the nearest mesh that has actually finished. A slower
         // higher-priority task must not head-of-line block other completed

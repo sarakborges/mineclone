@@ -143,15 +143,6 @@ impl PresentationScheduler {
             .map(ChunkCoord::as_ivec3)
     }
 
-    pub(crate) fn best_coord_by_key<K: Ord>(
-        &self,
-        mut key: impl FnMut(IVec3) -> K,
-    ) -> Option<IVec3> {
-        self.pending
-            .best_coord_by_key(|coord| key(coord.as_ivec3()))
-            .map(ChunkCoord::as_ivec3)
-    }
-
     pub(crate) fn poll_ready_by_key<K: Ord>(
         &mut self,
         mut key: impl FnMut(IVec3) -> K,

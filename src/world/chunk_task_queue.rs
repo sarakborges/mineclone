@@ -68,13 +68,6 @@ impl<T> ChunkTaskQueue<T> {
         coords
     }
 
-    pub(crate) fn best_coord_by_key<K: Ord>(
-        &self,
-        mut key: impl FnMut(ChunkCoord) -> K,
-    ) -> Option<ChunkCoord> {
-        self.pending.keys().copied().min_by_key(|coord| key(*coord))
-    }
-
     pub(crate) fn insert(
         &mut self,
         coord: ChunkCoord,
