@@ -2,7 +2,37 @@ use std::{ops::Deref, sync::Arc};
 
 use bevy::prelude::IVec2;
 
+use crate::content::structure::StructureRotation;
+
 use super::structure_field::StructureField;
+
+/// One immutable materialization decision inside a resolved authored structure plan.
+///
+/// The value belongs to the world-domain planning contract. A cache may retain it,
+/// but cache eviction must never change what the same deterministic planning inputs
+/// resolve to.
+#[derive(Clone, Debug)]
+pub(crate) struct ResolvedStructurePlanPiece {
+    pub(crate) structure_id: String,
+    pub(crate) rotation: StructureRotation,
+    pub(crate) anchor: IVec2,
+    pub(crate) origin_y: i32,
+    pub(crate) primary_placement_piece: bool,
+}
+
+/// Immutable resolved structure intent for one authored placement occurrence.
+///
+/// This is deliberately distinct from both cache ownership and voxel
+/// materialization. It can describe pieces that cross unloaded chunk boundaries;
+/// generation later applies only the pieces intersecting the chunk being built.
+#[derive(Clone, Debug)]
+pub(crate) struct ResolvedStructurePlan {
+    pub(crate) pieces: Vec<ResolvedStructurePlanPiece>,
+    pub(crate) minimum: IVec2,
+    pub(crate) maximum: IVec2,
+    pub(crate) minimum_y: i32,
+    pub(crate) maximum_y: i32,
+}
 
 /// Deterministic authored structure intent for a world.
 ///

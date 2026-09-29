@@ -21,23 +21,10 @@ pub(crate) struct CachedStructureCandidate {
     pub(crate) primary_placement_piece: bool,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureForestPiece {
-    pub(crate) structure_id: String,
-    pub(crate) rotation: StructureRotation,
-    pub(crate) anchor: IVec2,
-    pub(crate) origin_y: i32,
-    pub(crate) primary_placement_piece: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureForest {
-    pub(crate) pieces: Vec<CachedStructureForestPiece>,
-    pub(crate) minimum: IVec2,
-    pub(crate) maximum: IVec2,
-    pub(crate) minimum_y: i32,
-    pub(crate) maximum_y: i32,
-}
+pub(crate) use super::structure_metadata::{
+    ResolvedStructurePlan as CachedStructureForest,
+    ResolvedStructurePlanPiece as CachedStructureForestPiece,
+};
 
 use self::cache::FeatureCaches;
 use super::{

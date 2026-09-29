@@ -34,7 +34,7 @@
 - **Phase 3 concluída:** biome/structure metadata independente de render/materialization; caches derivados bounded.
 - **Phase 4 concluída:** correctness, boundedness e responsividade empírica do Streaming scheduler v2 validadas em gameplay e CI.
 - **Phase 5 concluída:** Terrain generation v2 isolada em jobs determinísticos, benchmarkável e com publication revision/relevance-safe.
-- **Phase 6 é o próximo bloco:** structures/connectors/feature planning sobre metadata determinística, sem ressuscitar hydrology legado.
+- **Phase 6 em andamento:** structures/connectors/feature planning; primeiro cut separa o valor de plano resolvido do cache owner.
 
 ## Phase 2 — contracts que não devem regredir
 
@@ -206,17 +206,41 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 
 ### Correção da política de CI
 
-O workflow deste branch ainda continha indevidamente um step `Test` com `cargo test --locked`. Isso contrariava a decisão já estabelecida de não executar a suíte de testes automaticamente neste branch e fez o run #10253 entrar em `Test` após Clippy. O step foi removido no cut imediatamente posterior a `d0207bee`.
+O workflow deste branch ainda continha indevidamente um step `Test` com `cargo test --locked`. Isso contrariava a decisão já estabelecida de não executar a suíte de testes automaticamente neste branch e fez o run #10253 entrar em `Test` após Clippy. O step foi removido em `7b02f1b0ac1adb7efe3fea29f2e8e609bfd736d9`; CI `36621055414` / #10254 passou audits + Clippy + Check sem step Test.
 
 Gate correto daqui para frente: audits de conteúdo/assets + Clippy + `cargo check`. `cargo test` permanece disponível apenas para execução manual e explícita, inclusive benchmarks/tests ignored específicos.
 
-### Próximo bloco — Phase 6
+## Phase 6 — Structures, connectors and feature planning
 
-1. auditar o planning/materialization atual de structures/connectors contra os contracts formais da Phase 6;
-2. separar metadata/planning determinístico de qualquer aplicação/materialization que ainda esteja acoplada;
-3. garantir budgets/caps explícitos para expansão de connector graphs e structure groups;
-4. manter rivers/lakes/cave entrances no modelo generalizado de structures/connectors, sem reintroduzir hydrology legado;
-5. atualizar este HANDOFF em cada cut e manter o gate audits + Clippy + Check verde entre blocos.
+Meta: generalized structures são o único mecanismo authored para world features long-form; planning/reservation não pertence ao cache nem à presentation.
+
+### Audit inicial
+
+O código já possui uma base forte herdada da Phase 3, mas os owners ainda estão misturados:
+
+- `StructureField` é determinístico e consegue enumerar roots que intersectam uma área sem materializar chunks;
+- `StructureMetadata` é preservado quando `WorldFeatureFields` troca caches, portanto metadata já não depende da residency/rendering;
+- `generation/structures.rs` ainda concentra placement planning, conflict resolution e rasterization no mesmo módulo de ~49 KB;
+- `StructureField` ainda importa `connected_horizontal_bounds_for_reference` e `structure_candidate_anchor` de `world::generation`, invertendo a direção desejada entre metadata/planning e materialization;
+- connector/group resolution é determinístico por seed/id/anchor/rotation e suporta target de structure/group;
+- connector graph possui depth cap (`MAX_CONNECTOR_CHAIN_DEPTH = 64`), mas ainda não possui cap explícito para número total de pieces/nodes; fan-out continua sendo dívida da Phase 6;
+- resolved forests/candidates são cacheados em `WorldFeatureFields`; esses caches são derivados e bounded, mas os tipos de plano resolvido estavam definidos no próprio cache owner, confundindo lifetime de cache com ownership semântico do plano.
+
+### Cut 1 — resolved plan deixa de pertencer ao cache owner
+
+- `ResolvedStructurePlanPiece` passa a representar uma decisão imutável de `structure_id + rotation + anchor + origin_y` dentro de um placement resolvido;
+- `ResolvedStructurePlan` contém as pieces e bounds horizontal/vertical do placement inteiro, inclusive quando cruza chunks não residentes;
+- ambos vivem em `structure_metadata.rs`, junto ao domínio de intent/planning, e não em `world_feature_fields.rs`;
+- `WorldFeatureFields` mantém somente aliases de compatibilidade (`CachedStructureForest*`) enquanto os call sites de generation migram; o cache continua livre para descartar/recomputar o valor sem se tornar owner da decisão;
+- este cut não muda hashing, seleção, conflict resolution nem rasterization; é exclusivamente um cut de ownership/type boundary.
+
+### Próximos cuts
+
+1. mover os módulos puros `connectors`, `placement`, `set`, `hash` e `geometry` para um owner explícito de structure planning fora de `generation`;
+2. fazer `StructureField` depender diretamente desse planner, removendo a dependência metadata -> generation;
+3. separar candidate/conflict resolution de `rasterize_structures`, fazendo materialization consumir `ResolvedStructurePlan` em vez de construir o plano;
+4. adicionar cap explícito de pieces/nodes e, se necessário, cap de estados avaliados nos bounds de connector graphs;
+5. depois migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por esse path generalizado, sem hydrology paralelo.
 
 ## Regras de continuidade
 
