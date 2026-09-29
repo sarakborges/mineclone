@@ -2,7 +2,7 @@
 
 > Handoff corrente. Histórico anterior preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade arquitetural, leia também `docs/asteria-core-rebuild.md`.
 
-## Estado atual — 2026-09-28
+## Estado atual — 2026-09-29
 
 - Repo: `sarakborges/mineclone`.
 - Branch ativa: `architecture/asteria-core-rebuild`.
@@ -125,21 +125,29 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 - remesh async: máximo 4 terrain + 4 fluid tasks; shared `ChunkAsyncWorkLimiter` aplica limite global/adaptativo.
 - loading async usa queue depth de 4 por worker via limiter.
 - `ChunkTaskQueue` é deduplicada; caps pertencem aos schedulers, não ao container genérico.
+- retired scan agora limita tanto inspeção quanto retorno útil por poll/frame path: `MAX_RETIRED_SCAN_STEPS_PER_POLL=16` e `MAX_RETIRED_RESULTS_BEFORE_YIELD=16`. `1442fa3350c2a7d30eb9e30db4341c1f48dace16` força yield após progresso bounded; CI `36582996658` success.
 
 ### Stale-work audit
 
-- generation tasks são canceladas no selection rebuild quando deixam `keeps_loaded`; stale input revision só é requeued se ainda pertencer à seleção/wave atual.
+- generation nova pertence apenas a `desired`; `retained` preserva world truth/materialization temporária, mas não autoriza novo trabalho de generation.
+- selection rebuild agora cancela generation tasks pela membership em `desired`, não por `keeps_loaded`. Isso é especialmente importante em warp disjunto: jobs da seleção anterior não podem manter worker capacity só porque os chunks ficaram temporariamente em `retained`.
+- stale generation input revision só é requeued se ainda pertencer à seleção/wave atual. A varredura defensiva `cancel_generation_outside_desired` em `collect_generated_chunks` permanece por enquanto; remover só depois do CI deste cut e de confirmar que toda remoção de `desired` passa por rebuild.
 - initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
-- remesh tinha uma lacuna: publication/dispatch dependiam de `ChunkRenderPool` membership, então trabalho concluído podia aplicar durante o backlog de render retirement depois que a seleção já não queria mais o mesh.
-- `17402d31753de978ac9499ee3e85784d279976ac` corrige isso: dispatch e publication exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks. CI `36503076178` success.
+- remesh publication/dispatch exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks (`17402d31753de978ac9499ee3e85784d279976ac`).
+- `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes sem confundir ausência de world residency com ausência de render mesh. O prune local acompanha voxel/fluid edits e o retain global roda no máximo uma vez por selection revision. CI `36581123163` success.
 
-### Próximo problema já localizado
+### Observabilidade existente
 
-`ChunkRemeshQueue` pode receber halo invalidations para coordenadas ausentes. Geometry/fluid/lighting scans ignoram chunks não renderizados, mas uma coord realmente sem resident chunk pode ficar na queue/mask maps até alguma remoção externa. O próximo cut deve impedir/prunar **apenas chunks ausentes**, preservando resident preload/unrendered work que ainda pode ser necessário para initial-presentation catchup.
+Não criar outro metrics owner sem necessidade. O diagnóstico periódico atual já cobre:
 
-Não podar remesh queue simplesmente por `ChunkRenderPool`: render residency e world residency são domínios diferentes.
+- `pending`, `ready`, `retired`, generation wave/prefetch/staged;
+- generation/initial-mesh/remesh tasks e shared async limiter;
+- remesh geometry/lighting/fluid queue counts;
+- pending/ready priority scan count, média, máximo e maior queue observada;
+- frame time percentiles + top slow-frame contexts com `selection_revision` e `warp_active`;
+- main/render work percentiles.
 
-Também auditar retired queue: candidatos não residentes devem consumir budget ou ser podados explicitamente; um backlog de selection-history não pode gerar scan loop não-orçado durante warp.
+Adicionar nova métrica somente quando um próximo cut tiver uma hipótese que os sinais acima não consigam provar/refutar.
 
 ## Checkpoints verdes mais recentes
 
@@ -151,14 +159,16 @@ Também auditar retired queue: candidatos não residentes devem consumir budget 
 - `bb2cfb1002c3dac37d139a000ec123301dffa013` — fecha Phase 3 e inicia audit da Phase 4; CI `36499528861` success.
 - `84955d6b6496548cd24fce37a0bed87aea368af7` — ready queue passa a ser residency-bound; CI `36502882704` success.
 - `17402d31753de978ac9499ee3e85784d279976ac` — remesh dispatch/publication rejeita presentation work fora da seleção atual; CI `36503076178` success.
+- `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` — prune local de halo remesh ausente; CI `36581123163` success.
+- `1442fa3350c2a7d30eb9e30db4341c1f48dace16` — retired candidate path passa a forçar yield após progresso bounded; CI `36582996658` success.
 
 ## Phase 4 — próximos cortes
 
-1. impedir/prunar remesh queue entries de chunks realmente ausentes, preservando resident preload work;
-2. garantir que retired candidates inválidos sejam bounded/charged pelo frame budget durante warp/selection churn;
-3. adicionar observabilidade onde falta para provar queue growth bounds, sem criar metrics owners duplicados;
-4. verificar disjoint warp/selection changes end-to-end para generation wave/prefetch/ready/remesh;
-5. só depois considerar remoção de priority rescans redundantes; não reescrever a prioridade por estética.
+1. concluir a auditoria de warp/selection disjunto: confirmar generation wave/prefetch, ready e remesh quando o centro muda sem overlap;
+2. após CI verde do cut desired-only, remover a varredura redundante de `cancel_generation_outside_desired` de todo frame se não existir outro path que retire membership de `desired` fora de rebuild;
+3. revisar ready retained-work em warp disjunto: residency temporária pode sobreviver, mas presentation dispatch não deve competir com o novo centro;
+4. revisar prefetch promotion em `GenerationWaveState::finish()` sob troca de seleção durante fluid settling/publication;
+5. só então considerar outros priority rescans redundantes; não reescrever prioridade por estética.
 
 ## Regras de continuidade
 

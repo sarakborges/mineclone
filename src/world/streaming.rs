@@ -557,9 +557,9 @@ pub(super) fn stream_chunks(
         }
 
         let cancelled_generation = {
-            let state = &work.state;
+            let desired = &work.state.residency.desired;
             work.generation_tasks
-                .cancel_where(|coord| !state.keeps_loaded(coord))
+                .cancel_where(|coord| !desired.contains(&coord))
         };
         for coord in cancelled_generation {
             work.state.generation_wave.abandon_target(coord);
