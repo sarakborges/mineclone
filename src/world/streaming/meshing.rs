@@ -94,7 +94,12 @@ pub(super) fn dispatch_initial_mesh_tasks(
             |neighbor| renderer.pool.contains(neighbor),
         )
         .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !work.mesh_tasks.schedule(coord, snapshot, &work.async_work) {
+        if !work.mesh_tasks.schedule(
+            coord,
+            snapshot,
+            &work.lighting_revisions,
+            &work.async_work,
+        ) {
             work.state.defer_ready(coord);
             break;
         }
@@ -176,7 +181,12 @@ pub(super) fn collect_built_chunk_meshes(
             work.state.mark_ready(completed.coord);
             continue;
         }
-        if !completed.output.dependencies.is_current(&*work.world) {
+        if !completed.output.content_source.is_current(&*work.world)
+            || !completed
+                .output
+                .lighting_source
+                .is_current(&work.lighting_revisions)
+        {
             work.state.mark_ready(completed.coord);
             continue;
         }
@@ -187,7 +197,7 @@ pub(super) fn collect_built_chunk_meshes(
         let chunk_has_fluid = chunk.has_fluid();
         let mut catchup_meshlets = completed
             .output
-            .dependencies
+            .content_source
             .initial_catchup_meshlets_with(&*work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
             });
@@ -261,12 +271,10 @@ fn notify_loaded_chunk_neighbors(
                     continue;
                 };
 
-                let new_content_border =
-                    chunk.dependency_boundary_has_content(offset);
+                let new_content_border = chunk.dependency_boundary_has_content(offset);
                 let geometry = new_content_border
                     && neighbor_chunk.dependency_boundary_has_content(-offset);
-                let has_fluid_border =
-                    neighbor_chunk.dependency_boundary_has_fluid(-offset);
+                let has_fluid_border = neighbor_chunk.dependency_boundary_has_fluid(-offset);
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
                 let fluid = (has_fluid_border && new_content_border) || new_cardinal_fluid;
@@ -308,8 +316,7 @@ mod tests {
         let new_content_border = incoming.dependency_boundary_has_content(offset);
         let geometry = new_content_border
             && neighbor.dependency_boundary_has_content(-offset);
-        let fluid = neighbor.dependency_boundary_has_fluid(-offset)
-            && new_content_border;
+        let fluid = neighbor.dependency_boundary_has_fluid(-offset) && new_content_border;
 
         assert!(!geometry);
         assert!(!fluid);

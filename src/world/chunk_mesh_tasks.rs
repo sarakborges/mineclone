@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::voxel::{coordinates::ChunkCoord, mesh_snapshot::ChunkMeshSnapshot};
+use crate::voxel::{
+    coordinates::ChunkCoord,
+    mesh_snapshot::ChunkMeshSnapshot,
+    meshlet::ChunkMeshletMask,
+};
 
 pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
 use super::{
@@ -10,7 +14,9 @@ use super::{
     chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    presentation_snapshot::ChunkPresentationSource,
+    presentation_snapshot::{
+        ChunkPresentationSource, PresentationLightingRevisions, PresentationLightingSource,
+    },
     revision::TaskInputRevision,
 };
 
@@ -18,7 +24,8 @@ pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
 
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
-    pub(crate) dependencies: ChunkPresentationSource,
+    pub(crate) content_source: ChunkPresentationSource,
+    pub(crate) lighting_source: PresentationLightingSource,
 }
 
 #[derive(Resource, Default)]
@@ -58,11 +65,13 @@ impl PresentationScheduler {
         &mut self,
         coord: IVec3,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
             ChunkCoord::from_ivec3(coord),
             world,
+            lighting_revisions,
             MAX_MESH_TASKS_IN_FLIGHT,
             || limiter.try_acquire_initial_mesh(),
         )
@@ -72,11 +81,13 @@ impl PresentationScheduler {
         &mut self,
         coord: IVec3,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
             ChunkCoord::from_ivec3(coord),
             world,
+            lighting_revisions,
             limiter.loading_queue_limit(),
             || limiter.try_acquire_loading_initial_mesh(),
         )
@@ -86,6 +97,7 @@ impl PresentationScheduler {
         &mut self,
         coord: ChunkCoord,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         pending_limit: usize,
         acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
     ) -> bool {
@@ -102,7 +114,9 @@ impl PresentationScheduler {
             .unwrap_or_else(|| panic!("chunk mesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = ChunkPresentationSource::capture(coord, &world);
+        let content_source = ChunkPresentationSource::capture(coord, &world);
+        let lighting_source =
+            lighting_revisions.capture(coord.as_ivec3(), ChunkMeshletMask::ALL);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             // The meshers now read central voxels directly and build a compact
@@ -111,7 +125,8 @@ impl PresentationScheduler {
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
                 meshes: build_chunk_render_meshes(coord.as_ivec3(), world.chunk(), &context),
-                dependencies,
+                content_source,
+                lighting_source,
             }
         });
 

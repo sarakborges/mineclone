@@ -282,14 +282,23 @@ Commit `eebf02f723bb6b49191e977c542430da3f0c7c5c` (`Move lighting revisions to p
 - retirement/unload continuam chamando `remove_lighting_revision` no scheduler apenas como bridge: o pedido é drenado no começo de `process_chunk_remesh_queue`, no mesmo frame para retirement de Update e no frame seguinte para mesh-pressure retirement de PostUpdate;
 - o mapa real deixa de estar acoplado ao scheduler, abrindo o mesmo owner para initial meshing e para os stamps persistidos no `ChunkRenderPool`;
 - nenhuma regra de lighting propagation, remesh retry, queue priority, mesh building, asset patching ou render lifetime foi alterada neste cut;
-- CI #10292 passou os audits e falhou somente no Clippy `too_many_arguments` de `collect_completed_remesh_tasks`; a correção agrupa os inputs imutáveis de publication em `RemeshCollectionContext`, sem `allow` e sem mudança de comportamento.
+- CI #10292 passou os audits e falhou somente no Clippy `too_many_arguments` de `collect_completed_remesh_tasks`; commit `d29645a675a6fe41a3005d9a00a846b21e2617d0` (`Fix lighting resource Clippy gate`) agrupou os inputs imutáveis em `RemeshCollectionContext`, sem `allow` e sem mudança de comportamento. CI #10293 passou audits + Clippy + Check.
+
+### Cut 6 — initial mesh captura lighting source stamp
+
+- `ChunkMeshTaskOutput` passa a carregar `content_source` e `lighting_source` explicitamente, em vez de um campo genérico `dependencies` que escondia o fato de existirem dois owners de freshness;
+- dispatch de initial mesh em Loading e Gameplay captura `PresentationLightingSource` para `ChunkMeshletMask::ALL` do mesmo resource compartilhado usado pelo remesh;
+- publication de initial mesh rejeita tanto content/halo stale quanto lighting stale antes de criar/alterar render allocation; Loading reschedules imediatamente e streaming devolve o chunk à ready queue;
+- o direct-light seed de streaming continua once-per-residency: retry por lighting stale não reseed e mantém o catch-up de halo/seed já existente;
+- Loading continua com lighting totalmente serializado antes de Meshing, portanto revision zero é um baseline legítimo até existir mudança dinâmica posterior;
+- chunks vazios continuam no caminho síncrono sem async task; o stamp deles será capturado diretamente no momento da futura persistência no `ChunkRenderPool`;
+- nenhuma lógica de mesh building, prioridade, preemption, lighting propagation, entity spawning ou asset lifetime muda neste cut.
 
 ### Próximos cuts
 
-1. fazer initial mesh capturar o `PresentationLightingSource` baseline pelo resource compartilhado, sem colapsar lighting em content revision;
-2. fazer `ChunkRenderPool` preservar os content/lighting source stamps publicados por render section/meshlet, compatível com partial remesh;
-3. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
-4. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
+1. fazer `ChunkRenderPool` preservar os content/lighting source stamps publicados por render section/meshlet, compatível com partial remesh e com publicação síncrona de chunks vazios;
+2. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
+3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade
 

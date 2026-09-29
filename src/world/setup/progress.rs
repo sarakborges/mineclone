@@ -80,6 +80,7 @@ pub(in crate::world) fn setup_world(
                 &mut pipeline.renderer,
                 &mut progress,
                 &mut pipeline.mesh_tasks,
+                &pipeline.lighting_revisions,
                 &pipeline.async_work,
             )
         }

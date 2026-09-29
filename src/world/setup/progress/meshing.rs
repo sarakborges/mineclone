@@ -5,6 +5,7 @@ use crate::{
         chunk_mesh_tasks::ChunkMeshTasks,
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
+        presentation_snapshot::PresentationLightingRevisions,
         work_budget::FrameWorkBudget,
     },
 };
@@ -19,6 +20,7 @@ pub(super) fn mesh_initial_chunks(
     renderer: &mut ChunkRenderer<'_, '_>,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
     mesh_tasks.sync_snapshot(content);
@@ -30,6 +32,7 @@ pub(super) fn mesh_initial_chunks(
         &mut integration_budget,
         progress,
         mesh_tasks,
+        lighting_revisions,
         async_work,
     );
 
@@ -42,6 +45,7 @@ pub(super) fn mesh_initial_chunks(
         &mut dispatch_budget,
         progress,
         mesh_tasks,
+        lighting_revisions,
         async_work,
     );
 
@@ -59,6 +63,7 @@ fn integrate_built_chunk_meshes(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
     let current_revision = mesh_tasks.revision();
@@ -76,12 +81,13 @@ fn integrate_built_chunk_meshes(
         let coord = completed.coord;
         let output = completed.output;
         if completed.revision != current_revision
-            || !output.dependencies.is_current(&*progress.world)
+            || !output.content_source.is_current(&*progress.world)
+            || !output.lighting_source.is_current(lighting_revisions)
         {
             let snapshot = ChunkMeshSnapshot::capture(&*progress.world, coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
             assert!(
-                mesh_tasks.schedule_loading(coord, snapshot, async_work),
+                mesh_tasks.schedule_loading(coord, snapshot, lighting_revisions, async_work),
                 "stale bootstrap mesh must be rescheduled for {coord:?}"
             );
             continue;
@@ -110,6 +116,7 @@ fn dispatch_mesh_tasks(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
     loop {
@@ -128,7 +135,7 @@ fn dispatch_mesh_tasks(
         let chunk_is_empty = progress
             .world
             .chunk(coord)
-            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"))
+            .unwrap_or_else(|| panic!("generated bootstrap chunk data should exist at {coord:?}"))
             .is_empty();
 
         if chunk_is_empty {
@@ -157,7 +164,7 @@ fn dispatch_mesh_tasks(
 
         let snapshot = ChunkMeshSnapshot::capture(&*progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !mesh_tasks.schedule_loading(coord, snapshot, async_work) {
+        if !mesh_tasks.schedule_loading(coord, snapshot, lighting_revisions, async_work) {
             break;
         }
 

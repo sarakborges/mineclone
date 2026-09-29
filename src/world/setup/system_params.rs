@@ -24,6 +24,7 @@ use crate::{
         dimension::CurrentDimension,
         fluid_updates::PendingFluidUpdates,
         game_rules::GameRules,
+        presentation_snapshot::PresentationLightingRevisions,
         render_distance::RenderDistanceSettings,
     },
 };
@@ -88,6 +89,7 @@ pub(in crate::world) struct WorldSetupChunkPipeline<'w, 's> {
     pub(super) renderer: ChunkRenderer<'w, 's>,
     pub(super) generation_tasks: ResMut<'w, GenerationScheduler>,
     pub(super) mesh_tasks: ResMut<'w, ChunkMeshTasks>,
+    pub(super) lighting_revisions: Res<'w, PresentationLightingRevisions>,
     pub(super) async_work: Res<'w, ChunkAsyncWorkLimiter>,
 }
 
