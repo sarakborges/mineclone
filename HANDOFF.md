@@ -19,7 +19,7 @@
 - **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
 - **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
 - **Phase 3 concluída.** Biome/structure metadata é consultável sem render/materialization e caches derivados possuem ownership/bounds explícitos.
-- **Phase 4 — correctness do Streaming scheduler v2 concluído; responsividade empírica reaberta.** Bounds, cancellation e stale-result guards estão cobertos por código/testes. O log real de 2026-09-29 revelou stalls de main thread durante churn de seleção; o cut atual remove full rebuilds desnecessários em movimento adjacente, mas o critério empírico só fecha após novo gameplay log.
+- **Phase 4 — correctness do Streaming scheduler v2 concluído; responsividade empírica reaberta.** O primeiro cut de seleção eliminou os full rebuilds observados, mas o segundo gameplay log ainda mostrou stalls de main thread. O cut atual remove outro trabalho global fora de budget do remesh path; o critério empírico só fecha após novo log.
 - **Phase 5 — Terrain generation v2 em andamento.**
 
 ## Phase 2 — estado final
@@ -152,14 +152,13 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 
 O diagnóstico existente cobre pending/ready/retired, wave/prefetch/staged, async task counts/shared limiter, remesh queues, priority scan count/avg/max/max queue e frame/main/render work percentiles com slow-frame context.
 
-O log `2026-09-29_17-02-50-263036500.txt`, capturado em `0.68.48` sobre esta reconstrução, mostrou que o steady state já fica majoritariamente em ~53–58 FPS com p95 de frame em ~19–22 ms, mas ainda há stalls severos de **117 ms, 230 ms e 488 ms**. Nos piores frames, `main_work_max_us` acompanha quase integralmente o frame stall, enquanto generation/mesh async não aparece saturado o suficiente para explicar o bloqueio.
+O primeiro log `2026-09-29_17-02-50-263036500.txt` mostrou steady state majoritariamente em ~53–58 FPS, mas stalls de **117 ms, 230 ms e 488 ms** alinhados a `main_work`. O audit encontrou full selection rebuild em mudança de direção e generation-region boundary. `e78d4808eb55573ab72f0d0bd3e4687472b2e3b3` mantém movimento horizontal adjacente incremental nesses casos; CI `36604894331` success.
 
-Audit do path síncrono encontrou dois gatilhos que derrubavam movimento normal no full selection rebuild:
+O segundo log `2026-09-29_17-31-55-122428800.txt`, já com `e78d4808`, confirma que esse problema específico saiu do caminho: não houve `slow streaming selection rebuild`. Há janelas estáveis de ~60–62 FPS, porém ainda ocorreram stalls de main thread de aproximadamente **103 ms, 343 ms, 423 ms e 128 ms**. Os priority scans ficaram abaixo de ~4,5 ms, então não explicam esses picos. Durante a viagem, as filas remesh chegaram a milhares de entradas (`geometry` > 2,4k; `fluid` ~0,9k).
 
-- qualquer mudança em `movement_direction` invalidava o incremental path, reconstruindo toda a desired selection e toda a pending queue;
-- cruzar uma generation region de 8 chunks também invalidava o incremental path apenas porque os caches eram podados, embora cache misses já sejam reconstruídos de forma segura pelo próprio delta path.
+O audit seguinte encontrou trabalho global fora dos budgets em `process_chunk_remesh_queue`: toda `selection_revision` chamava `ChunkRemeshQueue::retain_resident`, que percorria geometry/fluid/lighting inteiras, coletava/sort/dedup de stale coords e removia cada entrada antes dos budgets de dispatch/integration. Esse trigger também estava semanticamente errado: selection revision não é mudança de world residency.
 
-O cut atual mantém movimento horizontal adjacente no rebuild incremental mesmo ao virar ou cruzar generation-region boundary. A forma antiga é testada com `previous_movement_direction`, enquanto a forma nova continua usando a direção atual; full rebuild fica reservado para bootstrap, mudança de radius, movimento vertical/non-adjacent e warp. **Ainda não declarar a responsividade da Phase 4 validada sem novo gameplay log desta HEAD.**
+O cut atual remove esse full scan do churn normal. Authoritative eviction e render retirement já removem a coord de remesh no ponto em que residency/presentation realmente é destruída; remesh dispatch/publication continuam revalidando selection/world state, e tasks em voo continuam canceladas em selection change. `retain_resident` fica apenas como reconciliação defensiva quando a selection revision regride, sinal de restart do lifecycle enquanto o `Local` do sistema sobreviveu. **Ainda não declarar a responsividade da Phase 4 validada sem novo gameplay log deste cut.**
 
 ## Phase 5 — Terrain generation v2
 
@@ -223,10 +222,11 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `f602bdbd6b3c74cb77d54c291fd7b163effde6bc` — separa generation calculation em `ChunkGenerationJob`; CI `36598783588` success.
 - `77cba7c7bcb8fe49aadd0f64a16d657277030c73` — snapshot domain-constructible + regressão de determinismo autoritativo; CI `36600832740` success.
 - `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef` — benchmark manual/ignored de `ChunkGenerationJob`; CI `36602768937` success.
+- `e78d4808eb55573ab72f0d0bd3e4687472b2e3b3` — mantém movimento adjacente incremental em viradas/region boundaries; CI `36604894331` success.
 
 ## Phase 5 — próximos cortes
 
-1. validar em gameplay o cut incremental de streaming motivado pelo log de 2026-09-29; se os stalls severos persistirem, usar o próximo log para isolar o restante do main-thread cost antes de declarar Phase 4 empiricamente fechada;
+1. validar em gameplay o cut que remove o full remesh-residency scan por selection revision; se stalls severos persistirem, usar o próximo log para isolar o restante do main-thread cost antes de declarar Phase 4 empiricamente fechada;
 2. concluir audit de callers para confirmar ausência de generation síncrona fora do caminho já inspecionado;
 3. adicionar teste de publication stale/atomic somente se a cobertura existente não travar a invariant de revisão/relevância de forma suficiente;
 4. fechar os exit criteria da Phase 5 e só então iniciar structures/connectors da Phase 6.

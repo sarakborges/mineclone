@@ -69,10 +69,19 @@ pub(super) fn process_chunk_remesh_queue(
     tasks.sync_snapshot(&content);
 
     let selection_revision = streaming.selection_revision();
+    // Normal chunk and render retirement remove their remesh entries at the
+    // point residency actually changes. A selection revision alone does not
+    // make queued work nonresident, so scanning every remesh queue here makes
+    // travel cost scale with backlog outside the frame budget. Keep the full
+    // reconciliation only for a revision reset, which indicates a world/
+    // streaming lifecycle restart while this system-local state survived.
+    if last_reconciled_selection
+        .is_some_and(|previous| selection_revision < previous)
+        && queue.has_background_work()
+    {
+        queue.retain_resident(&world);
+    }
     if *last_reconciled_selection != Some(selection_revision) {
-        if queue.has_background_work() {
-            queue.retain_resident(&world);
-        }
         for request in tasks.cancel_where(|coord| !streaming.retains_render_mesh(coord)) {
             if renderer.pool.contains(request.coord) && world.chunk(request.coord).is_some() {
                 queue.enqueue_task_meshlets_priority(
