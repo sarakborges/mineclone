@@ -118,7 +118,7 @@ Commit `a32795957d707e08042d891b80e0cc2c606ff91d` (`Move structure planning out 
 - os paths antigos em `generation/structures/{connectors,placement,set,hash,geometry}.rs` tornam-se adapters mínimos de re-export para manter `generation/structures.rs` estável neste migration block;
 - algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais nesse cut.
 
-CI #10262 falhou apenas no Clippy por um re-export morto em `generation.rs`; `5b00587b47d922aee09fbd306c96b566ff4df06c` removeu esse re-export. CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`; `c6954f0efbfd4eac08d350af8ad0c0fd764efa22` mantém temporariamente esse adapter type-checked por um `const _` sem runtime cost. CI #10268 passou audits + Clippy + Check.
+CI #10262 falhou apenas no Clippy por um re-export morto em `generation.rs`; `5b00587b47d922aee09fbd306c96b566ff4df06c` removeu esse re-export. CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`; `c6954f0efbfd4eac08d350af8ad0c0fd764efa22` manteve temporariamente esse adapter type-checked por um `const _` sem runtime cost. CI #10268 passou audits + Clippy + Check.
 
 ### Cut 3 — materialization consome placements resolvidos
 
@@ -154,13 +154,24 @@ Commit `70c04704383f789eff935e0525337be1a71302fd` (`Move structure conflict reso
 - raster voxel, connector resolution, hashing, terrain fitting, volume eligibility e conflict policy permanecem semanticamente iguais;
 - a dependency continua inward: `planning::resolver` não conhece `ChunkGenerationContext`, terrain, render, ECS ou cache owner.
 
-CI #10277 passou todos os audits e falhou apenas no Clippy `needless_lifetimes` da assinatura do adapter `resolve_structure_placements_uncached`; o corretivo remove somente o lifetime explícito redundante, sem mudar tipos efetivos, ownership ou comportamento.
+CI #10277 passou todos os audits e falhou apenas no Clippy `needless_lifetimes` da assinatura do adapter `resolve_structure_placements_uncached`. Commit `127c76c3f64aead39381745abd8645f2ba86fc48` (`Fix planner resolver Clippy gate`) removeu somente o lifetime explícito redundante; CI #10278 passou audits + Clippy + Check.
+
+### Cut 6 — adapters de planning removidos de generation
+
+Estado deste cut:
+
+- `generation/structures.rs` importa `connectors`, `geometry`, `hash`, `placement` e `set` diretamente de `structure_metadata::planning`;
+- os cinco arquivos `generation/structures/{connectors,geometry,hash,placement,set}.rs`, que continham apenas re-exports de uma linha, foram removidos;
+- o `const _` temporário de type-check em `generation.rs` foi removido junto com o adapter que justificava sua existência;
+- `generation.rs` mantém seus re-exports públicos atuais de APIs de structures para não misturar cleanup de ownership com migração de consumidores externos neste cut;
+- `restrictions.rs` e `support.rs` permanecem em generation porque ainda consomem terrain/`ChunkGenerationContext` e não são planning puro;
+- nenhum hashing, connector traversal, candidate selection, conflict policy, ground-fit, rasterização ou materialization mudou neste cut.
 
 ### Próximos cuts
 
-1. remover os adapters `generation/structures/{connectors,placement,set,hash,geometry}.rs` e o `const _` temporário; call sites devem apontar diretamente para `structure_metadata::planning`;
-2. formalizar reservation/conflict semantics atravessando chunk boundaries no planner e adicionar cobertura específica de boundary/priority sem ativar testes automáticos no CI;
-3. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
+1. formalizar reservation/conflict semantics atravessando chunk boundaries no planner e adicionar cobertura específica de boundary/priority sem ativar testes automáticos no CI;
+2. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
+3. auditar os re-exports públicos restantes de `generation` e migrar consumidores somente onde isso melhorar ownership sem criar churn artificial;
 4. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
 
 ## Regras de continuidade

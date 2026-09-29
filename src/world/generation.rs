@@ -52,11 +52,6 @@ use self::{
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
 
-// Temporary compile-time contract for the Phase 6 adapter. This keeps the
-// generation-side re-export type-checked without reintroducing metadata -> generation.
-const _: fn(&StructureRegistry, &str) -> Option<(IVec2, IVec2)> =
-    self::structures::connected_horizontal_bounds_for_reference;
-
 pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) fluids: &'a FluidRegistry,

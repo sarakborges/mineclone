@@ -1,9 +1,4 @@
-mod connectors;
-mod geometry;
-mod hash;
-mod placement;
 mod restrictions;
-mod set;
 mod support;
 
 use bevy::prelude::*;
@@ -34,7 +29,12 @@ use crate::{
         structure_metadata::{
             ResolvedStructurePlacement,
             planning::{
-                StructureCandidate,
+                StructureCandidate, connectors, geometry::rectangles_overlap,
+                hash::{avalanche, unit_interval},
+                placement::{
+                    candidate_anchor, structure_member_hash, volume_site_is_selected,
+                    volume_structure_member_hash,
+                },
                 resolve_structure_placements as resolve_planned_structure_placements,
             },
         },
@@ -42,25 +42,17 @@ use crate::{
     },
 };
 
-pub(crate) use self::{
+pub(crate) use crate::world::structure_metadata::planning::{
     connectors::{
         ResolvedConnectedPiece, connected_horizontal_bounds_for_reference,
         resolve_connected_piece_forest_with_ground_fit,
         resolve_connected_pieces_with_ground_fit,
     },
     set::resolve_set_pieces,
-    support::fit_structure_to_ground,
 };
+pub(crate) use self::support::fit_structure_to_ground;
 
 use self::{
-    geometry::rectangles_overlap,
-    hash::{avalanche, unit_interval},
-};
-use self::{
-    placement::{
-        candidate_anchor, structure_member_hash, volume_site_is_selected,
-        volume_structure_member_hash,
-    },
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
