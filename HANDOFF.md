@@ -19,7 +19,7 @@
 - **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
 - **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
 - **Phase 3 concluída.** Biome/structure metadata é consultável sem render/materialization e caches derivados possuem ownership/bounds explícitos.
-- **Phase 4 — Streaming scheduler v2 iniciando.**
+- **Phase 4 — Streaming scheduler v2 em andamento.**
 
 ## Phase 2 — estado final
 
@@ -44,7 +44,7 @@ Gameplay/interação usa `VoxelMutationRuntime` para combinar mutation autoritat
 - layer edit -> remesh;
 - interactive fluid edit -> lighting + remesh + fluid scheduling.
 
-Bypasses diretos inspecionados e considerados intencionais:
+Bypasses diretos inspecionados e considerados **intencionais**:
 
 - `world_objects.rs`: object mutation + `ObjectRevisionState`; object presentation é separada de voxel mesh.
 - `voxel/lighting/propagation.rs`: light data muda diretamente; changed positions alimentam meshlet remesh.
@@ -112,6 +112,35 @@ Atendidos:
 - generation usa deterministic metadata/content + disposable feature caches;
 - spatial caches possuem retention explícita; content-keyed bounds são metadata finito por conteúdo.
 
+## Phase 4 — progresso
+
+Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o priority algorithm antes de provar os owners atuais.
+
+### Boundedness audit
+
+- `PendingChunkQueue`: não possui cap numérico próprio, mas membership é mantida como subset da seleção atual. Full rebuild reconstrói de `desired`; incremental rebuild remove `no_longer_desired`; requeue exige `keeps_loaded`.
+- `ReadyChunkQueue`: tinha growth por histórico de viagem porque entries fora de residency eram apenas ignoradas no `pop`. `84955d6b6496548cd24fce37a0bed87aea368af7` adicionou retention pelo owner e `mark_selection_rebuilt()` agora garante `ready ⊆ desired ∪ retained`. CI `36502882704` success.
+- generation async: máximo 8 tasks in-flight; critical generation wave usa até 4 targets e normal wave até 8; prefetch segue o mesmo target limit.
+- initial mesh async: máximo 8 tasks in-flight.
+- remesh async: máximo 4 terrain + 4 fluid tasks; shared `ChunkAsyncWorkLimiter` aplica limite global/adaptativo.
+- loading async usa queue depth de 4 por worker via limiter.
+- `ChunkTaskQueue` é deduplicada; caps pertencem aos schedulers, não ao container genérico.
+
+### Stale-work audit
+
+- generation tasks são canceladas no selection rebuild quando deixam `keeps_loaded`; stale input revision só é requeued se ainda pertencer à seleção/wave atual.
+- initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
+- remesh tinha uma lacuna: publication/dispatch dependiam de `ChunkRenderPool` membership, então trabalho concluído podia aplicar durante o backlog de render retirement depois que a seleção já não queria mais o mesh.
+- `17402d31753de978ac9499ee3e85784d279976ac` corrige isso: dispatch e publication exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks. CI `36503076178` success.
+
+### Próximo problema já localizado
+
+`ChunkRemeshQueue` pode receber halo invalidations para coordenadas ausentes. Geometry/fluid/lighting scans ignoram chunks não renderizados, mas uma coord realmente sem resident chunk pode ficar na queue/mask maps até alguma remoção externa. O próximo cut deve impedir/prunar **apenas chunks ausentes**, preservando resident preload/unrendered work que ainda pode ser necessário para initial-presentation catchup.
+
+Não podar remesh queue simplesmente por `ChunkRenderPool`: render residency e world residency são domínios diferentes.
+
+Também auditar retired queue: candidatos não residentes devem consumir budget ou ser podados explicitamente; um backlog de selection-history não pode gerar scan loop não-orçado durante warp.
+
 ## Checkpoints verdes mais recentes
 
 - `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation explicita `Resident / Archived / Absent`; CI `36496987975` success.
@@ -119,28 +148,17 @@ Atendidos:
 - `499d33aa1098da8edb63c9b85f5462f545840a45` + `2c12c9e67abb8d24bb310e9654ec3f658ad6f33a` — `SurfaceSiteCache`; CI `36498438529` success.
 - `d976bf536c9980a28e971ab5f5869c81b931ee3b` — `StructureMetadata` vira o contract explícito e fresh caches preservam metadata; CI `36498902285` success.
 - `12963a65547ec148725a259195c3bd05d40609ac` — structure reference bounds deixam `FeatureCaches` e viram deterministic metadata; CI `36499367474` success.
+- `bb2cfb1002c3dac37d139a000ec123301dffa013` — fecha Phase 3 e inicia audit da Phase 4; CI `36499528861` success.
+- `84955d6b6496548cd24fce37a0bed87aea368af7` — ready queue passa a ser residency-bound; CI `36502882704` success.
+- `17402d31753de978ac9499ee3e85784d279976ac` — remesh dispatch/publication rejeita presentation work fora da seleção atual; CI `36503076178` success.
 
-## Phase 4 — próximo corte
+## Phase 4 — próximos cortes
 
-Meta: desired-state scheduling explícito, bounded e stale-safe.
-
-Antes de criar scheduler novo, auditar o que já existe após os splits da Phase 1/2:
-
-- `ChunkResidencyState`: desired/retained/retired;
-- pending generation priority queue/cache;
-- `GenerationWaveState`: active targets/prefetch/staged/publication;
-- ready/initial-presentation queues;
-- generation/mesh/remesh task schedulers e `TaskInputRevision`;
-- shared `ChunkAsyncWorkLimiter`;
-- frame-work budgets e priority diagnostics.
-
-Próximas decisões:
-
-1. provar quais queues são bounded por residency vs quais precisam cap/backpressure próprio;
-2. verificar warp/selection changes e stale-task rejection end-to-end;
-3. remover rescans/cache invalidations redundantes se diagnostics mostrarem owner duplicado;
-4. não reescrever priority algorithm enquanto ownership/backpressure estiver correto;
-5. fechar Phase 4 apenas quando obsolete work não puder publicar sobre seleção atual e queue growth estiver explicitamente bounded/observable.
+1. impedir/prunar remesh queue entries de chunks realmente ausentes, preservando resident preload work;
+2. garantir que retired candidates inválidos sejam bounded/charged pelo frame budget durante warp/selection churn;
+3. adicionar observabilidade onde falta para provar queue growth bounds, sem criar metrics owners duplicados;
+4. verificar disjoint warp/selection changes end-to-end para generation wave/prefetch/ready/remesh;
+5. só depois considerar remoção de priority rescans redundantes; não reescrever a prioridade por estética.
 
 ## Regras de continuidade
 
