@@ -35,7 +35,7 @@
 - Phase 4 concluída: Streaming scheduler v2 correctness + boundedness + responsiveness validados.
 - Phase 5 concluída: Terrain generation v2 isolada em jobs determinísticos e stale-safe.
 - Phase 6 concluída: structures/connectors/feature planning com ownership, boundedness e authored feature path auditados.
-- Phase 7 é a próxima: voxel presentation / meshing v2.
+- Phase 7 em andamento: voxel presentation / meshing v2.
 
 ## Contracts que não devem regredir
 
@@ -218,15 +218,34 @@ Commit `ef651573aa8fa611e146ac21c23dab6c9d53e634` (`Remove final generation plan
 
 **Phase 6 concluída.** Todos os exit criteria formais de `docs/asteria-core-rebuild.md` estão satisfeitos pelo architecture/content audit atual.
 
-### Próxima fase — Phase 7: Voxel presentation / meshing v2
+## Phase 7 — Voxel presentation / meshing v2
 
-Próximo gate de trabalho após CI verde do fechamento da Phase 6:
+### Audit inicial
 
-1. auditar render-section identity, source revision e ownership atuais;
-2. mapear snapshot/halo de meshing e publication stale checks;
-3. separar custo de meshing de custo de render submission/presentation;
-4. atacar primeiro o maior boundary incorreto medido, preservando authoritative world como owner único;
-5. manter o spike conhecido de startup/render (~217 ms, ~188.7 ms render work no último gameplay log) como dívida de presentation a investigar nesta fase, sem atribuir causa antes de profiling.
+- initial mesh jobs já capturam `PresentationContentSnapshot` imutável + `ChunkMeshSnapshot` com center chunk e halo; workers não leem `VoxelWorld` vivo durante o build;
+- `ChunkMeshDependencies` captura `ChunkContentRevision` do center/halo e publication de initial mesh rejeita task input revision stale, render irrelevante e snapshot dependency stale antes de criar entities/assets;
+- remesh também usa snapshot imutável e rejeita content dependency stale; lighting possui revision própria por meshlet, separada de `ChunkContentRevision`;
+- `ChunkContentRevision` não é incrementada por `set_light_at`, portanto uma futura render source revision não pode fingir que content revision sozinho representa lighting;
+- `ChunkRenderPool` ainda guarda allocation por chunk + entities/mesh handles/bytes, mas não preserva explicitamente a identidade/source revisions que produziram o estado publicado;
+- spike conhecido de startup/render (~217 ms frame max, ~188.7 ms render work no último gameplay log) continua dívida mensurada desta fase; causa ainda não deve ser atribuída sem profiling específico de submission/assets.
+
+### Cut 1 — source stamp explícito para initial presentation
+
+- `ChunkPresentationSource` passa a agrupar `ChunkCoord` + `ChunkMeshDependencies`, em vez de o output carregar somente a matriz de revisions do snapshot;
+- o check `is_current` agora possui também identidade explícita do center chunk e mantém a mesma validação de revisions do halo;
+- initial halo catch-up continua delegado ao mesmo `ChunkMeshDependencies`, sem mudança de semântica;
+- `TaskInputRevision` continua separado no scheduler para authored/content snapshot changes; o novo source stamp representa somente a fonte autoritativa do world snapshot;
+- lighting não foi artificialmente fundido nesse tipo: remesh continua usando sua revision por meshlet, que será parte do próximo desenho section-aware;
+- nenhuma lógica de mesh building, prioridade, cancelamento, publication, entity spawning ou asset retirement muda neste cut.
+
+CI deste cut ainda precisa fechar audits + Clippy + Check antes do próximo bloco.
+
+### Próximos cuts
+
+1. modelar identidade/source revision por render section/meshlet sem colapsar lighting em `ChunkContentRevision`;
+2. fazer `ChunkRenderPool` preservar o source stamp publicado de maneira compatível com partial remesh;
+3. remover aliases/shims transitórios de presentation ownership depois que initial mesh/remesh compartilharem o vocabulário final;
+4. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade
 

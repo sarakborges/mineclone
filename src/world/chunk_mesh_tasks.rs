@@ -4,7 +4,8 @@ use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::voxel::{
     coordinates::ChunkCoord,
-    mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+    mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot, ChunkSnapshotSource},
+    meshlet::ChunkMeshletMask,
 };
 
 pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
@@ -18,9 +19,37 @@ use super::{
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkPresentationSource {
+    coord: ChunkCoord,
+    revisions: ChunkMeshDependencies,
+}
+
+impl ChunkPresentationSource {
+    fn capture(coord: ChunkCoord, world: &ChunkMeshSnapshot) -> Self {
+        Self {
+            coord,
+            revisions: world.dependencies(),
+        }
+    }
+
+    pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
+        source.snapshot_chunk(self.coord).is_some() && self.revisions.is_current(source)
+    }
+
+    pub(crate) fn initial_catchup_meshlets_with(
+        &self,
+        source: &impl ChunkSnapshotSource,
+        neighbor_is_visible: impl FnMut(IVec3) -> bool,
+    ) -> ChunkMeshletMask {
+        self.revisions
+            .initial_catchup_meshlets_with(source, neighbor_is_visible)
+    }
+}
+
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
-    pub(crate) dependencies: ChunkMeshDependencies,
+    pub(crate) dependencies: ChunkPresentationSource,
 }
 
 #[derive(Resource, Default)]
@@ -104,7 +133,7 @@ impl PresentationScheduler {
             .unwrap_or_else(|| panic!("chunk mesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = world.dependencies();
+        let dependencies = ChunkPresentationSource::capture(coord, &world);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             // The meshers now read central voxels directly and build a compact
