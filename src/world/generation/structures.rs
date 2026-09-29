@@ -44,8 +44,7 @@ use crate::{
 
 pub(crate) use crate::world::structure_metadata::planning::{
     connectors::{
-        ResolvedConnectedPiece, connected_horizontal_bounds_for_reference,
-        resolve_connected_piece_forest_with_ground_fit,
+        ResolvedConnectedPiece, resolve_connected_piece_forest_with_ground_fit,
         resolve_connected_pieces_with_ground_fit,
     },
     set::resolve_set_pieces,

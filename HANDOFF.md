@@ -40,7 +40,7 @@
 
 ### Authoritative storage
 
-`VoxelWorld` coordena owners separados para resident chunks, persistence/archive, content revisions, object revisions e block topology revisions. Gameplay mutations passam por `VoxelMutationRuntime`; presentation é derivada e descartável. `ChunkRenderPool` nunca é world truth.
+`VoxelWorld` coordena owners separados para resident chunks, persistence/archive, content revisions e block topology revisions. Gameplay mutations passam por `VoxelMutationRuntime`; presentation é derivada e descartável. `ChunkRenderPool` nunca é world truth.
 
 ### Deterministic metadata
 
@@ -165,7 +165,7 @@ Commit `fda250504219b413e27ac2e472d4615e9dafbeb6` (`Remove generation planning a
 - `restrictions.rs` e `support.rs` permanecem em generation porque ainda consomem terrain/`ChunkGenerationContext` e não são planning puro;
 - nenhum hashing, connector traversal, candidate selection, conflict policy, ground-fit, rasterização ou materialization mudou neste cut.
 
-CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizontal_bounds_for_reference`, agora importado diretamente do planner por `generation/structures.rs`, ainda é um re-export sem consumidor runtime. Commit `b7c3a68fd25c0967927e2b443c713df9e898e860` (`Fix planning adapter cleanup Clippy gate`) mantém temporariamente um `const _` de type-check em `generation.rs`; ele não executa trabalho. CI #10280 passou audits + Clippy + Check. Os cinco arquivos-adapter continuam removidos.
+CI #10279 passou os audits e falhou somente no Clippy porque `connected_horizontal_bounds_for_reference`, agora importado diretamente do planner por `generation/structures.rs`, ainda é um re-export sem consumidor runtime. Commit `b7c3a68fd25c0967927e2b443c713df9e898e860` (`Fix planning adapter cleanup Clippy gate`) manteve temporariamente um `const _` de type-check em `generation.rs`; ele não executa trabalho. CI #10280 passou audits + Clippy + Check. Os cinco arquivos-adapter continuam removidos.
 
 ### Cut 7 — conflict/reservation contract cross-chunk
 
@@ -190,14 +190,23 @@ Commit `dc9f3c6a8b9449a53bebd1e138827c222a1c3f47` (`Bound connector metadata sta
 - o teste `connector_strength_bucket_never_underestimates_remaining_strength` cobre o invariant de arredondamento conservador; o teste existente da chain continua exigindo bounds exato `(0,0)..(8,0)` no caso simples;
 - o fixture antigo de `explicit_piece_budget_caps_connector_expansion` foi corrigido de loss inválido para `0.25`, preservando cadeia suficiente para provar o budget de três pieces e respeitando o máximo de 64 loops;
 - nenhuma alteração em hashing, seleção de group member, connector traversal runtime, overlap rejection, ground-fit, conflict policy ou rasterization;
-- o arquivo acidental `tmp/placeholder` que acompanhou o commit foi identificado como resíduo de workspace e removido imediatamente no corrective cut seguinte; não pertence à arquitetura nem ao conteúdo do projeto.
+- o arquivo acidental `tmp/placeholder` que acompanhou o commit foi identificado como resíduo de workspace e removido em `15c005ee0f5ab9694e52a06ab9f73ddb7a79c489` (`Remove accidental phase 6 placeholder`); CI #10283 success.
+
+### Cut 9 — bridge final generation -> planning removido
+
+Estado deste cut:
+
+- o `const _` temporário em `generation.rs`, criado somente para manter type-checked um re-export morto durante a migração, foi removido;
+- `generation/structures.rs` não re-exporta mais `connected_horizontal_bounds_for_reference`; o uso real continua direto via `structure_metadata::planning::connectors` dentro da coleta de candidates de volume;
+- os demais re-exports de structures em `generation.rs` foram auditados e mantidos porque continuam compondo API realmente consumida; não houve churn artificial só para mudar paths;
+- nenhuma lógica de planning, metadata bounds, candidate collection, materialization, rasterization ou terrain fitting mudou neste cut;
+- com isso não resta bridge artificial criado pela migração Phase 6 entre `generation` e o owner de planning.
 
 ### Próximos cuts
 
-1. auditar os re-exports públicos restantes de `generation` e eliminar o `const _` temporário sem reintroduzir dependency inversion;
-2. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
-3. auditar qualquer feature-generation paralelo restante e confirmar ausência de hydrology legado;
-4. fechar Phase 6 contra os exit criteria: intent atravessa regiões unloaded sem render, materialization determinística/chunk-boundary-safe e nenhum subsystem legado paralelo.
+1. auditar caminhos authored atuais de cave entrances/tunnels e migrá-los exclusivamente por structures/connectors se ainda houver paralelo;
+2. auditar qualquer feature-generation paralelo restante e confirmar ausência de hydrology legado;
+3. revisar os exit criteria formais da Phase 6 e fechar a fase somente depois de ownership/boundedness/content-path audit completos.
 
 ## Regras de continuidade
 
