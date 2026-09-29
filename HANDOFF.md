@@ -110,7 +110,7 @@ Commit `3434909e3a730b8a4108a190c19a35ffb76011b5` (`Define resolved structure pl
 
 ### Cut 2 — planning sai de generation
 
-Implementação atual deste cut:
+Commit `a32795957d707e08042d891b80e0cc2c606ff91d` (`Move structure planning out of generation`).
 
 - planning puro passa para `src/world/structure_metadata/planning/`;
 - owner inclui `connectors`, `placement`, `set`, `hash` e `geometry`;
@@ -118,6 +118,8 @@ Implementação atual deste cut:
 - os paths antigos em `generation/structures/{connectors,placement,set,hash,geometry}.rs` tornam-se adapters mínimos de re-export para manter `generation/structures.rs` estável neste migration block;
 - algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais neste cut;
 - os adapters são temporários: o próximo cut deve separar candidate/conflict resolution de rasterization e remover esses wrappers, em vez de transformá-los em compatibilidade permanente.
+
+CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`, remanescente depois que `StructureField` passou a consumir o planner diretamente. O corretivo remove somente esse import/re-export não utilizado; nenhuma lógica de planning/materialization muda.
 
 ### Próximos cuts
 
