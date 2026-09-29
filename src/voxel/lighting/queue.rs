@@ -116,7 +116,7 @@ fn chunk_boundary_neighbor_position(origin: IVec3, index: usize) -> IVec3 {
         let pair = index / 2;
         let y = pair / CHUNK_SIZE;
         let z = pair % CHUNK_SIZE;
-        let x = if index % 2 == 0 { -1 } else { size };
+        let x = if index.is_multiple_of(2) { -1 } else { size };
         return origin + IVec3::new(x, y as i32, z as i32);
     }
 
@@ -125,7 +125,7 @@ fn chunk_boundary_neighbor_position(origin: IVec3, index: usize) -> IVec3 {
         let pair = local / 2;
         let y = pair / CHUNK_SIZE;
         let x = pair % CHUNK_SIZE;
-        let z = if local % 2 == 0 { -1 } else { size };
+        let z = if local.is_multiple_of(2) { -1 } else { size };
         return origin + IVec3::new(x as i32, y as i32, z);
     }
 
@@ -133,7 +133,7 @@ fn chunk_boundary_neighbor_position(origin: IVec3, index: usize) -> IVec3 {
     let pair = local / 2;
     let z = pair / CHUNK_SIZE;
     let x = pair % CHUNK_SIZE;
-    let y = if local % 2 == 0 { -1 } else { size };
+    let y = if local.is_multiple_of(2) { -1 } else { size };
     origin + IVec3::new(x as i32, y, z as i32)
 }
 

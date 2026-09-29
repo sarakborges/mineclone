@@ -31,8 +31,8 @@
 - **Phase 1 concluída:** core types/boundaries.
 - **Phase 2 concluída:** authoritative storage, revisions, lookup e eviction ownership.
 - **Phase 3 concluída:** biome/structure metadata independente de render/materialization; caches derivados bounded.
-- **Phase 4:** correctness do Streaming scheduler v2 concluído; responsividade empírica ainda aberta enquanto removemos stalls reais de main thread.
-- **Phase 5:** Terrain generation v2 em andamento; boundary/determinismo/benchmark prontos, publication/caller audit ainda precisa fechamento após Phase 4 empírica.
+- **Phase 4:** correctness e responsividade empírica do Streaming scheduler v2 validadas em gameplay; fechamento formal aguarda CI verde do corretivo de Clippy do último cut.
+- **Phase 5:** Terrain generation v2 em andamento; boundary/determinismo/benchmark prontos, publication/caller audit ainda precisa fechamento após o gate da Phase 4.
 
 ## Phase 2 — contracts que não devem regredir
 
@@ -94,7 +94,7 @@ Causa encontrada: `process_chunk_remesh_queue` chamava `ChunkRemeshQueue::retain
 
 ### Gameplay log 3 — lighting work materializado durante unload
 
-`2026-09-29_17-55-12-178083400.txt`, já com `3cacbd6`, melhorou o cenário, mas ainda não fecha Phase 4:
+`2026-09-29_17-55-12-178083400.txt`, já com `3cacbd6`, melhorou o cenário, mas ainda não fechava Phase 4:
 
 - janela final: ~53.1 FPS médio, p95 ~21.4 ms, p99 ~24.8 ms;
 - stall máximo: 235.464 ms, com `main_work_max_us=234758`;
@@ -128,7 +128,7 @@ Regressões unitárias cobrem full 4096-voxel traversal lazy, ordem contra backg
 
 ### Gameplay log 4 — unload boundary relight ainda escapa do budget
 
-`2026-09-29_18-22-20-833724900.txt`, já com `ba7ddfdf`, prova que o full-chunk scan lazy era correto mas insuficiente para fechar a responsividade:
+`2026-09-29_18-22-20-833724900.txt`, já com `ba7ddfdf`, provou que o full-chunk scan lazy era correto mas insuficiente:
 
 - janela intermediária estável em ~54.8–56.4 FPS;
 - houve stall de ~98.8 ms com `main_work_max_us=102833`;
@@ -143,9 +143,9 @@ O audit encontrou outro trabalho de lighting expandido fora do budget de unload:
 3. para cada coord, `LightingQueue::enqueue_chunk_boundary_neighbors` materializava imediatamente `6 * 16 * 16 = 1536` posições;
 4. portanto um batch com dezenas de unloads podia fazer dezenas de milhares de inserts/hash lookups **depois** que o budget de 4 ms já havia encerrado sua parte protegida.
 
-### Cut atual — lazy unload boundary lighting scans
+### Cut 4 — lazy unload boundary lighting scans
 
-`LightingQueue` passa a tratar full-chunk scans e chunk-boundary-neighbor scans como requests virtuais do mesmo background scheduler.
+`a57b3fea5c642088dea6cdaa91ea973764c60e3e` faz `LightingQueue` tratar full-chunk scans e chunk-boundary-neighbor scans como requests virtuais do mesmo background scheduler.
 
 - `enqueue_chunk_boundary_neighbors` deixa de expandir 1536 posições no caller;
 - o request virtual produz as seis faces externas sob consumo de `relax_budgeted`, portanto o custo entra no check de budget a cada 64 posições;
@@ -156,7 +156,21 @@ O audit encontrou outro trabalho de lighting expandido fora do budget de unload:
 
 Regressões do cut cobrem as 1536 posições únicas das seis faces, filtragem lazy da face abaixo de Y=0 e dedup de boundary requests.
 
-**Phase 4 continua empiricamente aberta até gameplay log da HEAD com este cut.** Não declarar o problema resolvido apenas pela correção estrutural; repetir a caminhada longa e comparar `frame_max_us`/`main_work_max_us`.
+CI `36613493499` / #10246 falhou somente no passo Clippy porque Rust 1.98 passou a exigir `usize::is_multiple_of(2)` em três expressões; Test/Check foram pulados. O corretivo substitui apenas essas três expressões, sem alterar a lógica do scheduler.
+
+### Gameplay log 5 — stalls de streaming/main thread removidos
+
+`2026-09-29_18-51-38-488208300.txt`, executado com o comportamento de `a57b3fea`, fornece a validação empírica que faltava:
+
+- startup ainda tem um frame de 217.296 ms, mas `render_work_max_us=188657` e `main_work_max_us=10059`, com `selection_revision=1` e sem backlog de streaming; isso é um spike de presentation/render startup, não o stall de scheduler investigado aqui;
+- na janela seguinte, já viajando/carregando, média de 50.9 FPS, `frame_max_us=38256` e `main_work_max_us=9242`, com `pending=1730` e `retired=3061`;
+- janela final: **58.7 FPS médio**, p95 18.947 ms, p99 20.856 ms, `frame_max_us=54882` e **`main_work_max_us=11149`**;
+- nessa mesma janela pesada havia `pending=2454`, `retired=5816`, `remesh_geometry=1254`, `remesh_fluid=338` e generation/remesh ainda ativos;
+- `pending_priority_max_us=3067` e `ready_priority_max_us=10`, compatíveis com o budget e sem qualquer retorno dos stalls de 100–500 ms de `main_work` vistos nos logs anteriores.
+
+Conclusão empírica: a sequência selection delta -> remoção do retain full-scan -> deferred full-chunk lighting -> deferred unload boundary lighting removeu o stall severo de streaming/main thread sob a caminhada longa testada. O spike de render no startup fica como dívida separada de presentation/rendering e não reabre o Streaming scheduler v2.
+
+**Phase 4 está funcionalmente pronta; marcar como formalmente concluída somente depois que o CI do corretivo de Clippy deste cut ficar verde.**
 
 ## Phase 5 — Terrain generation v2
 
@@ -173,7 +187,7 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 - publication audit já confirmou guards de `TaskInputRevision` + `wants_generation` antes de `VoxelWorld::insert_chunk`; insert é atômico no nível de chunk e recusa overwrite resident/persisted.
 - não foi encontrado caller síncrono de generation no frame path já auditado.
 
-### Depois de fechar Phase 4 empírica
+### Depois do gate da Phase 4
 
 1. concluir caller audit de generation;
 2. decidir se coverage atual já trava publication stale/atomic ou adicionar regressão específica;
