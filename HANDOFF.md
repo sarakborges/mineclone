@@ -243,14 +243,14 @@ Commit `5811dc516fab40e47d157aa5d707dee585353478` (`Define initial presentation 
 ### Cut 2 — source stamp passa ao owner de presentation snapshot
 
 - `ChunkPresentationSource` deixa de pertencer ao scheduler de initial mesh e passa a `presentation_snapshot.rs`, ao lado do snapshot imutável de conteúdo de apresentação;
-- o tipo ganha `for_meshlets`, que reduz `ChunkMeshDependencies` para exatamente o halo exigido pelas sections reconstruídas, sem alterar a semântica conservadora de stale checks;
 - `PresentationScheduler` passa a consumir esse tipo compartilhado e não define mais a identidade/source stamp localmente;
 - lighting continua deliberadamente fora deste stamp; sua revision por meshlet permanece no owner de remesh até a composição section-aware;
-- nenhuma lógica de meshing, task scheduling, publication, render allocation ou asset lifetime muda neste cut.
+- nenhuma lógica de meshing, task scheduling, publication, render allocation ou asset lifetime muda neste cut;
+- CI #10288 passou os audits e falhou apenas no Clippy `dead_code`: `for_meshlets` havia sido introduzido antes do primeiro consumidor. O método foi removido sem `allow` e deve voltar no mesmo cut em que remesh o usar.
 
 ### Próximos cuts
 
-1. fazer remesh usar o mesmo `ChunkPresentationSource` filtrado por meshlet, compondo content source + lighting revision sem colapsar owners;
+1. fazer remesh usar o mesmo `ChunkPresentationSource` filtrado por meshlet, adicionando `for_meshlets` junto do consumidor e compondo content source + lighting revision sem colapsar owners;
 2. fazer `ChunkRenderPool` preservar os source stamps publicados por render section/meshlet, compatível com partial remesh;
 3. remover aliases/shims transitórios de presentation ownership depois que initial mesh/remesh compartilharem o vocabulário final;
 4. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
