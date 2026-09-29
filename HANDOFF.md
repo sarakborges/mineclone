@@ -119,12 +119,14 @@ Commit `a32795957d707e08042d891b80e0cc2c606ff91d` (`Move structure planning out 
 - algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais neste cut;
 - os adapters são temporários: o próximo cut deve separar candidate/conflict resolution de rasterization e remover esses wrappers, em vez de transformá-los em compatibilidade permanente.
 
-CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`, remanescente depois que `StructureField` passou a consumir o planner diretamente. O corretivo remove somente esse import/re-export não utilizado; nenhuma lógica de planning/materialization muda.
+CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`, remanescente depois que `StructureField` passou a consumir o planner diretamente. O corretivo removeu esse re-export externo sem alterar lógica.
+
+CI #10263 então expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`. Como remover o item do arquivo grande será parte do próximo cut que elimina os adapters, o corretivo mantém temporariamente esse adapter type-checked por um `const _` em `generation.rs`: não há chamada/runtime cost, não há `allow`, e não se reintroduz a dependency `metadata -> generation`. O `const _` deve desaparecer junto com os adapters no próximo cut.
 
 ### Próximos cuts
 
 1. separar candidate/conflict resolution de `rasterize_structures`; materialization deve consumir `ResolvedStructurePlan` em vez de construir o plano;
-2. remover os adapters `generation/structures/*` após migrar os call sites para o planner owner;
+2. remover os adapters `generation/structures/*` após migrar os call sites para o planner owner, incluindo o `const _` temporário de type-check;
 3. adicionar cap explícito de total de pieces/nodes e, se necessário, cap dos estados avaliados em connector bounds;
 4. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
 5. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
