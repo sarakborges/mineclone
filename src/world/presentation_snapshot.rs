@@ -36,6 +36,11 @@ impl ChunkPresentationSource {
         }
     }
 
+    pub(crate) fn for_meshlets(mut self, meshlets: ChunkMeshletMask) -> Self {
+        self.revisions = self.revisions.for_meshlets(meshlets);
+        self
+    }
+
     pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
         source.snapshot_chunk(self.coord).is_some() && self.revisions.is_current(source)
     }

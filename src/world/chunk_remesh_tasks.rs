@@ -9,7 +9,7 @@ use bevy::{
 use crate::voxel::{
     coordinates::ChunkCoord,
     fluid_mesh::ChunkFluidMesh,
-    mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+    mesh_snapshot::ChunkMeshSnapshot,
     meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
@@ -26,6 +26,7 @@ use super::{
     },
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    presentation_snapshot::ChunkPresentationSource,
     revision::TaskInputRevision,
 };
 
@@ -142,7 +143,7 @@ impl LightingRemeshDependencies {
 }
 
 pub(crate) struct ChunkRemeshDependencies {
-    content: ChunkMeshDependencies,
+    content: ChunkPresentationSource,
     lighting: LightingRemeshDependencies,
 }
 
@@ -154,7 +155,8 @@ impl ChunkRemeshDependencies {
         revisions: &HashMap<ChunkCoord, [u64; 8]>,
     ) -> Self {
         Self {
-            content: world.dependencies().for_meshlets(meshlets),
+            content: ChunkPresentationSource::capture(ChunkCoord::from_ivec3(center), world)
+                .for_meshlets(meshlets),
             // Revision slots are already expanded by the one-voxel lighting
             // halo, so a partial task only depends on the meshlets it rebuilds.
             lighting: LightingRemeshDependencies::capture(center, meshlets, revisions),

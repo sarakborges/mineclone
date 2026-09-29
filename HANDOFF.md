@@ -242,18 +242,27 @@ Commit `5811dc516fab40e47d157aa5d707dee585353478` (`Define initial presentation 
 
 ### Cut 2 — source stamp passa ao owner de presentation snapshot
 
+Commit `af2e326b244359ff26aa73df62cae0f9c4ee8d6a` (`Move presentation source to snapshot owner`).
+
 - `ChunkPresentationSource` deixa de pertencer ao scheduler de initial mesh e passa a `presentation_snapshot.rs`, ao lado do snapshot imutável de conteúdo de apresentação;
 - `PresentationScheduler` passa a consumir esse tipo compartilhado e não define mais a identidade/source stamp localmente;
 - lighting continua deliberadamente fora deste stamp; sua revision por meshlet permanece no owner de remesh até a composição section-aware;
 - nenhuma lógica de meshing, task scheduling, publication, render allocation ou asset lifetime muda neste cut;
-- CI #10288 passou os audits e falhou apenas no Clippy `dead_code`: `for_meshlets` havia sido introduzido antes do primeiro consumidor. O método foi removido sem `allow` e deve voltar no mesmo cut em que remesh o usar.
+- CI #10288 passou os audits e falhou apenas no Clippy `dead_code`: `for_meshlets` havia sido introduzido antes do primeiro consumidor. Commit `ccd6183219d3bad1a376f6b99cf7f7286ba995a5` (`Fix presentation source Clippy gate`) removeu o método sem `allow`; CI #10289 passou audits + Clippy + Check.
+
+### Cut 3 — remesh compartilha content source stamp
+
+- `ChunkPresentationSource::for_meshlets` volta junto de seu primeiro consumidor e reduz as content/halo dependencies exatamente aos meshlets reconstruídos;
+- `ChunkRemeshDependencies.content` deixa de armazenar `ChunkMeshDependencies` cru e passa a armazenar `ChunkPresentationSource`, usando a mesma identidade/source contract do initial mesh;
+- `LightingRemeshDependencies` permanece separado e continua capturando revisions por meshlet; content e lighting não são colapsados em um contador artificial;
+- publication behavior permanece igual: content stale sempre retry; lighting stale causa lighting retry para terrain e catch-up para fluid;
+- nenhuma lógica de mesh building, queue priority, cancellation, asset patching ou entity lifetime muda neste cut.
 
 ### Próximos cuts
 
-1. fazer remesh usar o mesmo `ChunkPresentationSource` filtrado por meshlet, adicionando `for_meshlets` junto do consumidor e compondo content source + lighting revision sem colapsar owners;
-2. fazer `ChunkRenderPool` preservar os source stamps publicados por render section/meshlet, compatível com partial remesh;
-3. remover aliases/shims transitórios de presentation ownership depois que initial mesh/remesh compartilharem o vocabulário final;
-4. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
+1. fazer `ChunkRenderPool` preservar os content/lighting source stamps publicados por render section/meshlet, compatível com partial remesh;
+2. remover aliases/shims transitórios de presentation ownership depois que initial mesh/remesh compartilharem o vocabulário final;
+3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade
 
