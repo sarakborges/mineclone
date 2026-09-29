@@ -64,14 +64,25 @@ pub(super) fn process_chunk_remesh_queue(
     async_work: Res<ChunkAsyncWorkLimiter>,
     streaming: Res<ChunkStreamingState>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
-    mut last_pruned_selection: Local<Option<u64>>,
+    mut last_reconciled_selection: Local<Option<u64>>,
 ) {
     tasks.sync_snapshot(&content);
 
     let selection_revision = streaming.selection_revision();
-    if queue.has_background_work() && *last_pruned_selection != Some(selection_revision) {
-        queue.retain_resident(&world);
-        *last_pruned_selection = Some(selection_revision);
+    if *last_reconciled_selection != Some(selection_revision) {
+        if queue.has_background_work() {
+            queue.retain_resident(&world);
+        }
+        for request in tasks.cancel_where(|coord| !streaming.retains_render_mesh(coord)) {
+            if renderer.pool.contains(request.coord) && world.chunk(request.coord).is_some() {
+                queue.enqueue_task_meshlets_priority(
+                    request.coord,
+                    request.kind,
+                    request.meshlets,
+                );
+            }
+        }
+        *last_reconciled_selection = Some(selection_revision);
     }
 
     if tasks.pending_count() > 0 {

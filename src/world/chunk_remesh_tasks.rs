@@ -39,6 +39,67 @@ pub(crate) enum ChunkRemeshTaskKind {
     Fluid,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkRemeshTaskRequest {
+    pub(crate) coord: IVec3,
+    pub(crate) kind: ChunkRemeshTaskKind,
+    pub(crate) meshlets: ChunkMeshletMask,
+}
+
+#[derive(Default)]
+struct ChunkRemeshTaskRequests {
+    terrain: HashMap<ChunkCoord, ChunkRemeshTaskRequest>,
+    fluid: HashMap<ChunkCoord, ChunkRemeshTaskRequest>,
+}
+
+impl ChunkRemeshTaskRequests {
+    fn insert(&mut self, request: ChunkRemeshTaskRequest) {
+        let coord = ChunkCoord::from_ivec3(request.coord);
+        let previous = match request.kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                self.terrain.insert(coord, request)
+            }
+            ChunkRemeshTaskKind::Fluid => self.fluid.insert(coord, request),
+        };
+        debug_assert!(previous.is_none(), "remesh task request must be unique per queue");
+    }
+
+    fn remove(
+        &mut self,
+        coord: ChunkCoord,
+        kind: ChunkRemeshTaskKind,
+    ) -> Option<ChunkRemeshTaskRequest> {
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                self.terrain.remove(&coord)
+            }
+            ChunkRemeshTaskKind::Fluid => self.fluid.remove(&coord),
+        }
+    }
+
+    fn remove_coord(&mut self, coord: ChunkCoord) {
+        self.terrain.remove(&coord);
+        self.fluid.remove(&coord);
+    }
+
+    fn cancel_where(
+        &mut self,
+        mut predicate: impl FnMut(IVec3) -> bool,
+    ) -> Vec<ChunkRemeshTaskRequest> {
+        let cancelled = self
+            .terrain
+            .values()
+            .chain(self.fluid.values())
+            .copied()
+            .filter(|request| predicate(request.coord))
+            .collect::<Vec<_>>();
+        for request in &cancelled {
+            self.remove(ChunkCoord::from_ivec3(request.coord), request.kind);
+        }
+        cancelled
+    }
+}
+
 pub(crate) enum ChunkRemeshTaskMeshes {
     Geometry(Vec<BuiltChunkMesh>),
     Fluid(Vec<ChunkFluidMesh>),
@@ -145,6 +206,7 @@ pub(crate) struct ChunkRemeshTasks {
     snapshot: Option<Arc<MeshContentSnapshot>>,
     terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
+    requests: ChunkRemeshTaskRequests,
     poll_fluid_first: bool,
     lighting_revisions: HashMap<ChunkCoord, [u64; 8]>,
 }
@@ -156,6 +218,7 @@ impl Default for ChunkRemeshTasks {
             snapshot: None,
             terrain_pending: ChunkTaskQueue::default(),
             fluid_pending: ChunkTaskQueue::default(),
+            requests: ChunkRemeshTaskRequests::default(),
             poll_fluid_first: true,
             lighting_revisions: HashMap::default(),
         }
@@ -261,6 +324,11 @@ impl ChunkRemeshTasks {
             &world,
             &self.lighting_revisions,
         );
+        let request = ChunkRemeshTaskRequest {
+            coord,
+            kind,
+            meshlets,
+        };
         let task_coord = ChunkCoord::from_ivec3(coord);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
@@ -296,18 +364,41 @@ impl ChunkRemeshTasks {
             }
         });
 
-        match kind {
+        let inserted = match kind {
             ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
                 self.terrain_pending.insert(task_coord, revision, task)
             }
             ChunkRemeshTaskKind::Fluid => self.fluid_pending.insert(task_coord, revision, task),
+        };
+        if inserted {
+            self.requests.insert(request);
         }
+        inserted
+    }
+
+    pub(crate) fn cancel_where(
+        &mut self,
+        predicate: impl FnMut(IVec3) -> bool,
+    ) -> Vec<ChunkRemeshTaskRequest> {
+        let cancelled = self.requests.cancel_where(predicate);
+        for request in &cancelled {
+            let coord = ChunkCoord::from_ivec3(request.coord);
+            let removed = match request.kind {
+                ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                    self.terrain_pending.cancel(coord)
+                }
+                ChunkRemeshTaskKind::Fluid => self.fluid_pending.cancel(coord),
+            };
+            debug_assert!(removed, "cancelled remesh metadata must own a pending task");
+        }
+        cancelled
     }
 
     pub(crate) fn cancel_coord(&mut self, coord: IVec3) {
         let coord = ChunkCoord::from_ivec3(coord);
         self.terrain_pending.cancel(coord);
         self.fluid_pending.cancel(coord);
+        self.requests.remove_coord(coord);
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkRemeshTaskOutput>> {
@@ -321,7 +412,9 @@ impl ChunkRemeshTasks {
                 .poll_ready()
                 .or_else(|| self.fluid_pending.poll_ready())
         };
-        if ready.is_some() {
+        if let Some(completed) = ready.as_ref() {
+            let removed = self.requests.remove(completed.coord, completed.output.kind);
+            debug_assert!(removed.is_some(), "completed remesh task must retain request metadata");
             self.poll_fluid_first = !fluid_first;
         }
         ready.map(CompletedChunkTask::into_runtime)
@@ -361,6 +454,40 @@ mod tests {
         assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Geometry));
         assert!(tasks.can_schedule(ChunkRemeshTaskKind::Fluid));
         assert!(tasks.can_schedule(ChunkRemeshTaskKind::Geometry));
+    }
+
+    #[test]
+    fn request_registry_preserves_cancelled_kind_and_meshlets() {
+        let coord = IVec3::new(3, 2, 5);
+        let geometry = ChunkRemeshTaskRequest {
+            coord,
+            kind: ChunkRemeshTaskKind::Geometry,
+            meshlets: ChunkMeshletMask::for_dependency_offset(IVec3::X),
+        };
+        let fluid = ChunkRemeshTaskRequest {
+            coord,
+            kind: ChunkRemeshTaskKind::Fluid,
+            meshlets: ChunkMeshletMask::for_dependency_offset(IVec3::NEG_X),
+        };
+        let kept = ChunkRemeshTaskRequest {
+            coord: IVec3::new(4, 2, 5),
+            kind: ChunkRemeshTaskKind::Lighting,
+            meshlets: ChunkMeshletMask::ALL,
+        };
+        let mut requests = ChunkRemeshTaskRequests::default();
+        requests.insert(geometry);
+        requests.insert(fluid);
+        requests.insert(kept);
+
+        let cancelled = requests.cancel_where(|candidate| candidate == coord);
+
+        assert_eq!(cancelled.len(), 2);
+        assert!(cancelled.contains(&geometry));
+        assert!(cancelled.contains(&fluid));
+        assert_eq!(
+            requests.remove(ChunkCoord::from_ivec3(kept.coord), kept.kind),
+            Some(kept)
+        );
     }
 
     #[test]

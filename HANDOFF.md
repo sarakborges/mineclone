@@ -131,17 +131,18 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 
 - generation nova pertence apenas a `desired`; `retained` preserva world truth/materialization temporária, mas não autoriza novo trabalho de generation.
 - `39ed517067eedf8506c8417fe4a57e032117b8a7` moveu o cancelamento de generation stale para o selection rebuild e usa membership em `desired`, não `keeps_loaded`. Em warp disjunto, jobs da seleção anterior liberam worker capacity assim que deixam o desired set. CI `36586304834` success.
-- o `cancel_generation_outside_desired` redundante de `collect_generated_chunks` foi removido: remoções de `desired` pertencem ao selection rebuild; `adopt_structure_top_chunk` apenas adiciona. Pending targets/prefetch e resultados continuam revalidando `wants_generation`, portanto stale work não volta a ser autorizado depois do cut.
+- `37920ff51c4add96f08d2a471163e1cf07dbb98b` removeu o `cancel_generation_outside_desired` redundante de `collect_generated_chunks`; remoções de `desired` pertencem ao selection rebuild e pending/prefetch/results continuam revalidando `wants_generation`. CI `36587932705` success.
 - initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
 - remesh publication/dispatch exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks (`17402d31753de978ac9499ee3e85784d279976ac`).
 - `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes sem confundir ausência de world residency com ausência de render mesh. O prune local acompanha voxel/fluid edits e o retain global roda no máximo uma vez por selection revision. CI `36581123163` success.
+- cut atual: `ChunkRemeshTasks` passa a possuir metadata explícita de cada request em voo (`coord + kind + meshlet mask`). Na mudança de selection revision, `process_chunk_remesh_queue` cancela tasks que saíram de `retains_render_mesh`; se o render allocation e world chunk ainda existem, re-enfileira exatamente os dirty meshlets. `cancel_coord` continua destrutivo para retirement/eviction. CI pendente para este cut.
 
 ### Disjoint warp audit
 
 - generation tasks/prefetch reservations task-backed agora são cancelados desired-only no rebuild; unscheduled wave pending continua bounded pelo wave cap e revalida `wants_generation` antes de schedule.
 - chunks já staged/settling são world truth em processo de convergência e não são descartados por mudança de seleção; publication posterior ainda passa por residency/ready guards.
 - ready retained-work não compete com um warp disjunto: `pop_ready` exige estar dentro do show radius atual. Mesh task em voo só sobrevive dentro de `retains_render_mesh`/hide radius, preservando hysteresis sem publicar trabalho distante.
-- **lacuna remesh em voo:** completed remesh fora da seleção já é re-enfileirado sem publicar, mas uma task remesh ainda em voo não é cancelada no selection rebuild. Até 4 terrain + 4 fluid tasks antigas podem continuar segurando shared async permits durante um warp. Cancelar sem metadata hoje perderia `kind + meshlet mask`, porque esses dados só reaparecem no output da task. O próximo cut deve tornar a request metadata explícita no owner `ChunkRemeshTasks`, cancelar stale in-flight work no rebuild e re-enfileirar exatamente os dirty meshlets para permitir reentrada segura.
+- remesh em voo agora segue a mesma seleção de presentation: request metadata permite cancel/requeue sem perder invalidation, eliminando a ocupação de shared async permits por até 4 terrain + 4 fluid tasks da seleção antiga durante warp disjunto.
 
 ### Observabilidade existente
 
@@ -169,13 +170,13 @@ Adicionar nova métrica somente quando um próximo cut tiver uma hipótese que o
 - `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` — prune local de halo remesh ausente; CI `36581123163` success.
 - `1442fa3350c2a7d30eb9e30db4341c1f48dace16` — retired candidate path passa a forçar yield após progresso bounded; CI `36582996658` success.
 - `39ed517067eedf8506c8417fe4a57e032117b8a7` — selection rebuild cancela generation fora de `desired`; CI `36586304834` success.
+- `37920ff51c4add96f08d2a471163e1cf07dbb98b` — remove scan redundante de cancellation generation por frame; CI `36587932705` success.
 
 ## Phase 4 — próximos cortes
 
-1. tornar `kind + meshlet mask` metadata explícita para remesh tasks em voo, permitindo cancellation stale sem perder dirty work;
-2. no selection rebuild, cancelar remesh tasks fora de `retains_render_mesh` e re-enfileirar exatamente seus meshlets; manter destructive `cancel_coord` para render retirement/eviction;
-3. validar prefetch promotion em `GenerationWaveState::finish()` sob troca de seleção durante fluid settling/publication com teste focado se houver uma invariant ainda não coberta;
-4. continuar procurando priority rescans redundantes apenas depois de fechar remesh stale-work; não reescrever prioridade por estética.
+1. validar prefetch promotion em `GenerationWaveState::finish()` sob troca de seleção durante fluid settling/publication com teste focado se houver uma invariant ainda não coberta;
+2. revisar se selection-revision reconciliation de remesh precisa de diagnóstico próprio depois de gameplay logs; não adicionar métrica antes de haver hipótese não coberta pelos sinais existentes;
+3. continuar procurando priority rescans redundantes apenas depois de fechar o gate do remesh stale-work; não reescrever prioridade por estética.
 
 ## Regras de continuidade
 
