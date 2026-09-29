@@ -180,7 +180,7 @@ Commit `5f400382132001e162225f1c365ba95f8fcaded3` (`Formalize cross-chunk struct
 
 ### Cut 8 — connector metadata bounds com state-space explícito
 
-Estado deste cut:
+Commit `dc9f3c6a8b9449a53bebd1e138827c222a1c3f47` (`Bound connector metadata state space`), CI #10282 success.
 
 - `connected_horizontal_bounds_for_reference` deixa de usar `f32::to_bits()` como parte da memo key de remaining strength e passa a usar `CONNECTOR_BOUND_STRENGTH_BUCKETS = 64`;
 - strength é sempre arredondada **para cima** ao bucket seguinte, então o estado reutilizado representa um upper bound da força real e pode apenas ampliar o bounds calculado, nunca reduzir;
@@ -189,7 +189,8 @@ Estado deste cut:
 - o resolver/materializer real de connectors continua usando `f32` exato; bucketization existe somente no cálculo conservador de metadata bounds;
 - o teste `connector_strength_bucket_never_underestimates_remaining_strength` cobre o invariant de arredondamento conservador; o teste existente da chain continua exigindo bounds exato `(0,0)..(8,0)` no caso simples;
 - o fixture antigo de `explicit_piece_budget_caps_connector_expansion` foi corrigido de loss inválido para `0.25`, preservando cadeia suficiente para provar o budget de três pieces e respeitando o máximo de 64 loops;
-- nenhuma alteração em hashing, seleção de group member, connector traversal runtime, overlap rejection, ground-fit, conflict policy ou rasterization.
+- nenhuma alteração em hashing, seleção de group member, connector traversal runtime, overlap rejection, ground-fit, conflict policy ou rasterization;
+- o arquivo acidental `tmp/placeholder` que acompanhou o commit foi identificado como resíduo de workspace e removido imediatamente no corrective cut seguinte; não pertence à arquitetura nem ao conteúdo do projeto.
 
 ### Próximos cuts
 
