@@ -9,18 +9,6 @@ use bevy::prelude::*;
 
 use crate::content::structure::StructureRotation;
 
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureCandidate {
-    pub(crate) placement_id: String,
-    pub(crate) structure_id: String,
-    pub(crate) rotation: StructureRotation,
-    pub(crate) placement_anchor: IVec2,
-    pub(crate) placement_y: i32,
-    pub(crate) anchor: IVec2,
-    pub(crate) origin_y: i32,
-    pub(crate) primary_placement_piece: bool,
-}
-
 pub(crate) use super::structure_metadata::{
     ResolvedStructurePlan as CachedStructureForest,
     ResolvedStructurePlanPiece as CachedStructureForestPiece,
@@ -31,7 +19,7 @@ use super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
     structure_field::StructureField,
-    structure_metadata::StructureMetadata,
+    structure_metadata::{ResolvedStructurePlacement, StructureMetadata},
 };
 
 #[derive(Resource, Clone)]
@@ -126,12 +114,12 @@ impl WorldFeatureFields {
             .structure_origin_y(structure_id, rotation, anchor, factory)
     }
 
-    pub(crate) fn structure_candidates(
+    pub(crate) fn structure_placements(
         &self,
         coord: IVec2,
-        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
-    ) -> Arc<Vec<CachedStructureCandidate>> {
-        self.caches.structure_candidates(coord, factory)
+        factory: impl FnOnce() -> Vec<ResolvedStructurePlacement>,
+    ) -> Arc<Vec<ResolvedStructurePlacement>> {
+        self.caches.structure_placements(coord, factory)
     }
 
     pub(crate) fn surface_structure_placement(

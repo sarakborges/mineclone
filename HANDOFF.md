@@ -117,16 +117,29 @@ Commit `a32795957d707e08042d891b80e0cc2c606ff91d` (`Move structure planning out 
 - `StructureField` passa a importar `connected_horizontal_bounds_for_reference` e `structure_candidate_anchor` diretamente de `structure_metadata::planning`, removendo a dependency `metadata -> generation`;
 - os paths antigos em `generation/structures/{connectors,placement,set,hash,geometry}.rs` tornam-se adapters mínimos de re-export para manter `generation/structures.rs` estável neste migration block;
 - algorithms, hashes, connector resolution, set selection, bounds e rasterization permanecem semanticamente iguais neste cut;
-- os adapters são temporários: o próximo cut deve separar candidate/conflict resolution de rasterization e remover esses wrappers, em vez de transformá-los em compatibilidade permanente.
+- os adapters são temporários: devem sair quando os call sites restantes forem migrados para o planner owner.
 
-CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`, remanescente depois que `StructureField` passou a consumir o planner diretamente. O corretivo removeu esse re-export externo sem alterar lógica.
+CI #10262 falhou apenas no Clippy por um re-export morto de `connected_horizontal_bounds_for_reference` em `generation.rs`; `5b00587b47d922aee09fbd306c96b566ff4df06c` removeu esse re-export externo.
 
-CI #10263 então expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`. Como remover o item do arquivo grande será parte do próximo cut que elimina os adapters, o corretivo mantém temporariamente esse adapter type-checked por um `const _` em `generation.rs`: não há chamada/runtime cost, não há `allow`, e não se reintroduz a dependency `metadata -> generation`. O `const _` deve desaparecer junto com os adapters no próximo cut.
+CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/structures.rs`. `c6954f0efbfd4eac08d350af8ad0c0fd764efa22` mantém temporariamente esse adapter type-checked por um `const _` em `generation.rs`: não há chamada/runtime cost, não há `allow`, e não se reintroduz a dependency `metadata -> generation`. CI #10268 passou audits + Clippy + Check. O `const _` deve desaparecer junto com os adapters no próximo cut que os remover.
+
+### Cut 3 — materialization consome placements resolvidos
+
+Estado deste cut:
+
+- `ResolvedStructurePlacement` é o resultado aceito após deterministic conflict resolution: mantém `placement_id + placement_anchor + placement_y + ResolvedStructurePlan`;
+- biome identity, priority, `reserve_space` e conflict groups permanecem exclusivamente no resolver; não vazam para materialization;
+- o cache horizontal deixa de armazenar uma lista flat de `CachedStructureCandidate` por piece e passa a armazenar `Vec<ResolvedStructurePlacement>`;
+- conflict resolution continua usando a mesma identidade `(biome, placement_id, placement_anchor, placement_y)`, a mesma ordenação e os mesmos bounds 3D; depois da aceitação, todas as pieces daquele placement são agrupadas em um único plano imutável;
+- o filtro final por piece/chunk saiu do resolver: o placement completo permanece no cache quando seus bounds cruzam o chunk, e cada consumidor filtra somente as pieces que realmente intersectam o chunk atual;
+- `rasterize_structures`, `maximum_potential_structure_top_y_for_chunk` e `located_structure_origins_in_chunk` passam a consumir `placement.plan.pieces`;
+- raster voxel, hashing, structure selection, connector expansion, terrain fitting e conflict policy não são alterados neste cut;
+- isso torna explícito o boundary planner -> accepted placement plan -> materialization, sem fazer o cache virar owner da decisão.
 
 ### Próximos cuts
 
-1. separar candidate/conflict resolution de `rasterize_structures`; materialization deve consumir `ResolvedStructurePlan` em vez de construir o plano;
-2. remover os adapters `generation/structures/*` após migrar os call sites para o planner owner, incluindo o `const _` temporário de type-check;
+1. mover candidate/conflict resolution fisicamente para o planner owner agora que sua saída já é `ResolvedStructurePlacement`;
+2. remover os adapters `generation/structures/*` e o `const _` temporário quando os call sites restantes apontarem diretamente ao planner;
 3. adicionar cap explícito de total de pieces/nodes e, se necessário, cap dos estados avaliados em connector bounds;
 4. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
 5. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.

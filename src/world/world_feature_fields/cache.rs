@@ -10,11 +10,12 @@ use bevy::{
 
 use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
-use super::{CachedStructureCandidate, CachedStructureForest};
+use super::CachedStructureForest;
 use super::super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
     generation_region::GenerationRegionCoord,
+    structure_metadata::ResolvedStructurePlacement,
 };
 
 const CACHE_REGION_MARGIN: i32 = 1;
@@ -180,7 +181,7 @@ pub(super) struct FeatureCaches {
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
     volume_biomes: ConcurrentCache<GenerationRegionCoord, Arc<VolumeBiomeRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
-    structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
+    structure_placements: ConcurrentCache<IVec2, Arc<Vec<ResolvedStructurePlacement>>>,
     surface_structure_placements:
         ConcurrentCache<(String, String, IVec2), Arc<Option<CachedStructureForest>>>,
     connected_structure_forests: ConcurrentCache<
@@ -197,7 +198,7 @@ impl FeatureCaches {
             generation_columns: ConcurrentCache::new("generation column cache"),
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
-            structure_candidates: ConcurrentCache::new("structure candidate cache"),
+            structure_placements: ConcurrentCache::new("resolved structure placement cache"),
             surface_structure_placements: ConcurrentCache::new(
                 "surface structure placement cache",
             ),
@@ -246,12 +247,12 @@ impl FeatureCaches {
         self.structure_top_ys.get_if_initialized(&coord)
     }
 
-    pub(super) fn structure_candidates(
+    pub(super) fn structure_placements(
         &self,
         coord: IVec2,
-        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
-    ) -> Arc<Vec<CachedStructureCandidate>> {
-        self.structure_candidates
+        factory: impl FnOnce() -> Vec<ResolvedStructurePlacement>,
+    ) -> Arc<Vec<ResolvedStructurePlacement>> {
+        self.structure_placements
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
@@ -339,7 +340,7 @@ impl FeatureCaches {
             .retain(|coord| horizontal_chunks.contains(coord));
         self.structure_top_ys
             .retain(|coord| horizontal_chunks.contains(coord));
-        self.structure_candidates
+        self.structure_placements
             .retain(|coord| horizontal_chunks.contains(coord));
         self.surface_structure_placements.retain(|(_, _, anchor)| {
             let chunk_size = CHUNK_SIZE as i32;

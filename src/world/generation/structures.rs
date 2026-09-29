@@ -6,7 +6,10 @@ mod restrictions;
 mod set;
 mod support;
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
 use bevy::prelude::*;
 use smallvec::SmallVec;
@@ -32,9 +35,11 @@ use crate::{
         object::ObjectCell,
         texture_rotation::TextureRotation,
     },
-    world::world_feature_fields::{
-        CachedStructureCandidate, CachedStructureForestPiece,
-        CachedStructureForest,
+    world::{
+        structure_metadata::{
+            ResolvedStructurePlacement, ResolvedStructurePlan, ResolvedStructurePlanPiece,
+        },
+        world_feature_fields::{CachedStructureForest, CachedStructureForestPiece},
     },
 };
 
@@ -48,7 +53,10 @@ pub(crate) use self::{
     support::fit_structure_to_ground,
 };
 
-use self::{geometry::rectangles_overlap, hash::{avalanche, unit_interval}};
+use self::{
+    geometry::rectangles_overlap,
+    hash::{avalanche, unit_interval},
+};
 use self::{
     placement::{
         candidate_anchor, structure_member_hash, volume_site_is_selected,
@@ -95,35 +103,57 @@ pub(super) fn rasterize_structures(
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
 ) {
-    let candidates = resolved_structure_candidates(chunk_origin, context);
-    if candidates.is_empty() {
+    let placements = resolved_structure_placements(chunk_origin, context);
+    if placements.is_empty() {
         return;
     }
 
     let chunk_min_y = chunk_origin.y;
     let chunk_max_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
-    let intersects_section = candidates.iter().any(|candidate| {
-        let structure = context
-            .structures
-            .get(&candidate.structure_id)
-            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
-        let minimum_y = candidate.origin_y + structure.min_y_offset();
-        let maximum_y = candidate.origin_y + structure.effective_max_y_offset();
-        maximum_y >= chunk_min_y && minimum_y <= chunk_max_y
+    let chunk_horizontal_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
+    let chunk_horizontal_maximum =
+        chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
+    let intersects_section = placements.iter().any(|placement| {
+        placement.plan.pieces.iter().any(|piece| {
+            let structure = context
+                .structures
+                .get(&piece.structure_id)
+                .unwrap_or_else(|| panic!("missing planned structure: {}", piece.structure_id));
+            let (minimum_offset, maximum_offset) =
+                structure.horizontal_bounds_for_rotation(piece.rotation);
+            let horizontal_intersection = rectangles_overlap(
+                piece.anchor + minimum_offset,
+                piece.anchor + maximum_offset,
+                chunk_horizontal_minimum,
+                chunk_horizontal_maximum,
+            );
+            let minimum_y = piece.origin_y + structure.min_y_offset();
+            let maximum_y = piece.origin_y + structure.effective_max_y_offset();
+            horizontal_intersection && maximum_y >= chunk_min_y && minimum_y <= chunk_max_y
+        })
     });
     if !intersects_section {
         return;
     }
 
-    let needs_base_occupied = candidates.iter().any(|candidate| {
-        let structure = context
-            .structures
-            .get(&candidate.structure_id)
-            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
-        matches!(
-            structure.generation.replace_policy,
-            StructureReplacePolicy::AirOnly
-        )
+    let needs_base_occupied = placements.iter().any(|placement| {
+        placement.plan.pieces.iter().any(|piece| {
+            let structure = context
+                .structures
+                .get(&piece.structure_id)
+                .unwrap_or_else(|| panic!("missing planned structure: {}", piece.structure_id));
+            let (minimum_offset, maximum_offset) =
+                structure.horizontal_bounds_for_rotation(piece.rotation);
+            rectangles_overlap(
+                piece.anchor + minimum_offset,
+                piece.anchor + maximum_offset,
+                chunk_horizontal_minimum,
+                chunk_horizontal_maximum,
+            ) && matches!(
+                structure.generation.replace_policy,
+                StructureReplacePolicy::AirOnly
+            )
+        })
     });
 
     let mut base_occupied = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
@@ -148,46 +178,45 @@ pub(super) fn rasterize_structures(
     }
 
     let mut claimed = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
-    let chunk_horizontal_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
-    let chunk_horizontal_maximum =
-        chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
 
     chunk.edit_structure_content(|chunk| {
-        for candidate in candidates.iter() {
-            let structure = context
-                .structures
-                .get(&candidate.structure_id)
-                .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
-            let (minimum_offset, maximum_offset) =
-                structure.horizontal_bounds_for_rotation(candidate.rotation);
-            if !rectangles_overlap(
-                candidate.anchor + minimum_offset,
-                candidate.anchor + maximum_offset,
-                chunk_horizontal_minimum,
-                chunk_horizontal_maximum,
-            ) {
-                continue;
-            }
-            let minimum_y = candidate.origin_y + structure.min_y_offset();
-            let maximum_y = candidate.origin_y + structure.effective_max_y_offset();
-            if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
-                continue;
-            }
+        for placement in placements.iter() {
+            for piece in &placement.plan.pieces {
+                let structure = context
+                    .structures
+                    .get(&piece.structure_id)
+                    .unwrap_or_else(|| panic!("missing planned structure: {}", piece.structure_id));
+                let (minimum_offset, maximum_offset) =
+                    structure.horizontal_bounds_for_rotation(piece.rotation);
+                if !rectangles_overlap(
+                    piece.anchor + minimum_offset,
+                    piece.anchor + maximum_offset,
+                    chunk_horizontal_minimum,
+                    chunk_horizontal_maximum,
+                ) {
+                    continue;
+                }
+                let minimum_y = piece.origin_y + structure.min_y_offset();
+                let maximum_y = piece.origin_y + structure.effective_max_y_offset();
+                if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
+                    continue;
+                }
 
-            rasterize_structure(
-                chunk,
-                &mut claimed,
-                &StructureRasterizationContext {
-                    base_occupied: &base_occupied,
-                    blocks: context.blocks,
-                    fluids: context.fluids,
-                    chunk_origin,
-                    world_seed: context.biome_field.seed(),
-                },
-                structure,
-                candidate.rotation,
-                IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
-            );
+                rasterize_structure(
+                    chunk,
+                    &mut claimed,
+                    &StructureRasterizationContext {
+                        base_occupied: &base_occupied,
+                        blocks: context.blocks,
+                        fluids: context.fluids,
+                        chunk_origin,
+                        world_seed: context.biome_field.seed(),
+                    },
+                    structure,
+                    piece.rotation,
+                    IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
+                );
+            }
         }
     });
 }
@@ -358,64 +387,117 @@ pub(crate) fn located_structure_origins_in_chunk(
         0,
         horizontal_chunk.y * chunk_size,
     );
+    let chunk_minimum = chunk_origin.xz();
+    let chunk_maximum = chunk_minimum + IVec2::splat(chunk_size - 1);
 
-    resolved_structure_candidates(chunk_origin, context)
+    resolved_structure_placements(chunk_origin, context)
         .iter()
-        .filter(|candidate| {
-            candidate.placement_anchor == placement_anchor
-                && candidate.placement_y == placement_y
-                && ((candidate.placement_id == structure_id
-                    && candidate.primary_placement_piece)
-                    || candidate.structure_id == structure_id
+        .filter(|placement| {
+            placement.placement_anchor == placement_anchor
+                && placement.placement_y == placement_y
+        })
+        .flat_map(|placement| {
+            placement.plan.pieces.iter().filter_map(move |piece| {
+                let structure = context.structures.get(&piece.structure_id)?;
+                let (minimum_offset, maximum_offset) =
+                    structure.horizontal_bounds_for_rotation(piece.rotation);
+                if !rectangles_overlap(
+                    piece.anchor + minimum_offset,
+                    piece.anchor + maximum_offset,
+                    chunk_minimum,
+                    chunk_maximum,
+                ) {
+                    return None;
+                }
+                if !((placement.placement_id == structure_id && piece.primary_placement_piece)
+                    || piece.structure_id == structure_id
                     || context
                         .structures
-                        .reference_contains_structure(structure_id, &candidate.structure_id))
-        })
-        .map(|candidate| {
-            if candidate.placement_id == structure_id
-                && context.structure_sets.get(structure_id).is_some()
-            {
-                let surface_y = generation_surface_height(candidate.placement_anchor, context);
-                IVec3::new(
-                    candidate.placement_anchor.x,
-                    surface_y,
-                    candidate.placement_anchor.y,
-                )
-            } else {
-                IVec3::new(
-                    candidate.anchor.x,
-                    candidate.origin_y,
-                    candidate.anchor.y,
-                )
-            }
+                        .reference_contains_structure(structure_id, &piece.structure_id))
+                {
+                    return None;
+                }
+
+                if placement.placement_id == structure_id
+                    && context.structure_sets.get(structure_id).is_some()
+                {
+                    let surface_y = generation_surface_height(placement.placement_anchor, context);
+                    Some(IVec3::new(
+                        placement.placement_anchor.x,
+                        surface_y,
+                        placement.placement_anchor.y,
+                    ))
+                } else {
+                    Some(IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y))
+                }
+            })
         })
         .collect()
 }
 
-fn resolved_structure_candidates(
+fn resolved_structure_placements(
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
-) -> std::sync::Arc<Vec<CachedStructureCandidate>> {
+) -> std::sync::Arc<Vec<ResolvedStructurePlacement>> {
     let chunk_size = CHUNK_SIZE as i32;
     let horizontal_chunk = IVec2::new(
         chunk_origin.x.div_euclid(chunk_size),
         chunk_origin.z.div_euclid(chunk_size),
     );
-    context.feature_fields.structure_candidates(horizontal_chunk, || {
-        resolve_structure_candidates_uncached(chunk_origin, context)
-            .into_iter()
-            .map(|candidate| CachedStructureCandidate {
-                placement_id: candidate.placement_id.to_owned(),
-                structure_id: candidate.structure.id.clone(),
-                rotation: candidate.rotation,
-                placement_anchor: candidate.placement_anchor,
-                placement_y: candidate.placement_y,
-                anchor: candidate.anchor,
-                origin_y: candidate.origin_y,
-                primary_placement_piece: candidate.primary_placement_piece,
-            })
-            .collect()
+    context.feature_fields.structure_placements(horizontal_chunk, || {
+        resolve_structure_placements_uncached(chunk_origin, context)
     })
+}
+
+fn resolve_structure_placements_uncached(
+    chunk_origin: IVec3,
+    context: &ChunkGenerationContext<'_>,
+) -> Vec<ResolvedStructurePlacement> {
+    let accepted = resolve_structure_candidates_uncached(chunk_origin, context);
+    let mut placement_indices = HashMap::<(&str, &str, IVec2, i32), usize>::new();
+    let mut placements = Vec::<ResolvedStructurePlacement>::new();
+
+    for candidate in accepted {
+        let key = (
+            candidate.biome_id,
+            candidate.placement_id,
+            candidate.placement_anchor,
+            candidate.placement_y,
+        );
+        let piece = ResolvedStructurePlanPiece {
+            structure_id: candidate.structure.id.clone(),
+            rotation: candidate.rotation,
+            anchor: candidate.anchor,
+            origin_y: candidate.origin_y,
+            primary_placement_piece: candidate.primary_placement_piece,
+        };
+
+        if let Some(&index) = placement_indices.get(&key) {
+            let placement = &mut placements[index];
+            debug_assert_eq!(placement.plan.minimum, candidate.minimum);
+            debug_assert_eq!(placement.plan.maximum, candidate.maximum);
+            debug_assert_eq!(placement.plan.minimum_y, candidate.minimum_y);
+            debug_assert_eq!(placement.plan.maximum_y, candidate.maximum_y);
+            placement.plan.pieces.push(piece);
+            continue;
+        }
+
+        placement_indices.insert(key, placements.len());
+        placements.push(ResolvedStructurePlacement {
+            placement_id: candidate.placement_id.to_owned(),
+            placement_anchor: candidate.placement_anchor,
+            placement_y: candidate.placement_y,
+            plan: ResolvedStructurePlan {
+                pieces: vec![piece],
+                minimum: candidate.minimum,
+                maximum: candidate.maximum,
+                minimum_y: candidate.minimum_y,
+                maximum_y: candidate.maximum_y,
+            },
+        });
+    }
+
+    placements
 }
 
 fn resolve_structure_candidates_uncached<'a>(
@@ -471,16 +553,6 @@ fn resolve_structure_candidates_uncached<'a>(
                     && candidates_conflict(other, candidate)
             })
         })
-        .filter(|candidate| {
-            let (minimum_offset, maximum_offset) =
-                candidate.structure.horizontal_bounds_for_rotation(candidate.rotation);
-            rectangles_overlap(
-                candidate.anchor + minimum_offset,
-                candidate.anchor + maximum_offset,
-                chunk_min,
-                chunk_max,
-            )
-        })
         .collect::<Vec<_>>();
     accepted.sort_by(candidate_order);
     accepted
@@ -498,20 +570,21 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
     );
     let chunk_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_maximum = chunk_minimum + IVec2::splat(chunk_size - 1);
-    resolved_structure_candidates(chunk_origin, context)
+    resolved_structure_placements(chunk_origin, context)
         .iter()
-        .filter_map(|candidate| {
-            let structure = context.structures.get(&candidate.structure_id)?;
+        .flat_map(|placement| placement.plan.pieces.iter())
+        .filter_map(|piece| {
+            let structure = context.structures.get(&piece.structure_id)?;
             let (minimum_offset, maximum_offset) =
-                structure.horizontal_bounds_for_rotation(candidate.rotation);
-            let minimum = candidate.anchor + minimum_offset;
-            let maximum = candidate.anchor + maximum_offset;
+                structure.horizontal_bounds_for_rotation(piece.rotation);
+            let minimum = piece.anchor + minimum_offset;
+            let maximum = piece.anchor + maximum_offset;
             if !rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum) {
                 return None;
             }
             structure
                 .max_added_y_offset()
-                .map(|offset| candidate.origin_y + offset)
+                .map(|offset| piece.origin_y + offset)
         })
         .max()
         .unwrap_or(0)

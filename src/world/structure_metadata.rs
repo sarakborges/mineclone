@@ -36,6 +36,19 @@ pub(crate) struct ResolvedStructurePlan {
     pub(crate) maximum_y: i32,
 }
 
+/// One accepted authored placement after deterministic conflict resolution.
+///
+/// Priority/reservation/conflict-group inputs are intentionally absent here: they
+/// belong to planning. Materialization only needs placement identity plus the
+/// immutable plan that survived conflict resolution.
+#[derive(Clone, Debug)]
+pub(crate) struct ResolvedStructurePlacement {
+    pub(crate) placement_id: String,
+    pub(crate) placement_anchor: IVec2,
+    pub(crate) placement_y: i32,
+    pub(crate) plan: ResolvedStructurePlan,
+}
+
 /// Deterministic authored structure intent for a world.
 ///
 /// This owner is deliberately separate from disposable generation caches.
