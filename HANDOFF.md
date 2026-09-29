@@ -286,6 +286,8 @@ Commit `eebf02f723bb6b49191e977c542430da3f0c7c5c` (`Move lighting revisions to p
 
 ### Cut 6 — initial mesh captura lighting source stamp
 
+Commit `bbe356f44ac956252bbd74d9baf6375a00300792` (`Track lighting source for initial meshes`), CI #10294 success.
+
 - `ChunkMeshTaskOutput` passa a carregar `content_source` e `lighting_source` explicitamente, em vez de um campo genérico `dependencies` que escondia o fato de existirem dois owners de freshness;
 - dispatch de initial mesh em Loading e Gameplay captura `PresentationLightingSource` para `ChunkMeshletMask::ALL` do mesmo resource compartilhado usado pelo remesh;
 - publication de initial mesh rejeita tanto content/halo stale quanto lighting stale antes de criar/alterar render allocation; Loading reschedules imediatamente e streaming devolve o chunk à ready queue;
@@ -294,9 +296,24 @@ Commit `eebf02f723bb6b49191e977c542430da3f0c7c5c` (`Move lighting revisions to p
 - chunks vazios continuam no caminho síncrono sem async task; o stamp deles será capturado diretamente no momento da futura persistência no `ChunkRenderPool`;
 - nenhuma lógica de mesh building, prioridade, preemption, lighting propagation, entity spawning ou asset lifetime muda neste cut.
 
+Correção de processo imediatamente após o Cut 6: uma chamada errada criou `tmp/placeholder2` em `728abdfb764d4b91f7adb31c3eca62a732cdcffd`; `d149f26bd08382c99e572547a9d110bb20579a85` removeu o arquivo sem force-push. `bbe356f4..d149f26b` termina com **0 arquivos diferentes**, e CI #10296 passou audits + Clippy + Check.
+
+### Cut 7 — `ChunkRenderPool` possui published source stamps section-aware
+
+- `ChunkRenderPool` ganha metadata `published_sources` keyed por chunk, separada da allocation GPU mas com o mesmo lifecycle owner;
+- cada chunk mantém oito slots independentes para terrain e oito para fluid; cada slot guarda o par exato `(ChunkPresentationSource, PresentationLightingSource)` da publication que o produziu;
+- initial publication assíncrona em Loading e Gameplay grava o mesmo source pair nos oito meshlets de terrain e fluid somente depois que freshness foi validada e o render allocation foi criado;
+- partial remesh expõe o source pair capturado pela própria task e só grava provenance depois que `apply_built_chunk_*_meshlets` retorna sucesso;
+- geometry/lighting remesh atualiza somente os slots terrain selecionados pela mask; fluid remesh atualiza somente os slots fluid selecionados, preservando integralmente os meshlets e a section não tocados;
+- `FluidWithLightingCatchup` persiste deliberadamente o lighting stamp que realmente produziu o mesh visível e mantém o follow-up já enfileirado; não mente que o fluid observou uma revision de lighting posterior;
+- `insert` limpa metadata antiga antes de uma nova allocation; `take`/retirement e `clear` removem a metadata junto do allocation, portanto source stamps não sobrevivem ao render residency que possuíam;
+- o stamp salvo por slot permanece o stamp exato do batch que publicou aquele meshlet; ele não é artificialmente reescrito para uma revision global;
+- chunks vazios síncronos continuam sem stamp neste cut; a ausência representa source ainda não registrado, não freshness presumida;
+- nenhuma lógica de mesh building, patch/replace, queue priority, entity lifetime, asset retirement ou lighting propagation muda neste cut.
+
 ### Próximos cuts
 
-1. fazer `ChunkRenderPool` preservar os content/lighting source stamps publicados por render section/meshlet, compatível com partial remesh e com publicação síncrona de chunks vazios;
+1. capturar source stamps para publication síncrona de chunks vazios sem clonar um `ChunkMeshSnapshot` desnecessário;
 2. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
 3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 

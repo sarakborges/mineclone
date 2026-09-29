@@ -98,6 +98,8 @@ fn integrate_built_chunk_meshes(
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
+        let content_source = output.content_source;
+        let lighting_source = output.lighting_source;
         spawn_built_chunk_meshes(
             &mut renderer.commands,
             &mut renderer.meshes,
@@ -105,6 +107,11 @@ fn integrate_built_chunk_meshes(
             coord,
             output.meshes,
             &render_context,
+        );
+        renderer.pool.record_initial_presentation_sources(
+            coord,
+            content_source,
+            lighting_source,
         );
         progress.loading_state.meshed += 1;
     }

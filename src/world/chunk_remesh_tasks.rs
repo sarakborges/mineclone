@@ -148,6 +148,12 @@ impl ChunkRemeshDependencies {
         self.lighting.is_current(lighting_revisions)
     }
 
+    pub(super) fn published_sources(
+        &self,
+    ) -> (ChunkPresentationSource, PresentationLightingSource) {
+        (self.content, self.lighting)
+    }
+
     pub(super) fn publication(
         &self,
         kind: ChunkRemeshTaskKind,

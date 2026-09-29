@@ -7,6 +7,7 @@ use crate::{
         fluid_mesh::ChunkFluidMesh,
         meshlet::{ChunkMeshletMask, VoxelMeshPatch, patch_voxel_mesh},
     },
+    world::presentation_snapshot::{ChunkPresentationSource, PresentationLightingSource},
 };
 
 use super::spawn::BuiltChunkMesh;
@@ -46,6 +47,14 @@ pub(super) struct DetachedRenderAllocationParts {
 }
 
 const MESH_ASSET_RETIREMENT_FRAMES: u8 = 3;
+const CHUNK_PRESENTATION_MESHLET_COUNT: usize = 8;
+type ChunkPresentationSourceStamp = (ChunkPresentationSource, PresentationLightingSource);
+
+#[derive(Default)]
+struct ChunkPublishedPresentationSources {
+    terrain: [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
+    fluid: [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
+}
 
 #[derive(Default)]
 struct DeferredMeshAssetRetirement {
@@ -74,6 +83,7 @@ impl DeferredMeshAssetRetirements {
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
     active_column_counts: HashMap<IVec2, usize>,
+    published_sources: HashMap<IVec3, ChunkPublishedPresentationSources>,
     total_mesh_bytes: usize,
     membership_revision: u64,
 }
@@ -154,8 +164,64 @@ impl ChunkRenderPool {
             .map_or(0, |allocation| allocation.mesh_bytes)
     }
 
+    pub(crate) fn record_initial_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        assert!(
+            self.active.contains_key(&coord),
+            "initial presentation source requires an active render allocation: {coord:?}"
+        );
+        let published = self.published_sources.entry(coord).or_default();
+        record_published_source_slots(
+            &mut published.terrain,
+            ChunkMeshletMask::ALL,
+            content,
+            lighting,
+        );
+        record_published_source_slots(
+            &mut published.fluid,
+            ChunkMeshletMask::ALL,
+            content,
+            lighting,
+        );
+    }
+
+    pub(crate) fn record_terrain_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        assert!(
+            self.active.contains_key(&coord),
+            "terrain presentation source requires an active render allocation: {coord:?}"
+        );
+        let published = self.published_sources.entry(coord).or_default();
+        record_published_source_slots(&mut published.terrain, meshlets, content, lighting);
+    }
+
+    pub(crate) fn record_fluid_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        assert!(
+            self.active.contains_key(&coord),
+            "fluid presentation source requires an active render allocation: {coord:?}"
+        );
+        let published = self.published_sources.entry(coord).or_default();
+        record_published_source_slots(&mut published.fluid, meshlets, content, lighting);
+    }
+
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         let slot = self.active.remove(&coord)?;
+        self.published_sources.remove(&coord);
         replace_aggregated_mesh_bytes(
             &mut self.total_mesh_bytes,
             slot.mesh_bytes,
@@ -529,6 +595,7 @@ impl ChunkRenderPool {
 
     pub(super) fn insert(&mut self, coord: IVec3, allocation: ChunkRenderAllocation) {
         let allocation_mesh_bytes = allocation.mesh_bytes;
+        self.published_sources.remove(&coord);
         let previous = self.active.insert(coord, allocation);
         replace_aggregated_mesh_bytes(
             &mut self.total_mesh_bytes,
@@ -550,6 +617,7 @@ impl ChunkRenderPool {
             .collect();
 
         self.active_column_counts.clear();
+        self.published_sources.clear();
         self.total_mesh_bytes = 0;
         if had_active_allocations {
             self.bump_membership_revision();
@@ -586,6 +654,20 @@ impl ChunkRenderPool {
             .membership_revision
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
+    }
+}
+
+fn record_published_source_slots(
+    slots: &mut [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
+    meshlets: ChunkMeshletMask,
+    content: ChunkPresentationSource,
+    lighting: PresentationLightingSource,
+) {
+    let stamp = Some((content, lighting));
+    for (index, slot) in slots.iter_mut().enumerate() {
+        if meshlets.contains_index(index) {
+            *slot = stamp;
+        }
     }
 }
 

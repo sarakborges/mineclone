@@ -206,6 +206,7 @@ fn collect_completed_remesh_tasks(
             }
         }
 
+        let (content_source, lighting_source) = output.dependencies.published_sources();
         let render_context = content.render_context(
             context.world,
             &renderer.terrain_materials,
@@ -237,6 +238,26 @@ fn collect_completed_remesh_tasks(
         };
         if !applied {
             queue.enqueue_task_priority(coord, kind);
+            continue;
+        }
+
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                renderer.pool.record_terrain_presentation_sources(
+                    coord,
+                    meshlets,
+                    content_source,
+                    lighting_source,
+                );
+            }
+            ChunkRemeshTaskKind::Fluid => {
+                renderer.pool.record_fluid_presentation_sources(
+                    coord,
+                    meshlets,
+                    content_source,
+                    lighting_source,
+                );
+            }
         }
     }
 }

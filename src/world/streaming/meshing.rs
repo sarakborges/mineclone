@@ -210,6 +210,8 @@ pub(super) fn collect_built_chunk_meshes(
             &renderer.fluid_materials,
         );
 
+        let content_source = completed.output.content_source;
+        let lighting_source = completed.output.lighting_source;
         spawn_built_chunk_meshes(
             &mut renderer.commands,
             &mut renderer.meshes,
@@ -217,6 +219,11 @@ pub(super) fn collect_built_chunk_meshes(
             completed.coord,
             completed.output.meshes,
             &render_context,
+        );
+        renderer.pool.record_initial_presentation_sources(
+            completed.coord,
+            content_source,
+            lighting_source,
         );
         work.state.clear_initial_mesh_seed_catchup(completed.coord);
         if !catchup_meshlets.is_empty() {
