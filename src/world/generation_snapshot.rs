@@ -34,19 +34,40 @@ impl GenerationSnapshot {
         content: &ChunkContent<'_>,
         fresh_feature_caches: bool,
     ) -> Self {
-        Self {
-            blocks: content.blocks().clone(),
-            fluids: content.fluids().clone(),
-            dimension: generation.dimension().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
-            structures: StructureRegistry::clone(&generation.structures),
-            structure_sets: StructureSetRegistry::clone(&generation.structure_sets),
+        let context = ChunkGenerationContext {
+            blocks: content.blocks(),
+            fluids: content.fluids(),
+            dimension: generation.dimension(),
+            biomes: &content.biomes,
+            structures: &generation.structures,
+            structure_sets: &generation.structure_sets,
             world_generation: *generation.world_generation,
-            biome_field: content.biome_field.as_ref().clone(),
+            biome_field: &content.biome_field,
+            feature_fields: &generation.feature_fields,
+        };
+        Self::from_context(&context, fresh_feature_caches)
+    }
+
+    /// Captures the generator's domain inputs without requiring Bevy
+    /// `SystemParam` wrappers. Runtime systems use `capture`; tests and
+    /// benchmarks can build the same immutable job input directly.
+    pub(crate) fn from_context(
+        context: &ChunkGenerationContext<'_>,
+        fresh_feature_caches: bool,
+    ) -> Self {
+        Self {
+            blocks: context.blocks.clone(),
+            fluids: context.fluids.clone(),
+            dimension: context.dimension.clone(),
+            biomes: context.biomes.clone(),
+            structures: context.structures.clone(),
+            structure_sets: context.structure_sets.clone(),
+            world_generation: context.world_generation,
+            biome_field: context.biome_field.clone(),
             feature_fields: if fresh_feature_caches {
-                generation.feature_fields.clone_with_fresh_caches()
+                context.feature_fields.clone_with_fresh_caches()
             } else {
-                generation.feature_fields.as_ref().clone()
+                context.feature_fields.clone()
             },
         }
     }

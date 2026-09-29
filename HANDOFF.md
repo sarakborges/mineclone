@@ -161,19 +161,32 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 ### Audit inicial
 
 - `generation::generate_chunk(coord, context) -> VoxelChunk` já é cálculo de world data; no caminho auditado não cria Bevy entities, meshes, UI ou render state.
-- `GenerationSnapshot` já captura/clona a dependency surface permitida para background generation: registries/content, dimension, world-generation settings, biome field e feature metadata/caches.
-- `GenerationScheduler` já despacha generation no `AsyncComputeTaskPool`; o frame path integra resultados depois de revision/selection relevance guards.
+- `GenerationSnapshot` captura/clona a dependency surface permitida para background generation: registries/content, dimension, world-generation settings, biome field e feature metadata/caches.
+- `GenerationScheduler` despacha generation no `AsyncComputeTaskPool`; o frame path integra resultados depois de revision/selection relevance guards.
 - não foi encontrado caller síncrono de generation no frame path auditado.
-- falta um boundary explícito de **job**: o scheduler ainda chama `generate_chunk` diretamente e portanto mistura policy de scheduling com a operação calculável/benchmarkable.
-- não existe harness de benchmark independente (`benches/`/Criterion ausente no audit atual).
+- não existe harness de benchmark independente (`benches/`/Criterion ausente no audit atual); o crate é hoje binary-only, então não fazer um refactor amplo para `lib.rs` apenas para satisfazer benchmark tooling.
 
-### Cut atual
+### Job boundary
 
-- introduzir `ChunkGenerationJob`, com `ChunkCoord + Arc<GenerationSnapshot>` como inputs imutáveis;
-- `ChunkGenerationJob::run()` é o único owner do cálculo `generate_chunk` para async task generation;
-- `GenerationScheduler` continua proprietário apenas de snapshot revision, dedup/cap, async permit, cancellation e result revision;
-- o job não recebe permit/revision e não publica no `VoxelWorld`; isso preserva a separação entre cálculo e scheduling/publication;
-- behavior de terrain generation não muda neste cut. CI pendente.
+- `f602bdbd6b3c74cb77d54c291fd7b163effde6bc` introduziu `ChunkGenerationJob`, com `ChunkCoord + Arc<GenerationSnapshot>` como inputs imutáveis. CI `36598783588` success.
+- `ChunkGenerationJob::run()` é o owner do cálculo `generate_chunk` para async task generation.
+- `GenerationScheduler` continua proprietário apenas de snapshot revision, dedup/cap, async permit, cancellation e result revision.
+- o job não recebe permit/revision e não publica no `VoxelWorld`; scheduling/publication ficam fora do cálculo.
+
+### Cut atual — determinismo / testabilidade
+
+- `GenerationSnapshot::from_context` passa a capturar inputs a partir de `ChunkGenerationContext`, sem exigir Bevy `SystemParam`; `capture` permanece o adapter runtime e delega ao mesmo boundary.
+- regressão executa duas vezes o mesmo `ChunkGenerationJob` para o mesmo snapshot/coord usando conteúdo real do Overworld.
+- a comparação usa `DiskChunk` serializado, que representa blocks/layers/objects/fluids autoritativos e deliberadamente exclui lighting/runtime caches derivados; não adicionar `PartialEq` artificial em `VoxelChunk`.
+- usar o mesmo snapshot nas duas execuções também trava a invariant de que warming dos caches derivados não pode mudar o resultado autoritativo.
+- CI pendente para este cut.
+
+### Publication audit
+
+- result integration já rejeita `TaskInputRevision` stale e revalida `wants_generation` antes de inserir world data.
+- `VoxelWorld::insert_chunk` é uma operação única e recusa overwrite de chunk resident/persisted; publication do resultado calculado não acontece via mutações voxel-a-voxel.
+- chunks que entram em generated-fluid settling já são world truth em convergência; se deixarem retention antes da publication final, são arquivados em vez de apresentados como ready.
+- falta apenas decidir se essas invariants precisam de regressão adicional específica nesta fase; não reescrever o caminho que já satisfaz o contract sem evidência.
 
 ## Checkpoints verdes mais recentes
 
@@ -191,14 +204,15 @@ Meta: generation deve ser um job determinístico que produz authoritative world 
 - `37920ff51c4add96f08d2a471163e1cf07dbb98b` — remove cancellation scan generation redundante; CI `36587932705` success.
 - `1ab39af00954862af6ff5b8471790ab10f22f2a9` — cancela/re-enfileira remesh stale preservando dirty metadata; CI `36593145821` success.
 - `b1312808c3851865d5216d06e6b16a90dc1986a3` — trava invariável de prefetch promotion sob troca de seleção; CI `36595941232` success.
+- `f602bdbd6b3c74cb77d54c291fd7b163effde6bc` — separa generation calculation em `ChunkGenerationJob`; CI `36598783588` success.
 
 ## Phase 5 — próximos cortes
 
-1. fechar o CI do `ChunkGenerationJob` boundary;
-2. adicionar regressão de determinismo para o mesmo snapshot/coord, escolhendo comparação estável do conteúdo de `VoxelChunk` em vez de assumir igualdade estrutural sem audit;
-3. adicionar benchmark independente direcionado ao job de generation, sem medir scheduler/render;
-4. continuar auditando callers para remover qualquer generation síncrona que ainda exista fora do caminho já inspecionado;
-5. só então revisar publication atomicity/relevance e fechar os exit criteria da Phase 5.
+1. fechar CI da regressão de determinismo e do constructor de snapshot por contexto de domínio;
+2. adicionar benchmark independente do `ChunkGenerationJob`, medindo somente `run()` depois do setup/warm-up e sem scheduler/render;
+3. continuar auditando callers para confirmar ausência de generation síncrona fora do caminho já inspecionado;
+4. adicionar teste de publication stale/atomic somente se a cobertura existente não travar a invariant de revisão/relevância de forma suficiente;
+5. fechar os exit criteria da Phase 5 e só então iniciar structures/connectors da Phase 6.
 
 ## Regras de continuidade
 
