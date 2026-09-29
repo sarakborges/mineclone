@@ -2,7 +2,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::layer::{LayerFace, LayerRegistry},
-    world::{chunk_remesh::ChunkRemeshQueue, fluid_updates::PendingFluidUpdates},
+    world::{
+        chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
+        fluid_updates::PendingFluidUpdates,
+    },
 };
 
 use super::{
@@ -50,7 +53,7 @@ impl VoxelMutationRuntime<'_> {
         let chunk = self
             .world
             .add_layer_at(world_position, face, layer, &self.layers)?;
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         Some(ChunkCoord::from_ivec3(chunk))
     }
 
@@ -60,7 +63,7 @@ impl VoxelMutationRuntime<'_> {
         face: LayerFace,
     ) -> Option<&'static str> {
         let (_chunk, layer_id) = self.world.remove_top_layer_at(world_position, face)?;
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         Some(layer_id)
     }
 
@@ -83,7 +86,7 @@ impl VoxelMutationRuntime<'_> {
             .set_block_at_with_previous(world_position, block)?;
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(VoxelBlockMutation {
             chunk: ChunkCoord::from_ivec3(chunk),
@@ -99,9 +102,14 @@ impl VoxelMutationRuntime<'_> {
     ) -> Option<ChunkCoord> {
         let chunk = self.world.set_fluid_at(world_position, fluid)?;
         self.lighting.enqueue_medium_edit(world_position);
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(ChunkCoord::from_ivec3(chunk))
+    }
+
+    fn enqueue_voxel_remesh(&mut self, world_position: IVec3) {
+        self.remesh_queue.enqueue_voxel_edit(world_position);
+        prune_absent_remesh_halo(world_position, &self.world, &mut self.remesh_queue);
     }
 }
 

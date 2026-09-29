@@ -5,12 +5,25 @@ use std::time::{Duration, Instant};
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::voxel::{
+    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
     mesh_snapshot::ChunkMeshSnapshot,
     meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
 
 pub(crate) use self::queue::ChunkRemeshQueue;
+
+pub(crate) fn prune_absent_remesh_halo(
+    world_position: IVec3,
+    world: &VoxelWorld,
+    queue: &mut ChunkRemeshQueue,
+) {
+    visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
+        if world.chunk(coord).is_none() {
+            queue.remove(coord);
+        }
+    });
+}
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
@@ -51,11 +64,14 @@ pub(super) fn process_chunk_remesh_queue(
     async_work: Res<ChunkAsyncWorkLimiter>,
     streaming: Res<ChunkStreamingState>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
+    mut last_pruned_selection: Local<Option<u64>>,
 ) {
     tasks.sync_snapshot(&content);
 
-    if queue.has_background_work() {
+    let selection_revision = streaming.selection_revision();
+    if queue.has_background_work() && *last_pruned_selection != Some(selection_revision) {
         queue.retain_resident(&world);
+        *last_pruned_selection = Some(selection_revision);
     }
 
     if tasks.pending_count() > 0 {
