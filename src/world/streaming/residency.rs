@@ -6,6 +6,7 @@ use crate::voxel::{
 };
 
 const MAX_RETIRED_SCAN_STEPS_PER_POLL: usize = 16;
+const MAX_RETIRED_RESULTS_BEFORE_YIELD: usize = 16;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct ResidencySelectionRevision(u64);
@@ -46,6 +47,7 @@ struct RetiredScanState {
 struct RetiredChunkQueue {
     queue: DeduplicatedQueue<ChunkCoord>,
     scan: RetiredScanState,
+    returned_since_yield: usize,
 }
 
 impl RetiredChunkQueue {
@@ -65,6 +67,11 @@ impl RetiredChunkQueue {
         desired: &HashSet<IVec3>,
         retained: &HashSet<IVec3>,
     ) -> Option<IVec3> {
+        if self.returned_since_yield >= MAX_RETIRED_RESULTS_BEFORE_YIELD {
+            self.returned_since_yield = 0;
+            return None;
+        }
+
         let scan_key = RetiredScanKey {
             selection_revision,
             center,
@@ -85,6 +92,7 @@ impl RetiredChunkQueue {
             let Some(coord) = self.queue.pop() else {
                 self.scan.remaining = 0;
                 self.scan.queue_revision = self.queue.revision();
+                self.returned_since_yield = 0;
                 return None;
             };
             self.scan.remaining -= 1;
@@ -98,6 +106,7 @@ impl RetiredChunkQueue {
                 && !retained.contains(&world_coord)
             {
                 self.scan.queue_revision = self.queue.revision();
+                self.returned_since_yield += 1;
                 return Some(world_coord);
             }
 
@@ -106,6 +115,7 @@ impl RetiredChunkQueue {
             self.scan.queue_revision = self.queue.revision();
         }
 
+        self.returned_since_yield = 0;
         None
     }
 }
@@ -208,6 +218,54 @@ mod tests {
                 &retained,
             ),
             Some(far),
+        );
+    }
+
+    #[test]
+    fn retired_results_force_a_yield_after_bounded_progress() {
+        let mut queue = RetiredChunkQueue::default();
+        let desired = HashSet::default();
+        let retained = HashSet::default();
+        let revision = ResidencySelectionRevision::default();
+        let total = MAX_RETIRED_RESULTS_BEFORE_YIELD + 1;
+
+        for x in 0..total {
+            queue.enqueue(IVec3::new(100 + x as i32, 0, 0));
+        }
+
+        for _ in 0..MAX_RETIRED_RESULTS_BEFORE_YIELD {
+            assert!(
+                queue
+                    .pop_outside_horizontal_radius(
+                        revision,
+                        IVec2::ZERO,
+                        0,
+                        &desired,
+                        &retained,
+                    )
+                    .is_some()
+            );
+        }
+        assert_eq!(
+            queue.pop_outside_horizontal_radius(
+                revision,
+                IVec2::ZERO,
+                0,
+                &desired,
+                &retained,
+            ),
+            None,
+        );
+        assert!(
+            queue
+                .pop_outside_horizontal_radius(
+                    revision,
+                    IVec2::ZERO,
+                    0,
+                    &desired,
+                    &retained,
+                )
+                .is_some()
         );
     }
 
