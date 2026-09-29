@@ -9,6 +9,7 @@ use crate::content::structure::{
 use super::hash::{avalanche, string_hash};
 
 const MAX_CONNECTOR_CHAIN_DEPTH: usize = 64;
+const MAX_RESOLVED_CONNECTOR_PIECES: usize = 256;
 const CONNECTOR_INDEX_SALT: u64 = 0x9e37_79b1_85eb_ca87;
 const CONNECTOR_DEPTH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
 const CONNECTOR_ROTATION_SALT: u64 = 0x1656_67b1_9e37_79f9;
@@ -163,13 +164,38 @@ pub(crate) fn resolve_connected_piece_forest_with_ground_fit<'a>(
     world_seed: u64,
     roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
     structures: &'a StructureRegistry,
+    fit_ground_y: impl FnMut(
+        &StructureDefinition,
+        StructureRotation,
+        IVec3,
+    ) -> Option<i32>,
+) -> Vec<ResolvedConnectedPiece<'a>> {
+    resolve_connected_piece_forest_with_limit(
+        world_seed,
+        roots,
+        structures,
+        MAX_RESOLVED_CONNECTOR_PIECES,
+        fit_ground_y,
+    )
+}
+
+fn resolve_connected_piece_forest_with_limit<'a>(
+    world_seed: u64,
+    roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
+    structures: &'a StructureRegistry,
+    max_pieces: usize,
     mut fit_ground_y: impl FnMut(
         &StructureDefinition,
         StructureRotation,
         IVec3,
     ) -> Option<i32>,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
-    let roots = roots.into_iter().collect::<Vec<_>>();
+    if max_pieces == 0 {
+        return Vec::new();
+    }
+
+    let mut roots = roots.into_iter().collect::<Vec<_>>();
+    roots.truncate(max_pieces);
     if roots.is_empty() {
         return Vec::new();
     }
@@ -188,6 +214,7 @@ pub(crate) fn resolve_connected_piece_forest_with_ground_fit<'a>(
         occupy_piece(*root, &mut occupied);
     }
 
+    let mut remaining_piece_budget = max_pieces.saturating_sub(roots.len());
     let mut resolved = Vec::new();
     for root in roots {
         resolved.extend(resolve_connected_branch(
@@ -195,6 +222,7 @@ pub(crate) fn resolve_connected_piece_forest_with_ground_fit<'a>(
             root,
             structures,
             &mut occupied,
+            &mut remaining_piece_budget,
             &mut fit_ground_y,
         ));
     }
@@ -206,6 +234,7 @@ fn resolve_connected_branch<'a>(
     root: ResolvedConnectedPiece<'a>,
     structures: &'a StructureRegistry,
     occupied: &mut HashSet<IVec3>,
+    remaining_piece_budget: &mut usize,
     fit_ground_y: &mut impl FnMut(
         &StructureDefinition,
         StructureRotation,
@@ -220,6 +249,9 @@ fn resolve_connected_branch<'a>(
     }]);
 
     while let Some(state) = pending.pop_front() {
+        if *remaining_piece_budget == 0 {
+            break;
+        }
         if state.depth >= MAX_CONNECTOR_CHAIN_DEPTH {
             continue;
         }
@@ -232,6 +264,10 @@ fn resolve_connected_branch<'a>(
             .enumerate()
             .filter(|(_, connector)| connector.target.is_some())
         {
+            if *remaining_piece_budget == 0 {
+                break;
+            }
+
             let effective_strength = state
                 .remaining_strength
                 .map_or(output.strength, |remaining| remaining.min(output.strength));
@@ -299,6 +335,7 @@ fn resolve_connected_branch<'a>(
             occupied.extend(child_positions);
             let child_index = pieces.len();
             pieces.push(child_piece);
+            *remaining_piece_budget -= 1;
 
             let next_strength =
                 effective_strength - output.strength_loss_on_each_loop;
@@ -621,6 +658,33 @@ mod tests {
         assert_eq!(
             pieces.iter().map(|piece| piece.origin.x).collect::<Vec<_>>(),
             vec![0, 2, 4, 6, 8]
+        );
+    }
+
+    #[test]
+    fn explicit_piece_budget_caps_connector_expansion() {
+        let registry = registry(vec![
+            root_definition("test:segment", 0.0),
+            segment_definition("test:segment", None, true),
+        ]);
+        let root = registry.get("test:root").expect("root must exist");
+
+        let pieces = resolve_connected_piece_forest_with_limit(
+            7,
+            [ResolvedConnectedPiece {
+                structure: root,
+                rotation: StructureRotation::Degrees0,
+                origin: IVec3::ZERO,
+            }],
+            &registry,
+            3,
+            |_, _, geometric_origin| Some(geometric_origin.y),
+        );
+
+        assert_eq!(pieces.len(), 3);
+        assert_eq!(
+            pieces.iter().map(|piece| piece.origin.x).collect::<Vec<_>>(),
+            vec![0, 2, 4]
         );
     }
 

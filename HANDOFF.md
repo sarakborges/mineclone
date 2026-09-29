@@ -95,7 +95,7 @@ Meta: generalized structures são o único mecanismo authored para world feature
 - connector/group resolution já é deterministic por seed/id/anchor/rotation e suporta target de structure/group.
 - `generation/structures.rs` ainda mistura placement planning, conflict resolution e rasterization.
 - antes dos cuts da Phase 6, `StructureField` importava planning de `world::generation`, invertendo a dependency direction.
-- connector graph possui `MAX_CONNECTOR_CHAIN_DEPTH = 64`, mas ainda não possui cap explícito para total de pieces/nodes; fan-out continua dívida.
+- connector graph possuía somente `MAX_CONNECTOR_CHAIN_DEPTH = 64`; total de pieces/nodes não era bounded explicitamente.
 - resolved placement plans são valores de domínio; caches podem armazená-los, mas não são owner da decisão.
 
 ### Cut 1 — resolved plan ownership
@@ -125,7 +125,7 @@ CI #10263 expôs o mesmo símbolo ainda sem consumidor dentro de `generation/str
 
 ### Cut 3 — materialization consome placements resolvidos
 
-Estado deste cut:
+Commit `df52ad68bda7ad07774ba61ac6c8b05ec4699a69` (`Make structure materialization consume resolved plans`), CI #10275 success.
 
 - `ResolvedStructurePlacement` é o resultado aceito após deterministic conflict resolution: mantém `placement_id + placement_anchor + placement_y + ResolvedStructurePlan`;
 - biome identity, priority, `reserve_space` e conflict groups permanecem exclusivamente no resolver; não vazam para materialization;
@@ -133,21 +133,34 @@ Estado deste cut:
 - conflict resolution continua usando a mesma identidade `(biome, placement_id, placement_anchor, placement_y)`, a mesma ordenação e os mesmos bounds 3D; depois da aceitação, todas as pieces daquele placement são agrupadas em um único plano imutável;
 - o filtro final por piece/chunk saiu do resolver: o placement completo permanece no cache quando seus bounds cruzam o chunk, e cada consumidor filtra somente as pieces que realmente intersectam o chunk atual;
 - `rasterize_structures`, `maximum_potential_structure_top_y_for_chunk` e `located_structure_origins_in_chunk` passam a consumir `placement.plan.pieces`;
-- raster voxel, hashing, structure selection, connector expansion, terrain fitting e conflict policy não são alterados neste cut;
+- raster voxel, hashing, structure selection, connector expansion, terrain fitting e conflict policy não foram alterados nesse cut;
 - isso torna explícito o boundary planner -> accepted placement plan -> materialization, sem fazer o cache virar owner da decisão.
+
+### Cut 4 — connector expansion bounded por total de pieces
+
+Estado deste cut:
+
+- `MAX_RESOLVED_CONNECTOR_PIECES = 256` limita explicitamente o forest inteiro, contando roots e filhos conectados;
+- roots acima do budget são truncadas deterministicamente na ordem de entrada; o budget restante é compartilhado entre todas as branches do forest, então fan-out não multiplica o limite por root;
+- cada child aceito consome exatamente uma unidade antes de poder entrar na pending queue; quando o budget chega a zero, nenhuma seleção, ground-fit ou overlap adicional é executado;
+- `MAX_CONNECTOR_CHAIN_DEPTH = 64` continua como bound ortogonal de profundidade;
+- hashing, ordem de connector traversal, group selection, collision rejection e strength semantics permanecem iguais enquanto há budget;
+- o helper interno parametrizado permite cobertura direcionada do cap sem reduzir o limite de produção; teste novo usa budget 3 em uma chain que naturalmente produziria mais pieces;
+- `connected_horizontal_bounds_for_reference` permanece conservador e depth-bounded neste cut; um cap de estados do cálculo de bounds só deve ser adicionado se puder preservar bounds conservadores sem introduzir clipping falso.
 
 ### Próximos cuts
 
 1. mover candidate/conflict resolution fisicamente para o planner owner agora que sua saída já é `ResolvedStructurePlacement`;
 2. remover os adapters `generation/structures/*` e o `const _` temporário quando os call sites restantes apontarem diretamente ao planner;
-3. adicionar cap explícito de total de pieces/nodes e, se necessário, cap dos estados avaliados em connector bounds;
-4. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
+3. formalizar reservation/conflict semantics atravessando chunk boundaries no planner;
+4. avaliar cap explícito de estados em connector bounds somente com fallback conservador; não trocar boundedness por under-bounds/clipping;
 5. migrar cave entrances/tunnels e futuros rivers/lakes exclusivamente por structures/connectors, sem hydrology paralelo.
 
 ## Regras de continuidade
 
 - trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
 - cada bloco coerente deve terminar como um único commit com código + `HANDOFF.md`;
+- commits já publicados nesse branch não devem ser reescritos/force-pushed; montar cuts em branch temporária e publicar somente por fast-forward quando necessário;
 - verificar CI antes de iniciar o próximo migration block;
 - gate = audits + Clippy + Check; não aguardar/executar `cargo test` automaticamente;
 - se o gate falhar, abrir logs e corrigir root cause; não esconder warnings com `allow`;
