@@ -58,29 +58,12 @@ fn wants_generation(state: &super::ChunkStreamingState, coord: IVec3) -> bool {
     state.residency.desired.contains(&coord)
 }
 
-fn cancel_generation_outside_desired(work: &mut ChunkStreamingWork<'_>) {
-    let cancelled = {
-        let desired = &work.state.residency.desired;
-        work.generation_tasks
-            .cancel_where(|coord| !desired.contains(&coord))
-    };
-    for coord in cancelled {
-        work.state.generation_wave.abandon_target(coord);
-    }
-}
-
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
-    // Logical retention preserves already-materialized world data, but it must
-    // never authorize new generation work. This matters most for a disjoint
-    // warp selection: old chunks can remain retained while their async jobs are
-    // cancelled immediately so worker capacity follows the new desired state.
-    cancel_generation_outside_desired(work);
-
     if work.state.generation_wave.has_settled_publication() {
         if process_settled_wave_publication(work) {
             work.state.generation_wave.finish();
