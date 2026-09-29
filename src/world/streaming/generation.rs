@@ -15,7 +15,7 @@ use crate::{
     },
     world::{
         chunk_async_work::ChunkAsyncWorkLimiter,
-        chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
+        chunk_generation_tasks::{GenerationScheduler, MAX_GENERATION_TASKS_IN_FLIGHT},
         chunk_rendering::ChunkRenderPool,
         chunk_system_params::ChunkContent,
         fluid_updates::GeneratedFluidSettlingCompletion,
@@ -345,7 +345,7 @@ pub(super) fn dispatch_generation_tasks(
 
 fn schedule_generation_wave_pending(
     state: &mut super::ChunkStreamingState,
-    generation_tasks: &mut ChunkGenerationTasks,
+    generation_tasks: &mut GenerationScheduler,
     async_work: &ChunkAsyncWorkLimiter,
     mut budget: Option<&mut FrameWorkBudget>,
 ) {
@@ -394,7 +394,7 @@ fn schedule_generation_wave_pending(
 pub(in crate::world) fn refill_generation_workers(
     mut world: ResMut<VoxelWorld>,
     mut state: ResMut<super::ChunkStreamingState>,
-    mut generation_tasks: ResMut<ChunkGenerationTasks>,
+    mut generation_tasks: ResMut<GenerationScheduler>,
     async_work: Res<ChunkAsyncWorkLimiter>,
 ) {
     if state.generation_wave.settling_or_publishing() {
@@ -426,7 +426,7 @@ pub(in crate::world) fn refill_generation_workers(
 fn prefetch_next_generation_wave(
     world: &mut VoxelWorld,
     state: &mut super::ChunkStreamingState,
-    generation_tasks: &mut ChunkGenerationTasks,
+    generation_tasks: &mut GenerationScheduler,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
     let prefetch_limit = generation_wave_target_limit(state);
