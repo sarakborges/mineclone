@@ -19,7 +19,8 @@
 - **Phase 1 concluída.** Core types/boundaries necessários para a reconstrução existem.
 - **Phase 2 concluída.** Authoritative chunk/world storage, revisions, lookup semantics e eviction ownership estão explícitos.
 - **Phase 3 concluída.** Biome/structure metadata é consultável sem render/materialization e caches derivados possuem ownership/bounds explícitos.
-- **Phase 4 — Streaming scheduler v2 em andamento.**
+- **Phase 4 — código do Streaming scheduler v2 concluído.** Bounds, cancellation e stale-result guards estão cobertos por código/testes. O critério empírico de responsividade em gameplay/warp continua pendente de logs reais e não deve ser tratado como performance comprovada.
+- **Phase 5 — Terrain generation v2 em andamento.**
 
 ## Phase 2 — estado final
 
@@ -112,7 +113,7 @@ Atendidos:
 - generation usa deterministic metadata/content + disposable feature caches;
 - spatial caches possuem retention explícita; content-keyed bounds são metadata finito por conteúdo.
 
-## Phase 4 — progresso
+## Phase 4 — estado final do código
 
 Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o priority algorithm antes de provar os owners atuais.
 
@@ -125,66 +126,79 @@ Meta: desired-state scheduling explícito, bounded e stale-safe sem reescrever o
 - remesh async: máximo 4 terrain + 4 fluid tasks; shared `ChunkAsyncWorkLimiter` aplica limite global/adaptativo.
 - loading async usa queue depth de 4 por worker via limiter.
 - `ChunkTaskQueue` é deduplicada; caps pertencem aos schedulers, não ao container genérico.
-- retired scan agora limita tanto inspeção quanto retorno útil por poll/frame path: `MAX_RETIRED_SCAN_STEPS_PER_POLL=16` e `MAX_RETIRED_RESULTS_BEFORE_YIELD=16`. `1442fa3350c2a7d30eb9e30db4341c1f48dace16` força yield após progresso bounded; CI `36582996658` success.
+- retired scan limita tanto inspeção quanto retorno útil por poll/frame path: `MAX_RETIRED_SCAN_STEPS_PER_POLL=16` e `MAX_RETIRED_RESULTS_BEFORE_YIELD=16`. `1442fa3350c2a7d30eb9e30db4341c1f48dace16` força yield após progresso bounded; CI `36582996658` success.
 
 ### Stale-work audit
 
 - generation nova pertence apenas a `desired`; `retained` preserva world truth/materialization temporária, mas não autoriza novo trabalho de generation.
-- `39ed517067eedf8506c8417fe4a57e032117b8a7` moveu o cancelamento de generation stale para o selection rebuild e usa membership em `desired`, não `keeps_loaded`. Em warp disjunto, jobs da seleção anterior liberam worker capacity assim que deixam o desired set. CI `36586304834` success.
-- `37920ff51c4add96f08d2a471163e1cf07dbb98b` removeu o `cancel_generation_outside_desired` redundante de `collect_generated_chunks`; remoções de `desired` pertencem ao selection rebuild e pending/prefetch/results continuam revalidando `wants_generation`. CI `36587932705` success.
+- `39ed517067eedf8506c8417fe4a57e032117b8a7` moveu cancellation generation stale para selection rebuild e usa membership em `desired`. CI `36586304834` success.
+- `37920ff51c4add96f08d2a471163e1cf07dbb98b` removeu o scan redundante de cancellation generation por frame; pending/prefetch/results revalidam `wants_generation`. CI `36587932705` success.
 - initial mesh tasks são canceladas quando deixam `retains_render_mesh` e publication revalida selection + task revision + content dependencies.
 - remesh publication/dispatch exigem `streaming.retains_render_mesh(coord)` além de resident/render-pool checks (`17402d31753de978ac9499ee3e85784d279976ac`).
-- `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes sem confundir ausência de world residency com ausência de render mesh. O prune local acompanha voxel/fluid edits e o retain global roda no máximo uma vez por selection revision. CI `36581123163` success.
-- `1ab39af00954862af6ff5b8471790ab10f22f2a9`: `ChunkRemeshTasks` passa a possuir metadata explícita de cada request em voo (`coord + kind + meshlet mask`). Na mudança de selection revision, `process_chunk_remesh_queue` cancela tasks que saíram de `retains_render_mesh`; se o render allocation e world chunk ainda existem, re-enfileira exatamente os dirty meshlets. `cancel_coord` continua destrutivo para retirement/eviction. CI `36593145821` success.
+- `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` impede acúmulo de halo remesh para chunks realmente ausentes. CI `36581123163` success.
+- `1ab39af00954862af6ff5b8471790ab10f22f2a9` dá metadata explícita a requests remesh em voo e cancela/re-enfileira trabalho que sai de `retains_render_mesh`; `cancel_coord` continua destrutivo para retirement/eviction. CI `36593145821` success.
 
-### Disjoint warp audit
+### Disjoint warp / prefetch
 
-- generation tasks/prefetch reservations task-backed agora são cancelados desired-only no rebuild; unscheduled wave pending continua bounded pelo wave cap e revalida `wants_generation` antes de schedule.
-- chunks já staged/settling são world truth em processo de convergência e não são descartados por mudança de seleção; publication posterior ainda passa por residency/ready guards.
-- ready retained-work não compete com um warp disjunto: `pop_ready` exige estar dentro do show radius atual. Mesh task em voo só sobrevive dentro de `retains_render_mesh`/hide radius, preservando hysteresis sem publicar trabalho distante.
-- remesh em voo agora segue a mesma seleção de presentation: request metadata permite cancel/requeue sem perder invalidation, eliminando a ocupação de shared async permits por até 4 terrain + 4 fluid tasks da seleção antiga durante warp disjunto.
+- generation task-backed fora de `desired` é cancelada no rebuild; unscheduled wave pending continua bounded e revalida `wants_generation`.
+- chunks staged/settling já são world truth em convergência; publication posterior passa por residency/ready guards.
+- ready retained-work não compete com warp disjunto porque `pop_ready` exige show radius atual.
+- remesh em voo usa a seleção de presentation e não mantém permits ocupados por requests antigos após warp disjunto.
+- `GenerationWaveState::finish()` só promove reservations ainda presentes em `prefetch_targets`.
+- selection rebuild cancela task-backed prefetch fora de `desired`; `abandon_target` remove a reservation antes de `finish()`.
+- `b1312808c3851865d5216d06e6b16a90dc1986a3` adiciona regressão garantindo que prefetch abandonado não seja promovido, enquanto reservation ainda válida é promovida. CI `36595941232` success.
 
-### Prefetch promotion audit
+### Observabilidade / dívida empírica
 
-- `GenerationWaveState::finish()` só promove reservations que ainda permanecem em `prefetch_targets`.
-- selection rebuild cancela generation task-backed fora de `desired` e chama `abandon_target`, que também remove a reservation de `prefetch_targets` antes de `finish()`.
-- staged/settling/publication chunks não podem ser abandonados como async work porque já pertencem a world truth em convergência; os guards posteriores de publication/residency continuam responsáveis por eles.
-- não foi encontrado production hole nessa transição. Cut atual adiciona regressão focada provando que prefetch abandonado durante a wave não é promovido quando a wave termina, enquanto reservation ainda válida é promovida. CI pendente para este cut.
+O diagnóstico existente cobre pending/ready/retired, wave/prefetch/staged, async task counts/shared limiter, remesh queues, priority scan count/avg/max/max queue e frame/main/render work percentiles com slow-frame context.
 
-### Observabilidade existente
+Não há log de gameplay desta HEAD provando ainda o último exit criterion de Phase 4 (“gameplay remains responsive while background work progresses incrementally”). Por decisão explícita de seguir para Phase 5, isso fica registrado como **runtime validation debt**, não como performance já comprovada. Não adicionar métricas nem reabrir scheduler sem hipótese sustentada por logs.
 
-Não criar outro metrics owner sem necessidade. O diagnóstico periódico atual já cobre:
+## Phase 5 — Terrain generation v2
 
-- `pending`, `ready`, `retired`, generation wave/prefetch/staged;
-- generation/initial-mesh/remesh tasks e shared async limiter;
-- remesh geometry/lighting/fluid queue counts;
-- pending/ready priority scan count, média, máximo e maior queue observada;
-- frame time percentiles + top slow-frame contexts com `selection_revision` e `warp_active`;
-- main/render work percentiles.
+Meta: generation deve ser um job determinístico que produz authoritative world data sem possuir scheduling, ECS publication ou render side effects.
 
-Adicionar nova métrica somente quando um próximo cut tiver uma hipótese que os sinais acima não consigam provar/refutar.
+### Audit inicial
+
+- `generation::generate_chunk(coord, context) -> VoxelChunk` já é cálculo de world data; no caminho auditado não cria Bevy entities, meshes, UI ou render state.
+- `GenerationSnapshot` já captura/clona a dependency surface permitida para background generation: registries/content, dimension, world-generation settings, biome field e feature metadata/caches.
+- `GenerationScheduler` já despacha generation no `AsyncComputeTaskPool`; o frame path integra resultados depois de revision/selection relevance guards.
+- não foi encontrado caller síncrono de generation no frame path auditado.
+- falta um boundary explícito de **job**: o scheduler ainda chama `generate_chunk` diretamente e portanto mistura policy de scheduling com a operação calculável/benchmarkable.
+- não existe harness de benchmark independente (`benches/`/Criterion ausente no audit atual).
+
+### Cut atual
+
+- introduzir `ChunkGenerationJob`, com `ChunkCoord + Arc<GenerationSnapshot>` como inputs imutáveis;
+- `ChunkGenerationJob::run()` é o único owner do cálculo `generate_chunk` para async task generation;
+- `GenerationScheduler` continua proprietário apenas de snapshot revision, dedup/cap, async permit, cancellation e result revision;
+- o job não recebe permit/revision e não publica no `VoxelWorld`; isso preserva a separação entre cálculo e scheduling/publication;
+- behavior de terrain generation não muda neste cut. CI pendente.
 
 ## Checkpoints verdes mais recentes
 
 - `74c45f7aabfacbeb50b747b37d6799f168708f51` — generation explicita `Resident / Archived / Absent`; CI `36496987975` success.
 - `73383a52f8f8c9c4a4043274161dc36cb5ec1340` — eviction coordinator separa authoritative vs presentation capabilities; CI `36497504684` success.
 - `499d33aa1098da8edb63c9b85f5462f545840a45` + `2c12c9e67abb8d24bb310e9654ec3f658ad6f33a` — `SurfaceSiteCache`; CI `36498438529` success.
-- `d976bf536c9980a28e971ab5f5869c81b931ee3b` — `StructureMetadata` vira o contract explícito e fresh caches preservam metadata; CI `36498902285` success.
-- `12963a65547ec148725a259195c3bd05d40609ac` — structure reference bounds deixam `FeatureCaches` e viram deterministic metadata; CI `36499367474` success.
+- `d976bf536c9980a28e971ab5f5869c81b931ee3b` — `StructureMetadata` vira contract explícito e fresh caches preservam metadata; CI `36498902285` success.
+- `12963a65547ec148725a259195c3bd05d40609ac` — structure reference bounds viram deterministic metadata; CI `36499367474` success.
 - `bb2cfb1002c3dac37d139a000ec123301dffa013` — fecha Phase 3 e inicia audit da Phase 4; CI `36499528861` success.
-- `84955d6b6496548cd24fce37a0bed87aea368af7` — ready queue passa a ser residency-bound; CI `36502882704` success.
-- `17402d31753de978ac9499ee3e85784d279976ac` — remesh dispatch/publication rejeita presentation work fora da seleção atual; CI `36503076178` success.
+- `84955d6b6496548cd24fce37a0bed87aea368af7` — ready queue residency-bound; CI `36502882704` success.
+- `17402d31753de978ac9499ee3e85784d279976ac` — remesh dispatch/publication rejeita presentation work fora da seleção; CI `36503076178` success.
 - `c1f7b6b3fe63ed75a9abe44de7be5383a5dddabe` — prune local de halo remesh ausente; CI `36581123163` success.
-- `1442fa3350c2a7d30eb9e30db4341c1f48dace16` — retired candidate path passa a forçar yield após progresso bounded; CI `36582996658` success.
+- `1442fa3350c2a7d30eb9e30db4341c1f48dace16` — retired path força yield após progresso bounded; CI `36582996658` success.
 - `39ed517067eedf8506c8417fe4a57e032117b8a7` — selection rebuild cancela generation fora de `desired`; CI `36586304834` success.
-- `37920ff51c4add96f08d2a471163e1cf07dbb98b` — remove scan redundante de cancellation generation por frame; CI `36587932705` success.
-- `1ab39af00954862af6ff5b8471790ab10f22f2a9` — cancela/re-enfileira remesh em voo obsoleto preservando dirty metadata; CI `36593145821` success.
+- `37920ff51c4add96f08d2a471163e1cf07dbb98b` — remove cancellation scan generation redundante; CI `36587932705` success.
+- `1ab39af00954862af6ff5b8471790ab10f22f2a9` — cancela/re-enfileira remesh stale preservando dirty metadata; CI `36593145821` success.
+- `b1312808c3851865d5216d06e6b16a90dc1986a3` — trava invariável de prefetch promotion sob troca de seleção; CI `36595941232` success.
 
-## Phase 4 — próximos cortes
+## Phase 5 — próximos cortes
 
-1. fechar o gate do teste de regressão de prefetch promotion; se verde, considerar a invariável de promotion coberta;
-2. usar gameplay logs reais para validar responsividade de warp/background work e os bounds já observáveis antes de declarar Phase 4 completa;
-3. só adicionar diagnóstico ou alterar priority scanning se esses logs mostrarem uma hipótese concreta não coberta pelos sinais existentes; não reescrever prioridade por estética.
+1. fechar o CI do `ChunkGenerationJob` boundary;
+2. adicionar regressão de determinismo para o mesmo snapshot/coord, escolhendo comparação estável do conteúdo de `VoxelChunk` em vez de assumir igualdade estrutural sem audit;
+3. adicionar benchmark independente direcionado ao job de generation, sem medir scheduler/render;
+4. continuar auditando callers para remover qualquer generation síncrona que ainda exista fora do caminho já inspecionado;
+5. só então revisar publication atomicity/relevance e fechar os exit criteria da Phase 5.
 
 ## Regras de continuidade
 

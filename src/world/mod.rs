@@ -20,6 +20,7 @@ pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 pub(crate) mod generation;
 pub(crate) mod generation_region;
+mod generation_job;
 mod generation_snapshot;
 mod lighting_updates;
 mod macro_climate;

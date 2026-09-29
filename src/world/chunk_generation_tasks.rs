@@ -8,7 +8,7 @@ use super::{
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    generation::generate_chunk,
+    generation_job::ChunkGenerationJob,
     generation_snapshot::GenerationSnapshot,
     revision::TaskInputRevision,
 };
@@ -108,10 +108,10 @@ impl GenerationScheduler {
             .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
+        let job = ChunkGenerationJob::new(coord, snapshot);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
-            let context = snapshot.context();
-            generate_chunk(coord.as_ivec3(), &context)
+            job.run()
         });
 
         self.pending.insert(coord, revision, task)
