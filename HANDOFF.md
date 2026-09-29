@@ -40,7 +40,7 @@
 
 ### Authoritative storage
 
-`VoxelWorld` coordena owners separados para resident chunks, persistence/archive, content revisions e block topology revisions. Gameplay mutations passam por `VoxelMutationRuntime`; presentation é derivada e descartável. `ChunkRenderPool` nunca é world truth.
+`VoxelWorld` coordena owners separados para resident chunks, persistence/archive, content revisions, object revisions e block topology revisions. Gameplay mutations passam por `VoxelMutationRuntime`; presentation é derivada e descartável. `ChunkRenderPool` nunca é world truth.
 
 ### Deterministic metadata
 
@@ -194,7 +194,7 @@ Commit `dc9f3c6a8b9449a53bebd1e138827c222a1c3f47` (`Bound connector metadata sta
 
 ### Cut 9 — bridge final generation -> planning removido
 
-Estado deste cut:
+Commit `ef651573aa8fa611e146ac21c23dab6c9d53e634` (`Remove final generation planning bridge`), CI #10284 success.
 
 - o `const _` temporário em `generation.rs`, criado somente para manter type-checked um re-export morto durante a migração, foi removido;
 - `generation/structures.rs` não re-exporta mais `connected_horizontal_bounds_for_reference`; o uso real continua direto via `structure_metadata::planning::connectors` dentro da coleta de candidates de volume;
