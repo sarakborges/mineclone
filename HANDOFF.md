@@ -12,7 +12,8 @@
 - Rust + Bevy permanecem. Bevy é host/framework; Asteria possui world core, metadata/generation, streaming, simulation boundaries e voxel presentation.
 - Não ressuscitar hydrology legado. Rivers/lakes/cave entrances futuros pertencem a structures/connectors/structure groups + deterministic metadata. Dynamic fluids continuam separados.
 - Old saves/legacy compatibility não são prioridade.
-- CI deve ficar verde entre migration blocks. Não avançar sobre Clippy/test/check vermelho ou em andamento.
+- CI deste branch = audits + Clippy + Check. `cargo test` **não roda automaticamente neste branch**; testes só são executados manualmente quando explicitamente solicitados.
+- Não avançar sobre audits/Clippy/Check vermelhos ou em andamento.
 - Não declarar ganho de performance sem gameplay log real.
 
 ## Invariantes da reconstrução
@@ -186,7 +187,7 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 - `77cba7c7bcb8fe49aadd0f64a16d657277030c73`: `GenerationSnapshot::from_context` + regressão de determinismo autoritativo usando `DiskChunk`; CI `36600832740` success.
 - caches derivados podem aquecer sem alterar o resultado autoritativo.
 - `d6a9f7bdbc0822d956eb9195dd8d9522088fc6ef`: benchmark manual/ignored só de `ChunkGenerationJob::run`; CI `36602768937` success.
-- benchmark: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
+- benchmark manual, somente quando explicitamente solicitado: `cargo test --release --locked benchmark_chunk_generation_job -- --ignored --nocapture --test-threads=1`.
 
 ### Audit final / exit criteria
 
@@ -203,13 +204,19 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 
 **Phase 5 concluída.**
 
+### Correção da política de CI
+
+O workflow deste branch ainda continha indevidamente um step `Test` com `cargo test --locked`. Isso contrariava a decisão já estabelecida de não executar a suíte de testes automaticamente neste branch e fez o run #10253 entrar em `Test` após Clippy. O step foi removido no cut imediatamente posterior a `d0207bee`.
+
+Gate correto daqui para frente: audits de conteúdo/assets + Clippy + `cargo check`. `cargo test` permanece disponível apenas para execução manual e explícita, inclusive benchmarks/tests ignored específicos.
+
 ### Próximo bloco — Phase 6
 
 1. auditar o planning/materialization atual de structures/connectors contra os contracts formais da Phase 6;
 2. separar metadata/planning determinístico de qualquer aplicação/materialization que ainda esteja acoplada;
 3. garantir budgets/caps explícitos para expansão de connector graphs e structure groups;
 4. manter rivers/lakes/cave entrances no modelo generalizado de structures/connectors, sem reintroduzir hydrology legado;
-5. atualizar este HANDOFF em cada cut e manter CI verde entre blocos.
+5. atualizar este HANDOFF em cada cut e manter o gate audits + Clippy + Check verde entre blocos.
 
 ## Regras de continuidade
 
@@ -217,7 +224,8 @@ Meta: generation é job determinístico de authoritative world data, sem schedul
 - cada bloco coerente deve atualizar este `HANDOFF.md` no mesmo commit;
 - conferir diff de arquivos grandes regravados;
 - verificar CI antes do próximo migration block;
-- se CI falhar, abrir logs e corrigir root cause; não esconder warning com `allow`;
+- gate deste branch = audits + Clippy + Check; não executar/aguardar `cargo test` no CI;
+- se audits/Clippy/Check falharem, abrir logs e corrigir root cause; não esconder warning com `allow`;
 - preservar gameplay/content/UI/assets válidos durante o rebuild;
 - não reintroduzir hydrology legado;
 - não inventar performance claims sem logs reais.
