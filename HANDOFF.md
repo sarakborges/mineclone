@@ -136,6 +136,20 @@ Commit `74b8b1c1b0b32c933c40d8a626ae411b9c4f0d36` (`Skip clustering for viewmode
 5. depois do startup, instrumentar o main schedule para localizar o hitch de movimento de ~102 ms;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 
+## Pacote deferido pós-refactor — Worldgen coherence
+
+Planejamento registrado em `docs/post-refactor-worldgen-coherence.md`.
+
+Implementar **somente após a conclusão da Phase 7 e fechamento do core rebuild**, sem misturar feature work ao cutover atual. O pacote cobre:
+
+- ocean/coast margins com influência de altura estritamente lower-only, impedindo oceanos de erguer margens de qualquer mountain family;
+- constraints declarativas entre volume biomes e surface biomes, com selectors por ID/family/tag;
+- surface indicator opcional e determinístico para volume biomes via structure/structure group;
+- rewrite da formação de floating islands como massas coerentes, grandes, irregulares e conectadas, com blending gradual e estratificação surface/subsurface/core;
+- testes obrigatórios de determinismo, chunk seams, generation-order invariance, connectivity e regressões de biome relationships.
+
+Ordem pós-refactor definida no documento: primitives de relações -> volume constraints -> surface indicators -> ocean lower-only -> floating islands -> integração/tuning.
+
 ## Regras de continuidade
 
 - trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
