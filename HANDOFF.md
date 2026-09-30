@@ -203,3 +203,5 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 - 0.68.61: Hydro droplet vertically compressed while preserving its broad integrated root and existing shading, changing the silhouette from a tall spike to a shorter water-drop continuation. Pyro unchanged.
 
 - 0.68.62: Hydro droplet reshaped from a cone/spike silhouette into a compact rounded drop: lower layers hold a bulbous width, taper begins later, and the point is short. Pyro unchanged.
+
+- 0.68.63: Hydro top reshaped again from the in-game screenshot: removed the broad cap/mound silhouette. The droplet now has a narrow root buried into the slime, a small exposed bulb, and only a short pointed upper taper. Pyro unchanged.

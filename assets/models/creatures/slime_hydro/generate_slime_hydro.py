@@ -224,38 +224,45 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     # so the root matches the visible top exactly and the remaining faces keep
     # the same voxel shading language instead of flat-colored slabs.
     drop_buckets = [bucket() for _ in range(len(PALETTE))]
-    cell_x = 0.055 * s
-    # Keep the drop compact and rounded. The lower layers hold their width
-    # before the upper third tapers quickly into a short point, avoiding a cone/spike silhouette.
+    # The previous version still read as a hat because its visible root was a
+    # broad stepped mound. This version buries a narrow root inside the body,
+    # lets the exposed middle swell into a bulb, then tapers only the short
+    # upper section into a point. That creates a true teardrop silhouette.
+    cell_x = 0.050 * s
     cell_y = 0.038 * s
-    cell_z = 0.055 * s
-    base_y = top - 0.115 * s
+    cell_z = 0.050 * s
+    base_y = top - 0.150 * s
 
     if not large:
-        # Rounded water-drop silhouette: broad/bulbous lower body, then a late taper.
         profiles = [
-            (0, 5.2, 4.6, 0.00),
-            (1, 5.4, 4.8, 0.00),
-            (2, 5.3, 4.7, 0.02),
-            (3, 5.0, 4.4, 0.04),
-            (4, 4.5, 4.0, 0.07),
-            (5, 3.8, 3.4, 0.10),
-            (6, 2.7, 2.5, 0.15),
-            (7, 1.5, 1.4, 0.21),
-            (8, 0.60, 0.60, 0.27),
+            (0, 2.10, 1.90, 0.00),
+            (1, 2.35, 2.10, 0.00),
+            (2, 2.60, 2.35, 0.01),
+            (3, 2.82, 2.55, 0.02),
+            (4, 3.00, 2.72, 0.04),
+            (5, 3.08, 2.80, 0.06),
+            (6, 2.95, 2.68, 0.08),
+            (7, 2.62, 2.40, 0.11),
+            (8, 2.18, 2.02, 0.14),
+            (9, 1.64, 1.54, 0.18),
+            (10, 1.05, 1.00, 0.22),
+            (11, 0.52, 0.52, 0.26),
         ]
     else:
         profiles = [
-            (0, 6.0, 5.3, 0.00),
-            (1, 6.3, 5.6, 0.00),
-            (2, 6.2, 5.5, 0.02),
-            (3, 5.9, 5.2, 0.04),
-            (4, 5.5, 4.9, 0.07),
-            (5, 4.9, 4.4, 0.10),
-            (6, 4.1, 3.7, 0.14),
-            (7, 3.1, 2.9, 0.19),
-            (8, 2.0, 1.9, 0.25),
-            (9, 0.72, 0.72, 0.31),
+            (0, 2.20, 2.00, 0.00),
+            (1, 2.45, 2.20, 0.00),
+            (2, 2.70, 2.45, 0.01),
+            (3, 2.92, 2.65, 0.02),
+            (4, 3.10, 2.82, 0.04),
+            (5, 3.20, 2.90, 0.06),
+            (6, 3.12, 2.84, 0.08),
+            (7, 2.90, 2.65, 0.10),
+            (8, 2.58, 2.38, 0.13),
+            (9, 2.18, 2.02, 0.16),
+            (10, 1.68, 1.58, 0.20),
+            (11, 1.12, 1.06, 0.24),
+            (12, 0.56, 0.56, 0.28),
         ]
 
     droplet = set()
@@ -283,8 +290,8 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     max_layer = max(layer_info)
 
     def droplet_material(ix: int, iy: int, iz: int, normal) -> int:
-        if iy <= 1:
-            return 5  # exact upward/top material of the Hydro body
+        if iy <= 5:
+            return 5  # buried root + first exposed bulb layers match the Hydro top exactly
         t = iy / max_layer
         rx, _rz, shift = layer_info[iy]
         rel_x = (ix - shift) / max(rx, 1.0)
@@ -325,7 +332,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     details_prims = [p for p in (prim(b, i) for i, b in enumerate(drop_buckets)) if p]
     meshes.append({"name": "hydro_water_droplet", "primitives": details_prims})
     details_mesh = len(meshes) - 1
-    detail_height = (max_layer + 1) * cell_y - 0.105 * s
+    detail_height = (max_layer + 1) * cell_y - 0.150 * s
     detail_width = max((rx * 2.0 * cell_x for _iy, rx, _rz, _shift in profiles), default=0.0)
 
     materials = [
