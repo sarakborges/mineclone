@@ -8,14 +8,14 @@ use crate::voxel::{
     meshlet::ChunkMeshletMask,
 };
 
-pub(crate) use super::presentation_snapshot::PresentationContentSnapshot as MeshContentSnapshot;
 use super::{
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     presentation_snapshot::{
-        ChunkPresentationSource, PresentationLightingRevisions, PresentationLightingSource,
+        ChunkPresentationSource, PresentationContentSnapshot, PresentationLightingRevisions,
+        PresentationLightingSource,
     },
     revision::TaskInputRevision,
 };
@@ -31,7 +31,7 @@ pub(crate) struct ChunkMeshTaskOutput {
 #[derive(Resource, Default)]
 pub(crate) struct PresentationScheduler {
     revision: TaskInputRevision,
-    snapshot: Option<Arc<MeshContentSnapshot>>,
+    snapshot: Option<Arc<PresentationContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
@@ -46,7 +46,7 @@ impl PresentationScheduler {
         }
 
         self.revision = self.revision.next();
-        self.snapshot = Some(Arc::new(MeshContentSnapshot::capture(content)));
+        self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
     }
 
     pub(crate) fn revision(&self) -> TaskInputRevision {

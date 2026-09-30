@@ -19,7 +19,6 @@ use crate::voxel::coordinates::visit_chunk_coords_whose_voxel_halo_contains;
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_mesh_tasks::MeshContentSnapshot,
     chunk_rendering::{
         BuiltChunkMesh, build_chunk_fluid_meshlet_remeshes,
         build_chunk_terrain_meshlet_remeshes,
@@ -27,7 +26,8 @@ use super::{
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     presentation_snapshot::{
-        ChunkPresentationSource, PresentationLightingRevisions, PresentationLightingSource,
+        ChunkPresentationSource, PresentationContentSnapshot, PresentationLightingRevisions,
+        PresentationLightingSource,
     },
     revision::TaskInputRevision,
 };
@@ -188,7 +188,7 @@ pub(crate) struct ChunkRemeshTaskOutput {
 #[derive(Resource)]
 pub(crate) struct ChunkRemeshTasks {
     revision: TaskInputRevision,
-    snapshot: Option<Arc<MeshContentSnapshot>>,
+    snapshot: Option<Arc<PresentationContentSnapshot>>,
     terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     requests: ChunkRemeshTaskRequests,
@@ -217,7 +217,7 @@ impl ChunkRemeshTasks {
         }
 
         self.revision = self.revision.next();
-        self.snapshot = Some(Arc::new(MeshContentSnapshot::from_content(content)));
+        self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
     }
 
     pub(crate) fn revision(&self) -> TaskInputRevision {

@@ -327,9 +327,18 @@ Commit `0a847fa1adcd75c254ea2253834eb6007723b586` (`Stamp empty chunk presentati
 - nenhum trabalho async adicional, clone de snapshot, mesh build, entity churn ou asset allocation foi introduzido neste cut;
 - CI #10298 passou os audits e falhou somente no Clippy `large_enum_variant` da primeira representação `Mesh(ChunkMeshDependencies) | Center(ChunkContentRevision)`. A correção preserva `Copy` e evita heap allocation representando os modos por `Option<ChunkMeshDependencies> + Option<ChunkContentRevision>` no mesmo struct, mantendo o tamanho na mesma ordem do source original e sem `allow`.
 
+### Cut 9 — snapshot aliases transitórios removidos
+
+- `PresentationScheduler` deixa de armazenar `Arc<MeshContentSnapshot>` e passa a usar `Arc<PresentationContentSnapshot>` diretamente;
+- `ChunkRemeshTasks` usa o mesmo `PresentationContentSnapshot` diretamente, sem passar por `chunk_mesh_tasks`;
+- o re-export `MeshContentSnapshot` foi removido de `chunk_mesh_tasks.rs`;
+- o compatibility shim `PresentationContentSnapshot::from_content` foi removido; initial mesh e remesh usam `PresentationContentSnapshot::capture`;
+- não houve mudança em snapshot contents, task revision, scheduling, queue caps, publication, stale checks ou meshing;
+- o alias `ChunkMeshTasks = PresentationScheduler` permanece deliberadamente como o único bridge transitório de presentation ownership e será migrado no próximo cut.
+
 ### Próximos cuts
 
-1. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
+1. migrar lifecycle/Loading/streaming de `ChunkMeshTasks` para `PresentationScheduler` e remover o último alias transitório;
 2. auditar render-section identity/source stamps como base para o exit criterion de rebuild descartável;
 3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 

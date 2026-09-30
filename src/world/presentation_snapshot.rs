@@ -171,12 +171,6 @@ impl PresentationContentSnapshot {
         }
     }
 
-    /// Temporary compatibility shim for remesh scheduling while call sites are
-    /// migrated onto the presentation-owned snapshot vocabulary.
-    pub(crate) fn from_content(content: &ChunkContent<'_>) -> Self {
-        Self::capture(content)
-    }
-
     pub(crate) fn context<'a>(
         &'a self,
         world: &'a ChunkMeshSnapshot,
