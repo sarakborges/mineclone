@@ -113,7 +113,7 @@ struct TargetHighlightInput<'w, 's> {
     targeted_object: Res<'w, TargetedWorldObject>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
-    game_mode: Single<'w, &'static GameMode>,
+    game_mode: Single<'w, 's, &'static GameMode>,
 }
 
 #[derive(SystemParam)]
