@@ -156,6 +156,19 @@ impl UiLocalization {
             .map(String::as_str)
             .unwrap_or_else(|| panic!("missing {} localization key: {key}", language.key()))
     }
+
+    pub(crate) fn format(
+        &self,
+        language: Language,
+        key: &str,
+        replacements: &[(&str, &str)],
+    ) -> String {
+        let mut text = self.text(language, key).to_owned();
+        for (name, value) in replacements {
+            text = text.replace(&format!("{{{name}}}"), value);
+        }
+        text
+    }
 }
 
 pub(crate) struct LocalizationPlugin;
