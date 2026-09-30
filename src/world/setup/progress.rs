@@ -92,8 +92,6 @@ pub(in crate::world) fn setup_world(
     mut simulation: WorldSetupSimulation,
     persistence: WorldSetupPersistence,
     mut finalization: WorldSetupFinalization,
-    mut initial_presentation_prewarm: Local<InitialPresentationPrewarm>,
-    mut loading_diagnostics: Local<LoadingDiagnostics>,
 ) {
     if finalization.transition.is_active() {
         return;
