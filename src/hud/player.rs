@@ -108,7 +108,7 @@ fn spawn_player_hud(
                 row_gap: px(8),
                 ..default()
             },
-            player_hud_visibility(*pause_state.get(), *settings_state.get(), *game_mode),
+            player_hud_visibility(*pause_state.get(), *settings_state.get(), **game_mode),
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
@@ -145,7 +145,7 @@ fn sync_player_hud_visibility(
     game_mode: Single<&GameMode>,
     mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
 ) {
-    let next = player_hud_visibility(*pause.get(), *settings.get(), *game_mode);
+    let next = player_hud_visibility(*pause.get(), *settings.get(), **game_mode);
     for mut visibility in &mut roots {
         if *visibility != next {
             *visibility = next;
