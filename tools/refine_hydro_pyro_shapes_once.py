@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def replace_between(text: str, start_marker: str, end_marker: str, replacement: str) -> str:
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    return text[:start] + replacement + text[end:]
+
+
+hydro_path = ROOT / "assets/models/creatures/slime_hydro/generate_slime_hydro.py"
+hydro = hydro_path.read_text()
+hydro_block = '''    if not large:\n        # The droplet is not a prop sitting on the slime: it is the slime top\n        # itself continuing upward. Start broad and deeply embedded, then taper.\n        for x, y, z, w, h, d, mat in [\n            (0.000, -0.145,  0.010, 0.68, 0.18, 0.56, water_dark),\n            (0.000, -0.040,  0.008, 0.60, 0.16, 0.50, water_dark),\n            (0.000,  0.060,  0.006, 0.50, 0.15, 0.42, water_mid),\n            (0.006,  0.160,  0.004, 0.40, 0.14, 0.34, water_mid),\n            (0.014,  0.250,  0.002, 0.30, 0.12, 0.26, water_light),\n            (0.024,  0.327,  0.000, 0.21, 0.10, 0.19, water_light),\n            (0.034,  0.390, -0.004, 0.13, 0.08, 0.12, water_light),\n            (0.044,  0.438, -0.008, 0.07, 0.055,0.07, water_light),\n        ]:\n            drop_step(mat, x, y, z, w, h, d)\n        detail_height = 0.47 * s\n        detail_width = 0.68 * s\n    else:\n        for x, y, z, w, h, d, mat in [\n            (0.000, -0.165,  0.012, 0.76, 0.20, 0.64, water_dark),\n            (0.000, -0.045,  0.010, 0.68, 0.18, 0.56, water_dark),\n            (0.000,  0.072,  0.008, 0.57, 0.17, 0.48, water_mid),\n            (0.008,  0.188,  0.006, 0.46, 0.16, 0.39, water_mid),\n            (0.018,  0.292,  0.003, 0.35, 0.14, 0.30, water_light),\n            (0.030,  0.382,  0.000, 0.25, 0.11, 0.22, water_light),\n            (0.044,  0.454, -0.004, 0.16, 0.09, 0.15, water_light),\n            (0.058,  0.510, -0.008, 0.09, 0.065,0.09, water_light),\n        ]:\n            drop_step(mat, x, y, z, w, h, d)\n        detail_height = 0.55 * s\n        detail_width = 0.76 * s\n\n'''
+hydro = replace_between(hydro, "    if not large:\n        for x, y, z, w, h, d, mat in [", "    details_prims = [", hydro_block)
+hydro = hydro.replace(
+    '"reference_design": "clean turquoise water blob with no horns and one integrated teardrop on top"',
+    '"reference_design": "clean turquoise blob whose own top continues upward into one broad-based teardrop point"',
+)
+hydro_path.write_text(hydro)
+
+pyro_path = ROOT / "assets/models/creatures/slime_pyro/generate_slime_pyro.py"
+pyro = pyro_path.read_text()
+pyro_block = '''    # Irregular flames rise independently from the top surface. There is no\n    # continuous band, mirrored pair, or crown silhouette. Each flame has its\n    # own buried root and occupies a different X/Z position and height.\n    if not large:\n        flame_groups = [\n            [\n                ( 0.020,-0.085,-0.010,0.27,0.13,0.24,fire_dark),\n                ( 0.030, 0.005,-0.016,0.21,0.11,0.19,fire_orange),\n                ( 0.044, 0.090,-0.022,0.15,0.10,0.14,fire_yellow),\n                ( 0.058, 0.166,-0.028,0.10,0.085,0.10,fire_hot),\n                ( 0.070, 0.228,-0.032,0.055,0.055,0.06,fire_hot),\n            ],\n            [\n                (-0.190,-0.070,-0.105,0.19,0.11,0.17,fire_dark),\n                (-0.208, 0.004,-0.112,0.14,0.10,0.13,fire_orange),\n                (-0.222, 0.072,-0.118,0.09,0.08,0.09,fire_yellow),\n                (-0.234, 0.126,-0.122,0.050,0.055,0.055,fire_hot),\n            ],\n            [\n                ( 0.210,-0.060, 0.090,0.18,0.11,0.17,fire_dark),\n                ( 0.226, 0.015, 0.098,0.13,0.095,0.12,fire_orange),\n                ( 0.240, 0.080, 0.106,0.08,0.075,0.08,fire_yellow),\n            ],\n            [\n                (-0.050,-0.058, 0.175,0.17,0.10,0.15,fire_dark),\n                (-0.042, 0.010, 0.185,0.12,0.09,0.11,fire_orange),\n                (-0.034, 0.070, 0.194,0.07,0.07,0.07,fire_yellow),\n            ],\n            [\n                ( 0.120,-0.072,-0.165,0.14,0.10,0.12,fire_dark),\n                ( 0.132,-0.004,-0.174,0.095,0.085,0.09,fire_orange),\n                ( 0.142, 0.052,-0.182,0.055,0.060,0.055,fire_yellow),\n            ],\n        ]\n        detail_height = 0.31 * s\n        detail_width = 0.54 * s\n    else:\n        flame_groups = [\n            [\n                ( 0.028,-0.095,-0.012,0.31,0.14,0.28,fire_dark),\n                ( 0.040, 0.008,-0.018,0.25,0.12,0.22,fire_orange),\n                ( 0.056, 0.105,-0.025,0.19,0.11,0.17,fire_yellow),\n                ( 0.072, 0.192,-0.032,0.13,0.095,0.12,fire_hot),\n                ( 0.086, 0.264,-0.038,0.075,0.065,0.075,fire_hot),\n            ],\n            [\n                (-0.215,-0.080,-0.118,0.22,0.12,0.20,fire_dark),\n                (-0.236, 0.004,-0.126,0.17,0.105,0.15,fire_orange),\n                (-0.254, 0.078,-0.134,0.11,0.085,0.11,fire_yellow),\n                (-0.268, 0.140,-0.140,0.06,0.06,0.06,fire_hot),\n            ],\n            [\n                ( 0.235,-0.066, 0.104,0.21,0.12,0.19,fire_dark),\n                ( 0.254, 0.016, 0.114,0.16,0.10,0.14,fire_orange),\n                ( 0.270, 0.086, 0.124,0.10,0.085,0.10,fire_yellow),\n                ( 0.282, 0.145, 0.132,0.055,0.06,0.055,fire_hot),\n            ],\n            [\n                (-0.060,-0.066, 0.198,0.20,0.11,0.18,fire_dark),\n                (-0.050, 0.010, 0.210,0.15,0.10,0.14,fire_orange),\n                (-0.040, 0.078, 0.220,0.095,0.08,0.09,fire_yellow),\n            ],\n            [\n                ( 0.135,-0.080,-0.186,0.17,0.11,0.15,fire_dark),\n                ( 0.150,-0.006,-0.196,0.12,0.095,0.11,fire_orange),\n                ( 0.162, 0.058,-0.205,0.07,0.07,0.07,fire_yellow),\n            ],\n            [\n                (-0.130,-0.070, 0.020,0.15,0.10,0.13,fire_dark),\n                (-0.144,-0.004, 0.026,0.105,0.085,0.095,fire_orange),\n                (-0.156, 0.052, 0.032,0.060,0.060,0.060,fire_yellow),\n            ],\n        ]\n        detail_height = 0.36 * s\n        detail_width = 0.60 * s\n\n    for group in flame_groups:\n        for x, y, z, w, h, d, mat in group:\n            flame_step(mat, x, y, z, w, h, d)\n\n'''
+pyro = replace_between(pyro, "    # Flames grow out of the blob itself.", "    details_prims = [", pyro_block)
+pyro = pyro.replace(
+    '"reference_design": "clean orange fire blob with no horns and an irregular integrated flame tuft on top"',
+    '"reference_design": "clean orange blob with separate irregular flame tongues rising randomly from different top positions; no crown band"',
+)
+pyro_path.write_text(pyro)
+
+print("refined Hydro and Pyro generators")
