@@ -95,13 +95,7 @@ pub(super) struct ChunkEvictionRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkUnloadState>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
-}
-
-#[derive(SystemParam)]
-pub(super) struct ChunkEvictionPresentationRuntime<'w> {
     lighting: ResMut<'w, PendingLightingUpdates>,
-    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
-    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
 }
 
 #[derive(SystemParam)]
@@ -374,16 +368,14 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
 }
 
 /// Coordinates the final cutover from resident world data to archived/absent
-/// storage. Residency owns the retirement decision; authoritative storage and
-/// presentation teardown stay in separate capability sets but execute in this
-/// single budgeted system so there is no one-frame split-brain state.
+/// storage. Presentation retirement happens earlier in the render-retirement
+/// system; this boundary only changes authoritative residency and queues the
+/// simulation work required by that authoritative transition.
 pub(super) fn evict_distant_chunks(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
     mut streaming: ResMut<ChunkStreamingState>,
-    mut renderer: ChunkRenderer,
     mut eviction: ChunkEvictionRuntime,
-    mut presentation: ChunkEvictionPresentationRuntime,
     mut unloaded: Local<Vec<IVec3>>,
 ) {
     unloaded.clear();
@@ -427,17 +419,13 @@ pub(super) fn evict_distant_chunks(
             .chunk(coord)
             .is_some_and(chunk_might_affect_direct_skylight);
 
-        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
-        presentation.remesh_queue.remove(coord);
-        presentation.remesh_tasks.cancel_coord(coord);
-        presentation.remesh_tasks.remove_lighting_revision(coord);
         eviction.world.archive_chunk(coord);
 
         // Removing an empty section is equivalent to removing the missing-air
         // section that direct skylight already assumed, so lower sections do
         // not need a full relight. Non-empty sections remain conservative.
         if might_affect_direct_skylight {
-            presentation
+            eviction
                 .lighting
                 .enqueue_loaded_column_below(&eviction.world, coord);
         }
@@ -452,19 +440,8 @@ pub(super) fn evict_distant_chunks(
         return;
     }
 
-    presentation
-        .lighting
-        .enqueue_chunk_unloads(unloaded.as_slice());
-
-    for coord in unloaded.drain(..) {
-        enqueue_retired_render_halo_remeshes(
-            coord,
-            &eviction.world,
-            &renderer.pool,
-            &streaming,
-            &mut presentation.remesh_queue,
-        );
-    }
+    eviction.lighting.enqueue_chunk_unloads(unloaded.as_slice());
+    unloaded.clear();
 }
 
 // Vertex lighting/AO and fluid corner heights use all 26 rendered neighbors,
