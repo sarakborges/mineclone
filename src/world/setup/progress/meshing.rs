@@ -1,11 +1,11 @@
 use crate::{
-    voxel::mesh_snapshot::ChunkMeshSnapshot,
+    voxel::{mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask},
     world::{
         chunk_async_work::ChunkAsyncWorkLimiter,
         chunk_mesh_tasks::ChunkMeshTasks,
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
-        presentation_snapshot::PresentationLightingRevisions,
+        presentation_snapshot::{ChunkPresentationSource, PresentationLightingRevisions},
         work_budget::FrameWorkBudget,
     },
 };
@@ -146,6 +146,9 @@ fn dispatch_mesh_tasks(
             .is_empty();
 
         if chunk_is_empty {
+            let content_source = ChunkPresentationSource::capture_center(coord, &*progress.world)
+                .unwrap_or_else(|| panic!("empty bootstrap chunk source should exist at {coord:?}"));
+            let lighting_source = lighting_revisions.capture(coord, ChunkMeshletMask::ALL);
             let render_context = content.render_context(
                 &progress.world,
                 &renderer.terrain_materials,
@@ -158,6 +161,11 @@ fn dispatch_mesh_tasks(
                 coord,
                 Vec::new(),
                 &render_context,
+            );
+            renderer.pool.record_initial_presentation_sources(
+                coord,
+                content_source,
+                lighting_source,
             );
             progress.loading_state.mesh_cursor += 1;
             progress.loading_state.meshed += 1;

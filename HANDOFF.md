@@ -300,6 +300,8 @@ Correção de processo imediatamente após o Cut 6: uma chamada errada criou `tm
 
 ### Cut 7 — `ChunkRenderPool` possui published source stamps section-aware
 
+Commit `b532c841cb852e6a2d61d93ecdd822800e1fc784` (`Persist section-aware presentation source stamps`), CI #10297 success.
+
 - `ChunkRenderPool` ganha metadata `published_sources` keyed por chunk, separada da allocation GPU mas com o mesmo lifecycle owner;
 - cada chunk mantém oito slots independentes para terrain e oito para fluid; cada slot guarda o par exato `(ChunkPresentationSource, PresentationLightingSource)` da publication que o produziu;
 - initial publication assíncrona em Loading e Gameplay grava o mesmo source pair nos oito meshlets de terrain e fluid somente depois que freshness foi validada e o render allocation foi criado;
@@ -311,10 +313,21 @@ Correção de processo imediatamente após o Cut 6: uma chamada errada criou `tm
 - chunks vazios síncronos continuam sem stamp neste cut; a ausência representa source ainda não registrado, não freshness presumida;
 - nenhuma lógica de mesh building, patch/replace, queue priority, entity lifetime, asset retirement ou lighting propagation muda neste cut.
 
+### Cut 8 — chunks vazios recebem source stamp sem snapshot
+
+- `ChunkPresentationSource` passa a distinguir `Mesh(ChunkMeshDependencies)` de `Center(ChunkContentRevision)` dentro do próprio owner de presentation;
+- jobs de meshing/remesh continuam usando `Mesh`, preservando halo revisions, meshlet reduction e initial catch-up exatamente como antes;
+- publications síncronas de chunks vazios usam `capture_center`: capturam somente a revision autoritativa do center chunk, sem clonar `VoxelChunk`, halo ou construir `ChunkMeshSnapshot`;
+- `Center` exige que o chunk continue existente e que sua `ChunkContentRevision` permaneça igual; mudanças de vizinhos não invalidam esse stamp porque um center vazio não possui geometria/fluid próprios dependentes do halo;
+- Loading e gameplay streaming capturam também `PresentationLightingSource::ALL` no momento da publication vazia e gravam o pair no `ChunkRenderPool` depois que a allocation é criada;
+- o caminho gameplay continua executando direct-light seed antes da publication vazia; o stamp representa o estado observado naquele ponto, sem transformar o retry/seed lifecycle em meshing async;
+- `initial_catchup_meshlets_with` para `Center` é vazio por definição; neighbor arrival continua invalidando/remeshando os chunks que realmente possuem boundary geometry, não a allocation vazia;
+- nenhum trabalho async adicional, clone de snapshot, mesh build, entity churn ou asset allocation foi introduzido neste cut.
+
 ### Próximos cuts
 
-1. capturar source stamps para publication síncrona de chunks vazios sem clonar um `ChunkMeshSnapshot` desnecessário;
-2. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
+1. remover bridges/aliases transitórios de presentation ownership depois que publication e retirement consumirem diretamente os owners finais;
+2. auditar render-section identity/source stamps como base para o exit criterion de rebuild descartável;
 3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade

@@ -3,12 +3,15 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld},
+    voxel::{
+        mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask, world::VoxelWorld,
+    },
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
         chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
         chunk_system_params::{ChunkContent, ChunkRenderer},
+        presentation_snapshot::ChunkPresentationSource,
         work_budget::FrameWorkBudget,
     },
 };
@@ -114,6 +117,11 @@ fn integrate_empty_chunk(
     coord: IVec3,
     current_tick: u64,
 ) {
+    let content_source = ChunkPresentationSource::capture_center(coord, &*work.world)
+        .unwrap_or_else(|| panic!("empty streamed chunk source should exist at {coord:?}"));
+    let lighting_source = work
+        .lighting_revisions
+        .capture(coord, ChunkMeshletMask::ALL);
     let render_context = content.render_context(
         &work.world,
         &renderer.terrain_materials,
@@ -126,6 +134,11 @@ fn integrate_empty_chunk(
         coord,
         Vec::new(),
         &render_context,
+    );
+    renderer.pool.record_initial_presentation_sources(
+        coord,
+        content_source,
+        lighting_source,
     );
     activate_published_chunk_runtime(coord, work, queues, current_tick);
     notify_loaded_chunk_neighbors(

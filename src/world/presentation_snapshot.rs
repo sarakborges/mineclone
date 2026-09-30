@@ -13,6 +13,7 @@ use crate::{
         coordinates::ChunkCoord,
         mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot, ChunkSnapshotSource},
         meshlet::ChunkMeshletMask,
+        revision::ChunkContentRevision,
     },
 };
 
@@ -22,30 +23,57 @@ use super::{
     chunk_system_params::ChunkContent,
 };
 
-/// Immutable world-content identity captured by a presentation job. This is
-/// intentionally separate from authored/content-definition revisions and from
-/// lighting revisions, which have independent owners.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PresentationContentSource {
+    Mesh(ChunkMeshDependencies),
+    Center(ChunkContentRevision),
+}
+
+/// Immutable world-content identity captured by a presentation job or
+/// synchronous publication. This is intentionally separate from
+/// authored/content-definition revisions and from lighting revisions, which
+/// have independent owners.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkPresentationSource {
     coord: ChunkCoord,
-    revisions: ChunkMeshDependencies,
+    content: PresentationContentSource,
 }
 
 impl ChunkPresentationSource {
     pub(crate) fn capture(coord: ChunkCoord, world: &ChunkMeshSnapshot) -> Self {
         Self {
             coord,
-            revisions: world.dependencies(),
+            content: PresentationContentSource::Mesh(world.dependencies()),
         }
     }
 
+    pub(crate) fn capture_center(
+        coord: IVec3,
+        source: &impl ChunkSnapshotSource,
+    ) -> Option<Self> {
+        let coord = ChunkCoord::from_ivec3(coord);
+        Some(Self {
+            coord,
+            content: PresentationContentSource::Center(source.chunk_content_revision(coord)?),
+        })
+    }
+
     pub(crate) fn for_meshlets(mut self, meshlets: ChunkMeshletMask) -> Self {
-        self.revisions = self.revisions.for_meshlets(meshlets);
+        if let PresentationContentSource::Mesh(revisions) = self.content {
+            self.content = PresentationContentSource::Mesh(revisions.for_meshlets(meshlets));
+        }
         self
     }
 
     pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
-        source.snapshot_chunk(self.coord).is_some() && self.revisions.is_current(source)
+        match self.content {
+            PresentationContentSource::Mesh(revisions) => {
+                source.snapshot_chunk(self.coord).is_some() && revisions.is_current(source)
+            }
+            PresentationContentSource::Center(expected) => {
+                source.chunk_content_revision(self.coord) == Some(expected)
+            }
+        }
     }
 
     pub(crate) fn initial_catchup_meshlets_with(
@@ -53,8 +81,12 @@ impl ChunkPresentationSource {
         source: &impl ChunkSnapshotSource,
         neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> ChunkMeshletMask {
-        self.revisions
-            .initial_catchup_meshlets_with(source, neighbor_is_visible)
+        match self.content {
+            PresentationContentSource::Mesh(revisions) => {
+                revisions.initial_catchup_meshlets_with(source, neighbor_is_visible)
+            }
+            PresentationContentSource::Center(_) => ChunkMeshletMask::default(),
+        }
     }
 }
 
