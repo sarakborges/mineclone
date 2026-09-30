@@ -433,6 +433,40 @@ mod tests {
     }
 
     #[test]
+    fn floating_island_edge_tapers_before_the_outer_boundary() {
+        let seed = 7;
+        let inner = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(0.84, 0.0, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+        let boundary = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(1.0, 0.0, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+
+        assert!(inner.mask > boundary.mask);
+        assert!(boundary.mask > 0.0);
+    }
+
+    #[test]
+    fn floating_island_top_layer_depth_stays_within_the_surface_block() {
+        let top = 0.24;
+        let local_y = top - (0.64 / 36.0);
+        let depth =
+            ((top - local_y).max(0.0) * 36.0).floor() as u32;
+
+        assert_eq!(depth, 0);
+    }
+
+    #[test]
     fn floating_island_lobes_are_seeded_but_deterministic() {
         assert_eq!(
             floating_island_lobe(42, 2).center,
