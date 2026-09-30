@@ -124,6 +124,7 @@ pub(crate) struct PendingWarp {
 
 impl PendingWarp {
     pub(crate) fn request(&mut self, target: IVec3) {
+        log_gameplay_event(format!("warp.request target={:?}", target));
         self.target = Some(target);
         self.search.reset();
         self.outcome = None;
@@ -207,6 +208,10 @@ pub(super) fn resolve_pending_warp(
             let feet = (destination - Vec3::Y * PLAYER_EYE_HEIGHT).floor().as_ivec3();
             pending.target = None;
             pending.search.reset();
+            log_gameplay_event(format!(
+                "warp.success target={:?} destination={:?}",
+                target, feet
+            ));
             pending.outcome = Some(WarpOutcome::Succeeded(feet));
             *slow_search_warned = false;
         }
@@ -218,6 +223,10 @@ pub(super) fn resolve_pending_warp(
             );
             pending.target = None;
             pending.search.reset();
+            log_gameplay_event(format!(
+                "warp.failed target={:?} search_radius={}",
+                target, WARP_SEARCH_RADIUS_BLOCKS
+            ));
             pending.outcome = Some(WarpOutcome::Failed);
             *slow_search_warned = false;
         }
