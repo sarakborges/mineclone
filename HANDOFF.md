@@ -31,72 +31,56 @@
 - Phases 1–6 concluídas: core boundaries, authoritative storage, biome/structure metadata, Streaming scheduler v2, Terrain generation v2 e structures/connectors/feature planning.
 - **Phase 7 em andamento: voxel presentation / meshing v2 + dívida de performance/correctness descoberta durante validação.**
 
-## Phase 7 — estado consolidado
+## Estado recente
 
-### Presentation/render
+### Cut 23 — surface `size.min`
 
-- initial meshing e remesh usam snapshots imutáveis + stale checks;
-- content/halo e lighting possuem stamps separados, section-aware;
-- full presentation reset é descartável e reconstruído do `VoxelWorld` residente;
-- publication main-thread é barata na maior parte das janelas e não explica os grandes hitches;
-- RenderApp está instrumentado por stages e `Prepare` pelos sub-sets oficiais do Bevy 0.19.1.
+Commit `35313349c08c39dab6249afa35a56323117ce8ae`, CI #10321 success.
 
-### Cold-start conhecido
+- jitter independente ±32% por site podia comprimir vizinhos até 36% do spacing nominal;
+- surface sites agora usam jitter lateral determinístico por linha; domain warp continua owner da organicidade;
+- validar worldgen em mundo novo.
 
-- Cut 15 aqueceu a world camera ainda em Loading e reduziu parcialmente o primeiro frame;
-- Cut 16 localizou o cold-start remanescente em `RenderSystems::PrepareResources`;
-- lighting warm-up do Cut 17 foi refutado e removido;
-- `ClusterConfig::None` na viewmodel do Cut 18 é inválido nesse backend/wgpu e foi revertido;
-- cold-start de `PrepareResources` segue separado do hitch de movimento e deve ser retomado depois do pacote atual.
-
-### Streaming/hitch
-
-- Cut 19 instrumentou main-world stages e localizou os hitches de movimento em `streaming`;
-- Cut 21 adicionou warnings direcionados para rebuild, scheduler snapshots/cancelamentos e direct-light seed;
-- `ChunkTaskQueue` usa `check_ready`, portanto polling não espera worker terminar.
-
-### Surface biome size correctness
-
-- Cut 20 (`3525c290f13e5c361507f5097dd1c28569ffe98d`) passou a aplicar `size.max` à continuidade normal de surface biomes;
-- Cut 22 (`7ce183d8491ee43b516ed060b84f7ce2f060d7cd`) separou `size.max` das hard constraints de adjacency para não transformar ausência de fallback em panic indevido;
-- Cut 23 (`35313349c08c39dab6249afa35a56323117ce8ae`, CI #10321 success) corrigiu `size.min`: jitter independente ±32% por site podia comprimir sites vizinhos até 36% do spacing nominal. Surface sites agora usam jitter lateral determinístico por linha; domain warp continua owner da organicidade. Validar em mundo novo.
-
-## Cut 24 — limitar scans stale do generation frontier
+### Cut 24 — limitar scans stale do generation frontier
 
 Commit `75f476f54942f69ccd08df819b8b6ad5479099d8`, CI #10322 success.
 
-Gameplay `2026-09-30_16-23-13-909518300.txt` reproduziu o hitch com frame máximo ~100.9 ms, `main_work_max_us` ~97.5 ms e `streaming_max_us` ~93.9 ms, enquanto os demais buckets ficaram muito menores e nenhum warning direcionado do Cut 21 disparou.
-
-Root cause e correção:
-
-- `select_generation_wave` usa `pop_pending_by_priority`, que faz o scan caro da pending frontier;
-- stale/already-owned entries eram descartadas sem `budget.record(1)`, permitindo scans O(n) repetidos fora do item cap;
-- agora todo `pop_pending_by_priority()` bem-sucedido consome imediatamente uma unidade do budget de 1 ms / máximo 16 scans;
-- prioridades, wave size, worker limits e world truth não mudaram.
-
-Ainda não há claim de ganho até gameplay pós-Cut 24.
-
-## Pacote Worldgen coherence — execução autorizada agora
+Gameplay `2026-09-30_16-23-13-909518300.txt` reproduziu frame ~100.9 ms, `main_work` ~97.5 ms e `streaming` ~93.9 ms. `select_generation_wave` fazia priority scans O(n) e stale/already-owned entries escapavam de `budget.record(1)`. Agora cada `pop_pending_by_priority()` bem-sucedido consome uma unidade do budget de 1 ms / máximo 16 scans. Sem claim de ganho até log novo.
 
 ### Cut 25 — ocean/coast height influence lower-only
 
-Implementação preparada em `terrain.rs`:
+Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
-- terrain influences agora possuem política explícita de composição: `Blend` ou `LowerOnly`;
-- `BiomeTerrain::Ocean` resolve para `LowerOnly`; todos os demais terrains permanecem `Blend`;
-- o compositor calcula a altura blended normal e, quando existem influências unrestricted, limita o resultado ao baseline que existiria sem as influências lower-only;
-- consequência/invariante: adicionar ocean/coast influence nunca pode produzir altura maior que o terrain blend não-oceânico anterior;
-- ocean continua livre para abaixar/truncar/coastal-soften qualquer terrain, inclusive mountains/alps/mountain belt/volcano/gorge, sem enumerar IDs/famílias;
-- quando a região é somente ocean, o shape oceânico permanece inalterado;
-- shoreline material/surfaceMargin identity não foi alterada.
+- terrain influences possuem política `Blend` ou `LowerOnly`;
+- `BiomeTerrain::Ocean` é `LowerOnly`; demais terrains continuam `Blend`;
+- o resultado com ocean influence é limitado ao baseline não-oceânico que existiria sem a influência lower-only;
+- oceano pode abaixar/truncar/soften coast, mas nunca elevar mountain/alps/mountain belt/volcano/gorge ou qualquer terrain futuro blended;
+- região somente ocean preserva o shape oceânico;
+- shoreline material/surfaceMargin identity não mudou.
 
-Regressões unitárias cobrem: lower-only não eleva, lower-only ainda reduz, composição only-lower-only preserva shape e Ocean resolve para a política correta.
+## Pacote Worldgen coherence
+
+### Cut 26 — volume biome constraints por surface biome
+
+Implementação preparada:
+
+- `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes (e reutilizáveis futuramente);
+- `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
+- selector data-driven suporta `ids` e `tags` com semântica OR dentro do selector;
+- constraints suportam `allow` e `deny`; sem `allow` significa permitido salvo deny, e `deny` sempre vence;
+- surface biomes não podem declarar `surfaceConstraints`; selectors vazios e tags vazias/duplicadas são rejeitados;
+- `BiomeFieldEntry` carrega tags/constraints imutáveis para geração async;
+- `volume_selection_in_region` recebe o `identity_surface_index` da `GenerationColumnSample` e filtra candidates antes do overlap winner;
+- não existe `sample_surface()` adicional por voxel: o density pass reutiliza a classificação autoritativa já amostrada por coluna;
+- volume biome sem constraints mantém comportamento irrestrito anterior;
+- nenhum biome atual recebeu constraint inventada; o corte entrega a capacidade genérica sem retuning arbitrário de conteúdo.
+
+Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
 
 ### Próximos workstreams
 
-1. **Volume → surface constraints:** volume biomes podem declarar em quais surface biomes podem existir; determinístico e chunk-order invariant.
-2. **Volume surface indicator:** volume biome pode declarar structure/structure group opcional no surface biome; usar structure planner generalizado.
-3. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
+1. **Volume surface indicator:** metadata opcional + structure/structure group no surface usando planner generalizado.
+2. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
 
 Princípios:
 
@@ -108,12 +92,11 @@ Princípios:
 
 ## Próximos passos
 
-1. fechar CI do Cut 25;
-2. implementar constraints volume→surface;
-3. implementar surface indicator via structures;
-4. reescrever floating islands e estratificação;
-5. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
-6. retomar cold-start de `PrepareResources` depois do pacote.
+1. fechar CI do Cut 26;
+2. implementar surface indicator via structures;
+3. reescrever floating islands e estratificação;
+4. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
+5. retomar cold-start de `PrepareResources` depois do pacote.
 
 ## Regras de continuidade
 

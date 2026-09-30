@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::BiomeVerticalRange,
+    biome::{BiomeVerticalRange, VolumeSurfaceConstraints},
     biome_density::BiomeDensityModifier,
 };
 
@@ -78,16 +78,28 @@ impl BiomeField {
         &self,
         position: Vec3,
         region: &VolumeBiomeRegion,
+        surface_index: usize,
     ) -> Option<VolumeBiomeSelection> {
         if position.y < 0.0 || region.sites.is_empty() {
             return None;
         }
 
+        let surface = self
+            .surface_biomes
+            .get(surface_index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {surface_index}"));
         let warped = warp_volume_position(position, self.seed);
         let mut selected: Option<(ResolvedVolumeBiomeSite, f32, f32, Vec3)> = None;
 
         for site in &region.sites {
             let biome = &self.volume_biomes[site.biome_index];
+            if !volume_surface_allows(
+                biome.surface_constraints.as_ref(),
+                &surface.id,
+                &surface.tags,
+            ) {
+                continue;
+            }
             if !vertical_range_contains(biome.vertical_range, position.y) {
                 continue;
             }
@@ -208,6 +220,14 @@ impl BiomeField {
     }
 }
 
+fn volume_surface_allows(
+    constraints: Option<&VolumeSurfaceConstraints>,
+    surface_id: &str,
+    surface_tags: &[String],
+) -> bool {
+    constraints.is_none_or(|constraints| constraints.allows_surface(surface_id, surface_tags))
+}
+
 fn vertical_range_contains(range: Option<BiomeVerticalRange>, y: f32) -> bool {
     let Some(range) = range else {
         return y >= 0.0;
@@ -302,6 +322,11 @@ fn volume_site_strength(normalized_distance: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::content::biome::{SurfaceBiomeSelector, VolumeSurfaceConstraints};
+
+    fn tags(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
 
     #[test]
     fn volume_strength_is_full_inside_and_fades_outside() {
@@ -322,6 +347,41 @@ mod tests {
         assert!(vertical_range_contains(range, 64.0));
         assert!(!vertical_range_contains(range, 7.99));
         assert!(!vertical_range_contains(range, 64.01));
+    }
+
+    #[test]
+    fn constrained_volume_accepts_allowed_surface_and_rejects_denied_surface() {
+        let constraints = VolumeSurfaceConstraints {
+            allow: Some(SurfaceBiomeSelector {
+                ids: Vec::new(),
+                tags: vec!["land".to_string()],
+            }),
+            deny: Some(SurfaceBiomeSelector {
+                ids: vec!["asteria:overworld/wasteland".to_string()],
+                tags: Vec::new(),
+            }),
+        };
+
+        assert!(volume_surface_allows(
+            Some(&constraints),
+            "asteria:overworld/plains",
+            &tags(&["land"]),
+        ));
+        assert!(!volume_surface_allows(
+            Some(&constraints),
+            "asteria:overworld/wasteland",
+            &tags(&["land"]),
+        ));
+        assert!(!volume_surface_allows(
+            Some(&constraints),
+            "asteria:overworld/ocean",
+            &tags(&["water"]),
+        ));
+        assert!(volume_surface_allows(
+            None,
+            "asteria:overworld/ocean",
+            &tags(&["water"]),
+        ));
     }
 
     #[test]

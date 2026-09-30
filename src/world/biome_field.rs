@@ -16,7 +16,9 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
+    biome::{
+        BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints,
+    },
     biome_density::BiomeDensityModifier,
     biome_distribution::BiomeDistribution,
     biome_terrain::BiomeTerrain,
@@ -48,6 +50,8 @@ pub(super) struct SurfaceSiteCacheEntry {
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
     pub id: String,
+    pub tags: Vec<String>,
+    pub surface_constraints: Option<VolumeSurfaceConstraints>,
     pub distributions: Vec<BiomeDistribution>,
     pub size: DimensionBiomeSize,
     pub weight: f32,
@@ -217,6 +221,8 @@ impl BiomeField {
             let size = scaled_biome_size(size, multiplier_tenths);
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
+                tags: biome.tags.clone(),
+                surface_constraints: biome.surface_constraints.clone(),
                 distributions: biome.distributions.clone(),
                 size,
                 weight: dimension_biome.weight,
