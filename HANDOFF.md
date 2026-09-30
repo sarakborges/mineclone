@@ -20,6 +20,14 @@
 
 
 > Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
+## 2026-09-30 — Loading screen telemetry alignment
+
+- Loading screen phase rows now follow the active `WorldLoadingPhase` telemetry instead of the older one-off loading strings.
+- Added presentation prewarm progress telemetry to `WorldLoadingState`: the final loading phase now reports `0/12` through `12/12` while Bevy/render-side presentation caches are warmed.
+- Renamed the final loading-screen section from player spawning to **Presentation warm-up**, matching what actually consumes the visible loading time; player spawning itself is still performed at the start of that phase.
+- Removed obsolete localization keys for the former terrain/chunks/assets/finalizing summary strings that no longer have consumers.
+- Updated Portuguese and Spanish loading-phase labels that were still English and added the new presentation warm-up label in all three languages.
+- Fluid settling remains a real loading phase but intentionally has no numeric counter because the current settling telemetry does not expose a stable total; its active-row highlight remains the indicator.
 ## 2026-09-30 — Comprehensive gameplay event logging
 
 - Centralized gameplay event logging was added through `app::crash_log::log_gameplay_event`.
