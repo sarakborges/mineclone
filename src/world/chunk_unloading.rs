@@ -17,6 +17,7 @@ use crate::{
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
+    chunk_visibility::ChunkPresentationSelection,
     chunk_rendering::{
         ChunkRenderPool, chunk_mesh_residency_high_bytes, chunk_mesh_residency_recovery_bytes,
         chunk_mesh_residency_target_bytes, retire_chunk_render_allocation,
@@ -109,6 +110,7 @@ pub(super) struct ChunkMeshResidencyRuntime<'w> {
 pub(super) fn retire_distant_chunk_meshes(
     mut renderer: ChunkRenderer,
     streaming: Res<ChunkStreamingState>,
+    presentation_selection: Res<ChunkPresentationSelection>,
     world: Res<VoxelWorld>,
     frame_budget: Res<WorldFrameWorkBudget>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
@@ -123,10 +125,10 @@ pub(super) fn retire_distant_chunk_meshes(
         return;
     }
 
-    let selection_revision = streaming.selection_revision();
+    let selection_revision = presentation_selection.revision();
     if state.selection_revision != Some(selection_revision) {
         for coord in renderer.pool.active_coords() {
-            if !streaming.retains_render_mesh(coord) {
+            if !presentation_selection.retains_render_mesh(coord) {
                 state.enqueue(coord);
             }
         }
@@ -152,7 +154,7 @@ pub(super) fn retire_distant_chunk_meshes(
         // drained. Revalidate just before destructive work so moving back
         // toward a chunk cancels its stale retirement rather than causing
         // unnecessary despawn/remesh churn.
-        if !renderer.pool.contains(coord) || streaming.retains_render_mesh(coord) {
+        if !renderer.pool.contains(coord) || presentation_selection.retains_render_mesh(coord) {
             continue;
         }
 
@@ -164,7 +166,7 @@ pub(super) fn retire_distant_chunk_meshes(
             coord,
             &world,
             &renderer.pool,
-            &streaming,
+            &presentation_selection,
             &mut remesh_queue,
         );
     }
@@ -453,7 +455,7 @@ fn enqueue_retired_render_halo_remeshes(
     coord: IVec3,
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
-    streaming: &ChunkStreamingState,
+    presentation_selection: &ChunkPresentationSelection,
     remesh_queue: &mut ChunkRemeshQueue,
 ) {
     for y in -1..=1 {
@@ -466,7 +468,7 @@ fn enqueue_retired_render_halo_remeshes(
                 let neighbor = coord + offset;
                 if neighbor.y < 0
                     || !render_pool.contains(neighbor)
-                    || !streaming.retains_render_mesh(neighbor)
+                    || !presentation_selection.retains_render_mesh(neighbor)
                 {
                     continue;
                 }
