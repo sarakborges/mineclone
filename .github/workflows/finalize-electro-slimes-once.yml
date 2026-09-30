@@ -101,20 +101,22 @@ jobs:
           handoff = handoff_path.read_text(encoding='utf-8')
           marker = '## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob'
           if marker not in handoff:
-              section = '''## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob
-
-- Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.
-- A base corporal segue diretamente a linguagem e o perfil do `slime_blob`, mantendo o corpo arredondado e as animações de squash/stretch.
-- O visual Electro novo usa paleta amarelo/dourada, antena elétrica central com terminal claro e marcas de circuito discretas inspiradas na referência fornecida.
-- `SlimeFace` dos dois Electro agora aponta exatamente para `textures/creatures/slime_anemo/face.png`; a textura facial Electro antiga foi removida.
-- O generator reproduzível ficou em `assets/models/creatures/slime_electro/generate_slime_electro.py` e gera normal + large.
-- Bounds de metadata foram atualizados para as novas alturas visuais; os colliders físicos continuam compatíveis com o corpo blob e independentes dos detalhes decorativos.
-- Validação do rebuild: `tools/check_glb_assets.py` passou com 22 assets; Khronos glTF Validator passou nos dois Electro com `0 errors / 0 warnings`.
-- Próximo QA visual: conferir no gameplay silhueta, face, detalhes elétricos e animações das variantes normal e large.
-
-VERSION: `0.68.49`.
-
-'''
+              section_lines = [
+                  marker,
+                  '',
+                  '- Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.',
+                  '- A base corporal segue diretamente a linguagem e o perfil do `slime_blob`, mantendo o corpo arredondado e as animações de squash/stretch.',
+                  '- O visual Electro novo usa paleta amarelo/dourada, antena elétrica central com terminal claro e marcas de circuito discretas inspiradas na referência fornecida.',
+                  '- `SlimeFace` dos dois Electro agora aponta exatamente para `textures/creatures/slime_anemo/face.png`; a textura facial Electro antiga foi removida.',
+                  '- O generator reproduzível ficou em `assets/models/creatures/slime_electro/generate_slime_electro.py` e gera normal + large.',
+                  '- Bounds de metadata foram atualizados para as novas alturas visuais; os colliders físicos continuam compatíveis com o corpo blob e independentes dos detalhes decorativos.',
+                  '- Validação do rebuild: `tools/check_glb_assets.py` passou com 22 assets; Khronos glTF Validator passou nos dois Electro com `0 errors / 0 warnings`.',
+                  '- Próximo QA visual: conferir no gameplay silhueta, face, detalhes elétricos e animações das variantes normal e large.',
+                  '',
+                  'VERSION: `0.68.49`.',
+                  '',
+              ]
+              section = '\n'.join(section_lines) + '\n'
               first_section = handoff.find('## ')
               handoff = handoff[:first_section] + section + handoff[first_section:]
           handoff = handoff.replace(
