@@ -18,6 +18,7 @@ type DamageableCreatures<'w, 's> = Query<
     'w,
     's,
     (
+        &'static CreatureInstance,
         &'static mut EntityHealth,
         &'static mut CreatureAnimationState,
         &'static mut CreatureMotion,
@@ -41,7 +42,7 @@ impl CreatureAttackRuntime<'_, '_> {
         attack: &AttackDefinition,
         player_position: Vec3,
     ) -> bool {
-        let Ok((mut health, mut animation, mut motion, creature_transform, meta_tags)) =
+        let Ok((instance, mut health, mut animation, mut motion, creature_transform, meta_tags)) =
             self.creatures.get_mut(entity)
         else {
             return false;
@@ -56,7 +57,7 @@ impl CreatureAttackRuntime<'_, '_> {
         log_gameplay_event(format!(
             "entity.damage entity={:?} type=creature id={} source=creature_attack amount={:.3} health_before={:.3} health_after={:.3} position={:?}",
             entity,
-            "creature",
+            instance.definition_id,
             attack.damage,
             health_before,
             health_after,
@@ -76,8 +77,8 @@ impl CreatureAttackRuntime<'_, '_> {
         animation.trigger(if dead { "death" } else { "hurt" });
         if dead {
             log_gameplay_event(format!(
-                "entity.death entity={:?} type=creature id=unknown source=creature_attack position={:?}",
-                entity, creature_transform.translation
+                "entity.death entity={:?} type=creature id={} source=creature_attack position={:?}",
+                entity, instance.definition_id, creature_transform.translation
             ));
             self.commands
                 .entity(entity)
