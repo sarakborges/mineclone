@@ -22,7 +22,7 @@ use super::super::system_params::{
 const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
 
 #[derive(Default)]
-pub(super) struct InitialPresentationPrewarm {
+pub(in crate::world) struct InitialPresentationPrewarm {
     primed: bool,
     frames: u8,
 }
