@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use bevy::prelude::*;
+
+use crate::app::crash_log::log_gameplay_event;
 use crate::world::{
     PendingFluidUpdates,
     chunk_system_params::ChunkContent,
@@ -11,14 +14,17 @@ use super::super::{WorldLoadingPhase, system_params::WorldSetupProgress};
 const INITIAL_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(4);
 const MIN_INITIAL_FLUID_SETTLING_UPDATES: usize = 16;
 const MAX_INITIAL_FLUID_SETTLING_UPDATES: usize = 1_024;
-
+#[derive(Default)]struct FluidSettlingDiagnostics {    timer: Option<Timer>,    started: bool,}
 pub(super) fn settle_initial_fluids(
     content: &ChunkContent<'_>,
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
+    mut diagnostics: Local<FluidSettlingDiagnostics>,
+    time: Res<Time<Real>>,
 ) {
     if !progress.loading_state.fluid_settling.is_active() {
         let coords = progress.loading_state.coords.clone();
+        log_gameplay_event(format!("world.loading.fluid_settling.start generated_chunks={}", coords.len()));
         progress
             .loading_state
             .fluid_settling
@@ -39,6 +45,14 @@ pub(super) fn settle_initial_fluids(
             &mut budget,
         )
     };
+
+    let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        let (_, generated, mutable, initialization, work, verification, verification_chunks) =
+            progress.loading_state.fluid_settling.diagnostic_counts();
+        log_gameplay_event(format!("world.loading.fluid_settling.progress generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}"));
+    }
 
     if complete {
         let completion = progress
@@ -62,6 +76,7 @@ pub(super) fn settle_initial_fluids(
             fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
         }
 
+        log_gameplay_event(format!("world.loading.fluid_settling.complete generated_chunks={} changed_existing_positions={} owned_existing_chunks={}", progress.loading_state.coords.len(), completion.changed_existing_positions.len(), completion.owned_existing_chunks.len()));
         progress.loading_state.phase = WorldLoadingPhase::Lighting;
     }
 }
