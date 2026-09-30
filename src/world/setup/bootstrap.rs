@@ -502,6 +502,7 @@ pub(in crate::world) fn begin_world_loading(
         assets_loaded: 0,
         assets_total: gameplay_asset_count,
         finalization_frames: 0,
+        presentation_prewarm_frames: 0,
         column_top_chunks,
         spawn_column,
         fluid_settling: Default::default(),
