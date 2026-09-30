@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     ChunkStreamingState, QueueRebuildContext,
-    surface_cache::{cached_surface_range, prune_surface_cache},
+    surface_cache::{StreamingSelectionCache, cached_surface_range},
 };
 
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 2;
@@ -79,17 +79,17 @@ pub(in crate::world) fn initial_streaming_chunk_coords(
     rebuild_horizontal_selection_offsets(&mut horizontal_offsets, horizontal_radius, IVec2::ZERO);
 
     let mut desired = HashSet::new();
-    let mut surface_ranges = HashMap::new();
-    let mut surface_support_minimums = HashMap::new();
-    let mut structure_top_chunks = HashMap::new();
+    let mut selection_cache = StreamingSelectionCache::default();
+    let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+        selection_cache.parts_mut();
     rebuild_desired_chunk_coords(
         &mut desired,
         selection,
         &horizontal_offsets,
         context,
-        &mut surface_ranges,
-        &mut surface_support_minimums,
-        &mut structure_top_chunks,
+        surface_ranges,
+        surface_support_minimums,
+        structure_top_chunks,
     );
     let mut coords = desired.into_iter().collect::<Vec<_>>();
     coords.sort_by_key(|coord| (*coord - center).length_squared());
@@ -105,17 +105,14 @@ pub(super) fn rebuild_queue(
     scratch: &mut QueueRebuildScratch,
     context: &QueueRebuildContext<'_>,
 ) {
-    let previous_center = streaming.center;
-    let previous_movement_direction = streaming.movement_direction;
-    let previous_horizontal_radius = streaming.horizontal_radius;
-    let previous_vertical_radius = streaming.vertical_radius;
-
-    if allow_forward_preload {
-        update_movement_direction(streaming, center);
-    } else {
-        streaming.movement_direction = IVec2::ZERO;
-    }
-    let movement_direction = streaming.movement_direction;
+    let previous_selection = streaming
+        .selection_state
+        .prepare_rebuild(center, allow_forward_preload);
+    let previous_center = previous_selection.center();
+    let previous_movement_direction = previous_selection.movement_direction();
+    let previous_horizontal_radius = previous_selection.horizontal_radius();
+    let previous_vertical_radius = previous_selection.vertical_radius();
+    let movement_direction = streaming.selection_state.movement_direction();
     let prune_caches = should_prune_streaming_caches(
         previous_center,
         previous_horizontal_radius,
@@ -133,14 +130,9 @@ pub(super) fn rebuild_queue(
             forward_preload
         };
     if prune_caches {
-        prune_surface_cache(&mut streaming.surface_ranges, center.xz(), retention_radius);
-        let retention_radius_squared = retention_radius * retention_radius;
-        streaming.surface_support_minimums.retain(|coord, _| {
-            (*coord - center.xz()).length_squared() <= retention_radius_squared
-        });
-        streaming.structure_top_chunks.retain(|coord, _| {
-            (*coord - center.xz()).length_squared() <= retention_radius_squared
-        });
+        streaming
+            .selection_cache
+            .prune(center.xz(), retention_radius);
     }
 
     sync_horizontal_selection_offsets(
@@ -163,43 +155,47 @@ pub(super) fn rebuild_queue(
         previous_center,
         previous_horizontal_radius,
         previous_vertical_radius,
-        previous_movement_direction,
         center,
         horizontal_radius,
         vertical_radius,
-        movement_direction,
         allow_forward_preload,
-        prune_caches,
     );
     if incremental_rebuild {
+        let previous_desired = &streaming.residency.desired;
+        let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+            streaming.selection_cache.parts_mut();
         rebuild_desired_chunk_coords_incremental(
             &mut scratch.desired,
-            &streaming.desired,
+            previous_desired,
             previous_center.expect("incremental rebuild requires previous center"),
+            previous_movement_direction,
             desired_selection,
             movement_direction,
             &scratch.horizontal_offsets,
             surface_context,
-            &mut streaming.surface_ranges,
-            &mut streaming.surface_support_minimums,
-            &mut streaming.structure_top_chunks,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
             &mut scratch.newly_desired,
             &mut scratch.no_longer_desired,
         );
     } else {
         scratch.newly_desired.clear();
         scratch.no_longer_desired.clear();
+        let (surface_ranges, surface_support_minimums, structure_top_chunks) =
+            streaming.selection_cache.parts_mut();
         rebuild_desired_chunk_coords(
             &mut scratch.desired,
             desired_selection,
             &scratch.horizontal_offsets,
             surface_context,
-            &mut streaming.surface_ranges,
-            &mut streaming.surface_support_minimums,
-            &mut streaming.structure_top_chunks,
+            surface_ranges,
+            surface_support_minimums,
+            structure_top_chunks,
         );
         scratch.no_longer_desired.extend(
             streaming
+                .residency
                 .desired
                 .difference(&scratch.desired)
                 .copied(),
@@ -242,18 +238,18 @@ pub(super) fn rebuild_queue(
         .extend(scratch.no_longer_desired.iter().copied());
 
     collect_retired_chunk_coords(
-        &streaming.retained,
+        &streaming.residency.retained,
         &scratch.desired,
         &scratch.retained,
         center,
         &mut scratch.retired,
     );
 
-    std::mem::swap(&mut streaming.desired, &mut scratch.desired);
-    std::mem::swap(&mut streaming.retained, &mut scratch.retained);
-    streaming.center = Some(center);
-    streaming.horizontal_radius = horizontal_radius;
-    streaming.vertical_radius = vertical_radius;
+    std::mem::swap(&mut streaming.residency.desired, &mut scratch.desired);
+    std::mem::swap(&mut streaming.residency.retained, &mut scratch.retained);
+    streaming
+        .selection_state
+        .commit_rebuild(center, horizontal_radius, vertical_radius);
     streaming.mark_selection_rebuilt();
 
     if !incremental_rebuild {
@@ -267,18 +263,6 @@ pub(super) fn rebuild_queue(
     for coord in scratch.retired.drain(..) {
         streaming.enqueue_retired(coord);
     }
-}
-
-fn update_movement_direction(streaming: &mut ChunkStreamingState, center: IVec3) {
-    let Some(previous_center) = streaming.center else {
-        return;
-    };
-    let delta = center.xz() - previous_center.xz();
-    if delta == IVec2::ZERO {
-        return;
-    }
-
-    streaming.movement_direction = IVec2::new(delta.x.signum(), delta.y.signum());
 }
 
 fn should_prune_streaming_caches(
@@ -299,13 +283,10 @@ fn can_incrementally_rebuild_desired(
     previous_center: Option<IVec3>,
     previous_horizontal_radius: i32,
     previous_vertical_radius: i32,
-    previous_movement_direction: IVec2,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
-    movement_direction: IVec2,
     allow_forward_preload: bool,
-    prune_caches: bool,
 ) -> bool {
     let Some(previous_center) = previous_center else {
         return false;
@@ -313,10 +294,8 @@ fn can_incrementally_rebuild_desired(
     let delta = center - previous_center;
 
     allow_forward_preload
-        && !prune_caches
         && previous_horizontal_radius == horizontal_radius
         && previous_vertical_radius == vertical_radius
-        && previous_movement_direction == movement_direction
         && delta.y == 0
         && delta.x.abs() <= 1
         && delta.z.abs() <= 1
@@ -516,7 +495,8 @@ fn rebuild_horizontal_selection_offsets(
 
     let forward = movement_direction.as_vec2().normalize();
     let lateral = Vec2::new(-forward.y, forward.x);
-    let preload = forward_preload_chunks(horizontal_radius) as f32;
+    let preload_chunks = forward_preload_chunks(horizontal_radius);
+    let preload = preload_chunks as f32;
     let base = horizontal_radius as f32;
     let limit = base + preload;
     let near_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + preload * 0.5;
@@ -527,22 +507,25 @@ fn rebuild_horizontal_selection_offsets(
         forward * limit + lateral * far_width,
         forward * limit - lateral * far_width,
     ];
-    let minimum = corners
+    let search_radius = horizontal_radius + preload_chunks;
+    let minimum = (corners
         .iter()
         .copied()
         .reduce(Vec2::min)
         .expect("forward preload bounds require corners")
         .floor()
         .as_ivec2()
-        - IVec2::ONE;
-    let maximum = corners
+        - IVec2::ONE)
+        .max(IVec2::splat(-search_radius));
+    let maximum = (corners
         .iter()
         .copied()
         .reduce(Vec2::max)
         .expect("forward preload bounds require corners")
         .ceil()
         .as_ivec2()
-        + IVec2::ONE;
+        + IVec2::ONE)
+        .min(IVec2::splat(search_radius));
 
     for z in minimum.y..=maximum.y {
         for x in minimum.x..=maximum.x {
@@ -592,6 +575,7 @@ fn rebuild_desired_chunk_coords_incremental(
     desired: &mut HashSet<IVec3>,
     previous_desired: &HashSet<IVec3>,
     previous_center: IVec3,
+    previous_movement_direction: IVec2,
     selection: DesiredChunkSelection,
     movement_direction: IVec2,
     horizontal_offsets: &[IVec2],
@@ -631,8 +615,14 @@ fn rebuild_desired_chunk_coords_incremental(
     for &offset in horizontal_offsets {
         let horizontal = center_horizontal + offset;
         let previous_offset = horizontal - previous_horizontal;
-        let was_selected =
-            horizontal_offset_is_selected(previous_offset, selection.horizontal_radius, movement_direction);
+        // Compare against the shape that actually produced `previous_desired`.
+        // On a turn, the new preload direction can contain columns that did not
+        // exist in the previous shape and therefore still need to be inserted.
+        let was_selected = horizontal_offset_is_selected(
+            previous_offset,
+            selection.horizontal_radius,
+            previous_movement_direction,
+        );
         let has_cached_range = surface_ranges.contains_key(&horizontal)
             && surface_support_minimums.contains_key(&horizontal);
 
@@ -864,56 +854,82 @@ mod tests {
     }
 
     #[test]
-    fn incremental_rebuild_only_handles_adjacent_same_direction_motion() {
+    fn incremental_rebuild_handles_adjacent_direction_and_region_changes() {
         let previous = IVec3::new(10, 2, 10);
 
         assert!(can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
             previous + IVec3::X,
             12,
             2,
-            IVec2::X,
             true,
-            false,
         ));
+        assert!(can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            previous + IVec3::X,
+            12,
+            2,
+            true,
+        ));
+
+        let region_edge = IVec3::new(7, 2, 7);
+        assert!(should_prune_streaming_caches(
+            Some(region_edge),
+            12,
+            2,
+            region_edge + IVec3::X,
+            12,
+            2,
+        ));
+        assert!(can_incrementally_rebuild_desired(
+            Some(region_edge),
+            12,
+            2,
+            region_edge + IVec3::X,
+            12,
+            2,
+            true,
+        ));
+
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
             previous + IVec3::new(2, 0, 0),
             12,
             2,
-            IVec2::X,
             true,
-            false,
         ));
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
-            previous + IVec3::X,
+            previous + IVec3::Y,
             12,
             2,
-            IVec2::Y,
             true,
-            false,
         ));
         assert!(!can_incrementally_rebuild_desired(
             Some(previous),
             12,
             2,
-            IVec2::X,
+            previous + IVec3::X,
+            13,
+            2,
+            true,
+        ));
+        assert!(!can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
             previous + IVec3::X,
             12,
             2,
-            IVec2::X,
-            true,
-            true,
+            false,
         ));
     }
 

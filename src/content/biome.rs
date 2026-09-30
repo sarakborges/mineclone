@@ -98,7 +98,6 @@ pub struct CreatureSpawnRule {
     pub spacing: f32,
 }
 
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeObjectSpawnRule {
@@ -150,6 +149,78 @@ fn default_spawn_weight() -> f32 { 1.0 }
 fn default_spawn_light_max() -> u8 { 15 }
 fn default_spawn_spacing() -> f32 { 16.0 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceBiomeSelector {
+    #[serde(default)]
+    pub ids: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+impl SurfaceBiomeSelector {
+    pub(crate) fn matches(&self, surface_id: &str, surface_tags: &[String]) -> bool {
+        self.ids.iter().any(|id| id == surface_id)
+            || self
+                .tags
+                .iter()
+                .any(|tag| surface_tags.iter().any(|candidate| candidate == tag))
+    }
+
+    pub(crate) fn validate(&self, biome_id: &str, field: &str) {
+        assert!(
+            !self.ids.is_empty() || !self.tags.is_empty(),
+            "biome {biome_id} {field} must define at least one id or tag"
+        );
+        for (index, id) in self.ids.iter().enumerate() {
+            assert!(
+                !id.trim().is_empty(),
+                "biome {biome_id} {field}.ids[{index}] cannot be empty"
+            );
+        }
+        for (index, tag) in self.tags.iter().enumerate() {
+            assert!(
+                !tag.trim().is_empty(),
+                "biome {biome_id} {field}.tags[{index}] cannot be empty"
+            );
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSurfaceConstraints {
+    #[serde(default)]
+    pub allow: Option<SurfaceBiomeSelector>,
+    #[serde(default)]
+    pub deny: Option<SurfaceBiomeSelector>,
+}
+
+impl VolumeSurfaceConstraints {
+    pub(crate) fn allows_surface(&self, surface_id: &str, surface_tags: &[String]) -> bool {
+        if self
+            .deny
+            .as_ref()
+            .is_some_and(|selector| selector.matches(surface_id, surface_tags))
+        {
+            return false;
+        }
+
+        self.allow
+            .as_ref()
+            .is_none_or(|selector| selector.matches(surface_id, surface_tags))
+    }
+
+    pub(crate) fn validate(&self, biome_id: &str) {
+        if let Some(allow) = &self.allow {
+            allow.validate(biome_id, "surfaceConstraints.allow");
+        }
+        if let Some(deny) = &self.deny {
+            deny.validate(biome_id, "surfaceConstraints.deny");
+        }
+    }
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
@@ -157,6 +228,10 @@ pub struct BiomeDefinition {
     pub name: LocalizedText,
     #[serde(default)]
     pub kind: BiomeKind,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub surface_constraints: Option<VolumeSurfaceConstraints>,
     #[serde(default = "default_biome_distributions")]
     pub distributions: Vec<BiomeDistribution>,
     #[serde(default)]
@@ -316,7 +391,6 @@ impl BiomeRegistry {
     pub(crate) fn structure_placements(&self) -> &[BiomeStructurePlacement] {
         &self.structure_placements
     }
-
 }
 
 fn default_biome_distributions() -> Vec<BiomeDistribution> {
@@ -325,4 +399,52 @@ fn default_biome_distributions() -> Vec<BiomeDistribution> {
 
 fn default_vegetation_color() -> Hsi {
     Hsi::new(112.1111, 0.56363636, 0.36666667)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tags(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn surface_selector_matches_ids_or_tags() {
+        let selector = SurfaceBiomeSelector {
+            ids: vec!["asteria:overworld/plains".to_string()],
+            tags: vec!["mountain".to_string()],
+        };
+
+        assert!(selector.matches("asteria:overworld/plains", &[]));
+        assert!(selector.matches("asteria:overworld/alps", &tags(&["mountain", "cold"])));
+        assert!(!selector.matches("asteria:overworld/ocean", &tags(&["water"])));
+    }
+
+    #[test]
+    fn volume_surface_constraints_default_to_allow_and_deny_wins() {
+        let unrestricted = VolumeSurfaceConstraints::default();
+        assert!(unrestricted.allows_surface("asteria:overworld/ocean", &tags(&["water"])));
+
+        let constrained = VolumeSurfaceConstraints {
+            allow: Some(SurfaceBiomeSelector {
+                ids: Vec::new(),
+                tags: vec!["mountain".to_string()],
+            }),
+            deny: Some(SurfaceBiomeSelector {
+                ids: vec!["asteria:overworld/volcano".to_string()],
+                tags: Vec::new(),
+            }),
+        };
+
+        assert!(constrained.allows_surface(
+            "asteria:overworld/alps",
+            &tags(&["mountain"]),
+        ));
+        assert!(!constrained.allows_surface(
+            "asteria:overworld/volcano",
+            &tags(&["mountain"]),
+        ));
+        assert!(!constrained.allows_surface("asteria:overworld/plains", &[]));
+    }
 }

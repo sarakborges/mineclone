@@ -15,6 +15,7 @@ use crate::{
         edit::VoxelMutationRuntime,
         log_variant::{LogVariant, log_variant, transformed_log_id},
         microblock::MicroblockMask,
+        read::VoxelRead,
     },
 };
 
@@ -46,7 +47,7 @@ fn handle_carpenters_axe_use(
         let Some(hit) = usage.target else {
             continue;
         };
-        if runtime.world().block_id_at(hit.voxel) != Some(hit.block_id) {
+        if runtime.read().block_id_at(hit.voxel) != Some(hit.block_id) {
             continue;
         }
         let Some(cell) = runtime.cell_at(hit.voxel) else {

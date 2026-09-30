@@ -3,6 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     localization::{ActiveLanguage, Language, UiLocalization},
+    rendering::camera_stack::UI_CAMERA_ORDER,
     ui::{
         cosmic_background::{self, STAR_FIELD},
         surface, theme, typography,
@@ -72,6 +73,10 @@ fn setup_loading_screen(
 ) {
     commands.spawn((
         Camera2d,
+        Camera {
+            order: UI_CAMERA_ORDER,
+            ..default()
+        },
         BoxShadowSamples(8),
         DespawnOnExit(GameState::Loading),
     ));

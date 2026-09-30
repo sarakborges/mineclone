@@ -1,23 +1,34 @@
 use std::collections::HashMap;
 
-use bevy::{
-    prelude::IVec3,
-    tasks::{Task, futures::check_ready},
-};
+use bevy::tasks::{Task, futures::check_ready};
 
-pub(crate) struct CompletedChunkTask<T> {
-    pub(crate) coord: IVec3,
-    pub(crate) revision: u64,
+use crate::voxel::coordinates::ChunkCoord;
+
+use super::revision::TaskInputRevision;
+
+pub(crate) struct CompletedChunkTask<T, C = bevy::prelude::IVec3> {
+    pub(crate) coord: C,
+    pub(crate) revision: TaskInputRevision,
     pub(crate) output: T,
 }
 
+impl<T> CompletedChunkTask<T, ChunkCoord> {
+    pub(crate) fn into_runtime(self) -> CompletedChunkTask<T> {
+        CompletedChunkTask {
+            coord: self.coord.as_ivec3(),
+            revision: self.revision,
+            output: self.output,
+        }
+    }
+}
+
 struct PendingChunkTask<T> {
-    revision: u64,
+    revision: TaskInputRevision,
     task: Task<T>,
 }
 
 pub(crate) struct ChunkTaskQueue<T> {
-    pending: HashMap<IVec3, PendingChunkTask<T>>,
+    pending: HashMap<ChunkCoord, PendingChunkTask<T>>,
 }
 
 impl<T> Default for ChunkTaskQueue<T> {
@@ -33,18 +44,18 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.len()
     }
 
-    pub(crate) fn contains(&self, coord: IVec3) -> bool {
+    pub(crate) fn contains(&self, coord: ChunkCoord) -> bool {
         self.pending.contains_key(&coord)
     }
 
-    pub(crate) fn cancel(&mut self, coord: IVec3) -> bool {
+    pub(crate) fn cancel(&mut self, coord: ChunkCoord) -> bool {
         self.pending.remove(&coord).is_some()
     }
 
     pub(crate) fn cancel_where(
         &mut self,
-        mut predicate: impl FnMut(IVec3) -> bool,
-    ) -> Vec<IVec3> {
+        mut predicate: impl FnMut(ChunkCoord) -> bool,
+    ) -> Vec<ChunkCoord> {
         let coords = self
             .pending
             .keys()
@@ -57,17 +68,12 @@ impl<T> ChunkTaskQueue<T> {
         coords
     }
 
-    pub(crate) fn best_coord_by_key<K: Ord>(
-        &self,
-        mut key: impl FnMut(IVec3) -> K,
-    ) -> Option<IVec3> {
-        self.pending
-            .keys()
-            .copied()
-            .min_by_key(|coord| key(*coord))
-    }
-
-    pub(crate) fn insert(&mut self, coord: IVec3, revision: u64, task: Task<T>) -> bool {
+    pub(crate) fn insert(
+        &mut self,
+        coord: ChunkCoord,
+        revision: TaskInputRevision,
+        task: Task<T>,
+    ) -> bool {
         if self.pending.contains_key(&coord) {
             return false;
         }
@@ -79,26 +85,27 @@ impl<T> ChunkTaskQueue<T> {
 
     pub(crate) fn cancel_farthest_where(
         &mut self,
-        center: IVec3,
-        mut predicate: impl FnMut(IVec3) -> bool,
-    ) -> Option<IVec3> {
+        center: ChunkCoord,
+        mut predicate: impl FnMut(ChunkCoord) -> bool,
+    ) -> Option<ChunkCoord> {
+        let center = center.as_ivec3();
         let coord = self
             .pending
             .keys()
             .copied()
             .filter(|coord| predicate(*coord))
             .max_by_key(|coord| {
-                let delta = *coord - center;
+                let coord = coord.as_ivec3();
+                let delta = coord - center;
                 (delta.length_squared(), coord.x, coord.y, coord.z)
             })?;
         self.pending.remove(&coord);
         Some(coord)
     }
 
-    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
+    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T, ChunkCoord>> {
         let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
-            check_ready(&mut pending.task)
-                .map(|output| (*coord, pending.revision, output))
+            check_ready(&mut pending.task).map(|output| (*coord, pending.revision, output))
         })?;
         let (coord, revision, output) = ready;
         self.pending.remove(&coord);
@@ -112,8 +119,8 @@ impl<T> ChunkTaskQueue<T> {
 
     pub(crate) fn poll_ready_by_key<K: Ord>(
         &mut self,
-        mut key: impl FnMut(IVec3) -> K,
-    ) -> Option<CompletedChunkTask<T>> {
+        mut key: impl FnMut(ChunkCoord) -> K,
+    ) -> Option<CompletedChunkTask<T, ChunkCoord>> {
         let mut coords = self.pending.keys().copied().collect::<Vec<_>>();
         coords.sort_unstable_by_key(|coord| key(*coord));
 

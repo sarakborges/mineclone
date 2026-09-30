@@ -51,20 +51,34 @@ pub(crate) fn resolve_surface_material_column<'a>(
                 weight: *weight,
             }
         }));
-
 }
 
 pub(crate) fn solid_block_id(
     position: Vec3,
     surface_depth: u32,
     volume: Option<VolumeBiomeSelection>,
+    volume_surface_depth: Option<u32>,
     surface_materials: &SurfaceMaterialColumn<'_>,
     biome_field: &BiomeField,
+    biomes: &BiomeRegistry,
 ) -> &'static str {
-    if let Some(block_id) = volume.and_then(|selection| biome_field.volume_solid_block(selection)) {
-        return intern_block_id(block_id);
-    }
+    if let Some(selection) = volume {
+        let biome_id = biome_field.volume_biome_id(selection);
+        let volume_biome = biomes
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing volume biome definition: {biome_id}"));
 
+        if let Some(depth) = volume_surface_depth
+            && !volume_biome.surface_layers.is_empty()
+            && let Some(block_id) = volume_biome.surface_block_at_depth(depth)
+        {
+            return intern_block_id(block_id);
+        }
+
+        if let Some(block_id) = biome_field.volume_solid_block(selection) {
+            return intern_block_id(block_id);
+        }
+    }
 
     let base_material = strongest_surface_material(surface_materials, surface_depth);
     let resolved_material = if surface_depth > 0 {

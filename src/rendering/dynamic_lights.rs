@@ -30,6 +30,21 @@ impl Plugin for DynamicLightsPlugin {
     }
 }
 
+fn held_point_light(intensity: f32) -> PointLight {
+    PointLight {
+        color: Color::WHITE,
+        intensity,
+        range: HELD_LIGHT_RANGE,
+        radius: HELD_LIGHT_RADIUS,
+        // Held lights move with the camera. Cubemap shadow maps would rerender
+        // several shadow views continuously, while voxel terrain already receives
+        // this light through TerrainLightingBuffer. Keep the Bevy point light for
+        // non-terrain receivers, but avoid duplicating the expensive shadow path.
+        shadow_maps_enabled: false,
+        ..default()
+    }
+}
+
 fn spawn_held_dynamic_light(
     mut commands: Commands,
     cameras: Query<Entity, Added<GameplayCamera>>,
@@ -49,18 +64,7 @@ fn spawn_held_dynamic_light(
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
                 HeldDynamicLight { block_id },
-                PointLight {
-                    color: Color::WHITE,
-                    intensity,
-                    range: HELD_LIGHT_RANGE,
-                    radius: HELD_LIGHT_RADIUS,
-                    // Held lights move with the camera. Cubemap shadow maps would rerender
-                    // several shadow views continuously, while voxel terrain already receives
-                    // this light through TerrainLightingBuffer. Keep the Bevy point light for
-                    // non-terrain receivers, but avoid duplicating the expensive shadow path.
-                    shadow_maps_enabled: false,
-                    ..default()
-                },
+                held_point_light(intensity),
                 Transform::from_translation(HELD_LIGHT_OFFSET),
                 visibility,
             ));

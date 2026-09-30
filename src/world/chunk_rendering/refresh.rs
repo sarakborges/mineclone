@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 
-use crate::voxel::{
-    fluid_mesh::ChunkFluidMesh,
-    meshlet::ChunkMeshletMask,
+use crate::{
+    voxel::{fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask},
+    world::render_work_diagnostics::{
+        PresentationPublicationStage, PresentationPublicationTimer,
+    },
 };
 
 use super::{
@@ -40,6 +42,8 @@ pub(crate) fn apply_built_chunk_geometry_meshlets(
     meshlets: ChunkMeshletMask,
     context: &ChunkRenderContext<'_>,
 ) -> bool {
+    let _publication_timer =
+        PresentationPublicationTimer::start(PresentationPublicationStage::RemeshApply);
     if meshlets.is_all() {
         apply_built_chunk_geometry_meshes(
             commands,
@@ -126,6 +130,8 @@ pub(crate) fn apply_built_chunk_fluid_meshlets(
     meshlets: ChunkMeshletMask,
     context: &ChunkRenderContext<'_>,
 ) -> bool {
+    let _publication_timer =
+        PresentationPublicationTimer::start(PresentationPublicationStage::RemeshApply);
     if meshlets.is_all() {
         apply_built_chunk_fluid_meshes(
             commands,

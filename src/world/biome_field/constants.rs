@@ -3,7 +3,7 @@ pub(super) const BORDER_WARP_BROAD_AMPLITUDE: f32 = 17.0;
 pub(super) const BORDER_WARP_BROAD_SCALE: f32 = 0.014;
 pub(super) const BORDER_WARP_DETAIL_AMPLITUDE: f32 = 7.0;
 pub(super) const BORDER_WARP_DETAIL_SCALE: f32 = 0.045;
-pub(super) const SITE_JITTER_FRACTION: f32 = 0.32;
+pub(super) const SURFACE_ROW_JITTER_FRACTION: f32 = 0.32;
 pub(super) const SITE_SEARCH_RADIUS: i32 = 2;
 
 pub(super) const CLIMATE_BLEND_MARGIN: f32 = 0.12;

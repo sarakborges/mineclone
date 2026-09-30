@@ -99,7 +99,9 @@ impl PreparedWorldActivation {
                 &mut snapshot.creatures,
             )),
             seed,
-            dimension: CurrentDimension { id: dimension_id },
+            dimension: CurrentDimension {
+                id: dimension_id.into(),
+            },
             rules,
             world,
             session: WorldSession::loaded(id, snapshot.day, snapshot.tick_in_day),

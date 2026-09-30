@@ -6,7 +6,10 @@ use crate::content::{
     sky::{SkyDefinition, SkyRegistry},
 };
 
-use super::{day_night::DayNightClock, dimension::CurrentDimension};
+use super::{
+    day_night::DayNightClock,
+    dimension::{CurrentDimension, DimensionId},
+};
 
 #[derive(SystemParam)]
 pub(crate) struct CurrentDimensionContext<'w> {
@@ -15,12 +18,12 @@ pub(crate) struct CurrentDimensionContext<'w> {
 }
 
 impl CurrentDimensionContext<'_> {
-    pub(crate) fn id(&self) -> &str {
+    pub(crate) fn id(&self) -> &DimensionId {
         &self.current.id
     }
 
     pub(crate) fn definition(&self) -> Option<&DimensionDefinition> {
-        self.dimensions.get(&self.current.id)
+        self.dimensions.get(self.current.id.as_str())
     }
 
     pub(crate) fn inputs_changed(&self) -> bool {

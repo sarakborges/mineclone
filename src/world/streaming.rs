@@ -1,17 +1,21 @@
 mod generation;
+mod generation_wave;
+mod initial_presentation;
+mod mesh_pressure;
 mod meshing;
+mod pending;
+mod priority_diagnostics;
+mod ready;
+mod residency;
 mod selection;
+mod selection_state;
 mod surface_cache;
 
-use std::{
-    collections::VecDeque,
-    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use bevy::{
     ecs::system::SystemParam,
-    platform::collections::{HashMap, HashSet},
+    platform::collections::HashSet,
     prelude::*,
 };
 
@@ -29,8 +33,17 @@ use crate::{
 
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
+    generation_wave::GenerationWaveState,
+    initial_presentation::InitialPresentationState,
+    mesh_pressure::MeshPressureState,
     meshing::{collect_built_chunk_meshes, dispatch_initial_mesh_tasks},
+    pending::PendingChunkQueue,
+    priority_diagnostics::{StreamingPriorityDiagnostics, StreamingPriorityScanDiagnostic},
+    ready::ReadyChunkQueue,
+    residency::ChunkResidencyState,
     selection::rebuild_queue,
+    selection_state::StreamingSelectionState,
+    surface_cache::StreamingSelectionCache,
 };
 pub(in crate::world) use self::{
     generation::refill_generation_workers,
@@ -39,12 +52,13 @@ pub(in crate::world) use self::{
 use super::{
     biome_field::BiomeField,
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::ChunkGenerationTasks,
-    chunk_mesh_tasks::ChunkMeshTasks,
+    chunk_generation_tasks::GenerationScheduler,
+    chunk_mesh_tasks::PresentationScheduler,
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::{GeneratedFluidSettling, PendingFluidUpdates},
+    fluid_updates::PendingFluidUpdates,
+    presentation_snapshot::PresentationLightingRevisions,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     work_budget::WorldFrameWorkBudget,
@@ -55,135 +69,50 @@ use super::{
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 const SLOW_STREAMING_REBUILD_WARNING: Duration = Duration::from_millis(8);
 
-#[derive(Clone, Copy, Debug, Default)]
-pub(super) struct StreamingPriorityScanDiagnostic {
-    pub(super) count: u64,
-    pub(super) average_micros: u64,
-    pub(super) max_micros: u64,
-    pub(super) max_queue_len: usize,
-}
-
-#[derive(Default)]
-struct StreamingPriorityScanMetrics {
-    count: AtomicU64,
-    total_nanos: AtomicU64,
-    max_nanos: AtomicU64,
-    max_queue_len: AtomicUsize,
-}
-
-impl StreamingPriorityScanMetrics {
-    fn record(&self, elapsed: Duration, queue_len: usize) {
-        let elapsed_nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-        self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
-        self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
-        self.max_queue_len.fetch_max(queue_len, Ordering::Relaxed);
-    }
-
-    fn take(&self) -> StreamingPriorityScanDiagnostic {
-        let count = self.count.swap(0, Ordering::Relaxed);
-        let total_nanos = self.total_nanos.swap(0, Ordering::Relaxed);
-        StreamingPriorityScanDiagnostic {
-            count,
-            average_micros: total_nanos.checked_div(count).unwrap_or(0) / 1_000,
-            max_micros: self.max_nanos.swap(0, Ordering::Relaxed) / 1_000,
-            max_queue_len: self.max_queue_len.swap(0, Ordering::Relaxed),
-        }
-    }
-}
-
-#[derive(Default)]
-struct StreamingPriorityDiagnostics {
-    pending: StreamingPriorityScanMetrics,
-    ready: StreamingPriorityScanMetrics,
-}
-
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct SelectionScanKey {
-    queue_revision: u64,
-    selection_revision: u64,
-    center: IVec2,
-    radius_squared: i64,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CriticalPendingScanKey {
-    queue_revision: u64,
-    center: IVec3,
-}
-
-#[derive(Default)]
-struct PendingPriorityCache {
-    queue_revision: u64,
-    selection_revision: u64,
-    pending: VecDeque<IVec3>,
-}
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
-    center: Option<IVec3>,
-    movement_direction: IVec2,
-    horizontal_radius: i32,
-    vertical_radius: i32,
-    desired: HashSet<IVec3>,
-    retained: HashSet<IVec3>,
-    retired: DeduplicatedQueue<IVec3>,
-    pending: DeduplicatedQueue<IVec3>,
-    ready: DeduplicatedQueue<IVec3>,
-    surface_ranges: HashMap<IVec2, (i32, i32)>,
-    surface_support_minimums: HashMap<IVec2, i32>,
-    structure_top_chunks: HashMap<IVec2, i32>,
-    initial_lighting_seeded: HashSet<IVec3>,
-    initial_lighting_seed_results: HashMap<IVec3, DirectLightingSeedResult>,
-    initial_lighting_activated: HashSet<IVec3>,
-    initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
-    mesh_pressure_evicted: HashMap<IVec3, usize>,
-    fluid_settling: GeneratedFluidSettling,
-    generation_wave_targets: HashSet<IVec3>,
-    generation_wave_pending: DeduplicatedQueue<IVec3>,
-    generation_prefetch_targets: HashSet<IVec3>,
-    staged_generated_chunks: HashSet<IVec3>,
-    settled_publication_chunks: Vec<IVec3>,
-    selection_revision: u64,
-    pending_critical_scan_miss: Option<CriticalPendingScanKey>,
-    pending_priority_cache: PendingPriorityCache,
-    ready_scan_miss: Option<SelectionScanKey>,
-    retired_scan_miss: Option<SelectionScanKey>,
+    selection_state: StreamingSelectionState,
+    residency: ChunkResidencyState,
+    pending: PendingChunkQueue,
+    ready: ReadyChunkQueue,
+    selection_cache: StreamingSelectionCache,
+    initial_presentation: InitialPresentationState,
+    mesh_pressure: MeshPressureState,
+    generation_wave: GenerationWaveState,
     priority_diagnostics: StreamingPriorityDiagnostics,
+    observed_presentation_reset_revision: u64,
 }
 
 impl ChunkStreamingState {
     pub(super) fn center(&self) -> Option<IVec3> {
-        self.center
+        self.selection_state.center()
     }
 
     pub(super) fn movement_direction(&self) -> IVec2 {
-        self.movement_direction
+        self.selection_state.movement_direction()
     }
 
     pub(super) fn selection_revision(&self) -> u64 {
-        self.selection_revision
+        self.residency.revision()
     }
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
-        self.desired.contains(&coord) || self.retained.contains(&coord)
+        self.residency.keeps_loaded(coord)
     }
 
     pub(super) fn retains_render_mesh(&self, coord: IVec3) -> bool {
-        let Some(center) = self.center else {
+        let Some(center) = self.selection_state.center() else {
             return false;
         };
-        let (_, hide_radius) = chunk_visibility_radii(self.horizontal_radius);
+        let (_, hide_radius) =
+            chunk_visibility_radii(self.selection_state.horizontal_radius());
         self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            self.retired.enqueue(coord);
-        }
+        self.residency.enqueue_retired(coord);
     }
 
     pub(super) fn pop_retired_outside_horizontal_radius(
@@ -191,36 +120,8 @@ impl ChunkStreamingState {
         center: IVec3,
         horizontal_radius: i32,
     ) -> Option<IVec3> {
-        let center = center.xz();
-        let radius = i64::from(horizontal_radius.max(0));
-        let radius_squared = radius * radius;
-        let scan_key = SelectionScanKey {
-            queue_revision: self.retired.revision(),
-            selection_revision: self.selection_revision,
-            center,
-            radius_squared,
-        };
-        if self.retired_scan_miss == Some(scan_key) {
-            return None;
-        }
-
-        let desired = &self.desired;
-        let retained = &self.retained;
-        let coord = self.retired.pop_where(|coord| {
-            if desired.contains(&coord) || retained.contains(&coord) {
-                return false;
-            }
-
-            let delta_x = i64::from(coord.x) - i64::from(center.x);
-            let delta_z = i64::from(coord.z) - i64::from(center.y);
-            delta_x * delta_x + delta_z * delta_z > radius_squared
-        });
-        if coord.is_some() {
-            self.retired_scan_miss = None;
-        } else {
-            self.retired_scan_miss = Some(scan_key);
-        }
-        coord
+        self.residency
+            .pop_retired_outside_horizontal_radius(center, horizontal_radius)
     }
 
     fn requeue(&mut self, coord: IVec3) {
@@ -229,249 +130,106 @@ impl ChunkStreamingState {
         }
     }
 
-    fn has_critical_pending(&mut self) -> bool {
-        let Some(center) = self.center else {
-            return false;
-        };
-        let scan_key = CriticalPendingScanKey {
-            queue_revision: self.pending.revision(),
-            center,
-        };
-        if self.pending_critical_scan_miss == Some(scan_key) {
-            return false;
+    fn sync_presentation_reset(&mut self, render_pool: &ChunkRenderPool) {
+        let revision = render_pool.presentation_reset_revision();
+        if self.observed_presentation_reset_revision == revision {
+            return;
         }
+        self.observed_presentation_reset_revision = revision;
 
-        let found = self
-            .pending
-            .values()
-            .any(|coord| is_critical_streaming_coord(coord, center));
-        if found {
-            self.pending_critical_scan_miss = None;
-        } else {
-            self.pending_critical_scan_miss = Some(scan_key);
+        let missing = self
+            .residency
+            .desired
+            .iter()
+            .copied()
+            .filter(|coord| {
+                !render_pool.contains(*coord)
+                    && !self.generated_chunk_is_unpublished(*coord)
+                    && !self.mesh_is_pressure_evicted(*coord)
+            })
+            .collect::<Vec<_>>();
+        for coord in missing {
+            self.requeue(coord);
         }
-        found
+    }
+
+    fn has_critical_pending(&mut self) -> bool {
+        let Some(center) = self.selection_state.center() else {
+            return false;
+        };
+        self.pending
+            .has_critical(center, |coord| is_critical_streaming_coord(coord, center))
     }
 
     fn pop_pending_by_priority(&mut self) -> Option<IVec3> {
-        let center = self.center?;
-        let queue_revision = self.pending.revision();
-        let selection_revision = self.selection_revision;
+        let center = self.selection_state.center()?;
+        let selection_revision = self.residency.revision();
+        let movement_direction = self.selection_state.movement_direction();
+        let visible_radius = self.selection_state.horizontal_radius();
+        let structure_top_chunks = self.selection_cache.structure_top_chunks();
+        let center_structure_top_chunk = structure_top_chunks
+            .get(&center.xz())
+            .copied()
+            .unwrap_or(0);
+        let surface_ranges = self.selection_cache.surface_ranges();
+        let prioritize_surface = selection::player_is_above_surface(
+            center,
+            center_structure_top_chunk,
+            surface_ranges,
+        );
 
-        if self.pending_priority_cache.queue_revision != queue_revision
-            || self.pending_priority_cache.selection_revision != selection_revision
-        {
-            let movement_direction = self.movement_direction;
-            let visible_radius = self.horizontal_radius;
-            let center_structure_top_chunk = self
-                .structure_top_chunks
-                .get(&center.xz())
-                .copied()
-                .unwrap_or(0);
-            let prioritize_surface = selection::player_is_above_surface(
-                center,
-                center_structure_top_chunk,
-                &self.surface_ranges,
-            );
-            let structure_top_chunks = &self.structure_top_chunks;
-            let surface_ranges = &self.surface_ranges;
-
-            let queue_len = self.pending.len();
-            let started = Instant::now();
-            let mut ordered = self.pending.values().collect::<Vec<_>>();
-            ordered.sort_unstable_by_key(|coord| {
-                (
-                    selection::pending_priority(
-                        *coord,
-                        center,
-                        visible_radius,
-                        structure_top_chunks
-                            .get(&coord.xz())
-                            .copied()
-                            .unwrap_or(0),
-                        movement_direction,
-                        prioritize_surface,
-                        surface_ranges,
-                    ),
-                    coord.y,
-                    coord.z,
-                    coord.x,
-                )
-            });
-            self.priority_diagnostics
-                .pending
-                .record(started.elapsed(), queue_len);
-            self.pending_priority_cache.pending = ordered.into();
-            self.pending_priority_cache.queue_revision = queue_revision;
-            self.pending_priority_cache.selection_revision = selection_revision;
-        }
-
-        while let Some(coord) = self.pending_priority_cache.pending.pop_front() {
-            if !self.pending.contains(coord) {
-                continue;
-            }
-
-            let removed = self.pending.remove(coord);
-            debug_assert!(removed, "pending priority cache must reference an active chunk");
-            self.pending_priority_cache.queue_revision = self.pending.revision();
-            return Some(coord);
-        }
-
-        None
-    }
-
-    fn start_generation_wave_target(&mut self, coord: IVec3) {
-        if self.generation_wave_targets.insert(coord) {
-            self.generation_wave_pending.enqueue(coord);
-        }
-    }
-
-    fn generation_wave_active(&self) -> bool {
-        !self.generation_wave_targets.is_empty()
-            || !self.staged_generated_chunks.is_empty()
-            || !self.settled_publication_chunks.is_empty()
-            || self.fluid_settling.is_active()
-    }
-
-    fn generation_wave_accepts_new_targets(&self) -> bool {
-        !self.fluid_settling.is_active()
-            && self.staged_generated_chunks.is_empty()
-            && self.settled_publication_chunks.is_empty()
+        let (selected, scan) = self.pending.pop_by_priority(selection_revision, |coord| {
+            (
+                selection::pending_priority(
+                    coord,
+                    center,
+                    visible_radius,
+                    structure_top_chunks
+                        .get(&coord.xz())
+                        .copied()
+                        .unwrap_or(0),
+                    movement_direction,
+                    prioritize_surface,
+                    surface_ranges,
+                ),
+                coord.y,
+                coord.z,
+                coord.x,
+            )
+        });
+        self.priority_diagnostics.record_pending(scan);
+        selected
     }
 
     fn generation_dispatch_work_exists(&self) -> bool {
-        !self.fluid_settling.is_active()
-            && self.settled_publication_chunks.is_empty()
-            && (self.generation_wave_pending.len() > 0
-                || (self.pending.len() > 0 && self.generation_wave_accepts_new_targets()))
-    }
-
-    fn stage_generated_chunk(&mut self, coord: IVec3) {
-        debug_assert!(
-            self.generation_wave_targets.contains(&coord),
-            "only an active generation-wave target may become staged"
-        );
-        self.staged_generated_chunks.insert(coord);
-    }
-
-    fn abandon_generation_target(&mut self, coord: IVec3) {
-        self.generation_wave_pending.remove(coord);
-        self.generation_wave_targets.remove(&coord);
-        self.generation_prefetch_targets.remove(&coord);
-    }
-
-    fn mark_generation_prefetched(&mut self, coord: IVec3) {
-        debug_assert!(
-            !self.generation_wave_targets.contains(&coord),
-            "prefetched generation cannot already belong to the active wave"
-        );
-        self.generation_prefetch_targets.insert(coord);
-    }
-
-    fn complete_generation_wave_target(&mut self, coord: IVec3) {
-        debug_assert!(
-            !self.staged_generated_chunks.contains(&coord),
-            "completed generation-wave target cannot remain staged"
-        );
-        debug_assert!(
-            !self.fluid_settling.contains(coord),
-            "completed generation-wave target cannot remain settling-owned"
-        );
-        let removed = self.generation_wave_targets.remove(&coord);
-        debug_assert!(
-            removed,
-            "completed generation-wave target must still own its reservation: {coord:?}"
-        );
-    }
-
-    fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
-        let mut staged = self.staged_generated_chunks.drain().collect::<Vec<_>>();
-        staged.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        staged
-    }
-
-    fn begin_settled_publication(&mut self, mut chunks: Vec<IVec3>) {
-        debug_assert!(
-            self.settled_publication_chunks.is_empty(),
-            "settled publication queue must be empty before a new wave is staged"
-        );
-        chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-        self.settled_publication_chunks = chunks;
-    }
-
-    fn has_settled_publication(&self) -> bool {
-        !self.settled_publication_chunks.is_empty()
-    }
-
-    fn pop_settled_publication_chunk(&mut self) -> Option<IVec3> {
-        self.settled_publication_chunks.pop()
-    }
-
-    fn finish_generation_wave(&mut self) {
-        assert!(
-            self.staged_generated_chunks.is_empty(),
-            "generation wave cannot finish with unpublished generated chunks"
-        );
-        assert!(
-            self.settled_publication_chunks.is_empty(),
-            "generation wave cannot finish with settled chunks awaiting publication"
-        );
-        assert!(
-            self.generation_wave_pending.len() == 0,
-            "generation wave cannot finish with unscheduled targets"
-        );
-        assert!(
-            !self.fluid_settling.is_active(),
-            "generation wave cannot finish while fluid settling is active"
-        );
-        assert!(
-            self.generation_wave_targets.is_empty(),
-            "generation wave cannot finish with unresolved target reservations: {:?}",
-            self.generation_wave_targets
-        );
-
-        self.generation_wave_targets
-            .extend(self.generation_prefetch_targets.drain());
+        self.generation_wave.dispatch_work_exists(self.pending.len())
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.generation_wave_targets.contains(&coord)
-            || self.generation_prefetch_targets.contains(&coord)
-            || self.staged_generated_chunks.contains(&coord)
-            || self.fluid_settling.contains(coord)
+        self.generation_wave.contains_unpublished(coord)
     }
 
     pub(in crate::world) fn generated_fluid_settling_owns_mutation(&self, coord: IVec3) -> bool {
-        self.fluid_settling.owns_mutation(coord)
+        self.generation_wave.fluid_settling.owns_mutation(coord)
     }
 
     fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunks.contains(&coord)
-            || self.settled_publication_chunks.contains(&coord)
-            || self.fluid_settling.contains(coord)
+        self.generation_wave
+            .resident_generated_chunk_is_unpublished(coord)
     }
 
     fn adopt_structure_top_chunk(&mut self, horizontal: IVec2, top_chunk: i32) {
-        let previous_top = self
-            .structure_top_chunks
-            .get(&horizontal)
-            .copied()
-            .unwrap_or(-1);
-        if top_chunk <= previous_top {
+        let Some((previous_top, surface_top_chunk)) = self
+            .selection_cache
+            .adopt_structure_top_chunk(horizontal, top_chunk)
+        else {
             return;
-        }
-        self.structure_top_chunks.insert(horizontal, top_chunk);
-
-        let surface_top_chunk = self
-            .surface_ranges
-            .get(&horizontal)
-            .map(|(_, maximum)| maximum.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32))
-            .unwrap_or(-1);
+        };
         let start_y = previous_top.max(surface_top_chunk).saturating_add(1).max(0);
         let mut changed = false;
         for y in start_y..=top_chunk {
             let coord = IVec3::new(horizontal.x, y, horizontal.y);
-            if !self.desired.insert(coord) {
+            if !self.residency.desired.insert(coord) {
                 continue;
             }
             changed = true;
@@ -493,7 +251,7 @@ impl ChunkStreamingState {
             !self.resident_generated_chunk_is_unpublished(coord),
             "generated chunk cannot become ready before fluid settling completes: {coord:?}"
         );
-        if self.mesh_pressure_evicted.contains_key(&coord) {
+        if self.mesh_pressure.contains(coord) {
             return;
         }
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
@@ -503,11 +261,11 @@ impl ChunkStreamingState {
 
     pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3, bytes: usize) {
         self.ready.remove(coord);
-        self.mesh_pressure_evicted.insert(coord, bytes);
+        self.mesh_pressure.suppress(coord, bytes);
     }
 
     pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
-        if self.mesh_pressure_evicted.remove(&coord).is_none() || !self.keeps_loaded(coord) {
+        if !self.mesh_pressure.recover(coord) || !self.keeps_loaded(coord) {
             return false;
         }
         self.mark_ready(coord);
@@ -515,15 +273,15 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn mesh_pressure_evicted_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.mesh_pressure_evicted.keys().copied()
+        self.mesh_pressure.coords()
     }
 
     pub(super) fn mesh_pressure_evicted_bytes(&self, coord: IVec3) -> Option<usize> {
-        self.mesh_pressure_evicted.get(&coord).copied()
+        self.mesh_pressure.bytes(coord)
     }
 
     pub(super) fn mesh_is_pressure_evicted(&self, coord: IVec3) -> bool {
-        self.mesh_pressure_evicted.contains_key(&coord)
+        self.mesh_pressure.contains(coord)
     }
 
     pub(super) fn retain_mesh_pressure_evictions(
@@ -531,48 +289,31 @@ impl ChunkStreamingState {
         desired: &HashSet<IVec3>,
         center: IVec3,
     ) {
-        let before = self.mesh_pressure_evicted.len();
-        self.mesh_pressure_evicted.retain(|coord, _| {
-            desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
-        });
-        if self.mesh_pressure_evicted.len() != before {
-            }
+        self.mesh_pressure
+            .retain_for_selection(desired, |coord| !is_critical_streaming_coord(coord, center));
     }
 
     fn pop_ready(&mut self) -> Option<IVec3> {
-        let center = self.center?;
-        let movement_direction = self.movement_direction;
-        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let center = self.selection_state.center()?;
+        let movement_direction = self.selection_state.movement_direction();
+        let (show_radius, _) =
+            chunk_visibility_radii(self.selection_state.horizontal_radius());
         let radius = i64::from(show_radius.max(0));
-        let scan_key = SelectionScanKey {
-            queue_revision: self.ready.revision(),
-            selection_revision: self.selection_revision,
-            center: center.xz(),
-            radius_squared: radius * radius,
-        };
-        if self.ready_scan_miss == Some(scan_key) {
-            return None;
-        }
-
-        let desired = &self.desired;
-        let retained = &self.retained;
-        let queue_len = self.ready.len();
-        let started = Instant::now();
-        let selected = self.ready.pop_min_where_by_key(
+        let radius_squared = radius * radius;
+        let selection_revision = self.residency.revision();
+        let desired = &self.residency.desired;
+        let retained = &self.residency.retained;
+        let (selected, scan) = self.ready.pop_min_where_by_key(
+            selection_revision,
+            center.xz(),
+            radius_squared,
             |coord| {
                 (desired.contains(&coord) || retained.contains(&coord))
                     && chunk_is_inside_render_radius(center, coord, show_radius)
             },
             |coord| chunk_load_priority(coord, center, movement_direction),
         );
-        self.priority_diagnostics
-            .ready
-            .record(started.elapsed(), queue_len);
-        if selected.is_some() {
-            self.ready_scan_miss = None;
-        } else {
-            self.ready_scan_miss = Some(scan_key);
-        }
+        self.priority_diagnostics.record_ready(scan);
         selected
     }
 
@@ -583,7 +324,7 @@ impl ChunkStreamingState {
     }
 
     fn mark_initial_lighting_seeded(&mut self, coord: IVec3) -> bool {
-        self.initial_lighting_seeded.insert(coord)
+        self.initial_presentation.mark_lighting_seeded(coord)
     }
 
     fn store_initial_lighting_seed_result(
@@ -591,27 +332,37 @@ impl ChunkStreamingState {
         coord: IVec3,
         result: DirectLightingSeedResult,
     ) {
-        self.initial_lighting_seed_results.insert(coord, result);
+        self.initial_presentation
+            .store_lighting_seed_result(coord, result);
     }
 
     fn take_initial_lighting_seed_result(
         &mut self,
         coord: IVec3,
     ) -> Option<DirectLightingSeedResult> {
-        self.initial_lighting_seed_results.remove(&coord)
+        self.initial_presentation.take_lighting_seed_result(coord)
     }
 
     fn mark_initial_lighting_activated(&mut self, coord: IVec3) -> bool {
-        self.initial_lighting_activated.insert(coord)
+        self.initial_presentation.mark_lighting_activated(coord)
+    }
+
+    fn add_initial_mesh_seed_catchup(&mut self, coord: IVec3, meshlets: ChunkMeshletMask) {
+        self.initial_presentation
+            .add_mesh_seed_catchup(coord, meshlets);
+    }
+
+    pub(super) fn initial_mesh_seed_catchup(&self, coord: IVec3) -> Option<ChunkMeshletMask> {
+        self.initial_presentation.mesh_seed_catchup(coord)
+    }
+
+    pub(super) fn clear_initial_mesh_seed_catchup(&mut self, coord: IVec3) {
+        self.initial_presentation.clear_mesh_seed_catchup(coord);
     }
 
     pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
-        self.initial_lighting_seeded.remove(&coord);
-        self.initial_lighting_seed_results.remove(&coord);
-        self.initial_lighting_activated.remove(&coord);
-        self.initial_mesh_seed_catchup.remove(&coord);
+        self.initial_presentation.forget(coord);
     }
-
 
     pub(super) fn take_priority_scan_diagnostics(
         &self,
@@ -619,17 +370,15 @@ impl ChunkStreamingState {
         StreamingPriorityScanDiagnostic,
         StreamingPriorityScanDiagnostic,
     ) {
-        (
-            self.priority_diagnostics.pending.take(),
-            self.priority_diagnostics.ready.take(),
-        )
+        self.priority_diagnostics.take()
     }
 
     pub(crate) fn has_renderable_streaming_backlog(&self) -> bool {
-        let Some(center) = self.center else {
+        let Some(center) = self.selection_state.center() else {
             return false;
         };
-        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let (show_radius, _) =
+            chunk_visibility_radii(self.selection_state.horizontal_radius());
         let renderable = |coord: IVec3| {
             self.keeps_loaded(coord)
                 && chunk_is_inside_render_radius(center, coord, show_radius)
@@ -637,39 +386,38 @@ impl ChunkStreamingState {
 
         self.ready.values().any(renderable)
             || self.pending.values().any(renderable)
-            || self
-                .generation_wave_targets
-                .iter()
-                .copied()
-                .any(renderable)
+            || self.generation_wave.targets().any(renderable)
     }
 
     pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
+        let (generation_pending, generation_targets, staged_generated) =
+            self.generation_wave.diagnostic_counts();
         (
             self.pending.len(),
             self.ready.len(),
-            self.generation_wave_pending.len(),
-            self.generation_wave_targets.len(),
-            self.staged_generated_chunks.len(),
-            self.mesh_pressure_evicted.len(),
+            generation_pending,
+            generation_targets,
+            staged_generated,
+            self.mesh_pressure.len(),
         )
     }
 
     pub(super) fn diagnostic_generation_prefetch_count(&self) -> usize {
-        self.generation_prefetch_targets.len()
+        self.generation_wave.prefetch_count()
     }
 
     pub(super) fn diagnostic_fluid_settling_counts(
         &self,
     ) -> (bool, usize, usize, usize, usize, usize, usize) {
-        self.fluid_settling.diagnostic_counts()
+        self.generation_wave.fluid_settling.diagnostic_counts()
     }
 
     pub(super) fn diagnostic_renderable_backlog_counts(&self) -> (usize, usize, usize) {
-        let Some(center) = self.center else {
+        let Some(center) = self.selection_state.center() else {
             return (0, 0, 0);
         };
-        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let (show_radius, _) =
+            chunk_visibility_radii(self.selection_state.horizontal_radius());
         let renderable = |coord: IVec3| {
             self.keeps_loaded(coord)
                 && chunk_is_inside_render_radius(center, coord, show_radius)
@@ -678,19 +426,17 @@ impl ChunkStreamingState {
         (
             self.pending.values().filter(|coord| renderable(*coord)).count(),
             self.ready.values().filter(|coord| renderable(*coord)).count(),
-            self.generation_wave_targets
-                .iter()
-                .copied()
+            self.generation_wave
+                .targets()
                 .filter(|coord| renderable(*coord))
                 .count(),
         )
     }
 
     fn mark_selection_rebuilt(&mut self) {
-        self.selection_revision = self
-            .selection_revision
-            .checked_add(1)
-            .expect("chunk streaming selection revision exhausted");
+        self.residency.mark_rebuilt();
+        let residency = &self.residency;
+        self.ready.retain(|coord| residency.keeps_loaded(coord));
     }
 }
 
@@ -754,8 +500,9 @@ struct QueueRebuildContext<'a> {
 pub(super) struct ChunkStreamingWork<'w> {
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkStreamingState>,
-    generation_tasks: ResMut<'w, ChunkGenerationTasks>,
-    mesh_tasks: ResMut<'w, ChunkMeshTasks>,
+    generation_tasks: ResMut<'w, GenerationScheduler>,
+    mesh_tasks: ResMut<'w, PresentationScheduler>,
+    lighting_revisions: Res<'w, PresentationLightingRevisions>,
     world_ticks: Res<'w, WorldTickClock>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
     async_work: Res<'w, ChunkAsyncWorkLimiter>,
@@ -801,9 +548,10 @@ pub(super) fn stream_chunks(
     let allow_forward_preload = warp_center.is_none();
     let current_tick = work.world_ticks.current_tick();
 
-    if work.state.center != Some(center)
-        || work.state.horizontal_radius != horizontal_radius
-        || work.state.vertical_radius != vertical_radius
+    if work
+        .state
+        .selection_state
+        .needs_rebuild(center, horizontal_radius, vertical_radius)
     {
         let rebuild_context = QueueRebuildContext {
             render_pool: &renderer.pool,
@@ -827,20 +575,20 @@ pub(super) fn stream_chunks(
             warn!(
                 "slow streaming selection rebuild: center={center:?} radius={horizontal_radius} vertical_radius={vertical_radius} warp={} desired={} pending={} structure_columns={} elapsed_ms={:.2}",
                 !allow_forward_preload,
-                work.state.desired.len(),
+                work.state.residency.desired.len(),
                 work.state.pending.len(),
-                work.state.structure_top_chunks.len(),
+                work.state.selection_cache.structure_column_count(),
                 rebuild_elapsed.as_secs_f64() * 1_000.0,
             );
         }
 
         let cancelled_generation = {
-            let state = &work.state;
+            let desired = &work.state.residency.desired;
             work.generation_tasks
-                .cancel_where(|coord| !state.keeps_loaded(coord))
+                .cancel_where(|coord| !desired.contains(&coord))
         };
         for coord in cancelled_generation {
-            work.state.abandon_generation_target(coord);
+            work.state.generation_wave.abandon_target(coord);
         }
 
         let cancelled_meshes = {
@@ -849,18 +597,15 @@ pub(super) fn stream_chunks(
                 .cancel_where(|coord| !state.retains_render_mesh(coord))
         };
         for coord in cancelled_meshes {
-            work.state.initial_mesh_seed_catchup.remove(&coord);
+            work.state.clear_initial_mesh_seed_catchup(coord);
         }
     }
 
+    work.state.sync_presentation_reset(&renderer.pool);
     work.generation_tasks.sync_snapshot(&generation, &content);
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
-    // Presentation is foreground work. Drain/publish already-built meshes and
-    // feed initial meshing before integrating more generation results; otherwise
-    // direct-light seeding for newly generated chunks can consume the shared
-    // frame deadline while hundreds of render-ready chunks wait in `ready`.
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(
             &content,
@@ -879,7 +624,7 @@ pub(super) fn stream_chunks(
             current_tick,
         );
     }
-    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave_active() {
+    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave.is_active() {
         collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.state.generation_dispatch_work_exists() {
@@ -887,9 +632,6 @@ pub(super) fn stream_chunks(
     }
 }
 
-// Direct lighting is presentation preparation. Unpublished preload chunks stay
-// outside the dynamic-lighting domain, so they can remain unseeded without
-// leaking DARK halo values into visible chunks.
 pub(super) fn seed_loaded_chunk_direct_lighting(
     coord: IVec3,
     content: &ChunkContent<'_>,
@@ -910,9 +652,6 @@ pub(super) fn seed_loaded_chunk_direct_lighting(
     work.state
         .store_initial_lighting_seed_result(coord, lighting_seed);
 
-    // A mesh task may already have captured this position as missing air.
-    // Remember only the affected meshlets; the finished task can publish and
-    // receive a targeted catch-up instead of being cancelled.
     for y in -1..=1 {
         for z in -1..=1 {
             for x in -1..=1 {
@@ -923,16 +662,7 @@ pub(super) fn seed_loaded_chunk_direct_lighting(
                 let neighbor = coord + offset;
                 if work.mesh_tasks.contains(neighbor) {
                     let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
-                    let combined = work
-                        .state
-                        .initial_mesh_seed_catchup
-                        .get(&neighbor)
-                        .copied()
-                        .unwrap_or_default()
-                        .union(meshlets);
-                    work.state
-                        .initial_mesh_seed_catchup
-                        .insert(neighbor, combined);
+                    work.state.add_initial_mesh_seed_catchup(neighbor, meshlets);
                 }
             }
         }
@@ -978,18 +708,49 @@ pub(super) fn activate_published_chunk_runtime(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn state_with_selection(
+        center: Option<IVec3>,
+        movement_direction: IVec2,
+        horizontal_radius: i32,
+    ) -> ChunkStreamingState {
+        ChunkStreamingState {
+            selection_state: StreamingSelectionState::configured(
+                center,
+                movement_direction,
+                horizontal_radius,
+                0,
+            ),
+            ..default()
+        }
+    }
+
+    #[test]
+    fn presentation_reset_requeues_desired_chunks_without_selection_change() {
+        let coord = IVec3::new(3, 0, -2);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state.residency.desired.insert(coord);
+        let mut render_pool = ChunkRenderPool::default();
+
+        state.sync_presentation_reset(&render_pool);
+        assert!(!state.pending.contains(coord));
+
+        let _ = render_pool.reset_all_presentations();
+        state.sync_presentation_reset(&render_pool);
+        assert!(state.pending.contains(coord));
+        let pending_count = state.pending.len();
+
+        state.sync_presentation_reset(&render_pool);
+        assert_eq!(state.pending.len(), pending_count);
+    }
+
     #[test]
     fn ready_queue_prioritizes_distance_before_movement_direction() {
         let background = IVec3::new(-4, 0, 0);
         let forward = IVec3::new(5, 0, 0);
         let critical = IVec3::new(1, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            movement_direction: IVec2::X,
-            horizontal_radius: 12,
-            ..default()
-        };
-        state.desired.extend([background, forward, critical]);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::X, 12);
+        state.residency.desired.extend([background, forward, critical]);
         state.ready.enqueue(background);
         state.ready.enqueue(forward);
         state.ready.enqueue(critical);
@@ -1005,22 +766,18 @@ mod tests {
         let coord = IVec3::new(20, 0, 0);
         let mut state = ChunkStreamingState::default();
         state.enqueue_retired(coord);
-        state.retained.insert(coord);
+        state.residency.retained.insert(coord);
 
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
             None
         );
-        let first_miss = state.retired_scan_miss;
-        assert!(first_miss.is_some());
-
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
             None
         );
-        assert_eq!(state.retired_scan_miss, first_miss);
 
-        state.retained.remove(&coord);
+        state.residency.retained.remove(&coord);
         state.mark_selection_rebuilt();
 
         assert_eq!(
@@ -1057,14 +814,15 @@ mod tests {
         let coord = IVec3::new(30, 0, 0);
         let mut state = ChunkStreamingState::default();
         state.enqueue_retired(coord);
-        state.desired.insert(coord);
+        state.residency.desired.insert(coord);
 
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             None
         );
 
-        state.desired.remove(&coord);
+        state.residency.desired.remove(&coord);
+        state.mark_selection_rebuilt();
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             Some(coord)
@@ -1078,25 +836,22 @@ mod tests {
 
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.mark_initial_lighting_seeded(coord));
-        state
-            .initial_mesh_seed_catchup
-            .insert(coord, ChunkMeshletMask::ALL);
+        state.add_initial_mesh_seed_catchup(coord, ChunkMeshletMask::ALL);
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
-        assert!(!state.initial_mesh_seed_catchup.contains_key(&coord));
+        assert!(state.initial_mesh_seed_catchup(coord).is_none());
     }
 
     #[test]
     fn forward_preload_stays_resident_without_allocating_a_gpu_mesh() {
-        let visible = IVec3::new(14, 0, 0);
-        let hysteresis = IVec3::new(15, 0, 0);
+        let visible = IVec3::new(13, 0, 0);
+        let hysteresis = IVec3::new(14, 0, 0);
         let preload_only = IVec3::new(20, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            horizontal_radius: 12,
-            ..default()
-        };
-        state.desired.extend([visible, hysteresis, preload_only]);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state
+            .residency
+            .desired
+            .extend([visible, hysteresis, preload_only]);
 
         assert!(state.retains_render_mesh(hysteresis));
         assert!(!state.retains_render_mesh(preload_only));
@@ -1112,31 +867,22 @@ mod tests {
     #[test]
     fn ready_scan_miss_invalidates_when_selection_or_queue_changes() {
         let preload_only = IVec3::new(20, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            horizontal_radius: 12,
-            ..default()
-        };
-        state.desired.insert(preload_only);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state.residency.desired.insert(preload_only);
         state.mark_ready(preload_only);
 
         assert_eq!(state.pop_ready(), None);
-        let first_miss = state.ready_scan_miss;
-        assert!(first_miss.is_some());
         assert_eq!(state.pop_ready(), None);
-        assert_eq!(state.ready_scan_miss, first_miss);
 
         let visible = IVec3::X;
-        state.desired.insert(visible);
+        state.residency.desired.insert(visible);
         state.mark_ready(visible);
         assert_eq!(state.pop_ready(), Some(visible));
-        assert_eq!(state.ready_scan_miss, None);
 
         assert_eq!(state.pop_ready(), None);
-        state.center = Some(IVec3::new(6, 0, 0));
+        state.selection_state.commit_rebuild(IVec3::new(7, 0, 0), 12, 0);
         state.mark_selection_rebuilt();
         assert_eq!(state.pop_ready(), Some(preload_only));
-        assert_eq!(state.ready_scan_miss, None);
     }
 
     #[test]
@@ -1144,23 +890,14 @@ mod tests {
         let near = IVec3::X;
         let middle = IVec3::new(2, 0, 0);
         let far = IVec3::new(3, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            horizontal_radius: 12,
-            ..default()
-        };
-        state.desired.extend([near, middle, far]);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state.residency.desired.extend([near, middle, far]);
         state.pending.enqueue(far);
         state.pending.enqueue(near);
         state.pending.enqueue(middle);
 
         assert_eq!(state.pop_pending_by_priority(), Some(near));
-        let cached_selection_revision = state.pending_priority_cache.selection_revision;
         assert_eq!(state.pop_pending_by_priority(), Some(middle));
-        assert_eq!(
-            state.pending_priority_cache.selection_revision,
-            cached_selection_revision
-        );
         assert_eq!(state.pop_pending_by_priority(), Some(far));
         assert_eq!(state.pop_pending_by_priority(), None);
     }
@@ -1168,39 +905,27 @@ mod tests {
     #[test]
     fn critical_pending_scan_miss_invalidates_when_queue_or_center_changes() {
         let far = IVec3::new(10, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            ..default()
-        };
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 0);
         state.pending.enqueue(far);
 
         assert!(!state.has_critical_pending());
-        let first_miss = state.pending_critical_scan_miss;
-        assert!(first_miss.is_some());
         assert!(!state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, first_miss);
 
         state.pending.enqueue(IVec3::X);
         assert!(state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, None);
 
         state.pending.remove(IVec3::X);
         assert!(!state.has_critical_pending());
-        state.center = Some(IVec3::new(9, 0, 0));
+        state.selection_state.commit_rebuild(IVec3::new(9, 0, 0), 0, 0);
         assert!(state.has_critical_pending());
-        assert_eq!(state.pending_critical_scan_miss, None);
     }
 
     #[test]
     fn renderable_streaming_backlog_includes_generation_work() {
         let visible = IVec3::new(3, 0, 0);
         let preload_only = IVec3::new(20, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            horizontal_radius: 12,
-            ..default()
-        };
-        state.desired.extend([visible, preload_only]);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state.residency.desired.extend([visible, preload_only]);
 
         state.pending.enqueue(preload_only);
         assert!(!state.has_renderable_streaming_backlog());
@@ -1214,15 +939,15 @@ mod tests {
         let coord = IVec3::new(4, 0, -2);
         let mut state = ChunkStreamingState::default();
 
-        state.mark_generation_prefetched(coord);
+        state.generation_wave.mark_prefetched(coord);
         assert!(state.generated_chunk_is_unpublished(coord));
         assert_eq!(state.diagnostic_generation_prefetch_count(), 1);
-        assert!(!state.generation_wave_targets.contains(&coord));
+        assert!(!state.generation_wave.contains_target(coord));
 
-        state.finish_generation_wave();
+        state.generation_wave.finish();
 
         assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
-        assert!(state.generation_wave_targets.contains(&coord));
+        assert!(state.generation_wave.contains_target(coord));
         assert!(state.generated_chunk_is_unpublished(coord));
     }
 
@@ -1231,8 +956,8 @@ mod tests {
         let coord = IVec3::new(-5, 1, 7);
         let mut state = ChunkStreamingState::default();
 
-        state.mark_generation_prefetched(coord);
-        state.abandon_generation_target(coord);
+        state.generation_wave.mark_prefetched(coord);
+        state.generation_wave.abandon_target(coord);
 
         assert_eq!(state.diagnostic_generation_prefetch_count(), 0);
         assert!(!state.generated_chunk_is_unpublished(coord));

@@ -33,7 +33,7 @@
     ]
   },
   "textures": {
-    "SlimeFace": "textures/creatures/slime_electro/face.png"
+    "SlimeFace": "textures/creatures/slime_anemo/face.png"
   },
   "unlitMaterials": [
     "SlimeFace",

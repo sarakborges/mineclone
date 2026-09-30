@@ -7,6 +7,7 @@ use super::{
     math::smoothstep,
 };
 use self::volume::volume_biome_density_delta;
+pub(crate) use self::volume::volume_biome_surface_depth;
 
 const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
 const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;

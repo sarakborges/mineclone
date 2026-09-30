@@ -6,29 +6,31 @@ mod noise_band;
 mod selection;
 mod spatial;
 mod surface;
+mod surface_cache;
 mod visuals;
 mod volume;
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use arrayvec::ArrayVec;
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 
-use crate::{
-    content::{
-    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
-    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
+use crate::content::{
+    biome::{
+        BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints,
+    },
+    biome_density::BiomeDensityModifier,
+    biome_distribution::BiomeDistribution,
     biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis, DimensionDefinition},
-    },
-    voxel::chunk::CHUNK_SIZE,
 };
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
     spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
+    surface_cache::SurfaceSiteCache,
 };
 use super::{
     macro_climate::MacroClimateField,
@@ -48,6 +50,8 @@ pub(super) struct SurfaceSiteCacheEntry {
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
     pub id: String,
+    pub tags: Vec<String>,
+    pub surface_constraints: Option<VolumeSurfaceConstraints>,
     pub distributions: Vec<BiomeDistribution>,
     pub size: DimensionBiomeSize,
     pub weight: f32,
@@ -81,7 +85,7 @@ pub struct BiomeField {
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
-    pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, SurfaceSiteCacheEntry>>>,
+    pub(super) surface_site_cache: SurfaceSiteCache,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
     single_surface_biome: Option<usize>,
     ocean_surface_index: Option<usize>,
@@ -171,30 +175,11 @@ impl BiomeField {
         center_chunk: IVec2,
         radius_chunks: i32,
     ) {
-        let chunk_size = CHUNK_SIZE as i32;
-        let center_world = (center_chunk * chunk_size).as_vec2()
-            + Vec2::splat(CHUNK_SIZE as f32 * 0.5);
-        let center_cell = IVec2::new(
-            (center_world.x / self.surface_site_spacing.x).round() as i32,
-            (center_world.y / self.surface_site_spacing.y).round() as i32,
+        self.surface_site_cache.retain_around(
+            center_chunk,
+            radius_chunks,
+            self.surface_site_spacing,
         );
-        let world_radius = radius_chunks
-            .max(0)
-            .saturating_add(2)
-            .saturating_mul(chunk_size) as f32;
-        let padding = SITE_SEARCH_RADIUS + 2;
-        let radius_x =
-            (world_radius / self.surface_site_spacing.x).ceil() as i32 + padding;
-        let radius_z =
-            (world_radius / self.surface_site_spacing.y).ceil() as i32 + padding;
-
-        self.surface_site_biomes
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .retain(|cell, _| {
-                (cell.x - center_cell.x).abs() <= radius_x
-                    && (cell.y - center_cell.y).abs() <= radius_z
-            });
     }
 
     pub fn from_dimension(
@@ -236,6 +221,8 @@ impl BiomeField {
             let size = scaled_biome_size(size, multiplier_tenths);
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
+                tags: biome.tags.clone(),
+                surface_constraints: biome.surface_constraints.clone(),
                 distributions: biome.distributions.clone(),
                 size,
                 weight: dimension_biome.weight,
@@ -304,7 +291,7 @@ impl BiomeField {
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
             seed,
-            surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
+            surface_site_cache: SurfaceSiteCache::new(),
             forced_surface_biome: None,
             single_surface_biome: None,
             ocean_surface_index,
@@ -321,10 +308,7 @@ impl BiomeField {
             return;
         }
         self.spawn_oceans = spawn_oceans;
-        self.surface_site_biomes
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clear();
+        self.surface_site_cache.clear();
     }
 
     pub(super) fn surface_biome_is_enabled(&self, index: usize) -> bool {
@@ -339,10 +323,7 @@ impl BiomeField {
             .unwrap_or_else(|| panic!("single biome is not a surface biome: {biome_id}"));
         self.single_surface_biome = Some(biome_index);
         self.forced_surface_biome = None;
-        self.surface_site_biomes
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clear();
+        self.surface_site_cache.clear();
     }
 
     pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {
@@ -395,7 +376,6 @@ impl BiomeField {
             .id
             .as_str()
     }
-
 
     pub(crate) fn surface_terrain(
         &self,
@@ -467,7 +447,6 @@ fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
     mixed
 }
 
-
 #[cfg(test)]
 mod biome_size_multiplier_tests {
     use super::*;
@@ -476,9 +455,18 @@ mod biome_size_multiplier_tests {
     fn biome_size_multiplier_scales_and_rounds_every_axis() {
         let scaled = scaled_biome_size(
             DimensionBiomeSize {
-                x: DimensionBiomeSizeAxis { min: 75.0, max: 125.0 },
-                z: DimensionBiomeSizeAxis { min: 41.0, max: 99.0 },
-                y: Some(DimensionBiomeSizeAxis { min: 15.0, max: 35.0 }),
+                x: DimensionBiomeSizeAxis {
+                    min: 75.0,
+                    max: 125.0,
+                },
+                z: DimensionBiomeSizeAxis {
+                    min: 41.0,
+                    max: 99.0,
+                },
+                y: Some(DimensionBiomeSizeAxis {
+                    min: 15.0,
+                    max: 35.0,
+                }),
             },
             5,
         );
@@ -487,7 +475,9 @@ mod biome_size_multiplier_tests {
         assert_eq!(scaled.x.max, 63.0);
         assert_eq!(scaled.z.min, 21.0);
         assert_eq!(scaled.z.max, 50.0);
-        let y = scaled.y.expect("scaled vertical size should remain defined");
+        let y = scaled
+            .y
+            .expect("scaled vertical size should remain defined");
         assert_eq!(y.min, 8.0);
         assert_eq!(y.max, 18.0);
     }

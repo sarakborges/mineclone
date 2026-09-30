@@ -1,6 +1,9 @@
+use std::collections::HashSet;
+
 use super::{BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind};
 
 pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
+    validate_tags(definition);
     match definition.kind {
         BiomeKind::Surface => validate_surface_biome(definition),
         BiomeKind::Volume => validate_volume_biome(definition),
@@ -41,6 +44,22 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     }
 }
 
+fn validate_tags(definition: &BiomeDefinition) {
+    let mut unique = HashSet::new();
+    for (index, tag) in definition.tags.iter().enumerate() {
+        assert!(
+            !tag.trim().is_empty(),
+            "biome {} tags[{index}] cannot be empty",
+            definition.id
+        );
+        assert!(
+            unique.insert(tag.as_str()),
+            "biome {} defines duplicate tag {tag}",
+            definition.id
+        );
+    }
+}
+
 fn validate_surface_biome(definition: &BiomeDefinition) {
     assert!(
         definition.visuals.is_some(),
@@ -50,6 +69,11 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
     assert!(
         definition.terrain.is_some(),
         "surface biome {} must define terrain",
+        definition.id
+    );
+    assert!(
+        definition.surface_constraints.is_none(),
+        "surface biome {} cannot define volume surfaceConstraints",
         definition.id
     );
     assert!(
@@ -111,11 +135,17 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         "volume biome {} cannot define terrainModifiers",
         definition.id
     );
-    assert!(
-        definition.surface_layers.is_empty(),
-        "volume biome {} cannot define surfaceLayers",
-        definition.id
-    );
+    if !definition.surface_layers.is_empty() {
+        assert!(
+            matches!(
+                definition.density_modifier,
+                Some(crate::content::biome_density::BiomeDensityModifier::FloatingIsland { .. })
+            ),
+            "volume biome {} surfaceLayers currently require a floating_island densityModifier",
+            definition.id
+        );
+        definition.validate_surface_materials();
+    }
     assert!(
         definition.surface_margin.is_none(),
         "volume biome {} cannot define surfaceMargin",
@@ -126,6 +156,9 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         "volume biome {} cannot define surfaceFluid",
         definition.id
     );
+    if let Some(constraints) = &definition.surface_constraints {
+        constraints.validate(&definition.id);
+    }
 }
 
 fn validate_distributions(definition: &BiomeDefinition) {
@@ -178,7 +211,7 @@ fn validate_visuals(definition: &BiomeDefinition) {
     );
     assert!(
         (0.0..=1.0).contains(&visuals.underwater_tint.opacity),
-        "biome {} underwaterTint opacity must be between 0 and 1",
+        "biome {} underwaterTint.opacity must be between 0 and 1",
         definition.id
     );
 

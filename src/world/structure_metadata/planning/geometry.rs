@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub(super) fn rectangles_overlap(
+pub(crate) fn rectangles_overlap(
     left_min: IVec2,
     left_max: IVec2,
     right_min: IVec2,

@@ -69,7 +69,7 @@ for ix,iy,iz in sorted(vox,key=lambda v:(v[1],v[2],v[0])):
   if(ix+n[0],iy+n[1],iz+n[2])in vox:continue
   pts=[(-BODY_WIDTH*.5+(ix+cx)*DX,-BODY_HEIGHT*.5+(iy+cy)*DY,-BODY_DEPTH*.5+(iz+cz)*DZ)for cx,cy,cz in corners];quad(bs[material_for(ix,iy,iz,n)],pts,n)
 meshes.append({'name':'rounded_voxel_blob_fixed_color','primitives':[p for p in(prim(b,i)for i,b in enumerate(bs))if p]});shell_mesh=len(meshes)-1
-fb=bucket();z=-BODY_DEPTH*.5-.006;w=.86;h=.86;yc=-.075;quad(fb,((w/2,yc-h/2,z),(-w/2,yc-h/2,z),(-w/2,yc+h/2,z),(w/2,yc+h/2,z)),(0,0,-1));fb[4][:]=[0,1,2,0,2,3];meshes.append({'name':'pixel_face_decal','primitives':[prim(fb,7)]});face_mesh=len(meshes)-1
+fb=bucket();z=-BODY_DEPTH*.5-.006;w=.86;h=.48;yc=-.075;quad(fb,((w/2,yc-h/2,z),(-w/2,yc-h/2,z),(-w/2,yc+h/2,z),(w/2,yc+h/2,z)),(0,0,-1));fb[4][:]=[0,1,2,0,2,3];meshes.append({'name':'pixel_face_decal','primitives':[prim(fb,7)]});face_mesh=len(meshes)-1
 materials=[{'name':n,'pbrMetallicRoughness':{'baseColorFactor':[lin(c[0]),lin(c[1]),lin(c[2]),1],'metallicFactor':0,'roughnessFactor':1},'doubleSided':False,'extensions':{'KHR_materials_unlit':{}}}for n,c in SRGB]
 materials.append({'name':'SlimeFace','pbrMetallicRoughness':{'baseColorFactor':[1,1,1,1],'metallicFactor':0,'roughnessFactor':1},'doubleSided':False,'alphaMode':'BLEND','extensions':{'KHR_materials_unlit':{}}})
 def node(name,mesh=None,children=None,translation=None,extras=None):

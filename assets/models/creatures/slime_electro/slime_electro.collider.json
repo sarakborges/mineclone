@@ -84,8 +84,7 @@
   },
   "materials": {
     "face": "SlimeFace",
-    "face_texture": "textures/creatures/slime_electro/face.png",
-    "expression": "dedicated Electro face texture through the SlimeFace override",
+    "expression": "exact relaxed Anemo face texture reused through the SlimeFace override",
     "unlit": true
   },
   "authoring": {
@@ -94,7 +93,7 @@
       20,
       22
     ],
-    "construction": "plain slime_blob body + central lightning antenna + square texture-driven face quad",
+    "construction": "fresh slime_blob body + central lightning antenna + stepped forehead circuit marks + shared Anemo face quad",
     "base_language": "slime_blob",
     "legacy_electro_geometry_reused": false
   }

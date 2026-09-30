@@ -63,8 +63,10 @@ pub(super) fn rasterize_material_pass(
                         sample_position,
                         surface_depth,
                         density.volume_at(index),
+                        density.volume_surface_depth_at(index),
                         &surface_materials,
                         context.biome_field,
+                        context.biomes,
                     );
                     let block = context
                         .blocks

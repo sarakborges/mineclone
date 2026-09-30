@@ -28,7 +28,7 @@ pub(in crate::world) use self::settling::{
 };
 pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
-    chunk_remesh::ChunkRemeshQueue,
+    chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
     game_rules::GameRules,
     streaming::ChunkStreamingState,
     tick::WorldTickClock,
@@ -227,6 +227,7 @@ fn process_due_fluid_ticks(
 
         runtime.lighting.enqueue_medium_edit(position);
         enqueue_remesh(position, &mut runtime.remesh_queue);
+        prune_absent_remesh_halo(position, &runtime.world, &mut runtime.remesh_queue);
         schedule_changed_fluid_neighborhood(
             &mut runtime.pending,
             fluids,

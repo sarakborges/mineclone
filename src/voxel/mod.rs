@@ -26,6 +26,7 @@ pub(crate) mod orientation;
 pub(crate) mod quad;
 pub(crate) mod raycast;
 pub(crate) mod read;
+pub(crate) mod revision;
 pub(crate) mod secondary_properties;
 pub(crate) mod spatial_search;
 pub(crate) mod texture_rotation;

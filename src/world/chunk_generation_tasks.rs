@@ -1,86 +1,32 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::{
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
-        fluid::FluidRegistry, structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
-    },
-    voxel::chunk::VoxelChunk,
-};
+use crate::voxel::{chunk::VoxelChunk, coordinates::ChunkCoord};
 
 use super::{
-    biome_field::BiomeField,
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
-    generation::{ChunkGenerationContext, generate_chunk},
-    new_world::WorldGenerationSettings,
-    world_feature_fields::WorldFeatureFields,
+    generation_job::ChunkGenerationJob,
+    generation_snapshot::GenerationSnapshot,
+    revision::TaskInputRevision,
 };
 
 pub(crate) const MAX_GENERATION_TASKS_IN_FLIGHT: usize = 8;
-
-struct GenerationSnapshot {
-    blocks: BlockRegistry,
-    fluids: FluidRegistry,
-    dimension: DimensionDefinition,
-    biomes: BiomeRegistry,
-    structures: StructureRegistry,
-    structure_sets: StructureSetRegistry,
-    world_generation: WorldGenerationSettings,
-    biome_field: BiomeField,
-    feature_fields: WorldFeatureFields,
-}
-
-impl GenerationSnapshot {
-    fn from_sources(
-        generation: &ChunkGeneration<'_>,
-        content: &ChunkContent<'_>,
-        fresh_feature_caches: bool,
-    ) -> Self {
-        Self {
-            blocks: content.blocks().clone(),
-            fluids: content.fluids().clone(),
-            dimension: generation.dimension().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
-            structures: StructureRegistry::clone(&generation.structures),
-            structure_sets: StructureSetRegistry::clone(&generation.structure_sets),
-            world_generation: *generation.world_generation,
-            biome_field: content.biome_field.as_ref().clone(),
-            feature_fields: if fresh_feature_caches {
-                generation.feature_fields.clone_with_fresh_caches()
-            } else {
-                generation.feature_fields.as_ref().clone()
-            },
-        }
-    }
-
-    fn context(&self) -> ChunkGenerationContext<'_> {
-        ChunkGenerationContext {
-            blocks: &self.blocks,
-            fluids: &self.fluids,
-            dimension: &self.dimension,
-            biomes: &self.biomes,
-            structures: &self.structures,
-            structure_sets: &self.structure_sets,
-            world_generation: self.world_generation,
-            biome_field: &self.biome_field,
-            feature_fields: &self.feature_fields,
-        }
-    }
-}
+const SLOW_GENERATION_SCHEDULER_WARNING: Duration = Duration::from_millis(8);
 
 #[derive(Resource, Default)]
-pub(crate) struct ChunkGenerationTasks {
-    revision: u64,
+pub(crate) struct GenerationScheduler {
+    revision: TaskInputRevision,
     snapshot: Option<Arc<GenerationSnapshot>>,
     pending: ChunkTaskQueue<VoxelChunk>,
 }
 
-impl ChunkGenerationTasks {
+impl GenerationScheduler {
     pub(crate) fn sync_snapshot(
         &mut self,
         generation: &ChunkGeneration<'_>,
@@ -91,21 +37,31 @@ impl ChunkGenerationTasks {
             return;
         }
 
+        let started = Instant::now();
         let fresh_feature_caches =
             self.snapshot.is_some() && generation.world_generation.is_changed();
-        self.revision = self.revision.wrapping_add(1).max(1);
-        self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
+        self.revision = self.revision.next();
+        self.snapshot = Some(Arc::new(GenerationSnapshot::capture(
             generation,
             content,
             fresh_feature_caches,
         )));
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_GENERATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming generation snapshot refresh: elapsed_us={} fresh_feature_caches={} revision={:?}",
+                elapsed.as_micros(),
+                fresh_feature_caches,
+                self.revision,
+            );
+        }
     }
 
     pub(crate) fn sync_streaming_region(&mut self, _center: IVec3) {
         // Cold-cache readiness is queried directly from the shared OnceLocks.
     }
 
-    pub(crate) fn revision(&self) -> u64 {
+    pub(crate) fn revision(&self) -> TaskInputRevision {
         self.revision
     }
 
@@ -116,13 +72,11 @@ impl ChunkGenerationTasks {
     pub(crate) fn structure_top_chunk_if_ready(&self, horizontal: IVec2) -> Option<i32> {
         self.snapshot
             .as_ref()?
-            .feature_fields
-            .structure_top_y_if_ready(horizontal)
-            .map(|top_y| top_y.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32))
+            .structure_top_chunk_if_ready(horizontal)
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains(coord)
+        self.pending.contains(ChunkCoord::from_ivec3(coord))
     }
 
     pub(crate) fn schedule(
@@ -131,7 +85,7 @@ impl ChunkGenerationTasks {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             MAX_GENERATION_TASKS_IN_FLIGHT,
             || limiter.try_acquire_generation(),
         )
@@ -143,7 +97,7 @@ impl ChunkGenerationTasks {
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             limiter.loading_queue_limit(),
             || limiter.try_acquire_loading_generation(),
         )
@@ -151,7 +105,7 @@ impl ChunkGenerationTasks {
 
     fn schedule_with_permit(
         &mut self,
-        coord: IVec3,
+        coord: ChunkCoord,
         pending_limit: usize,
         acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
     ) -> bool {
@@ -165,13 +119,13 @@ impl ChunkGenerationTasks {
         let snapshot = self
             .snapshot
             .as_ref()
-            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"));
-        let snapshot = snapshot.clone();
+            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"))
+            .clone();
         let revision = self.revision;
+        let job = ChunkGenerationJob::new(coord, snapshot);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
-            let context = snapshot.context();
-            generate_chunk(coord, &context)
+            job.run()
         });
 
         self.pending.insert(coord, revision, task)
@@ -179,12 +133,28 @@ impl ChunkGenerationTasks {
 
     pub(crate) fn cancel_where(
         &mut self,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending.cancel_where(predicate)
+        let started = Instant::now();
+        let cancelled = self
+            .pending
+            .cancel_where(|coord| predicate(coord.as_ivec3()))
+            .into_iter()
+            .map(ChunkCoord::as_ivec3)
+            .collect::<Vec<_>>();
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_GENERATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming generation task cancellation: cancelled={} remaining={} elapsed_us={}",
+                cancelled.len(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
-        self.pending.poll_ready()
+        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
     }
 }

@@ -301,7 +301,7 @@ impl ChunkRemeshQueue {
             // A one-voxel lighting halo can only influence neighbor terrain
             // that actually touches the boundary facing the changed chunk.
             let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
-            if chunk.boundary_has_content(-offset) {
+            if chunk.has_terrain_content() && chunk.boundary_has_content(-offset) {
                 self.enqueue_lighting_meshlets(neighbor, meshlets, false);
             }
             if chunk.boundary_has_fluid(-offset) {
@@ -317,6 +317,23 @@ impl ChunkRemeshQueue {
         self.geometry_meshlets.remove(&coord);
         self.fluid_meshlets.remove(&coord);
         self.lighting_meshlets.remove(&coord);
+    }
+
+    pub(crate) fn retain_resident(&mut self, world: &VoxelWorld) -> usize {
+        let mut stale = self
+            .queue
+            .values()
+            .chain(self.fluid.values())
+            .chain(self.lighting.values())
+            .filter(|coord| world.chunk(*coord).is_none())
+            .collect::<Vec<_>>();
+        stale.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        stale.dedup();
+        let removed = stale.len();
+        for coord in stale {
+            self.remove(coord);
+        }
+        removed
     }
 
     pub(super) fn has_background_work(&self) -> bool {
@@ -512,7 +529,6 @@ fn pop_renderable_from(
     coord
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,6 +577,26 @@ mod tests {
         assert_eq!(queue.pop(), Some(coord));
         assert_eq!(queue.pop_lighting(), Some(coord));
         assert_eq!(queue.pop_fluid(), Some(coord));
+    }
+
+    #[test]
+    fn retention_drops_absent_chunks_from_all_remesh_kinds() {
+        let resident = IVec3::new(2, 1, 3);
+        let absent = IVec3::new(7, 1, -4);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(resident, VoxelChunk::empty());
+        let mut queue = ChunkRemeshQueue::default();
+        for coord in [resident, absent] {
+            queue.enqueue_priority(coord);
+            queue.enqueue_fluid_priority(coord);
+            queue.enqueue_lighting_priority(coord);
+        }
+
+        assert_eq!(queue.retain_resident(&world), 1);
+        assert_eq!(queue.diagnostic_counts(), (1, 1, 1));
+        assert_eq!(queue.pop(), Some(resident));
+        assert_eq!(queue.pop_lighting(), Some(resident));
+        assert_eq!(queue.pop_fluid(), Some(resident));
     }
 
     #[test]

@@ -49,7 +49,7 @@ impl BiomeField {
 
         {
             let cache = self
-                .surface_site_biomes
+                .surface_site_cache
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
@@ -87,7 +87,7 @@ impl BiomeField {
 
         if cache_update_count > 0 {
             let mut cache = self
-                .surface_site_biomes
+                .surface_site_cache
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for update in &cache_updates[..cache_update_count] {

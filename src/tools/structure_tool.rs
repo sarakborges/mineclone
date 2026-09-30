@@ -143,7 +143,7 @@ fn handle_structure_tool_use(
         let Some(hit) = usage.target else {
             continue;
         };
-        let Some(point) = placement_voxel(hit, &world, camera.translation) else {
+        let Some(point) = placement_voxel(hit, &*world, camera.translation) else {
             continue;
         };
 
@@ -190,7 +190,7 @@ fn draw_structure_selection(
     };
     let end = targeted
         .0
-        .and_then(|hit| placement_voxel(hit, &world, camera.translation))
+        .and_then(|hit| placement_voxel(hit, &*world, camera.translation))
         .unwrap_or(start);
     let (minimum, maximum) = selection_bounds(start, end);
     let size = (maximum - minimum + IVec3::ONE).as_vec3();

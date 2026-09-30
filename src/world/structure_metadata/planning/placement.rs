@@ -6,7 +6,7 @@ use crate::content::biome_structure::{
 
 use super::hash::{avalanche, string_hash, unit_interval};
 
-pub(super) fn candidate_anchor(
+pub(crate) fn candidate_anchor(
     world_seed: u64,
     biome_id: &str,
     structure_reference: &str,
@@ -33,8 +33,7 @@ pub(super) fn candidate_anchor(
     ))
 }
 
-
-pub(super) fn volume_site_is_selected(
+pub(crate) fn volume_site_is_selected(
     world_seed: u64,
     biome_id: &str,
     structure_reference: &str,
@@ -49,7 +48,7 @@ pub(super) fn volume_site_is_selected(
     )) < placement.chance
 }
 
-pub(super) fn volume_structure_member_hash(
+pub(crate) fn volume_structure_member_hash(
     world_seed: u64,
     biome_id: &str,
     structure_reference: &str,
@@ -64,7 +63,7 @@ pub(super) fn volume_structure_member_hash(
     avalanche(hash)
 }
 
-pub(super) fn structure_member_hash(
+pub(crate) fn structure_member_hash(
     world_seed: u64,
     biome_id: &str,
     structure_reference: &str,

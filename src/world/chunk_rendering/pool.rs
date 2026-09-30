@@ -7,6 +7,7 @@ use crate::{
         fluid_mesh::ChunkFluidMesh,
         meshlet::{ChunkMeshletMask, VoxelMeshPatch, patch_voxel_mesh},
     },
+    world::presentation_snapshot::{ChunkPresentationSource, PresentationLightingSource},
 };
 
 use super::spawn::BuiltChunkMesh;
@@ -40,12 +41,49 @@ pub(super) struct ChunkRenderAllocation {
     pub(super) fluid_mesh_bytes: usize,
 }
 
-pub(super) struct DetachedRenderAllocationParts {
+pub(crate) struct DetachedRenderAllocationParts {
     pub(super) entities: Vec<Entity>,
     pub(super) meshes: Vec<Handle<Mesh>>,
 }
 
 const MESH_ASSET_RETIREMENT_FRAMES: u8 = 3;
+const CHUNK_PRESENTATION_MESHLET_COUNT: usize = 8;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum ChunkRenderSectionKind {
+    Terrain,
+    Fluid,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct ChunkRenderSectionId {
+    pub(crate) coord: IVec3,
+    pub(crate) kind: ChunkRenderSectionKind,
+    pub(crate) meshlet_index: usize,
+}
+
+impl ChunkRenderSectionId {
+    fn new(coord: IVec3, kind: ChunkRenderSectionKind, meshlet_index: usize) -> Self {
+        debug_assert!(meshlet_index < CHUNK_PRESENTATION_MESHLET_COUNT);
+        Self {
+            coord,
+            kind,
+            meshlet_index,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkPublishedPresentationSource {
+    pub(crate) content: ChunkPresentationSource,
+    pub(crate) lighting: PresentationLightingSource,
+}
+
+#[derive(Default)]
+struct ChunkPublishedPresentationSources {
+    terrain: [Option<ChunkPublishedPresentationSource>; CHUNK_PRESENTATION_MESHLET_COUNT],
+    fluid: [Option<ChunkPublishedPresentationSource>; CHUNK_PRESENTATION_MESHLET_COUNT],
+}
 
 #[derive(Default)]
 struct DeferredMeshAssetRetirement {
@@ -74,8 +112,10 @@ impl DeferredMeshAssetRetirements {
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
     active_column_counts: HashMap<IVec2, usize>,
+    published_sources: HashMap<IVec3, ChunkPublishedPresentationSources>,
     total_mesh_bytes: usize,
     membership_revision: u64,
+    presentation_reset_revision: u64,
 }
 
 impl ChunkRenderPool {
@@ -89,6 +129,10 @@ impl ChunkRenderPool {
 
     pub(crate) fn membership_revision(&self) -> u64 {
         self.membership_revision
+    }
+
+    pub(crate) fn presentation_reset_revision(&self) -> u64 {
+        self.presentation_reset_revision
     }
 
     pub(crate) fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
@@ -154,8 +198,99 @@ impl ChunkRenderPool {
             .map_or(0, |allocation| allocation.mesh_bytes)
     }
 
+    pub(crate) fn record_initial_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Terrain,
+            ChunkMeshletMask::ALL,
+            content,
+            lighting,
+        );
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Fluid,
+            ChunkMeshletMask::ALL,
+            content,
+            lighting,
+        );
+    }
+
+    pub(crate) fn record_terrain_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Terrain,
+            meshlets,
+            content,
+            lighting,
+        );
+    }
+
+    pub(crate) fn record_fluid_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Fluid,
+            meshlets,
+            content,
+            lighting,
+        );
+    }
+
+    fn record_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        kind: ChunkRenderSectionKind,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
+        assert!(
+            self.active.contains_key(&coord),
+            "presentation source requires an active render allocation: {coord:?}"
+        );
+        let source = ChunkPublishedPresentationSource { content, lighting };
+        for meshlet_index in 0..CHUNK_PRESENTATION_MESHLET_COUNT {
+            if meshlets.contains_index(meshlet_index) {
+                self.record_presentation_source(
+                    ChunkRenderSectionId::new(coord, kind, meshlet_index),
+                    source,
+                );
+            }
+        }
+    }
+
+    fn record_presentation_source(
+        &mut self,
+        section: ChunkRenderSectionId,
+        source: ChunkPublishedPresentationSource,
+    ) {
+        let published = self.published_sources.entry(section.coord).or_default();
+        let slots = match section.kind {
+            ChunkRenderSectionKind::Terrain => &mut published.terrain,
+            ChunkRenderSectionKind::Fluid => &mut published.fluid,
+        };
+        slots[section.meshlet_index] = Some(source);
+    }
+
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         let slot = self.active.remove(&coord)?;
+        self.published_sources.remove(&coord);
         replace_aggregated_mesh_bytes(
             &mut self.total_mesh_bytes,
             slot.mesh_bytes,
@@ -529,6 +664,7 @@ impl ChunkRenderPool {
 
     pub(super) fn insert(&mut self, coord: IVec3, allocation: ChunkRenderAllocation) {
         let allocation_mesh_bytes = allocation.mesh_bytes;
+        self.published_sources.remove(&coord);
         let previous = self.active.insert(coord, allocation);
         replace_aggregated_mesh_bytes(
             &mut self.total_mesh_bytes,
@@ -541,21 +677,26 @@ impl ChunkRenderPool {
         }
     }
 
-    fn clear(&mut self) -> Vec<Handle<Mesh>> {
+    pub(crate) fn reset_all_presentations(&mut self) -> DetachedRenderAllocationParts {
         let had_active_allocations = !self.active.is_empty();
-        let mesh_handles = self
-            .active
-            .drain()
-            .flat_map(|(_, slot)| slot.meshes)
-            .collect();
+        let mut parts = DetachedRenderAllocationParts {
+            entities: Vec::new(),
+            meshes: Vec::new(),
+        };
+        for (_, mut slot) in self.active.drain() {
+            parts.entities.append(&mut slot.entities);
+            parts.meshes.append(&mut slot.meshes);
+        }
 
         self.active_column_counts.clear();
+        self.published_sources.clear();
         self.total_mesh_bytes = 0;
         if had_active_allocations {
             self.bump_membership_revision();
         }
+        self.bump_presentation_reset_revision();
 
-        mesh_handles
+        parts
     }
 
     fn add_active_column(&mut self, column: IVec2) {
@@ -586,6 +727,13 @@ impl ChunkRenderPool {
             .membership_revision
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
+    }
+
+    fn bump_presentation_reset_revision(&mut self) {
+        self.presentation_reset_revision = self
+            .presentation_reset_revision
+            .checked_add(1)
+            .expect("chunk render pool presentation reset revision exhausted");
     }
 }
 
@@ -657,15 +805,8 @@ pub(crate) fn clear_chunk_render_pool(
     mut commands: Commands,
     mut render_pool: ResMut<ChunkRenderPool>,
 ) {
-    let mesh_handles = render_pool.clear();
-    if mesh_handles.is_empty() {
-        return;
-    }
-    commands.queue(move |world: &mut World| {
-        world
-            .resource_mut::<DeferredMeshAssetRetirements>()
-            .enqueue(mesh_handles);
-    });
+    let parts = render_pool.reset_all_presentations();
+    retire_render_allocation_parts(&mut commands, parts.entities, parts.meshes);
 }
 
 pub(crate) fn advance_deferred_mesh_asset_retirements(

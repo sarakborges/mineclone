@@ -9,71 +9,55 @@ use bevy::prelude::*;
 
 use crate::content::structure::StructureRotation;
 
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureCandidate {
-    pub(crate) placement_id: String,
-    pub(crate) structure_id: String,
-    pub(crate) rotation: StructureRotation,
-    pub(crate) placement_anchor: IVec2,
-    pub(crate) placement_y: i32,
-    pub(crate) anchor: IVec2,
-    pub(crate) origin_y: i32,
-    pub(crate) primary_placement_piece: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureForestPiece {
-    pub(crate) structure_id: String,
-    pub(crate) rotation: StructureRotation,
-    pub(crate) anchor: IVec2,
-    pub(crate) origin_y: i32,
-    pub(crate) primary_placement_piece: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct CachedStructureForest {
-    pub(crate) pieces: Vec<CachedStructureForestPiece>,
-    pub(crate) minimum: IVec2,
-    pub(crate) maximum: IVec2,
-    pub(crate) minimum_y: i32,
-    pub(crate) maximum_y: i32,
-}
+pub(crate) use super::structure_metadata::{
+    ResolvedStructurePlan as CachedStructureForest,
+    ResolvedStructurePlanPiece as CachedStructureForestPiece,
+};
 
 use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
     structure_field::StructureField,
+    structure_metadata::{ResolvedStructurePlacement, StructureMetadata},
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
     caches: Arc<FeatureCaches>,
-    structure_field: Arc<StructureField>,
+    structure_metadata: StructureMetadata,
 }
 
 impl WorldFeatureFields {
     pub(crate) fn new(seed: u64) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
-            structure_field: Arc::new(StructureField::empty(seed)),
+            structure_metadata: StructureMetadata::new(seed),
         }
     }
 
     pub(crate) fn with_structure_field(mut self, structure_field: StructureField) -> Self {
-        self.structure_field = Arc::new(structure_field);
+        self.structure_metadata = self.structure_metadata.with_field(structure_field);
         self
     }
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
             caches: Arc::new(FeatureCaches::new()),
-            structure_field: self.structure_field.clone(),
+            structure_metadata: self.structure_metadata.clone(),
         }
     }
 
-    pub(crate) fn structure_field(&self) -> &StructureField {
-        &self.structure_field
+    pub(crate) fn structure_metadata(&self) -> &StructureMetadata {
+        &self.structure_metadata
+    }
+
+    /// Compatibility adapter while generation call sites migrate from the
+    /// implementation-oriented `StructureField` name to metadata intent.
+    /// The returned contract is already `StructureMetadata`; callers cannot
+    /// obtain a cache owner through this path.
+    pub(crate) fn structure_field(&self) -> &StructureMetadata {
+        self.structure_metadata()
     }
 
     pub(crate) fn generation_columns(
@@ -114,7 +98,9 @@ impl WorldFeatureFields {
         reference: &str,
         factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
     ) -> Option<(IVec2, IVec2)> {
-        self.caches.structure_placement_bounds(reference, factory)
+        self.structure_metadata
+            .reference_bounds(reference)
+            .or_else(factory)
     }
 
     pub(crate) fn structure_origin_y(
@@ -128,12 +114,12 @@ impl WorldFeatureFields {
             .structure_origin_y(structure_id, rotation, anchor, factory)
     }
 
-    pub(crate) fn structure_candidates(
+    pub(crate) fn structure_placements(
         &self,
         coord: IVec2,
-        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
-    ) -> Arc<Vec<CachedStructureCandidate>> {
-        self.caches.structure_candidates(coord, factory)
+        factory: impl FnOnce() -> Vec<ResolvedStructurePlacement>,
+    ) -> Arc<Vec<ResolvedStructurePlacement>> {
+        self.caches.structure_placements(coord, factory)
     }
 
     pub(crate) fn surface_structure_placement(
@@ -200,6 +186,22 @@ mod tests {
     }
 
     #[test]
+    fn fresh_caches_preserve_structure_metadata_but_drop_cache_entries() {
+        let fields = test_fields();
+        fields.generation_columns(IVec2::new(3, -2), Vec::new);
+        assert_eq!(fields.cached_generation_column_count(), 1);
+
+        let fresh = fields.clone_with_fresh_caches();
+
+        assert!(
+            fields
+                .structure_metadata()
+                .shares_field_storage(fresh.structure_metadata())
+        );
+        assert_eq!(fresh.cached_generation_column_count(), 0);
+    }
+
+    #[test]
     fn generation_column_cache_reuses_horizontal_chunk_samples() {
         let fields = test_fields();
         let coord = IVec2::new(3, -2);
@@ -233,23 +235,39 @@ mod tests {
         let rejected_anchor = IVec2::new(24, -4);
 
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, accepted_anchor, || Some(65)),
+            fields.structure_origin_y(
+                "asteria:test/tree",
+                StructureRotation::Degrees0,
+                accepted_anchor,
+                || Some(65),
+            ),
             Some(65),
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, accepted_anchor, || {
-                panic!("accepted structure origin should be cached")
-            }),
+            fields.structure_origin_y(
+                "asteria:test/tree",
+                StructureRotation::Degrees0,
+                accepted_anchor,
+                || { panic!("accepted structure origin should be cached") },
+            ),
             Some(65),
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, rejected_anchor, || None),
+            fields.structure_origin_y(
+                "asteria:test/tree",
+                StructureRotation::Degrees0,
+                rejected_anchor,
+                || None,
+            ),
             None,
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, rejected_anchor, || {
-                panic!("rejected structure origin should be cached")
-            }),
+            fields.structure_origin_y(
+                "asteria:test/tree",
+                StructureRotation::Degrees0,
+                rejected_anchor,
+                || { panic!("rejected structure origin should be cached") },
+            ),
             None,
         );
         assert_eq!(fields.cached_structure_origin_count(), 2);
@@ -267,8 +285,18 @@ mod tests {
         fields.generation_columns(far_chunk.xz(), Vec::new);
         fields.volume_biome_region(near_region, VolumeBiomeRegion::default);
         fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
-        fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || Some(64));
-        fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
+        fields.structure_origin_y(
+            "test",
+            StructureRotation::Degrees0,
+            IVec2::ZERO,
+            || Some(64),
+        );
+        fields.structure_origin_y(
+            "test",
+            StructureRotation::Degrees0,
+            IVec2::new(32 * CHUNK_SIZE as i32, 0),
+            || Some(64),
+        );
 
         let desired = HashSet::from([near_chunk]);
         fields.retain_for_chunks(&desired);

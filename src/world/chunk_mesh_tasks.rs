@@ -1,89 +1,64 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-use crate::{
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
-    },
-    rendering::block_texture::TerrainTextureTable,
-    voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+use crate::voxel::{
+    coordinates::ChunkCoord,
+    mesh_snapshot::ChunkMeshSnapshot,
+    meshlet::ChunkMeshletMask,
 };
 
 use super::{
-    biome_field::BiomeField,
     chunk_async_work::{ChunkAsyncWorkLimiter, ChunkAsyncWorkPermit},
-    chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
+    chunk_rendering::{BuiltChunkMesh, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    presentation_snapshot::{
+        ChunkPresentationSource, PresentationContentSnapshot, PresentationLightingRevisions,
+        PresentationLightingSource,
+    },
+    revision::TaskInputRevision,
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
-
-pub(crate) struct MeshContentSnapshot {
-    blocks: BlockRegistry,
-    layers: LayerRegistry,
-    fluids: FluidRegistry,
-    biomes: BiomeRegistry,
-    secondary_properties: SecondaryPropertyRegistry,
-    biome_field: BiomeField,
-    texture_table: TerrainTextureTable,
-}
-
-impl MeshContentSnapshot {
-    pub(crate) fn from_content(content: &ChunkContent<'_>) -> Self {
-        Self {
-            blocks: content.blocks().clone(),
-            layers: content.layers().clone(),
-            fluids: content.fluids().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
-            secondary_properties: content.secondary_properties().clone(),
-            biome_field: content.biome_field.as_ref().clone(),
-            texture_table: TerrainTextureTable::from_blocks(content.blocks()),
-        }
-    }
-
-    pub(crate) fn context<'a>(
-        &'a self,
-        world: &'a ChunkMeshSnapshot,
-    ) -> ChunkMeshBuildContext<'a, ChunkMeshSnapshot> {
-        ChunkMeshBuildContext {
-            world,
-            blocks: &self.blocks,
-            layers: &self.layers,
-            fluids: &self.fluids,
-            biomes: &self.biomes,
-            secondary_properties: &self.secondary_properties,
-            biome_field: &self.biome_field,
-            texture_table: &self.texture_table,
-        }
-    }
-}
+const SLOW_PRESENTATION_SCHEDULER_WARNING: Duration = Duration::from_millis(8);
 
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
-    pub(crate) dependencies: ChunkMeshDependencies,
+    pub(crate) content_source: ChunkPresentationSource,
+    pub(crate) lighting_source: PresentationLightingSource,
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct ChunkMeshTasks {
-    revision: u64,
-    snapshot: Option<Arc<MeshContentSnapshot>>,
+pub(crate) struct PresentationScheduler {
+    revision: TaskInputRevision,
+    snapshot: Option<Arc<PresentationContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
-impl ChunkMeshTasks {
+impl PresentationScheduler {
     pub(crate) fn sync_snapshot(&mut self, content: &ChunkContent<'_>) {
         if self.snapshot.is_some() && !content.mesh_inputs_changed() {
             return;
         }
 
-        self.revision = self.revision.wrapping_add(1).max(1);
-        self.snapshot = Some(Arc::new(MeshContentSnapshot::from_content(content)));
+        let started = Instant::now();
+        self.revision = self.revision.next();
+        self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming presentation snapshot refresh: elapsed_us={} revision={:?}",
+                elapsed.as_micros(),
+                self.revision,
+            );
+        }
     }
 
-    pub(crate) fn revision(&self) -> u64 {
+    pub(crate) fn revision(&self) -> TaskInputRevision {
         self.revision
     }
 
@@ -92,18 +67,20 @@ impl ChunkMeshTasks {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains(coord)
+        self.pending.contains(ChunkCoord::from_ivec3(coord))
     }
 
     pub(crate) fn schedule(
         &mut self,
         coord: IVec3,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             world,
+            lighting_revisions,
             MAX_MESH_TASKS_IN_FLIGHT,
             || limiter.try_acquire_initial_mesh(),
         )
@@ -113,11 +90,13 @@ impl ChunkMeshTasks {
         &mut self,
         coord: IVec3,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         self.schedule_with_permit(
-            coord,
+            ChunkCoord::from_ivec3(coord),
             world,
+            lighting_revisions,
             limiter.loading_queue_limit(),
             || limiter.try_acquire_loading_initial_mesh(),
         )
@@ -125,8 +104,9 @@ impl ChunkMeshTasks {
 
     fn schedule_with_permit(
         &mut self,
-        coord: IVec3,
+        coord: ChunkCoord,
         world: ChunkMeshSnapshot,
+        lighting_revisions: &PresentationLightingRevisions,
         pending_limit: usize,
         acquire_permit: impl FnOnce() -> Option<ChunkAsyncWorkPermit>,
     ) -> bool {
@@ -143,7 +123,9 @@ impl ChunkMeshTasks {
             .unwrap_or_else(|| panic!("chunk mesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = world.dependencies();
+        let content_source = ChunkPresentationSource::capture(coord, &world);
+        let lighting_source =
+            lighting_revisions.capture(coord.as_ivec3(), ChunkMeshletMask::ALL);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             // The meshers now read central voxels directly and build a compact
@@ -151,8 +133,9 @@ impl ChunkMeshTasks {
             // into another 18³ shell here only duplicates the same traversal.
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
-                meshes: build_chunk_render_meshes(coord, world.chunk(), &context),
-                dependencies,
+                meshes: build_chunk_render_meshes(coord.as_ivec3(), world.chunk(), &context),
+                content_source,
+                lighting_source,
             }
         });
 
@@ -161,34 +144,61 @@ impl ChunkMeshTasks {
 
     pub(crate) fn cancel_where(
         &mut self,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending.cancel_where(predicate)
+        let started = Instant::now();
+        let cancelled = self
+            .pending
+            .cancel_where(|coord| predicate(coord.as_ivec3()))
+            .into_iter()
+            .map(ChunkCoord::as_ivec3)
+            .collect::<Vec<_>>();
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming mesh task cancellation: cancelled={} remaining={} elapsed_us={}",
+                cancelled.len(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn cancel_farthest_where(
         &mut self,
         center: IVec3,
-        predicate: impl FnMut(IVec3) -> bool,
+        mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Option<IVec3> {
-        self.pending.cancel_farthest_where(center, predicate)
-    }
-
-    pub(crate) fn best_coord_by_key<K: Ord>(
-        &self,
-        key: impl FnMut(IVec3) -> K,
-    ) -> Option<IVec3> {
-        self.pending.best_coord_by_key(key)
+        let started = Instant::now();
+        let cancelled = self
+            .pending
+            .cancel_farthest_where(ChunkCoord::from_ivec3(center), |coord| {
+                predicate(coord.as_ivec3())
+            })
+            .map(ChunkCoord::as_ivec3);
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming mesh task preemption: cancelled={} remaining={} elapsed_us={}",
+                cancelled.is_some(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn poll_ready_by_key<K: Ord>(
         &mut self,
-        key: impl FnMut(IVec3) -> K,
+        mut key: impl FnMut(IVec3) -> K,
     ) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready_by_key(key)
+        self.pending
+            .poll_ready_by_key(|coord| key(coord.as_ivec3()))
+            .map(CompletedChunkTask::into_runtime)
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready()
+        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
     }
 }

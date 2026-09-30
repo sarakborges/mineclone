@@ -32,10 +32,20 @@ impl StructurePlacementRules {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VolumeStructurePlacementMode {
+    #[default]
+    Volume,
+    SurfaceIndicator,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeStructurePlacementRules {
     pub chance: f32,
+    #[serde(default)]
+    pub mode: VolumeStructurePlacementMode,
 }
 
 impl VolumeStructurePlacementRules {
@@ -141,5 +151,18 @@ impl BiomeDefinition {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn volume_structure_mode_defaults_to_volume() {
+        assert_eq!(
+            VolumeStructurePlacementMode::default(),
+            VolumeStructurePlacementMode::Volume
+        );
     }
 }

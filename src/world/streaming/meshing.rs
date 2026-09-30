@@ -3,12 +3,16 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld},
+    voxel::{
+        mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask, world::VoxelWorld,
+    },
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
         chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
         chunk_system_params::{ChunkContent, ChunkRenderer},
+        presentation_snapshot::ChunkPresentationSource,
+        render_work_diagnostics::{PresentationPublicationStage, PresentationPublicationTimer},
         work_budget::FrameWorkBudget,
     },
 };
@@ -59,11 +63,11 @@ pub(super) fn dispatch_initial_mesh_tasks(
         };
 
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
-            let Some(center) = work.state.center else {
+            let Some(center) = work.state.center() else {
                 work.state.defer_ready(coord);
                 break;
             };
-            let movement_direction = work.state.movement_direction;
+            let movement_direction = work.state.movement_direction();
             let candidate_priority = chunk_load_priority(coord, center, movement_direction);
             let Some(preempted) = work.mesh_tasks.cancel_farthest_where(center, |task_coord| {
                 chunk_load_priority(task_coord, center, movement_direction) > candidate_priority
@@ -89,16 +93,20 @@ pub(super) fn dispatch_initial_mesh_tasks(
         }
 
         let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
-            &work.world,
+            &*work.world,
             coord,
             |neighbor| renderer.pool.contains(neighbor),
         )
         .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !work.mesh_tasks.schedule(coord, snapshot, &work.async_work) {
+        if !work.mesh_tasks.schedule(
+            coord,
+            snapshot,
+            &work.lighting_revisions,
+            &work.async_work,
+        ) {
             work.state.defer_ready(coord);
             break;
         }
-
     }
 }
 
@@ -110,19 +118,33 @@ fn integrate_empty_chunk(
     coord: IVec3,
     current_tick: u64,
 ) {
+    let content_source = ChunkPresentationSource::capture_center(coord, &*work.world)
+        .unwrap_or_else(|| panic!("empty streamed chunk source should exist at {coord:?}"));
+    let lighting_source = work
+        .lighting_revisions
+        .capture(coord, ChunkMeshletMask::ALL);
     let render_context = content.render_context(
         &work.world,
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
-    spawn_built_chunk_meshes(
-        &mut renderer.commands,
-        &mut renderer.meshes,
-        &mut renderer.pool,
-        coord,
-        Vec::new(),
-        &render_context,
-    );
+    {
+        let _publication_timer =
+            PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+        spawn_built_chunk_meshes(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            Vec::new(),
+            &render_context,
+        );
+        renderer.pool.record_initial_presentation_sources(
+            coord,
+            content_source,
+            lighting_source,
+        );
+    }
     activate_published_chunk_runtime(coord, work, queues, current_tick);
     notify_loaded_chunk_neighbors(
         coord,
@@ -150,25 +172,10 @@ pub(super) fn collect_built_chunk_meshes(
             break;
         }
 
-        let Some(center) = work.state.center else {
+        let Some(center) = work.state.center() else {
             break;
         };
-        let movement_direction = work.state.movement_direction;
-        let Some(next_coord) = work.mesh_tasks.best_coord_by_key(|coord| {
-            chunk_load_priority(coord, center, movement_direction)
-        }) else {
-            break;
-        };
-
-        if !work.state.retains_render_mesh(next_coord) {
-            let cancelled = work.mesh_tasks.cancel_farthest_where(center, |coord| {
-                coord == next_coord
-            });
-            debug_assert_eq!(cancelled, Some(next_coord));
-            work.state.mark_ready(next_coord);
-            budget.record(1);
-            continue;
-        }
+        let movement_direction = work.state.movement_direction();
 
         // Publish the nearest mesh that has actually finished. A slower
         // higher-priority task must not head-of-line block other completed
@@ -192,7 +199,12 @@ pub(super) fn collect_built_chunk_meshes(
             work.state.mark_ready(completed.coord);
             continue;
         }
-        if !completed.output.dependencies.is_current(&work.world) {
+        if !completed.output.content_source.is_current(&*work.world)
+            || !completed
+                .output
+                .lighting_source
+                .is_current(&work.lighting_revisions)
+        {
             work.state.mark_ready(completed.coord);
             continue;
         }
@@ -203,16 +215,11 @@ pub(super) fn collect_built_chunk_meshes(
         let chunk_has_fluid = chunk.has_fluid();
         let mut catchup_meshlets = completed
             .output
-            .dependencies
-            .initial_catchup_meshlets_with(&work.world, |neighbor| {
+            .content_source
+            .initial_catchup_meshlets_with(&*work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
             });
-        if let Some(seed_catchup) = work
-            .state
-            .initial_mesh_seed_catchup
-            .get(&completed.coord)
-            .copied()
-        {
+        if let Some(seed_catchup) = work.state.initial_mesh_seed_catchup(completed.coord) {
             catchup_meshlets = catchup_meshlets.union(seed_catchup);
         }
         let render_context = content.render_context(
@@ -221,15 +228,26 @@ pub(super) fn collect_built_chunk_meshes(
             &renderer.fluid_materials,
         );
 
-        spawn_built_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            completed.coord,
-            completed.output.meshes,
-            &render_context,
-        );
-        work.state.initial_mesh_seed_catchup.remove(&completed.coord);
+        let content_source = completed.output.content_source;
+        let lighting_source = completed.output.lighting_source;
+        {
+            let _publication_timer =
+                PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+            spawn_built_chunk_meshes(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                completed.coord,
+                completed.output.meshes,
+                &render_context,
+            );
+            renderer.pool.record_initial_presentation_sources(
+                completed.coord,
+                content_source,
+                lighting_source,
+            );
+        }
+        work.state.clear_initial_mesh_seed_catchup(completed.coord);
         if !catchup_meshlets.is_empty() {
             queues.remesh.enqueue_geometry_meshlets_priority(
                 completed.coord,
@@ -282,12 +300,10 @@ fn notify_loaded_chunk_neighbors(
                     continue;
                 };
 
-                let new_content_border =
-                    chunk.dependency_boundary_has_content(offset);
+                let new_content_border = chunk.dependency_boundary_has_content(offset);
                 let geometry = new_content_border
                     && neighbor_chunk.dependency_boundary_has_content(-offset);
-                let has_fluid_border =
-                    neighbor_chunk.dependency_boundary_has_fluid(-offset);
+                let has_fluid_border = neighbor_chunk.dependency_boundary_has_fluid(-offset);
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
                 let fluid = (has_fluid_border && new_content_border) || new_cardinal_fluid;
@@ -329,8 +345,7 @@ mod tests {
         let new_content_border = incoming.dependency_boundary_has_content(offset);
         let geometry = new_content_border
             && neighbor.dependency_boundary_has_content(-offset);
-        let fluid = neighbor.dependency_boundary_has_fluid(-offset)
-            && new_content_border;
+        let fluid = neighbor.dependency_boundary_has_fluid(-offset) && new_content_border;
 
         assert!(!geometry);
         assert!(!fluid);

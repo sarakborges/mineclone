@@ -22,7 +22,7 @@ where
 
 impl LocalizedHudSource<DimensionRegistry> for CurrentDimension {
     fn id(&self) -> &str {
-        &self.id
+        self.id.as_str()
     }
 
     fn localized_name<'a>(
@@ -31,7 +31,7 @@ impl LocalizedHudSource<DimensionRegistry> for CurrentDimension {
         language: Language,
     ) -> Option<&'a str> {
         registry
-            .get(&self.id)
+            .get(self.id.as_str())
             .map(|definition| definition.name.text(language))
     }
 }

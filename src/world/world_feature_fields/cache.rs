@@ -10,11 +10,12 @@ use bevy::{
 
 use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
-use super::{CachedStructureCandidate, CachedStructureForest};
+use super::CachedStructureForest;
 use super::super::{
     biome_field::VolumeBiomeRegion,
     generation::GenerationColumnSample,
-    generation_region::generation_region_coord,
+    generation_region::GenerationRegionCoord,
+    structure_metadata::ResolvedStructurePlacement,
 };
 
 const CACHE_REGION_MARGIN: i32 = 1;
@@ -135,7 +136,10 @@ impl StructureOriginCache {
             if let Some(anchors) = entries.get_mut(structure_id) {
                 anchors.insert((anchor, rotation), entry.clone());
             } else {
-                entries.insert(structure_id.to_owned(), HashMap::from([((anchor, rotation), entry.clone())]));
+                entries.insert(
+                    structure_id.to_owned(),
+                    HashMap::from([((anchor, rotation), entry.clone())]),
+                );
             }
             entry
         });
@@ -169,22 +173,21 @@ impl StructureOriginCache {
 #[derive(Default)]
 struct RetentionScratch {
     horizontal_chunks: HashSet<IVec2>,
-    generation_regions: HashSet<IVec3>,
-    retained_regions: HashSet<IVec3>,
+    generation_regions: HashSet<GenerationRegionCoord>,
+    retained_regions: HashSet<GenerationRegionCoord>,
 }
 
 pub(super) struct FeatureCaches {
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
-    volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
+    volume_biomes: ConcurrentCache<GenerationRegionCoord, Arc<VolumeBiomeRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
-    structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
+    structure_placements: ConcurrentCache<IVec2, Arc<Vec<ResolvedStructurePlacement>>>,
     surface_structure_placements:
         ConcurrentCache<(String, String, IVec2), Arc<Option<CachedStructureForest>>>,
     connected_structure_forests: ConcurrentCache<
         (String, String, StructureRotation, IVec3),
         Arc<CachedStructureForest>,
     >,
-    structure_placement_bounds: ConcurrentCache<String, Option<(IVec2, IVec2)>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -195,14 +198,13 @@ impl FeatureCaches {
             generation_columns: ConcurrentCache::new("generation column cache"),
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
-            structure_candidates: ConcurrentCache::new("structure candidate cache"),
+            structure_placements: ConcurrentCache::new("resolved structure placement cache"),
             surface_structure_placements: ConcurrentCache::new(
                 "surface structure placement cache",
             ),
             connected_structure_forests: ConcurrentCache::new(
                 "connected structure forest cache",
             ),
-            structure_placement_bounds: ConcurrentCache::new("structure placement bounds cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -227,8 +229,10 @@ impl FeatureCaches {
         coord: IVec3,
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
-        self.volume_biomes
-            .get_or_insert_with(coord, || Arc::new(factory()))
+        self.volume_biomes.get_or_insert_with(
+            GenerationRegionCoord::from_region_coord(coord),
+            || Arc::new(factory()),
+        )
     }
 
     pub(super) fn structure_top_y(
@@ -236,20 +240,19 @@ impl FeatureCaches {
         coord: IVec2,
         factory: impl FnOnce() -> i32,
     ) -> i32 {
-        self.structure_top_ys
-            .get_or_insert_with(coord, factory)
+        self.structure_top_ys.get_or_insert_with(coord, factory)
     }
 
     pub(super) fn structure_top_y_if_ready(&self, coord: IVec2) -> Option<i32> {
         self.structure_top_ys.get_if_initialized(&coord)
     }
 
-    pub(super) fn structure_candidates(
+    pub(super) fn structure_placements(
         &self,
         coord: IVec2,
-        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
-    ) -> Arc<Vec<CachedStructureCandidate>> {
-        self.structure_candidates
+        factory: impl FnOnce() -> Vec<ResolvedStructurePlacement>,
+    ) -> Arc<Vec<ResolvedStructurePlacement>> {
+        self.structure_placements
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
@@ -285,15 +288,6 @@ impl FeatureCaches {
         )
     }
 
-    pub(super) fn structure_placement_bounds(
-        &self,
-        reference: &str,
-        factory: impl FnOnce() -> Option<(IVec2, IVec2)>,
-    ) -> Option<(IVec2, IVec2)> {
-        self.structure_placement_bounds
-            .get_or_insert_with(reference.to_owned(), factory)
-    }
-
     pub(super) fn structure_origin_y(
         &self,
         structure_id: &str,
@@ -323,42 +317,40 @@ impl FeatureCaches {
         generation_regions.clear();
         for &coord in desired {
             horizontal_chunks.insert(coord.xz());
-            generation_regions.insert(generation_region_coord(coord));
+            generation_regions.insert(GenerationRegionCoord::from_chunk_coord(coord));
         }
 
         retained_regions.clear();
         // Many desired chunks share one 8x8x8 generation region. Expand the
         // cache margin once per unique region rather than once per chunk.
         for region in generation_regions.drain() {
+            let region = region.as_ivec3();
             for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
                 for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
                     for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
-                        retained_regions.insert(IVec3::new(x, y, z));
+                        retained_regions.insert(GenerationRegionCoord::from_region_coord(
+                            IVec3::new(x, y, z),
+                        ));
                     }
                 }
             }
         }
 
-
         self.generation_columns
             .retain(|coord| horizontal_chunks.contains(coord));
         self.structure_top_ys
             .retain(|coord| horizontal_chunks.contains(coord));
-        self.structure_candidates
+        self.structure_placements
             .retain(|coord| horizontal_chunks.contains(coord));
-        self.surface_structure_placements
-            .retain(|(_, _, anchor)| {
-                let chunk_size = CHUNK_SIZE as i32;
-                let chunk = IVec2::new(
-                    anchor.x.div_euclid(chunk_size),
-                    anchor.y.div_euclid(chunk_size),
-                );
-                retained_regions.contains(&generation_region_coord(IVec3::new(
-                    chunk.x,
-                    0,
-                    chunk.y,
-                )))
-            });
+        self.surface_structure_placements.retain(|(_, _, anchor)| {
+            let chunk_size = CHUNK_SIZE as i32;
+            let chunk = IVec3::new(
+                anchor.x.div_euclid(chunk_size),
+                0,
+                anchor.y.div_euclid(chunk_size),
+            );
+            retained_regions.contains(&GenerationRegionCoord::from_chunk_coord(chunk))
+        });
         self.connected_structure_forests
             .retain(|(_, _, _, origin)| {
                 let chunk_size = CHUNK_SIZE as i32;
@@ -367,7 +359,7 @@ impl FeatureCaches {
                     origin.y.div_euclid(chunk_size),
                     origin.z.div_euclid(chunk_size),
                 );
-                retained_regions.contains(&generation_region_coord(chunk))
+                retained_regions.contains(&GenerationRegionCoord::from_chunk_coord(chunk))
             });
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));

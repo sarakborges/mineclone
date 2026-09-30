@@ -6,7 +6,7 @@ pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
     BORDER_TRANSITION_WIDTH, BORDER_WARP_BROAD_AMPLITUDE, BORDER_WARP_BROAD_SCALE,
-    BORDER_WARP_DETAIL_AMPLITUDE, BORDER_WARP_DETAIL_SCALE, SITE_JITTER_FRACTION,
+    BORDER_WARP_DETAIL_AMPLITUDE, BORDER_WARP_DETAIL_SCALE, SURFACE_ROW_JITTER_FRACTION,
     VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
 };
 
@@ -97,15 +97,24 @@ pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {
 pub(super) fn surface_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
 
-    if cell == IVec2::ZERO {
+    // Independent 2D jitter can move two neighboring sites toward each other
+    // by twice the authored jitter amplitude, invalidating the minimum-radius
+    // guarantee that `surface_minimum_spacing` is built around. Jitter whole
+    // rows laterally instead: sites in one row keep the full X spacing while
+    // sites in different rows keep the full Z spacing. This still breaks the
+    // lattice's four-way junctions, and the continuous domain warp owns the
+    // organic border shape, without letting a region collapse below size.min.
+    if cell.y == 0 {
         return base;
     }
 
-    let hash = cell_hash(cell, seed);
-    let jitter_x = hash_signed(hash) * spacing.x * SITE_JITTER_FRACTION;
-    let jitter_z = hash_signed(hash.rotate_left(29)) * spacing.y * SITE_JITTER_FRACTION;
+    let row_hash = cell_hash(
+        IVec2::new(0, cell.y),
+        seed ^ 0xd1b5_4a32_d192_ed03,
+    );
+    let row_offset = hash_signed(row_hash) * spacing.x * SURFACE_ROW_JITTER_FRACTION;
 
-    base + Vec2::new(jitter_x, jitter_z)
+    base + Vec2::new(row_offset, 0.0)
 }
 
 pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec3 {
@@ -147,4 +156,70 @@ pub(super) fn volume_cell_hash(cell: IVec3, seed: u64) -> u64 {
     hash = hash.wrapping_mul(0xbf58_476d_1ce4_e5b9);
     hash ^= hash >> 29;
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn surface_row_jitter_preserves_lattice_axis_spacing() {
+        let spacing = Vec2::new(440.0, 440.0);
+        let tolerance = spacing.max_element() * 1e-5;
+        let seed = 42;
+
+        for y in -4..=4 {
+            for x in -4..=4 {
+                let cell = IVec2::new(x, y);
+                let site = surface_site_position(cell, spacing, seed);
+                let right = surface_site_position(cell + IVec2::X, spacing, seed);
+                let above = surface_site_position(cell + IVec2::Y, spacing, seed);
+
+                assert!((right.x - site.x - spacing.x).abs() <= tolerance);
+                assert!((right.y - site.y).abs() <= tolerance);
+                assert!((above.y - site.y - spacing.y).abs() <= tolerance);
+            }
+        }
+    }
+
+    #[test]
+    fn surface_site_jitter_cannot_compress_authored_minimum_radius() {
+        let minimum_radius = Vec2::new(180.0, 180.0);
+        let spacing = surface_minimum_spacing(minimum_radius);
+
+        for seed in [0, 42, u64::MAX] {
+            for y in -3..=3 {
+                for x in -3..=3 {
+                    let cell = IVec2::new(x, y);
+                    let site = surface_site_position(cell, spacing, seed);
+
+                    for neighbor_y in -1..=1 {
+                        for neighbor_x in -1..=1 {
+                            if neighbor_x == 0 && neighbor_y == 0 {
+                                continue;
+                            }
+
+                            let neighbor = surface_site_position(
+                                cell + IVec2::new(neighbor_x, neighbor_y),
+                                spacing,
+                                seed,
+                            );
+                            let half_delta = (neighbor - site) * 0.5;
+                            let normalized = Vec2::new(
+                                half_delta.x / minimum_radius.x,
+                                half_delta.y / minimum_radius.y,
+                            )
+                            .length();
+
+                            assert!(
+                                normalized >= 1.0,
+                                "surface sites {cell:?} and {:?} compress size.min for seed {seed}: normalized half-distance={normalized}",
+                                cell + IVec2::new(neighbor_x, neighbor_y),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

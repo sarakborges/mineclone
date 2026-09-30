@@ -136,7 +136,7 @@ fn update_targets(
 
     let origin = camera.translation();
     let direction = camera.forward().as_vec3();
-    let block_hit = raycast_voxels(&world, origin, direction, TARGET_RANGE);
+    let block_hit = raycast_voxels(&*world, origin, direction, TARGET_RANGE);
     let block_distance = block_hit.as_ref().map_or(TARGET_RANGE, |hit| {
         ray_box_distance(
             origin,

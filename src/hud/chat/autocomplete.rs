@@ -146,9 +146,7 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
             ParsedLine::Place(args[1], variation)
         },
         CommandId::Locate => match args[0] {
-            "biome" | "hydrology" if args.len() == 2 => {
-                ParsedLine::Locate(args[0], args[1], None)
-            }
+            "biome" if args.len() == 2 => ParsedLine::Locate(args[0], args[1], None),
             "structure" => {
                 let Ok(variation) = parse_optional_variation(args.get(2).copied()) else {
                     return ParsedLine::Usage(definition.usage);
@@ -533,7 +531,11 @@ mod tests {
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
             parse_line("/locate biome asteria:plains 2"),
-            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
+            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/locate hydrology asteria:river"),
+            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/place structure extra extra extra"),
@@ -549,11 +551,11 @@ mod tests {
         );
         assert_eq!(
             parse_line("/locate structure asteria:tree_oak nope"),
-            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
+            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/locate structure asteria:tree_oak 0"),
-            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
+            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));

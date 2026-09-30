@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Generate Electro Slime models from the rounded slime_blob body language.
 
-Both sizes use a plain golden blob body, one small central lightning antenna,
-and a square SlimeFace quad. All other face/electric detail is texture-driven.
+Both sizes use the same authored design: golden blob body, a small central
+lightning antenna, stepped forehead circuit marks and the shared SlimeFace quad.
+The face texture itself is intentionally external and must be mapped to the
+Anemo face texture by the creature definition.
 """
 from __future__ import annotations
 
@@ -110,6 +112,10 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
         gy = iy / (NY - 1)
         gz = (iz - cz_mid) / (NZ * 0.5)
         if normal == (0, 0, -1):
+            if -0.58 < gx < -0.24 and 0.63 < gy < 0.86:
+                return 6
+            if -0.72 < gx < -0.10 and 0.50 < gy < 0.88:
+                return 5
             if gy < 0.13:
                 return 3
             if abs(gx) > 0.72:
@@ -199,9 +205,8 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
 
     face_bucket = bucket()
     face_z = -body_depth * 0.5 - max(0.006, body_depth * 0.005)
-    face_size = body_width * (0.86 / 1.20)
-    face_w = face_size
-    face_h = face_size
+    face_w = body_width * (0.86 / 1.20)
+    face_h = body_height * 0.48
     face_y = -body_height * 0.075
     quad(face_bucket,
          ((face_w / 2, face_y - face_h / 2, face_z),
@@ -210,12 +215,12 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
           (face_w / 2, face_y + face_h / 2, face_z)),
          (0, 0, -1))
     face_bucket[4][:] = [0, 1, 2, 0, 2, 3]
-    meshes.append({"name": "slime_face_quad", "primitives": [prim(face_bucket, len(PALETTE))]})
+    meshes.append({"name": "shared_anemo_face_quad", "primitives": [prim(face_bucket, len(PALETTE))]})
     face_mesh = len(meshes) - 1
 
-    # The antenna is the only Electro-specific geometry.
     s = body_width / 1.20
     accent = bucket()
+    pale = bucket()
     white = bucket()
 
     add_box(accent, (0.0, body_height * 0.5 + 0.055 * s, 0.0), (0.075 * s, 0.13 * s, 0.075 * s))
@@ -223,8 +228,21 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     add_box(white, (0.015 * s, body_height * 0.5 + 0.215 * s, 0.0), (0.13 * s, 0.08 * s, 0.11 * s))
     add_box(white, (0.015 * s, body_height * 0.5 + 0.275 * s, 0.0), (0.085 * s, 0.06 * s, 0.075 * s))
 
-    antenna_primitives = [prim(accent, 7), prim(white, 9)]
-    meshes.append({"name": "electro_antenna", "primitives": [p for p in antenna_primitives if p]})
+    front_z = -body_depth * 0.5 - 0.014 * s
+    depth = 0.018 * s
+    for sign in (-1, 1):
+        add_box(pale, (sign * 0.22 * s, body_height * 0.28, front_z), (0.045 * s, 0.19 * s, depth))
+        add_box(pale, (sign * 0.165 * s, body_height * 0.205, front_z), (0.11 * s, 0.045 * s, depth))
+        add_box(pale, (sign * 0.11 * s, body_height * 0.135, front_z), (0.045 * s, 0.18 * s, depth))
+
+    for sign in (-1, 1):
+        x = sign * body_width * 0.39
+        add_box(pale, (x, body_height * 0.03, front_z), (0.05 * s, 0.18 * s, depth))
+        add_box(pale, (x - sign * 0.045 * s, body_height * 0.105, front_z), (0.09 * s, 0.045 * s, depth))
+        add_box(pale, (x - sign * 0.045 * s, body_height * -0.045, front_z), (0.09 * s, 0.045 * s, depth))
+
+    detail_primitives = [prim(accent, 7), prim(pale, 8), prim(white, 9)]
+    meshes.append({"name": "electro_details", "primitives": [p for p in detail_primitives if p]})
     details_mesh = len(meshes) - 1
 
     materials = [
@@ -287,7 +305,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     body_pivot = node("BodyPivot", children=[], translation=[0, half_h, 0])
     body_node = node("Shell", mesh=body_mesh)
     face_node = node("Face", mesh=face_mesh)
-    details_node = node("ElectroAntenna", mesh=details_mesh)
+    details_node = node("ElectroDetails", mesh=details_mesh)
     nodes[body_pivot]["children"] = [body_node, face_node, details_node]
     nodes[visual]["children"] = [body_pivot]
     hit = node(
@@ -342,12 +360,12 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
         "extras": {
             "asset_id": f"asteria:{asset_id}",
             "base_language": "slime_blob",
-            "face_source": "textures/creatures/slime_electro/face.png",
+            "face_source": "textures/creatures/slime_anemo/face.png",
             "collision_source": f"{asset_id}.collider.json",
             "voxel_resolution": [NX, NY, NZ],
             "occupied_voxels": len(vox),
             "visual_height": visual_height,
-            "notes": "Plain Electro blob + central antenna; face/electric ornament detail is texture-driven.",
+            "notes": "Fresh Electro rebuild from slime_blob; no geometry/data reused from prior Electro GLBs.",
         },
     }
     json_chunk = json.dumps(scene, separators=(",", ":")).encode("utf-8")

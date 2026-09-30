@@ -1,112 +1,133 @@
 # HANDOFF — Asteria / Mineclone
 
-> Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
+> Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
 
-## 2026-09-30 — 0.68.50 corrige SlimeFace 1:1 e simplifica Electro
+## Estado atual — 2026-09-30
 
-- A causa do rosto achatado era geométrica: os quads `SlimeFace` antigos tinham proporção aproximada `0.86 x 0.48`, apesar das texturas faciais serem quadradas 64x64.
-- `tools/fix_slime_face_quads.py` normaliza os accessors `POSITION` dos `SlimeFace` para 1:1, preservando o UV completo `0..1`, centro e topologia do decal.
-- Foram verificados 20 GLBs de slime com `SlimeFace`: 18 assets legados precisaram ser corrigidos e os dois Electro recém-regenerados já saíram 1:1 do generator.
-- O generator base `assets/models/creatures/slime_blob/generate_slime_blob.py` também passou a gerar o face quad em `0.86 x 0.86`, evitando reintroduzir o achatamento em futuras regenerações.
-- Electro normal e large foram regenerados como bolota amarelo/dourada + antena elétrica central apenas. As marcas frontais em geometria e os destaques localizados no `body_material` foram removidos; rosto e demais marcas elétricas agora são texture-driven.
-- Electro normal e large usam `textures/creatures/slime_electro/face.png` através do material `SlimeFace`.
-- Validação do bloco: `tools/fix_slime_face_quads.py --check` passou em 20/20 `SlimeFace`; `tools/check_glb_assets.py` passou em 22/22 GLBs.
-- Ainda falta QA visual em gameplay para confirmar escala/posição perceptual das faces e a silhueta final do Electro.
+- Repo: `sarakborges/mineclone`.
+- Branch: `architecture/asteria-core-rebuild`.
+- PR draft: #22 `Asteria core rebuild` -> `develop`.
+- `develop` sincronizado até `c3821a124d37c8d22ff981a3f3fb01badf2a193e` (`0.68.49`).
+- `VERSION` acompanha agora `develop` em `0.68.49`; os cutovers internos seguintes não devem criar bumps isolados sem necessidade de release/content.
+- Rust + Bevy permanecem; o rebuild troca boundaries/ownership, não a stack.
+- Hydrology legado foi removido deliberadamente e não deve voltar.
+- Old saves/legacy compatibility não são prioridade.
+- CI obrigatório = audits + Clippy + Check; `cargo test` não é gate automático.
+- Não declarar ganho de performance sem gameplay log real.
 
-VERSION: `0.68.50`.
+## Invariantes
 
-## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob
+- authoritative world != resident world != rendered presentation;
+- jobs async usam inputs imutáveis e publication stale é rejeitada;
+- caches/queues possuem owner e bound explícitos;
+- trabalho frame-sensitive precisa ser incremental/budgetado;
+- generation não possui side effects de render/UI/ECS;
+- presentation é derivada e descartável; `ChunkRenderPool` nunca é world truth;
+- cada cut coerente termina com HANDOFF atualizado e CI verde;
+- não reintroduzir Hydrology legado.
 
-- Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.
-- A base corporal segue diretamente a linguagem e o perfil do `slime_blob`, mantendo o corpo arredondado e as animações de squash/stretch.
-- O visual Electro novo usa paleta amarelo/dourada, antena elétrica central com terminal claro e marcas de circuito discretas inspiradas na referência fornecida.
-- `SlimeFace` dos dois Electro agora aponta exatamente para `textures/creatures/slime_anemo/face.png`; a textura facial Electro antiga foi removida.
-- O generator reproduzível ficou em `assets/models/creatures/slime_electro/generate_slime_electro.py` e gera normal + large.
-- Bounds de metadata foram atualizados para as novas alturas visuais; os colliders físicos continuam compatíveis com o corpo blob e independentes dos detalhes decorativos.
-- Validação do rebuild: `tools/check_glb_assets.py` passou com 22 assets; Khronos glTF Validator passou nos dois Electro com `0 errors / 0 warnings`.
-- Próximo QA visual: conferir no gameplay silhueta, face, detalhes elétricos e animações das variantes normal e large.
+## Fases
 
-VERSION: `0.68.49`.
+- Phases 1–6 concluídas: core boundaries, authoritative storage, biome/structure metadata, Streaming scheduler v2, Terrain generation v2 e structures/connectors/feature planning.
+- **Phase 7 em andamento: voxel presentation / meshing v2 + dívida de performance/correctness descoberta durante validação.**
 
-## 2026-09-25/26 — 0.68.48 repara semanticamente os Electro GLBs e endurece auditoria
+## Sync de `develop` — Electro Slime 0.68.49
 
-- QA mostrou que a correção estrutural da 0.68.47 ainda não bastava: o preload do Electro normal continuava panicando dentro do `GltfLoader`, mesmo com header/chunks GLB formalmente válidos.
-- O validator oficial da Khronos foi executado contra os assets e revelou a causa real:
-  - Electro normal: 258 erros semânticos;
-  - Electro large: 47 erros semânticos;
-  - havia `bufferView`/accessor metadata stale apontando para regiões erradas do buffer, produzindo índices OOB, bounds incorretos e keyframes de animação lidos de bytes que não eram keyframes.
-- A investigação recuperou os dados válidos diretamente dos `.gltf` históricos do commit `35b8aaca906e1fdf48bae56feb4bb94b84814861`:
-  - no normal, body/face permaneciam válidos nos offsets originais e todos os 12 accessors de animação estavam intactos, deslocados +2720 bytes em relação ao metadata stale;
-  - o bloco de details do normal pertencia a outra revisão: metadata dizia 54 vértices, enquanto o bloco real de índices referenciava `0..167`; ele não foi remendado por alteração artificial do count;
-  - no large, body/face/details estavam recuperáveis; o details válido possui 62 vértices e exatamente 252 índices, todos dentro de range e sem triângulos degenerados;
-  - o metadata large dizia 276 índices e acabava lendo 24 valores de dentro do bloco de animação.
-- O reparo definitivo repacotou cada accessor em um buffer novo e sequencial, reconstruiu todos os `bufferViews`, recalculou bounds a partir dos bytes reais e validou relações entre primitives/accessors antes de escrever o GLB.
-- O details Electro válido do large foi usado como topologia canônica também no normal, remapeado para o bounding box authored do details normal. Body, face e animações normais continuam usando os dados recuperados do próprio normal; não foi copiado outro tipo de slime.
-- A face embedded histórica foi removida dos GLBs porque as definitions já aplicam `textures/creatures/slime_electro/face.png` externamente ao material `SlimeFace`; isso também eliminou os únicos warnings restantes do validator GLB.
-- Resultado do one-shot antes de publicar:
-  - `tools/check_glb_assets.py`: 22 assets validados;
-  - Khronos glTF Validator: Electro normal `0 errors / 0 warnings`;
-  - Khronos glTF Validator: Electro large `0 errors / 0 warnings`.
-- Assets finais publicados em `develop`:
-  - `6d8b22bdfcdaf8ba21592e961b03b5639efe94b2` — `Repair Electro GLB accessor layout`.
-- O audit permanente `tools/check_glb_assets.py` foi ampliado para validar, além do container:
-  - bounds reais de accessors contra `min/max` declarados;
-  - contagem de atributos de vertex contra `POSITION`;
-  - índices de primitives dentro do count de vértices;
-  - `COLOR_0` float dentro de `[0, 1]`;
-  - animation input como `FLOAT SCALAR`;
-  - key times finitos e estritamente crescentes.
-- O audit semântico novo passou em todos os 22 GLBs existentes e o CI completo do bloco passou no run `36212679301`, incluindo Clippy `-D warnings` e `cargo check --locked`.
-- Os três workflows temporários de validator/inspeção/reparo foram removidos após o diagnóstico. A proteção permanente ficou em `tools/check_glb_assets.py` + CI normal.
-- A instrumentação de performance da 0.68.45 (`frame`, `main_work`, `render work`) permanece intacta; depois de confirmar que Loading entra em Gameplay, a investigação de FPS volta exatamente desse ponto.
+- O avanço paralelo de `develop` foi integrado por merge commit real, sem rebase/force-push e sem substituir código do rebuild.
+- O delta de `develop` desde a baseline anterior é restrito a `assets/`, `data/creatures`, `HANDOFF.md` e `VERSION`; não há alteração `.rs` nesses seis commits.
+- Electro normal + large foram refeitos a partir da linguagem do `slime_blob`, com paleta amarelo/dourada, antena elétrica e marcas discretas.
+- Ambos usam exatamente `textures/creatures/slime_anemo/face.png`; a face Electro antiga foi removida.
+- Generator reproduzível: `assets/models/creatures/slime_electro/generate_slime_electro.py`.
+- Metadata/colliders acompanham os novos modelos; GLB audit e Khronos validator haviam passado em `develop` com zero erros/warnings.
+- QA visual do Electro ainda deve conferir silhueta, face, detalhes e animações normal + large em gameplay.
 
-VERSION: `0.68.48`.
+## Estado recente
 
-## 2026-09-25/26 — 0.68.47 corrigiu container GLB, mas não metadata semântico
+### Cut 23 — surface `size.min`
 
-- QA da 0.68.46 panicou no preload do Electro normal com:
-  `Gltf(Binary(Length { length: 8220, length_read: 8172 }))`.
-- A investigação inicial confirmou que os GLBs tinham header/chunks truncados e foi feito um rebuild estrutural.
-- Commit do rebuild de container:
-  - `18e48e0625a8a61c54e8866a8510b9c6ccc34e0a` — `Rebuild Electro GLB containers`.
-- Também foi criado `tools/check_glb_assets.py` e o CI passou a executar `Audit GLB assets` antes de instalar Rust.
-- Essa auditoria inicial verificava magic/version/length, chunks JSON/BIN, alinhamento, buffer size e ranges de bufferViews/accessors.
-- O container reconstruído passou nessa auditoria, mas QA mostrou um novo `AssetLoaderPanic`; o validator Khronos então revelou que o conteúdo semântico continuava corrompido.
-- Portanto a 0.68.47 deve ser considerada a correção da camada de container, não a correção definitiva do Electro. O reparo semântico completo está na 0.68.48.
+Commit `35313349c08c39dab6249afa35a56323117ce8ae`, CI #10321 success.
 
-VERSION: `0.68.47`.
+- jitter independente ±32% por site podia comprimir vizinhos até 36% do spacing nominal;
+- surface sites agora usam jitter lateral determinístico por linha; domain warp continua owner da organicidade;
+- validar worldgen em mundo novo.
 
-## 2026-09-25/26 — 0.68.46 corrige referência de preload dos Electro Slimes
+### Cut 24 — limitar scans stale do generation frontier
 
-- A 0.68.45 não chegou ao gameplay porque `setup_world` panicou no preload de `slime_electro.gltf`.
-- `slime_electro.json` e `slime_electro_large.json` foram alterados para `.glb`.
-- Ambos receberam override explícito do material `SlimeFace` para `textures/creatures/slime_electro/face.png`.
-- Os `.gltf` quebrados foram removidos do HEAD.
-- Essa versão revelou que os `.glb` também haviam sido gerados incorretamente; a correção definitiva está na 0.68.48.
+Commit `75f476f54942f69ccd08df819b8b6ad5479099d8`, CI #10322 success.
 
-VERSION: `0.68.46`.
+Gameplay `2026-09-30_16-23-13-909518300.txt` reproduziu frame ~100.9 ms, `main_work` ~97.5 ms e `streaming` ~93.9 ms. `select_generation_wave` fazia priority scans O(n) e stale/already-owned entries escapavam de `budget.record(1)`. Agora cada `pop_pending_by_priority()` bem-sucedido consome uma unidade do budget de 1 ms / máximo 16 scans. Sem claim de ganho até log novo.
 
-## 2026-09-25/26 — Rendering diagnostics 0.68.45 mede o Render schedule separadamente
+### Cut 25 — ocean/coast height influence lower-only
 
-- Continuação da investigação de FPS após os logs mostrarem slow frames com streaming/generation/mesh/remesh zerados.
-- A 0.68.43 adicionou `main_work_*` e mudou Windows/DX12 para `PresentMode::Mailbox`.
-- A 0.68.44 reduziu o segundo anel de chunks invisíveis atrás do fog (`show/hide` default 14/15 -> 13/14).
-- A 0.68.45 adicionou `src/world/render_work_diagnostics.rs` para medir wall time do schedule `Render` separadamente do `Main`:
-  - timer antes de `RenderSystems::ExtractCommands`;
-  - fim depois de `RenderSystems::PostCleanup`;
-  - bridge latest-only por `Arc<AtomicU64>`, sem mutex/alocação por frame;
-  - logs `render work: samples=... skipped_samples=... avg_us=... p50_us=... p95_us=... p99_us=... max_us=...`.
-- Interpretação do próximo log:
-  - frame alto + main alto => perfilar Main systems;
-  - frame alto + main baixo + render alto => perfilar Render schedule/submit;
-  - frame alto + main baixo + render baixo => presentation/GPU/driver ou trabalho fora das janelas medidas.
-- CI funcional da implementação: run `36207686674` verde.
+Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
-VERSION: `0.68.45`.
+- terrain influences possuem política `Blend` ou `LowerOnly`;
+- `BiomeTerrain::Ocean` é `LowerOnly`; demais terrains continuam `Blend`;
+- o resultado com ocean influence é limitado ao baseline não-oceânico que existiria sem a influência lower-only;
+- oceano pode abaixar/truncar/soften coast, mas nunca elevar mountain/alps/mountain belt/volcano/gorge ou qualquer terrain futuro blended;
+- região somente ocean preserva o shape oceânico;
+- shoreline material/surfaceMargin identity não mudou.
 
-## Continuidade imediata
+## Pacote Worldgen coherence
 
-1. Rodar a **0.68.50** e conferir visualmente que todos os rostos usam a área quadrada 64x64 sem achatamento.
-2. Conferir Electro normal + large: bolota amarelo/dourada + antena, sem marcas geométricas frontais, usando a face própria do Electro.
-3. Gerar log de gameplay com período parado e movimento/streaming normal.
-4. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização; antes de cada novo bloco, manter CI sem erros e sem warnings.
+### Cut 26 — volume biome constraints por surface biome
+
+Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`, `c4b62f5bdf103a63807d0340234be5169c2e1bb9` e correção de gate `99cd6456af1f77b670f1e771d3b372cc46dac735`. O merge de `develop` em `12806bd94b08498d15ac92111b74e22863935b93` preservou o corte e passou CI #10341.
+
+- `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes;
+- `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
+- selector data-driven suporta `ids` e `tags` com semântica OR dentro do selector;
+- constraints suportam `allow` e `deny`; sem `allow` significa permitido salvo deny, e `deny` sempre vence;
+- surface biomes não podem declarar `surfaceConstraints`; selectors vazios e tags vazias/duplicadas são rejeitados;
+- `BiomeFieldEntry` carrega tags/constraints imutáveis para geração async;
+- `volume_selection_in_region` preserva a API para planners e resolve a surface identity do anchor; o density pass usa `volume_selection_in_region_for_surface` para reutilizar `GenerationColumnSample.identity_surface_index` sem novo surface sample por voxel;
+- volume biome sem constraints mantém comportamento irrestrito anterior;
+- nenhum biome atual recebeu constraint inventada.
+
+Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
+
+### Cut 27 — volume biome surface indicators
+
+Commit `5121da7ea2fb59d37b71c24ad12f38a1c722b9e6`, CI #10342 success.
+
+- `VolumeStructurePlacementRules.mode` defaulta para `volume`, preservando conteúdo existente;
+- novo modo `surface_indicator` continua sendo `BiomeStructure`, portanto structure groups, chance, priority, conflict groups, reserve-space e connectors usam o planner generalizado;
+- identidade/chance continuam derivadas do volume site 3D original;
+- o root é projetado no mesmo X/Z para o surface Y via `validated_structure_origin_y`;
+- restrictions/ground-fit do root e children usam o surface biome efetivo da projeção;
+- o volume site precisa continuar selecionado naquele X/Z, então `surfaceConstraints` também se aplicam;
+- nenhuma indicator concreta foi inventada para conteúdo atual; o corte entrega a capacidade autorável.
+
+### Cut 28 — floating islands como ilhas estratificadas
+
+Implementação preparada em `tmp/cut28-floating-islands`:
+
+- o shape deixou de ser um único blob radial; cada site agora tem um core central obrigatório + 3–5 lobes secundários determinísticos;
+- os lobes secundários têm offset limitado e footprint mínimo que garantem overlap com o core; não são pedras independentes;
+- união de masks usa smooth union `1 - (1-a)(1-b)`, produzindo transição gradual entre massas;
+- cada lobe varia footprint X/Z, top offset e underside depth pelo seed; planar/detail noise continuam responsáveis pela irregularidade orgânica das bordas e do topo;
+- topo permanece amplo e levemente ondulado; underside continua afunilando em direção às bordas;
+- `VolumeBiomeSelection` carrega apenas o `vertical_radius` durante density sampling; o density pass converte a posição local em profundidade de superfície uma única vez e empacota só `u16` para o material pass;
+- `surfaceLayers` passa a ser permitido em volume biome somente quando o density modifier é `floating_island`; demais volumes continuam proibidos de usá-lo;
+- Floating Islands agora autoram `grass_block` depth 1 -> `dirt` depth 4 -> `stone`, mantendo `solidBlock: stone` como fallback;
+- footprint autorado aumenta de `22..48` para `48..96` em X/Z e de `8..16` para `12..24` em Y;
+- o novo `min` não aumenta o spacing global dos volume sites: Caverns já possuía `min=48` em X/Z e `min=18` em Y;
+- o early-out de chunks altos agora considera `FloatingIsland` um solid volume modifier; antes o flag legado considerava somente `Solid`, o que podia descartar chunks de ilha acima do terrain local;
+- nenhuma regra de surface terrain, structure ou streaming foi alterada.
+
+Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado e variação determinística por seed. O gate deve ser executado após consolidação.
+
+## Próximos passos
+
+1. consolidar e fechar CI do Cut 28;
+2. gameplay em mundo novo para validar ocean/coast, constraints/indicator e floating islands;
+3. coletar log pós-Cut 24 para confirmar se o hitch de generation frontier caiu;
+4. retomar cold-start de `PrepareResources` depois do pacote.
+
+## Regras de continuidade
+
+- trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
+- não force-push/rewrite de commits publicados; usar fast-forward;
+- corrigir root cause de Clippy/Check, nunca esconder warning com `allow`;
+- preservar gameplay/content/UI/assets válidos durante o rebuild;
+- não inventar performance claims sem logs reais.

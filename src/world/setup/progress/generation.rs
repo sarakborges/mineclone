@@ -1,7 +1,7 @@
 use crate::world::{
     PendingFluidUpdates, WorldLoadMode,
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::ChunkGenerationTasks,
+    chunk_generation_tasks::GenerationScheduler,
     chunk_system_params::{ChunkContent, ChunkGeneration},
     work_budget::FrameWorkBudget,
 };
@@ -16,7 +16,7 @@ pub(super) fn generate_initial_chunks(
     content: &ChunkContent<'_>,
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
-    generation_tasks: &mut ChunkGenerationTasks,
+    generation_tasks: &mut GenerationScheduler,
     async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
@@ -59,7 +59,7 @@ fn integrate_generated_chunks(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
-    generation_tasks: &mut ChunkGenerationTasks,
+    generation_tasks: &mut GenerationScheduler,
     async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
@@ -109,7 +109,7 @@ fn dispatch_generation_tasks(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
-    generation_tasks: &mut ChunkGenerationTasks,
+    generation_tasks: &mut GenerationScheduler,
     async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {

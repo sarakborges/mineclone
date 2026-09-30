@@ -5,12 +5,25 @@ use std::time::{Duration, Instant};
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::voxel::{
+    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
     mesh_snapshot::ChunkMeshSnapshot,
     meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
 
 pub(crate) use self::queue::ChunkRemeshQueue;
+
+pub(crate) fn prune_absent_remesh_halo(
+    world_position: IVec3,
+    world: &VoxelWorld,
+    queue: &mut ChunkRemeshQueue,
+) {
+    visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
+        if world.chunk(coord).is_none() {
+            queue.remove(coord);
+        }
+    });
+}
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
@@ -22,6 +35,7 @@ use super::{
         apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    presentation_snapshot::PresentationLightingRevisions,
     streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
@@ -34,8 +48,17 @@ const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 struct RemeshDispatchContext<'a> {
     world: &'a VoxelWorld,
     render_pool: &'a ChunkRenderPool,
+    streaming: &'a ChunkStreamingState,
+    lighting_revisions: &'a PresentationLightingRevisions,
     async_work: &'a ChunkAsyncWorkLimiter,
     center: Option<IVec3>,
+    deadline: Instant,
+}
+
+struct RemeshCollectionContext<'a> {
+    world: &'a VoxelWorld,
+    streaming: &'a ChunkStreamingState,
+    lighting_revisions: &'a PresentationLightingRevisions,
     deadline: Instant,
 }
 
@@ -46,21 +69,56 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
+    mut lighting_revisions: ResMut<PresentationLightingRevisions>,
     frame_budget: Res<WorldFrameWorkBudget>,
     async_work: Res<ChunkAsyncWorkLimiter>,
     streaming: Res<ChunkStreamingState>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
+    mut last_reconciled_selection: Local<Option<u64>>,
 ) {
     tasks.sync_snapshot(&content);
+    for coord in tasks.drain_lighting_revision_removals() {
+        lighting_revisions.remove(coord);
+    }
+
+    let selection_revision = streaming.selection_revision();
+    // Normal chunk and render retirement remove their remesh entries at the
+    // point residency actually changes. A selection revision alone does not
+    // make queued work nonresident, so scanning every remesh queue here makes
+    // travel cost scale with backlog outside the frame budget. Keep the full
+    // reconciliation only for a revision reset, which indicates a world/
+    // streaming lifecycle restart while this system-local state survived.
+    if last_reconciled_selection
+        .is_some_and(|previous| selection_revision < previous)
+        && queue.has_background_work()
+    {
+        queue.retain_resident(&world);
+    }
+    if *last_reconciled_selection != Some(selection_revision) {
+        for request in tasks.cancel_where(|coord| !streaming.retains_render_mesh(coord)) {
+            if renderer.pool.contains(request.coord) && world.chunk(request.coord).is_some() {
+                queue.enqueue_task_meshlets_priority(
+                    request.coord,
+                    request.kind,
+                    request.meshlets,
+                );
+            }
+        }
+        *last_reconciled_selection = Some(selection_revision);
+    }
 
     if tasks.pending_count() > 0 {
         collect_completed_remesh_tasks(
             &content,
             &mut renderer,
-            &world,
             &mut queue,
             &mut tasks,
-            frame_budget.deadline(),
+            RemeshCollectionContext {
+                world: &world,
+                streaming: &streaming,
+                lighting_revisions: &lighting_revisions,
+                deadline: frame_budget.deadline(),
+            },
         );
     }
 
@@ -80,6 +138,8 @@ pub(super) fn process_chunk_remesh_queue(
         RemeshDispatchContext {
             world: &world,
             render_pool: &renderer.pool,
+            streaming: &streaming,
+            lighting_revisions: &lighting_revisions,
             async_work: &async_work,
             center: streaming.center(),
             deadline: frame_budget.deadline(),
@@ -93,14 +153,13 @@ pub(super) fn process_chunk_remesh_queue(
 fn collect_completed_remesh_tasks(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
-    world: &VoxelWorld,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
-    deadline: Instant,
+    context: RemeshCollectionContext<'_>,
 ) {
     let current_revision = tasks.revision();
     let mut budget = FrameWorkBudget::new(REMESH_RESULT_INTEGRATION_BUDGET, 1)
-        .with_global_deadline(deadline)
+        .with_global_deadline(context.deadline)
         .with_maximum_items(MAX_REMESH_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
@@ -117,7 +176,15 @@ fn collect_completed_remesh_tasks(
         let output = completed.output;
         let kind = output.kind;
         let meshlets = output.meshlets;
-        if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
+        if !renderer.pool.contains(coord) || context.world.chunk(coord).is_none() {
+            continue;
+        }
+        if !context.streaming.retains_render_mesh(coord) {
+            // Selection can reverse before the budgeted render-retirement pass
+            // reaches this allocation. Preserve the dirty meshlets until the
+            // allocation is actually retired, or until the chunk re-enters the
+            // render residency and becomes eligible for publication again.
+            queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
             continue;
         }
         if completed.revision != current_revision {
@@ -125,7 +192,10 @@ fn collect_completed_remesh_tasks(
             continue;
         }
 
-        match output.dependencies.publication(kind, world, tasks) {
+        match output
+            .dependencies
+            .publication(kind, context.world, context.lighting_revisions)
+        {
             ChunkRemeshPublication::Ready => {}
             ChunkRemeshPublication::Retry(retry_kind) => {
                 queue.enqueue_task_meshlets_priority(coord, retry_kind, meshlets);
@@ -136,8 +206,9 @@ fn collect_completed_remesh_tasks(
             }
         }
 
+        let (content_source, lighting_source) = output.dependencies.published_sources();
         let render_context = content.render_context(
-            world,
+            context.world,
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
@@ -167,6 +238,26 @@ fn collect_completed_remesh_tasks(
         };
         if !applied {
             queue.enqueue_task_priority(coord, kind);
+            continue;
+        }
+
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                renderer.pool.record_terrain_presentation_sources(
+                    coord,
+                    meshlets,
+                    content_source,
+                    lighting_source,
+                );
+            }
+            ChunkRemeshTaskKind::Fluid => {
+                renderer.pool.record_fluid_presentation_sources(
+                    coord,
+                    meshlets,
+                    content_source,
+                    lighting_source,
+                );
+            }
         }
     }
 }
@@ -194,21 +285,25 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let Some((coord, kind, meshlets)) =
-            queue.pop_renderable_background(
-                context.render_pool,
-                context.center,
-                allow_terrain,
-                allow_fluid,
-            )
-        else {
+        let Some((coord, kind, meshlets)) = queue.pop_renderable_background(
+            context.render_pool,
+            context.center,
+            allow_terrain,
+            allow_fluid,
+        ) else {
             break;
         };
         // Deferred and stale candidates also consume main-thread work. Charge
         // the attempt before any early return can bypass the frame budget.
         budget.record(1);
-        let (kind, meshlets) =
-            queue.coalesce_terrain_work(coord, kind, meshlets);
+        if !context.streaming.retains_render_mesh(coord) {
+            // Keep invalidation attached to a still-live render allocation.
+            // Explicit render retirement removes it; a rapid reversal/warp
+            // can instead make it eligible again without losing dirty work.
+            deferred.push((coord, kind, meshlets));
+            continue;
+        }
+        let (kind, meshlets) = queue.coalesce_terrain_work(coord, kind, meshlets);
 
         if tasks.contains(coord, kind) {
             deferred.push((coord, kind, meshlets));
@@ -218,20 +313,25 @@ fn dispatch_remesh_tasks(
         let snapshot = if let Some(existing) = snapshots.get(&snapshot_key) {
             existing.clone()
         } else {
-            let Some(captured) =
-                ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
-                    context.world,
-                    coord,
-                    |neighbor| context.render_pool.contains(neighbor),
-                    meshlets,
-                )
-            else {
+            let Some(captured) = ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
+                context.world,
+                coord,
+                |neighbor| context.render_pool.contains(neighbor),
+                meshlets,
+            ) else {
                 continue;
             };
             snapshots.insert(snapshot_key, captured.clone());
             captured
         };
-        if !tasks.schedule(coord, kind, meshlets, snapshot, context.async_work) {
+        if !tasks.schedule(
+            coord,
+            kind,
+            meshlets,
+            snapshot,
+            context.lighting_revisions,
+            context.async_work,
+        ) {
             deferred.push((coord, kind, meshlets));
             // The per-kind and per-coordinate checks passed above, so shared
             // executor capacity is exhausted. Preserve the remaining queue.

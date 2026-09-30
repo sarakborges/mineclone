@@ -2,17 +2,26 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::layer::{LayerFace, LayerRegistry},
-    world::{chunk_remesh::ChunkRemeshQueue, fluid_updates::PendingFluidUpdates},
+    world::{
+        chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
+        fluid_updates::PendingFluidUpdates,
+    },
 };
 
 use super::{
-    cell::VoxelCell, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
-    object::ObjectCell, world::VoxelWorld,
+    cell::VoxelCell,
+    coordinates::ChunkCoord,
+    fluid::FluidCell,
+    layer::LayerCell,
+    lighting::PendingLightingUpdates,
+    object::ObjectCell,
+    read::VoxelTopologyReader,
+    world::VoxelWorld,
 };
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct VoxelBlockMutation {
-    pub(crate) chunk: IVec3,
+    pub(crate) chunk: ChunkCoord,
     pub(crate) previous_cell: Option<VoxelCell>,
     pub(crate) detached_object: Option<ObjectCell>,
 }
@@ -27,8 +36,8 @@ pub(crate) struct VoxelMutationRuntime<'w> {
 }
 
 impl VoxelMutationRuntime<'_> {
-    pub(crate) fn world(&self) -> &VoxelWorld {
-        &self.world
+    pub(crate) fn read(&self) -> VoxelTopologyReader<'_> {
+        VoxelTopologyReader::new(&self.world)
     }
 
     pub(crate) fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
@@ -40,12 +49,12 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         face: LayerFace,
         layer: LayerCell,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         let chunk = self
             .world
             .add_layer_at(world_position, face, layer, &self.layers)?;
-        self.remesh_queue.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        self.enqueue_voxel_remesh(world_position);
+        Some(ChunkCoord::from_ivec3(chunk))
     }
 
     pub(crate) fn remove_top_layer(
@@ -54,7 +63,7 @@ impl VoxelMutationRuntime<'_> {
         face: LayerFace,
     ) -> Option<&'static str> {
         let (_chunk, layer_id) = self.world.remove_top_layer_at(world_position, face)?;
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         Some(layer_id)
     }
 
@@ -62,7 +71,7 @@ impl VoxelMutationRuntime<'_> {
         &mut self,
         world_position: IVec3,
         block: Option<VoxelCell>,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         self.set_block_detailed(world_position, block)
             .map(|mutation| mutation.chunk)
     }
@@ -77,10 +86,10 @@ impl VoxelMutationRuntime<'_> {
             .set_block_at_with_previous(world_position, block)?;
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(VoxelBlockMutation {
-            chunk,
+            chunk: ChunkCoord::from_ivec3(chunk),
             previous_cell,
             detached_object,
         })
@@ -90,12 +99,17 @@ impl VoxelMutationRuntime<'_> {
         &mut self,
         world_position: IVec3,
         fluid: Option<FluidCell>,
-    ) -> Option<IVec3> {
+    ) -> Option<ChunkCoord> {
         let chunk = self.world.set_fluid_at(world_position, fluid)?;
         self.lighting.enqueue_medium_edit(world_position);
-        self.remesh_queue.enqueue_voxel_edit(world_position);
+        self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        Some(ChunkCoord::from_ivec3(chunk))
+    }
+
+    fn enqueue_voxel_remesh(&mut self, world_position: IVec3) {
+        self.remesh_queue.enqueue_voxel_edit(world_position);
+        prune_absent_remesh_halo(world_position, &self.world, &mut self.remesh_queue);
     }
 }
 
@@ -105,8 +119,8 @@ pub(crate) struct VoxelTopologyRuntime<'w> {
 }
 
 impl VoxelTopologyRuntime<'_> {
-    pub(crate) fn world(&self) -> &VoxelWorld {
-        self.mutation.world()
+    pub(crate) fn read(&self) -> VoxelTopologyReader<'_> {
+        self.mutation.read()
     }
 
     pub(crate) fn add_layer(
@@ -115,7 +129,9 @@ impl VoxelTopologyRuntime<'_> {
         face: LayerFace,
         layer: LayerCell,
     ) -> Option<IVec3> {
-        self.mutation.add_layer(world_position, face, layer)
+        self.mutation
+            .add_layer(world_position, face, layer)
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn remove_top_layer(
@@ -131,7 +147,9 @@ impl VoxelTopologyRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
-        self.mutation.set_block(world_position, block)
+        self.mutation
+            .set_block(world_position, block)
+            .map(ChunkCoord::as_ivec3)
     }
 
     pub(crate) fn set_block_detailed(
@@ -147,6 +165,8 @@ impl VoxelTopologyRuntime<'_> {
         world_position: IVec3,
         fluid: Option<FluidCell>,
     ) -> Option<IVec3> {
-        self.mutation.set_fluid(world_position, fluid)
+        self.mutation
+            .set_fluid(world_position, fluid)
+            .map(ChunkCoord::as_ivec3)
     }
 }

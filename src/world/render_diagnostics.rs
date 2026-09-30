@@ -17,8 +17,8 @@ use crate::{
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::ChunkGenerationTasks,
-    chunk_mesh_tasks::ChunkMeshTasks,
+    chunk_generation_tasks::GenerationScheduler,
+    chunk_mesh_tasks::PresentationScheduler,
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
     chunk_rendering::ChunkRenderPool,
@@ -63,6 +63,7 @@ struct SlowFrameContext {
     warp_active: bool,
     stream_pending: usize,
     stream_ready: usize,
+    stream_retired: usize,
     generation_tasks: usize,
     mesh_tasks: usize,
     remesh_tasks: usize,
@@ -85,6 +86,7 @@ impl std::fmt::Debug for SlowFrameContext {
             .field("warp", &self.warp_active)
             .field("pending", &self.stream_pending)
             .field("ready", &self.stream_ready)
+            .field("retired", &self.stream_retired)
             .field("generation_tasks", &self.generation_tasks)
             .field("mesh_tasks", &self.mesh_tasks)
             .field("remesh_tasks", &self.remesh_tasks)
@@ -206,9 +208,9 @@ pub(super) fn slow_frame_context_due(time: Res<Time<Real>>) -> bool {
 #[derive(SystemParam)]
 pub(super) struct SlowFrameContextAssets<'w> {
     streaming: Res<'w, ChunkStreamingState>,
-    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    generation_tasks: Res<'w, GenerationScheduler>,
     async_work: Res<'w, ChunkAsyncWorkLimiter>,
-    mesh_tasks: Res<'w, ChunkMeshTasks>,
+    mesh_tasks: Res<'w, PresentationScheduler>,
     remesh_queue: Res<'w, ChunkRemeshQueue>,
     remesh_tasks: Res<'w, ChunkRemeshTasks>,
     pending_warp: Res<'w, PendingWarp>,
@@ -228,6 +230,7 @@ pub(super) fn record_slow_frame_context(
         staged_generated_chunks,
         _,
     ) = assets.streaming.diagnostic_counts();
+    let stream_retired = assets.streaming.diagnostic_retired_count();
     let (remesh_geometry, remesh_lighting, remesh_fluid) =
         assets.remesh_queue.diagnostic_counts();
 
@@ -237,6 +240,7 @@ pub(super) fn record_slow_frame_context(
         warp_active: assets.pending_warp.streaming_center().is_some(),
         stream_pending,
         stream_ready,
+        stream_retired,
         generation_tasks: assets.generation_tasks.pending_count(),
         mesh_tasks: assets.mesh_tasks.pending_count(),
         remesh_tasks: assets.remesh_tasks.pending_count(),
@@ -325,9 +329,9 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     asset_server: Res<'w, AssetServer>,
     pool: Res<'w, ChunkRenderPool>,
     streaming: Res<'w, ChunkStreamingState>,
-    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    generation_tasks: Res<'w, GenerationScheduler>,
     async_work: Res<'w, ChunkAsyncWorkLimiter>,
-    mesh_tasks: Res<'w, ChunkMeshTasks>,
+    mesh_tasks: Res<'w, PresentationScheduler>,
     remesh_queue: Res<'w, ChunkRemeshQueue>,
     remesh_tasks: Res<'w, ChunkRemeshTasks>,
     meshes: Res<'w, Assets<Mesh>>,
@@ -379,6 +383,7 @@ pub(super) fn log_render_asset_pressure(
         staged_generated_chunks,
         pressure_evicted_meshes,
     ) = assets.streaming.diagnostic_counts();
+    let stream_retired = assets.streaming.diagnostic_retired_count();
     let (stream_pending_renderable, stream_ready_renderable, wave_targets_renderable) =
         assets.streaming.diagnostic_renderable_backlog_counts();
     let generation_prefetch_targets = assets.streaming.diagnostic_generation_prefetch_count();
@@ -437,7 +442,6 @@ pub(super) fn log_render_asset_pressure(
             .then_with(|| left.0.cmp(&right.0))
     });
     runtime_top_shapes.truncate(RUNTIME_IMAGE_SHAPE_LIMIT);
-
     let font_atlas_keys = assets.font_atlases.len();
     let font_atlas_key_diagnostic = font_atlas_key_diagnostic(&assets.font_atlases);
     let font_atlas_count = assets.font_atlases.values().map(Vec::len).sum::<usize>();
@@ -462,7 +466,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     let diagnostic = format!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} main_work_avg_us={} main_work_p50_us={} main_work_p95_us={} main_work_p99_us={} main_work_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_pending_renderable={stream_pending_renderable} stream_ready={stream_ready} stream_ready_renderable={stream_ready_renderable} wave_targets_renderable={wave_targets_renderable} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_chunk_base_limit={async_chunk_work_base_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} generation_prefetch_targets={generation_prefetch_targets} staged_generated_chunks={staged_generated_chunks} fluid_settling_active={fluid_settling_active} fluid_settling_generated={fluid_settling_generated} fluid_settling_mutable={fluid_settling_mutable} fluid_settling_initialization={fluid_settling_initialization} fluid_settling_work={fluid_settling_work} fluid_settling_verification={fluid_settling_verification} fluid_settling_verification_chunks={fluid_settling_verification_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlas_faces={} font_atlas_sizes={} font_atlas_variations={} font_atlas_raster_modes={} font_atlas_size_range={:?} font_atlas_top_sizes={:?} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} extruded_sprite_mesh_cache={} extruded_sprite_material_cache={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} terrain_array_meshes={terrain_array_meshes} terrain_legacy_meshes={terrain_legacy_meshes} layer_meshes={layer_meshes} fluid_meshes={fluid_meshes} pooled_mesh_bytes={pooled_mesh_bytes} diagnostic_prev_us={} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} main_work_avg_us={} main_work_p50_us={} main_work_p95_us={} main_work_p99_us={} main_work_max_us={} slow_frames={slow_frames:?} stream_pending={stream_pending} stream_pending_renderable={stream_pending_renderable} stream_ready={stream_ready} stream_ready_renderable={stream_ready_renderable} stream_retired={stream_retired} wave_targets_renderable={wave_targets_renderable} pending_priority_scans={} pending_priority_avg_us={} pending_priority_max_us={} pending_priority_max_queue={} ready_priority_scans={} ready_priority_avg_us={} ready_priority_max_us={} ready_priority_max_queue={} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_chunk_base_limit={async_chunk_work_base_limit} async_generation={:?} async_initial_mesh={:?} async_remesh={:?} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} generation_prefetch_targets={generation_prefetch_targets} staged_generated_chunks={staged_generated_chunks} fluid_settling_active={fluid_settling_active} fluid_settling_generated={fluid_settling_generated} fluid_settling_mutable={fluid_settling_mutable} fluid_settling_initialization={fluid_settling_initialization} fluid_settling_work={fluid_settling_work} fluid_settling_verification={fluid_settling_verification} fluid_settling_verification_chunks={fluid_settling_verification_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlas_faces={} font_atlas_sizes={} font_atlas_variations={} font_atlas_raster_modes={} font_atlas_size_range={:?} font_atlas_top_sizes={:?} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={} world_objects={} world_object_chunks={} object_material_cache={} extruded_sprite_mesh_cache={} extruded_sprite_material_cache={}",
         assets.state.get(),
         *previous_diagnostic_micros,
         frame_times.count,

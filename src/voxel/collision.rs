@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{
     log_variant::is_hollow_log_id,
     microblock::{HOLLOW_LOG_WALL_THICKNESS, MicroblockMask},
-    world::VoxelWorld,
+    read::VoxelRead,
 };
 
 const COLLISION_EPSILON: f32 = 0.0001;
@@ -11,7 +11,7 @@ const MICRO_EDGE: f32 = 8.0;
 pub const ENTITY_STEP_HEIGHT: f32 = 0.5;
 pub const ENTITY_STEP_INCREMENT: f32 = 0.125;
 
-pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
+pub fn collides_aabb(world: &impl VoxelRead, min: Vec3, max: Vec3) -> bool {
     let min = min + Vec3::splat(COLLISION_EPSILON);
     let max = max - Vec3::splat(COLLISION_EPSILON);
 
@@ -91,7 +91,7 @@ fn hollow_log_shell_intersects(
 /// Geometry is evaluated at the world's 1/8-block micro resolution so a
 /// quarter-block or smaller ledge is climbed by exactly the required amount.
 pub fn try_step_up_aabb(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     position: Vec3,
     horizontal_delta: Vec3,
     max_step_height: f32,
@@ -123,7 +123,7 @@ pub fn try_step_up_aabb(
     None
 }
 
-pub(crate) fn aabb_is_clear(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+pub(crate) fn aabb_is_clear(world: &impl VoxelRead, bounds: (Vec3, Vec3)) -> bool {
     let min = (bounds.0 + Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
     let max = (bounds.1 - Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
     for y in min.y..=max.y {
@@ -139,7 +139,7 @@ pub(crate) fn aabb_is_clear(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
 }
 
 fn move_aabb_horizontally(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     position: Vec3,
     horizontal_delta: Vec3,
     bounds_at: &impl Fn(Vec3) -> (Vec3, Vec3),
@@ -158,7 +158,7 @@ fn move_aabb_horizontally(
 }
 
 fn settle_after_step(
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     position: Vec3,
     rise: f32,
     bounds_at: &impl Fn(Vec3) -> (Vec3, Vec3),

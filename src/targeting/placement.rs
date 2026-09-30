@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT},
-    voxel::{raycast::VoxelHit, world::VoxelWorld},
+    voxel::{raycast::VoxelHit, read::VoxelRead},
 };
 
 pub(crate) fn placement_voxel(
     hit: VoxelHit,
-    world: &VoxelWorld,
+    world: &impl VoxelRead,
     player_eye_position: Vec3,
 ) -> Option<IVec3> {
     if hit.normal == IVec3::ZERO {

@@ -313,11 +313,11 @@ mod tests {
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
             parse_line("/place"),
-            ParsedLine::Usage("/place structure <groupid> [variation]")
+            ParsedLine::Usage("/place structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/place structure foo extra extra"),
-            ParsedLine::Usage("/place structure <groupid> [variation]")
+            ParsedLine::Usage("/place structure <id> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature foo"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
