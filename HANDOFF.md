@@ -201,6 +201,8 @@ O Cut 21 é observabilidade direcionada apenas. Nenhum ganho de performance é r
 
 ### Cut 22 — separar `size.max` de adjacency autorada
 
+Commit `7ce183d8491ee43b516ed060b84f7ce2f060d7cd` (`Fix biome max adjacency fallback`), CI #10320 success.
+
 Runtime pós-Cut 21 expôs uma regressão introduzida pelo Cut 20 durante bootstrap de mundo:
 
 - panic em `surface biome site IVec2(3, 0) has no biome compatible with adjacency constraints`;
@@ -219,10 +221,32 @@ Correção do Cut 22:
 
 Consequência semântica deliberada: `size.max` continua limitando continuidade sempre que existe candidato compatível, mas adjacency autorada tem precedência quando os dois requisitos seriam localmente incompatíveis. Um bound absolutamente estrito em todos os casos exigiria assignment/região global em vez do selector local atual e não deve ser simulado com um panic.
 
+### Cut 23 — preservar `size.min` de surface biomes
+
+Relato em gameplay pós-Cut 22: oceanos aparecendo como faixas estreitas, apesar de `asteria:overworld/ocean` autorar `size.x/z min=180, max=520`.
+
+Root cause confirmado no histórico e na geometria atual:
+
+- `surface_minimum_spacing` calcula o lattice nominal a partir do maior `size.min` ativo mais toda a allowance de transition/domain warp; essa fórmula existe justamente para manter a borda regional fora do raio mínimo autorado;
+- o commit histórico `9f8ad77cd6aec66a5bfd03d97baad7de82bc03c2` (`fix: break up four-way biome junctions`) adicionou jitter independente de ±32% em X e Z para cada site, mas não alterou a fórmula de spacing;
+- dois sites vizinhos podiam então se mover um contra o outro em até 64% do spacing do eixo, reduzindo a separação efetiva para apenas 36% da nominal e permitindo Voronoi cells/faixas muito menores que `size.min`;
+- o multi-scale `warp_surface_position` introduzido posteriormente já é o owner da irregularidade orgânica de borda, então não é necessário sacrificar a garantia de tamanho para evitar geometria artificial.
+
+Correção preparada:
+
+- o jitter 2D independente de surface sites foi substituído por jitter lateral determinístico por linha: toda linha Z recebe o mesmo offset X;
+- sites na mesma linha preservam exatamente o spacing X; sites em linhas distintas preservam exatamente o spacing Z, então nenhuma aproximação causada pelo jitter pode invadir o raio mínimo usado para construir o lattice;
+- o deslocamento por linha continua quebrando junctions regulares de quatro células, enquanto o domain warp contínuo preserva bordas orgânicas;
+- volume biome jitter permanece inalterado;
+- nenhum `weight`, climate range, distribution, `size` JSON ou regra especial de ocean foi retunado;
+- regressões percorrem múltiplas células e seeds para provar tanto a preservação do spacing axial quanto a impossibilidade de o jitter comprimir o raio mínimo autorado.
+
+A mudança altera deterministicamente a geometria de surface biome sites. Validar em **mundo novo**; chunks já gerados não representam a nova geometria.
+
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 22;
-2. criar mundo novo e confirmar que bootstrap não panika e que `size.max` continua interrompendo cadeias de surface biome quando existe fallback compatível;
+1. passar audits + Clippy + Check do Cut 23;
+2. criar mundo novo e confirmar visualmente que oceanos não colapsam em faixas abaixo do `min=180` e que as bordas continuam orgânicas;
 3. coletar gameplay log reproduzindo movimento até ocorrer hitch;
 4. correlacionar `streaming_max_us` com warnings `slow streaming ...` do Cut 21 e otimizar somente o hot path confirmado;
 5. retomar a investigação do cold-start de `PrepareResources` sem repetir `ClusterConfig::None` nem o lighting warm-up refutado;
