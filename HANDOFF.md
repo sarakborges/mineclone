@@ -348,8 +348,10 @@ Commit `909a193c4e41113cb5a4cb0add5c5915cbbe59db` (`Use presentation scheduler o
 - métodos de sync/schedule/cancel/poll, caps, revision semantics e publication behavior não mudam;
 - `streaming.rs` teve somente o import e o `ResMut` do SystemParam renomeados; `mod.rs` teve somente import + init/resets equivalentes;
 - com isso os bridges transitórios de snapshot/scheduler ownership introduzidos pela Phase 7 foram removidos;
-- CI #10301 passou os audits e falhou no Clippy porque `render_diagnostics.rs` ainda importava o nome removido `ChunkMeshTasks`; `1f1cdd2f4e3ba793a0e0f9e06a1f3be3c422b4d3` migrou esse último consumer para `PresentationScheduler`, sem mudança no diagnóstico;
-- por erro de processo, esse corretivo foi publicado via Contents API antes do update do HANDOFF e portanto não ficou atômico com esta documentação; o histórico não foi reescrito/forçado e a exceção fica registrada aqui.
+- CI #10301 passou os audits e falhou no Clippy porque `render_diagnostics.rs` ainda importava o nome removido `ChunkMeshTasks`; `1f1cdd2f4e3ba793a0e0f9e06a1f3be3c422b4d3` migrou esse último consumer para `PresentationScheduler`, sem mudança intencional no diagnóstico;
+- por erro de processo, esse corretivo foi publicado via Contents API antes do update do HANDOFF e portanto não ficou atômico com esta documentação; o histórico não foi reescrito/forçado e a exceção fica registrada aqui;
+- CI #10303 passou os audits e expôs outro efeito colateral do mesmo rewrite manual: o campo `async_chunk_base_limit={async_chunk_work_base_limit}` havia sido apagado da format string de `render_diagnostics`, deixando a variável sem uso e falhando Clippy;
+- a correção subsequente restaura exatamente esse campo de diagnóstico; não remove a variável, não usa `allow` e não altera scheduler/render behavior.
 
 ### Próximos cuts
 
