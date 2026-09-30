@@ -8,8 +8,8 @@ use crate::{
 };
 
 const MAX_HELD_LIGHT_INTENSITY: f32 = 90.0;
-const HELD_LIGHT_RANGE: f32 = 8.0;
-const HELD_LIGHT_RADIUS: f32 = 0.12;
+pub(super) const HELD_LIGHT_RANGE: f32 = 8.0;
+pub(super) const HELD_LIGHT_RADIUS: f32 = 0.12;
 const HELD_LIGHT_OFFSET: Vec3 = Vec3::new(0.32, -0.24, -0.52);
 
 #[derive(Component)]
@@ -27,6 +27,21 @@ impl Plugin for DynamicLightsPlugin {
                 .chain()
                 .run_if(in_state(GameState::Gameplay)),
         );
+    }
+}
+
+pub(super) fn held_point_light(intensity: f32) -> PointLight {
+    PointLight {
+        color: Color::WHITE,
+        intensity,
+        range: HELD_LIGHT_RANGE,
+        radius: HELD_LIGHT_RADIUS,
+        // Held lights move with the camera. Cubemap shadow maps would rerender
+        // several shadow views continuously, while voxel terrain already receives
+        // this light through TerrainLightingBuffer. Keep the Bevy point light for
+        // non-terrain receivers, but avoid duplicating the expensive shadow path.
+        shadow_maps_enabled: false,
+        ..default()
     }
 }
 
@@ -49,18 +64,7 @@ fn spawn_held_dynamic_light(
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
                 HeldDynamicLight { block_id },
-                PointLight {
-                    color: Color::WHITE,
-                    intensity,
-                    range: HELD_LIGHT_RANGE,
-                    radius: HELD_LIGHT_RADIUS,
-                    // Held lights move with the camera. Cubemap shadow maps would rerender
-                    // several shadow views continuously, while voxel terrain already receives
-                    // this light through TerrainLightingBuffer. Keep the Bevy point light for
-                    // non-terrain receivers, but avoid duplicating the expensive shadow path.
-                    shadow_maps_enabled: false,
-                    ..default()
-                },
+                held_point_light(intensity),
                 Transform::from_translation(HELD_LIGHT_OFFSET),
                 visibility,
             ));
