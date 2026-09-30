@@ -216,52 +216,117 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     face_mesh = len(meshes) - 1
 
     s = body_width / 1.20
-    water_dark = bucket()
-    water_mid = bucket()
-    water_light = bucket()
     top = body_height * 0.5
 
-    def drop_step(bucket_, x, y, z, w, h, d):
-        add_box(bucket_, (x * s, top + y * s, z * s), (w * s, h * s, d * s))
+    # Hydro is not an accessory sitting on the blob. This mesh is a voxel
+    # continuation of the slime's own top surface: broad at the root, then
+    # narrowing into a water-drop point. Materials come from the body palette
+    # so the root matches the visible top exactly and the remaining faces keep
+    # the same voxel shading language instead of flat-colored slabs.
+    drop_buckets = [bucket() for _ in range(len(PALETTE))]
+    cell_x = 0.055 * s
+    cell_y = 0.055 * s
+    cell_z = 0.055 * s
+    base_y = top - 0.105 * s
 
     if not large:
-        # The droplet is not a prop sitting on the slime: it is the slime top
-        # itself continuing upward. Start broad and deeply embedded, then taper.
-        for x, y, z, w, h, d, mat in [
-            (0.000, -0.145,  0.010, 0.68, 0.18, 0.56, water_dark),
-            (0.000, -0.040,  0.008, 0.60, 0.16, 0.50, water_dark),
-            (0.000,  0.060,  0.006, 0.50, 0.15, 0.42, water_mid),
-            (0.006,  0.160,  0.004, 0.40, 0.14, 0.34, water_mid),
-            (0.014,  0.250,  0.002, 0.30, 0.12, 0.26, water_light),
-            (0.024,  0.327,  0.000, 0.21, 0.10, 0.19, water_light),
-            (0.034,  0.390, -0.004, 0.13, 0.08, 0.12, water_light),
-            (0.044,  0.438, -0.008, 0.07, 0.055,0.07, water_light),
-        ]:
-            drop_step(mat, x, y, z, w, h, d)
-        detail_height = 0.47 * s
-        detail_width = 0.68 * s
+        profiles = [
+            (0, 5.4, 4.7, 0.00),
+            (1, 5.1, 4.5, 0.00),
+            (2, 4.7, 4.1, 0.00),
+            (3, 4.2, 3.7, 0.05),
+            (4, 3.6, 3.2, 0.10),
+            (5, 3.0, 2.7, 0.15),
+            (6, 2.4, 2.2, 0.20),
+            (7, 1.8, 1.7, 0.28),
+            (8, 1.25, 1.20, 0.36),
+            (9, 0.72, 0.72, 0.45),
+        ]
     else:
-        for x, y, z, w, h, d, mat in [
-            (0.000, -0.165,  0.012, 0.76, 0.20, 0.64, water_dark),
-            (0.000, -0.045,  0.010, 0.68, 0.18, 0.56, water_dark),
-            (0.000,  0.072,  0.008, 0.57, 0.17, 0.48, water_mid),
-            (0.008,  0.188,  0.006, 0.46, 0.16, 0.39, water_mid),
-            (0.018,  0.292,  0.003, 0.35, 0.14, 0.30, water_light),
-            (0.030,  0.382,  0.000, 0.25, 0.11, 0.22, water_light),
-            (0.044,  0.454, -0.004, 0.16, 0.09, 0.15, water_light),
-            (0.058,  0.510, -0.008, 0.09, 0.065,0.09, water_light),
-        ]:
-            drop_step(mat, x, y, z, w, h, d)
-        detail_height = 0.55 * s
-        detail_width = 0.76 * s
+        profiles = [
+            (0, 6.2, 5.4, 0.00),
+            (1, 5.9, 5.1, 0.00),
+            (2, 5.5, 4.8, 0.00),
+            (3, 5.0, 4.3, 0.04),
+            (4, 4.4, 3.8, 0.09),
+            (5, 3.8, 3.3, 0.14),
+            (6, 3.2, 2.8, 0.19),
+            (7, 2.6, 2.3, 0.25),
+            (8, 2.0, 1.9, 0.31),
+            (9, 1.45, 1.40, 0.38),
+            (10, 0.90, 0.90, 0.46),
+            (11, 0.55, 0.55, 0.54),
+        ]
 
-    details_prims = [
-        prim(water_dark, 9),
-        prim(water_mid, 7),
-        prim(water_light, 10),
-    ]
-    meshes.append({"name": "hydro_water_droplet", "primitives": [p for p in details_prims if p]})
+    droplet = set()
+    layer_info = {}
+    for iy, rx, rz, shift in profiles:
+        layer_info[iy] = (rx, rz, shift)
+        lim_x = int(rx) + 2
+        lim_z = int(rz) + 2
+        for ix in range(-lim_x, lim_x + 1):
+            for iz in range(-lim_z, lim_z + 1):
+                px = (ix - shift) / rx
+                pz = iz / rz
+                if px * px + pz * pz <= 1.0:
+                    droplet.add((ix, iy, iz))
+
+    detail_faces = (
+        ((1, 0, 0), ((1, 0, 0), (1, 0, 1), (1, 1, 1), (1, 1, 0))),
+        ((-1, 0, 0), ((0, 0, 1), (0, 0, 0), (0, 1, 0), (0, 1, 1))),
+        ((0, 1, 0), ((0, 1, 0), (1, 1, 0), (1, 1, 1), (0, 1, 1))),
+        ((0, -1, 0), ((0, 0, 1), (1, 0, 1), (1, 0, 0), (0, 0, 0))),
+        ((0, 0, 1), ((1, 0, 1), (0, 0, 1), (0, 1, 1), (1, 1, 1))),
+        ((0, 0, -1), ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))),
+    )
+
+    max_layer = max(layer_info)
+
+    def droplet_material(ix: int, iy: int, iz: int, normal) -> int:
+        if iy <= 1:
+            return 5  # exact upward/top material of the Hydro body
+        t = iy / max_layer
+        rx, _rz, shift = layer_info[iy]
+        rel_x = (ix - shift) / max(rx, 1.0)
+        if normal == (0, 1, 0):
+            return 10 if t > 0.78 else 6
+        if normal == (1, 0, 0):
+            return 2
+        if normal == (-1, 0, 0):
+            return 0
+        if normal == (0, 0, 1):
+            return 2 if t < 0.65 else 7
+        if normal == (0, 0, -1):
+            if rel_x < -0.35:
+                return 0
+            if rel_x > 0.42:
+                return 5
+            if t > 0.72:
+                return 10
+            if t > 0.42:
+                return 6
+            return 1
+        return 3
+
+    for ix, iy, iz in sorted(droplet, key=lambda v: (v[1], v[2], v[0])):
+        for normal, corners in detail_faces:
+            if (ix + normal[0], iy + normal[1], iz + normal[2]) in droplet:
+                continue
+            if iy == 0 and normal == (0, -1, 0):
+                continue
+            pts = [
+                ((ix + px) * cell_x,
+                 base_y + (iy + py) * cell_y,
+                 (iz + pz) * cell_z)
+                for px, py, pz in corners
+            ]
+            quad(drop_buckets[droplet_material(ix, iy, iz, normal)], pts, normal)
+
+    details_prims = [p for p in (prim(b, i) for i, b in enumerate(drop_buckets)) if p]
+    meshes.append({"name": "hydro_water_droplet", "primitives": details_prims})
     details_mesh = len(meshes) - 1
+    detail_height = (max_layer + 1) * cell_y - 0.105 * s
+    detail_width = max((rx * 2.0 * cell_x for _iy, rx, _rz, _shift in profiles), default=0.0)
 
     materials = [
         {
@@ -365,7 +430,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     visual_height = body_height + detail_height
     visual_width = max(body_width, detail_width)
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Hydro droplet rebuild v1"},
+        "asset": {"version": "2.0", "generator": "Asteria Hydro integrated droplet rebuild v2"},
         "scene": 0,
         "scenes": [{"name": "GeoSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],
@@ -385,7 +450,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "occupied_voxels": len(vox),
             "visual_height": visual_height,
             "visual_width": visual_width,
-            "pixel_art_geometry": "Hydro droplet uses only axis-aligned voxel boxes; taper is expressed through stepped layer size changes",
+            "pixel_art_geometry": "Hydro top extension is an exposed-face voxel volume; all faces are cardinal and the teardrop taper is encoded by shrinking voxel layers",
             "reference_design": "clean turquoise blob whose own top continues upward into one broad-based teardrop point",
         },
     }
