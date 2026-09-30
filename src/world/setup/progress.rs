@@ -8,7 +8,9 @@ mod spawning;
 
 use std::time::Duration;
 
-use bevy::ecs::system::Local;
+use bevy::{ecs::system::Local, prelude::*};
+
+use crate::app::crash_log::log_gameplay_event;
 
 use self::{
     assets::wait_for_gameplay_assets,
@@ -32,6 +34,49 @@ pub(super) const INITIAL_LOADING_DISPATCH_BUDGET: Duration = Duration::from_mill
 pub(super) const INITIAL_FINALIZATION_FRAMES: u8 = 2;
 pub(super) const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
 
+#[derive(Default)]
+struct LoadingDiagnostics {
+    timer: Option<Timer>,
+    previous_phase: Option<WorldLoadingPhase>,
+}
+
+fn log_loading_diagnostics(
+    time: Res<Time<Real>>,
+    state: &super::WorldLoadingState,
+    diagnostics: &mut LoadingDiagnostics,
+) {
+    let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
+    timer.tick(time.delta());
+
+    if diagnostics.previous_phase != Some(state.phase) {
+        if let Some(previous) = diagnostics.previous_phase {
+            log_gameplay_event(format!("world.loading.phase.complete phase={previous:?}"));
+        }
+        log_gameplay_event(format!("world.loading.phase.start phase={:?} detail={}", state.phase, loading_phase_detail(state)));
+        diagnostics.previous_phase = Some(state.phase);
+        return;
+    }
+
+    if timer.just_finished() {
+        log_gameplay_event(format!("world.loading.phase.progress phase={:?} detail={}", state.phase, loading_phase_detail(state)));
+    }
+}
+
+fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
+    match state.phase {
+        WorldLoadingPhase::Generating => format!("generated={}/{} cursor={}", state.generated, state.total(), state.generation_cursor),
+        WorldLoadingPhase::SettlingFluids => {
+            let (_, generated, mutable, initialization, work, verification, verification_chunks) = state.fluid_settling.diagnostic_counts();
+            format!("generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}")
+        }
+        WorldLoadingPhase::Lighting => format!("seeded={}/{} relaxations={}/{}", state.lighting_seed_cursor, state.total(), state.lighting_relaxation_cursor, state.lighting_relaxations.len()),
+        WorldLoadingPhase::Meshing => format!("meshed={}/{} cursor={}", state.meshed, state.total(), state.mesh_cursor),
+        WorldLoadingPhase::Assets => format!("loaded={}/{}", state.assets_loaded, state.assets_total),
+        WorldLoadingPhase::Finalizing => format!("frames={}/{}", state.finalization_frames, INITIAL_FINALIZATION_FRAMES),
+        WorldLoadingPhase::Spawning => format!("presentation_prewarm={}/{}", state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES),
+    }
+}
+
 pub(in crate::world) fn setup_world(
     mut pipeline: WorldSetupChunkPipeline,
     mut progress: WorldSetupProgress,
@@ -40,6 +85,7 @@ pub(in crate::world) fn setup_world(
     persistence: WorldSetupPersistence,
     mut finalization: WorldSetupFinalization,
     mut initial_presentation_prewarm: Local<InitialPresentationPrewarm>,
+    mut loading_diagnostics: Local<LoadingDiagnostics>,
 ) {
     if finalization.transition.is_active() {
         return;
@@ -111,4 +157,10 @@ pub(in crate::world) fn setup_world(
             &mut initial_presentation_prewarm,
         ),
     }
+
+    log_loading_diagnostics(
+        assets.time,
+        &progress.loading_state,
+        &mut loading_diagnostics,
+    );
 }
