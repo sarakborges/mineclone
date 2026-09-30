@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    CreatureInstance,
+    CreatureInstance, EntityMetaTags,
     lifecycle::CreatureDeathTimer,
     motion::CreatureMotion,
     visual::CreatureAnimationState,
@@ -21,6 +21,7 @@ type DamageableCreatures<'w, 's> = Query<
         &'static mut CreatureAnimationState,
         &'static mut CreatureMotion,
         &'static Transform,
+        &'static EntityMetaTags,
     ),
     With<CreatureInstance>,
 >;
@@ -39,12 +40,12 @@ impl CreatureAttackRuntime<'_, '_> {
         attack: &AttackDefinition,
         player_position: Vec3,
     ) -> bool {
-        let Ok((mut health, mut animation, mut motion, creature_transform)) =
+        let Ok((mut health, mut animation, mut motion, creature_transform, meta_tags)) =
             self.creatures.get_mut(entity)
         else {
             return false;
         };
-        if health.is_dead() {
+        if health.is_dead() || meta_tags.is_no_ai() {
             return false;
         }
 
