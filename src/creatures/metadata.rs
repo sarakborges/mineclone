@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const NO_AI_META_TAG: &str = "NO_AI";
+const NO_AI_META_TAG: &str = "NO_AI";
 
-pub(crate) fn normalized_meta_tag(tag: &str) -> Option<&'static str> {
+fn normalized_meta_tag(tag: &str) -> Option<&'static str> {
     if tag.eq_ignore_ascii_case(NO_AI_META_TAG) {
         Some(NO_AI_META_TAG)
     } else {
@@ -55,13 +55,6 @@ impl EntityMetaTags {
             return Err(format!("meta tag is not set: {tag}"));
         };
         *current = value;
-        Ok(())
-    }
-
-    pub(crate) fn validate(&self) -> Result<(), String> {
-        if let Some(tag) = self.0.keys().find(|tag| normalized_meta_tag(tag).is_none()) {
-            return Err(format!("unknown saved meta tag: {tag}"));
-        }
         Ok(())
     }
 }
