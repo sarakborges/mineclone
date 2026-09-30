@@ -13,7 +13,11 @@ use bevy::{
 };
 
 use crate::{
-    app::{game_state::GameState, resource_systems::reset_resource},
+    app::{
+        crash_log::log_gameplay_event,
+        game_state::GameState,
+        resource_systems::reset_resource,
+    },
     content::{
         biome::BiomeRegistry,
         block::BlockRegistry,
@@ -267,7 +271,25 @@ fn apply_object_placement_requests(
     mut world: ResMut<VoxelWorld>,
 ) {
     for request in requests.read() {
-        let _ = world.set_object_at(request.support, request.object, &objects);
+        if world
+            .set_object_at(request.support, request.object, &objects)
+            .is_some()
+        {
+            log_gameplay_event(format!(
+                "object.place applied object={} support={:?} face={:?} rotation={:?}",
+                request.object.object_id,
+                request.support,
+                request.object.face,
+                request.object.rotation
+            ));
+        } else {
+            log_gameplay_event(format!(
+                "object.place failed object={} support={:?} face={:?}",
+                request.object.object_id,
+                request.support,
+                request.object.face
+            ));
+        }
     }
 }
 
@@ -305,6 +327,12 @@ fn apply_object_removal_requests(
                 &mut runtime.drops,
             );
         }
+        log_gameplay_event(format!(
+            "object.remove applied object={} support={:?} drop_loot={}",
+            removed.object_id,
+            request.support,
+            request.drop_loot
+        ));
         debug_assert_eq!(removed.object_id, object.object_id);
     }
 }
