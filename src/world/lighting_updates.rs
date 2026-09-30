@@ -26,7 +26,11 @@ use super::{
 const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
 const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
-#[derive(Default)]struct LightingDiagnostics {    timer: Option<Timer>,    processed_voxels: u64,}
+#[derive(Default)]
+pub(in crate::world) struct LightingDiagnostics {
+    timer: Option<Timer>,
+    processed_voxels: u64,
+}
 #[derive(SystemParam)]
 pub(super) struct DynamicLightingRuntime<'w, 's> {
     world: ResMut<'w, VoxelWorld>,
@@ -94,12 +98,11 @@ pub(super) fn process_dynamic_lighting(
         });
     }
 
-    let dirty_meshlet_count = dirty_meshlets.len();
     let dirty_meshlet_count = runtime.dirty_meshlets.len();
     for (&coord, &meshlets) in runtime.dirty_meshlets.iter() {
         runtime.lighting_revisions.bump(coord, meshlets);
     }
-    changed_chunks.clear();
+    runtime.changed_chunks.clear();
 
     for (coord, meshlets) in runtime.dirty_meshlets.drain() {
         runtime
