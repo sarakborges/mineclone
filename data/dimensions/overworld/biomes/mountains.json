@@ -5,6 +5,9 @@
     "portuguese_brazil": "Montanhas",
     "spanish": "Montañas"
   },
+  "tags": [
+    "mountain"
+  ],
   "distributions": [
     {
       "type": "mountain_belt",
