@@ -390,6 +390,8 @@ Gameplay log `2026-09-30_01-46-22-083021400.txt` localiza a dívida fora da publ
 
 ### Cut 13 — RenderApp ganha timing por estágio
 
+Commit `7ba078005d89f5f4f9f3db3f461bdf8fea8a20ad` (`Split RenderApp stage timing`), CI #10307 success.
+
 - o timer total existente continua cobrindo o mesmo intervalo `ExtractCommands -> PostCleanup` e mantém seus percentis para comparação histórica;
 - checkpoints novos medem separadamente `ExtractCommands`, `PrepareAssets`, `PrepareMeshes`, o bloco `CreateViews + Specialize + PrepareViews`, `Queue + PhaseSort`, `Prepare`, `Render` e `Cleanup + PostCleanup`;
 - os campos novos do log são `stage_extract_*`, `stage_assets_*`, `stage_meshes_*`, `stage_views_*`, `stage_queue_*`, `stage_prepare_*`, `stage_render_*` e `stage_cleanup_*`, cada um com média e máximo por janela;
@@ -397,11 +399,24 @@ Gameplay log `2026-09-30_01-46-22-083021400.txt` localiza a dívida fora da publ
 - stage metrics são limpas junto dos samples totais em cada lifecycle reset para não misturar Loading e Gameplay; publication mantém a política específica do Cut 12;
 - este cut não tenta otimizar o estágio ainda: se `stage_render` dominar, investigar render graph/submit/present/GPU synchronization; se `stage_assets`/`stage_meshes` dominar, atacar upload/churn de assets; se `stage_queue`/`stage_prepare` dominar, atacar quantidade/batching de render entities somente com essa evidência.
 
+### Cut 14 — reset completo de presentation reentra no pipeline
+
+- o audit do exit criterion descartável encontrou uma lacuna real: `ChunkRenderPool` podia ser limpo, mas `pending` era reconstruído somente quando a seleção espacial mudava; destruir toda presentation com o jogador parado podia deixar chunks ainda desejados sem caminho explícito de republication;
+- `ChunkRenderPool` ganha `presentation_reset_revision`, independente de `membership_revision`; insert/retirement normal continuam alterando apenas membership e **não** causam scan global de desired chunks;
+- `reset_all_presentations` agora drena allocations completas, incluindo render entities e mesh handles, limpa active-column accounting, published source stamps e byte accounting, e sempre avança o reset revision;
+- o teardown usa a mesma `retire_render_allocation_parts` do retirement normal: entities são despawnadas e mesh assets continuam na fila deferred de três frames, sem criar uma segunda política de lifetime;
+- `ChunkStreamingState` observa o reset revision; cada revision nova executa uma única passagem sobre `residency.desired` e requeueia somente presentation ausente que não esteja em generation-unpublished nem sob mesh-pressure suppression;
+- chunks já residentes voltam pelo pipeline normal `pending -> resident lookup -> ready -> initial presentation`; `VoxelWorld` não é regenerado, sobrescrito nem reconstruído por causa de um reset visual;
+- `InitialPresentationState` é deliberadamente preservado: rebuild de render não repete direct-light seed, fluid runtime activation ou outros side effects once-per-residency;
+- a regressão `presentation_reset_requeues_desired_chunks_without_selection_change` cobre o caso estacionário e confirma que a mesma reset revision não duplica enqueue;
+- com os source stamps dos Cuts 7–8, stale checks existentes e este trigger de rebuild, presentation deixa de ser apenas conceitualmente descartável: há um caminho explícito para destruir render state e reconstruí-lo a partir do world autoritativo sem transformar render em world truth;
+- este cut é de correctness/ownership; não há claim de ganho de performance.
+
 ### Próximos cuts
 
 1. coletar gameplay log novo com `stage_*` para localizar precisamente o custo dentro do RenderApp;
 2. aplicar um único cut de performance no estágio dominante e comparar contra o log `2026-09-30_01-46-22-083021400.txt`;
-3. depois da dívida de performance localizada, auditar o exit criterion de rebuild descartável como um todo antes de encerrar Phase 7.
+3. após a dívida de performance ser localizada/endereçada, fazer o audit final da Phase 7 e decidir seu encerramento.
 
 ## Regras de continuidade
 

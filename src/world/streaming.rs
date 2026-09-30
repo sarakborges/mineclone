@@ -82,6 +82,7 @@ pub(super) struct ChunkStreamingState {
     mesh_pressure: MeshPressureState,
     generation_wave: GenerationWaveState,
     priority_diagnostics: StreamingPriorityDiagnostics,
+    observed_presentation_reset_revision: u64,
 }
 
 impl ChunkStreamingState {
@@ -126,6 +127,29 @@ impl ChunkStreamingState {
     fn requeue(&mut self, coord: IVec3) {
         if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
             self.pending.enqueue_front(coord);
+        }
+    }
+
+    fn sync_presentation_reset(&mut self, render_pool: &ChunkRenderPool) {
+        let revision = render_pool.presentation_reset_revision();
+        if self.observed_presentation_reset_revision == revision {
+            return;
+        }
+        self.observed_presentation_reset_revision = revision;
+
+        let missing = self
+            .residency
+            .desired
+            .iter()
+            .copied()
+            .filter(|coord| {
+                !render_pool.contains(*coord)
+                    && !self.generated_chunk_is_unpublished(*coord)
+                    && !self.mesh_is_pressure_evicted(*coord)
+            })
+            .collect::<Vec<_>>();
+        for coord in missing {
+            self.requeue(coord);
         }
     }
 
@@ -577,6 +601,7 @@ pub(super) fn stream_chunks(
         }
     }
 
+    work.state.sync_presentation_reset(&renderer.pool);
     work.generation_tasks.sync_snapshot(&generation, &content);
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
@@ -698,6 +723,25 @@ mod tests {
             ),
             ..default()
         }
+    }
+
+    #[test]
+    fn presentation_reset_requeues_desired_chunks_without_selection_change() {
+        let coord = IVec3::new(3, 0, -2);
+        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
+        state.residency.desired.insert(coord);
+        let mut render_pool = ChunkRenderPool::default();
+
+        state.sync_presentation_reset(&render_pool);
+        assert!(!state.pending.contains(coord));
+
+        let _ = render_pool.reset_all_presentations();
+        state.sync_presentation_reset(&render_pool);
+        assert!(state.pending.contains(coord));
+        let pending_count = state.pending.len();
+
+        state.sync_presentation_reset(&render_pool);
+        assert_eq!(state.pending.len(), pending_count);
     }
 
     #[test]

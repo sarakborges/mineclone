@@ -41,7 +41,7 @@ pub(super) struct ChunkRenderAllocation {
     pub(super) fluid_mesh_bytes: usize,
 }
 
-pub(super) struct DetachedRenderAllocationParts {
+pub(crate) struct DetachedRenderAllocationParts {
     pub(super) entities: Vec<Entity>,
     pub(super) meshes: Vec<Handle<Mesh>>,
 }
@@ -115,6 +115,7 @@ pub struct ChunkRenderPool {
     published_sources: HashMap<IVec3, ChunkPublishedPresentationSources>,
     total_mesh_bytes: usize,
     membership_revision: u64,
+    presentation_reset_revision: u64,
 }
 
 impl ChunkRenderPool {
@@ -128,6 +129,10 @@ impl ChunkRenderPool {
 
     pub(crate) fn membership_revision(&self) -> u64 {
         self.membership_revision
+    }
+
+    pub(crate) fn presentation_reset_revision(&self) -> u64 {
+        self.presentation_reset_revision
     }
 
     pub(crate) fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
@@ -672,13 +677,16 @@ impl ChunkRenderPool {
         }
     }
 
-    fn clear(&mut self) -> Vec<Handle<Mesh>> {
+    pub(crate) fn reset_all_presentations(&mut self) -> DetachedRenderAllocationParts {
         let had_active_allocations = !self.active.is_empty();
-        let mesh_handles = self
-            .active
-            .drain()
-            .flat_map(|(_, slot)| slot.meshes)
-            .collect();
+        let mut parts = DetachedRenderAllocationParts {
+            entities: Vec::new(),
+            meshes: Vec::new(),
+        };
+        for (_, mut slot) in self.active.drain() {
+            parts.entities.append(&mut slot.entities);
+            parts.meshes.append(&mut slot.meshes);
+        }
 
         self.active_column_counts.clear();
         self.published_sources.clear();
@@ -686,8 +694,9 @@ impl ChunkRenderPool {
         if had_active_allocations {
             self.bump_membership_revision();
         }
+        self.bump_presentation_reset_revision();
 
-        mesh_handles
+        parts
     }
 
     fn add_active_column(&mut self, column: IVec2) {
@@ -718,6 +727,13 @@ impl ChunkRenderPool {
             .membership_revision
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
+    }
+
+    fn bump_presentation_reset_revision(&mut self) {
+        self.presentation_reset_revision = self
+            .presentation_reset_revision
+            .checked_add(1)
+            .expect("chunk render pool presentation reset revision exhausted");
     }
 }
 
@@ -789,15 +805,8 @@ pub(crate) fn clear_chunk_render_pool(
     mut commands: Commands,
     mut render_pool: ResMut<ChunkRenderPool>,
 ) {
-    let mesh_handles = render_pool.clear();
-    if mesh_handles.is_empty() {
-        return;
-    }
-    commands.queue(move |world: &mut World| {
-        world
-            .resource_mut::<DeferredMeshAssetRetirements>()
-            .enqueue(mesh_handles);
-    });
+    let parts = render_pool.reset_all_presentations();
+    retire_render_allocation_parts(&mut commands, parts.entities, parts.meshes);
 }
 
 pub(crate) fn advance_deferred_mesh_asset_retirements(
