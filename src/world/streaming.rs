@@ -504,6 +504,7 @@ pub(super) struct ChunkStreamingWork<'w> {
 pub(super) struct ChunkStreamingSelection<'w, 's> {
     render_distance: Res<'w, RenderDistanceSettings>,
     pending_warp: Res<'w, PendingWarp>,
+    presentation_selection: ResMut<'w, ChunkPresentationSelection>,
     scratch: Local<'s, selection::QueueRebuildScratch>,
 }
 
@@ -520,7 +521,6 @@ pub(super) fn stream_chunks(
     mut renderer: ChunkRenderer,
     player: Single<&Transform, With<GameplayCamera>>,
     mut selection: ChunkStreamingSelection,
-    mut presentation_selection: ResMut<ChunkPresentationSelection>,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
 ) {
@@ -541,7 +541,9 @@ pub(super) fn stream_chunks(
     let allow_forward_preload = warp_center.is_none();
     let current_tick = work.world_ticks.current_tick();
 
-    presentation_selection.sync_from_streaming(Some(center), horizontal_radius);
+    selection
+        .presentation_selection
+        .sync_from_streaming(Some(center), horizontal_radius);
 
     if work
         .state
@@ -587,9 +589,8 @@ pub(super) fn stream_chunks(
         }
 
         let cancelled_meshes = {
-            let state = &work.state;
             work.mesh_tasks
-                .cancel_where(|coord| !presentation_selection.retains_render_mesh(coord))
+                .cancel_where(|coord| !selection.presentation_selection.retains_render_mesh(coord))
         };
         for coord in cancelled_meshes {
             work.state.clear_initial_mesh_seed_catchup(coord);
@@ -607,7 +608,7 @@ pub(super) fn stream_chunks(
             &mut renderer,
             &mut work,
             &mut queues,
-            &presentation_selection,
+            &selection.presentation_selection,
             current_tick,
         );
     }
