@@ -119,7 +119,7 @@ pub(super) fn restore_saved_creatures(
             &creature.definition_id,
             feet,
             Some(creature.health),
-            EntityMetaTags::default(),
+            creature.meta_tags,
         ) {
             warn!(
                 "Could not restore creature {}: {error}",
