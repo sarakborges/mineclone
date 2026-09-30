@@ -302,7 +302,7 @@ fn dispatch_remesh_tasks(
         // Deferred and stale candidates also consume main-thread work. Charge
         // the attempt before any early return can bypass the frame budget.
         budget.record(1);
-        if !context.streaming.retains_render_mesh(coord) {
+        if !context.presentation_selection.retains_render_mesh(coord) {
             // Keep invalidation attached to a still-live render allocation.
             // Explicit render retirement removes it; a rapid reversal/warp
             // can instead make it eligible again without losing dirty work.
