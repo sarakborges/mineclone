@@ -49,9 +49,8 @@ const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 struct RemeshDispatchContext<'a> {
     world: &'a VoxelWorld,
     render_pool: &'a ChunkRenderPool,
-    streaming: &'a ChunkStreamingState,
-    lighting_revisions: &'a PresentationLightingRevisions,
     presentation_selection: &'a ChunkPresentationSelection,
+    lighting_revisions: &'a PresentationLightingRevisions,
     async_work: &'a ChunkAsyncWorkLimiter,
     center: Option<IVec3>,
     deadline: Instant,
