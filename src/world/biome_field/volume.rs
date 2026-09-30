@@ -52,6 +52,7 @@ pub(crate) struct VolumeBiomeSelection {
     pub(crate) biome_index: usize,
     pub(crate) strength: f32,
     pub(crate) local_position: Vec3,
+    pub(crate) vertical_radius: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -135,6 +136,7 @@ impl BiomeField {
             biome_index: site.biome_index,
             strength,
             local_position,
+            vertical_radius: site.radii.y,
         })
     }
 

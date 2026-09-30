@@ -10,9 +10,9 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, block_id::intern_block_id,
-        dimension::DimensionDefinition, fluid::FluidRegistry, structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
+        biome::{BiomeKind, BiomeRegistry}, biome_density::BiomeDensityModifier,
+        block::BlockRegistry, block_id::intern_block_id, dimension::DimensionDefinition,
+        fluid::FluidRegistry, structure::StructureRegistry, structure_set::StructureSetRegistry,
     },
     voxel::{
         cell::VoxelCell,
@@ -87,6 +87,16 @@ pub(crate) fn generate_chunk(
         WorldGenerationMode::Void => unreachable!(),
     };
     let allow_solid_volume = context.world_generation.mode() == WorldGenerationMode::Normal;
+    let has_solid_volume = context.biomes.iter().any(|biome| {
+        biome.kind == BiomeKind::Volume
+            && matches!(
+                biome.density_modifier,
+                Some(
+                    BiomeDensityModifier::Solid { .. }
+                        | BiomeDensityModifier::FloatingIsland { .. }
+                )
+            )
+    });
     if chunk_coord.y > maximum_surface_chunk_y.max(structure_top_chunk)
         && (!allow_solid_volume || !context.biomes.has_volume_density_modifiers())
     {
@@ -119,12 +129,13 @@ pub(crate) fn generate_chunk(
         .div_euclid(CHUNK_SIZE as i32);
 
     // Most volume modifiers only carve existing terrain. Avoid constructing a
-    // cave/volume region for chunks that are well above any local
-    // surface, while retaining two full chunks of headroom for high lake water,
-    // biome transitions and structures reaching in from neighboring columns.
+    // cave/volume region for chunks that are well above any local surface,
+    // while retaining two full chunks of headroom for high lake water, biome
+    // transitions and structures reaching in from neighboring columns. Solid
+    // volume modifiers, including floating islands, must remain eligible here.
     if chunk_coord.y
         > local_surface_chunk.max(structure_top_chunk) + LOCAL_EMPTY_HEADROOM_CHUNKS
-        && (!allow_solid_volume || !context.biomes.has_volume_solid_density_modifiers())
+        && (!allow_solid_volume || !has_solid_volume)
     {
         return VoxelChunk::empty();
     }

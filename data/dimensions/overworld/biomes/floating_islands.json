@@ -18,6 +18,19 @@
     "edgeIrregularity": 0.13,
     "topRoughness": 0.08
   },
+  "surfaceLayers": [
+    {
+      "block": "asteria:grass_block",
+      "depth": 1
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 4
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
   "solidBlock": "asteria:stone",
   "visuals": {
     "skyColor": {

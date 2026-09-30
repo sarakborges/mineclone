@@ -74,7 +74,7 @@ Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
 Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`, `c4b62f5bdf103a63807d0340234be5169c2e1bb9` e correção de gate `99cd6456af1f77b670f1e771d3b372cc46dac735`. O merge de `develop` em `12806bd94b08498d15ac92111b74e22863935b93` preservou o corte e passou CI #10341.
 
-- `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes (e reutilizáveis futuramente);
+- `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes;
 - `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
 - selector data-driven suporta `ids` e `tags` com semântica OR dentro do selector;
 - constraints suportam `allow` e `deny`; sem `allow` significa permitido salvo deny, e `deny` sempre vence;
@@ -82,49 +82,46 @@ Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbf
 - `BiomeFieldEntry` carrega tags/constraints imutáveis para geração async;
 - `volume_selection_in_region` preserva a API para planners e resolve a surface identity do anchor; o density pass usa `volume_selection_in_region_for_surface` para reutilizar `GenerationColumnSample.identity_surface_index` sem novo surface sample por voxel;
 - volume biome sem constraints mantém comportamento irrestrito anterior;
-- nenhum biome atual recebeu constraint inventada; o corte entrega a capacidade genérica sem retuning arbitrário de conteúdo.
-
-Gate history:
-
-- primeiro gate: helper `test_surface_entry` ainda construía `BiomeFieldEntry` sem `tags`/`surface_constraints`;
-- segundo gate em `c4b62f5...`: somente três warnings em `selection.rs` (`BiomeDistribution` import não usado e dois parâmetros `cell` não usados);
-- `99cd6456...` remove o import morto e marca os dois parâmetros intencionalmente não usados, sem mudança runtime.
+- nenhum biome atual recebeu constraint inventada.
 
 Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
 
 ### Cut 27 — volume biome surface indicators
 
-Implementação preparada em `tmp/cut27-volume-surface-indicator`:
+Commit `5121da7ea2fb59d37b71c24ad12f38a1c722b9e6`, CI #10342 success.
 
-- `VolumeStructurePlacementRules` ganhou `mode`, com default `volume` para preservar todo conteúdo existente;
-- novo modo data-driven `surface_indicator`; JSON usa `"mode": "surface_indicator"` dentro de `volumePlacement`;
-- não existe segundo sistema de indicator: continua sendo `BiomeStructure`, portanto structure groups, chance, priority, conflict groups, reserve-space e connectors continuam usando o planner generalizado;
-- a identidade determinística/chance continuam derivadas do volume site 3D original;
-- no modo `surface_indicator`, o X/Z do volume site é projetado para o surface terrain e o root Y é resolvido por `validated_structure_origin_y`;
-- restrictions e ground-fit do root/children usam o surface biome efetivo da projeção, não o ID do volume biome;
-- antes da projeção o planner continua verificando que o volume site está realmente selecionado naquele X/Z, portanto `surfaceConstraints` do Cut 26 também se aplicam ao indicator;
-- `volume` permanece o comportamento default e segue usando as restrictions volumétricas existentes;
-- nenhuma structure concreta foi inventada para biomes atuais; o corte entrega a capacidade genérica para conteúdo autorado.
+- `VolumeStructurePlacementRules.mode` defaulta para `volume`, preservando conteúdo existente;
+- novo modo `surface_indicator` continua sendo `BiomeStructure`, portanto structure groups, chance, priority, conflict groups, reserve-space e connectors usam o planner generalizado;
+- identidade/chance continuam derivadas do volume site 3D original;
+- o root é projetado no mesmo X/Z para o surface Y via `validated_structure_origin_y`;
+- restrictions/ground-fit do root e children usam o surface biome efetivo da projeção;
+- o volume site precisa continuar selecionado naquele X/Z, então `surfaceConstraints` também se aplicam;
+- nenhuma indicator concreta foi inventada para conteúdo atual; o corte entrega a capacidade autorável.
 
-Regressão cobre default `volume` do novo placement mode. O gate deve ser executado após consolidação no branch principal.
+### Cut 28 — floating islands como ilhas estratificadas
 
-### Próximo workstream
+Implementação preparada em `tmp/cut28-floating-islands`:
 
-1. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
+- o shape deixou de ser um único blob radial; cada site agora tem um core central obrigatório + 3–5 lobes secundários determinísticos;
+- os lobes secundários têm offset limitado e footprint mínimo que garantem overlap com o core; não são pedras independentes;
+- união de masks usa smooth union `1 - (1-a)(1-b)`, produzindo transição gradual entre massas;
+- cada lobe varia footprint X/Z, top offset e underside depth pelo seed; planar/detail noise continuam responsáveis pela irregularidade orgânica das bordas e do topo;
+- topo permanece amplo e levemente ondulado; underside continua afunilando em direção às bordas;
+- `VolumeBiomeSelection` carrega apenas o `vertical_radius` durante density sampling; o density pass converte a posição local em profundidade de superfície uma única vez e empacota só `u16` para o material pass;
+- `surfaceLayers` passa a ser permitido em volume biome somente quando o density modifier é `floating_island`; demais volumes continuam proibidos de usá-lo;
+- Floating Islands agora autoram `grass_block` depth 1 -> `dirt` depth 4 -> `stone`, mantendo `solidBlock: stone` como fallback;
+- footprint autorado aumenta de `22..48` para `48..96` em X/Z e de `8..16` para `12..24` em Y;
+- o novo `min` não aumenta o spacing global dos volume sites: Caverns já possuía `min=48` em X/Z e `min=18` em Y;
+- o early-out de chunks altos agora considera `FloatingIsland` um solid volume modifier; antes o flag legado considerava somente `Solid`, o que podia descartar chunks de ilha acima do terrain local;
+- nenhuma regra de surface terrain, structure ou streaming foi alterada.
 
-Princípios:
-
-- metadata/data-driven para relações de conteúdo;
-- sem hardcode de biome IDs quando primitive geral resolve;
-- determinismo, chunk seams e generation-order invariance obrigatórios;
-- Hydrology legado continua proibido;
-- validar mudanças de worldgen em mundo novo.
+Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado e variação determinística por seed. O gate deve ser executado após consolidação.
 
 ## Próximos passos
 
-1. consolidar e fechar CI do Cut 27;
-2. reescrever floating islands e estratificação;
-3. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
+1. consolidar e fechar CI do Cut 28;
+2. gameplay em mundo novo para validar ocean/coast, constraints/indicator e floating islands;
+3. coletar log pós-Cut 24 para confirmar se o hitch de generation frontier caiu;
 4. retomar cold-start de `PrepareResources` depois do pacote.
 
 ## Regras de continuidade

@@ -135,11 +135,17 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         "volume biome {} cannot define terrainModifiers",
         definition.id
     );
-    assert!(
-        definition.surface_layers.is_empty(),
-        "volume biome {} cannot define surfaceLayers",
-        definition.id
-    );
+    if !definition.surface_layers.is_empty() {
+        assert!(
+            matches!(
+                definition.density_modifier,
+                Some(crate::content::biome_density::BiomeDensityModifier::FloatingIsland { .. })
+            ),
+            "volume biome {} surfaceLayers currently require a floating_island densityModifier",
+            definition.id
+        );
+        definition.validate_surface_materials();
+    }
     assert!(
         definition.surface_margin.is_none(),
         "volume biome {} cannot define surfaceMargin",
@@ -205,7 +211,7 @@ fn validate_visuals(definition: &BiomeDefinition) {
     );
     assert!(
         (0.0..=1.0).contains(&visuals.underwater_tint.opacity),
-        "biome {} underwaterTint opacity must be between 0 and 1",
+        "biome {} underwaterTint.opacity must be between 0 and 1",
         definition.id
     );
 
