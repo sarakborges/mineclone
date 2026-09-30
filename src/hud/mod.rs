@@ -195,10 +195,6 @@ impl HudSettings {
         }
     }
 
-    pub(crate) const fn target_block_position_preference(&self) -> TargetBlockPosition {
-        self.target_block_position
-    }
-
     pub(crate) fn set_target_block_position(&mut self, position: TargetBlockPosition) {
         self.target_block_position = position;
     }
