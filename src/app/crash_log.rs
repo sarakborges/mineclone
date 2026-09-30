@@ -55,6 +55,27 @@ pub(crate) fn append_runtime_diagnostic(line: &str) -> bool {
     append_runtime_line(line)
 }
 
+pub(crate) fn log_gameplay_event(message: impl Into<String>) {
+    log_gameplay_line("EVENT", message.into());
+}
+
+pub(crate) fn log_gameplay_warning(message: impl Into<String>) {
+    log_gameplay_line("WARN", message.into());
+}
+
+pub(crate) fn log_gameplay_error(message: impl Into<String>) {
+    log_gameplay_line("ERROR", message.into());
+}
+
+fn log_gameplay_line(level: &str, message: String) {
+    match level {
+        "WARN" => bevy::log::warn!(target: "asteria::gameplay", "{message}"),
+        "ERROR" => bevy::log::error!(target: "asteria::gameplay", "{message}"),
+        _ => bevy::log::info!(target: "asteria::gameplay", "{message}"),
+    }
+    let _ = append_runtime_diagnostic(&format!("[{level}] {message}"));
+}
+
 fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
     let message = panic_message(info);
     let location = info
