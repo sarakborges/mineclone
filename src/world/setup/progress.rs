@@ -15,7 +15,7 @@ use self::{
     generation::generate_initial_chunks,
     lighting::light_initial_chunks,
     meshing::mesh_initial_chunks,
-    spawning::spawn_loaded_world,
+    spawning::{InitialPresentationPrewarm, spawn_loaded_world},
 };
 use super::{
     WorldLoadingPhase,
@@ -36,9 +36,14 @@ pub(in crate::world) fn setup_world(
     mut simulation: WorldSetupSimulation,
     persistence: WorldSetupPersistence,
     mut finalization: WorldSetupFinalization,
+    mut initial_presentation_prewarm: Local<InitialPresentationPrewarm>,
 ) {
     if finalization.transition.is_active() {
         return;
+    }
+
+    if progress.loading_state.phase != WorldLoadingPhase::Spawning {
+        initial_presentation_prewarm.reset();
     }
 
     if !progress.loading_state.screen_rendered {
@@ -100,6 +105,7 @@ pub(in crate::world) fn setup_world(
             &mut progress,
             &persistence,
             &mut finalization,
+            &mut initial_presentation_prewarm,
         ),
     }
 }

@@ -19,56 +19,81 @@ use super::super::system_params::{
     WorldSetupFinalization, WorldSetupPersistence, WorldSetupProgress,
 };
 
+const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
+
+#[derive(Default)]
+pub(super) struct InitialPresentationPrewarm {
+    primed: bool,
+    frames: u8,
+}
+
+impl InitialPresentationPrewarm {
+    pub(super) fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
 pub(super) fn spawn_loaded_world(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     progress: &mut WorldSetupProgress<'_>,
     persistence: &WorldSetupPersistence<'_>,
     finalization: &mut WorldSetupFinalization<'_, '_>,
+    prewarm: &mut InitialPresentationPrewarm,
 ) {
     if progress.loading_state.transition_requested {
         return;
     }
 
-    let saved_position = (*persistence.load_mode == WorldLoadMode::Load)
-        .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
-        .flatten();
-    let translation = saved_position
-        .filter(|position| player_position_is_clear(&progress.world, *position))
-        .unwrap_or_else(|| spawn_position(content, progress, persistence));
-    let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
-        persistence.save.player_game_mode(LOCAL_PLAYER_ID)
-    } else {
-        persistence.new_world_config.game_mode()
-    };
+    if !prewarm.primed {
+        let saved_position = (*persistence.load_mode == WorldLoadMode::Load)
+            .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
+            .flatten();
+        let translation = saved_position
+            .filter(|position| player_position_is_clear(&progress.world, *position))
+            .unwrap_or_else(|| spawn_position(content, progress, persistence));
+        let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
+            persistence.save.player_game_mode(LOCAL_PLAYER_ID)
+        } else {
+            persistence.new_world_config.game_mode()
+        };
 
-    let saved_health = (*persistence.load_mode == WorldLoadMode::Load)
-        .then(|| persistence.save.player_health(LOCAL_PLAYER_ID))
-        .flatten();
-    let saved_look = (*persistence.load_mode == WorldLoadMode::Load)
-        .then(|| persistence.save.player_look(LOCAL_PLAYER_ID))
-        .flatten();
-    let saved_flying = *persistence.load_mode == WorldLoadMode::Load
-        && persistence.save.player_flying(LOCAL_PLAYER_ID);
-    spawn_player_entity(
-        &mut renderer.commands,
-        translation,
-        game_mode,
-        &finalization.player_definition,
-        saved_health,
-        saved_look,
-        saved_flying,
-    );
+        let saved_health = (*persistence.load_mode == WorldLoadMode::Load)
+            .then(|| persistence.save.player_health(LOCAL_PLAYER_ID))
+            .flatten();
+        let saved_look = (*persistence.load_mode == WorldLoadMode::Load)
+            .then(|| persistence.save.player_look(LOCAL_PLAYER_ID))
+            .flatten();
+        let saved_flying = *persistence.load_mode == WorldLoadMode::Load
+            && persistence.save.player_flying(LOCAL_PLAYER_ID);
+        spawn_player_entity(
+            &mut renderer.commands,
+            translation,
+            game_mode,
+            &finalization.player_definition,
+            saved_health,
+            saved_look,
+            saved_flying,
+        );
 
-    // Bootstrap chunk entities are intentionally created hidden so streaming
-    // can apply hysteresis later. Prime the exact initial visibility while the
-    // transition overlay is still closed, so Gameplay's first revealed frame
-    // already contains the world.
-    prime_chunk_visibility(
-        chunk_coord_from_position(translation).xz(),
-        finalization.render_distance.chunks(),
-        &mut finalization.chunk_entities,
-    );
+        // Bootstrap chunk entities are intentionally created hidden so streaming
+        // can apply hysteresis later. Prime the exact initial visibility while the
+        // loading screen is still covering the world. The active world camera then
+        // gets several complete app/render frames to populate Bevy's render-side
+        // caches before Gameplay can be revealed.
+        prime_chunk_visibility(
+            chunk_coord_from_position(translation).xz(),
+            finalization.render_distance.chunks(),
+            &mut finalization.chunk_entities,
+        );
+        prewarm.primed = true;
+        return;
+    }
+
+    if prewarm.frames < INITIAL_PRESENTATION_PREWARM_FRAMES {
+        prewarm.frames = prewarm.frames.saturating_add(1);
+        return;
+    }
 
     progress.loading_state.transition_requested = true;
     finalization
