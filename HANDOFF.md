@@ -187,6 +187,17 @@ O trabalho do branch de continuação foi integrado diretamente em `develop` ap�
 - o gate do branch de origem já havia passado audits + Clippy + Check (#10496/#10500);
 - runtime ainda precisa ser validado em `develop`; não declarar ganho de performance sem log novo.
 
+## Cut 30 — authoritative eviction no longer owns presentation retirement
+
+Commit: `ceb7bb0a580c915ca42084a620269ed8dc4fe4d6`. CI Rust validation #10525: success.
+
+- `evict_distant_chunks` deixou de receber `ChunkRenderer` e não toca mais `ChunkRenderPool`, entidades, mesh tasks ou remesh queue;
+- render retirement continua exclusivamente em `retire_distant_chunk_meshes`, que roda antes da authoritative eviction no pipeline de Gameplay;
+- authoritative eviction agora arquiva o chunk e publica apenas o trabalho de simulação/lighting decorrente da mudança de residency;
+- removida a `ChunkEvictionPresentationRuntime`, eliminando a mistura explícita entre world eviction e presentation teardown;
+- o helper de halo remesh permanece no caminho de retirement da apresentação, portanto a invalidação acontece enquanto a fonte ainda está disponível;
+- nenhum comportamento de residency/streaming pretendido foi alterado.
+
 ## Floating Islands follow-up — integrado em develop
 
 - Floating Islands agora aceitam somente `asteria:overworld/plains` como surface biome;
