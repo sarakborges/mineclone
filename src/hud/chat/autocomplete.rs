@@ -16,18 +16,12 @@ use crate::{
 
 use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
 
-/// Command signatures are the single source of truth for parsing, help and completion.
-#[derive(Clone, Copy)]
-enum CommandId {
-    Spawn,
-    Place,
-    Locate,
-    Warp,
-}
-
 #[derive(Clone, Copy)]
 enum ParameterKind {
     CreatureId,
+    MetaTag,
+    ModifyAction,
+    MetaValue,
     StructureLiteral,
     StructureId,
     StructureVariation,
@@ -38,137 +32,58 @@ enum ParameterKind {
 
 struct CommandDefinition {
     name: &'static str,
-    usage: &'static str,
     description: &'static str,
     parameters: &'static [ParameterKind],
-    required_parameters: usize,
-    id: CommandId,
 }
 
 const COMMANDS: &[CommandDefinition] = &[
     CommandDefinition {
         name: "spawn",
-        usage: "/spawn <id>",
         description: "Spawn a creature",
-        parameters: &[ParameterKind::CreatureId],
-        required_parameters: 1,
-        id: CommandId::Spawn,
+        parameters: &[ParameterKind::CreatureId, ParameterKind::MetaTag],
+    },
+    CommandDefinition {
+        name: "kill",
+        description: "Kill the targeted creature",
+        parameters: &[],
+    },
+    CommandDefinition {
+        name: "modify",
+        description: "Modify metadata on the targeted creature",
+        parameters: &[
+            ParameterKind::ModifyAction,
+            ParameterKind::MetaTag,
+            ParameterKind::MetaValue,
+        ],
     },
     CommandDefinition {
         name: "place",
-        usage: "/place structure <id> [variation]",
         description: "Place a structure",
         parameters: &[
             ParameterKind::StructureLiteral,
             ParameterKind::StructureId,
             ParameterKind::StructureVariation,
         ],
-        required_parameters: 2,
-        id: CommandId::Place,
     },
     CommandDefinition {
         name: "locate",
-        usage: "/locate biome <id> | /locate structure <id> [variation]",
         description: "Locate a biome or structure",
         parameters: &[
             ParameterKind::LocateKind,
             ParameterKind::LocateTargetId,
             ParameterKind::StructureVariation,
         ],
-        required_parameters: 2,
-        id: CommandId::Locate,
     },
     CommandDefinition {
         name: "warp",
-        usage: "/warp <x> <z> <y>",
         description: "Warp near world coordinates",
         parameters: &[
             ParameterKind::Coordinate,
             ParameterKind::Coordinate,
             ParameterKind::Coordinate,
         ],
-        required_parameters: 3,
-        id: CommandId::Warp,
     },
 ];
-
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum ParsedLine<'a> {
-    Say(&'a str),
-    Spawn(&'a str),
-    Place(&'a str, Option<usize>),
-    Locate(&'a str, &'a str, Option<usize>),
-    Warp(IVec3),
-    Usage(&'static str),
-    Unknown(&'a str),
-}
-
-fn parse_optional_variation(value: Option<&str>) -> Result<Option<usize>, ()> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|variation| *variation > 0)
-        .map(Some)
-        .ok_or(())
-}
-
-pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
-    let line = input.trim();
-    if !line.starts_with('/') {
-        return ParsedLine::Say(line);
-    }
-    let mut words = line.split_whitespace();
-    let Some(name) = words.next() else {
-        return ParsedLine::Unknown("/");
-    };
-    let Some(definition) = COMMANDS
-        .iter()
-        .find(|definition| name.strip_prefix('/') == Some(definition.name))
-    else {
-        return ParsedLine::Unknown(name);
-    };
-    let args: Vec<_> = words.collect();
-    if args.len() < definition.required_parameters || args.len() > definition.parameters.len() {
-        return ParsedLine::Usage(definition.usage);
-    }
-    match definition.id {
-        CommandId::Spawn => ParsedLine::Spawn(args[0]),
-        CommandId::Place => {
-            if args[0] != "structure" {
-                return ParsedLine::Usage(definition.usage);
-            }
-            let Ok(variation) = parse_optional_variation(args.get(2).copied()) else {
-                return ParsedLine::Usage(definition.usage);
-            };
-            ParsedLine::Place(args[1], variation)
-        },
-        CommandId::Locate => match args[0] {
-            "biome" if args.len() == 2 => ParsedLine::Locate(args[0], args[1], None),
-            "structure" => {
-                let Ok(variation) = parse_optional_variation(args.get(2).copied()) else {
-                    return ParsedLine::Usage(definition.usage);
-                };
-                ParsedLine::Locate(args[0], args[1], variation)
-            }
-            _ => ParsedLine::Usage(definition.usage),
-        },
-        CommandId::Warp => {
-            let Ok(x) = args[0].parse::<i32>() else {
-                return ParsedLine::Usage(definition.usage);
-            };
-            let Ok(z) = args[1].parse::<i32>() else {
-                return ParsedLine::Usage(definition.usage);
-            };
-            let Ok(y) = args[2].parse::<i32>() else {
-                return ParsedLine::Usage(definition.usage);
-            };
-            ParsedLine::Warp(IVec3::new(x, y, z))
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Suggestion {
@@ -267,6 +182,20 @@ fn id_matches_query(id: &str, query: &str) -> bool {
     text_matches_query(id, query)
 }
 
+fn literal_suggestions(
+    values: &[(&str, &str)],
+    prefix: &str,
+) -> Vec<Suggestion> {
+    values
+        .iter()
+        .filter(|(value, _)| text_matches_query(value, prefix))
+        .map(|(value, description)| Suggestion {
+            value: (*value).to_owned(),
+            description: (*description).to_owned(),
+        })
+        .collect()
+}
+
 struct AutocompleteCatalog<'a> {
     creatures: &'a CreatureRegistry,
     biomes: &'a BiomeRegistry,
@@ -347,14 +276,10 @@ fn suggestions_for(
             .iter()
             .find(|item| command.strip_prefix('/') == Some(item.name))?;
         match definition.parameters.get(word_index - 1)? {
-            ParameterKind::StructureLiteral => ["structure"]
-                .into_iter()
-                .filter(|value| text_matches_query(value, &prefix))
-                .map(|value| Suggestion {
-                    value: value.to_owned(),
-                    description: "Structure".to_owned(),
-                })
-                .collect::<Vec<_>>(),
+            ParameterKind::StructureLiteral => literal_suggestions(
+                &[("structure", "Structure")],
+                &prefix,
+            ),
             ParameterKind::CreatureId => catalog
                 .creatures
                 .iter()
@@ -364,6 +289,19 @@ fn suggestions_for(
                     description: creature.name.text(catalog.language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
+            ParameterKind::MetaTag => literal_suggestions(
+                &[("NO_AI", "Freeze entity AI, damage and collision")],
+                &prefix,
+            ),
+            ParameterKind::ModifyAction => literal_suggestions(
+                &[
+                    ("add", "Add a metadata tag"),
+                    ("remove", "Remove a metadata tag"),
+                    ("edit", "Edit a metadata tag value"),
+                ],
+                &prefix,
+            ),
+            ParameterKind::MetaValue => Vec::new(),
             ParameterKind::StructureId => catalog.structure_suggestions(&prefix, false),
             ParameterKind::StructureVariation => {
                 if first_argument? != "structure" {
@@ -385,19 +323,14 @@ fn suggestions_for(
                         })
                         .collect::<Vec<_>>()
                 }
-            },
-            ParameterKind::LocateKind => ["biome", "structure"]
-                .into_iter()
-                .filter(|value| text_matches_query(value, &prefix))
-                .map(|value| Suggestion {
-                    value: value.to_owned(),
-                    description: match value {
-                        "biome" => "Locate a surface or volume biome".to_owned(),
-                        "structure" => "Locate a locatable structure".to_owned(),
-                        _ => unreachable!(),
-                    },
-                })
-                .collect::<Vec<_>>(),
+            }
+            ParameterKind::LocateKind => literal_suggestions(
+                &[
+                    ("biome", "Locate a surface or volume biome"),
+                    ("structure", "Locate a locatable structure"),
+                ],
+                &prefix,
+            ),
             ParameterKind::LocateTargetId => match first_argument? {
                 "biome" => catalog
                     .biomes
@@ -408,7 +341,6 @@ fn suggestions_for(
                         description: biome.name.text(catalog.language.get()).to_owned(),
                     })
                     .collect::<Vec<_>>(),
-
                 "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
@@ -491,8 +423,6 @@ pub(super) fn update_autocomplete(
         if completed.chars().count() > MAX_INPUT_CHARS {
             return;
         }
-        // Preserve other arguments when completing a token in the middle of a line.
-        // These edits put the caret immediately after the replacement.
         let suffix_characters = completed[caret..].chars().count();
         draft.pending_edits.clear();
         draft.editor_mut().set_text(&completed);
@@ -509,56 +439,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn command_registry_also_drives_parser() {
-        assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(parse_line("/spawn asteria:meadow_slime"), ParsedLine::Spawn("asteria:meadow_slime"));
-        assert_eq!(
-            parse_line("/place structure asteria:hut"),
-            ParsedLine::Place("asteria:hut", None)
-        );
-        assert_eq!(
-            parse_line("/place structure asteria:tree_oak 3"),
-            ParsedLine::Place("asteria:tree_oak", Some(3))
-        );
-        assert_eq!(
-            parse_line("/locate structure asteria:tree_oak"),
-            ParsedLine::Locate("structure", "asteria:tree_oak", None)
-        );
-        assert_eq!(
-            parse_line("/locate structure asteria:tree_oak 3"),
-            ParsedLine::Locate("structure", "asteria:tree_oak", Some(3))
-        );
-        assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
-        assert_eq!(
-            parse_line("/locate biome asteria:plains 2"),
-            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/locate hydrology asteria:river"),
-            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/place structure extra extra extra"),
-            ParsedLine::Usage("/place structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/place structure asteria:tree_oak nope"),
-            ParsedLine::Usage("/place structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/place structure asteria:tree_oak 0"),
-            ParsedLine::Usage("/place structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/locate structure asteria:tree_oak nope"),
-            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
-        );
-        assert_eq!(
-            parse_line("/locate structure asteria:tree_oak 0"),
-            ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
-        );
-        assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
-        assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
+    fn command_catalog_contains_entity_commands() {
+        assert!(COMMANDS.iter().any(|command| command.name == "kill"));
+        assert!(COMMANDS.iter().any(|command| command.name == "modify"));
     }
 
     #[test]
