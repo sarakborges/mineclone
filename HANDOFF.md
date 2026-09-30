@@ -90,9 +90,17 @@ Consolidado no core rebuild antes do merge do PR #22.
 - footprint/altura/underside variam pelo seed com borda orgânica;
 - `surfaceLayers` permitido em volume biome apenas para `floating_island`;
 - Floating Islands autoram `grass_block` depth 1 -> `dirt` depth 4 -> `stone`;
-- footprint autorado aumentado para `48..96` X/Z e `12..24` Y;
+- footprint inicial foi `48..96` X/Z e `18..30` Y;
 - early-out de chunks altos reconhece `FloatingIsland` como solid volume modifier;
 - nenhuma regra de surface terrain, structure ou streaming foi alterada.
+
+### Floating Islands follow-up — plains only + spacing
+
+Commits `7680ced02fcdb3408851255d08ea55ac41c5cafe` e `9fa649926651b5233c8d79eb00da07e1866098bc`.
+
+- Floating Islands agora possuem `surfaceConstraints.allow.ids = [asteria:overworld/plains]`; não podem mais ser selecionadas sobre outros surface biomes.
+- X/Z do volume foram ampliados de `48..96` para `96..144`, aumentando também o lattice spacing global de volume porque o espaçamento é derivado do maior `size.min` ativo; isso deixa os sites de Floating Islands substancialmente mais afastados.
+- `surfaceLayers` continuam explicitamente definidos como `grass_block` depth 1 -> `dirt` depth 4 -> `stone`; a validação visual do grass precisa ser feita em runtime nesta build.
 
 ### Cut 29 — prewarm da apresentação antes de revelar Gameplay
 
@@ -119,8 +127,8 @@ Implementação:
 
 ## Próximos passos
 
-1. rodar gameplay em build do Cut 29 e comparar o primeiro bloco de Gameplay com `2026-09-30_21-05-23-706780000.txt`;
-2. validar visualmente em mundo novo: ocean/coast, volume constraints/indicator e floating islands;
+1. rodar gameplay em build atual e verificar primeiro o comportamento visual das Floating Islands: somente sobre Plains, com grass/dirt/stone na superfície;
+2. comparar o primeiro bloco de Gameplay com `2026-09-30_21-05-23-706780000.txt`;
 3. se o spike de cold-start continuar, instrumentar readiness/sequence do RenderApp e decompor `PrepareResources`/`Render` antes do próximo corte;
 4. depois retomar a dívida restante de voxel presentation / meshing v2.
 
