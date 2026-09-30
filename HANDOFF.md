@@ -329,18 +329,28 @@ Commit `0a847fa1adcd75c254ea2253834eb6007723b586` (`Stamp empty chunk presentati
 
 ### Cut 9 — snapshot aliases transitórios removidos
 
+Commit `88671dd37c0b89d5f4326d82c316c74ce6d82549` (`Remove presentation snapshot aliases`), CI #10300 success.
+
 - `PresentationScheduler` deixa de armazenar `Arc<MeshContentSnapshot>` e passa a usar `Arc<PresentationContentSnapshot>` diretamente;
 - `ChunkRemeshTasks` usa o mesmo `PresentationContentSnapshot` diretamente, sem passar por `chunk_mesh_tasks`;
 - o re-export `MeshContentSnapshot` foi removido de `chunk_mesh_tasks.rs`;
 - o compatibility shim `PresentationContentSnapshot::from_content` foi removido; initial mesh e remesh usam `PresentationContentSnapshot::capture`;
 - não houve mudança em snapshot contents, task revision, scheduling, queue caps, publication, stale checks ou meshing;
-- o alias `ChunkMeshTasks = PresentationScheduler` permanece deliberadamente como o único bridge transitório de presentation ownership e será migrado no próximo cut.
+- o alias `ChunkMeshTasks = PresentationScheduler` permaneceu como o último bridge transitório até o Cut 10.
+
+### Cut 10 — scheduler de presentation é o único owner nominal
+
+- lifecycle do `WorldPlugin`, Loading `SystemParam`/meshing e gameplay streaming passam a referenciar `PresentationScheduler` diretamente;
+- o alias `ChunkMeshTasks = PresentationScheduler` é removido de `chunk_mesh_tasks.rs`; não resta compatibility name para initial presentation scheduling;
+- init/reset de resource continua nos mesmos lifecycle hooks; somente o tipo nominal muda;
+- métodos de sync/schedule/cancel/poll, caps, revision semantics e publication behavior não mudam;
+- `streaming.rs` teve somente o import e o `ResMut` do SystemParam renomeados; `mod.rs` teve somente import + init/resets equivalentes;
+- com isso os bridges transitórios de snapshot/scheduler ownership introduzidos pela Phase 7 foram removidos.
 
 ### Próximos cuts
 
-1. migrar lifecycle/Loading/streaming de `ChunkMeshTasks` para `PresentationScheduler` e remover o último alias transitório;
-2. auditar render-section identity/source stamps como base para o exit criterion de rebuild descartável;
-3. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
+1. auditar render-section identity/source stamps como base para o exit criterion de rebuild descartável;
+2. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade
 

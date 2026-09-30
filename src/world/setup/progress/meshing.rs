@@ -2,7 +2,7 @@ use crate::{
     voxel::{mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask},
     world::{
         chunk_async_work::ChunkAsyncWorkLimiter,
-        chunk_mesh_tasks::ChunkMeshTasks,
+        chunk_mesh_tasks::PresentationScheduler,
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
         presentation_snapshot::{ChunkPresentationSource, PresentationLightingRevisions},
@@ -19,7 +19,7 @@ pub(super) fn mesh_initial_chunks(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     progress: &mut WorldSetupProgress<'_>,
-    mesh_tasks: &mut ChunkMeshTasks,
+    mesh_tasks: &mut PresentationScheduler,
     lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
@@ -62,7 +62,7 @@ fn integrate_built_chunk_meshes(
     renderer: &mut ChunkRenderer<'_, '_>,
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
-    mesh_tasks: &mut ChunkMeshTasks,
+    mesh_tasks: &mut PresentationScheduler,
     lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {
@@ -122,7 +122,7 @@ fn dispatch_mesh_tasks(
     renderer: &mut ChunkRenderer<'_, '_>,
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
-    mesh_tasks: &mut ChunkMeshTasks,
+    mesh_tasks: &mut PresentationScheduler,
     lighting_revisions: &PresentationLightingRevisions,
     async_work: &ChunkAsyncWorkLimiter,
 ) {

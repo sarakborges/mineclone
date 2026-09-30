@@ -18,7 +18,7 @@ use crate::{
         InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
         chunk_async_work::ChunkAsyncWorkLimiter,
         chunk_generation_tasks::GenerationScheduler,
-        chunk_mesh_tasks::ChunkMeshTasks,
+        chunk_mesh_tasks::PresentationScheduler,
         chunk_rendering::ChunkRenderCoord,
         chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
         dimension::CurrentDimension,
@@ -88,7 +88,7 @@ pub(in crate::world) struct WorldSetupChunkPipeline<'w, 's> {
     pub(super) content: ChunkContent<'w>,
     pub(super) renderer: ChunkRenderer<'w, 's>,
     pub(super) generation_tasks: ResMut<'w, GenerationScheduler>,
-    pub(super) mesh_tasks: ResMut<'w, ChunkMeshTasks>,
+    pub(super) mesh_tasks: ResMut<'w, PresentationScheduler>,
     pub(super) lighting_revisions: Res<'w, PresentationLightingRevisions>,
     pub(super) async_work: Res<'w, ChunkAsyncWorkLimiter>,
 }

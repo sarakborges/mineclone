@@ -35,10 +35,6 @@ pub(crate) struct PresentationScheduler {
     pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
-/// Transitional compatibility name while initial-mesh call sites are migrated
-/// to the explicit presentation scheduler owner.
-pub(crate) type ChunkMeshTasks = PresentationScheduler;
-
 impl PresentationScheduler {
     pub(crate) fn sync_snapshot(&mut self, content: &ChunkContent<'_>) {
         if self.snapshot.is_some() && !content.mesh_inputs_changed() {
