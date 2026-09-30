@@ -76,10 +76,10 @@ impl BiomeField {
         // continuity preference layered on top of them: if enforcing both
         // locally would leave the site without any legal biome, preserve the
         // authored adjacency solution instead of panicking world generation.
-        if let Some(candidate) = weighted_candidates
-            .iter()
-            .find(|candidate| authored_adjacency_allows(candidate.index, &selection_context))
-        {
+        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
+            candidate.index != raw_index
+                && authored_adjacency_allows(candidate.index, &selection_context)
+        }) {
             return candidate.index;
         }
 
