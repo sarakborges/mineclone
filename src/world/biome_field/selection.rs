@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
-        biome_distribution::BiomeDistribution,
-    },
+    content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
     world::{deterministic::mix_hash_u64, macro_climate::MacroClimateSample},
 };
 
@@ -94,7 +91,7 @@ impl BiomeField {
 
     fn surface_weighted_candidates(
         &self,
-        cell: IVec2,
+        _cell: IVec2,
         site: Vec2,
         climate: MacroClimateSample,
         cell_hash: u64,
@@ -386,7 +383,7 @@ fn region_claim_hash(cell: IVec2, biome_index: usize, seed: u64) -> u64 {
 }
 
 fn raw_surface_biome_index(
-    cell: IVec2,
+    _cell: IVec2,
     site: Vec2,
     climate: MacroClimateSample,
     source_hash: u64,
