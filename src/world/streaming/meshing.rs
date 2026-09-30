@@ -11,6 +11,7 @@ use crate::{
         chunk_remesh::ChunkRemeshQueue,
         chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
         chunk_system_params::{ChunkContent, ChunkRenderer},
+        chunk_visibility::ChunkPresentationSelection,
         presentation_snapshot::ChunkPresentationSource,
         render_work_diagnostics::{PresentationPublicationStage, PresentationPublicationTimer},
         work_budget::FrameWorkBudget,
@@ -159,6 +160,7 @@ pub(super) fn collect_built_chunk_meshes(
     renderer: &mut ChunkRenderer<'_, '_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
+    presentation_selection: &ChunkPresentationSelection,
     current_tick: u64,
 ) {
     let deadline = work.frame_budget.deadline();
@@ -195,7 +197,7 @@ pub(super) fn collect_built_chunk_meshes(
         if renderer.pool.contains(completed.coord) {
             continue;
         }
-        if !work.state.retains_render_mesh(completed.coord) {
+        if !presentation_selection.retains_render_mesh(completed.coord) {
             work.state.mark_ready(completed.coord);
             continue;
         }
