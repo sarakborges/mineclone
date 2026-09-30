@@ -11,6 +11,13 @@
     "max": 280
   },
   "priority": 2,
+  "surfaceConstraints": {
+    "allow": {
+      "ids": [
+        "asteria:overworld/plains"
+      ]
+    }
+  },
   "densityModifier": {
     "type": "floating_island",
     "fillMargin": 4,
