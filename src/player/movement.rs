@@ -44,8 +44,13 @@ fn log_movement_diagnostics(
     ), With<PlayerEntity>>,
     mut state: Local<MovementLogState>,
 ) {
-    let timer = state.timer.get_or_insert_with(|| Timer::from_seconds(1.0, TimerMode::Repeating));
-    timer.tick(time.delta());
+    let timer_finished = {
+        let timer = state
+            .timer
+            .get_or_insert_with(|| Timer::from_seconds(1.0, TimerMode::Repeating));
+        timer.tick(time.delta());
+        timer.just_finished()
+    };
 
     let (transform, game_mode, flight, swimming, gravity, walking) = player.into_inner();
     let flying = flight.is_active();
@@ -60,7 +65,7 @@ fn log_movement_diagnostics(
         previous.distance_squared(transform.translation) > 0.0001
     });
 
-    if state_changed || (timer.just_finished() && moved) {
+    if state_changed || (timer_finished && moved) {
         log_gameplay_event(format!(
             "player.movement position=({:.3},{:.3},{:.3}) mode={game_mode:?} flying={flying} swimming={swimming} grounded={grounded} running={running} horizontal_speed={:.3} vertical_velocity={:.3}",
             transform.translation.x,
