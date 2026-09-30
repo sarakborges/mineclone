@@ -304,7 +304,7 @@ fn loading_phase_key(phase: WorldLoadingPhase) -> &'static str {
         WorldLoadingPhase::Meshing => "loading.phase.meshing",
         WorldLoadingPhase::Assets => "loading.phase.assets",
         WorldLoadingPhase::Finalizing => "loading.phase.finalizing",
-        WorldLoadingPhase::Spawning => "loading.phase.spawning",
+        WorldLoadingPhase::Spawning => "loading.phase.presentation",
     }
 }
 
