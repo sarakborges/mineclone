@@ -520,6 +520,7 @@ pub(super) fn stream_chunks(
     mut renderer: ChunkRenderer,
     player: Single<&Transform, With<GameplayCamera>>,
     mut selection: ChunkStreamingSelection,
+    mut presentation_selection: ResMut<ChunkPresentationSelection>,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
 ) {
