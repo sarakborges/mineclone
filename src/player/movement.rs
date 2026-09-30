@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::gameplay::availability::world_interaction_available;
+use crate::{
+    gameplay::availability::world_interaction_available,
+    player::game_mode::not_spectator,
+};
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
 use swimming::{swim_vertical, update_swimming_state};
@@ -31,7 +34,7 @@ impl Plugin for PlayerMovementPlugin {
                 move_flying,
                 swim_vertical,
                 apply_gravity,
-                enforce_world_floor,
+                enforce_world_floor.run_if(not_spectator),
             )
                 .chain()
                 .run_if(world_interaction_available),
@@ -40,7 +43,7 @@ impl Plugin for PlayerMovementPlugin {
             PostUpdate,
             (
                 entity_collision::resolve_creature_creature_contacts,
-                entity_collision::resolve_player_creature_contacts,
+                entity_collision::resolve_player_creature_contacts.run_if(not_spectator),
             )
                 .chain()
                 .run_if(entity_collision::contacts_enabled()),

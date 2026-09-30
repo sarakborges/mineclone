@@ -12,7 +12,7 @@ use crate::{
 
 use crate::gameplay::random::next_u32;
 
-use super::{CreatureInstance, visual::CreatureAnimationState};
+use super::{CreatureInstance, EntityMetaTags, visual::CreatureAnimationState};
 
 const GROUND_PROBE: f32 = 0.06;
 const DIRECTIONS: [(i32, i32); 8] = [
@@ -70,6 +70,15 @@ impl CreatureMotion {
         }
     }
 
+    pub(crate) fn stop(&mut self) {
+        self.phase = HopPhase::Idle;
+        self.timer = 1.0;
+        self.velocity_y = 0.0;
+        self.direction = Vec2::ZERO;
+        self.knockback = Vec3::ZERO;
+        self.knockback_time = 0.0;
+    }
+
     /// Each creature has its own pseudorandom stream, seeded by its spawn slot.
     /// Only choose a new direction at the beginning of the next jump.
     fn choose_heading(&mut self, position: Vec3) {
@@ -85,7 +94,6 @@ impl CreatureMotion {
         let random = next_u32(&mut self.random_state);
         let (x, z) = DIRECTIONS[random as usize % DIRECTIONS.len()];
         self.direction = Vec2::new(x as f32, z as f32).normalize();
-        // The shared slime model faces -Z. Rotate the visual wrapper only.
         self.facing_yaw = (-self.direction.x).atan2(-self.direction.y);
     }
 }
@@ -101,10 +109,16 @@ pub(super) fn move_creatures(
         &mut CreatureMotion,
         &mut CreatureAnimationState,
         &EntityHealth,
+        &EntityMetaTags,
     )>,
 ) {
     let dt = time.delta_secs().min(0.05);
-    for (instance, collider, mut transform, mut motion, mut animation, health) in &mut creatures {
+    for (instance, collider, mut transform, mut motion, mut animation, health, meta_tags) in &mut creatures {
+        if meta_tags.is_no_ai() {
+            motion.stop();
+            set_animation(&mut animation, "idle");
+            continue;
+        }
         if health.is_dead() {
             set_animation(&mut animation, "death");
             continue;
@@ -173,7 +187,6 @@ pub(super) fn move_creatures(
                         Vec3::new(horizontal.x, 0.0, horizontal.y),
                     )
                 {
-                    // A wall stops this hop, without ever moving the static collider through it.
                     motion.direction = Vec2::ZERO;
                 }
                 let gravity_scale = if motion.velocity_y <= 0.0 {
@@ -222,8 +235,6 @@ fn on_ground(world: &VoxelWorld, collider: CreatureCollider, feet: Vec3) -> bool
     collides_aabb(world, min, max)
 }
 
-/// Substep movement so fast hops or knockback cannot skip thin collision.
-/// Returns true when the next substep would enter solid or unloaded space.
 fn advance(
     world: &VoxelWorld,
     collider: CreatureCollider,

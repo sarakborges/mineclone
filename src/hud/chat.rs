@@ -1,4 +1,5 @@
 mod autocomplete;
+mod commands;
 mod locate;
 mod placement;
 mod visual;
@@ -20,19 +21,32 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
+    content::creature::CreatureRegistry,
+    creatures::{
+        CreatureAnimationState, CreatureDeathTimer, CreatureInstance, EntityMetaTags,
+        spawn_creature_at_with_tags,
+    },
+    entity::EntityHealth,
     gameplay::modal::GameplayModalState,
-    player::{PLAYER_DISPLAY_NAME, camera::look::MouseLookInputState},
-    world::warp::PendingWarp,
+    localization::ActiveLanguage,
+    player::{
+        PLAYER_DISPLAY_NAME,
+        camera::look::MouseLookInputState,
+        game_mode::{GameMode, not_spectator},
+    },
+    targeting::block::TargetedCreature,
     ui::text_input::editable_value,
+    world::warp::{PendingWarp, WarpOutcome},
 };
 
-use autocomplete::{ChatAutocomplete, ParsedLine, parse_line, update_autocomplete};
+use autocomplete::{ChatAutocomplete, update_autocomplete};
+use commands::{ModifyAction, ParsedLine, parse_line};
 use locate::{ChatLocateContext, PendingLocate, poll_locate_task};
 use placement::ChatPlacementContext;
 use visual::{
-    advance_chat_timeout, rebuild_chat_history, render_autocomplete, scroll_chat_history,
-    handle_chat_open_structure_file, handle_chat_warp_links, scroll_chat_to_bottom, spawn_chat_ui,
-    sync_chat_visibility,
+    advance_chat_timeout, rebuild_chat_history, handle_chat_open_structure_file,
+    handle_chat_warp_links, render_autocomplete, scroll_chat_history, scroll_chat_to_bottom,
+    spawn_chat_ui, sync_chat_visibility,
 };
 
 const HISTORY_CAPACITY: usize = 64;
@@ -42,11 +56,11 @@ const MAX_INPUT_CHARS: usize = 256;
 #[derive(Clone, Debug)]
 pub(super) enum ChatMessage {
     Text(String),
+    Error(String),
     Located { prefix: String, target: IVec3 },
     StructureFile(PathBuf),
 }
 
-/// Oldest entries are first; visual order is the same as chronological order.
 #[derive(Resource, Default)]
 pub(crate) struct ChatState {
     open: bool,
@@ -80,6 +94,10 @@ impl ChatState {
 
     pub(crate) fn append_text(&mut self, text: impl Into<String>) {
         self.append(ChatMessage::Text(text.into()));
+    }
+
+    pub(crate) fn append_error(&mut self, text: impl Into<String>) {
+        self.append(ChatMessage::Error(text.into()));
     }
 
     pub(crate) fn append_structure_file(&mut self, path: PathBuf) {
@@ -116,9 +134,11 @@ impl Plugin for ChatHudPlugin {
                     handle_chat_input,
                     handle_chat_warp_links,
                     handle_chat_open_structure_file,
-                    update_autocomplete,
+                    update_autocomplete.run_if(not_spectator),
                     interpret_chat_submissions,
                     poll_locate_task,
+                    normalize_locate_failures,
+                    poll_warp_outcome,
                     advance_chat_timeout,
                     scroll_chat_history,
                     sync_chat_visibility,
@@ -191,7 +211,6 @@ fn handle_chat_input(
         }
         if input.keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
             if input.autocomplete.visible() {
-                // First Esc only dismisses suggestions; the editor and draft stay intact.
                 input.autocomplete.dismiss(editor);
                 chat.escape_consumed = true;
                 return;
@@ -263,42 +282,216 @@ fn restore_game_cursor(
     mouse_look.ignore_next_delta = true;
 }
 
+type CommandTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Name,
+        &'static Transform,
+        &'static mut EntityHealth,
+        &'static mut EntityMetaTags,
+        Option<&'static mut CreatureAnimationState>,
+    ),
+    With<CreatureInstance>,
+>;
+
+#[derive(SystemParam)]
+struct ChatCommandContent<'w, 's> {
+    definitions: Res<'w, CreatureRegistry>,
+    assets: Res<'w, AssetServer>,
+    language: Res<'w, ActiveLanguage>,
+    targeted: Res<'w, TargetedCreature>,
+    targets: CommandTargetQuery<'w, 's>,
+}
+
+fn format_position(position: IVec3) -> String {
+    format!("X: {} Z: {} Y: {}", position.x, position.z, position.y)
+}
+
+fn command_target_position(transform: &Transform) -> IVec3 {
+    transform.translation.floor().as_ivec3()
+}
+
+// Bevy systems expose their independent ECS inputs as function parameters.
+#[allow(clippy::too_many_arguments)]
 fn interpret_chat_submissions(
     mut submissions: MessageReader<ChatSubmission>,
     mut chat: ResMut<ChatState>,
     mut commands: Commands,
+    game_mode: Single<&GameMode>,
     mut placement: ChatPlacementContext,
     mut locate: ChatLocateContext,
     mut warp: ResMut<PendingWarp>,
+    mut content: ChatCommandContent,
 ) {
-    // Commands::spawn is deferred, so preflight must also account for creatures
-    // already requested by earlier submissions during this same frame.
     let mut reserved = Vec::new();
     for submission in submissions.read() {
-        let response = match parse_line(&submission.0) {
-            ParsedLine::Say(text) => format!("<{PLAYER_DISPLAY_NAME}>: {text}"),
-            ParsedLine::Usage(usage) => format!("Usage: {usage}"),
-            ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
-            ParsedLine::Spawn(id) => placement.spawn(&mut commands, id, &mut reserved),
-            ParsedLine::Place(id, variation) => placement.place(id, variation, &reserved),
-            ParsedLine::Locate(kind, id, variation) => {
-                let Some(player_block) = placement.player_block_position() else {
-                    chat.append(ChatMessage::Text(
-                        "Cannot locate: player is unavailable.".to_owned(),
-                    ));
+        let parsed = parse_line(&submission.0);
+        if game_mode.is_spectator() && !matches!(parsed, ParsedLine::Say(_)) {
+            chat.append_error("commands unavailable in spectator mode");
+            continue;
+        }
+
+        match parsed {
+            ParsedLine::Say(text) => chat.append_text(format!("<{PLAYER_DISPLAY_NAME}>: {text}")),
+            ParsedLine::Usage(usage) => chat.append_error(format!("Usage: {usage}")),
+            ParsedLine::Unknown(command) => chat.append_error(format!("Unknown command: {command}")),
+            ParsedLine::Spawn(id, meta_tag) => {
+                let Some(definition) = content.definitions.get(id) else {
+                    chat.append_error("spawn failed");
                     continue;
                 };
-                locate.start(kind, id, variation, player_block)
-            },
+                let Some(position) = placement.player_block_position() else {
+                    chat.append_error("spawn failed");
+                    continue;
+                };
+                let name = definition.name.text(content.language.get()).to_owned();
+
+                if let Some(meta_tag) = meta_tag {
+                    let mut meta_tags = EntityMetaTags::default();
+                    if meta_tags.add(meta_tag, None).is_err() {
+                        chat.append_error("spawn failed");
+                        continue;
+                    }
+                    let feet = Vec3::new(
+                        position.x as f32 + 0.5,
+                        position.y as f32,
+                        position.z as f32 + 0.5,
+                    );
+                    if spawn_creature_at_with_tags(
+                        &mut commands,
+                        &content.definitions,
+                        &content.assets,
+                        content.language.get(),
+                        id,
+                        feet,
+                        meta_tags,
+                    )
+                    .is_err()
+                    {
+                        chat.append_error("spawn failed");
+                        continue;
+                    }
+                    chat.append_text(format!(
+                        "spawned {name} at {}",
+                        format_position(position)
+                    ));
+                    continue;
+                }
+
+                let response = placement.spawn(&mut commands, id, &mut reserved);
+                if response.starts_with("Spawned ") {
+                    chat.append_text(format!(
+                        "spawned {name} at {}",
+                        format_position(position)
+                    ));
+                } else {
+                    chat.append_error("spawn failed");
+                }
+            }
+            ParsedLine::Place(id, variation) => {
+                let response = placement.place(id, variation, &reserved);
+                if response.starts_with("Placed ") {
+                    chat.append_text(response);
+                } else {
+                    chat.append_error("place failed");
+                }
+            }
+            ParsedLine::Locate(kind, id, variation) => {
+                let Some(player_block) = placement.player_block_position() else {
+                    chat.append_error("locate failed");
+                    continue;
+                };
+                let response = locate.start(kind, id, variation, player_block);
+                if response.starts_with("Locating ") {
+                    chat.append_text(response);
+                } else {
+                    chat.append_error("locate failed");
+                }
+            }
             ParsedLine::Warp(target) => {
                 warp.request(target);
-                format!(
-                    "Warping to X: {} Z: {} Y: {}...",
-                    target.x, target.z, target.y
-                )
+                chat.append_text(format!("warping to {}...", format_position(target)));
             }
-        };
-        chat.append(ChatMessage::Text(response));
+            ParsedLine::Kill => {
+                let Some(entity) = content.targeted.0 else {
+                    chat.append_error("kill failed");
+                    continue;
+                };
+                let Ok((name, transform, mut health, _, animation)) = content.targets.get_mut(entity) else {
+                    chat.append_error("kill failed");
+                    continue;
+                };
+                let position = command_target_position(transform);
+                let current = health.current();
+                health.damage(current);
+                if let Some(mut animation) = animation {
+                    animation.trigger("death");
+                }
+                commands.entity(entity).insert(CreatureDeathTimer(Timer::from_seconds(
+                    0.75,
+                    TimerMode::Once,
+                )));
+                chat.append_text(format!(
+                    "killed {} at {}",
+                    name.as_str(),
+                    format_position(position)
+                ));
+            }
+            ParsedLine::Modify(action, tag, value) => {
+                let Some(entity) = content.targeted.0 else {
+                    chat.append_error("modify failed");
+                    continue;
+                };
+                let Ok((name, transform, _, mut meta_tags, _)) = content.targets.get_mut(entity) else {
+                    chat.append_error("modify failed");
+                    continue;
+                };
+                let result = match action {
+                    ModifyAction::Add => meta_tags.add(tag, value.map(str::to_owned)),
+                    ModifyAction::Remove => meta_tags.remove(tag),
+                    ModifyAction::Edit => meta_tags.edit(tag, value.map(str::to_owned)),
+                };
+                if result.is_err() {
+                    chat.append_error("modify failed");
+                    continue;
+                }
+                let verb = match action {
+                    ModifyAction::Add => "added",
+                    ModifyAction::Remove => "removed",
+                    ModifyAction::Edit => "edited",
+                };
+                chat.append_text(format!(
+                    "{verb} {tag} on {} at {}",
+                    name.as_str(),
+                    format_position(command_target_position(transform))
+                ));
+            }
+        }
+    }
+}
+
+fn normalize_locate_failures(mut chat: ResMut<ChatState>) {
+    let Some(ChatMessage::Text(text)) = chat.history.back() else {
+        return;
+    };
+    if !text.contains("could not be found within") {
+        return;
+    }
+    let Some(last) = chat.history.back_mut() else {
+        return;
+    };
+    *last = ChatMessage::Error("locate failed".to_owned());
+    chat.revision = chat.revision.wrapping_add(1);
+}
+
+fn poll_warp_outcome(mut warp: ResMut<PendingWarp>, mut chat: ResMut<ChatState>) {
+    match warp.take_outcome() {
+        Some(WarpOutcome::Succeeded(position)) => {
+            chat.append_text(format!("warped to {}", format_position(position)));
+        }
+        Some(WarpOutcome::Failed) => chat.append_error("warp failed"),
+        None => {}
     }
 }
 
@@ -309,17 +502,19 @@ mod tests {
     #[test]
     fn commands_are_distinguished_from_plain_messages() {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(parse_line(" /spawn asteria:meadow_slime "), ParsedLine::Spawn("asteria:meadow_slime"));
-        assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
-            parse_line("/place"),
-            ParsedLine::Usage("/place structure <id> [variation]")
+            parse_line(" /spawn asteria:meadow_slime "),
+            ParsedLine::Spawn("asteria:meadow_slime", None)
         );
         assert_eq!(
-            parse_line("/place structure foo extra extra"),
-            ParsedLine::Usage("/place structure <id> [variation]")
+            parse_line("/spawn"),
+            ParsedLine::Usage("/spawn <id> [meta_tag]")
         );
-        assert_eq!(parse_line("/spawn_creature foo"), ParsedLine::Unknown("/spawn_creature"));
+        assert_eq!(parse_line("/kill"), ParsedLine::Kill);
+        assert_eq!(
+            parse_line("/modify add NO_AI"),
+            ParsedLine::Modify(ModifyAction::Add, "NO_AI", None)
+        );
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
     }
 

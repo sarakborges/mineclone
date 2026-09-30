@@ -9,15 +9,17 @@ use crate::{
 };
 
 use super::{
-    CreatureInstance, CreatureTargetCollider, PendingCreatureRestores,
+    CreatureInstance, CreatureTargetCollider, EntityMetaTags, PendingCreatureRestores,
     motion::CreatureMotion,
     particles::CreatureParticleEmitter,
     visual::CreatureModel,
 };
 
-/// The chat preflights world occupancy and relocates the player before calling
-/// this function. The exact feet position is preserved; this function never
-/// searches neighboring slots or mutates the terrain.
+struct CreatureSpawnState {
+    health: Option<f32>,
+    meta_tags: EntityMetaTags,
+}
+
 pub(crate) fn spawn_creature_at(
     commands: &mut Commands,
     definitions: &CreatureRegistry,
@@ -26,25 +28,48 @@ pub(crate) fn spawn_creature_at(
     id: &str,
     feet: Vec3,
 ) -> Result<String, String> {
-    spawn_creature_with_health(
+    spawn_creature_at_with_tags(
         commands,
         definitions,
         asset_server,
         language,
         id,
         feet,
-        None,
+        EntityMetaTags::default(),
     )
 }
 
-fn spawn_creature_with_health(
+pub(crate) fn spawn_creature_at_with_tags(
     commands: &mut Commands,
     definitions: &CreatureRegistry,
     asset_server: &AssetServer,
     language: Language,
     id: &str,
     feet: Vec3,
-    saved_health: Option<f32>,
+    meta_tags: EntityMetaTags,
+) -> Result<String, String> {
+    spawn_creature_with_state(
+        commands,
+        definitions,
+        asset_server,
+        language,
+        id,
+        feet,
+        CreatureSpawnState {
+            health: None,
+            meta_tags,
+        },
+    )
+}
+
+fn spawn_creature_with_state(
+    commands: &mut Commands,
+    definitions: &CreatureRegistry,
+    asset_server: &AssetServer,
+    language: Language,
+    id: &str,
+    feet: Vec3,
+    state: CreatureSpawnState,
 ) -> Result<String, String> {
     let definition = definitions
         .get(id)
@@ -58,10 +83,11 @@ fn spawn_creature_with_health(
         CreatureModel(asset_server.load(definition.model.clone())),
         CreatureMotion::default(),
         CreatureParticleEmitter::default(),
-        saved_health.map_or_else(
+        state.health.map_or_else(
             || EntityHealth::new(definition.health),
             |health| EntityHealth::restored(definition.health, health),
         ),
+        state.meta_tags,
         definition.collider,
         CreatureTargetCollider(definition.target_collider()),
         Transform::from_translation(feet),
@@ -91,14 +117,17 @@ pub(super) fn restore_saved_creatures(
             continue;
         }
 
-        if let Err(error) = spawn_creature_with_health(
+        if let Err(error) = spawn_creature_with_state(
             &mut commands,
             &definitions,
             &asset_server,
             language.get(),
             &creature.definition_id,
             feet,
-            Some(creature.health),
+            CreatureSpawnState {
+                health: Some(creature.health),
+                meta_tags: creature.meta_tags,
+            },
         ) {
             warn!(
                 "Could not restore creature {}: {error}",

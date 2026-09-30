@@ -70,6 +70,7 @@ pub(crate) fn world_settings_section(
                         GameMode::Creative,
                         game_mode,
                     ),
+                    game_mode_button("Spectator", GameMode::Spectator, game_mode),
                 ],
             ),
         ],
@@ -89,7 +90,6 @@ fn game_mode_button(
         ButtonVariant::from_active(mode == current_game_mode),
     )
 }
-
 
 pub(crate) fn handle_game_mode_buttons(
     interactions: GameModeButtonInteractions,
@@ -147,5 +147,4 @@ pub(crate) fn sync_game_mode_buttons(
         let active = button.0 == current_game_mode;
         *variant = ButtonVariant::from_active(active);
     }
-
 }

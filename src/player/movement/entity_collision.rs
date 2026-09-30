@@ -5,16 +5,13 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    creatures::{CreatureInstance, CreatureTargetCollider},
+    creatures::{CreatureInstance, CreatureTargetCollider, EntityMetaTags},
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity},
     voxel::{collision::aabb_is_clear, world::VoxelWorld},
 };
 
 use super::config::COLLISION_STEP;
 
-// This is a positional contact response, not a second movement controller.
-// Both gameplay roots move; neither the camera's view orientation nor the
-// creature's animated visual wrapper participates in collision.
 const CONTACT_EPSILON: f32 = 0.0001;
 const PLAYER_PUSH_SHARE: f32 = 0.35;
 const CREATURE_PUSH_SHARE: f32 = 0.5;
@@ -29,6 +26,7 @@ type CreatureContacts<'w, 's> = Query<
         Entity,
         &'static mut Transform,
         &'static CreatureTargetCollider,
+        &'static EntityMetaTags,
     ),
     (With<CreatureInstance>, Without<PlayerEntity>),
 >;
@@ -46,7 +44,10 @@ impl CreatureContactBroadphase {
         self.pairs.clear();
         self.seen_pairs.clear();
 
-        for (entity, transform, collider) in creatures.iter() {
+        for (entity, transform, collider, meta_tags) in creatures.iter() {
+            if meta_tags.is_no_ai() {
+                continue;
+            }
             let (minimum, maximum) = collider.0.bounds(transform.translation);
             let minimum_cell = horizontal_contact_cell(minimum);
             let maximum_cell = horizontal_contact_cell(maximum);
@@ -137,7 +138,6 @@ fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
             second.0.z + second.1.z,
         )
     };
-    // When centers coincide, pick a stable side rather than producing NaN.
     let second_direction = if second_center >= first_center {
         1.0
     } else {
@@ -151,9 +151,6 @@ fn contact(first: Bounds, second: Bounds) -> Option<HorizontalContact> {
     })
 }
 
-/// Sweep small steps so the push cannot tunnel through a wall or unloaded chunk.
-/// Return the actual distance traveled, allowing the other participant to
-/// absorb any displacement that this one could not take.
 fn push(
     position: &mut Vec3,
     world: &VoxelWorld,
@@ -231,9 +228,6 @@ fn resolve_contact_pair(
     }
 }
 
-/// After the movement systems, share horizontal penetration between the
-/// player and each creature. If one hits terrain, transfer the remainder to
-/// the other. No displacement may pass through a solid or unloaded voxel.
 pub(super) fn resolve_player_creature_contacts(
     world: Res<VoxelWorld>,
     mut player: Single<&mut Transform, With<PlayerEntity>>,
@@ -241,7 +235,10 @@ pub(super) fn resolve_player_creature_contacts(
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
         let mut had_contact = false;
-        for (_, mut creature, collider) in &mut creatures {
+        for (_, mut creature, collider, meta_tags) in &mut creatures {
+            if meta_tags.is_no_ai() {
+                continue;
+            }
             let Some(contact) = contact(
                 player_bounds(player.translation),
                 collider.0.bounds(creature.translation),
@@ -266,10 +263,6 @@ pub(super) fn resolve_player_creature_contacts(
     }
 }
 
-/// Share horizontal penetration between creature roots after their movement.
-/// Creature animation wrappers never participate; only gameplay colliders move.
-/// Terrain remains authoritative, and any displacement one creature cannot take
-/// is transferred to the other instead of pushing either through a wall.
 pub(super) fn resolve_creature_creature_contacts(
     world: Res<VoxelWorld>,
     mut creatures: CreatureContacts<'_, '_>,
@@ -282,12 +275,15 @@ pub(super) fn resolve_creature_creature_contacts(
         for pair_index in 0..broadphase.pairs.len() {
             let (first_entity, second_entity) = broadphase.pairs[pair_index];
             let Ok([
-                (_, mut first, first_collider),
-                (_, mut second, second_collider),
+                (_, mut first, first_collider, first_meta),
+                (_, mut second, second_collider, second_meta),
             ]) = creatures.get_many_mut([first_entity, second_entity])
             else {
                 continue;
             };
+            if first_meta.is_no_ai() || second_meta.is_no_ai() {
+                continue;
+            }
             let Some(contact) = contact(
                 first_collider.0.bounds(first.translation),
                 second_collider.0.bounds(second.translation),

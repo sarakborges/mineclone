@@ -13,6 +13,7 @@ use crate::{
     },
     gameplay::modal::GameplayModalState,
     hud::chat::ChatState,
+    player::game_mode::GameMode,
 };
 
 pub(crate) struct PlayerCharacterInfoPlugin;
@@ -39,7 +40,14 @@ struct CharacterInfoModalInput<'w, 's> {
     next_modal: ResMut<'w, NextState<GameplayModalState>>,
 }
 
-fn toggle_character_info(mut input: CharacterInfoModalInput) {
+fn toggle_character_info(
+    mut input: CharacterInfoModalInput,
+    game_mode: Single<&GameMode>,
+) {
+    if game_mode.is_spectator() {
+        return;
+    }
+
     let typing = input
         .focus
         .get()

@@ -94,6 +94,15 @@ pub fn hud(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn hud_error(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(16.0, FontWeight::NORMAL),
+        LetterSpacing::Px(0.0),
+        TextColor(theme::DANGER),
+    )
+}
+
 pub fn hud_link(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
