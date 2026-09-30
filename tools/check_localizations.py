@@ -99,6 +99,18 @@ def check_ui_catalogs() -> None:
                 errors.append(f"data/localization/{language}.json:{key}: placeholders differ")
 
 
+def check_shared_catalogs() -> None:
+    path = DATA / "localization" / "chat_commands.json"
+    catalog = read_json(path)
+    if catalog is None:
+        return
+    if not isinstance(catalog, dict):
+        errors.append(f"{path.relative_to(ROOT)}: catalog must be a JSON object")
+        return
+    for key, localized in catalog.items():
+        validate_text(localized, f"{path.relative_to(ROOT)}:{key}")
+
+
 def main() -> int:
     if not DATA.is_dir():
         print(f"Missing content directory: {DATA}", file=sys.stderr)
@@ -110,12 +122,13 @@ def main() -> int:
         if content is not None:
             inspect(content, str(path.relative_to(ROOT)))
     check_ui_catalogs()
+    check_shared_catalogs()
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
         print(f"Localization audit failed: {len(errors)} problem(s)", file=sys.stderr)
         return 1
-    print(f"Localization audit passed: {checked_fields} visible fields and three UI catalogs")
+    print(f"Localization audit passed: {checked_fields} visible fields and localization catalogs")
     return 0
 
 
