@@ -105,14 +105,19 @@ pub(super) fn natural_spawn_creatures(
     ) else {
         return;
     };
-    let _ = spawn_creature_at(
+    if spawn_creature_at(
         &mut commands,
         &context.definitions,
         &context.asset_server,
         context.language.get(),
         creature_id,
         feet,
-    );
+    ).is_ok() {
+        log_gameplay_event(format!(
+            "entity.spawn source=natural type=creature id={} position={:?}",
+            creature_id, feet
+        ));
+    }
 }
 
 fn find_natural_spawn<'a>(
