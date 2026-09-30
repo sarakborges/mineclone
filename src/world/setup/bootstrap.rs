@@ -577,21 +577,45 @@ fn random_spawn_biome_id<'a>(
                 .is_some_and(|biome| biome.kind == BiomeKind::Surface)
     };
 
-    let candidate_count = dimension.biomes.iter().filter(is_candidate).count();
+    let candidates = dimension
+        .biomes
+        .iter()
+        .filter(is_candidate)
+        .collect::<Vec<_>>();
+
     assert!(
-        candidate_count > 0,
+        !candidates.is_empty(),
         "dimension {} must define at least one forceable non-ocean surface biome for random spawn",
         dimension.id
     );
 
-    let selected = random_spawn_candidate_index(seed, candidate_count);
-    dimension
-        .biomes
-        .iter()
-        .filter(is_candidate)
-        .nth(selected)
-        .map(|entry| entry.id.as_str())
-        .expect("random spawn biome index must resolve")
+    // Exclusive-neighbor groups are biome variants of one terrain family.
+    // Random spawn should not give a family five times the probability merely
+    // because it currently has five mutually exclusive variants.
+    let mut families: Vec<Vec<&crate::content::dimension::DimensionBiome>> = Vec::new();
+    for entry in candidates {
+        if let Some(group) = entry.exclusive_neighbor_group.as_deref() {
+            if let Some(family) = families.iter_mut().find(|family| {
+                family
+                    .first()
+                    .and_then(|member| member.exclusive_neighbor_group.as_deref())
+                    == Some(group)
+            }) {
+                family.push(entry);
+            } else {
+                families.push(vec![entry]);
+            }
+        } else {
+            families.push(vec![entry]);
+        }
+    }
+
+    let family_index = random_spawn_candidate_index(seed, families.len());
+    let family = &families[family_index];
+    let member_seed = mix_hash_u64(seed.rotate_left(17) ^ RANDOM_SPAWN_BIOME_SALT);
+    let member_index = random_spawn_candidate_index(member_seed, family.len());
+
+    family[member_index].id.as_str()
 }
 
 fn random_spawn_candidate_index(seed: u64, candidate_count: usize) -> usize {
