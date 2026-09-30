@@ -78,6 +78,7 @@ fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
 }
 
 pub(in crate::world) fn setup_world(
+    time: Res<Time<Real>>,
     mut pipeline: WorldSetupChunkPipeline,
     mut progress: WorldSetupProgress,
     mut assets: WorldSetupAssets,
@@ -159,7 +160,7 @@ pub(in crate::world) fn setup_world(
     }
 
     log_loading_diagnostics(
-        assets.time,
+        time,
         &progress.loading_state,
         &mut loading_diagnostics,
     );
