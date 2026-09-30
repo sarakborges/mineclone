@@ -6,6 +6,7 @@ use bevy::{
 
 use crate::{
     app::{
+        crash_log::log_gameplay_event,
         game_state::GameState,
         keybinds::{KeybindAction, Keybinds},
         pause_state::PauseState,
@@ -88,7 +89,7 @@ struct WorldItemVisual;
 #[derive(Resource, Default)]
 pub(crate) struct TargetedWorldItem(pub(crate) Option<Entity>);
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum WorldItemPickup {
     #[default]
     Interact,
@@ -202,6 +203,11 @@ fn drop_selected_item(
         return;
     }
     if let Some(stack) = hotbar.take_selected_stack() {
+        log_gameplay_event(format!(
+            "item.drop.request source=player item={} quantity={}",
+            stack.id(),
+            stack.quantity()
+        ));
         drops.write(PlayerDropRequest::new(stack));
     }
 }
@@ -247,6 +253,14 @@ fn spawn_world_items(
     mut assets: WorldItemSpawnAssets,
 ) {
     for request in requests.read() {
+        log_gameplay_event(format!(
+            "item.spawn item={} quantity={} position={:?} velocity={:?} pickup={:?}",
+            request.stack.id(),
+            request.stack.quantity(),
+            request.position,
+            request.velocity,
+            request.pickup
+        ));
         let mut entity = commands.spawn((
             WorldItem::new(request.stack.clone()),
             WorldItemMotion {
