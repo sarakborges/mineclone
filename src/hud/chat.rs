@@ -65,6 +65,7 @@ pub(super) enum ChatMessage {
 pub(crate) struct ChatState {
     open: bool,
     escape_consumed: bool,
+    command_target: Option<Entity>,
     history: VecDeque<ChatMessage>,
     since_last_message: f32,
     revision: u64,
@@ -81,6 +82,7 @@ impl ChatState {
 
     fn close(&mut self) {
         self.open = false;
+        self.command_target = None;
     }
 
     pub(super) fn append(&mut self, message: ChatMessage) {
@@ -110,7 +112,10 @@ impl ChatState {
 }
 
 #[derive(Message)]
-struct ChatSubmission(String);
+struct ChatSubmission {
+    line: String,
+    target: Option<Entity>,
+}
 
 pub(super) struct ChatHudPlugin;
 
@@ -184,6 +189,7 @@ struct ChatInputContext<'w> {
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
     modal: Res<'w, State<GameplayModalState>>,
+    targeted: Res<'w, TargetedCreature>,
     focus: ResMut<'w, InputFocus>,
     autocomplete: ResMut<'w, ChatAutocomplete>,
 }
@@ -227,12 +233,13 @@ fn handle_chat_input(
             && !editor.is_composing()
         {
             let line = editable_value(editor).trim().to_owned();
+            let target = chat.command_target;
             chat.close();
             editor.clear();
             input.focus.clear();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
             if !line.is_empty() {
-                submissions.write(ChatSubmission(line));
+                submissions.write(ChatSubmission { line, target });
             }
             return;
         }
@@ -255,12 +262,18 @@ fn handle_chat_input(
     ]
     .iter()
     .any(|key| input.keys.pressed(*key));
-    if !can_open || !input.keys.just_pressed(input.keybinds.key_code(KeybindAction::Chat)) || has_command_modifier {
+    if !can_open
+        || !input
+            .keys
+            .just_pressed(input.keybinds.key_code(KeybindAction::Chat))
+        || has_command_modifier
+    {
         return;
     }
 
     editor.clear();
     *input.autocomplete = ChatAutocomplete::default();
+    chat.command_target = input.targeted.0;
     chat.open = true;
     input.focus.set(entity, FocusCause::Navigated);
     cursor.grab_mode = CursorGrabMode::None;
@@ -300,7 +313,6 @@ struct ChatCommandContent<'w, 's> {
     definitions: Res<'w, CreatureRegistry>,
     assets: Res<'w, AssetServer>,
     language: Res<'w, ActiveLanguage>,
-    targeted: Res<'w, TargetedCreature>,
     targets: CommandTargetQuery<'w, 's>,
 }
 
@@ -326,7 +338,7 @@ fn interpret_chat_submissions(
 ) {
     let mut reserved = Vec::new();
     for submission in submissions.read() {
-        let parsed = parse_line(&submission.0);
+        let parsed = parse_line(&submission.line);
         if game_mode.is_spectator() && !matches!(parsed, ParsedLine::Say(_)) {
             chat.append_error("commands unavailable in spectator mode");
             continue;
@@ -414,11 +426,12 @@ fn interpret_chat_submissions(
                 chat.append_text(format!("warping to {}...", format_position(target)));
             }
             ParsedLine::Kill => {
-                let Some(entity) = content.targeted.0 else {
+                let Some(entity) = submission.target else {
                     chat.append_error("kill failed");
                     continue;
                 };
-                let Ok((name, transform, mut health, _, animation)) = content.targets.get_mut(entity) else {
+                let Ok((name, transform, mut health, _, animation)) = content.targets.get_mut(entity)
+                else {
                     chat.append_error("kill failed");
                     continue;
                 };
@@ -439,11 +452,12 @@ fn interpret_chat_submissions(
                 ));
             }
             ParsedLine::Modify(action, tag, value) => {
-                let Some(entity) = content.targeted.0 else {
+                let Some(entity) = submission.target else {
                     chat.append_error("modify failed");
                     continue;
                 };
-                let Ok((name, transform, _, mut meta_tags, _)) = content.targets.get_mut(entity) else {
+                let Ok((name, transform, _, mut meta_tags, _)) = content.targets.get_mut(entity)
+                else {
                     chat.append_error("modify failed");
                     continue;
                 };
