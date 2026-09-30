@@ -225,30 +225,35 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
         add_box(bucket_, (x * s, top + y * s, z * s), (w * s, h * s, d * s))
 
     if not large:
+        # The droplet is not a prop sitting on the slime: it is the slime top
+        # itself continuing upward. Start broad and deeply embedded, then taper.
         for x, y, z, w, h, d, mat in [
-            (0.000, -0.080,  0.015, 0.34, 0.20, 0.30, water_dark),
-            (0.000,  0.055,  0.010, 0.30, 0.16, 0.27, water_mid),
-            (0.008,  0.165,  0.005, 0.24, 0.13, 0.22, water_mid),
-            (0.018,  0.255,  0.000, 0.18, 0.10, 0.17, water_light),
-            (0.030,  0.323, -0.004, 0.12, 0.075, 0.12, water_light),
-            (0.042,  0.372, -0.008, 0.065, 0.050, 0.07, water_light),
+            (0.000, -0.145,  0.010, 0.68, 0.18, 0.56, water_dark),
+            (0.000, -0.040,  0.008, 0.60, 0.16, 0.50, water_dark),
+            (0.000,  0.060,  0.006, 0.50, 0.15, 0.42, water_mid),
+            (0.006,  0.160,  0.004, 0.40, 0.14, 0.34, water_mid),
+            (0.014,  0.250,  0.002, 0.30, 0.12, 0.26, water_light),
+            (0.024,  0.327,  0.000, 0.21, 0.10, 0.19, water_light),
+            (0.034,  0.390, -0.004, 0.13, 0.08, 0.12, water_light),
+            (0.044,  0.438, -0.008, 0.07, 0.055,0.07, water_light),
         ]:
             drop_step(mat, x, y, z, w, h, d)
-        detail_height = 0.40 * s
-        detail_width = 0.34 * s
+        detail_height = 0.47 * s
+        detail_width = 0.68 * s
     else:
         for x, y, z, w, h, d, mat in [
-            (0.000, -0.095,  0.018, 0.39, 0.23, 0.35, water_dark),
-            (0.000,  0.060,  0.012, 0.35, 0.19, 0.31, water_mid),
-            (0.010,  0.190,  0.006, 0.28, 0.15, 0.25, water_mid),
-            (0.022,  0.295,  0.000, 0.21, 0.12, 0.20, water_light),
-            (0.036,  0.375, -0.006, 0.15, 0.09, 0.15, water_light),
-            (0.050,  0.435, -0.010, 0.09, 0.065, 0.10, water_light),
-            (0.060,  0.478, -0.014, 0.05, 0.045, 0.06, water_light),
+            (0.000, -0.165,  0.012, 0.76, 0.20, 0.64, water_dark),
+            (0.000, -0.045,  0.010, 0.68, 0.18, 0.56, water_dark),
+            (0.000,  0.072,  0.008, 0.57, 0.17, 0.48, water_mid),
+            (0.008,  0.188,  0.006, 0.46, 0.16, 0.39, water_mid),
+            (0.018,  0.292,  0.003, 0.35, 0.14, 0.30, water_light),
+            (0.030,  0.382,  0.000, 0.25, 0.11, 0.22, water_light),
+            (0.044,  0.454, -0.004, 0.16, 0.09, 0.15, water_light),
+            (0.058,  0.510, -0.008, 0.09, 0.065,0.09, water_light),
         ]:
             drop_step(mat, x, y, z, w, h, d)
-        detail_height = 0.50 * s
-        detail_width = 0.39 * s
+        detail_height = 0.55 * s
+        detail_width = 0.76 * s
 
     details_prims = [
         prim(water_dark, 9),
@@ -381,7 +386,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "visual_height": visual_height,
             "visual_width": visual_width,
             "pixel_art_geometry": "Hydro droplet uses only axis-aligned voxel boxes; taper is expressed through stepped layer size changes",
-            "reference_design": "clean turquoise water blob with no horns and one integrated teardrop on top",
+            "reference_design": "clean turquoise blob whose own top continues upward into one broad-based teardrop point",
         },
     }
     json_chunk = json.dumps(scene, separators=(",", ":")).encode("utf-8")

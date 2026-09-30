@@ -93,7 +93,7 @@
       20,
       22
     ],
-    "construction": "clean turquoise slime_blob body + one partially embedded stepped water droplet on top + square texture-driven face",
+    "construction": "rounded turquoise slime_blob body whose broad top continues upward and tapers into one pointed water droplet; no separate cap or horns",
     "base_language": "slime_blob",
     "reference": "user Hydro reference: no horns; replace them with one teardrop-shaped water feature centered on top"
   }

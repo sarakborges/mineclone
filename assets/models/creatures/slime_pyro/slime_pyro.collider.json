@@ -93,7 +93,7 @@
       20,
       22
     ],
-    "construction": "clean orange-gold slime_blob body + asymmetric stepped flame cluster growing from the top + square texture-driven face",
+    "construction": "rounded orange slime_blob body with independent asymmetrical voxel flame tongues rising from different top positions; no crown band or horns",
     "base_language": "slime_blob",
     "reference": "user Pyro reference: ignore horns; top should read as flames built in strict pixel-art geometry"
   }

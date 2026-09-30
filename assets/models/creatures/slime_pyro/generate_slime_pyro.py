@@ -225,80 +225,85 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     def flame_step(bucket_, x, y, z, w, h, d):
         add_box(bucket_, (x * s, top + y * s, z * s), (w * s, h * s, d * s))
 
-    # Flames grow out of the blob itself. Each tongue is a staircase silhouette:
-    # wider buried roots, then progressively smaller layers shifted sideways/up.
+    # Irregular flames rise independently from the top surface. There is no
+    # continuous band, mirrored pair, or crown silhouette. Each flame has its
+    # own buried root and occupies a different X/Z position and height.
     if not large:
-        # Dominant central flame.
-        for x, y, z, w, h, d, mat in [
-            (0.000, -0.090,  0.010, 0.39, 0.20, 0.33, fire_dark),
-            (0.005,  0.045,  0.005, 0.33, 0.17, 0.29, fire_orange),
-            (0.015,  0.165,  0.000, 0.26, 0.14, 0.24, fire_orange),
-            (0.028,  0.265, -0.004, 0.19, 0.11, 0.18, fire_yellow),
-            (0.044,  0.342, -0.008, 0.12, 0.085,0.13, fire_yellow),
-            (0.060,  0.400, -0.012, 0.060,0.055,0.075,fire_hot),
-        ]:
-            flame_step(mat, x, y, z, w, h, d)
-
-        # Left tongue leans outward by pixel stair-steps.
-        for x, y, z, w, h, d, mat in [
-            (-0.235, -0.075, 0.020, 0.25, 0.17, 0.25, fire_dark),
-            (-0.275,  0.040, 0.015, 0.20, 0.14, 0.21, fire_orange),
-            (-0.315,  0.138, 0.010, 0.14, 0.11, 0.16, fire_yellow),
-            (-0.345,  0.215, 0.005, 0.075,0.070,0.10, fire_hot),
-        ]:
-            flame_step(mat, x, y, z, w, h, d)
-
-        # Right tongue is shorter and offset, avoiding horn-like symmetry.
-        for x, y, z, w, h, d, mat in [
-            (0.245, -0.080,-0.005, 0.23, 0.16, 0.24, fire_dark),
-            (0.278,  0.030,-0.010, 0.18, 0.13, 0.20, fire_orange),
-            (0.305,  0.118,-0.014, 0.12, 0.10, 0.15, fire_yellow),
-            (0.325,  0.185,-0.018, 0.060,0.065,0.09, fire_hot),
-        ]:
-            flame_step(mat, x, y, z, w, h, d)
-
-        # Small rear lick gives the top a flame cluster instead of three spikes.
-        for x, y, z, w, h, d, mat in [
-            (-0.055,-0.050, 0.205,0.20,0.15,0.18,fire_dark),
-            (-0.075, 0.050, 0.220,0.15,0.12,0.14,fire_orange),
-            (-0.095, 0.130, 0.232,0.09,0.085,0.10,fire_yellow),
-        ]:
-            flame_step(mat, x, y, z, w, h, d)
-
-        detail_height = 0.43 * s
-        detail_width = 0.78 * s
+        flame_groups = [
+            [
+                ( 0.020,-0.085,-0.010,0.27,0.13,0.24,fire_dark),
+                ( 0.030, 0.005,-0.016,0.21,0.11,0.19,fire_orange),
+                ( 0.044, 0.090,-0.022,0.15,0.10,0.14,fire_yellow),
+                ( 0.058, 0.166,-0.028,0.10,0.085,0.10,fire_hot),
+                ( 0.070, 0.228,-0.032,0.055,0.055,0.06,fire_hot),
+            ],
+            [
+                (-0.190,-0.070,-0.105,0.19,0.11,0.17,fire_dark),
+                (-0.208, 0.004,-0.112,0.14,0.10,0.13,fire_orange),
+                (-0.222, 0.072,-0.118,0.09,0.08,0.09,fire_yellow),
+                (-0.234, 0.126,-0.122,0.050,0.055,0.055,fire_hot),
+            ],
+            [
+                ( 0.210,-0.060, 0.090,0.18,0.11,0.17,fire_dark),
+                ( 0.226, 0.015, 0.098,0.13,0.095,0.12,fire_orange),
+                ( 0.240, 0.080, 0.106,0.08,0.075,0.08,fire_yellow),
+            ],
+            [
+                (-0.050,-0.058, 0.175,0.17,0.10,0.15,fire_dark),
+                (-0.042, 0.010, 0.185,0.12,0.09,0.11,fire_orange),
+                (-0.034, 0.070, 0.194,0.07,0.07,0.07,fire_yellow),
+            ],
+            [
+                ( 0.120,-0.072,-0.165,0.14,0.10,0.12,fire_dark),
+                ( 0.132,-0.004,-0.174,0.095,0.085,0.09,fire_orange),
+                ( 0.142, 0.052,-0.182,0.055,0.060,0.055,fire_yellow),
+            ],
+        ]
+        detail_height = 0.31 * s
+        detail_width = 0.54 * s
     else:
-        # Large variant has taller, denser flames but the same non-horn language.
-        for x, y, z, w, h, d, mat in [
-            (0.000, -0.105, 0.012, 0.44, 0.23, 0.37, fire_dark),
-            (0.006,  0.050, 0.006, 0.38, 0.19, 0.33, fire_orange),
-            (0.018,  0.185, 0.000, 0.30, 0.16, 0.27, fire_orange),
-            (0.034,  0.300,-0.005, 0.22, 0.13, 0.21, fire_yellow),
-            (0.052,  0.392,-0.010, 0.15, 0.10, 0.15, fire_yellow),
-            (0.072,  0.463,-0.015, 0.085,0.075,0.10, fire_hot),
-            (0.088,  0.515,-0.018, 0.045,0.045,0.055,fire_hot),
-        ]:
-            flame_step(mat, x, y, z, w, h, d)
+        flame_groups = [
+            [
+                ( 0.028,-0.095,-0.012,0.31,0.14,0.28,fire_dark),
+                ( 0.040, 0.008,-0.018,0.25,0.12,0.22,fire_orange),
+                ( 0.056, 0.105,-0.025,0.19,0.11,0.17,fire_yellow),
+                ( 0.072, 0.192,-0.032,0.13,0.095,0.12,fire_hot),
+                ( 0.086, 0.264,-0.038,0.075,0.065,0.075,fire_hot),
+            ],
+            [
+                (-0.215,-0.080,-0.118,0.22,0.12,0.20,fire_dark),
+                (-0.236, 0.004,-0.126,0.17,0.105,0.15,fire_orange),
+                (-0.254, 0.078,-0.134,0.11,0.085,0.11,fire_yellow),
+                (-0.268, 0.140,-0.140,0.06,0.06,0.06,fire_hot),
+            ],
+            [
+                ( 0.235,-0.066, 0.104,0.21,0.12,0.19,fire_dark),
+                ( 0.254, 0.016, 0.114,0.16,0.10,0.14,fire_orange),
+                ( 0.270, 0.086, 0.124,0.10,0.085,0.10,fire_yellow),
+                ( 0.282, 0.145, 0.132,0.055,0.06,0.055,fire_hot),
+            ],
+            [
+                (-0.060,-0.066, 0.198,0.20,0.11,0.18,fire_dark),
+                (-0.050, 0.010, 0.210,0.15,0.10,0.14,fire_orange),
+                (-0.040, 0.078, 0.220,0.095,0.08,0.09,fire_yellow),
+            ],
+            [
+                ( 0.135,-0.080,-0.186,0.17,0.11,0.15,fire_dark),
+                ( 0.150,-0.006,-0.196,0.12,0.095,0.11,fire_orange),
+                ( 0.162, 0.058,-0.205,0.07,0.07,0.07,fire_yellow),
+            ],
+            [
+                (-0.130,-0.070, 0.020,0.15,0.10,0.13,fire_dark),
+                (-0.144,-0.004, 0.026,0.105,0.085,0.095,fire_orange),
+                (-0.156, 0.052, 0.032,0.060,0.060,0.060,fire_yellow),
+            ],
+        ]
+        detail_height = 0.36 * s
+        detail_width = 0.60 * s
 
-        for x, y, z, w, h, d, mat in [
-            (-0.260,-0.090, 0.025,0.29,0.19,0.28,fire_dark),
-            (-0.305, 0.040, 0.018,0.23,0.16,0.24,fire_orange),
-            (-0.350, 0.150, 0.012,0.17,0.13,0.19,fire_yellow),
-            (-0.385, 0.238, 0.006,0.10,0.085,0.12,fire_hot),
-            ( 0.270,-0.095,-0.010,0.27,0.18,0.27,fire_dark),
-            ( 0.310, 0.025,-0.015,0.21,0.15,0.23,fire_orange),
-            ( 0.345, 0.125,-0.020,0.15,0.12,0.17,fire_yellow),
-            ( 0.372, 0.205,-0.025,0.08,0.075,0.11,fire_hot),
-            (-0.070,-0.060, 0.225,0.23,0.17,0.20,fire_dark),
-            (-0.095, 0.055, 0.242,0.17,0.14,0.16,fire_orange),
-            (-0.120, 0.150, 0.255,0.10,0.10,0.11,fire_yellow),
-            ( 0.145,-0.045, 0.185,0.19,0.15,0.18,fire_dark),
-            ( 0.170, 0.055, 0.200,0.13,0.11,0.13,fire_orange),
-        ]:
+    for group in flame_groups:
+        for x, y, z, w, h, d, mat in group:
             flame_step(mat, x, y, z, w, h, d)
-
-        detail_height = 0.54 * s
-        detail_width = 0.86 * s
 
     details_prims = [
         prim(fire_dark, 9),
