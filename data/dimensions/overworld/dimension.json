@@ -176,7 +176,7 @@
     },
     {
       "id": "asteria:overworld/floating_islands",
-      "weight": 0.35,
+      "weight": 0.25,
       "size": {
         "x": {
           "min": 48,
