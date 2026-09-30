@@ -12,9 +12,9 @@ use crate::{
 use super::carve_density_delta;
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
-const ISLAND_EDGE_BLEND: f32 = 0.10;
-const ISLAND_TOP_BLEND: f32 = 0.075;
-const ISLAND_BOTTOM_BLEND: f32 = 0.11;
+const ISLAND_EDGE_BLEND: f32 = 0.16;
+const ISLAND_TOP_BLEND: f32 = 0.020;
+const ISLAND_BOTTOM_BLEND: f32 = 0.16;
 const SECONDARY_LOBE_MIN_COUNT: usize = 3;
 const SECONDARY_LOBE_VARIATION: usize = 3;
 
@@ -221,7 +221,8 @@ fn floating_island_sample(
         let core = (1.0 - radial).clamp(0.0, 1.0);
         let bottom = top - (0.16 + lobe.underside_depth * core.powf(0.72));
         let edge_mask = smoothstep(
-            ((1.0 - radial) / ISLAND_EDGE_BLEND + 1.0).clamp(0.0, 1.0),
+            ((1.0 + ISLAND_EDGE_BLEND - radial) / (ISLAND_EDGE_BLEND * 2.0))
+                .clamp(0.0, 1.0),
         );
         let top_mask =
             smoothstep(((top - local_position.y) / ISLAND_TOP_BLEND).clamp(0.0, 1.0));
@@ -253,22 +254,22 @@ fn floating_island_lobe(seed: u64, index: usize) -> FloatingIslandLobe {
     if index == 0 {
         return FloatingIslandLobe {
             center: Vec2::ZERO,
-            radii: Vec2::new(0.72, 0.68),
+            radii: Vec2::new(0.64, 0.60),
             top_offset: 0.0,
-            underside_depth: 1.08,
+            underside_depth: 1.35,
         };
     }
 
     let salt = index as u64;
     let angle = std::f32::consts::TAU * hash_unit(seed, 0x9e37_79b9_7f4a_7c15 ^ salt);
-    let offset = 0.22 + 0.20 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
+    let offset = 0.28 + 0.16 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
     let center = Vec2::new(angle.cos(), angle.sin()) * offset;
-    let radius_x = 0.43 + 0.23 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
-    let radius_z = 0.43 + 0.23 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
+    let radius_x = 0.34 + 0.18 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
+    let radius_z = 0.34 + 0.18 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
     let top_offset =
         (hash_unit(seed, 0x27d4_eb2f_1656_67c5 ^ salt.rotate_left(29)) - 0.5) * 0.10;
     let underside_depth =
-        0.68 + 0.28 * hash_unit(seed, 0x94d0_49bb_1331_11eb ^ salt.rotate_left(37));
+        0.90 + 0.30 * hash_unit(seed, 0x94d0_49bb_1331_11eb ^ salt.rotate_left(37));
 
     FloatingIslandLobe {
         center,
@@ -375,7 +376,7 @@ mod tests {
             0.0,
         );
 
-        assert!(bridge_sample.mask > 0.5);
+        assert!(bridge_sample.mask > 0.35);
         assert!(secondary_sample.mask > 0.5);
     }
 
