@@ -57,4 +57,11 @@ impl EntityMetaTags {
         *current = value;
         Ok(())
     }
+
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        if let Some(tag) = self.0.keys().find(|tag| normalized_meta_tag(tag).is_none()) {
+            return Err(format!("unknown saved meta tag: {tag}"));
+        }
+        Ok(())
+    }
 }
