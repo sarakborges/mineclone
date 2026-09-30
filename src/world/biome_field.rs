@@ -377,6 +377,15 @@ impl BiomeField {
             .as_str()
     }
 
+    pub(crate) fn surface_biome_has_tag(&self, index: usize, tag: &str) -> bool {
+        self.surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"))
+            .tags
+            .iter()
+            .any(|candidate| candidate == tag)
+    }
+
     pub(crate) fn surface_terrain(
         &self,
         index: usize,
