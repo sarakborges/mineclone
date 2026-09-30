@@ -77,7 +77,9 @@ use chunk_unloading::{
     ChunkUnloadState, enforce_chunk_mesh_residency_budget, evict_distant_chunks,
     retire_distant_chunk_meshes,
 };
-use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
+use chunk_visibility::{
+    ChunkPresentationSelection, sync_chunk_visibility, sync_new_chunk_visibility,
+};
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
@@ -148,6 +150,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
+            .init_resource::<ChunkPresentationSelection>()
             .init_resource::<ChunkAsyncWorkLimiter>()
             .init_resource::<GenerationScheduler>()
             .init_resource::<PresentationScheduler>()
@@ -192,6 +195,7 @@ impl Plugin for WorldPlugin {
                 OnEnter(GameState::Gameplay),
                 (
                     reset_resource::<ChunkStreamingState>,
+                    reset_resource::<ChunkPresentationSelection>,
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<PresentationScheduler>,
                     reset_resource::<ChunkRemeshTasks>,
