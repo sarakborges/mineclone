@@ -5,6 +5,9 @@
     "portuguese_brazil": "Alpes",
     "spanish": "Alpes"
   },
+  "tags": [
+    "mountain"
+  ],
   "distributions": [
     {
       "type": "mountain_peak",
