@@ -475,7 +475,7 @@ fn move_world_items(
     mut items: Query<(Entity, &mut Transform, &mut WorldItemMotion)>,
 ) {
     let dt = time.delta_secs().min(0.05);
-    for (entity, mut transform, mut motion) in &mut items {
+    for (entity, mut transform, world_item, mut motion) in &mut items {
         if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
             continue;
         }
@@ -540,6 +540,13 @@ fn pickup_proximity_items(
             continue;
         }
         if collect_world_item(&mut hotbar, &mut world_item) {
+            log_gameplay_event(format!(
+                "item.pickup source=proximity entity={:?} item={} quantity={} position={:?}",
+                entity,
+                world_item.stack().id(),
+                world_item.stack().quantity(),
+                transform.translation
+            ));
             commands.entity(entity).despawn();
         }
     }
@@ -563,6 +570,12 @@ fn pickup_interact_item(
         return;
     };
     if collect_world_item(&mut hotbar, &mut world_item) {
+        log_gameplay_event(format!(
+            "item.pickup source=interact entity={:?} item={} quantity={}",
+            entity,
+            world_item.stack().id(),
+            world_item.stack().quantity()
+        ));
         commands.entity(entity).despawn();
         targeted.0 = None;
     }
