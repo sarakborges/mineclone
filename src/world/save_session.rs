@@ -7,7 +7,10 @@ use bevy::{
 };
 
 use crate::{
-    app::game_state::GameState,
+    app::{
+        crash_log::{log_gameplay_error, log_gameplay_event},
+        game_state::GameState,
+    },
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
@@ -96,9 +99,10 @@ impl WorldSession {
         // Measured on the machine running the game, not inferred from CI.
         // Publication includes JSON serialization, fsync and cleanup dispatch;
         // final world exit remains blocked until the commit is durable.
-        info!(
-            "World {id} saved: capture={capture_elapsed:?}, publication={publication_elapsed:?}"
-        );
+        log_gameplay_event(format!(
+            "world.save success id={} capture={:?} publication={:?}",
+            id, capture_elapsed, publication_elapsed
+        ));
         Ok(())
     }
 }
@@ -295,6 +299,7 @@ pub(crate) fn save_on_gameplay_window_close(
     }
 
     if let Err(error) = session.persist(&snapshot) {
+        log_gameplay_error(format!("world.save failed error={error}"));
         error!("World save failed; keeping current world open: {error}");
         return;
     }
