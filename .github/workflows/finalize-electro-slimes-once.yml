@@ -1,0 +1,169 @@
+name: Finalize Electro slimes once
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/finalize-electro-slimes-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Finalize Electro metadata and exact Anemo face reuse
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          def load(path):
+              return json.loads(Path(path).read_text(encoding='utf-8'))
+
+          def save(path, value):
+              Path(path).write_text(json.dumps(value, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          small_collider_path = 'assets/models/creatures/slime_electro/slime_electro.collider.json'
+          small = load(small_collider_path)
+          small['asset'] = 'slime_electro.glb'
+          small['model_bounds_rest'] = {
+              'size': [1.2, 1.305, 1.14],
+              'center': [0, 0.6525, 0],
+              'approximate_visual_height': 1.305,
+          }
+          small['collider']['follows'] = 'SlimeRoot world transform, NOT BodyPivot scale or GLB animation'
+          small['materials'] = {
+              'face': 'SlimeFace',
+              'expression': 'exact relaxed Anemo face texture reused through the SlimeFace override',
+              'unlit': True,
+          }
+          small['authoring'] = {
+              'voxel_resolution': [24, 20, 22],
+              'construction': 'fresh slime_blob body + central lightning antenna + stepped forehead circuit marks + shared Anemo face quad',
+              'base_language': 'slime_blob',
+              'legacy_electro_geometry_reused': False,
+          }
+          save(small_collider_path, small)
+
+          large_collider_path = 'assets/models/creatures/slime_electro_large/slime_electro_large.collider.json'
+          large = load(large_collider_path)
+          large['asset'] = 'slime_electro_large.glb'
+          large['model_bounds_rest'] = {
+              'size': [1.92, 1.868, 1.82],
+              'center': [0, 0.934, 0],
+              'approximate_visual_height': 1.868,
+          }
+          large['collider']['follows'] = 'SlimeRoot world transform, NOT BodyPivot scale or GLB animation'
+          large['materials'] = {
+              'face': 'SlimeFace',
+              'expression': 'exact relaxed Anemo face texture reused through the SlimeFace override',
+              'unlit': True,
+          }
+          large['authoring'] = {
+              'voxel_resolution': [24, 20, 22],
+              'construction': 'fresh slime_blob body + central lightning antenna + stepped forehead circuit marks + shared Anemo face quad',
+              'base_language': 'slime_blob',
+              'legacy_electro_geometry_reused': False,
+          }
+          save(large_collider_path, large)
+
+          for creature_path in (
+              'data/creatures/slime_electro.json',
+              'data/creatures/slime_electro_large.json',
+          ):
+              creature = load(creature_path)
+              creature['textures'] = {'SlimeFace': 'textures/creatures/slime_anemo/face.png'}
+              creature['unlitMaterials'] = ['SlimeFace', 'ElementAccent', 'ElementPale', 'ElementWhite']
+              save(creature_path, creature)
+
+          Path('VERSION').write_text('0.68.49\n', encoding='utf-8')
+
+          readme_path = Path('assets/models/creatures/README.md')
+          readme = readme_path.read_text(encoding='utf-8')
+          readme = readme.replace(
+              'All elemental faces use the same visual language as the original relaxed Anemo face. The active Anemo reuses that original face texture directly; the other elements use expression variants derived from the same closed-eye, soft-cheek, minimal-mouth design. Faces are texture-driven through the shared `SlimeFace` material instead of bespoke face geometry.',
+              'All elemental faces use the same visual language as the original relaxed Anemo face. The active Anemo reuses that original face texture directly, and Electro intentionally reuses that exact same Anemo texture as well. The remaining elements use expression variants derived from the same closed-eye, soft-cheek, minimal-mouth design. Faces are texture-driven through the shared `SlimeFace` material instead of bespoke face geometry.'
+          )
+          readme = readme.replace(
+              'The latest palette pass makes Electro yellow/gold, reserves purple for Tenebra, and gives Lumen a white/pink palette. Lumen uses angelic wings plus a halo; Tenebra uses bat wings plus small horns. Elemental silhouette details otherwise stay reference-driven and avoid unrelated horn-like decoration.',
+              'Electro is generated fresh from the `slime_blob` body language in both sizes, with a yellow/gold palette, a central lightning antenna and restrained stepped circuit marks; no geometry from the previous Electro GLBs is reused. Purple remains reserved for Tenebra, while Lumen uses a white/pink palette. Lumen uses angelic wings plus a halo; Tenebra uses bat wings plus small horns. Elemental silhouette details otherwise stay reference-driven and avoid unrelated horn-like decoration.'
+          )
+          readme_path.write_text(readme, encoding='utf-8')
+
+          handoff_path = Path('HANDOFF.md')
+          handoff = handoff_path.read_text(encoding='utf-8')
+          marker = '## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob'
+          if marker not in handoff:
+              section = '''## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob
+
+- Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.
+- A base corporal segue diretamente a linguagem e o perfil do `slime_blob`, mantendo o corpo arredondado e as animações de squash/stretch.
+- O visual Electro novo usa paleta amarelo/dourada, antena elétrica central com terminal claro e marcas de circuito discretas inspiradas na referência fornecida.
+- `SlimeFace` dos dois Electro agora aponta exatamente para `textures/creatures/slime_anemo/face.png`; a textura facial Electro antiga foi removida.
+- O generator reproduzível ficou em `assets/models/creatures/slime_electro/generate_slime_electro.py` e gera normal + large.
+- Bounds de metadata foram atualizados para as novas alturas visuais; os colliders físicos continuam compatíveis com o corpo blob e independentes dos detalhes decorativos.
+- Validação do rebuild: `tools/check_glb_assets.py` passou com 22 assets; Khronos glTF Validator passou nos dois Electro com `0 errors / 0 warnings`.
+- Próximo QA visual: conferir no gameplay silhueta, face, detalhes elétricos e animações das variantes normal e large.
+
+VERSION: `0.68.49`.
+
+'''
+              first_section = handoff.find('## ')
+              handoff = handoff[:first_section] + section + handoff[first_section:]
+          handoff = handoff.replace(
+              '1. Rodar a **0.68.48** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.',
+              '1. Rodar a **0.68.49** e conferir visualmente o novo Electro normal + large, incluindo a face exata do Anemo, detalhes elétricos e animações.'
+          )
+          handoff_path.write_text(handoff, encoding='utf-8')
+
+          for creature_path in ('data/creatures/slime_electro.json', 'data/creatures/slime_electro_large.json'):
+              creature = load(creature_path)
+              assert creature['textures']['SlimeFace'] == 'textures/creatures/slime_anemo/face.png'
+
+      - name: Remove obsolete Electro face and temporary workflows
+        shell: bash
+        run: |
+          rm -f assets/textures/creatures/slime_electro/face.png
+          rm -f .github/workflows/rebuild-electro-slimes-once.yml
+          rm -f .github/workflows/finalize-electro-slimes-once.yml
+
+      - name: Audit final GLB assets
+        run: python tools/check_glb_assets.py
+
+      - name: Verify active Electro face mapping
+        shell: bash
+        run: |
+          test ! -e assets/textures/creatures/slime_electro/face.png
+          python - <<'PY'
+          import json
+          for path in ('data/creatures/slime_electro.json', 'data/creatures/slime_electro_large.json'):
+              doc = json.load(open(path, encoding='utf-8'))
+              assert doc['textures']['SlimeFace'] == 'textures/creatures/slime_anemo/face.png'
+          print('Electro normal + large reuse exact Anemo face texture')
+          PY
+
+      - name: Commit final Electro rebuild metadata
+        shell: bash
+        run: |
+          git config user.name "Sara Borges"
+          git config user.email "sarakborges@outlook.com"
+          git add -A \
+            assets/models/creatures/slime_electro \
+            assets/models/creatures/slime_electro_large \
+            assets/models/creatures/README.md \
+            assets/textures/creatures/slime_electro \
+            data/creatures/slime_electro.json \
+            data/creatures/slime_electro_large.json \
+            VERSION HANDOFF.md \
+            .github/workflows/rebuild-electro-slimes-once.yml \
+            .github/workflows/finalize-electro-slimes-once.yml
+          git commit -m "Finalize Electro slime rebuild"
+          git pull --rebase origin develop
+          git push origin HEAD:develop
