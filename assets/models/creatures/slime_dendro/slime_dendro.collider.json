@@ -8,16 +8,16 @@
   "origin": "center of ground contact, feet at local y = 0",
   "model_bounds_rest": {
     "size": [
-      1.2,
-      1.557,
+      1.2105,
+      1.51,
       1.146
     ],
     "center": [
-      0.0,
-      0.7785,
-      0.0
+      -0.00525,
+      0.75,
+      -0.003
     ],
-    "approximate_visual_height": 1.557
+    "approximate_visual_height": 1.51
   },
   "collider": {
     "type": "aabb",
@@ -93,8 +93,9 @@
       20,
       22
     ],
-    "construction": "clean pale-green slime_blob body + leafy sprout/fern crown + curled tendril + square texture-driven face",
+    "construction": "clean pale-green slime_blob body + strict pixel-art stepped sprout/fern crown + square-hook tendril + square texture-driven face",
     "base_language": "slime_blob",
-    "reference": "user Dendro reference: clean blob below, plant growth above; large form carries orange flower"
+    "reference": "user Dendro reference: clean blob below, plant growth above; large form carries orange flower",
+    "pixel_art_geometry": "axis-aligned boxes and orthogonal stepped paths only; no smooth curves or straight diagonal detail geometry"
   }
 }

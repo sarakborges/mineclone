@@ -8,16 +8,16 @@
   "origin": "center of ground contact, feet at local y = 0",
   "model_bounds_rest": {
     "size": [
-      2.496,
-      1.958,
-      1.895
+      2.72,
+      2.2015,
+      1.848
     ],
     "center": [
       0.0,
-      0.979,
-      0.028
+      0.99925,
+      0.004
     ],
-    "approximate_visual_height": 1.958
+    "approximate_visual_height": 2.2015
   },
   "collider": {
     "type": "aabb",
@@ -93,8 +93,9 @@
       20,
       22
     ],
-    "construction": "clean pale-green slime_blob body + broad orange flower + green central bud + fern/tendril collar + square texture-driven face",
+    "construction": "clean pale-green slime_blob body + strict pixel-art stepped orange flower + voxel bud + fern/square-hook collar + square texture-driven face",
     "base_language": "slime_blob",
-    "reference": "user Dendro reference: clean blob below, plant growth above; large form carries orange flower"
+    "reference": "user Dendro reference: clean blob below, plant growth above; large form carries orange flower",
+    "pixel_art_geometry": "axis-aligned boxes and orthogonal stepped paths only; no smooth curves or straight diagonal detail geometry"
   }
 }
