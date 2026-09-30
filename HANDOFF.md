@@ -315,14 +315,17 @@ Commit `b532c841cb852e6a2d61d93ecdd822800e1fc784` (`Persist section-aware presen
 
 ### Cut 8 — chunks vazios recebem source stamp sem snapshot
 
-- `ChunkPresentationSource` passa a distinguir `Mesh(ChunkMeshDependencies)` de `Center(ChunkContentRevision)` dentro do próprio owner de presentation;
-- jobs de meshing/remesh continuam usando `Mesh`, preservando halo revisions, meshlet reduction e initial catch-up exatamente como antes;
+Commit `0a847fa1adcd75c254ea2253834eb6007723b586` (`Stamp empty chunk presentation sources`).
+
+- `ChunkPresentationSource` distingue internamente o modo de halo completo (`mesh_revisions`) do modo center-only (`center_revision`) dentro do owner de presentation;
+- jobs de meshing/remesh continuam usando `mesh_revisions`, preservando halo revisions, meshlet reduction e initial catch-up exatamente como antes;
 - publications síncronas de chunks vazios usam `capture_center`: capturam somente a revision autoritativa do center chunk, sem clonar `VoxelChunk`, halo ou construir `ChunkMeshSnapshot`;
-- `Center` exige que o chunk continue existente e que sua `ChunkContentRevision` permaneça igual; mudanças de vizinhos não invalidam esse stamp porque um center vazio não possui geometria/fluid próprios dependentes do halo;
+- o modo center-only exige somente que a `ChunkContentRevision` do center permaneça igual; sua validação não chama `snapshot_chunk`, então continua revision-only;
 - Loading e gameplay streaming capturam também `PresentationLightingSource::ALL` no momento da publication vazia e gravam o pair no `ChunkRenderPool` depois que a allocation é criada;
 - o caminho gameplay continua executando direct-light seed antes da publication vazia; o stamp representa o estado observado naquele ponto, sem transformar o retry/seed lifecycle em meshing async;
-- `initial_catchup_meshlets_with` para `Center` é vazio por definição; neighbor arrival continua invalidando/remeshando os chunks que realmente possuem boundary geometry, não a allocation vazia;
-- nenhum trabalho async adicional, clone de snapshot, mesh build, entity churn ou asset allocation foi introduzido neste cut.
+- initial catch-up para center-only é vazio por definição; neighbor arrival continua invalidando/remeshando os chunks que realmente possuem boundary geometry, não a allocation vazia;
+- nenhum trabalho async adicional, clone de snapshot, mesh build, entity churn ou asset allocation foi introduzido neste cut;
+- CI #10298 passou os audits e falhou somente no Clippy `large_enum_variant` da primeira representação `Mesh(ChunkMeshDependencies) | Center(ChunkContentRevision)`. A correção preserva `Copy` e evita heap allocation representando os modos por `Option<ChunkMeshDependencies> + Option<ChunkContentRevision>` no mesmo struct, mantendo o tamanho na mesma ordem do source original e sem `allow`.
 
 ### Próximos cuts
 
