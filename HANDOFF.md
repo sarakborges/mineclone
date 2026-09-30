@@ -2,7 +2,7 @@
 
 > Handoff corrente. Histórico anterior está em `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura em `docs/asteria-core-rebuild.md`.
 
-## Estado atual — 2026-09-29
+## Estado atual — 2026-09-30
 
 - Repo: `sarakborges/mineclone`.
 - Branch: `architecture/asteria-core-rebuild`.
@@ -412,11 +412,30 @@ Commit `7ba078005d89f5f4f9f3db3f461bdf8fea8a20ad` (`Split RenderApp stage timing
 - com os source stamps dos Cuts 7–8, stale checks existentes e este trigger de rebuild, presentation deixa de ser apenas conceitualmente descartável: há um caminho explícito para destruir render state e reconstruí-lo a partir do world autoritativo sem transformar render em world truth;
 - este cut é de correctness/ownership; não há claim de ganho de performance.
 
+### Evidência após Cut 13
+
+O gameplay log novo com `stage_*` localiza dois custos distintos no RenderApp:
+
+- no primeiro intervalo de Gameplay, `stage_prepare_max_us=122187` e `stage_render_max_us=80060`; o cold-start não está em publication main-thread nem em async initial meshing;
+- depois da entrada, `stage_prepare` estabiliza aproximadamente na faixa de ~3 ms, enquanto `stage_render` permanece tipicamente ~11–12 ms e continua sendo o maior custo médio do RenderApp;
+- o código explica o spike: o player/world camera é criado durante `WorldLoadingPhase::Spawning`, mas nascia com `Camera.is_active = false`; `prime_chunk_visibility` já deixava o mundo visualmente preparado atrás da transição e a câmera só era ativada em `OnEnter(GameState::Gameplay)`;
+- portanto existiam frames cobertos pelo loading/transition overlay que não executavam o primeiro prepare/render da view 3D. O primeiro frame jogável concentrava esse cold-start.
+
+### Cut 15 — world camera aquece durante a transição
+
+- a `GameplayWorldCamera` agora nasce ativa junto do player ainda em `WorldLoadingPhase::Spawning`; ela mantém `CameraOutputMode::Skip`, então Bevy executa a view/render graph e mantém o resultado nas texturas intermediárias sem escrever o output final da world camera diretamente no target;
+- a câmera 2D do loading recebe `UI_CAMERA_ORDER`, acima de `WORLD_CAMERA_ORDER`, para a stack ficar explícita e sem depender da ordem default enquanto ambas estão ativas;
+- o loading screen e o transition overlay continuam cobrindo a tela; este cut apenas antecipa o cold-start da view 3D para os frames já ocultos antes de Gameplay;
+- `prime_chunk_visibility`, render distance, meshing, publication, async scheduling, world truth, presentation ownership e budgets não mudam;
+- `OnEnter(Gameplay)` ainda garante `is_active = true`; manter essa operação idempotente preserva o lifecycle atual sem reintroduzir uma segunda política de câmera;
+- **não declarar ganho ainda**: o objetivo mensurável é retirar/reduzir o `stage_prepare`/`stage_render` spike do primeiro frame jogável. A validação exige gameplay log novo após este cut.
+
 ### Próximos cuts
 
-1. coletar gameplay log novo com `stage_*` para localizar precisamente o custo dentro do RenderApp;
-2. aplicar um único cut de performance no estágio dominante e comparar contra o log `2026-09-30_01-46-22-083021400.txt`;
-3. após a dívida de performance ser localizada/endereçada, fazer o audit final da Phase 7 e decidir seu encerramento.
+1. passar audits + Clippy + Check do Cut 15;
+2. coletar gameplay log novo e comparar primeiro intervalo de Gameplay, especialmente `frame_max_us`, `render work max_us`, `stage_prepare_max_us` e `stage_render_max_us` contra o baseline pré-Cut 15;
+3. se o cold-start sair do primeiro frame jogável mas `stage_render` continuar ~11–12 ms médio, investigar separadamente render graph/submit/present/GPU synchronization sem misturar novamente startup com steady-state;
+4. após a dívida de performance ser localizada/endereçada, fazer o audit final da Phase 7 e decidir seu encerramento.
 
 ## Regras de continuidade
 

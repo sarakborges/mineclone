@@ -80,7 +80,10 @@ pub(crate) fn spawn_player_entity(
                 GameplayWorldCamera,
                 Camera3d::default(),
                 Camera {
-                    is_active: false,
+                    // The player is spawned while Loading is still covered by
+                    // the transition UI. Keep the world camera active so Bevy
+                    // can prepare the 3D view before the first Gameplay frame.
+                    is_active: true,
                     order: WORLD_CAMERA_ORDER,
                     output_mode: CameraOutputMode::Skip,
                     ..default()
