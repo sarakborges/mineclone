@@ -56,7 +56,8 @@ VERSION: `0.68.55`.
 ## Estado atual — 2026-09-30
 
 - Repo: `sarakborges/mineclone`.
-- Branch: `develop` (Asteria core rebuild já integrado).
+- Branch operacional: `develop`.
+- Não houve autorização para mover a continuidade do trabalho para uma branch de fase/rebuild separada; o trabalho corrente deve continuar em `develop`.
 - Asteria core rebuild integrado em `develop` pelo merge `48197a30ed78cc6b3eadd5f2be7fcf0d2a9c4204`.
 - `develop` contém o core rebuild integrado e os patches de slime subsequentes; versão de conteúdo atual `0.68.52`.
 - `VERSION` em `0.68.52`; este bump cobre mudanças de conteúdo/modelos de slime.
@@ -168,6 +169,13 @@ Implementação preparada em `tmp/cut28-floating-islands`:
 
 Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado e variação determinística por seed. O gate deve ser executado após consolidação.
 
+## Correção operacional — continuidade em `develop`
+
+- O handoff anterior continha uma regra de continuidade apontando para uma branch de Phase 7 separada. Essa regra não corresponde à instrução operacional atual e foi corrigida.
+- `develop` é a branch de trabalho e fonte de continuidade deste projeto.
+- Nenhuma mudança deve ser deslocada para outra branch por iniciativa própria.
+- As correções de Floating Islands solicitadas nesta sessão (somente sobre Plains e maior espaçamento) ainda não devem ser descritas como integradas em `develop` até existirem commits efetivamente aplicados nesta branch.
+
 ## Próximos passos
 
 1. consolidar e fechar CI do Cut 28;
@@ -177,7 +185,7 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 
 ## Regras de continuidade
 
-- trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
+- trabalhar diretamente em `develop`, salvo instrução explícita em contrário;
 - não force-push/rewrite de commits publicados; usar fast-forward;
 - corrigir root cause de Clippy/Check, nunca esconder warning com `allow`;
 - preservar gameplay/content/UI/assets válidos durante o rebuild;
