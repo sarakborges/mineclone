@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         chunk::VoxelChunk, coordinates::chunk_coord_from_position,
@@ -455,6 +456,11 @@ pub(super) fn evict_distant_chunks(
         return;
     }
 
+    log_gameplay_event(format!(
+        "chunk.unload count={} coords={:?}",
+        unloaded.len(),
+        unloaded
+    ));
     eviction.lighting.enqueue_chunk_unloads(unloaded.as_slice());
     unloaded.clear();
 }
