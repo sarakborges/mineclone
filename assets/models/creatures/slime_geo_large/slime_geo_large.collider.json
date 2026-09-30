@@ -9,15 +9,15 @@
   "model_bounds_rest": {
     "size": [
       1.98,
-      1.42,
+      2.3275,
       1.88
     ],
     "center": [
-      0,
-      0.71,
-      0
+      0.0,
+      1.16375,
+      0.0
     ],
-    "approximate_visual_height": 1.42
+    "approximate_visual_height": 2.3275
   },
   "collider": {
     "type": "aabb",
@@ -84,7 +84,7 @@
   },
   "materials": {
     "face": "SlimeFace",
-    "expression": "texture derived from the original relaxed Anemo face design",
+    "expression": "dedicated Geo face texture through the square SlimeFace override",
     "unlit": true
   },
   "authoring": {
@@ -93,7 +93,9 @@
       20,
       22
     ],
-    "construction": "sampled rounded voxel body + reference-driven blocky element details + textured face quad",
-    "base_language": "slime_blob"
+    "construction": "clean stone-grey slime_blob body + heavier strict pixel-art stepped stone crown + square texture-driven face",
+    "base_language": "slime_blob",
+    "reference": "user Geo reference: clean blob with crown/horns made from dark stones",
+    "pixel_art_geometry": "all crown geometry is axis-aligned; tapered silhouettes are staircases of boxes"
   }
 }

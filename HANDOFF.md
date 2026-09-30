@@ -1,5 +1,16 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-09-30 — 0.68.53 Geo stone-crown rebuild
+
+- Geo normal + large refeitos a partir do slime_blob e da referência do usuário.
+- Corpo permanece uma bolota cinza limpa; identidade Geo fica numa coroa de pedras no topo.
+- Dois espigões laterais maiores funcionam como chifres; pedras centrais menores fecham a diadema.
+- Toda a coroa é pixel-art 3D estrita: caixas ortogonais e staircases, sem curvas nem faces diagonais lisas.
+- Generator reproduzível: `assets/models/creatures/slime_geo/generate_slime_geo.py`.
+- Validação: audit geral de GLBs + verificação específica de normals cardinais na `geo_stone_crown`.
+- Face segue em `textures/creatures/slime_geo/face.png`; seis clips de animação preservados.
+
+
 > Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
 ## 2026-09-30 — 0.68.52 Dendro strict pixel-art geometry
 
