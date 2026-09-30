@@ -106,7 +106,7 @@ impl PlayerPreviewLayout<'_, '_> {
 }
 
 #[derive(SystemParam)]
-pub(super) struct PlayerPreviewState<'w> {
+pub(super) struct PlayerPreviewState<'w, 's> {
     pause: Res<'w, State<PauseState>>,
     settings: Res<'w, State<SettingsState>>,
     modal: Res<'w, State<GameplayModalState>>,
@@ -114,7 +114,7 @@ pub(super) struct PlayerPreviewState<'w> {
     game_mode: Single<'w, 's, &'static GameMode>,
 }
 
-impl PlayerPreviewState<'_> {
+impl PlayerPreviewState<'_, '_> {
     fn hud_visible(&self) -> bool {
         *self.pause.get() == PauseState::Running
             && *self.settings.get() == SettingsState::Closed
