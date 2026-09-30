@@ -186,6 +186,7 @@ pub(super) struct MeshResidencyCandidate {
 pub(super) fn enforce_chunk_mesh_residency_budget(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
+    presentation_selection: Res<ChunkPresentationSelection>,
     mut renderer: ChunkRenderer,
     mut runtime: ChunkMeshResidencyRuntime,
     mut candidates: Local<Vec<MeshResidencyCandidate>>,
@@ -352,7 +353,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             candidate.coord,
             &runtime.world,
             &renderer.pool,
-            &runtime.streaming,
+            &presentation_selection,
             &mut runtime.remesh_queue,
         );
 
