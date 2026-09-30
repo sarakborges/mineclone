@@ -12,7 +12,6 @@ use super::super::{WorldLoadingPhase, system_params::WorldSetupProgress};
 const INITIAL_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(4);
 const MIN_INITIAL_FLUID_SETTLING_UPDATES: usize = 16;
 const MAX_INITIAL_FLUID_SETTLING_UPDATES: usize = 1_024;
-#[derive(Default)]struct FluidSettlingDiagnostics {    timer: Option<Timer>,    started: bool,}
 pub(super) fn settle_initial_fluids(
     content: &ChunkContent<'_>,
     progress: &mut WorldSetupProgress<'_>,
