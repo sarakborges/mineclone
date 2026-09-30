@@ -324,6 +324,24 @@ fn command_target_position(transform: &Transform) -> IVec3 {
     transform.translation.floor().as_ivec3()
 }
 
+fn error_feedback(message: impl AsRef<str>) -> String {
+    let message = message.as_ref().trim();
+    if message.is_empty() {
+        return "Command failed.".to_owned();
+    }
+
+    let mut chars = message.chars();
+    let Some(first) = chars.next() else {
+        return "Command failed.".to_owned();
+    };
+    let mut formatted = first.to_uppercase().collect::<String>();
+    formatted.push_str(chars.as_str());
+    if !matches!(formatted.chars().last(), Some('.' | '!' | '?')) {
+        formatted.push('.');
+    }
+    formatted
+}
+
 // Bevy systems expose their independent ECS inputs as function parameters.
 #[allow(clippy::too_many_arguments)]
 fn interpret_chat_submissions(
@@ -340,29 +358,31 @@ fn interpret_chat_submissions(
     for submission in submissions.read() {
         let parsed = parse_line(&submission.line);
         if game_mode.is_spectator() && !matches!(parsed, ParsedLine::Say(_)) {
-            chat.append_error("commands unavailable in spectator mode");
+            chat.append_error("Commands are unavailable in spectator mode.");
             continue;
         }
 
         match parsed {
             ParsedLine::Say(text) => chat.append_text(format!("<{PLAYER_DISPLAY_NAME}>: {text}")),
             ParsedLine::Usage(usage) => chat.append_error(format!("Usage: {usage}")),
-            ParsedLine::Unknown(command) => chat.append_error(format!("Unknown command: {command}")),
+            ParsedLine::Unknown(command) => {
+                chat.append_error(format!("Unknown command: {command}."));
+            }
             ParsedLine::Spawn(id, meta_tag) => {
                 let Some(definition) = content.definitions.get(id) else {
-                    chat.append_error("spawn failed");
+                    chat.append_error(format!("Unknown creature id: {id}."));
                     continue;
                 };
                 let Some(position) = placement.player_block_position() else {
-                    chat.append_error("spawn failed");
+                    chat.append_error("Cannot spawn creature: player is unavailable.");
                     continue;
                 };
                 let name = definition.name.text(content.language.get()).to_owned();
 
                 if let Some(meta_tag) = meta_tag {
                     let mut meta_tags = EntityMetaTags::default();
-                    if meta_tags.add(meta_tag, None).is_err() {
-                        chat.append_error("spawn failed");
+                    if let Err(error) = meta_tags.add(meta_tag, None) {
+                        chat.append_error(error_feedback(error));
                         continue;
                     }
                     let feet = Vec3::new(
@@ -370,7 +390,7 @@ fn interpret_chat_submissions(
                         position.y as f32,
                         position.z as f32 + 0.5,
                     );
-                    if spawn_creature_at_with_tags(
+                    if let Err(error) = spawn_creature_at_with_tags(
                         &mut commands,
                         &content.definitions,
                         &content.assets,
@@ -378,14 +398,12 @@ fn interpret_chat_submissions(
                         id,
                         feet,
                         meta_tags,
-                    )
-                    .is_err()
-                    {
-                        chat.append_error("spawn failed");
+                    ) {
+                        chat.append_error(error_feedback(error));
                         continue;
                     }
                     chat.append_text(format!(
-                        "spawned {name} at {}",
+                        "Spawned {name} at {}.",
                         format_position(position)
                     ));
                     continue;
@@ -394,11 +412,11 @@ fn interpret_chat_submissions(
                 let response = placement.spawn(&mut commands, id, &mut reserved);
                 if response.starts_with("Spawned ") {
                     chat.append_text(format!(
-                        "spawned {name} at {}",
+                        "Spawned {name} at {}.",
                         format_position(position)
                     ));
                 } else {
-                    chat.append_error("spawn failed");
+                    chat.append_error(error_feedback(response));
                 }
             }
             ParsedLine::Place(id, variation) => {
@@ -406,33 +424,33 @@ fn interpret_chat_submissions(
                 if response.starts_with("Placed ") {
                     chat.append_text(response);
                 } else {
-                    chat.append_error("place failed");
+                    chat.append_error(error_feedback(response));
                 }
             }
             ParsedLine::Locate(kind, id, variation) => {
                 let Some(player_block) = placement.player_block_position() else {
-                    chat.append_error("locate failed");
+                    chat.append_error("Cannot locate target: player is unavailable.");
                     continue;
                 };
                 let response = locate.start(kind, id, variation, player_block);
                 if response.starts_with("Locating ") {
                     chat.append_text(response);
                 } else {
-                    chat.append_error("locate failed");
+                    chat.append_error(error_feedback(response));
                 }
             }
             ParsedLine::Warp(target) => {
                 warp.request(target);
-                chat.append_text(format!("warping to {}...", format_position(target)));
+                chat.append_text(format!("Warping to {}...", format_position(target)));
             }
             ParsedLine::Kill => {
                 let Some(entity) = submission.target else {
-                    chat.append_error("kill failed");
+                    chat.append_error("No creature is targeted.");
                     continue;
                 };
                 let Ok((name, transform, mut health, _, animation)) = content.targets.get_mut(entity)
                 else {
-                    chat.append_error("kill failed");
+                    chat.append_error("The targeted creature is no longer available.");
                     continue;
                 };
                 let position = command_target_position(transform);
@@ -446,19 +464,19 @@ fn interpret_chat_submissions(
                     TimerMode::Once,
                 )));
                 chat.append_text(format!(
-                    "killed {} at {}",
+                    "Killed {} at {}.",
                     name.as_str(),
                     format_position(position)
                 ));
             }
             ParsedLine::Modify(action, tag, value) => {
                 let Some(entity) = submission.target else {
-                    chat.append_error("modify failed");
+                    chat.append_error("No creature is targeted.");
                     continue;
                 };
                 let Ok((name, transform, _, mut meta_tags, _)) = content.targets.get_mut(entity)
                 else {
-                    chat.append_error("modify failed");
+                    chat.append_error("The targeted creature is no longer available.");
                     continue;
                 };
                 let result = match action {
@@ -466,20 +484,28 @@ fn interpret_chat_submissions(
                     ModifyAction::Remove => meta_tags.remove(tag),
                     ModifyAction::Edit => meta_tags.edit(tag, value.map(str::to_owned)),
                 };
-                if result.is_err() {
-                    chat.append_error("modify failed");
+                if let Err(error) = result {
+                    chat.append_error(error_feedback(error));
                     continue;
                 }
-                let verb = match action {
-                    ModifyAction::Add => "added",
-                    ModifyAction::Remove => "removed",
-                    ModifyAction::Edit => "edited",
+                let feedback = match action {
+                    ModifyAction::Add => format!(
+                        "Added {tag} to {} at {}.",
+                        name.as_str(),
+                        format_position(command_target_position(transform))
+                    ),
+                    ModifyAction::Remove => format!(
+                        "Removed {tag} from {} at {}.",
+                        name.as_str(),
+                        format_position(command_target_position(transform))
+                    ),
+                    ModifyAction::Edit => format!(
+                        "Updated {tag} on {} at {}.",
+                        name.as_str(),
+                        format_position(command_target_position(transform))
+                    ),
                 };
-                chat.append_text(format!(
-                    "{verb} {tag} on {} at {}",
-                    name.as_str(),
-                    format_position(command_target_position(transform))
-                ));
+                chat.append_text(feedback);
             }
         }
     }
@@ -492,19 +518,21 @@ fn normalize_locate_failures(mut chat: ResMut<ChatState>) {
     if !text.contains("could not be found within") {
         return;
     }
+    let message = text.clone();
     let Some(last) = chat.history.back_mut() else {
         return;
     };
-    *last = ChatMessage::Error("locate failed".to_owned());
+    *last = ChatMessage::Error(message);
+    chat.since_last_message = 0.0;
     chat.revision = chat.revision.wrapping_add(1);
 }
 
 fn poll_warp_outcome(mut warp: ResMut<PendingWarp>, mut chat: ResMut<ChatState>) {
     match warp.take_outcome() {
         Some(WarpOutcome::Succeeded(position)) => {
-            chat.append_text(format!("warped to {}", format_position(position)));
+            chat.append_text(format!("Warped to {}.", format_position(position)));
         }
-        Some(WarpOutcome::Failed) => chat.append_error("warp failed"),
+        Some(WarpOutcome::Failed) => chat.append_error("Warp failed."),
         None => {}
     }
 }
@@ -530,6 +558,12 @@ mod tests {
             ParsedLine::Modify(ModifyAction::Add, "NO_AI", None)
         );
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
+    }
+
+    #[test]
+    fn error_feedback_capitalizes_and_punctuates_messages() {
+        assert_eq!(error_feedback("unknown meta tag: TEST"), "Unknown meta tag: TEST.");
+        assert_eq!(error_feedback("Already correct."), "Already correct.");
     }
 
     #[test]
