@@ -7,6 +7,7 @@ use std::{
 use bevy::prelude::*;
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity,
         movement::{
