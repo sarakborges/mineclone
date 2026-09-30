@@ -62,7 +62,7 @@ Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
 ### Cut 26 — volume biome constraints por surface biome
 
-Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22` + `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`; gate correction em andamento.
+Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`, `c4b62f5bdf103a63807d0340234be5169c2e1bb9` e correção de gate `99cd6456af1f77b670f1e771d3b372cc46dac735`.
 
 - `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes (e reutilizáveis futuramente);
 - `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
@@ -74,7 +74,11 @@ Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22` + `4d84cae3783bdb
 - volume biome sem constraints mantém comportamento irrestrito anterior;
 - nenhum biome atual recebeu constraint inventada; o corte entrega a capacidade genérica sem retuning arbitrário de conteúdo.
 
-O primeiro gate do Cut 26 falhou somente porque o helper de teste `test_surface_entry` em `selection.rs` ainda construía `BiomeFieldEntry` sem os novos campos. A correção adiciona `tags: Vec::new()` e `surface_constraints: None`; nenhum comportamento runtime muda nesse follow-up.
+Gate history:
+
+- primeiro gate: helper `test_surface_entry` ainda construía `BiomeFieldEntry` sem `tags`/`surface_constraints`;
+- segundo gate em `c4b62f5...`: somente três warnings em `selection.rs` (`BiomeDistribution` import não usado e dois parâmetros `cell` não usados);
+- `99cd6456...` remove o import morto e marca os dois parâmetros intencionalmente não usados, sem mudança runtime.
 
 Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
 
