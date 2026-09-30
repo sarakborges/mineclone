@@ -20,6 +20,18 @@
 
 
 > Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
+## 2026-09-30 — Floating island shape/material correction + spectator HUD cleanup
+
+- Floating island sites now use `84..120` X/Z and `24..36` Y, reducing the near-touching footprint while making the landmass vertically thicker.
+- Island lobes were tightened and rounded: the central mass is less elongated, secondary lobes are smaller and still overlap the core, and underside depth increased.
+- Edge masking now tapers *before* the outer boundary instead of staying solid until the radius and dropping vertically; this removes the straight-wall/plate look.
+- Top blend was tightened so the first generated solid voxel remains aligned with the authored surface layer; the `grass_block -> dirt -> stone` stack can now place grass on the actual top.
+- Regression tests cover edge taper and top-layer depth; CI is green on `a845440585818262deba50bc833d7db9df00c9c8`.
+- Floating Islands remain constrained by `surfaceConstraints.allow = plains`; no other surface biome is eligible.
+- Spectator targeting visuals remain disabled, including target highlight/brush/artisan ghosts.
+- Spectator player preview cameras are inactive; the local-player HUD remains hidden in spectator, including the character portrait preview.
+- Fixed the Bevy 0.19 `Single` SystemParam lifetime errors introduced by the spectator patch.
+
 ## 2026-09-30 — 0.68.52 Dendro strict pixel-art geometry
 
 - Dendro normal + large tiveram todos os detalhes vegetais refeitos como pixel art geométrica estrita.
