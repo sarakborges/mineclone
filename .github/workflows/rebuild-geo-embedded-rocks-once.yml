@@ -1,0 +1,111 @@
+name: Rebuild Geo embedded rocks once
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/rebuild-geo-embedded-rocks-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rework Geo generator into embedded rock cap
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('assets/models/creatures/slime_geo/generate_slime_geo.py')
+          text = p.read_text()
+          start = text.index('    # Low crown band sitting on the blob, deliberately asymmetric by one pixel-step.')
+          end = text.index('    details_prims = [', start)
+          replacement = '''    # Irregular rock cap grown into the slime body. There is intentionally no\n    # continuous band/base: every rock is an independent mass partially buried\n    # into the upper blob, matching the reference rather than reading as a crown.\n    if not large:\n        # Left temple: the taller horn-like rock mass, sunk deeply into the body.\n        rock_step(rock_dark, -0.39, -0.105, -0.045, 0.33, 0.30, 0.31)\n        rock_step(rock_mid,  -0.425, 0.075, -0.030, 0.25, 0.22, 0.26)\n        rock_step(rock_dark, -0.455, 0.225, -0.012, 0.18, 0.16, 0.21)\n        rock_step(rock_light,-0.475, 0.335,  0.000, 0.11, 0.09, 0.16)\n\n        # Right temple: deliberately shorter, broader and offset forward.\n        rock_step(rock_dark,  0.36, -0.125, -0.070, 0.35, 0.27, 0.32)\n        rock_step(rock_mid,   0.395, 0.040, -0.055, 0.27, 0.20, 0.27)\n        rock_step(rock_dark,  0.425, 0.175, -0.040, 0.19, 0.14, 0.21)\n        rock_step(rock_light, 0.440, 0.270, -0.025, 0.12, 0.08, 0.16)\n\n        # Low forehead boulder between the eyes, visibly embedded rather than perched.\n        rock_step(rock_dark,   0.015, -0.120, -0.155, 0.31, 0.25, 0.24)\n        rock_step(rock_mid,    0.030,  0.020, -0.165, 0.24, 0.17, 0.20)\n        rock_step(rock_light,  0.045,  0.120, -0.175, 0.15, 0.09, 0.16)\n\n        # Independent rubble fills gaps without forming a continuous strip.\n        rock_step(rock_mid,   -0.205, -0.045, -0.030, 0.16, 0.16, 0.18)\n        rock_step(rock_dark,   0.205, -0.065,  0.010, 0.15, 0.14, 0.17)\n        rock_step(rock_light, -0.120,  0.080,  0.095, 0.12, 0.11, 0.14)\n        rock_step(rock_mid,    0.145,  0.045,  0.115, 0.13, 0.10, 0.15)\n\n        # Tiny front facet blocks break up the large stone faces in pixel-art style.\n        rock_step(rock_light, -0.385, 0.000, -0.215, 0.10, 0.09, 0.035)\n        rock_step(rock_mid,    0.350,-0.020, -0.230, 0.11, 0.08, 0.035)\n        detail_height = 0.43 * s\n        detail_width = 1.05 * s\n    else:\n        # Large variant keeps the same composition, with heavier overlapping masses.\n        rock_step(rock_dark, -0.40, -0.125, -0.045, 0.38, 0.34, 0.35)\n        rock_step(rock_mid,  -0.445, 0.075, -0.030, 0.30, 0.25, 0.30)\n        rock_step(rock_dark, -0.485, 0.245, -0.010, 0.22, 0.18, 0.24)\n        rock_step(rock_light,-0.510, 0.370,  0.005, 0.13, 0.10, 0.18)\n\n        rock_step(rock_dark,  0.355, -0.145, -0.085, 0.42, 0.31, 0.37)\n        rock_step(rock_mid,   0.405,  0.035, -0.070, 0.31, 0.22, 0.30)\n        rock_step(rock_dark,  0.445,  0.185, -0.050, 0.22, 0.16, 0.23)\n        rock_step(rock_light, 0.465,  0.295, -0.035, 0.13, 0.09, 0.17)\n\n        # Broader low central mass, still lower than both outer peaks.\n        rock_step(rock_dark,  -0.015, -0.145, -0.175, 0.38, 0.28, 0.28)\n        rock_step(rock_mid,    0.015,  0.010, -0.185, 0.29, 0.19, 0.23)\n        rock_step(rock_light,  0.035,  0.120, -0.195, 0.18, 0.10, 0.17)\n\n        # Uneven rubble field; placements intentionally avoid mirror symmetry.\n        for bucket_, x, y, z, w, h, d in [\n            (rock_mid,  -0.235, -0.055, -0.010, 0.18, 0.17, 0.20),\n            (rock_dark,  0.220, -0.085,  0.015, 0.17, 0.15, 0.19),\n            (rock_light,-0.145,  0.090,  0.105, 0.13, 0.12, 0.15),\n            (rock_mid,   0.155,  0.055,  0.125, 0.15, 0.11, 0.16),\n            (rock_dark, -0.285,  0.055,  0.130, 0.14, 0.13, 0.16),\n            (rock_mid,   0.285,  0.015,  0.145, 0.13, 0.11, 0.15),\n        ]:\n            rock_step(bucket_, x, y, z, w, h, d)\n\n        rock_step(rock_light, -0.390, -0.005, -0.250, 0.12, 0.10, 0.04)\n        rock_step(rock_mid,    0.345, -0.030, -0.265, 0.13, 0.09, 0.04)\n        detail_height = 0.48 * s\n        detail_width = 1.08 * s\n\n'''
+          text = text[:start] + replacement + text[end:]
+          text = text.replace('axis-aligned stepped stone crown: two taller outer horn-like spires plus smaller\\ncentral rocks.', 'embedded irregular rock cap: two uneven outer peaks, a lower forehead boulder, and smaller\\nrubble masses.')
+          text = text.replace('"geo_stone_crown"', '"geo_rock_cap"')
+          text = text.replace('node("GeoCrown", mesh=details_mesh)', 'node("GeoRockCap", mesh=details_mesh)')
+          text = text.replace('Asteria Geo slime stone crown rebuild v1', 'Asteria Geo slime embedded rock-cap rebuild v2')
+          text = text.replace('all Geo crown faces are axis-aligned; tapered stone silhouettes use box staircases', 'all Geo rock-detail faces are axis-aligned; irregular silhouettes use embedded box staircases')
+          text = text.replace('clean grey blob with a dark stone crown and two taller outer horn-like spires', 'clean grey blob with irregular dark rocks embedded into the upper body, two uneven outer peaks, and a lower forehead boulder')
+          p.write_text(text)
+          PY
+
+      - name: Generate Geo GLBs
+        run: python assets/models/creatures/slime_geo/generate_slime_geo.py
+
+      - name: Audit GLB assets
+        run: python tools/check_glb_assets.py
+
+      - name: Enforce Geo cardinal pixel-art geometry
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, struct
+          from pathlib import Path
+          for path in [Path('assets/models/creatures/slime_geo/slime_geo.glb'), Path('assets/models/creatures/slime_geo_large/slime_geo_large.glb')]:
+              raw = path.read_bytes()
+              n = struct.unpack_from('<I', raw, 12)[0]
+              scene = json.loads(raw[20:20+n].decode().rstrip())
+              mesh = next(m for m in scene['meshes'] if m['name'] == 'geo_rock_cap')
+              for prim in mesh['primitives']:
+                  acc = scene['accessors'][prim['attributes']['NORMAL']]
+                  view = scene['bufferViews'][acc['bufferView']]
+                  off = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
+                  blob = raw
+                  # BIN chunk starts after padded JSON chunk header+payload.
+                  json_len = struct.unpack_from('<I', raw, 12)[0]
+                  bin_header = 20 + json_len
+                  bin_len = struct.unpack_from('<I', raw, bin_header)[0]
+                  bin_start = bin_header + 8
+                  vals = struct.unpack_from('<' + 'f' * (acc['count'] * 3), raw, bin_start + off)
+                  for i in range(0, len(vals), 3):
+                      v = tuple(round(vals[i+j], 6) for j in range(3))
+                      if v not in {(1.0,0.0,0.0),(-1.0,0.0,0.0),(0.0,1.0,0.0),(0.0,-1.0,0.0),(0.0,0.0,1.0),(0.0,0.0,-1.0)}:
+                          raise SystemExit(f'{path}: non-cardinal Geo normal {v}')
+              print(path, 'Geo rock cap normals: cardinal-only')
+          PY
+
+      - name: Update Geo metadata and version
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in [Path('assets/models/creatures/slime_geo/slime_geo.collider.json'), Path('assets/models/creatures/slime_geo_large/slime_geo_large.collider.json')]:
+              d = json.loads(path.read_text())
+              d['authoring']['construction'] = 'clean stone-grey slime_blob body + irregular rock masses embedded into the upper body + square texture-driven face'
+              d['authoring']['reference'] = 'user Geo reference: upper head is broken rocky mass, not a separate crown; two uneven outer peaks and lower central forehead rock'
+              path.write_text(json.dumps(d, indent=2) + '\n')
+          Path('VERSION').write_text('0.68.54\n')
+          handoff = Path('HANDOFF.md')
+          text = handoff.read_text()
+          note = '''## 2026-09-30 — 0.68.54 Geo embedded rock-cap correction\n\n- Geo normal + large no longer use a crown/band sitting above the slime.\n- Rock masses are independent, asymmetric and partially buried into the upper blob; side masses descend into the temples and the center stone sits lower on the forehead, matching the supplied reference.\n- Pixel-art invariant preserved: all rock-detail faces remain cardinal/axis-aligned.\n- Generator: `assets/models/creatures/slime_geo/generate_slime_geo.py`.\n\n'''
+          if note not in text:
+              text = text.replace('# HANDOFF — Asteria / Mineclone\n', '# HANDOFF — Asteria / Mineclone\n\n' + note, 1)
+          handoff.write_text(text)
+          PY
+
+      - name: Commit rebuilt Geo assets and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/rebuild-geo-embedded-rocks-once.yml
+          git add -A
+          git commit -m "Integrate Geo rocks into slime head"
+          git push origin HEAD:develop
