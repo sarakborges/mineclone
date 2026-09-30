@@ -801,6 +801,18 @@ fn interpret_chat_submissions(
                 let name = name.as_str().to_owned();
                 let current = health.current();
                 health.damage(current);
+                log_gameplay_event(format!(
+                    "entity.damage entity={:?} type=creature id={} source=command_kill amount={:.3} health_before={:.3} health_after=0 position={:?}",
+                    entity,
+                    name,
+                    current,
+                    current,
+                    transform.translation
+                ));
+                log_gameplay_event(format!(
+                    "entity.death entity={:?} type=creature id={} source=command_kill position={:?}",
+                    entity, name, transform.translation
+                ));
                 if let Some(mut animation) = animation {
                     animation.trigger("death");
                 }
