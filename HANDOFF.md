@@ -104,28 +104,35 @@ A leitura do Bevy 0.19.1 localizou uma operação com perfil compatível dentro 
 - por view 3D ele cria `ViewClusterBindings` e `ViewGpuClusteringBuffers`, reserva cluster storage, lista inicial de até 65.536 índices e scratch buffers e escreve buffers GPU;
 - a world camera já existe durante Loading por causa do Cut 15;
 - a **viewmodel camera só nasce no primeiro Update de Gameplay**, portanto cria uma nova view 3D justamente na janela do cold-start;
-- a viewmodel não necessita clustered lighting:
-  - o braço usa `StandardMaterial` explicitamente `unlit=true`;
-  - held-block usa `BlockModelMaterial` com display shading próprio;
-  - a câmera já usa render layer dedicada e não deve compartilhar iluminação/world visibility da world camera;
-- Bevy 0.19.1 fornece `ClusterConfig::None` com semântica explícita de desabilitar cálculos de cluster para aquela view.
+- a viewmodel não necessita clustered lighting: o braço usa `StandardMaterial` `unlit=true`, e held-block usa `BlockModelMaterial` com display shading próprio.
 
-### Cut 18 — remover warm-up refutado e desligar clustering da viewmodel
+### Cut 18 — experimento per-view e falha de runtime
 
-- remover `LightingWarmupPlugin` do `RenderingPlugin` e deletar `src/rendering/lighting_warmup.rs`;
-- restaurar visibilidade mínima dos helpers de `sun_lighting` / `dynamic_lights` que haviam sido ampliados somente para o experimento;
-- adicionar `ClusterConfig::None` exclusivamente à segunda `Camera3d` usada pela viewmodel;
-- world camera continua com clustering normal e iluminação PBR real;
-- nenhuma mudança em meshing, streaming, generation, presentation ownership ou world truth;
-- objetivo mensurável: evitar alocação/preparo de clustered-light resources para uma view que não usa luz PBR;
-- **não declarar ganho até gameplay log novo**.
+Commit `74b8b1c1b0b32c933c40d8a626ae411b9c4f0d36` (`Skip clustering for viewmodel camera`), CI #10313 success.
+
+- removeu corretamente o `LightingWarmupPlugin` refutado do Cut 17 e deletou `src/rendering/lighting_warmup.rs`;
+- restaurou visibilidade mínima dos helpers de `sun_lighting` / `dynamic_lights`;
+- tentou usar `ClusterConfig::None` exclusivamente na viewmodel camera para evitar clustering per-view;
+- o binário compilou e passou Clippy/Check, mas o teste de runtime falhou antes de produzir benchmark válido:
+  - Bevy 0.19.1 converte `ClusterConfig::None` em dimensões `UVec3::ZERO`;
+  - com GPU clustering habilitado, `prepare_cluster_dummy_textures` ainda processa essa view e tenta criar `clustering dummy texture` com dimensão X zero;
+  - wgpu rejeita a textura e o app encerra com `Validation RenderError`;
+- portanto **não existe resultado de performance válido do Cut 18** e `ClusterConfig::None` não pode permanecer nesse backend;
+- `ClusterConfig::Single` não será usado como substituição especulativa: ele ainda mantém infraestrutura de clustering per-view e não isola a causa do cold-start.
+
+### Correção pós-Cut 18 — restaurar viewmodel válida
+
+- remover somente `ClusterConfig::None` da viewmodel camera, retornando o arquivo ao comportamento anterior ao experimento;
+- manter toda a remoção do warm-up refutado do Cut 17;
+- não alterar world camera, meshing, streaming, generation, presentation ownership ou world truth;
+- objetivo desta correção é apenas restaurar runtime válido; **não há claim de performance**.
 
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 18;
-2. coletar gameplay log novo e comparar primeiro Gameplay `resources_max_us`, `stage_prepare_max_us`, `stage_render_max_us` e frame max contra 93.610 ms / 97.902 ms / 111.069 ms / 169.143 ms do log pós-Cut 17 e também contra o baseline pré-Cut 17 de 67.598 ms em `PrepareResources`;
-3. se o pico cair, manter `ClusterConfig::None` na viewmodel e continuar separando o custo residual de startup;
-4. se não cair, instrumentar/alterar outro candidato dentro de `PrepareResources`, sem reintroduzir warm-ups especulativos;
+1. passar audits + Clippy + Check da correção pós-Cut 18;
+2. não pedir benchmark da variante inválida; voltar a `PrepareResources` com observabilidade/experimentos que não dependam de zero cluster dimensions;
+3. separar o custo de GPU clustering dos demais systems de `PrepareResources` antes de outra otimização funcional;
+4. manter como baselines válidos `resources_max_us=67598` pré-Cut 17 e `resources_max_us=93610` pós-Cut 17, lembrando que Cut 17 foi removido;
 5. depois do startup, instrumentar o main schedule para localizar o hitch de movimento de ~102 ms;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 
@@ -133,7 +140,7 @@ A leitura do Bevy 0.19.1 localizou uma operação com perfil compatível dentro 
 
 - trabalhar em `architecture/asteria-core-rebuild`, nunca direto em `develop`;
 - não reescrever/force-push commits publicados; usar fast-forward;
-- cada bloco coerente deve terminar com HANDOFF e gate verde;
+- cada bloco coerente deve terminar com HANDOFF atualizado e gate verde;
 - corrigir root cause de Clippy/Check, nunca esconder warning com `allow`;
 - preservar gameplay/content/UI/assets válidos durante o rebuild;
 - não inventar performance claims sem logs reais.

@@ -3,7 +3,7 @@ use std::{collections::HashSet, f32::consts::PI};
 use bevy::{
     camera::{Hdr, visibility::RenderLayers},
     ecs::system::SystemParam,
-    light::{NotShadowCaster, cluster::ClusterConfig},
+    light::NotShadowCaster,
     prelude::*,
     world_serialization::WorldInstanceReady,
 };
@@ -166,7 +166,6 @@ pub(super) fn spawn_viewmodel(
                 },
                 Hdr,
                 Msaa::Off,
-                ClusterConfig::None,
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
             ));
 
