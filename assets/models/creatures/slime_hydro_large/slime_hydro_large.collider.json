@@ -93,7 +93,8 @@
       20,
       22
     ],
-    "construction": "sampled rounded voxel body + reference-driven blocky element details + textured face quad",
-    "base_language": "slime_blob"
+    "construction": "clean turquoise slime_blob body + one partially embedded stepped water droplet on top + square texture-driven face",
+    "base_language": "slime_blob",
+    "reference": "user Hydro reference: no horns; replace them with one teardrop-shaped water feature centered on top"
   }
 }
