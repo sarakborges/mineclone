@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{
+        crash_log::log_gameplay_event,
+        game_state::GameState,
+    },
     player::{
         find_safe_spawn_position, player_id::LOCAL_PLAYER_ID, player_position_is_clear,
         safe_spawn_position, spawn_player_entity,
@@ -95,6 +98,10 @@ pub(super) fn spawn_loaded_world(
         return;
     }
 
+    log_gameplay_event(format!(
+        "world.load.complete player_ready=true prewarm_frames={}",
+        prewarm.frames
+    ));
     progress.loading_state.transition_requested = true;
     finalization
         .transition
