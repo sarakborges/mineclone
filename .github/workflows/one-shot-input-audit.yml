@@ -1,18 +1,68 @@
-name: One-shot editable input audit
+name: One-shot Hydro integrated top point
 on:
   push:
     branches: [develop]
     paths: [.github/workflows/one-shot-input-audit.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  rebuild:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Enumerate all editable inputs and their layout
+        with:
+          ref: develop
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Integrate visible Hydro droplet point into body
+        run: python tools/fix_hydro_integrated_tip_once.py
+      - name: Regenerate Hydro models
+        run: python assets/models/creatures/slime_hydro/generate_slime_hydro.py
+      - name: Validate GLBs
+        run: python tools/check_glb_assets.py
+      - name: Verify integrated Hydro tip
         run: |
-          echo '=== Every editable input in src ==='
-          grep -RnE -C 12 'EditableText[[:space:]]*\{|EditableText::new|TextInput|INPUT_PADDING_X' src || true
-          echo '=== Input related files ==='
-          grep -RlE 'EditableText|TextInput' src || true
+          python - <<'PY'
+          import json, struct
+          from pathlib import Path
+          checks = [
+              (Path('assets/models/creatures/slime_hydro/slime_hydro.glb'), 1.10),
+              (Path('assets/models/creatures/slime_hydro_large/slime_hydro_large.glb'), 1.65),
+          ]
+          for path, min_height in checks:
+              data = path.read_bytes()
+              assert data[:4] == b'glTF'
+              json_len, kind = struct.unpack_from('<I4s', data, 12)
+              assert kind == b'JSON'
+              doc = json.loads(data[20:20 + json_len].decode('utf-8'))
+              mesh_names = [m.get('name') for m in doc.get('meshes', [])]
+              node_names = [n.get('name') for n in doc.get('nodes', [])]
+              assert 'hydro_blob_body' in mesh_names, (path, mesh_names)
+              assert 'hydro_water_droplet' not in mesh_names, (path, mesh_names)
+              assert 'HydroDroplet' not in node_names, (path, node_names)
+              assert len(mesh_names) == 2, (path, mesh_names)
+              height = float(doc['extras']['visual_height'])
+              assert height > min_height, (path, height)
+              assert doc['extras']['voxel_resolution'][1] == 23, doc['extras']['voxel_resolution']
+              print(path, 'visual_height=', height, 'meshes=', mesh_names)
+          PY
+      - name: Bump patch version
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('VERSION')
+          a, b, c = map(int, p.read_text().strip().split('.'))
+          p.write_text(f'{a}.{b}.{c + 1}\n')
+          PY
+      - name: Commit integrated Hydro top point
+        run: |
+          git checkout HEAD^ -- .github/workflows/one-shot-input-audit.yml
+          rm -f tools/fix_hydro_integrated_tip_once.py
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add integrated droplet point to Hydro slime top'
+          git pull --rebase origin develop
+          git push origin HEAD:develop
