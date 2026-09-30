@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Generate pixel-art Hydro Slime models from the rounded slime_blob body language.
 
-The Hydro body is a clean turquoise blob with no horns, armor, or side features.
-Its only modeled elemental feature is one water droplet growing directly from the
-top of the body. The droplet tapers through axis-aligned voxel stair-steps so the
-silhouette reads as pixel art without smooth curves or diagonal faces. The face
-remains a square texture-driven SlimeFace decal.
+Hydro has no separate modeled accessory on top. The slime body itself keeps the
+rounded blob volume through the lower/middle mass and then continues upward,
+progressively narrowing into a short water-drop point. The entire silhouette is
+one exposed-face voxel body mesh; the face remains texture-driven.
 """
 from __future__ import annotations
 
@@ -36,10 +35,14 @@ def lin(c: float) -> float:
 
 
 def profile(t: float) -> float:
+    # One continuous Hydro body: rounded blob below, then the same body
+    # narrows through the upper silhouette into a short droplet point.
+    # There is deliberately no secondary bulb, brim, mound, or accessory.
     keys = (
         (0.0, 0.66), (0.06, 0.79), (0.15, 0.91), (0.28, 0.995),
-        (0.44, 1.0), (0.58, 0.965), (0.70, 0.89), (0.80, 0.76),
-        (0.88, 0.60), (0.94, 0.36), (0.975, 0.14), (1.0, 0.02),
+        (0.44, 1.0), (0.58, 0.97), (0.70, 0.91), (0.79, 0.82),
+        (0.86, 0.72), (0.91, 0.60), (0.95, 0.46), (0.975, 0.31),
+        (0.99, 0.17), (1.0, 0.04),
     )
     for (a, ar), (b, br) in zip(keys, keys[1:]):
         if t <= b:
@@ -215,126 +218,6 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     meshes.append({"name": "slime_face_quad", "primitives": [prim(face_bucket, len(PALETTE))]})
     face_mesh = len(meshes) - 1
 
-    s = body_width / 1.20
-    top = body_height * 0.5
-
-    # Hydro is not an accessory sitting on the blob. This mesh is a voxel
-    # continuation of the slime's own top surface: broad at the root, then
-    # narrowing into a water-drop point. Materials come from the body palette
-    # so the root matches the visible top exactly and the remaining faces keep
-    # the same voxel shading language instead of flat-colored slabs.
-    drop_buckets = [bucket() for _ in range(len(PALETTE))]
-    # The previous version still read as a hat because its visible root was a
-    # broad stepped mound. This version buries a narrow root inside the body,
-    # lets the exposed middle swell into a bulb, then tapers only the short
-    # upper section into a point. That creates a true teardrop silhouette.
-    cell_x = 0.050 * s
-    cell_y = 0.038 * s
-    cell_z = 0.050 * s
-    base_y = top - 0.150 * s
-
-    if not large:
-        profiles = [
-            (0, 2.10, 1.90, 0.00),
-            (1, 2.35, 2.10, 0.00),
-            (2, 2.60, 2.35, 0.01),
-            (3, 2.82, 2.55, 0.02),
-            (4, 3.00, 2.72, 0.04),
-            (5, 3.08, 2.80, 0.06),
-            (6, 2.95, 2.68, 0.08),
-            (7, 2.62, 2.40, 0.11),
-            (8, 2.18, 2.02, 0.14),
-            (9, 1.64, 1.54, 0.18),
-            (10, 1.05, 1.00, 0.22),
-            (11, 0.52, 0.52, 0.26),
-        ]
-    else:
-        profiles = [
-            (0, 2.20, 2.00, 0.00),
-            (1, 2.45, 2.20, 0.00),
-            (2, 2.70, 2.45, 0.01),
-            (3, 2.92, 2.65, 0.02),
-            (4, 3.10, 2.82, 0.04),
-            (5, 3.20, 2.90, 0.06),
-            (6, 3.12, 2.84, 0.08),
-            (7, 2.90, 2.65, 0.10),
-            (8, 2.58, 2.38, 0.13),
-            (9, 2.18, 2.02, 0.16),
-            (10, 1.68, 1.58, 0.20),
-            (11, 1.12, 1.06, 0.24),
-            (12, 0.56, 0.56, 0.28),
-        ]
-
-    droplet = set()
-    layer_info = {}
-    for iy, rx, rz, shift in profiles:
-        layer_info[iy] = (rx, rz, shift)
-        lim_x = int(rx) + 2
-        lim_z = int(rz) + 2
-        for ix in range(-lim_x, lim_x + 1):
-            for iz in range(-lim_z, lim_z + 1):
-                px = (ix - shift) / rx
-                pz = iz / rz
-                if px * px + pz * pz <= 1.0:
-                    droplet.add((ix, iy, iz))
-
-    detail_faces = (
-        ((1, 0, 0), ((1, 0, 0), (1, 0, 1), (1, 1, 1), (1, 1, 0))),
-        ((-1, 0, 0), ((0, 0, 1), (0, 0, 0), (0, 1, 0), (0, 1, 1))),
-        ((0, 1, 0), ((0, 1, 0), (1, 1, 0), (1, 1, 1), (0, 1, 1))),
-        ((0, -1, 0), ((0, 0, 1), (1, 0, 1), (1, 0, 0), (0, 0, 0))),
-        ((0, 0, 1), ((1, 0, 1), (0, 0, 1), (0, 1, 1), (1, 1, 1))),
-        ((0, 0, -1), ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))),
-    )
-
-    max_layer = max(layer_info)
-
-    def droplet_material(ix: int, iy: int, iz: int, normal) -> int:
-        if iy <= 5:
-            return 5  # buried root + first exposed bulb layers match the Hydro top exactly
-        t = iy / max_layer
-        rx, _rz, shift = layer_info[iy]
-        rel_x = (ix - shift) / max(rx, 1.0)
-        if normal == (0, 1, 0):
-            return 10 if t > 0.78 else 6
-        if normal == (1, 0, 0):
-            return 2
-        if normal == (-1, 0, 0):
-            return 0
-        if normal == (0, 0, 1):
-            return 2 if t < 0.65 else 7
-        if normal == (0, 0, -1):
-            if rel_x < -0.35:
-                return 0
-            if rel_x > 0.42:
-                return 5
-            if t > 0.72:
-                return 10
-            if t > 0.42:
-                return 6
-            return 1
-        return 3
-
-    for ix, iy, iz in sorted(droplet, key=lambda v: (v[1], v[2], v[0])):
-        for normal, corners in detail_faces:
-            if (ix + normal[0], iy + normal[1], iz + normal[2]) in droplet:
-                continue
-            if iy == 0 and normal == (0, -1, 0):
-                continue
-            pts = [
-                ((ix + px) * cell_x,
-                 base_y + (iy + py) * cell_y,
-                 (iz + pz) * cell_z)
-                for px, py, pz in corners
-            ]
-            quad(drop_buckets[droplet_material(ix, iy, iz, normal)], pts, normal)
-
-    details_prims = [p for p in (prim(b, i) for i, b in enumerate(drop_buckets)) if p]
-    meshes.append({"name": "hydro_water_droplet", "primitives": details_prims})
-    details_mesh = len(meshes) - 1
-    detail_height = (max_layer + 1) * cell_y - 0.150 * s
-    detail_width = max((rx * 2.0 * cell_x for _iy, rx, _rz, _shift in profiles), default=0.0)
-
     materials = [
         {
             "name": name,
@@ -395,8 +278,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     body_pivot = node("BodyPivot", children=[], translation=[0, half_h, 0])
     body_node = node("Shell", mesh=body_mesh)
     face_node = node("Face", mesh=face_mesh)
-    details_node = node("HydroDroplet", mesh=details_mesh)
-    nodes[body_pivot]["children"] = [body_node, face_node, details_node]
+    nodes[body_pivot]["children"] = [body_node, face_node]
     nodes[visual]["children"] = [body_pivot]
     hit = node(
         "Hitbox_AABB",
@@ -434,10 +316,10 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     track("Hurt", [0, .085, .15, .24, .38], [[1, 1, 1], [1.1, .88, 1.1], [.94, 1.08, .94], [1.025, .968, 1.025], [1, 1, 1]])
     track("Death", [0, .12, .31, .55, .75], [[1, 1, 1], [1.13, .8, 1.13], [1.2, .60, 1.2], [1.12, .19, 1.12], [.001, .001, .001]], center=[half_h, half_h * .8, half_h * .6, half_h * .19, half_h * .001])
 
-    visual_height = body_height + detail_height
-    visual_width = max(body_width, detail_width)
+    visual_height = body_height
+    visual_width = body_width
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Hydro integrated droplet rebuild v3"},
+        "asset": {"version": "2.0", "generator": "Asteria Hydro body-silhouette droplet rebuild v4"},
         "scene": 0,
         "scenes": [{"name": "GeoSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],
@@ -457,8 +339,8 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "occupied_voxels": len(vox),
             "visual_height": visual_height,
             "visual_width": visual_width,
-            "pixel_art_geometry": "Hydro top extension is an exposed-face voxel volume; all faces are cardinal and the teardrop taper is encoded by shrinking voxel layers",
-            "reference_design": "clean turquoise blob whose own top continues upward into one broad-based teardrop point",
+            "pixel_art_geometry": "Hydro is one exposed-face voxel body mesh; the body profile itself narrows into the top droplet point and all faces remain cardinal",
+            "reference_design": "clean turquoise slime whose entire upper body silhouette continues naturally into one short droplet point; no separate droplet mesh or hat-like mound",
         },
     }
     json_chunk = json.dumps(scene, separators=(",", ":")).encode("utf-8")

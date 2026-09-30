@@ -93,8 +93,8 @@
       20,
       22
     ],
-    "construction": "rounded Hydro blob + narrow buried voxel root that swells into a rounded exposed teardrop bulb and ends in a short point; no cap/brim silhouette",
+    "construction": "single rounded Hydro voxel body whose own upper silhouette narrows into a short droplet point; no separate top detail mesh + square texture face",
     "base_language": "slime_blob",
-    "reference": "Hydro top should read as a small water droplet pulled out of the slime surface, not a hat, cone, horn, or mound"
+    "reference": "the top of the slime itself is the water-drop shape: rounded body below, continuous taper above, short point at the apex; no droplet sitting on the slime"
   }
 }

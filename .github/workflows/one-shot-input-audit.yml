@@ -1,37 +1,18 @@
-name: One-shot Hydro body integration
+name: One-shot editable input audit
 on:
   push:
     branches: [develop]
     paths: [.github/workflows/one-shot-input-audit.yml]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  rebuild:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: develop
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Integrate Hydro drop into body silhouette
-        run: python tools/integrate_hydro_drop_into_body_once.py
-      - name: Regenerate Hydro models
-        run: python assets/models/creatures/slime_hydro/generate_slime_hydro.py
-      - name: Validate GLBs
-        run: python tools/check_glb_assets.py
-      - name: Verify there is no separate Hydro top mesh
+      - name: Enumerate all editable inputs and their layout
         run: |
-          ! grep -q 'hydro_water_droplet' assets/models/creatures/slime_hydro/generate_slime_hydro.py
-          ! grep -q 'HydroDroplet' assets/models/creatures/slime_hydro/generate_slime_hydro.py
-      - name: Commit generated models
-        run: |
-          git show HEAD^:.github/workflows/one-shot-input-audit.yml > .github/workflows/one-shot-input-audit.yml
-          rm -f tools/integrate_hydro_drop_into_body_once.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Integrate Hydro droplet into slime body silhouette"
-          git push origin develop
+          echo '=== Every editable input in src ==='
+          grep -RnE -C 12 'EditableText[[:space:]]*\{|EditableText::new|TextInput|INPUT_PADDING_X' src || true
+          echo '=== Input related files ==='
+          grep -RlE 'EditableText|TextInput' src || true

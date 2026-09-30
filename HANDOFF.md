@@ -223,3 +223,5 @@ O trabalho do branch de continuação foi integrado diretamente em `develop` ap�
 - 0.68.62: Hydro droplet reshaped from a cone/spike silhouette into a compact rounded drop: lower layers hold a bulbous width, taper begins later, and the point is short. Pyro unchanged.
 
 - 0.68.63: Hydro top reshaped again from the in-game screenshot: removed the broad cap/mound silhouette. The droplet now has a narrow root buried into the slime, a small exposed bulb, and only a short pointed upper taper. Pyro unchanged.
+
+- 0.68.64: Hydro corrected structurally: removed the separate HydroDroplet mesh/node entirely. The main hydro_blob_body profile itself now carries the water-drop silhouette and tapers continuously into a short apex point; Pyro unchanged.
