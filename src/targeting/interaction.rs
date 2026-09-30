@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::{
         attack::AttackRegistry, block::BlockRegistry,
         builtin_ids::BIOME_TINT_METADATA_KEY,
@@ -148,6 +149,10 @@ fn edit_targeted_block(
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
             }
             input.hotbar.set_selected_stack(Some(stack));
+            log_gameplay_event(format!(
+                "creative.pick block={} voxel={:?}",
+                hit.block_id, hit.voxel
+            ));
         }
         return;
     }
@@ -175,6 +180,10 @@ fn edit_targeted_block(
                         support,
                         drop_loot: false,
                     });
+                    log_gameplay_event(format!(
+                        "object.pickup object={} support={:?}",
+                        object.object_id, support
+                    ));
                     input.object_target.0 = None;
                     actions.viewmodel_animation.play_place();
                 }
@@ -186,6 +195,10 @@ fn edit_targeted_block(
                     support,
                     drop_loot: *game_mode == GameMode::Survival,
                 });
+                log_gameplay_event(format!(
+                    "object.break object={} support={:?} mode={:?}",
+                    object.object_id, support, game_mode
+                ));
                 input.object_target.0 = None;
                 actions.viewmodel_animation.play_break();
                 return;
@@ -253,6 +266,10 @@ fn edit_targeted_block(
                     TextureRotation::for_position(support, true),
                 ),
             });
+            log_gameplay_event(format!(
+                "object.place object={} support={:?} face={:?} mode={:?}",
+                object_id, support, face, game_mode
+            ));
             consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
         }
@@ -279,15 +296,34 @@ fn edit_targeted_block(
     match outcome {
         VoxelEditOutcome::Consumed => {}
         VoxelEditOutcome::LayerPlaced => {
+            log_gameplay_event(format!(
+                "layer.place layer={} voxel={:?} face={:?} mode={:?}",
+                selected_item.unwrap_or("<empty>"),
+                hit.voxel,
+                LayerFace::from_normal(hit.normal).unwrap_or(LayerFace::Top),
+                game_mode
+            ));
             consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
         }
         VoxelEditOutcome::BlockPlaced => {
+            log_gameplay_event(format!(
+                "block.place block={} voxel={:?} mode={:?}",
+                selected_item.unwrap_or("<empty>"),
+                hit.voxel + hit.normal,
+                game_mode
+            ));
             consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
             input.targeted.0 = None;
         }
         VoxelEditOutcome::BlockBroken(mutation) => {
+            log_gameplay_event(format!(
+                "block.break source=creative voxel={:?} block={} tool={}",
+                hit.voxel,
+                hit.block_id,
+                selected_item.unwrap_or("<empty>")
+            ));
             if let Some(object) = mutation.detached_object
                 && let Some(drop) = detached_object_drop_request(
                     hit.voxel,
@@ -337,6 +373,10 @@ fn dispatch_selected_tool(
                 behavior_id: tool.left_behavior.clone(),
                 target,
             });
+            log_gameplay_event(format!(
+                "tool.use item={} hand=left behavior={} target={:?}",
+                tool.id, tool.left_behavior, target
+            ));
         }
     }
 
@@ -347,6 +387,10 @@ fn dispatch_selected_tool(
                 behavior_id: tool.right_behavior.clone(),
                 target,
             });
+            log_gameplay_event(format!(
+                "tool.use item={} hand=right behavior={} target={:?}",
+                tool.id, tool.right_behavior, target
+            ));
         }
     }
 
