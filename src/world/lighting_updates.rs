@@ -28,12 +28,18 @@ const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 #[derive(Default)]struct LightingDiagnostics {    timer: Option<Timer>,    processed_voxels: u64,}
 #[derive(SystemParam)]
-pub(super) struct DynamicLightingRuntime<'w> {
+pub(super) struct DynamicLightingRuntime<'w, 's> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     lighting_revisions: ResMut<'w, PresentationLightingRevisions>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
+    render_pool: Res<'w, ChunkRenderPool>,
+    changed_chunks: Local<'s, HashSet<IVec3>>,
+    changed_positions: Local<'s, HashSet<IVec3>>,
+    dirty_meshlets: Local<'s, HashMap<IVec3, ChunkMeshletMask>>,
+    diagnostics: Local<'s, LightingDiagnostics>,
+    time: Res<'w, Time<Real>>,
 }
 
 pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bool {
@@ -42,12 +48,6 @@ pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bo
 
 pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
-    render_pool: Res<ChunkRenderPool>,
-    mut changed_chunks: Local<HashSet<IVec3>>,
-    mut changed_positions: Local<HashSet<IVec3>>,
-    mut dirty_meshlets: Local<HashMap<IVec3, ChunkMeshletMask>>,
-    mut diagnostics: Local<LightingDiagnostics>,
-    time: Res<Time<Real>>,
     mut runtime: DynamicLightingRuntime,
 ) {
     if runtime.lighting.is_empty() {
@@ -64,9 +64,9 @@ pub(super) fn process_dynamic_lighting(
         &content.blocks,
         &content.fluids,
         &content.secondary_properties,
-        &mut changed_chunks,
-        &mut changed_positions,
-        &|coord| render_pool.contains(coord),
+        &mut runtime.changed_chunks,
+        &mut runtime.changed_positions,
+        &|coord| runtime.render_pool.contains(coord),
         |processed_voxels| {
             budget.record(processed_voxels.saturating_sub(recorded_voxels));
             recorded_voxels = processed_voxels;
@@ -74,32 +74,34 @@ pub(super) fn process_dynamic_lighting(
         },
     );
 
-    let changed_chunk_count = changed_chunks.len();
-    let changed_position_count = changed_positions.len();
-    diagnostics.processed_voxels = diagnostics
+    let changed_chunk_count = runtime.changed_chunks.len();
+    let changed_position_count = runtime.changed_positions.len();
+    runtime.diagnostics.processed_voxels = runtime
+        .diagnostics
         .processed_voxels
         .saturating_add(recorded_voxels as u64);
 
-    dirty_meshlets.clear();
-    for position in changed_positions.drain() {
+    runtime.dirty_meshlets.clear();
+    for position in runtime.changed_positions.drain() {
         visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
             if runtime.world.chunk(coord).is_none() {
                 return;
             }
 
             let meshlets = ChunkMeshletMask::for_world_position(coord, position);
-            let dirty = dirty_meshlets.entry(coord).or_default();
+            let dirty = runtime.dirty_meshlets.entry(coord).or_default();
             *dirty = dirty.union(meshlets);
         });
     }
 
     let dirty_meshlet_count = dirty_meshlets.len();
-    for (&coord, &meshlets) in dirty_meshlets.iter() {
+    let dirty_meshlet_count = runtime.dirty_meshlets.len();
+    for (&coord, &meshlets) in runtime.dirty_meshlets.iter() {
         runtime.lighting_revisions.bump(coord, meshlets);
     }
     changed_chunks.clear();
 
-    for (coord, meshlets) in dirty_meshlets.drain() {
+    for (coord, meshlets) in runtime.dirty_meshlets.drain() {
         runtime
             .remesh_queue
             .enqueue_lighting_meshlet_change(coord, meshlets, &runtime.world);
@@ -120,20 +122,21 @@ pub(super) fn process_dynamic_lighting(
         }
     }
 
-    let timer = diagnostics
+    let timer = runtime
+        .diagnostics
         .timer
         .get_or_insert_with(|| Timer::from_seconds(5.0, TimerMode::Repeating));
-    timer.tick(time.delta());
+    timer.tick(runtime.time.delta());
     if timer.just_finished() {
         log_gameplay_event(format!(
             "world.lighting.runtime processed_voxels={} changed_chunks={} changed_positions={} dirty_meshlets={} propagation_pending={}",
-            diagnostics.processed_voxels,
+            runtime.diagnostics.processed_voxels,
             changed_chunk_count,
             changed_position_count,
             dirty_meshlet_count,
             runtime.lighting.has_propagation_work(),
         ));
-        diagnostics.processed_voxels = 0;
+        runtime.diagnostics.processed_voxels = 0;
     }
 }
 
