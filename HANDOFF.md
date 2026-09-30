@@ -2,6 +2,19 @@
 
 > Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
 
+## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob
+
+- Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.
+- A base corporal segue diretamente a linguagem e o perfil do `slime_blob`, mantendo o corpo arredondado e as animações de squash/stretch.
+- O visual Electro novo usa paleta amarelo/dourada, antena elétrica central com terminal claro e marcas de circuito discretas inspiradas na referência fornecida.
+- `SlimeFace` dos dois Electro agora aponta exatamente para `textures/creatures/slime_anemo/face.png`; a textura facial Electro antiga foi removida.
+- O generator reproduzível ficou em `assets/models/creatures/slime_electro/generate_slime_electro.py` e gera normal + large.
+- Bounds de metadata foram atualizados para as novas alturas visuais; os colliders físicos continuam compatíveis com o corpo blob e independentes dos detalhes decorativos.
+- Validação do rebuild: `tools/check_glb_assets.py` passou com 22 assets; Khronos glTF Validator passou nos dois Electro com `0 errors / 0 warnings`.
+- Próximo QA visual: conferir no gameplay silhueta, face, detalhes elétricos e animações das variantes normal e large.
+
+VERSION: `0.68.49`.
+
 ## 2026-09-25/26 — 0.68.48 repara semanticamente os Electro GLBs e endurece auditoria
 
 - QA mostrou que a correção estrutural da 0.68.47 ainda não bastava: o preload do Electro normal continuava panicando dentro do `GltfLoader`, mesmo com header/chunks GLB formalmente válidos.
@@ -80,7 +93,7 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Rodar a **0.68.48** e confirmar que Loading entra em Gameplay sem panic do Electro normal ou large.
+1. Rodar a **0.68.49** e conferir visualmente o novo Electro normal + large, incluindo a face exata do Anemo, detalhes elétricos e animações.
 2. Gerar log de gameplay com período parado e movimento/streaming normal.
 3. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
 4. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.

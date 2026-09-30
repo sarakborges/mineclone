@@ -33,16 +33,13 @@
     ]
   },
   "textures": {
-    "SlimeFace": "textures/creatures/slime_electro/face.png"
+    "SlimeFace": "textures/creatures/slime_anemo/face.png"
   },
   "unlitMaterials": [
     "SlimeFace",
     "ElementAccent",
     "ElementPale",
-    "ElementDark",
-    "ElementWhite",
-    "ElementRose",
-    "FlowerOrange"
+    "ElementWhite"
   ],
   "animations": {
     "idle": "Idle",
@@ -61,7 +58,12 @@
   "particleEffects": {
     "idle": {
       "count": 2,
-      "color": [1, 0.88, 0.3, 0.68],
+      "color": [
+        1,
+        0.88,
+        0.3,
+        0.68
+      ],
       "size": 0.038,
       "lifetime": 1,
       "interval": 0.55,
@@ -75,7 +77,12 @@
     },
     "land": {
       "count": 8,
-      "color": [1, 0.88, 0.3, 0.68],
+      "color": [
+        1,
+        0.88,
+        0.3,
+        0.68
+      ],
       "size": 0.048,
       "lifetime": 0.52,
       "spawnRadius": 0.33456,
@@ -88,7 +95,12 @@
     },
     "hurt": {
       "count": 7,
-      "color": [1, 0.9304, 0.594, 0.78],
+      "color": [
+        1,
+        0.9304,
+        0.594,
+        0.78
+      ],
       "size": 0.05,
       "lifetime": 0.5,
       "spawnRadius": 0.29376,
@@ -101,7 +113,12 @@
     },
     "death": {
       "count": 18,
-      "color": [1, 0.9304, 0.594, 0.78],
+      "color": [
+        1,
+        0.9304,
+        0.594,
+        0.78
+      ],
       "size": 0.062,
       "lifetime": 0.9,
       "spawnRadius": 0.408,
