@@ -101,12 +101,11 @@ fn placeholders(text: &str) -> BTreeMap<&str, usize> {
 
 impl UiLocalization {
     fn load() -> Self {
+        let localization_root = data_root().join("localization");
         let mut languages = HashMap::new();
 
         for language in Language::ALL {
-            let path = data_root()
-                .join("localization")
-                .join(format!("{}.json", language.key()));
+            let path = localization_root.join(format!("{}.json", language.key()));
             let source = fs::read_to_string(&path).unwrap_or_else(|error| {
                 panic!("failed to read localization file {}: {error}", path.display())
             });
@@ -115,6 +114,35 @@ impl UiLocalization {
                     panic!("failed to parse localization file {}: {error}", path.display())
                 });
             languages.insert(language, strings);
+        }
+
+        let command_path = localization_root.join("chat_commands.json");
+        let command_source = fs::read_to_string(&command_path).unwrap_or_else(|error| {
+            panic!(
+                "failed to read localization file {}: {error}",
+                command_path.display()
+            )
+        });
+        let commands = serde_json::from_str::<HashMap<String, LocalizedText>>(&command_source)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to parse localization file {}: {error}",
+                    command_path.display()
+                )
+            });
+        for (key, localized) in commands {
+            localized.validate(&format!("chat command localization {key}"));
+            for language in Language::ALL {
+                let strings = languages
+                    .get_mut(&language)
+                    .expect("all configured UI localizations must exist");
+                assert!(
+                    strings
+                        .insert(key.clone(), localized.text(language).to_owned())
+                        .is_none(),
+                    "chat command localization duplicates UI key {key}"
+                );
+            }
         }
 
         let english = languages
