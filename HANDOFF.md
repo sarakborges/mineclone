@@ -199,12 +199,32 @@ Instrumentação adicionada sem alterar scheduling, budgets ou world truth:
 
 O Cut 21 é observabilidade direcionada apenas. Nenhum ganho de performance é reivindicado até novo gameplay log reproduzir os hitches.
 
+### Cut 22 — separar `size.max` de adjacency autorada
+
+Runtime pós-Cut 21 expôs uma regressão introduzida pelo Cut 20 durante bootstrap de mundo:
+
+- panic em `surface biome site IVec2(3, 0) has no biome compatible with adjacency constraints`;
+- o Cut 20 havia colocado a quebra de continuidade de `size.max` dentro de `adjacency_allows`, junto de `avoidNear`, `requireNear` e `exclusiveNeighborGroup`;
+- em um site onde o raw biome perdia o claim cross-region e nenhum fallback permitido satisfazia simultaneamente essa regra nova, o domínio local ficava vazio e o loading panikava.
+
+Correção do Cut 22:
+
+- adjacency autorada foi separada em `authored_adjacency_allows`; `avoidNear`, `requireNear` e exclusive groups permanecem hard constraints;
+- a continuidade de `size.max` agora é avaliada separadamente por `surface_size_allows`;
+- seleção tenta primeiro raw/fallback que satisfaça tanto adjacency autorada quanto `size.max`;
+- se `size.max` esvaziaria um domínio que ainda possui uma solução válida pelas constraints autoradas, o selector preserva essa solução em vez de panicar;
+- se a própria adjacency autorada for impossível, o panic permanece, agora com mensagem explícita `authored adjacency constraints`, para não esconder conteúdo inconsistente;
+- regressão unitária prova que uma fronteira de `size.max` pode rejeitar continuidade sem ser tratada como conflito de adjacency autorada;
+- nenhum conteúdo JSON, climate, distribution, weight ou regra de exclusive group foi relaxado.
+
+Consequência semântica deliberada: `size.max` continua limitando continuidade sempre que existe candidato compatível, mas adjacency autorada tem precedência quando os dois requisitos seriam localmente incompatíveis. Um bound absolutamente estrito em todos os casos exigiria assignment/região global em vez do selector local atual e não deve ser simulado com um panic.
+
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 21;
-2. coletar gameplay log novo reproduzindo movimento até ocorrer hitch;
-3. correlacionar `streaming_max_us` com warnings `slow streaming ...` de task cancellation, snapshot refresh, mesh preemption e initial direct-light seed;
-4. otimizar somente o hot path confirmado pela evidência e medir novamente end-to-end;
+1. passar audits + Clippy + Check do Cut 22;
+2. criar mundo novo e confirmar que bootstrap não panika e que `size.max` continua interrompendo cadeias de surface biome quando existe fallback compatível;
+3. coletar gameplay log reproduzindo movimento até ocorrer hitch;
+4. correlacionar `streaming_max_us` com warnings `slow streaming ...` do Cut 21 e otimizar somente o hot path confirmado;
 5. retomar a investigação do cold-start de `PrepareResources` sem repetir `ClusterConfig::None` nem o lighting warm-up refutado;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 

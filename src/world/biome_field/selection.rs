@@ -94,7 +94,31 @@ impl BiomeField {
             seed: self.seed,
         };
         let raw_index = self.raw_surface_biome_index(cell, site);
-        if adjacency_allows(&self.surface_biomes[raw_index], &adjacency) {
+        let raw = &self.surface_biomes[raw_index];
+        let raw_authored_adjacency = authored_adjacency_allows(raw, &adjacency);
+        if raw_authored_adjacency && surface_size_allows(raw, &adjacency) {
+            return raw_index;
+        }
+
+        if let Some(index) = self.select_weighted_surface_biome_index(
+            site,
+            climate,
+            hash.rotate_left(9),
+            |candidate| {
+                authored_adjacency_allows(candidate, &adjacency)
+                    && surface_size_allows(candidate, &adjacency)
+                    && exclusive_fallback_allows(raw, candidate)
+            },
+        ) {
+            return index;
+        }
+
+        // `size.max` bounds continuity of one biome; it must not turn an
+        // otherwise valid authored adjacency domain into an impossible local
+        // coloring. If every size-compatible alternative is unavailable,
+        // preserve authored adjacency and accept the raw biome rather than
+        // panicking during world loading.
+        if raw_authored_adjacency {
             return raw_index;
         }
 
@@ -103,16 +127,13 @@ impl BiomeField {
             climate,
             hash.rotate_left(9),
             |candidate| {
-                adjacency_allows(candidate, &adjacency)
-                    && exclusive_fallback_allows(
-                        &self.surface_biomes[raw_index],
-                        candidate,
-                    )
+                authored_adjacency_allows(candidate, &adjacency)
+                    && exclusive_fallback_allows(raw, candidate)
             },
         )
         .unwrap_or_else(|| {
             panic!(
-                "surface biome site {cell:?} has no biome compatible with adjacency constraints"
+                "surface biome site {cell:?} has no biome compatible with authored adjacency constraints"
             )
         })
     }
@@ -194,7 +215,7 @@ impl BiomeField {
     }
 }
 
-fn adjacency_allows(
+fn authored_adjacency_allows(
     candidate: &BiomeFieldEntry,
     context: &SurfaceAdjacencyContext<'_>,
 ) -> bool {
@@ -219,18 +240,6 @@ fn adjacency_allows(
             continue;
         }
 
-        if candidate.id == neighbor.id
-            && !same_biome_region_allows(
-                candidate,
-                context.cell,
-                context.site,
-                neighbor_cell,
-                neighbor_site,
-                context.seed,
-            )
-        {
-            return false;
-        }
         if biomes_conflict(candidate, neighbor) {
             return false;
         }
@@ -244,6 +253,45 @@ fn adjacency_allows(
     }
 
     required_neighbor_found
+}
+
+fn surface_size_allows(
+    candidate: &BiomeFieldEntry,
+    context: &SurfaceAdjacencyContext<'_>,
+) -> bool {
+    for ((&neighbor_cell, &neighbor_site), &neighbor_index) in context
+        .nearby_cells
+        .iter()
+        .zip(context.nearby_sites)
+        .zip(context.nearby_biomes)
+    {
+        let neighbor = &context.biomes[neighbor_index];
+        if candidate.id != neighbor.id {
+            continue;
+        }
+        if !surface_sites_share_border(
+            context.cell,
+            context.site,
+            neighbor_cell,
+            neighbor_site,
+            context.spacing,
+            context.seed,
+        ) {
+            continue;
+        }
+        if !same_biome_region_allows(
+            candidate,
+            context.cell,
+            context.site,
+            neighbor_cell,
+            neighbor_site,
+            context.seed,
+        ) {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Surface size axes are radii, matching forced-surface and volume biome
@@ -605,6 +653,60 @@ mod tests {
             site,
             42,
         ));
+    }
+
+    #[test]
+    fn size_boundary_is_not_an_authored_adjacency_conflict() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 1.0,
+            max: 1.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 1.0,
+            max: 1.0,
+        };
+        plains.density_seed = 0x1234_5678;
+
+        let spacing = Vec2::splat(360.0);
+        let seed = 42;
+        let left_cell = IVec2::ZERO;
+        let right_cell = IVec2::X;
+        let left_site = surface_site_position(left_cell, spacing, seed);
+        let right_site = surface_site_position(right_cell, spacing, seed);
+        let left_allows = same_biome_region_allows(
+            &plains,
+            left_cell,
+            left_site,
+            right_cell,
+            right_site,
+            seed,
+        );
+        let (cell, site, neighbor_cell, neighbor_site) = if left_allows {
+            (right_cell, right_site, left_cell, left_site)
+        } else {
+            (left_cell, left_site, right_cell, right_site)
+        };
+
+        let mut nearby_cells = [cell; PROXIMITY_NEIGHBOR_COUNT];
+        let mut nearby_sites = [site; PROXIMITY_NEIGHBOR_COUNT];
+        let nearby_biomes = [0; PROXIMITY_NEIGHBOR_COUNT];
+        nearby_cells[0] = neighbor_cell;
+        nearby_sites[0] = neighbor_site;
+        let biomes = [plains];
+        let context = SurfaceAdjacencyContext {
+            cell,
+            site,
+            nearby_cells: &nearby_cells,
+            nearby_sites: &nearby_sites,
+            nearby_biomes: &nearby_biomes,
+            biomes: &biomes,
+            spacing,
+            seed,
+        };
+
+        assert!(authored_adjacency_allows(&biomes[0], &context));
+        assert!(!surface_size_allows(&biomes[0], &context));
     }
 
     #[test]
