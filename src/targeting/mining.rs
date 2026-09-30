@@ -150,6 +150,12 @@ fn advance_survival_mining(
     let started = runtime.mining.target != Some(target);
     if started {
         runtime.mining.begin(target);
+        log_gameplay_event(format!(
+            "block.mine.start voxel={:?} block={} tool={}",
+            hit.voxel,
+            hit.block_id,
+            selected_item.unwrap_or("<empty>")
+        ));
         runtime.viewmodel.play_break_fast();
     }
 
