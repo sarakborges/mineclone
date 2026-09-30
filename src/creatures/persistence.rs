@@ -5,16 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::content::creature::CreatureRegistry;
 
-use super::EntityMetaTags;
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SavedCreature {
     pub(crate) definition_id: String,
     pub(crate) position: [f32; 3],
     pub(crate) health: f32,
-    #[serde(default)]
-    pub(crate) meta_tags: EntityMetaTags,
 }
 
 impl SavedCreature {
@@ -34,9 +30,6 @@ impl SavedCreature {
                 "saved creature position or health is invalid",
             ));
         }
-        self.meta_tags
-            .validate()
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         Ok(())
     }
 }
