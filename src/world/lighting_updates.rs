@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::app::crash_log::log_gameplay_event;
+
 use bevy::{
     ecs::system::SystemParam,
     platform::collections::{HashMap, HashSet},
@@ -24,7 +26,7 @@ use super::{
 const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
 const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
-
+#[derive(Default)]struct LightingDiagnostics {    timer: Option<Timer>,    processed_voxels: u64,}
 #[derive(SystemParam)]
 pub(super) struct DynamicLightingRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
@@ -44,6 +46,8 @@ pub(super) fn process_dynamic_lighting(
     mut changed_chunks: Local<HashSet<IVec3>>,
     mut changed_positions: Local<HashSet<IVec3>>,
     mut dirty_meshlets: Local<HashMap<IVec3, ChunkMeshletMask>>,
+    mut diagnostics: Local<LightingDiagnostics>,
+    time: Res<Time<Real>>,
     mut runtime: DynamicLightingRuntime,
 ) {
     if runtime.lighting.is_empty() {
@@ -69,6 +73,12 @@ pub(super) fn process_dynamic_lighting(
             budget.exhausted()
         },
     );
+
+    let changed_chunk_count = changed_chunks.len();
+    let changed_position_count = changed_positions.len();
+    diagnostics.processed_voxels = diagnostics
+        .processed_voxels
+        .saturating_add(recorded_voxels as u64);
 
     dirty_meshlets.clear();
     for position in changed_positions.drain() {
@@ -107,6 +117,22 @@ pub(super) fn process_dynamic_lighting(
                 runtime.remesh_queue.enqueue_fluid(coord);
             }
         }
+    }
+
+    let timer = diagnostics
+        .timer
+        .get_or_insert_with(|| Timer::from_seconds(5.0, TimerMode::Repeating));
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        log_gameplay_event(format!(
+            "world.lighting.runtime processed_voxels={} changed_chunks={} changed_positions={} dirty_meshlets={} propagation_pending={}",
+            diagnostics.processed_voxels,
+            changed_chunk_count,
+            changed_position_count,
+            dirty_meshlets.len(),
+            runtime.lighting.has_propagation_work(),
+        ));
+        diagnostics.processed_voxels = 0;
     }
 }
 
