@@ -134,6 +134,26 @@ fn resolved_surface_margin_index(
     biome_field: &BiomeField,
 ) -> Option<usize> {
     let margin_index = surface.surface_margin_index?;
+
+    // Ocean shoreline material must never become a ramp over any biome tagged
+    // as mountain. A gradual mountain slope can satisfy maxSlope block-by-block,
+    // so the authored biome relationship must be checked explicitly.
+    if biome_field.ocean_surface_index() == Some(margin_index)
+        && (surface.primary_surface_index == margin_index
+            || surface
+                .influences
+                .iter()
+                .any(|influence| {
+                    influence.weight > f32::EPSILON
+                        && biome_field.surface_biome_has_tag(
+                            influence.surface_index,
+                            "mountain",
+                        )
+                }))
+    {
+        return None;
+    }
+
     let margin_biome_id = biome_field.surface_biome_id(margin_index);
     let margin = biomes
         .get(margin_biome_id)
