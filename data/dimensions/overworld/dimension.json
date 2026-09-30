@@ -34,11 +34,7 @@
           "max": 420
         },
         "y": null
-      },
-      "avoidNear": [
-        "asteria:overworld/witchwood",
-        "asteria:overworld/enchanted_forest"
-      ]
+      }
     },
     {
       "id": "asteria:overworld/witchwood",
@@ -53,10 +49,7 @@
           "max": 460
         },
         "y": null
-      },
-      "avoidNear": [
-        "asteria:overworld/enchanted_forest"
-      ]
+      }
     },
     {
       "id": "asteria:overworld/enchanted_forest",
@@ -71,10 +64,7 @@
           "max": 460
         },
         "y": null
-      },
-      "avoidNear": [
-        "asteria:overworld/witchwood"
-      ]
+      }
     },
     {
       "id": "asteria:overworld/mountains",
