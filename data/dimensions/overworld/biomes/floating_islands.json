@@ -118,5 +118,12 @@
     },
     "terrainRoughness": 0.98,
     "terrainMetallic": 0
+  },
+  "surfaceConstraints": {
+    "allow": {
+      "ids": [
+        "asteria:overworld/plains"
+      ]
+    }
   }
 }
