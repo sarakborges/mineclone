@@ -140,21 +140,50 @@ Gameplay log válido pós-correção:
 
 ### Cut 19 — timing do núcleo main-world
 
-Implementado neste cut como observabilidade apenas:
+Commit `dd198df25f08f6dd0b7a9d326ca790cd2c9a58aa` (`Measure main world stage timing`), CI #10317 success.
 
 - novo `main_world_diagnostics` mede, por janela, count/avg/p95/p99/max em microssegundos;
 - buckets instrumentados: `streaming`, `retirement`/eviction/warp reconciliation, `fluid`, `lighting`, `remesh`, `residency`, `visibility`, `generation_refill` e `deferred_mesh_retirement`;
 - os marcadores foram inseridos nas chains já serializadas do `WorldPlugin`, sem mudar budgets, world truth, generation, presentation, meshing ou regras de gameplay;
 - samples são resetados ao entrar em Loading/Gameplay e emitidos junto da cadência existente de render diagnostics;
-- objetivo é comparar os máximos desses buckets com `main_work_max_us`; se todos permanecerem baixos durante um hitch, a causa está fora desse núcleo e o próximo corte deve instrumentar o subsistema externo correspondente;
-- **nenhum ganho de performance é reivindicado neste cut**; é necessário novo gameplay log.
+- nenhum ganho de performance foi reivindicado; o objetivo era localizar o hitch com gameplay real.
+
+### Evidência após Cut 19 — hitch localizado em streaming
+
+Gameplay `2026-09-30_14-05-57-794802200.txt`:
+
+- uma janela registrou frame max `95369 us`, `main_work_max_us=98400` e **`streaming_max_us=95019`**;
+- outra registrou frame max `218414 us`, `main_work_max_us=212395` e **`streaming_max_us=208765`**;
+- os demais buckets ficaram muito abaixo desses máximos nas mesmas janelas;
+- portanto a observabilidade do Cut 19 localizou o hitch de movimento no bucket **streaming**; a próxima investigação de performance deve decompor `stream_chunks`, sem mexer nos demais subsistemas por hipótese.
+
+### Correção de correctness durante Phase 7 — surface biome `size.max`
+
+Relato em gameplay: regiões de Plains ocupando a maior parte do terreno e ultrapassando o `size.max` autorado.
+
+Root cause confirmado no código:
+
+- `DimensionBiomeSize.max` era validado, escalado e armazenado para surface biomes, mas a geração normal usava apenas `size.min` para calcular o espaçamento global de sites;
+- sites Voronoi vizinhos podiam selecionar o mesmo biome repetidamente e `sample_surface` compactava essas influências pelo mesmo biome index, fundindo a sequência em uma região visual/terrain contínua sem bound;
+- em `asteria:overworld/plains`, o conteúdo autorado é `x/z min=120, max=420`, mas esse `max=420` não participava da seleção normal; ele só tinha efeito no caso especial de forced surface biome;
+- o problema é anterior ao core rebuild: o primeiro gradual biome field já carregava/validava `max` sem aplicá-lo ao field normal.
+
+Correção preparada no Cut 20:
+
+- surface selection passa a derivar uma região determinística candidate-specific cujo extent é o diâmetro correspondente aos `size.x.max` / `size.z.max` autorados;
+- sites vizinhos com o mesmo raw biome continuam podendo se fundir dentro da mesma região;
+- quando dois sites do mesmo biome compartilham uma aresta Voronoi mas pertencem a regiões máximas diferentes, um único lado vence por claim determinístico e o outro passa pelo fallback normal, interrompendo cadeias ilimitadas do mesmo biome;
+- pesos, climate, distributions, `avoidNear`, `requireNear`, exclusive groups e conteúdo JSON não foram retunados para esconder o bug;
+- regressões unitárias cobrem uso do `max`, vencedor único cross-region e preservação de merge dentro da mesma região.
+
+Esta correção altera determinísticamente worldgen de surface biomes; validação visual limpa deve ser feita em **mundo novo**, não esperando que chunks já gerados de um save sejam reescritos.
 
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 19;
-2. coletar gameplay log novo reproduzindo movimento até registrar um hitch;
-3. comparar `main world stages` com `main_work_max_us` da mesma janela e localizar o bucket dominante, ou provar que o custo está fora do núcleo instrumentado;
-4. instrumentar/otimizar somente o subsistema apontado pela evidência e medir novamente end-to-end;
+1. passar audits + Clippy + Check do Cut 20;
+2. criar mundo novo e validar que Plains e os demais surface biomes não formam cadeias ilimitadas além das regiões derivadas de `size.max`;
+3. se a validação de biome estiver correta, retomar performance decompondo internamente `stream_chunks`, pois o Cut 19 localizou hitches de ~95 ms e ~209 ms nesse bucket;
+4. medir novamente end-to-end após qualquer correção de streaming;
 5. retomar a investigação do cold-start de `PrepareResources` sem repetir `ClusterConfig::None` nem o lighting warm-up refutado;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 

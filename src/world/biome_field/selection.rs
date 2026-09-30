@@ -112,7 +112,7 @@ impl BiomeField {
         )
         .unwrap_or_else(|| {
             panic!(
-                "surface biome site {cell:?} has no biome compatible with avoidNear borders"
+                "surface biome site {cell:?} has no biome compatible with adjacency constraints"
             )
         })
     }
@@ -219,6 +219,18 @@ fn adjacency_allows(
             continue;
         }
 
+        if candidate.id == neighbor.id
+            && !same_biome_region_allows(
+                candidate,
+                context.cell,
+                context.site,
+                neighbor_cell,
+                neighbor_site,
+                context.seed,
+            )
+        {
+            return false;
+        }
         if biomes_conflict(candidate, neighbor) {
             return false;
         }
@@ -232,6 +244,57 @@ fn adjacency_allows(
     }
 
     required_neighbor_found
+}
+
+/// Surface size axes are radii, matching forced-surface and volume biome
+/// semantics. Normal surface sites historically ignored `max`, so consecutive
+/// sites with the same biome could merge without bound. Candidate-specific
+/// region cells make that maximum participate in normal selection while
+/// keeping neighboring sites inside one authored-size region mergeable.
+fn surface_region_extent(biome: &BiomeFieldEntry) -> Vec2 {
+    Vec2::new(biome.size.x.max, biome.size.z.max) * 2.0
+}
+
+fn surface_region_key(biome: &BiomeFieldEntry, site: Vec2) -> IVec2 {
+    let extent = surface_region_extent(biome);
+    let offset = Vec2::new(
+        hash_unit(biome.density_seed.rotate_left(11)),
+        hash_unit(biome.density_seed.rotate_left(37)),
+    ) * extent;
+    let shifted = site + offset;
+
+    IVec2::new(
+        (shifted.x / extent.x).floor() as i32,
+        (shifted.y / extent.y).floor() as i32,
+    )
+}
+
+fn same_biome_region_allows(
+    biome: &BiomeFieldEntry,
+    cell: IVec2,
+    site: Vec2,
+    neighbor_cell: IVec2,
+    neighbor_site: Vec2,
+    seed: u64,
+) -> bool {
+    if surface_region_key(biome, site) == surface_region_key(biome, neighbor_site) {
+        return true;
+    }
+
+    surface_region_claim_key(biome, cell, seed)
+        < surface_region_claim_key(biome, neighbor_cell, seed)
+}
+
+fn surface_region_claim_key(
+    biome: &BiomeFieldEntry,
+    cell: IVec2,
+    seed: u64,
+) -> (u64, i32, i32) {
+    (
+        cell_hash(cell, seed ^ biome.density_seed.rotate_left(23)),
+        cell.x,
+        cell.y,
+    )
 }
 
 fn surface_sites_share_border(
@@ -473,6 +536,78 @@ mod tests {
     }
 
     #[test]
+    fn surface_region_extent_uses_authored_maximum_radius() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 420.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 420.0,
+        };
+
+        assert_eq!(surface_region_extent(&plains), Vec2::splat(840.0));
+    }
+
+    #[test]
+    fn cross_region_same_biome_pair_has_one_deterministic_winner() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 420.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 420.0,
+        };
+        plains.density_seed = 0x1234_5678;
+        let extent = surface_region_extent(&plains);
+        let left_cell = IVec2::ZERO;
+        let right_cell = IVec2::X;
+        let left_site = Vec2::ZERO;
+        let right_site = Vec2::new(extent.x + 1.0, 0.0);
+
+        assert_ne!(
+            surface_region_key(&plains, left_site),
+            surface_region_key(&plains, right_site)
+        );
+        let left_allows = same_biome_region_allows(
+            &plains,
+            left_cell,
+            left_site,
+            right_cell,
+            right_site,
+            42,
+        );
+        let right_allows = same_biome_region_allows(
+            &plains,
+            right_cell,
+            right_site,
+            left_cell,
+            left_site,
+            42,
+        );
+
+        assert_ne!(left_allows, right_allows);
+    }
+
+    #[test]
+    fn same_region_sites_can_keep_the_same_biome() {
+        let plains = test_surface_entry("plains", None);
+        let site = Vec2::ZERO;
+
+        assert!(same_biome_region_allows(
+            &plains,
+            IVec2::ZERO,
+            site,
+            IVec2::X,
+            site,
+            42,
+        ));
+    }
+
+    #[test]
     fn exclusive_neighbor_group_conflicts_across_different_biome_ids() {
         let volcano = test_surface_entry("volcano", Some("mountain_terrain"));
         let gorge = test_surface_entry("gorge", Some("mountain_terrain"));
@@ -556,5 +691,4 @@ mod tests {
             Some(4 | 2 | 7)
         ));
     }
-
 }
