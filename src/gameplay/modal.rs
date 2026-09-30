@@ -6,6 +6,7 @@ use crate::{
         pause_state::PauseState,
         state_systems::reset_next_state,
     },
+    player::game_mode::GameMode,
 };
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -34,7 +35,8 @@ impl Plugin for GameplayModalPlugin {
         app.init_state::<GameplayModalState>()
             .add_systems(
                 Update,
-                close_modal_on_escape
+                (close_spectator_inventory_modals, close_modal_on_escape)
+                    .chain()
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             )
@@ -47,6 +49,20 @@ impl Plugin for GameplayModalPlugin {
                 reset_next_state::<GameplayModalState>,
             );
     }
+}
+
+fn close_spectator_inventory_modals(
+    game_mode: Single<&GameMode>,
+    state: Res<State<GameplayModalState>>,
+    mut next_state: ResMut<NextState<GameplayModalState>>,
+    mut focus: ResMut<InputFocus>,
+) {
+    if !game_mode.is_spectator() || !state.get().shows_inventory() {
+        return;
+    }
+
+    focus.clear();
+    next_state.set(GameplayModalState::Closed);
 }
 
 fn close_modal_on_escape(
