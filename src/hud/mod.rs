@@ -39,6 +39,7 @@ use world::WorldHudPlugin;
 
 use crate::{
     app::game_state::GameState,
+    player::game_mode::GameMode,
     rendering::camera_stack::UI_CAMERA_ORDER,
     targeting::block::BlockTargetingSet,
 };
@@ -154,6 +155,8 @@ pub(crate) struct HudSettings {
     hide_hints: bool,
     hints: HintSettings,
     target_block_position: TargetBlockPosition,
+    #[serde(skip)]
+    spectator_override: bool,
 }
 
 impl Default for HudSettings {
@@ -162,6 +165,7 @@ impl Default for HudSettings {
             hide_hints: false,
             hints: HintSettings::default(),
             target_block_position: TargetBlockPosition::Center,
+            spectator_override: false,
         }
     }
 }
@@ -183,16 +187,24 @@ impl HudSettings {
         !self.hide_hints && self.hints.enabled(kind)
     }
 
-    pub(crate) fn set_hint_preference(&mut self, kind: HintKind, enabled: bool) {
-        self.hints.set(kind, enabled);
+    pub(crate) const fn target_block_position(&self) -> TargetBlockPosition {
+        if self.spectator_override {
+            TargetBlockPosition::Hidden
+        } else {
+            self.target_block_position
+        }
     }
 
-    pub(crate) const fn target_block_position(&self) -> TargetBlockPosition {
+    pub(crate) const fn target_block_position_preference(&self) -> TargetBlockPosition {
         self.target_block_position
     }
 
     pub(crate) fn set_target_block_position(&mut self, position: TargetBlockPosition) {
         self.target_block_position = position;
+    }
+
+    fn set_spectator_override(&mut self, spectator: bool) {
+        self.spectator_override = spectator;
     }
 }
 
@@ -205,6 +217,10 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HudSettings>()
             .add_systems(OnEnter(GameState::Gameplay), spawn_gameplay_ui_camera)
+            .add_systems(
+                PreUpdate,
+                sync_spectator_hud_override.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 Update,
                 (
@@ -229,6 +245,13 @@ impl Plugin for HudPlugin {
                 EntityHudPlugin,
             ));
     }
+}
+
+fn sync_spectator_hud_override(
+    game_mode: Single<&GameMode>,
+    mut settings: ResMut<HudSettings>,
+) {
+    settings.set_spectator_override(game_mode.is_spectator());
 }
 
 fn spawn_gameplay_ui_camera(mut commands: Commands) {
