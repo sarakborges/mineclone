@@ -216,6 +216,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     face_mesh = len(meshes) - 1
 
     s = body_width / 1.20
+    fire_root = bucket()
     fire_dark = bucket()
     fire_orange = bucket()
     fire_yellow = bucket()
@@ -231,30 +232,30 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     if not large:
         flame_groups = [
             [
-                ( 0.020,-0.085,-0.010,0.27,0.13,0.24,fire_dark),
+                ( 0.020,-0.085,-0.010,0.27,0.13,0.24,fire_root),
                 ( 0.030, 0.005,-0.016,0.21,0.11,0.19,fire_orange),
                 ( 0.044, 0.090,-0.022,0.15,0.10,0.14,fire_yellow),
                 ( 0.058, 0.166,-0.028,0.10,0.085,0.10,fire_hot),
                 ( 0.070, 0.228,-0.032,0.055,0.055,0.06,fire_hot),
             ],
             [
-                (-0.190,-0.070,-0.105,0.19,0.11,0.17,fire_dark),
+                (-0.190,-0.070,-0.105,0.19,0.11,0.17,fire_root),
                 (-0.208, 0.004,-0.112,0.14,0.10,0.13,fire_orange),
                 (-0.222, 0.072,-0.118,0.09,0.08,0.09,fire_yellow),
                 (-0.234, 0.126,-0.122,0.050,0.055,0.055,fire_hot),
             ],
             [
-                ( 0.210,-0.060, 0.090,0.18,0.11,0.17,fire_dark),
+                ( 0.210,-0.060, 0.090,0.18,0.11,0.17,fire_root),
                 ( 0.226, 0.015, 0.098,0.13,0.095,0.12,fire_orange),
                 ( 0.240, 0.080, 0.106,0.08,0.075,0.08,fire_yellow),
             ],
             [
-                (-0.050,-0.058, 0.175,0.17,0.10,0.15,fire_dark),
+                (-0.050,-0.058, 0.175,0.17,0.10,0.15,fire_root),
                 (-0.042, 0.010, 0.185,0.12,0.09,0.11,fire_orange),
                 (-0.034, 0.070, 0.194,0.07,0.07,0.07,fire_yellow),
             ],
             [
-                ( 0.120,-0.072,-0.165,0.14,0.10,0.12,fire_dark),
+                ( 0.120,-0.072,-0.165,0.14,0.10,0.12,fire_root),
                 ( 0.132,-0.004,-0.174,0.095,0.085,0.09,fire_orange),
                 ( 0.142, 0.052,-0.182,0.055,0.060,0.055,fire_yellow),
             ],
@@ -264,36 +265,36 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     else:
         flame_groups = [
             [
-                ( 0.028,-0.095,-0.012,0.31,0.14,0.28,fire_dark),
+                ( 0.028,-0.095,-0.012,0.31,0.14,0.28,fire_root),
                 ( 0.040, 0.008,-0.018,0.25,0.12,0.22,fire_orange),
                 ( 0.056, 0.105,-0.025,0.19,0.11,0.17,fire_yellow),
                 ( 0.072, 0.192,-0.032,0.13,0.095,0.12,fire_hot),
                 ( 0.086, 0.264,-0.038,0.075,0.065,0.075,fire_hot),
             ],
             [
-                (-0.215,-0.080,-0.118,0.22,0.12,0.20,fire_dark),
+                (-0.215,-0.080,-0.118,0.22,0.12,0.20,fire_root),
                 (-0.236, 0.004,-0.126,0.17,0.105,0.15,fire_orange),
                 (-0.254, 0.078,-0.134,0.11,0.085,0.11,fire_yellow),
                 (-0.268, 0.140,-0.140,0.06,0.06,0.06,fire_hot),
             ],
             [
-                ( 0.235,-0.066, 0.104,0.21,0.12,0.19,fire_dark),
+                ( 0.235,-0.066, 0.104,0.21,0.12,0.19,fire_root),
                 ( 0.254, 0.016, 0.114,0.16,0.10,0.14,fire_orange),
                 ( 0.270, 0.086, 0.124,0.10,0.085,0.10,fire_yellow),
                 ( 0.282, 0.145, 0.132,0.055,0.06,0.055,fire_hot),
             ],
             [
-                (-0.060,-0.066, 0.198,0.20,0.11,0.18,fire_dark),
+                (-0.060,-0.066, 0.198,0.20,0.11,0.18,fire_root),
                 (-0.050, 0.010, 0.210,0.15,0.10,0.14,fire_orange),
                 (-0.040, 0.078, 0.220,0.095,0.08,0.09,fire_yellow),
             ],
             [
-                ( 0.135,-0.080,-0.186,0.17,0.11,0.15,fire_dark),
+                ( 0.135,-0.080,-0.186,0.17,0.11,0.15,fire_root),
                 ( 0.150,-0.006,-0.196,0.12,0.095,0.11,fire_orange),
                 ( 0.162, 0.058,-0.205,0.07,0.07,0.07,fire_yellow),
             ],
             [
-                (-0.130,-0.070, 0.020,0.15,0.10,0.13,fire_dark),
+                (-0.130,-0.070, 0.020,0.15,0.10,0.13,fire_root),
                 (-0.144,-0.004, 0.026,0.105,0.085,0.095,fire_orange),
                 (-0.156, 0.052, 0.032,0.060,0.060,0.060,fire_yellow),
             ],
@@ -306,6 +307,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             flame_step(mat, x, y, z, w, h, d)
 
     details_prims = [
+        prim(fire_root, 5),
         prim(fire_dark, 9),
         prim(fire_orange, 7),
         prim(fire_yellow, 8),
@@ -416,7 +418,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     visual_height = body_height + detail_height
     visual_width = max(body_width, detail_width)
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Pyro flame rebuild v1"},
+        "asset": {"version": "2.0", "generator": "Asteria Pyro flame rebuild v2"},
         "scene": 0,
         "scenes": [{"name": "PyroSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],

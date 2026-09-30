@@ -189,3 +189,5 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 - 0.68.58: Pyro Slime rebuilt from the reference as a clean orange-gold blob with no horns. Normal and large now use an integrated asymmetric flame cluster on top, built only from cardinal voxel stair-steps; face remains texture-driven.
 
 - 0.68.59: Hydro top reshaped as a broad continuation of the slime body tapering into a droplet point; Pyro crown-like tuft replaced by independent irregular flame tongues distributed across the top. Normal/large GLBs regenerated and cardinal pixel-art geometry revalidated.
+
+- 0.68.60: Hydro top rebuilt as a shaded exposed-face voxel continuation of the body, broad at the root and tapering to a droplet point; its root uses the exact slime-top material. Pyro flame geometry kept, but all flame roots now begin in the exact top-surface material before transitioning to fire colors.

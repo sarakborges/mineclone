@@ -93,8 +93,8 @@
       20,
       22
     ],
-    "construction": "rounded turquoise slime_blob body whose broad top continues upward and tapers into one pointed water droplet; no separate cap or horns",
+    "construction": "rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face",
     "base_language": "slime_blob",
-    "reference": "user Hydro reference: no horns; replace them with one teardrop-shaped water feature centered on top"
+    "reference": "Hydro top is pulled upward as part of the slime silhouette, not a separate droplet object; no color seam at the root"
   }
 }

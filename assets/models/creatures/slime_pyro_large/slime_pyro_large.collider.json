@@ -93,8 +93,8 @@
       20,
       22
     ],
-    "construction": "rounded orange slime_blob body with independent asymmetrical voxel flame tongues rising from different top positions; no crown band or horns",
+    "construction": "rounded Pyro blob + irregular asymmetric voxel flames; flame roots use the exact top body material before transitioning to fire colors + square texture face",
     "base_language": "slime_blob",
-    "reference": "user Pyro reference: ignore horns; top should read as flames built in strict pixel-art geometry"
+    "reference": "Pyro flame geometry retained; color transition now starts from the slime top color"
   }
 }
