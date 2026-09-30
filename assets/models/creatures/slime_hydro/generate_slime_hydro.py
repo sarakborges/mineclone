@@ -225,38 +225,37 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     # the same voxel shading language instead of flat-colored slabs.
     drop_buckets = [bucket() for _ in range(len(PALETTE))]
     cell_x = 0.055 * s
-    # Keep the droplet broad, but compress it vertically so it reads as a drop rather than a spike.
-    cell_y = 0.040 * s
+    # Keep the drop compact and rounded. The lower layers hold their width
+    # before the upper third tapers quickly into a short point, avoiding a cone/spike silhouette.
+    cell_y = 0.038 * s
     cell_z = 0.055 * s
-    base_y = top - 0.105 * s
+    base_y = top - 0.115 * s
 
     if not large:
+        # Rounded water-drop silhouette: broad/bulbous lower body, then a late taper.
         profiles = [
-            (0, 5.4, 4.7, 0.00),
-            (1, 5.1, 4.5, 0.00),
-            (2, 4.7, 4.1, 0.00),
-            (3, 4.2, 3.7, 0.05),
-            (4, 3.6, 3.2, 0.10),
-            (5, 3.0, 2.7, 0.15),
-            (6, 2.4, 2.2, 0.20),
-            (7, 1.8, 1.7, 0.28),
-            (8, 1.25, 1.20, 0.36),
-            (9, 0.72, 0.72, 0.45),
+            (0, 5.2, 4.6, 0.00),
+            (1, 5.4, 4.8, 0.00),
+            (2, 5.3, 4.7, 0.02),
+            (3, 5.0, 4.4, 0.04),
+            (4, 4.5, 4.0, 0.07),
+            (5, 3.8, 3.4, 0.10),
+            (6, 2.7, 2.5, 0.15),
+            (7, 1.5, 1.4, 0.21),
+            (8, 0.60, 0.60, 0.27),
         ]
     else:
         profiles = [
-            (0, 6.2, 5.4, 0.00),
-            (1, 5.9, 5.1, 0.00),
-            (2, 5.5, 4.8, 0.00),
-            (3, 5.0, 4.3, 0.04),
-            (4, 4.4, 3.8, 0.09),
-            (5, 3.8, 3.3, 0.14),
-            (6, 3.2, 2.8, 0.19),
-            (7, 2.6, 2.3, 0.25),
-            (8, 2.0, 1.9, 0.31),
-            (9, 1.45, 1.40, 0.38),
-            (10, 0.90, 0.90, 0.46),
-            (11, 0.55, 0.55, 0.54),
+            (0, 6.0, 5.3, 0.00),
+            (1, 6.3, 5.6, 0.00),
+            (2, 6.2, 5.5, 0.02),
+            (3, 5.9, 5.2, 0.04),
+            (4, 5.5, 4.9, 0.07),
+            (5, 4.9, 4.4, 0.10),
+            (6, 4.1, 3.7, 0.14),
+            (7, 3.1, 2.9, 0.19),
+            (8, 2.0, 1.9, 0.25),
+            (9, 0.72, 0.72, 0.31),
         ]
 
     droplet = set()

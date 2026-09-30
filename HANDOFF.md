@@ -193,3 +193,5 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 - 0.68.60: Hydro top rebuilt as a shaded exposed-face voxel continuation of the body, broad at the root and tapering to a droplet point; its root uses the exact slime-top material. Pyro flame geometry kept, but all flame roots now begin in the exact top-surface material before transitioning to fire colors.
 
 - 0.68.61: Hydro droplet vertically compressed while preserving its broad integrated root and existing shading, changing the silhouette from a tall spike to a shorter water-drop continuation. Pyro unchanged.
+
+- 0.68.62: Hydro droplet reshaped from a cone/spike silhouette into a compact rounded drop: lower layers hold a bulbous width, taper begins later, and the point is short. Pyro unchanged.

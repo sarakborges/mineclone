@@ -93,8 +93,8 @@
       20,
       22
     ],
-    "construction": "rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face",
+    "construction": "rounded Hydro blob + compact rounded voxel droplet grown from the top; lower drop remains bulbous before a short late taper; root uses exact top body material + square texture face",
     "base_language": "slime_blob",
-    "reference": "Hydro top is a short broad droplet-shaped continuation of the slime body; height reduced to avoid a spike silhouette while preserving the exact top-color root."
+    "reference": "Hydro top should read as a water droplet, not a cone, spike, or hat: rounded body with a short pointed tip"
   }
 }
