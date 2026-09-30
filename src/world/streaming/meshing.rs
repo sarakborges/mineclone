@@ -12,6 +12,7 @@ use crate::{
         chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
         chunk_system_params::{ChunkContent, ChunkRenderer},
         presentation_snapshot::ChunkPresentationSource,
+        render_work_diagnostics::{PresentationPublicationStage, PresentationPublicationTimer},
         work_budget::FrameWorkBudget,
     },
 };
@@ -127,19 +128,23 @@ fn integrate_empty_chunk(
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
-    spawn_built_chunk_meshes(
-        &mut renderer.commands,
-        &mut renderer.meshes,
-        &mut renderer.pool,
-        coord,
-        Vec::new(),
-        &render_context,
-    );
-    renderer.pool.record_initial_presentation_sources(
-        coord,
-        content_source,
-        lighting_source,
-    );
+    {
+        let _publication_timer =
+            PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+        spawn_built_chunk_meshes(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            Vec::new(),
+            &render_context,
+        );
+        renderer.pool.record_initial_presentation_sources(
+            coord,
+            content_source,
+            lighting_source,
+        );
+    }
     activate_published_chunk_runtime(coord, work, queues, current_tick);
     notify_loaded_chunk_neighbors(
         coord,
@@ -225,19 +230,23 @@ pub(super) fn collect_built_chunk_meshes(
 
         let content_source = completed.output.content_source;
         let lighting_source = completed.output.lighting_source;
-        spawn_built_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            completed.coord,
-            completed.output.meshes,
-            &render_context,
-        );
-        renderer.pool.record_initial_presentation_sources(
-            completed.coord,
-            content_source,
-            lighting_source,
-        );
+        {
+            let _publication_timer =
+                PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+            spawn_built_chunk_meshes(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                completed.coord,
+                completed.output.meshes,
+                &render_context,
+            );
+            renderer.pool.record_initial_presentation_sources(
+                completed.coord,
+                content_source,
+                lighting_source,
+            );
+        }
         work.state.clear_initial_mesh_seed_catchup(completed.coord);
         if !catchup_meshlets.is_empty() {
             queues.remesh.enqueue_geometry_meshlets_priority(

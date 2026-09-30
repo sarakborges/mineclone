@@ -12,7 +12,7 @@ use bevy::{
     render::{Render, RenderApp, RenderSystems},
 };
 
-use crate::app::crash_log::append_runtime_diagnostic;
+use crate::app::{crash_log::append_runtime_diagnostic, game_state::GameState};
 
 const RENDER_WORK_SAMPLE_CAPACITY: usize = 4096;
 const RENDER_WORK_MICROS_BITS: u32 = 32;
@@ -43,6 +43,102 @@ struct RenderFrameWorkDiagnostic {
     p95_micros: u64,
     p99_micros: u64,
     max_micros: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PresentationPublicationStage {
+    InitialPublish,
+    RemeshApply,
+}
+
+struct PresentationPublicationStageMetrics {
+    count: AtomicU64,
+    total_nanos: AtomicU64,
+    max_nanos: AtomicU64,
+}
+
+impl PresentationPublicationStageMetrics {
+    const fn new() -> Self {
+        Self {
+            count: AtomicU64::new(0),
+            total_nanos: AtomicU64::new(0),
+            max_nanos: AtomicU64::new(0),
+        }
+    }
+
+    fn record(&self, elapsed_nanos: u64) {
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.total_nanos
+            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
+    }
+
+    fn take(&self) -> PresentationPublicationStageDiagnostic {
+        let count = self.count.swap(0, Ordering::Relaxed);
+        let total_nanos = self.total_nanos.swap(0, Ordering::Relaxed);
+        let max_nanos = self.max_nanos.swap(0, Ordering::Relaxed);
+        PresentationPublicationStageDiagnostic {
+            count,
+            average_micros: total_nanos.checked_div(count).unwrap_or(0) / 1_000,
+            max_micros: max_nanos / 1_000,
+        }
+    }
+}
+
+static PRESENTATION_INITIAL_PUBLISH_METRICS: PresentationPublicationStageMetrics =
+    PresentationPublicationStageMetrics::new();
+static PRESENTATION_REMESH_APPLY_METRICS: PresentationPublicationStageMetrics =
+    PresentationPublicationStageMetrics::new();
+
+#[derive(Clone, Copy, Default)]
+struct PresentationPublicationStageDiagnostic {
+    count: u64,
+    average_micros: u64,
+    max_micros: u64,
+}
+
+pub(crate) struct PresentationPublicationTimer {
+    stage: PresentationPublicationStage,
+    started_at: Instant,
+}
+
+impl PresentationPublicationTimer {
+    pub(crate) fn start(stage: PresentationPublicationStage) -> Self {
+        Self {
+            stage,
+            started_at: Instant::now(),
+        }
+    }
+}
+
+impl Drop for PresentationPublicationTimer {
+    fn drop(&mut self) {
+        let elapsed_nanos = self
+            .started_at
+            .elapsed()
+            .as_nanos()
+            .min(u128::from(u64::MAX)) as u64;
+        publication_metrics(self.stage).record(elapsed_nanos);
+    }
+}
+
+fn publication_metrics(
+    stage: PresentationPublicationStage,
+) -> &'static PresentationPublicationStageMetrics {
+    match stage {
+        PresentationPublicationStage::InitialPublish => &PRESENTATION_INITIAL_PUBLISH_METRICS,
+        PresentationPublicationStage::RemeshApply => &PRESENTATION_REMESH_APPLY_METRICS,
+    }
+}
+
+fn take_presentation_publication_diagnostics() -> (
+    PresentationPublicationStageDiagnostic,
+    PresentationPublicationStageDiagnostic,
+) {
+    (
+        PRESENTATION_INITIAL_PUBLISH_METRICS.take(),
+        PRESENTATION_REMESH_APPLY_METRICS.take(),
+    )
 }
 
 pub(super) fn install_render_work_diagnostics(app: &mut App) {
@@ -123,6 +219,7 @@ pub(super) fn collect_render_frame_work(
 }
 
 pub(super) fn reset_render_frame_work_samples(
+    state: Res<State<GameState>>,
     bridge: Res<RenderFrameWorkBridge>,
     mut samples: ResMut<RenderFrameWorkSamples>,
 ) {
@@ -130,12 +227,16 @@ pub(super) fn reset_render_frame_work_samples(
     samples.last_sequence = (packed_sample >> RENDER_WORK_MICROS_BITS) as u32;
     samples.skipped_samples = 0;
     samples.micros.clear();
+    if *state.get() == GameState::Loading {
+        let _ = take_presentation_publication_diagnostics();
+    }
 }
 
 pub(super) fn log_render_frame_work(mut samples: ResMut<RenderFrameWorkSamples>) {
     let diagnostic = samples.take_diagnostic();
+    let (publish_initial, publish_remesh_apply) = take_presentation_publication_diagnostics();
     let line = format!(
-        "render work: samples={} skipped_samples={} avg_us={} p50_us={} p95_us={} p99_us={} max_us={}",
+        "render work: samples={} skipped_samples={} avg_us={} p50_us={} p95_us={} p99_us={} max_us={} publish_initial_count={} publish_initial_avg_us={} publish_initial_max_us={} publish_remesh_apply_count={} publish_remesh_apply_avg_us={} publish_remesh_apply_max_us={}",
         diagnostic.count,
         diagnostic.skipped_samples,
         diagnostic.average_micros,
@@ -143,6 +244,12 @@ pub(super) fn log_render_frame_work(mut samples: ResMut<RenderFrameWorkSamples>)
         diagnostic.p95_micros,
         diagnostic.p99_micros,
         diagnostic.max_micros,
+        publish_initial.count,
+        publish_initial.average_micros,
+        publish_initial.max_micros,
+        publish_remesh_apply.count,
+        publish_remesh_apply.average_micros,
+        publish_remesh_apply.max_micros,
     );
     info!("{line}");
     let _ = append_runtime_diagnostic(&line);

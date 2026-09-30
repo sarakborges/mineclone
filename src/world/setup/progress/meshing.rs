@@ -6,6 +6,7 @@ use crate::{
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
         presentation_snapshot::{ChunkPresentationSource, PresentationLightingRevisions},
+        render_work_diagnostics::{PresentationPublicationStage, PresentationPublicationTimer},
         work_budget::FrameWorkBudget,
     },
 };
@@ -100,19 +101,23 @@ fn integrate_built_chunk_meshes(
         );
         let content_source = output.content_source;
         let lighting_source = output.lighting_source;
-        spawn_built_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            output.meshes,
-            &render_context,
-        );
-        renderer.pool.record_initial_presentation_sources(
-            coord,
-            content_source,
-            lighting_source,
-        );
+        {
+            let _publication_timer =
+                PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+            spawn_built_chunk_meshes(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                output.meshes,
+                &render_context,
+            );
+            renderer.pool.record_initial_presentation_sources(
+                coord,
+                content_source,
+                lighting_source,
+            );
+        }
         progress.loading_state.meshed += 1;
     }
 }
@@ -154,19 +159,23 @@ fn dispatch_mesh_tasks(
                 &renderer.terrain_materials,
                 &renderer.fluid_materials,
             );
-            spawn_built_chunk_meshes(
-                &mut renderer.commands,
-                &mut renderer.meshes,
-                &mut renderer.pool,
-                coord,
-                Vec::new(),
-                &render_context,
-            );
-            renderer.pool.record_initial_presentation_sources(
-                coord,
-                content_source,
-                lighting_source,
-            );
+            {
+                let _publication_timer =
+                    PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+                spawn_built_chunk_meshes(
+                    &mut renderer.commands,
+                    &mut renderer.meshes,
+                    &mut renderer.pool,
+                    coord,
+                    Vec::new(),
+                    &render_context,
+                );
+                renderer.pool.record_initial_presentation_sources(
+                    coord,
+                    content_source,
+                    lighting_source,
+                );
+            }
             progress.loading_state.mesh_cursor += 1;
             progress.loading_state.meshed += 1;
             budget.record(1);

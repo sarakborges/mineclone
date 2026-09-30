@@ -355,6 +355,8 @@ Commit `909a193c4e41113cb5a4cb0add5c5915cbbe59db` (`Use presentation scheduler o
 
 ### Cut 11 — identidade de render section é explícita
 
+Commit `2b62bc899cbf54cfe063c0c1423bd23dbba625cc` (`Define explicit render section identity`), CI #10305 success.
+
 - `ChunkRenderSectionKind` define `Terrain` e `Fluid` como sections distintas de presentation;
 - `ChunkRenderSectionId` define identidade estável como `coord + kind + meshlet_index`, em vez de deixar a identidade implícita em qual array foi indexado;
 - `ChunkPublishedPresentationSource` substitui o tuple alias e nomeia explicitamente o par `content + lighting` que produziu a section publicada;
@@ -363,10 +365,21 @@ Commit `909a193c4e41113cb5a4cb0add5c5915cbbe59db` (`Use presentation scheduler o
 - retirement/clear continuam removendo toda a metadata junto do render allocation owner; patch/replace/spawn/asset behavior não muda neste cut;
 - este cut fecha o item formal de **render-section identity + source revision** sem transformar a identidade de domínio em custo estrutural extra.
 
+### Cut 12 — publication/submission ganha timing separado
+
+- `render_work_diagnostics` passa a manter counters atômicos process-wide apenas para diagnóstico de `InitialPublish` e `RemeshApply`; eles não são gameplay state e não entram em scheduler, queue ou lifecycle autoritativo;
+- Loading e streaming medem somente a janela main-thread que cria a allocation/`Assets<Mesh>`/entity commands e registra os source stamps; o build async continua medido separadamente em `async_initial_mesh`;
+- remesh mede a janela de patch/replace/detach/spawn fallback em `apply_built_chunk_*_meshlets`; o build async continua em `async_remesh`;
+- o log `render work` ganha `publish_initial_count/avg_us/max_us` e `publish_remesh_apply_count/avg_us/max_us`, enquanto o timer já existente do RenderApp continua medindo extract/render/post-cleanup como uma terceira camada separada;
+- publication metrics são zeradas ao entrar em Loading, mas **não** na transição Loading -> Gameplay, para que loading curto ainda apareça no primeiro diagnóstico de gameplay;
+- os timers não alteram budgets, scheduling, stale checks, mesh data, entity lifetime ou asset ownership;
+- audit complementar: `chunk_visibility.rs` usa somente câmera + render distance + `ChunkRenderCoord`, sem consultar `VoxelWorld`; render entities carregam mesh/material/transform/coord/visibility e não possuem authoritative voxel state;
+- com este cut, o exit criterion formal de **meshing cost e submission/publication cost separadamente observáveis** passa a ser atendido. O próximo passo de performance depende de gameplay log novo; não atribuir o spike de startup antes dessa evidência.
+
 ### Próximos cuts
 
-1. expor/auditar a identidade + source stamps como base verificável para o exit criterion de rebuild descartável;
-2. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
+1. coletar gameplay log novo com `publish_initial_*`, `publish_remesh_apply_*`, `async_initial_mesh`, `async_remesh` e `render work` para localizar o spike de startup;
+2. auditar o exit criterion de rebuild descartável como um todo e só então decidir se pooling/churn precisa de novo cut estrutural.
 
 ## Regras de continuidade
 
