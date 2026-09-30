@@ -59,9 +59,6 @@ pub(crate) fn log_gameplay_event(message: impl Into<String>) {
     log_gameplay_line("EVENT", message.into());
 }
 
-pub(crate) fn log_gameplay_warning(message: impl Into<String>) {
-    log_gameplay_line("WARN", message.into());
-}
 
 pub(crate) fn log_gameplay_error(message: impl Into<String>) {
     log_gameplay_line("ERROR", message.into());
