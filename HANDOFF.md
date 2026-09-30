@@ -62,7 +62,7 @@ Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
 ### Cut 26 — volume biome constraints por surface biome
 
-Implementação preparada:
+Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22` + `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`; gate correction em andamento.
 
 - `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes (e reutilizáveis futuramente);
 - `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
@@ -70,10 +70,11 @@ Implementação preparada:
 - constraints suportam `allow` e `deny`; sem `allow` significa permitido salvo deny, e `deny` sempre vence;
 - surface biomes não podem declarar `surfaceConstraints`; selectors vazios e tags vazias/duplicadas são rejeitados;
 - `BiomeFieldEntry` carrega tags/constraints imutáveis para geração async;
-- `volume_selection_in_region` recebe o `identity_surface_index` da `GenerationColumnSample` e filtra candidates antes do overlap winner;
-- não existe `sample_surface()` adicional por voxel: o density pass reutiliza a classificação autoritativa já amostrada por coluna;
+- `volume_selection_in_region` preserva a API para planners e resolve a surface identity do anchor; o density pass usa `volume_selection_in_region_for_surface` para reutilizar `GenerationColumnSample.identity_surface_index` sem novo surface sample por voxel;
 - volume biome sem constraints mantém comportamento irrestrito anterior;
 - nenhum biome atual recebeu constraint inventada; o corte entrega a capacidade genérica sem retuning arbitrário de conteúdo.
+
+O primeiro gate do Cut 26 falhou somente porque o helper de teste `test_surface_entry` em `selection.rs` ainda construía `BiomeFieldEntry` sem os novos campos. A correção adiciona `tags: Vec::new()` e `surface_constraints: None`; nenhum comportamento runtime muda nesse follow-up.
 
 Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
 
