@@ -10,9 +10,9 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::{BiomeKind, BiomeRegistry}, biome_density::BiomeDensityModifier,
-        block::BlockRegistry, block_id::intern_block_id, dimension::DimensionDefinition,
-        fluid::FluidRegistry, structure::StructureRegistry, structure_set::StructureSetRegistry,
+        biome::BiomeRegistry, biome_density::BiomeDensityModifier, block::BlockRegistry,
+        block_id::intern_block_id, dimension::DimensionDefinition, fluid::FluidRegistry,
+        structure::StructureRegistry, structure_set::StructureSetRegistry,
     },
     voxel::{
         cell::VoxelCell,
@@ -87,16 +87,13 @@ pub(crate) fn generate_chunk(
         WorldGenerationMode::Void => unreachable!(),
     };
     let allow_solid_volume = context.world_generation.mode() == WorldGenerationMode::Normal;
-    let has_solid_volume = context.biomes.iter().any(|biome| {
-        biome.kind == BiomeKind::Volume
-            && matches!(
+    let has_solid_volume = context.biomes.has_volume_solid_density_modifiers()
+        || context.biomes.iter().any(|biome| {
+            matches!(
                 biome.density_modifier,
-                Some(
-                    BiomeDensityModifier::Solid { .. }
-                        | BiomeDensityModifier::FloatingIsland { .. }
-                )
+                Some(BiomeDensityModifier::FloatingIsland { .. })
             )
-    });
+        });
     if chunk_coord.y > maximum_surface_chunk_y.max(structure_top_chunk)
         && (!allow_solid_volume || !context.biomes.has_volume_density_modifiers())
     {
