@@ -122,18 +122,40 @@ Commit `74b8b1c1b0b32c933c40d8a626ae411b9c4f0d36` (`Skip clustering for viewmode
 
 ### Correção pós-Cut 18 — restaurar viewmodel válida
 
-- remover somente `ClusterConfig::None` da viewmodel camera, retornando o arquivo ao comportamento anterior ao experimento;
-- manter toda a remoção do warm-up refutado do Cut 17;
-- não alterar world camera, meshing, streaming, generation, presentation ownership ou world truth;
-- objetivo desta correção é apenas restaurar runtime válido; **não há claim de performance**.
+- `ClusterConfig::None` foi removido da viewmodel camera, retornando o runtime ao comportamento válido anterior ao experimento;
+- a remoção do warm-up refutado do Cut 17 foi preservada;
+- world camera, meshing, streaming, generation, presentation ownership e world truth não foram alterados;
+- objetivo da correção foi somente restaurar runtime válido; não há claim de performance associado.
+
+### Evidência pós-correção — hitch de movimento
+
+Gameplay log válido pós-correção:
+
+- startup voltou ao patamar saudável anterior ao experimento inválido, com `PrepareResources` máximo em ~65,1 ms e `main_work` baixo na entrada;
+- durante movimento houve um frame de ~53,2 ms com `main_work` ~52,7 ms;
+- outro hitch atingiu ~96,4 ms de frame com `main_work` ~96,0 ms;
+- nas mesmas janelas o renderer permaneceu materialmente menor (`Prepare` ~4,5–5,1 ms; `Render` ~14,9–18,0 ms);
+- publication e priority scans já medidos permanecem ordens de grandeza abaixo desses hitches;
+- conclusão: o próximo diagnóstico deve localizar qual trabalho do **main schedule** concentra o custo antes de qualquer mudança funcional.
+
+### Cut 19 — timing do núcleo main-world
+
+Implementado neste cut como observabilidade apenas:
+
+- novo `main_world_diagnostics` mede, por janela, count/avg/p95/p99/max em microssegundos;
+- buckets instrumentados: `streaming`, `retirement`/eviction/warp reconciliation, `fluid`, `lighting`, `remesh`, `residency`, `visibility`, `generation_refill` e `deferred_mesh_retirement`;
+- os marcadores foram inseridos nas chains já serializadas do `WorldPlugin`, sem mudar budgets, world truth, generation, presentation, meshing ou regras de gameplay;
+- samples são resetados ao entrar em Loading/Gameplay e emitidos junto da cadência existente de render diagnostics;
+- objetivo é comparar os máximos desses buckets com `main_work_max_us`; se todos permanecerem baixos durante um hitch, a causa está fora desse núcleo e o próximo corte deve instrumentar o subsistema externo correspondente;
+- **nenhum ganho de performance é reivindicado neste cut**; é necessário novo gameplay log.
 
 ## Próximos passos
 
-1. passar audits + Clippy + Check da correção pós-Cut 18;
-2. não pedir benchmark da variante inválida; voltar a `PrepareResources` com observabilidade/experimentos que não dependam de zero cluster dimensions;
-3. separar o custo de GPU clustering dos demais systems de `PrepareResources` antes de outra otimização funcional;
-4. manter como baselines válidos `resources_max_us=67598` pré-Cut 17 e `resources_max_us=93610` pós-Cut 17, lembrando que Cut 17 foi removido;
-5. depois do startup, instrumentar o main schedule para localizar o hitch de movimento de ~102 ms;
+1. passar audits + Clippy + Check do Cut 19;
+2. coletar gameplay log novo reproduzindo movimento até registrar um hitch;
+3. comparar `main world stages` com `main_work_max_us` da mesma janela e localizar o bucket dominante, ou provar que o custo está fora do núcleo instrumentado;
+4. instrumentar/otimizar somente o subsistema apontado pela evidência e medir novamente end-to-end;
+5. retomar a investigação do cold-start de `PrepareResources` sem repetir `ClusterConfig::None` nem o lighting warm-up refutado;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 
 ## Pacote deferido pós-refactor — Worldgen coherence

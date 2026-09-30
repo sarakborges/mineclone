@@ -24,6 +24,7 @@ mod generation_job;
 mod generation_snapshot;
 mod lighting_updates;
 mod macro_climate;
+mod main_world_diagnostics;
 mod material_field;
 pub(crate) mod math;
 pub(crate) mod new_world;
@@ -82,6 +83,14 @@ use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
+use main_world_diagnostics::{
+    MainWorldWorkSamples, begin_deferred_mesh_retirement_work, begin_fluid_work,
+    begin_generation_refill_work, begin_lighting_work, begin_remesh_work,
+    begin_residency_work, begin_retirement_work, begin_streaming_work, begin_visibility_work,
+    finish_deferred_mesh_retirement_work, finish_fluid_work, finish_generation_refill_work,
+    finish_lighting_work, finish_remesh_work, finish_residency_work, finish_retirement_work,
+    finish_streaming_work, finish_visibility_work, log_main_world_work,
+};
 use presentation_snapshot::PresentationLightingRevisions;
 pub(crate) use new_world::{
     DEFAULT_BIOME_SIZE_MULTIPLIER,
@@ -154,6 +163,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldFrameWorkBudget>()
             .init_resource::<FrameTimeSamples>()
             .init_resource::<MainFrameWorkSamples>()
+            .init_resource::<MainWorldWorkSamples>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
             .add_systems(
@@ -169,6 +179,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingWarp>,
                     reset_resource::<FrameTimeSamples>,
                     reset_resource::<MainFrameWorkSamples>,
+                    reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
@@ -189,6 +200,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<MainFrameWorkSamples>,
+                    reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
@@ -231,10 +243,14 @@ impl Plugin for WorldPlugin {
                 Update,
                 (
                     begin_world_frame_work_budget,
+                    begin_streaming_work,
                     stream_chunks,
+                    finish_streaming_work,
+                    begin_retirement_work,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
                     evict_distant_chunks,
+                    finish_retirement_work,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -246,21 +262,45 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 PostUpdate,
                 (
+                    begin_fluid_work,
                     process_fluid_updates,
+                    finish_fluid_work,
+                    begin_lighting_work,
                     process_dynamic_lighting.run_if(pending_lighting_work),
+                    finish_lighting_work,
+                    begin_remesh_work,
                     process_chunk_remesh_queue,
+                    finish_remesh_work,
+                    begin_residency_work,
                     enforce_chunk_mesh_residency_budget,
+                    finish_residency_work,
+                    begin_visibility_work,
                     sync_chunk_visibility,
                     sync_new_chunk_visibility,
+                    finish_visibility_work,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Last,
-                refill_generation_workers.run_if(in_state(GameState::Gameplay)),
+                (
+                    begin_generation_refill_work,
+                    refill_generation_workers,
+                    finish_generation_refill_work.before(log_main_world_work),
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(Last, advance_deferred_mesh_asset_retirements)
+            .add_systems(
+                Last,
+                (
+                    begin_deferred_mesh_retirement_work,
+                    advance_deferred_mesh_asset_retirements,
+                    finish_deferred_mesh_retirement_work.before(log_main_world_work),
+                )
+                    .chain(),
+            )
             .add_systems(
                 Last,
                 (
@@ -276,11 +316,13 @@ impl Plugin for WorldPlugin {
                 record_main_frame_work
                     .before(log_render_asset_pressure)
                     .before(log_render_frame_work)
+                    .before(log_main_world_work)
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
             .add_systems(Last, log_render_frame_work.run_if(render_diagnostics_due))
             .add_systems(Last, log_render_prepare_work.run_if(render_diagnostics_due))
+            .add_systems(Last, log_main_world_work.run_if(render_diagnostics_due))
             .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(
                 Last,
