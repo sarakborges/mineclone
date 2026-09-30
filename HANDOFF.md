@@ -7,8 +7,8 @@
 - Repo: `sarakborges/mineclone`.
 - Branch: `architecture/asteria-core-rebuild`.
 - PR draft: #22 `Asteria core rebuild` -> `develop`.
-- Baseline de develop: `5038934a97a51cddcd8cdc94fc61314cb650d96d` (`0.68.48`).
-- `VERSION` permanece `0.68.48` durante os cutovers internos.
+- `develop` sincronizado até `c3821a124d37c8d22ff981a3f3fb01badf2a193e` (`0.68.49`).
+- `VERSION` acompanha agora `develop` em `0.68.49`; os cutovers internos seguintes não devem criar bumps isolados sem necessidade de release/content.
 - Rust + Bevy permanecem; o rebuild troca boundaries/ownership, não a stack.
 - Hydrology legado foi removido deliberadamente e não deve voltar.
 - Old saves/legacy compatibility não são prioridade.
@@ -30,6 +30,16 @@
 
 - Phases 1–6 concluídas: core boundaries, authoritative storage, biome/structure metadata, Streaming scheduler v2, Terrain generation v2 e structures/connectors/feature planning.
 - **Phase 7 em andamento: voxel presentation / meshing v2 + dívida de performance/correctness descoberta durante validação.**
+
+## Sync de `develop` — Electro Slime 0.68.49
+
+- O avanço paralelo de `develop` foi integrado por merge commit real, sem rebase/force-push e sem substituir código do rebuild.
+- O delta de `develop` desde a baseline anterior é restrito a `assets/`, `data/creatures`, `HANDOFF.md` e `VERSION`; não há alteração `.rs` nesses seis commits.
+- Electro normal + large foram refeitos a partir da linguagem do `slime_blob`, com paleta amarelo/dourada, antena elétrica e marcas discretas.
+- Ambos usam exatamente `textures/creatures/slime_anemo/face.png`; a face Electro antiga foi removida.
+- Generator reproduzível: `assets/models/creatures/slime_electro/generate_slime_electro.py`.
+- Metadata/colliders acompanham os novos modelos; GLB audit e Khronos validator haviam passado em `develop` com zero erros/warnings.
+- QA visual do Electro ainda deve conferir silhueta, face, detalhes e animações normal + large em gameplay.
 
 ## Estado recente
 
@@ -97,7 +107,7 @@ Princípios:
 
 ## Próximos passos
 
-1. fechar CI do Cut 26;
+1. fechar CI do Cut 26 após sync de `develop`;
 2. implementar surface indicator via structures;
 3. reescrever floating islands e estratificação;
 4. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
