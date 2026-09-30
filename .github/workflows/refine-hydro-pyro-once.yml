@@ -1,0 +1,112 @@
+name: Refine Hydro and Pyro once
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/refine-hydro-pyro-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refine generators
+        run: python tools/refine_hydro_pyro_shapes_once.py
+
+      - name: Generate Hydro and Pyro GLBs
+        run: |
+          python assets/models/creatures/slime_hydro/generate_slime_hydro.py
+          python assets/models/creatures/slime_pyro/generate_slime_pyro.py
+
+      - name: Audit GLB assets
+        run: python tools/check_glb_assets.py
+
+      - name: Audit pixel-art feature geometry
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, struct
+          from pathlib import Path
+
+          targets = [
+              (Path('assets/models/creatures/slime_hydro/slime_hydro.glb'), 'hydro_water_droplet'),
+              (Path('assets/models/creatures/slime_hydro_large/slime_hydro_large.glb'), 'hydro_water_droplet'),
+              (Path('assets/models/creatures/slime_pyro/slime_pyro.glb'), 'pyro_flame_tuft'),
+              (Path('assets/models/creatures/slime_pyro_large/slime_pyro_large.glb'), 'pyro_flame_tuft'),
+          ]
+          for path, mesh_name in targets:
+              b = path.read_bytes(); off = 12
+              jl, _ = struct.unpack_from('<I4s', b, off); off += 8
+              doc = json.loads(b[off:off+jl].decode()); off += jl
+              bl, _ = struct.unpack_from('<I4s', b, off); off += 8
+              binary = b[off:off+bl]
+              mesh = next(m for m in doc['meshes'] if m['name'] == mesh_name)
+              bad = 0
+              for prim in mesh['primitives']:
+                  a = doc['accessors'][prim['attributes']['NORMAL']]
+                  v = doc['bufferViews'][a['bufferView']]
+                  base = v.get('byteOffset', 0) + a.get('byteOffset', 0)
+                  for i in range(a['count']):
+                      n = struct.unpack_from('<3f', binary, base + i * 12)
+                      if sum(abs(c) > 0.999 for c in n) != 1 or sum(abs(c) > 1e-6 for c in n) != 1:
+                          bad += 1
+              if bad:
+                  raise SystemExit(f'{path}: {bad} non-cardinal normals in {mesh_name}')
+              print(path, mesh_name, 'pixel-art normals OK')
+          PY
+
+      - name: Update metadata
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          updates = {
+              Path('assets/models/creatures/slime_hydro/slime_hydro.collider.json'):
+                  'rounded turquoise slime_blob body whose broad top continues upward and tapers into one pointed water droplet; no separate cap or horns',
+              Path('assets/models/creatures/slime_hydro_large/slime_hydro_large.collider.json'):
+                  'rounded turquoise slime_blob body whose broad top continues upward and tapers into one pointed water droplet; no separate cap or horns',
+              Path('assets/models/creatures/slime_pyro/slime_pyro.collider.json'):
+                  'rounded orange slime_blob body with independent asymmetrical voxel flame tongues rising from different top positions; no crown band or horns',
+              Path('assets/models/creatures/slime_pyro_large/slime_pyro_large.collider.json'):
+                  'rounded orange slime_blob body with independent asymmetrical voxel flame tongues rising from different top positions; no crown band or horns',
+          }
+          for path, construction in updates.items():
+              d = json.loads(path.read_text())
+              d.setdefault('authoring', {})['construction'] = construction
+              path.write_text(json.dumps(d, indent=2, ensure_ascii=False) + '\n')
+
+          Path('VERSION').write_text('0.68.59\n')
+          h = Path('HANDOFF.md')
+          if h.exists():
+              note = '- 0.68.59: Hydro top reshaped as a broad continuation of the slime body tapering into a droplet point; Pyro crown-like tuft replaced by independent irregular flame tongues distributed across the top. Normal/large GLBs regenerated and cardinal pixel-art geometry revalidated.'
+              t = h.read_text()
+              if note not in t:
+                  h.write_text(t.rstrip() + '\n\n' + note + '\n')
+          PY
+
+      - name: Commit refined models
+        shell: bash
+        run: |
+          rm -f .github/workflows/refine-hydro-pyro-once.yml
+          rm -f tools/refine_hydro_pyro_shapes_once.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Refine Hydro droplet and Pyro flames"
+          git push origin develop
