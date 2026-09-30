@@ -60,7 +60,7 @@ VERSION: `0.68.55`.
 - Não houve autorização para mover a continuidade do trabalho para uma branch de fase/rebuild separada; o trabalho corrente deve continuar em `develop`.
 - Asteria core rebuild integrado em `develop` pelo merge `48197a30ed78cc6b3eadd5f2be7fcf0d2a9c4204`.
 - `develop` contém o core rebuild integrado e os patches de slime subsequentes; versão de conteúdo atual `0.68.52`.
-- `VERSION` em `0.68.52`; este bump cobre mudanças de conteúdo/modelos de slime.
+- `VERSION` atual em `0.68.63`; mudanças recentes de conteúdo/modelos de slime estão preservadas.
 - Rust + Bevy permanecem; o rebuild troca boundaries/ownership, não a stack.
 - Hydrology legado foi removido deliberadamente e não deve voltar.
 - Old saves/legacy compatibility não são prioridade.
@@ -176,12 +176,30 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 - Nenhuma mudança deve ser deslocada para outra branch por iniciativa própria.
 - As correções de Floating Islands solicitadas nesta sessão (somente sobre Plains e maior espaçamento) ainda não devem ser descritas como integradas em `develop` até existirem commits efetivamente aplicados nesta branch.
 
+## Cut 29 — presentation prewarm integrado em develop
+
+O trabalho do branch de continuação foi integrado diretamente em `develop` após o PR #24 apresentar conflito com avanços posteriores de conteúdo. O merge automático do PR foi recusado pelo GitHub por conflitos; os dois arquivos de código do cut foram aplicados diretamente em `develop`.
+
+- `InitialPresentationPrewarm` cria/player + prime da visibilidade inicial ainda sob o loading;
+- mantém 12 frames completos de prewarm antes de solicitar Gameplay;
+- estado de prewarm permanece local ao sistema de loading;
+- worldgen, streaming, residency e authoritative world state não são alterados;
+- o gate do branch de origem já havia passado audits + Clippy + Check (#10496/#10500);
+- runtime ainda precisa ser validado em `develop`; não declarar ganho de performance sem log novo.
+
+## Floating Islands follow-up — integrado em develop
+
+- Floating Islands agora aceitam somente `asteria:overworld/plains` como surface biome;
+- footprint/lattice X/Z passou de `48..96` para `96..144`, afastando os sites;
+- `grass_block` depth 1 -> `dirt` depth 4 -> `stone` continua autorado na biome;
+- runtime visual ainda precisa confirmar a aplicação do grass na superfície.
+
 ## Próximos passos
 
-1. consolidar e fechar CI do Cut 28;
-2. gameplay em mundo novo para validar ocean/coast, constraints/indicator e floating islands;
-3. coletar log pós-Cut 24 para confirmar se o hitch de generation frontier caiu;
-4. retomar cold-start de `PrepareResources` depois do pacote.
+1. gameplay em mundo novo para validar Floating Islands: somente Plains, grass/dirt/stone e espaçamento;
+2. coletar log pós-Cut 29 em `develop` e comparar com o baseline 0.68.59;
+3. se o cold-start continuar, seguir para a decomposição de `PrepareResources`/`Render`;
+4. retomar a dívida restante de voxel presentation / meshing v2.
 
 ## Regras de continuidade
 
