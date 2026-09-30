@@ -120,13 +120,9 @@ pub(in crate::world) fn setup_world(
             &pipeline.async_work,
             *persistence.load_mode,
         ),
-        WorldLoadingPhase::SettlingFluids => settle_initial_fluids(
-            &pipeline.content,
-            &mut progress,
-            &mut simulation.fluids,
-            &mut loading_diagnostics,
-            time,
-        ),
+        WorldLoadingPhase::SettlingFluids => {
+            settle_initial_fluids(&pipeline.content, &mut progress, &mut simulation.fluids)
+        }
         WorldLoadingPhase::Lighting => light_initial_chunks(
             &pipeline.content,
             &mut progress,
