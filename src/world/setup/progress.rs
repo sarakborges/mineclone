@@ -8,7 +8,7 @@ mod spawning;
 
 use std::time::Duration;
 
-use bevy::{ecs::system::Local, prelude::*};
+use bevy::{ecs::system::{Local, SystemParam}, prelude::*};
 
 use crate::app::crash_log::log_gameplay_event;
 
@@ -35,18 +35,25 @@ pub(super) const INITIAL_FINALIZATION_FRAMES: u8 = 2;
 pub(super) const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
 
 #[derive(Default)]
-struct LoadingDiagnostics {
+pub(in crate::world) struct LoadingDiagnostics {
     timer: Option<Timer>,
     previous_phase: Option<WorldLoadingPhase>,
 }
 
+
+#[derive(SystemParam)]
+pub(in crate::world) struct LoadingRuntime<'w, 's> {
+    pub(super) time: Res<'w, Time<Real>>,
+    pub(super) initial_presentation_prewarm: Local<'s, InitialPresentationPrewarm>,
+    pub(super) loading_diagnostics: Local<'s, LoadingDiagnostics>,
+}
 fn log_loading_diagnostics(
-    time: Res<Time<Real>>,
+    delta: Duration,
     state: &super::WorldLoadingState,
     diagnostics: &mut LoadingDiagnostics,
 ) {
     let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
-    timer.tick(time.delta());
+    timer.tick(delta);
 
     if diagnostics.previous_phase != Some(state.phase) {
         if let Some(previous) = diagnostics.previous_phase {
@@ -78,7 +85,7 @@ fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
 }
 
 pub(in crate::world) fn setup_world(
-    time: Res<Time<Real>>,
+    mut runtime: LoadingRuntime,
     mut pipeline: WorldSetupChunkPipeline,
     mut progress: WorldSetupProgress,
     mut assets: WorldSetupAssets,
@@ -93,7 +100,7 @@ pub(in crate::world) fn setup_world(
     }
 
     if progress.loading_state.phase != WorldLoadingPhase::Spawning {
-        initial_presentation_prewarm.reset();
+        runtime.initial_presentation_prewarm.reset();
     }
 
     if !progress.loading_state.screen_rendered {
@@ -155,13 +162,13 @@ pub(in crate::world) fn setup_world(
             &mut progress,
             &persistence,
             &mut finalization,
-            &mut initial_presentation_prewarm,
+            &mut runtime.initial_presentation_prewarm,
         ),
     }
 
     log_loading_diagnostics(
-        time,
+        runtime.time.delta(),
         &progress.loading_state,
-        &mut loading_diagnostics,
+        &mut runtime.loading_diagnostics,
     );
 }
