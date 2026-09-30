@@ -486,7 +486,7 @@ fn move_world_items(
     time: Res<Time>,
     world: Res<VoxelWorld>,
     mut commands: Commands,
-    mut items: Query<(Entity, &mut Transform, &mut WorldItemMotion)>,
+    mut items: Query<(Entity, &mut Transform, &WorldItem, &mut WorldItemMotion)>,
 ) {
     let dt = time.delta_secs().min(0.05);
     for (entity, mut transform, world_item, mut motion) in &mut items {
@@ -509,6 +509,12 @@ fn move_world_items(
 
         if collided {
             commands.entity(entity).remove::<WorldItemMotion>();
+            log_gameplay_event(format!(
+                "item.settle entity={:?} item={} position={:?}",
+                entity,
+                world_item.stack().id(),
+                transform.translation
+            ));
         }
     }
 }
