@@ -55,7 +55,7 @@ impl CreatureAttackRuntime<'_, '_> {
         let dead = health.damage(attack.damage);
         let health_after = health.current();
         log_gameplay_event(format!(
-            "entity.damage entity={:?} type=creature id={} source=creature_attack amount={:.3} health_before={:.3} health_after={:.3} position={:?}",
+            "entity.damage entity={:?} type=creature id={} source=player_attack amount={:.3} health_before={:.3} health_after={:.3} position={:?}",
             entity,
             instance.definition_id,
             attack.damage,
