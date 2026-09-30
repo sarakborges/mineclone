@@ -57,7 +57,7 @@ pub(crate) fn spawn_player_entity(
     let gameplay_camera = saved_look.map_or_else(GameplayCamera::default, |(yaw, pitch)| GameplayCamera::restored(yaw, pitch));
     let transform = Transform::from_translation(translation).with_rotation(gameplay_camera.rotation());
     log_gameplay_event(format!(
-        "entity.spawn type=player id={} mode={:?} position={:?} health={:.3}",
+        "entity.spawn type=player id={:?} mode={:?} position={:?} health={:.3}",
         LOCAL_PLAYER_ID,
         game_mode,
         translation,
