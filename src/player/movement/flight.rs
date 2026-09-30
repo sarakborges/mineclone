@@ -63,6 +63,14 @@ pub(super) fn handle_flight_toggle(
     mut flight: Single<&mut FlightState>,
     mut gravity: Single<&mut GravityState>,
 ) {
+    if game_mode.is_spectator() {
+        flight.active = true;
+        flight.toggle_deadline_tick = None;
+        gravity.vertical_velocity = 0.0;
+        gravity.grounded = false;
+        return;
+    }
+
     if !game_mode.allows_flight() {
         if flight.toggle_deadline_tick.is_some() {
             flight.toggle_deadline_tick = None;
@@ -109,11 +117,17 @@ pub(super) fn move_flying(
     world: Res<VoxelWorld>,
     perspective: Res<CameraPerspective>,
     player: Single<
-        (&mut Transform, &GameplayCamera, &mut FlightState, &mut GravityState),
+        (
+            &mut Transform,
+            &GameplayCamera,
+            &GameMode,
+            &mut FlightState,
+            &mut GravityState,
+        ),
         With<PlayerEntity>,
     >,
 ) {
-    let (mut transform, camera, mut flight, mut gravity) = player.into_inner();
+    let (mut transform, camera, game_mode, mut flight, mut gravity) = player.into_inner();
 
     if !flight.active {
         if flight.velocity != Vec3::ZERO {
@@ -173,6 +187,13 @@ pub(super) fn move_flying(
     }
 
     let velocity = flight.velocity;
+    if game_mode.is_spectator() {
+        transform.translation += velocity * delta_seconds;
+        gravity.vertical_velocity = 0.0;
+        gravity.grounded = false;
+        return;
+    }
+
     if velocity.x != 0.0
         && matches!(
             move_axis(
