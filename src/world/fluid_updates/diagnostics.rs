@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
+use crate::app::crash_log::log_gameplay_event;
+
 use super::{
     solver::FluidSolverMetrics,
     state::{PendingFluidBacklog, PendingFluidUpdates},
@@ -52,8 +54,8 @@ impl FluidPerformanceDiagnostics {
             dormant_chunks,
         } = pending.backlog();
 
-        info!(
-            "fluid solver diagnostics: desired={} horizontal_candidates={} downhill_searches={} downhill_nodes={} searches_per_desired={searches_per_desired:.3} nodes_per_search={nodes_per_search:.2} active_frames={} topology_backlog={} wake_backlog={} scheduled_backlog={} dormant_chunks={} catch_up={catch_up}",
+        log_gameplay_event(format!(
+            "world.fluid.solver desired={} horizontal_candidates={} downhill_searches={} downhill_nodes={} searches_per_desired={searches_per_desired:.3} nodes_per_search={nodes_per_search:.2} active_frames={} topology_backlog={} wake_backlog={} scheduled_backlog={} dormant_chunks={} catch_up={catch_up}",
             self.totals.desired_evaluations,
             self.totals.horizontal_candidates,
             self.totals.downhill_searches,
@@ -63,7 +65,7 @@ impl FluidPerformanceDiagnostics {
             wakes,
             scheduled,
             dormant_chunks,
-        );
+        ));
 
         self.totals = FluidSolverMetrics::default();
         self.active_frames = 0;
