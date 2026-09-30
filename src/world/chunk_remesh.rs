@@ -85,7 +85,7 @@ pub(super) fn process_chunk_remesh_queue(
         lighting_revisions.remove(coord);
     }
 
-    let selection_revision = streaming.selection_revision();
+    let selection_revision = presentation_selection.revision();
     // Normal chunk and render retirement remove their remesh entries at the
     // point residency actually changes. A selection revision alone does not
     // make queued work nonresident, so scanning every remesh queue here makes
