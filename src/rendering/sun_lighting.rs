@@ -35,7 +35,7 @@ impl Plugin for SunLightingPlugin {
 #[derive(Component)]
 struct SunLight;
 
-pub(super) fn sun_directional_light() -> DirectionalLight {
+fn sun_directional_light() -> DirectionalLight {
     DirectionalLight {
         illuminance: 0.0,
         // Minecraft-style terrain lighting is authored by propagated voxel
@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn sun_light_never_projects_shadow_maps() {
+    fn directional_light_never_projects_shadow_maps() {
         assert!(!sun_directional_light().shadow_maps_enabled);
     }
 }

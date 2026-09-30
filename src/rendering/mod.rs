@@ -17,7 +17,6 @@ mod environment;
 mod fog;
 mod gameplay_asset_preload;
 mod lighting;
-mod lighting_warmup;
 mod mesh_allocator_diagnostics;
 mod sky;
 mod sky_layers;
@@ -34,7 +33,6 @@ use environment::EnvironmentPlugin;
 use extruded_sprite::ExtrudedSpritePlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
-use lighting_warmup::LightingWarmupPlugin;
 use mesh_allocator_diagnostics::MeshAllocatorDiagnosticsPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
@@ -58,7 +56,6 @@ impl Plugin for RenderingPlugin {
             MeshAllocatorDiagnosticsPlugin,
             EnvironmentPlugin,
             LightingPlugin,
-            LightingWarmupPlugin,
             SunLightingPlugin,
             DynamicLightsPlugin,
             FogPlugin,

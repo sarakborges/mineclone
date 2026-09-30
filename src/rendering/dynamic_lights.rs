@@ -8,8 +8,8 @@ use crate::{
 };
 
 const MAX_HELD_LIGHT_INTENSITY: f32 = 90.0;
-pub(super) const HELD_LIGHT_RANGE: f32 = 8.0;
-pub(super) const HELD_LIGHT_RADIUS: f32 = 0.12;
+const HELD_LIGHT_RANGE: f32 = 8.0;
+const HELD_LIGHT_RADIUS: f32 = 0.12;
 const HELD_LIGHT_OFFSET: Vec3 = Vec3::new(0.32, -0.24, -0.52);
 
 #[derive(Component)]
@@ -30,7 +30,7 @@ impl Plugin for DynamicLightsPlugin {
     }
 }
 
-pub(super) fn held_point_light(intensity: f32) -> PointLight {
+fn held_point_light(intensity: f32) -> PointLight {
     PointLight {
         color: Color::WHITE,
         intensity,

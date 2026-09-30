@@ -81,43 +81,51 @@ Gameplay `2026-09-30_04-17-04-401157000.txt` + vídeo `Gravando 2026-09-30 01221
 - Loading: `render prepare total_max_us=8373`, `resources_max_us=1000`, `bind_groups_max_us=7891`;
 - primeiro intervalo de Gameplay: `render prepare total_max_us=70971`, **`resources_max_us=67598`**, `bind_groups_max_us=3169`, `flush_max_us=1189`;
 - no mesmo intervalo: `stage_prepare_max_us=70985`, `stage_render_max_us=50495`, `render work max_us=101426`, frame max `129088`, `main_work_max_us=7388`;
-- portanto o cold-start restante está especificamente em **Bevy `RenderSystems::PrepareResources`**. Não é publication, async meshing, bind-group creation nem mesh-instance buffer flush;
-- steady-state parado permanece ~60–61 FPS, `Prepare` ~3.1 ms e `Render` ~11.6 ms;
-- existe um problema separado durante movimento: uma janela registrou frame max `102812 us` com **`main_work_max_us=102244`**, enquanto `stage_prepare_max_us=5166` e `stage_render_max_us=19341`. O vídeo mostra o hitch correspondente. Esse stall é main-world e deve ser investigado em cut separado após o startup;
-- outro spike posterior de render mostrou `flush_max_us=11337`, mas é menor e distinto do cold-start inicial.
+- portanto o cold-start restante está especificamente em **Bevy `RenderSystems::PrepareResources`**;
+- existe um problema separado durante movimento: uma janela registrou frame max `102812 us` com **`main_work_max_us=102244`**, enquanto `stage_prepare_max_us=5166` e `stage_render_max_us=19341`. Esse stall é main-world e deve ser investigado em cut separado após o startup.
 
-### Audit de hipóteses antes do Cut 17
+### Cut 17 — hipótese de prewarm de lighting PBR
 
-Hipóteses descartadas com código/evidência antes de mudar lifecycle:
+Commit `0b215f029d7e107f58dd57342c9fc752eda4f803` (`Warm PBR lighting before gameplay`), CI #10312 success.
 
-- viewmodel camera: target/view preparation pertence a `PrepareViews`, não à subfase culpada `PrepareResources`;
-- milhares de mesh instances: o write/flush do buffer de mesh instances cai em `PrepareResourcesFlush`, mas o startup mediu só ~1.2 ms de flush;
-- player GLB/skin: `player.glb` não usa skinning (`JOINTS_0`/`WEIGHTS_0`/node `skin` ausentes), portanto `prepare_skins` não explica o spike;
-- `publish_initial_count` cruza Loading -> Gameplay por design, enquanto as métricas do Cut 16 são zeradas em `OnEnter(Gameplay)`; não usar esse contador acumulado como prova de publication no frame do spike.
+- experimento criou `DirectionalLight` e `PointLight` zero-intensity durante Loading para tentar pagar o cold-start de lighting atrás do overlay;
+- as entidades eram separadas das luzes reais de Gameplay e não alteravam valores funcionais, shadows, world truth ou streaming;
+- gameplay log `2026-09-30_05-09-17-966417700.txt` **refutou a hipótese**:
+  - Loading ficou com `resources_max_us=1659`, `bind_groups_max_us=12197`;
+  - primeiro intervalo de Gameplay ficou com `render prepare total_max_us=97863`, **`resources_max_us=93610`**, `stage_render_max_us=111069` e frame max `169143`;
+  - depois do burst, `resources_max_us` volta a ~2–3 ms;
+- conclusão: lighting warm-up não remove o cold-start de `PrepareResources`; não deve permanecer como complexidade especulativa.
 
-Delta de lifecycle que resta dentro de `PrepareResources`:
+### Audit pós-Cut 17 — clustering per-view
 
-- `SunLightingPlugin` cria o `DirectionalLight` somente em `OnEnter(Gameplay)`;
-- `DynamicLightsPlugin` cria o `PointLight` da mão somente quando seu system começa a rodar em Gameplay;
-- Bevy extrai essas luzes para `prepare_lights` / clustered-light preparation dentro de `PrepareResources`;
-- ambas já têm shadow maps desativados, portanto o cold-start não é shadow rendering.
+A leitura do Bevy 0.19.1 localizou uma operação com perfil compatível dentro de `PrepareResources`:
 
-### Cut 17 — prewarm da infraestrutura PBR de lighting durante Loading
+- `prepare_clusters_for_gpu_clustering` roda em `RenderSystems::PrepareResources` quando GPU clustering está habilitado;
+- por view 3D ele cria `ViewClusterBindings` e `ViewGpuClusteringBuffers`, reserva cluster storage, lista inicial de até 65.536 índices e scratch buffers e escreve buffers GPU;
+- a world camera já existe durante Loading por causa do Cut 15;
+- a **viewmodel camera só nasce no primeiro Update de Gameplay**, portanto cria uma nova view 3D justamente na janela do cold-start;
+- a viewmodel não necessita clustered lighting:
+  - o braço usa `StandardMaterial` explicitamente `unlit=true`;
+  - held-block usa `BlockModelMaterial` com display shading próprio;
+  - a câmera já usa render layer dedicada e não deve compartilhar iluminação/world visibility da world camera;
+- Bevy 0.19.1 fornece `ClusterConfig::None` com semântica explícita de desabilitar cálculos de cluster para aquela view.
 
-- novo `LightingWarmupPlugin` cria durante Loading uma `DirectionalLight` de illuminance zero, visível para o renderer e sem shadows;
-- quando `GameplayCamera` aparece durante Loading, o mesmo warm-up cria como child uma `PointLight` de intensity zero, usando range/radius e shadow policy da luz dinâmica real;
-- ambos warm-up entities usam `DespawnOnExit(GameState::Loading)`: eles desaparecem na transição e as luzes reais de Gameplay continuam sendo criadas pelos owners atuais, sem compartilhar gameplay state com o warm-up;
-- `sun_directional_light` e `held_point_light` viram helpers internos reutilizados pelos owners reais e pelo warm-up, evitando configuração duplicada;
-- zero intensity/illuminance mantém o warm-up visualmente inerte; `Visibility::Visible` é deliberado para Bevy extrair as lights e preparar o path PBR atrás do overlay;
-- nenhum lighting value real, day/night behavior, terrain lighting buffer, shadow policy, camera, meshing, streaming ou world truth é alterado;
-- **não declarar ganho até gameplay log novo**. Métrica primária: primeiro Gameplay `resources_max_us`; comparar com 67.598 ms desta evidência.
+### Cut 18 — remover warm-up refutado e desligar clustering da viewmodel
+
+- remover `LightingWarmupPlugin` do `RenderingPlugin` e deletar `src/rendering/lighting_warmup.rs`;
+- restaurar visibilidade mínima dos helpers de `sun_lighting` / `dynamic_lights` que haviam sido ampliados somente para o experimento;
+- adicionar `ClusterConfig::None` exclusivamente à segunda `Camera3d` usada pela viewmodel;
+- world camera continua com clustering normal e iluminação PBR real;
+- nenhuma mudança em meshing, streaming, generation, presentation ownership ou world truth;
+- objetivo mensurável: evitar alocação/preparo de clustered-light resources para uma view que não usa luz PBR;
+- **não declarar ganho até gameplay log novo**.
 
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 17;
-2. coletar gameplay log novo e comparar primeiro Gameplay `resources_max_us`, `stage_prepare_max_us`, `stage_render_max_us` e frame max;
-3. se `PrepareResources` cair, manter o warm-up e então separar/atacar o `stage_render` steady-state;
-4. se não cair, remover/repensar o warm-up em vez de empilhar outras hipóteses;
+1. passar audits + Clippy + Check do Cut 18;
+2. coletar gameplay log novo e comparar primeiro Gameplay `resources_max_us`, `stage_prepare_max_us`, `stage_render_max_us` e frame max contra 93.610 ms / 97.902 ms / 111.069 ms / 169.143 ms do log pós-Cut 17 e também contra o baseline pré-Cut 17 de 67.598 ms em `PrepareResources`;
+3. se o pico cair, manter `ClusterConfig::None` na viewmodel e continuar separando o custo residual de startup;
+4. se não cair, instrumentar/alterar outro candidato dentro de `PrepareResources`, sem reintroduzir warm-ups especulativos;
 5. depois do startup, instrumentar o main schedule para localizar o hitch de movimento de ~102 ms;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 
