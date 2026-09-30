@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::attack::{AttackDefinition, AttackEffectKind},
     entity::EntityHealth,
     gameplay::random::next_unit_f32,
@@ -49,7 +50,18 @@ impl CreatureAttackRuntime<'_, '_> {
             return false;
         }
 
+        let health_before = health.current();
         let dead = health.damage(attack.damage);
+        let health_after = health.current();
+        log_gameplay_event(format!(
+            "entity.damage entity={:?} type=creature id={} source=creature_attack amount={:.3} health_before={:.3} health_after={:.3} position={:?}",
+            entity,
+            "creature",
+            attack.damage,
+            health_before,
+            health_after,
+            creature_transform.translation
+        ));
         let direction = creature_transform.translation - player_position;
         for effect in &attack.effects {
             if !effect_applies(effect.chance, &mut self.random_state) {
@@ -63,6 +75,10 @@ impl CreatureAttackRuntime<'_, '_> {
         }
         animation.trigger(if dead { "death" } else { "hurt" });
         if dead {
+            log_gameplay_event(format!(
+                "entity.death entity={:?} type=creature id=unknown source=creature_attack position={:?}",
+                entity, creature_transform.translation
+            ));
             self.commands
                 .entity(entity)
                 .insert(CreatureDeathTimer(Timer::from_seconds(
