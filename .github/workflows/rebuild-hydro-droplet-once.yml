@@ -25,7 +25,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Hydro generator and metadata
-        run: python tools/rebuild_hydro_once.py
+        run: python tools/rebuild_hydro_once_v2.py
 
       - name: Generate Hydro GLBs
         run: python assets/models/creatures/slime_hydro/generate_slime_hydro.py
@@ -72,7 +72,7 @@ jobs:
       - name: Commit rebuilt Hydro assets
         shell: bash
         run: |
-          rm -f .github/workflows/rebuild-hydro-droplet-once.yml tools/rebuild_hydro_once.py
+          rm -f .github/workflows/rebuild-hydro-droplet-once.yml tools/rebuild_hydro_once.py tools/rebuild_hydro_once_v2.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
