@@ -39,7 +39,7 @@
   - player game-mode changes;
   - world load bootstrap/completion, save success/failure, and authoritative chunk unloads.
 - Event messages include contextual identifiers/positions/quantities/health/modes where available, so gameplay logs can be correlated without reconstructing state from screenshots.
-- CI is green on `38438ed86d551e958420524b3dac799e132cb0ff`.
+- CI is green on `c6a2cf2779cf82dc194da0f36fc013315f6fda93`.
 ## 2026-09-30 — Floating island shape/material correction + spectator HUD cleanup
 
 - Floating island sites now use `84..120` X/Z and `24..36` Y, reducing the near-touching footprint while making the landmass vertically thicker.
