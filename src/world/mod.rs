@@ -172,6 +172,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 OnEnter(GameState::Loading),
                 (
+                    reset_resource::<ChunkPresentationSelection>,
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<PresentationScheduler>,
                     reset_resource::<ChunkRemeshTasks>,
