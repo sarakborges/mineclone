@@ -22,8 +22,6 @@ use super::super::system_params::{
     WorldSetupFinalization, WorldSetupPersistence, WorldSetupProgress,
 };
 
-const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
-
 #[derive(Default)]
 pub(in crate::world) struct InitialPresentationPrewarm {
     primed: bool,
@@ -69,6 +67,10 @@ pub(super) fn spawn_loaded_world(
             .flatten();
         let saved_flying = *persistence.load_mode == WorldLoadMode::Load
             && persistence.save.player_flying(LOCAL_PLAYER_ID);
+        progress
+            .loading_state
+            .set_presentation_prewarm_frames(0);
+
         spawn_player_entity(
             &mut renderer.commands,
             translation,
@@ -93,8 +95,11 @@ pub(super) fn spawn_loaded_world(
         return;
     }
 
-    if prewarm.frames < INITIAL_PRESENTATION_PREWARM_FRAMES {
+    if prewarm.frames < super::INITIAL_PRESENTATION_PREWARM_FRAMES {
         prewarm.frames = prewarm.frames.saturating_add(1);
+        progress
+            .loading_state
+            .set_presentation_prewarm_frames(prewarm.frames);
         return;
     }
 
