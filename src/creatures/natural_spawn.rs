@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::{
         biome::{BiomeRegistry, CreatureSpawnRule},
         creature::CreatureRegistry,
