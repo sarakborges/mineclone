@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     gameplay::availability::world_interaction_available,
     player::game_mode::not_spectator,
 };
@@ -21,6 +24,61 @@ mod vertical;
 pub(crate) mod walking;
 mod world_bounds;
 
+#[derive(Default)]
+struct MovementLogState {
+    timer: Option<Timer>,
+    last_position: Option<Vec3>,
+    last_flying: Option<bool>,
+    last_swimming: Option<bool>,
+    last_grounded: Option<bool>,
+    last_running: Option<bool>,
+}
+
+fn log_movement_diagnostics(
+    time: Res<Time<Real>>,
+    player: Single<(
+        &Transform,
+        &GameMode,
+        &flight::FlightState,
+        &swimming::SwimmingState,
+        &gravity::GravityState,
+        &walking::WalkingState,
+    ),
+    mut state: Local<MovementLogState>,
+) {
+    let timer = state.timer.get_or_insert_with(|| Timer::from_seconds(1.0, TimerMode::Repeating));
+    timer.tick(time.delta());
+
+    let (transform, game_mode, flight, swimming, gravity, walking) = player.into_inner();
+    let flying = flight.is_active();
+    let swimming = swimming.is_active();
+    let grounded = gravity.grounded();
+    let running = walking.is_running();
+    let state_changed = state.last_flying != Some(flying)
+        || state.last_swimming != Some(swimming)
+        || state.last_grounded != Some(grounded)
+        || state.last_running != Some(running);
+    let moved = state.last_position.is_some_and(|previous| {
+        previous.distance_squared(transform.translation) > 0.0001
+    });
+
+    if state_changed || (timer.just_finished() && moved) {
+        log_gameplay_event(format!(
+            "player.movement position=({:.3},{:.3},{:.3}) mode={game_mode:?} flying={flying} swimming={swimming} grounded={grounded} running={running} horizontal_speed={:.3} vertical_velocity={:.3}",
+            transform.translation.x,
+            transform.translation.y,
+            transform.translation.z,
+            walking.horizontal_speed_squared().sqrt(),
+            gravity.vertical_velocity(),
+        ));
+    }
+
+    state.last_position = Some(transform.translation);
+    state.last_flying = Some(flying);
+    state.last_swimming = Some(swimming);
+    state.last_grounded = Some(grounded);
+    state.last_running = Some(running);
+}
 pub struct PlayerMovementPlugin;
 
 impl Plugin for PlayerMovementPlugin {
@@ -35,6 +93,7 @@ impl Plugin for PlayerMovementPlugin {
                 swim_vertical,
                 apply_gravity,
                 enforce_world_floor.run_if(not_spectator),
+                log_movement_diagnostics,
             )
                 .chain()
                 .run_if(world_interaction_available),
