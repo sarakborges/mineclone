@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
-    world::{deterministic::mix_hash_u64, macro_climate::MacroClimateSample},
+    world::{
+        deterministic::mix_hash_u64,
+        macro_climate::{MacroClimateField, MacroClimateSample},
+    },
 };
 
 use super::{
@@ -16,6 +19,26 @@ impl BiomeField {
     pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
         let climate = self.climate.sample(site);
         let cell_hash = cell_hash(cell, self.seed);
+
+        // Ocean's authored continentalness core is a macro mask, not merely
+        // another weighted land candidate. Without this guard, land biomes
+        // can fragment the ocean core into isolated Voronoi cells.
+        if let Some(ocean_index) = self.ocean_surface_index
+            && self.surface_biome_is_enabled(ocean_index)
+        {
+            let ocean = &self.surface_biomes[ocean_index];
+            if ocean.weight > f32::EPSILON
+                && ocean
+                    .distributions
+                    .iter()
+                    .copied()
+                    .any(|distribution| distribution.is_regional())
+                && climate_suitability(ocean.climate, climate) >= 1.0 - f32::EPSILON
+            {
+                return ocean_index;
+            }
+        }
+
         let weighted_candidates = self.surface_weighted_candidates(cell, site, climate, cell_hash);
         let raw_index = weighted_candidates
             .first()
@@ -34,6 +57,7 @@ impl BiomeField {
             self.seed,
             &self.surface_biomes,
             self.spawn_oceans,
+            &self.climate,
         ) && surface_size_allows(
             raw_index,
             cell,
@@ -41,6 +65,8 @@ impl BiomeField {
             self.surface_site_spacing,
             self.seed,
             &self.surface_biomes,
+            self.spawn_oceans,
+            &self.climate,
         ) {
             return raw_index;
         }
@@ -54,6 +80,7 @@ impl BiomeField {
                 self.seed,
                 &self.surface_biomes,
                 self.spawn_oceans,
+                &self.climate,
             ) && surface_size_allows(
                 candidate.index,
                 cell,
@@ -61,6 +88,8 @@ impl BiomeField {
                 self.surface_site_spacing,
                 self.seed,
                 &self.surface_biomes,
+                self.spawn_oceans,
+                &self.climate,
             )
         }) {
             return candidate.index;
@@ -79,6 +108,7 @@ impl BiomeField {
                 self.seed,
                 &self.surface_biomes,
                 self.spawn_oceans,
+                &self.climate,
             )
         }) {
             return candidate.index;
@@ -190,6 +220,7 @@ fn authored_adjacency_allows(
     seed: u64,
     biomes: &[BiomeFieldEntry],
     spawn_oceans: bool,
+    climate_field: &MacroClimateField,
 ) -> bool {
     let candidate = &biomes[candidate_index];
 
@@ -213,12 +244,7 @@ fn authored_adjacency_allows(
             }
 
             let neighbor_hash = cell_hash(neighbor_cell, seed);
-            let climate = MacroClimateSample {
-                temperature: hash_unit(neighbor_hash.rotate_left(5)),
-                humidity: hash_unit(neighbor_hash.rotate_left(19)),
-                continentalness: hash_unit(neighbor_hash.rotate_left(37)),
-                erosion: hash_unit(neighbor_hash.rotate_left(53)),
-            };
+            let climate = climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
@@ -278,12 +304,7 @@ fn authored_adjacency_allows(
             }
 
             let neighbor_hash = cell_hash(neighbor_cell, seed);
-            let climate = MacroClimateSample {
-                temperature: hash_unit(neighbor_hash.rotate_left(5)),
-                humidity: hash_unit(neighbor_hash.rotate_left(19)),
-                continentalness: hash_unit(neighbor_hash.rotate_left(37)),
-                erosion: hash_unit(neighbor_hash.rotate_left(53)),
-            };
+            let climate = climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
@@ -313,6 +334,8 @@ fn surface_size_allows(
     spacing: Vec2,
     seed: u64,
     biomes: &[BiomeFieldEntry],
+    spawn_oceans: bool,
+    climate_field: &MacroClimateField,
 ) -> bool {
     let candidate = &biomes[candidate_index];
     let candidate_region = surface_region(candidate_site, candidate);
@@ -335,6 +358,22 @@ fn surface_size_allows(
             ) {
                 continue;
             }
+            // size.max only limits continuity of the same biome.
+            // Different neighboring biomes must never consume this candidate's
+            // size budget.
+            let neighbor_index = raw_surface_biome_index(
+                neighbor_cell,
+                neighbor_site,
+                climate_field.sample(neighbor_site),
+                cell_hash(neighbor_cell, seed),
+                biomes,
+                seed,
+                spawn_oceans,
+            );
+            if neighbor_index != candidate_index {
+                continue;
+            }
+
             let neighbor_region = surface_region(neighbor_site, candidate);
             if candidate_region != neighbor_region
                 && !candidate_region_claim_wins(
@@ -617,8 +656,26 @@ mod tests {
 
         assert_ne!(surface_region(left_site, &plains), surface_region(right_site, &plains));
         assert_ne!(
-            surface_size_allows(0, left, left_site, spacing, 42, &[plains.clone()]),
-            surface_size_allows(0, right, right_site, spacing, 42, &[plains]),
+            surface_size_allows(
+                0,
+                left,
+                left_site,
+                spacing,
+                42,
+                &[plains.clone()],
+                true,
+                &MacroClimateField::new(42),
+            ),
+            surface_size_allows(
+                0,
+                right,
+                right_site,
+                spacing,
+                42,
+                &[plains],
+                true,
+                &MacroClimateField::new(42),
+            ),
         );
     }
 
@@ -640,8 +697,111 @@ mod tests {
         let right_site = surface_site_position(right, spacing, 42);
 
         assert_eq!(surface_region(left_site, &plains), surface_region(right_site, &plains));
-        assert!(surface_size_allows(0, left, left_site, spacing, 42, &[plains.clone()]));
-        assert!(surface_size_allows(0, right, right_site, spacing, 42, &[plains]));
+        assert!(surface_size_allows(
+            0,
+            left,
+            left_site,
+            spacing,
+            42,
+            &[plains.clone()],
+            true,
+            &MacroClimateField::new(42),
+        ));
+        assert!(surface_size_allows(
+            0,
+            right,
+            right_site,
+            spacing,
+            42,
+            &[plains],
+            true,
+            &MacroClimateField::new(42),
+        ));
+    }
+
+    #[test]
+    fn full_ocean_continentalness_range_is_authoritative() {
+        let ocean_climate = BiomeClimate {
+            continentalness: Some(BiomeClimateRange {
+                min: 0.0,
+                max: 0.38,
+            }),
+            ..Default::default()
+        };
+        let ocean_core = MacroClimateSample {
+            temperature: 0.5,
+            humidity: 0.5,
+            continentalness: 0.2,
+            erosion: 0.5,
+        };
+        let shoreline = MacroClimateSample {
+            continentalness: 0.44,
+            ..ocean_core
+        };
+        let inland = MacroClimateSample {
+            continentalness: 0.6,
+            ..ocean_core
+        };
+
+        assert_eq!(climate_suitability(ocean_climate, ocean_core), 1.0);
+        assert!((0.0..1.0).contains(&climate_suitability(ocean_climate, shoreline)));
+        assert_eq!(climate_suitability(ocean_climate, inland), 0.0);
+    }
+
+    #[test]
+    fn size_limit_ignores_different_neighbor_biome() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 180.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 120.0,
+            max: 180.0,
+        };
+
+        let mut other = test_surface_entry("other", None);
+        let spacing = Vec2::splat(360.0);
+        let seed = 42;
+        let candidate_cell = IVec2::new(1, 0);
+        let candidate_site = surface_site_position(candidate_cell, spacing, seed);
+        let neighbor_cell = IVec2::new(2, 0);
+        let neighbor_site = surface_site_position(neighbor_cell, spacing, seed);
+        let neighbor_climate = MacroClimateField::new(seed).sample(neighbor_site);
+
+        plains.climate = BiomeClimate {
+            continentalness: Some(BiomeClimateRange {
+                min: (neighbor_climate.continentalness + 0.1).min(1.0),
+                max: 1.0,
+            }),
+            ..Default::default()
+        };
+        other.climate = BiomeClimate {
+            continentalness: Some(BiomeClimateRange {
+                min: neighbor_climate.continentalness,
+                max: neighbor_climate.continentalness,
+            }),
+            ..Default::default()
+        };
+
+        assert!(surface_sites_share_border(
+            candidate_cell,
+            candidate_site,
+            neighbor_cell,
+            neighbor_site,
+            spacing,
+            seed,
+        ));
+        assert!(surface_size_allows(
+            0,
+            candidate_cell,
+            candidate_site,
+            spacing,
+            seed,
+            &[plains, other],
+            true,
+            &MacroClimateField::new(seed),
+        ));
     }
 
     #[test]
@@ -667,6 +827,7 @@ mod tests {
             42,
             &[plains.clone()],
             true,
+            &MacroClimateField::new(42),
         ));
         assert!(!surface_size_allows(
             0,
@@ -675,6 +836,8 @@ mod tests {
             spacing,
             42,
             &[plains],
+            true,
+            &MacroClimateField::new(42),
         ));
     }
 }
