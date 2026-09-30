@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   fix-slime-faces:
-    if: github.event.head_commit.message == 'Add one-shot slime face fixer'
+    if: github.event.head_commit.message == 'Fix one-shot slime face fixer'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout develop
@@ -26,8 +26,8 @@ jobs:
 
           base = Path('assets/models/creatures/slime_blob/generate_slime_blob.py')
           text = base.read_text()
-          old = '    w, h = 0.86 * scale, 0.48 * scale\n'
-          new = '    # SlimeFace textures are square (64x64); keep the geometry 1:1 too.\n    w = h = 0.86 * scale\n'
+          old = 'fb=bucket();z=-BODY_DEPTH*.5-.006;w=.86;h=.48;yc=-.075;quad'
+          new = 'fb=bucket();z=-BODY_DEPTH*.5-.006;w=.86;h=.86;yc=-.075;quad'
           if old not in text:
               raise SystemExit('slime_blob face dimensions pattern not found')
           base.write_text(text.replace(old, new, 1))
@@ -35,53 +35,35 @@ jobs:
           electro = Path('assets/models/creatures/slime_electro/generate_slime_electro.py')
           text = electro.read_text()
 
-          replacements = [
-              (
-                  '''"""Generate Electro Slime models from the rounded slime_blob body language.\n\nBoth sizes use the same authored design: golden blob body, a small central\nlightning antenna, stepped forehead circuit marks and the shared SlimeFace quad.\nThe face texture itself is intentionally external and must be mapped to the\nAnemo face texture by the creature definition.\n"""''',
-                  '''"""Generate Electro Slime models from the rounded slime_blob body language.\n\nBoth sizes use the same authored design: a plain golden blob body, one small\ncentral lightning antenna, and a square SlimeFace quad. All face/electric\nornament detail other than the antenna is texture-driven.\n"""'''
-              ),
-              (
-                  '''        if normal == (0, 0, -1):\n            if -0.58 < gx < -0.24 and 0.63 < gy < 0.86:\n                return 6\n            if -0.72 < gx < -0.10 and 0.50 < gy < 0.88:\n                return 5\n            if gy < 0.13:\n''',
-                  '''        if normal == (0, 0, -1):\n            if gy < 0.13:\n'''
-              ),
-              (
-                  '''    # Shared face quad. Runtime maps the exact Anemo face texture to SlimeFace.\n    face_bucket = bucket()\n    face_z = -body_depth * 0.5 - max(0.006, body_depth * 0.005)\n    face_w = body_width * (0.86 / 1.20)\n    face_h = body_height * 0.48\n    face_y = -body_height * 0.075\n''',
-                  '''    # SlimeFace textures are square (64x64); keep the geometry 1:1 too.\n    face_bucket = bucket()\n    face_z = -body_depth * 0.5 - max(0.006, body_depth * 0.005)\n    face_size = body_width * (0.86 / 1.20)\n    face_w = face_size\n    face_h = face_size\n    face_y = -body_height * 0.075\n'''
-              ),
-              (
-                  '    meshes.append({"name": "shared_anemo_face_quad", "primitives": [prim(face_bucket, len(PALETTE))]})\n',
-                  '    meshes.append({"name": "slime_face_quad", "primitives": [prim(face_bucket, len(PALETTE))]})\n'
-              ),
-              (
-                  '''    # Electric details are small and do not alter the blob silhouette except for the antenna.\n    s = body_width / 1.20\n    accent = bucket()\n    pale = bucket()\n    white = bucket()\n\n    # Central stepped antenna/stalk.\n    add_box(accent, (0.0, body_height * 0.5 + 0.055 * s, 0.0), (0.075 * s, 0.13 * s, 0.075 * s))\n    add_box(accent, (0.025 * s, body_height * 0.5 + 0.145 * s, 0.0), (0.085 * s, 0.08 * s, 0.085 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.215 * s, 0.0), (0.13 * s, 0.08 * s, 0.11 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.275 * s, 0.0), (0.085 * s, 0.06 * s, 0.075 * s))\n\n    # Forehead circuit marks, inspired by the supplied reference. Kept above the eyes.\n    front_z = -body_depth * 0.5 - 0.014 * s\n    depth = 0.018 * s\n    for sign in (-1, 1):\n        add_box(pale, (sign * 0.22 * s, body_height * 0.28, front_z), (0.045 * s, 0.19 * s, depth))\n        add_box(pale, (sign * 0.165 * s, body_height * 0.205, front_z), (0.11 * s, 0.045 * s, depth))\n        add_box(pale, (sign * 0.11 * s, body_height * 0.135, front_z), (0.045 * s, 0.18 * s, depth))\n\n    # Small side charge marks; no horns or unrelated adornments.\n    for sign in (-1, 1):\n        x = sign * body_width * 0.39\n        add_box(pale, (x, body_height * 0.03, front_z), (0.05 * s, 0.18 * s, depth))\n        add_box(pale, (x - sign * 0.045 * s, body_height * 0.105, front_z), (0.09 * s, 0.045 * s, depth))\n        add_box(pale, (x - sign * 0.045 * s, body_height * -0.045, front_z), (0.09 * s, 0.045 * s, depth))\n\n    detail_primitives = [\n        prim(accent, 7),\n        prim(pale, 8),\n        prim(white, 9),\n    ]\n    meshes.append({"name": "electro_details", "primitives": [p for p in detail_primitives if p]})\n    details_mesh = len(meshes) - 1\n''',
-                  '''    # The antenna is the only Electro-specific geometry. All other motifs live in the texture.\n    s = body_width / 1.20\n    accent = bucket()\n    white = bucket()\n\n    add_box(accent, (0.0, body_height * 0.5 + 0.055 * s, 0.0), (0.075 * s, 0.13 * s, 0.075 * s))\n    add_box(accent, (0.025 * s, body_height * 0.5 + 0.145 * s, 0.0), (0.085 * s, 0.08 * s, 0.085 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.215 * s, 0.0), (0.13 * s, 0.08 * s, 0.11 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.275 * s, 0.0), (0.085 * s, 0.06 * s, 0.075 * s))\n\n    antenna_primitives = [\n        prim(accent, 7),\n        prim(white, 9),\n    ]\n    meshes.append({"name": "electro_antenna", "primitives": [p for p in antenna_primitives if p]})\n    details_mesh = len(meshes) - 1\n'''
-              ),
-              (
-                  '    details_node = node("ElectroDetails", mesh=details_mesh)\n',
-                  '    details_node = node("ElectroAntenna", mesh=details_mesh)\n'
-              ),
-              (
-                  '            "face_source": "textures/creatures/slime_anemo/face.png",\n',
-                  '            "face_source": "textures/creatures/slime_electro/face.png",\n'
-              ),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit('Electro generator pattern not found:\n' + old[:180])
-              text = text.replace(old, new, 1)
-          electro.write_text(text)
+          old_doc = '''"""Generate Electro Slime models from the rounded slime_blob body language.\n\nBoth sizes use the same authored design: golden blob body, a small central\nlightning antenna, stepped forehead circuit marks and the shared SlimeFace quad.\nThe face texture itself is intentionally external and must be mapped to the\nAnemo face texture by the creature definition.\n"""'''
+          new_doc = '''"""Generate Electro Slime models from the rounded slime_blob body language.\n\nBoth sizes use a plain golden blob body, one small central lightning antenna,\nand a square SlimeFace quad. All other face/electric detail is texture-driven.\n"""'''
+          if old_doc not in text:
+              raise SystemExit('Electro docstring pattern not found')
+          text = text.replace(old_doc, new_doc, 1)
 
-          for path in [
-              Path('assets/models/creatures/slime_electro/slime_electro.collider.json'),
-              Path('assets/models/creatures/slime_electro_large/slime_electro_large.collider.json'),
-          ]:
-              if not path.exists():
-                  continue
-              raw = path.read_text()
-              raw = raw.replace('fresh slime_blob body + central lightning antenna + stepped forehead circuit marks + shared Anemo face quad',
-                                'plain slime_blob body + central lightning antenna + square texture-driven face quad')
-              raw = raw.replace('exact relaxed Anemo face texture reused', 'Electro face texture')
-              path.write_text(raw)
+          front_marks = '''        if normal == (0, 0, -1):\n            if -0.58 < gx < -0.24 and 0.63 < gy < 0.86:\n                return 6\n            if -0.72 < gx < -0.10 and 0.50 < gy < 0.88:\n                return 5\n            if gy < 0.13:\n'''
+          plain_front = '''        if normal == (0, 0, -1):\n            if gy < 0.13:\n'''
+          if front_marks not in text:
+              raise SystemExit('Electro body front-mark pattern not found')
+          text = text.replace(front_marks, plain_front, 1)
+
+          face_dims = '''    face_w = body_width * (0.86 / 1.20)\n    face_h = body_height * 0.48\n'''
+          square_face = '''    face_size = body_width * (0.86 / 1.20)\n    face_w = face_size\n    face_h = face_size\n'''
+          if face_dims not in text:
+              raise SystemExit('Electro face dimension pattern not found')
+          text = text.replace(face_dims, square_face, 1)
+          text = text.replace('"shared_anemo_face_quad"', '"slime_face_quad"', 1)
+
+          details_start = text.index('    s = body_width / 1.20\n    accent = bucket()\n    pale = bucket()\n    white = bucket()\n')
+          details_end = text.index('    materials = [', details_start)
+          antenna_only = '''    # The antenna is the only Electro-specific geometry.\n    s = body_width / 1.20\n    accent = bucket()\n    white = bucket()\n\n    add_box(accent, (0.0, body_height * 0.5 + 0.055 * s, 0.0), (0.075 * s, 0.13 * s, 0.075 * s))\n    add_box(accent, (0.025 * s, body_height * 0.5 + 0.145 * s, 0.0), (0.085 * s, 0.08 * s, 0.085 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.215 * s, 0.0), (0.13 * s, 0.08 * s, 0.11 * s))\n    add_box(white, (0.015 * s, body_height * 0.5 + 0.275 * s, 0.0), (0.085 * s, 0.06 * s, 0.075 * s))\n\n    antenna_primitives = [prim(accent, 7), prim(white, 9)]\n    meshes.append({"name": "electro_antenna", "primitives": [p for p in antenna_primitives if p]})\n    details_mesh = len(meshes) - 1\n\n'''
+          text = text[:details_start] + antenna_only + text[details_end:]
+          text = text.replace('node("ElectroDetails", mesh=details_mesh)', 'node("ElectroAntenna", mesh=details_mesh)', 1)
+          text = text.replace('"face_source": "textures/creatures/slime_anemo/face.png"',
+                              '"face_source": "textures/creatures/slime_electro/face.png"', 1)
+          text = text.replace('Fresh Electro rebuild from slime_blob; no geometry/data reused from prior Electro GLBs.',
+                              'Plain Electro blob + central antenna; face/electric ornament detail is texture-driven.', 1)
+          electro.write_text(text)
           PY
 
       - name: Regenerate Electro slimes
@@ -96,7 +78,7 @@ jobs:
       - name: Audit all GLB assets
         run: python tools/check_glb_assets.py
 
-      - name: Verify Electro face texture mapping
+      - name: Verify Electro texture mapping and model source
         shell: bash
         run: |
           python - <<'PY'
@@ -108,7 +90,12 @@ jobs:
               actual = data.get('textures', {}).get('SlimeFace')
               if actual != expected:
                   raise SystemExit(f'{path}: expected {expected}, got {actual}')
-              print(f'{path}: {actual}')
+          source = Path('assets/models/creatures/slime_electro/generate_slime_electro.py').read_text()
+          forbidden = ['front_z =', 'pale = bucket()', 'stepped forehead circuit marks', 'shared_anemo_face_quad']
+          for token in forbidden:
+              if token in source:
+                  raise SystemExit(f'Electro source still contains forbidden feature token: {token}')
+          print('Electro source contains only blob + antenna geometry and uses its own face texture')
           PY
 
       - name: Commit generated assets
