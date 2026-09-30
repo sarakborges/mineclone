@@ -15,6 +15,11 @@ use super::{
     visual::CreatureModel,
 };
 
+struct CreatureSpawnState {
+    health: Option<f32>,
+    meta_tags: EntityMetaTags,
+}
+
 pub(crate) fn spawn_creature_at(
     commands: &mut Commands,
     definitions: &CreatureRegistry,
@@ -43,27 +48,28 @@ pub(crate) fn spawn_creature_at_with_tags(
     feet: Vec3,
     meta_tags: EntityMetaTags,
 ) -> Result<String, String> {
-    spawn_creature_with_health(
+    spawn_creature_with_state(
         commands,
         definitions,
         asset_server,
         language,
         id,
         feet,
-        None,
-        meta_tags,
+        CreatureSpawnState {
+            health: None,
+            meta_tags,
+        },
     )
 }
 
-fn spawn_creature_with_health(
+fn spawn_creature_with_state(
     commands: &mut Commands,
     definitions: &CreatureRegistry,
     asset_server: &AssetServer,
     language: Language,
     id: &str,
     feet: Vec3,
-    saved_health: Option<f32>,
-    meta_tags: EntityMetaTags,
+    state: CreatureSpawnState,
 ) -> Result<String, String> {
     let definition = definitions
         .get(id)
@@ -77,11 +83,11 @@ fn spawn_creature_with_health(
         CreatureModel(asset_server.load(definition.model.clone())),
         CreatureMotion::default(),
         CreatureParticleEmitter::default(),
-        saved_health.map_or_else(
+        state.health.map_or_else(
             || EntityHealth::new(definition.health),
             |health| EntityHealth::restored(definition.health, health),
         ),
-        meta_tags,
+        state.meta_tags,
         definition.collider,
         CreatureTargetCollider(definition.target_collider()),
         Transform::from_translation(feet),
@@ -111,15 +117,17 @@ pub(super) fn restore_saved_creatures(
             continue;
         }
 
-        if let Err(error) = spawn_creature_with_health(
+        if let Err(error) = spawn_creature_with_state(
             &mut commands,
             &definitions,
             &asset_server,
             language.get(),
             &creature.definition_id,
             feet,
-            Some(creature.health),
-            creature.meta_tags,
+            CreatureSpawnState {
+                health: Some(creature.health),
+                meta_tags: creature.meta_tags,
+            },
         ) {
             warn!(
                 "Could not restore creature {}: {error}",
