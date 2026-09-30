@@ -260,6 +260,17 @@ Commit final: `2f6c8d9d8d7a81ee276b3c2f8d204fcf723df13b`. CI Rust validation: su
 - `grass_block` depth 1 -> `dirt` depth 4 -> `stone` continua autorado na biome;
 - runtime visual ainda precisa confirmar a aplicação do grass na superfície.
 
+## Cut 32 — comprehensive runtime/loading diagnostics
+
+Commit final: `f7069a7eb186bb26e75c5a4b148ffe82efa3114e`. CI Rust validation: success.
+
+- Loading now emits lifecycle + 0.5s progress events for Generating, Fluid Settling, Lighting, Meshing, Assets, Finalizing and Presentation Warm-up.
+- Fluid settling logs explicit start/completion events; runtime fluid solver diagnostics are persisted to the session log instead of existing only as console `info!` output.
+- Dynamic lighting now emits periodic runtime diagnostics with processed voxels, changed chunks/positions, dirty meshlets and remaining propagation work.
+- Player movement now logs state transitions and periodic movement snapshots while moving: position, game mode, flight, swimming, grounded/running state, horizontal speed and vertical velocity.
+- Existing render/streaming diagnostics already persist periodic frame, streaming, async generation/mesh/remesh, fluid-settling, mesh-pressure and asset-pressure diagnostics to the session log.
+- Existing command/chat/warp gameplay events remain covered by `log_gameplay_event`; this cut fills the major missing movement/loading/lighting gaps.
+- Logging is event/transition + periodic diagnostics, not per-frame raw spam, so the session log remains useful for postmortem analysis.
 ## Próximos passos
 
 1. gameplay em mundo novo para validar Floating Islands: somente Plains, grass/dirt/stone e espaçamento;
