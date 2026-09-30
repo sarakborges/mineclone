@@ -14,6 +14,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 NX, NY, NZ = 24, 20, 22
+TIP_EXTRA_LAYERS = 3
+TIP_PROFILES = (
+    (NY - 2, 5.8, 5.0, 0.00),
+    (NY - 1, 4.6, 4.0, 0.00),
+    (NY,     3.6, 3.2, 0.10),
+    (NY + 1, 2.0, 1.8, 0.24),
+    (NY + 2, 0.65, 0.65, 0.42),
+)
 
 PALETTE = (
     ("SlimeShell", (0.17, 0.68, 0.72)),
@@ -91,17 +99,36 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
         return len(accessors) - 1
 
     def occupied(ix: int, iy: int, iz: int) -> bool:
-        x = (ix + 0.5) * dx - body_width * 0.5
-        y = (iy + 0.5) * dy - body_height * 0.5
-        z = (iz + 0.5) * dz - body_depth * 0.5
-        t = (y + half_h) / body_height
-        radius = profile(t)
-        x -= 0.032 * (body_width / 1.20) * max(0.0, (t - 0.62) / 0.38) ** 1.7
-        rx = body_width * 0.5 * radius
-        rz = body_depth * 0.5 * radius
-        return rx > 0 and rz > 0 and abs(x / rx) ** 2.35 + abs(z / rz) ** 2.35 <= 1
+        # Main rounded slime body.
+        body = False
+        if iy < NY:
+            x = (ix + 0.5) * dx - body_width * 0.5
+            y = (iy + 0.5) * dy - body_height * 0.5
+            z = (iz + 0.5) * dz - body_depth * 0.5
+            t = (y + half_h) / body_height
+            radius = profile(t)
+            x -= 0.032 * (body_width / 1.20) * max(0.0, (t - 0.62) / 0.38) ** 1.7
+            rx = body_width * 0.5 * radius
+            rz = body_depth * 0.5 * radius
+            body = rx > 0 and rz > 0 and abs(x / rx) ** 2.35 + abs(z / rz) ** 2.35 <= 1
 
-    vox = {(x, y, z) for y in range(NY) for z in range(NZ) for x in range(NX) if occupied(x, y, z)}
+        # The pointed Hydro top is part of this SAME occupancy field / mesh.
+        # Its root overlaps the body's top two voxel layers, so there is no
+        # accessory seam, cap, hat brim, or second mesh. Only the central top
+        # continues a few layers upward and tapers to one voxel-scale point.
+        tip = False
+        cx = (NX - 1) * 0.5
+        cz = (NZ - 1) * 0.5
+        for ty, trx, trz, shift in TIP_PROFILES:
+            if iy == ty:
+                tx = (ix - (cx + shift)) / trx
+                tz = (iz - cz) / trz
+                tip = tx * tx + tz * tz <= 1.0
+                break
+
+        return body or tip
+
+    vox = {(x, y, z) for y in range(NY + TIP_EXTRA_LAYERS) for z in range(NZ) for x in range(NX) if occupied(x, y, z)}
     faces = (
         ((1, 0, 0), ((1, 0, 0), (1, 0, 1), (1, 1, 1), (1, 1, 0))),
         ((-1, 0, 0), ((0, 0, 1), (0, 0, 0), (0, 1, 0), (0, 1, 1))),
@@ -114,7 +141,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
 
     def body_material(ix: int, iy: int, iz: int, normal) -> int:
         gx = (ix - cx_mid) / (NX * 0.5)
-        gy = iy / (NY - 1)
+        gy = min(1.0, iy / (NY - 1))
         gz = (iz - cz_mid) / (NZ * 0.5)
         if normal == (0, 0, -1):
             if gy < 0.16:
@@ -316,10 +343,10 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     track("Hurt", [0, .085, .15, .24, .38], [[1, 1, 1], [1.1, .88, 1.1], [.94, 1.08, .94], [1.025, .968, 1.025], [1, 1, 1]])
     track("Death", [0, .12, .31, .55, .75], [[1, 1, 1], [1.13, .8, 1.13], [1.2, .60, 1.2], [1.12, .19, 1.12], [.001, .001, .001]], center=[half_h, half_h * .8, half_h * .6, half_h * .19, half_h * .001])
 
-    visual_height = body_height
+    visual_height = body_height + TIP_EXTRA_LAYERS * dy
     visual_width = body_width
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Hydro body-silhouette droplet rebuild v4"},
+        "asset": {"version": "2.0", "generator": "Asteria Hydro integrated top-point rebuild v5"},
         "scene": 0,
         "scenes": [{"name": "GeoSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],
@@ -335,12 +362,12 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "base_language": "slime_blob",
             "face_source": "textures/creatures/slime_hydro/face.png",
             "collision_source": f"{asset_id}.collider.json",
-            "voxel_resolution": [NX, NY, NZ],
+            "voxel_resolution": [NX, NY + TIP_EXTRA_LAYERS, NZ],
             "occupied_voxels": len(vox),
             "visual_height": visual_height,
             "visual_width": visual_width,
-            "pixel_art_geometry": "Hydro is one exposed-face voxel body mesh; the body profile itself narrows into the top droplet point and all faces remain cardinal",
-            "reference_design": "clean turquoise slime whose entire upper body silhouette continues naturally into one short droplet point; no separate droplet mesh or hat-like mound",
+            "pixel_art_geometry": "Hydro is one exposed-face voxel body mesh; a central top continuation overlaps the upper body and extends three voxel layers above it into a short droplet point; all faces remain cardinal",
+            "reference_design": "clean turquoise slime whose own central top rises naturally into a short droplet point; no separate droplet mesh, no flat cap, and no hat-like mound",
         },
     }
     json_chunk = json.dumps(scene, separators=(",", ":")).encode("utf-8")
