@@ -49,68 +49,37 @@ impl BiomeField {
                 )
             });
 
-        if authored_adjacency_allows(
-            raw_index,
+        let selection_context = SurfaceSelectionContext {
             cell,
             site,
-            self.surface_site_spacing,
-            self.seed,
-            &self.surface_biomes,
-            self.spawn_oceans,
-            &self.climate,
-        ) && surface_size_allows(
-            raw_index,
-            cell,
-            site,
-            self.surface_site_spacing,
-            self.seed,
-            &self.surface_biomes,
-            self.spawn_oceans,
-            &self.climate,
-        ) {
+            spacing: self.surface_site_spacing,
+            seed: self.seed,
+            biomes: &self.surface_biomes,
+            spawn_oceans: self.spawn_oceans,
+            climate_field: &self.climate,
+        };
+
+        if authored_adjacency_allows(raw_index, &selection_context)
+            && surface_size_allows(raw_index, &selection_context)
+        {
             return raw_index;
         }
 
         if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            authored_adjacency_allows(
-                candidate.index,
-                cell,
-                site,
-                self.surface_site_spacing,
-                self.seed,
-                &self.surface_biomes,
-                self.spawn_oceans,
-                &self.climate,
-            ) && surface_size_allows(
-                candidate.index,
-                cell,
-                site,
-                self.surface_site_spacing,
-                self.seed,
-                &self.surface_biomes,
-                self.spawn_oceans,
-                &self.climate,
-            )
+            authored_adjacency_allows(candidate.index, &selection_context)
+                && surface_size_allows(candidate.index, &selection_context)
         }) {
             return candidate.index;
         }
 
-        // Authored adjacency constraints are hard. `size.max` is a spatial
+        // Authored adjacency constraints are hard. size.max is a spatial
         // continuity preference layered on top of them: if enforcing both
         // locally would leave the site without any legal biome, preserve the
         // authored adjacency solution instead of panicking world generation.
-        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            authored_adjacency_allows(
-                candidate.index,
-                cell,
-                site,
-                self.surface_site_spacing,
-                self.seed,
-                &self.surface_biomes,
-                self.spawn_oceans,
-                &self.climate,
-            )
-        }) {
+        if let Some(candidate) = weighted_candidates
+            .iter()
+            .find(|candidate| authored_adjacency_allows(candidate.index, &selection_context))
+        {
             return candidate.index;
         }
 
@@ -180,6 +149,16 @@ struct WeightedSurfaceCandidate {
     weight: f32,
 }
 
+struct SurfaceSelectionContext<'a> {
+    cell: IVec2,
+    site: Vec2,
+    spacing: Vec2,
+    seed: u64,
+    biomes: &'a [BiomeFieldEntry],
+    spawn_oceans: bool,
+    climate_field: &'a MacroClimateField,
+}
+
 pub(super) fn select_volume_biome_index(
     y: f32,
     climate: MacroClimateSample,
@@ -214,15 +193,9 @@ pub(super) fn select_volume_biome_index(
 
 fn authored_adjacency_allows(
     candidate_index: usize,
-    candidate_cell: IVec2,
-    candidate_site: Vec2,
-    spacing: Vec2,
-    seed: u64,
-    biomes: &[BiomeFieldEntry],
-    spawn_oceans: bool,
-    climate_field: &MacroClimateField,
+    context: &SurfaceSelectionContext<'_>,
 ) -> bool {
-    let candidate = &biomes[candidate_index];
+    let candidate = &context.biomes[candidate_index];
 
     for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
         for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
@@ -230,31 +203,33 @@ fn authored_adjacency_allows(
             if offset == IVec2::ZERO {
                 continue;
             }
-            let neighbor_cell = candidate_cell + offset;
-            let neighbor_site = surface_site_position(neighbor_cell, spacing, seed);
+
+            let neighbor_cell = context.cell + offset;
+            let neighbor_site =
+                surface_site_position(neighbor_cell, context.spacing, context.seed);
             if !surface_sites_share_border(
-                candidate_cell,
-                candidate_site,
+                context.cell,
+                context.site,
                 neighbor_cell,
                 neighbor_site,
-                spacing,
-                seed,
+                context.spacing,
+                context.seed,
             ) {
                 continue;
             }
 
-            let neighbor_hash = cell_hash(neighbor_cell, seed);
-            let climate = climate_field.sample(neighbor_site);
+            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
+            let neighbor_climate = context.climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
-                climate,
+                neighbor_climate,
                 neighbor_hash,
-                biomes,
-                seed,
-                spawn_oceans,
+                context.biomes,
+                context.seed,
+                context.spawn_oceans,
             );
-            let neighbor = &biomes[neighbor_index];
+            let neighbor = &context.biomes[neighbor_index];
 
             if candidate
                 .avoid_near
@@ -290,34 +265,36 @@ fn authored_adjacency_allows(
             if offset == IVec2::ZERO {
                 continue;
             }
-            let neighbor_cell = candidate_cell + offset;
-            let neighbor_site = surface_site_position(neighbor_cell, spacing, seed);
+
+            let neighbor_cell = context.cell + offset;
+            let neighbor_site =
+                surface_site_position(neighbor_cell, context.spacing, context.seed);
             if !surface_sites_share_border(
-                candidate_cell,
-                candidate_site,
+                context.cell,
+                context.site,
                 neighbor_cell,
                 neighbor_site,
-                spacing,
-                seed,
+                context.spacing,
+                context.seed,
             ) {
                 continue;
             }
 
-            let neighbor_hash = cell_hash(neighbor_cell, seed);
-            let climate = climate_field.sample(neighbor_site);
+            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
+            let neighbor_climate = context.climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
-                climate,
+                neighbor_climate,
                 neighbor_hash,
-                biomes,
-                seed,
-                spawn_oceans,
+                context.biomes,
+                context.seed,
+                context.spawn_oceans,
             );
             if candidate
                 .require_near
                 .iter()
-                .any(|id| id == &biomes[neighbor_index].id)
+                .any(|id| id == &context.biomes[neighbor_index].id)
             {
                 return true;
             }
@@ -329,16 +306,10 @@ fn authored_adjacency_allows(
 
 fn surface_size_allows(
     candidate_index: usize,
-    candidate_cell: IVec2,
-    candidate_site: Vec2,
-    spacing: Vec2,
-    seed: u64,
-    biomes: &[BiomeFieldEntry],
-    spawn_oceans: bool,
-    climate_field: &MacroClimateField,
+    context: &SurfaceSelectionContext<'_>,
 ) -> bool {
-    let candidate = &biomes[candidate_index];
-    let candidate_region = surface_region(candidate_site, candidate);
+    let candidate = &context.biomes[candidate_index];
+    let candidate_region = surface_region(context.site, candidate);
 
     for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
         for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
@@ -346,29 +317,33 @@ fn surface_size_allows(
             if offset == IVec2::ZERO {
                 continue;
             }
-            let neighbor_cell = candidate_cell + offset;
-            let neighbor_site = surface_site_position(neighbor_cell, spacing, seed);
+
+            let neighbor_cell = context.cell + offset;
+            let neighbor_site =
+                surface_site_position(neighbor_cell, context.spacing, context.seed);
             if !surface_sites_share_border(
-                candidate_cell,
-                candidate_site,
+                context.cell,
+                context.site,
                 neighbor_cell,
                 neighbor_site,
-                spacing,
-                seed,
+                context.spacing,
+                context.seed,
             ) {
                 continue;
             }
+
             // size.max only limits continuity of the same biome.
             // Different neighboring biomes must never consume this candidate's
             // size budget.
+            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
-                climate_field.sample(neighbor_site),
-                cell_hash(neighbor_cell, seed),
-                biomes,
-                seed,
-                spawn_oceans,
+                context.climate_field.sample(neighbor_site),
+                neighbor_hash,
+                context.biomes,
+                context.seed,
+                context.spawn_oceans,
             );
             if neighbor_index != candidate_index {
                 continue;
@@ -377,10 +352,10 @@ fn surface_size_allows(
             let neighbor_region = surface_region(neighbor_site, candidate);
             if candidate_region != neighbor_region
                 && !candidate_region_claim_wins(
-                    candidate_cell,
+                    context.cell,
                     neighbor_cell,
                     candidate_index,
-                    seed,
+                    context.seed,
                 )
             {
                 return false;
@@ -655,27 +630,31 @@ mod tests {
         let right_site = surface_site_position(right, spacing, 42);
 
         assert_ne!(surface_region(left_site, &plains), surface_region(right_site, &plains));
+        let climate = MacroClimateField::new(42);
+        let left_biomes = [plains.clone()];
+        let right_biomes = [plains];
+        let left_context = SurfaceSelectionContext {
+            cell: left,
+            site: left_site,
+            spacing,
+            seed: 42,
+            biomes: &left_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        let right_context = SurfaceSelectionContext {
+            cell: right,
+            site: right_site,
+            spacing,
+            seed: 42,
+            biomes: &right_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+
         assert_ne!(
-            surface_size_allows(
-                0,
-                left,
-                left_site,
-                spacing,
-                42,
-                &[plains.clone()],
-                true,
-                &MacroClimateField::new(42),
-            ),
-            surface_size_allows(
-                0,
-                right,
-                right_site,
-                spacing,
-                42,
-                &[plains],
-                true,
-                &MacroClimateField::new(42),
-            ),
+            surface_size_allows(0, &left_context),
+            surface_size_allows(0, &right_context),
         );
     }
 
@@ -697,26 +676,29 @@ mod tests {
         let right_site = surface_site_position(right, spacing, 42);
 
         assert_eq!(surface_region(left_site, &plains), surface_region(right_site, &plains));
-        assert!(surface_size_allows(
-            0,
-            left,
-            left_site,
+        let climate = MacroClimateField::new(42);
+        let left_biomes = [plains.clone()];
+        let left_context = SurfaceSelectionContext {
+            cell: left,
+            site: left_site,
             spacing,
-            42,
-            &[plains.clone()],
-            true,
-            &MacroClimateField::new(42),
-        ));
-        assert!(surface_size_allows(
-            0,
-            right,
-            right_site,
+            seed: 42,
+            biomes: &left_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        assert!(surface_size_allows(0, &left_context));
+        let right_biomes = [plains];
+        let right_context = SurfaceSelectionContext {
+            cell: right,
+            site: right_site,
             spacing,
-            42,
-            &[plains],
-            true,
-            &MacroClimateField::new(42),
-        ));
+            seed: 42,
+            biomes: &right_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        assert!(surface_size_allows(0, &right_context));
     }
 
     #[test]
@@ -792,16 +774,18 @@ mod tests {
             spacing,
             seed,
         ));
-        assert!(surface_size_allows(
-            0,
-            candidate_cell,
-            candidate_site,
+        let climate = MacroClimateField::new(seed);
+        let biomes = [plains, other];
+        let context = SurfaceSelectionContext {
+            cell: candidate_cell,
+            site: candidate_site,
             spacing,
             seed,
-            &[plains, other],
-            true,
-            &MacroClimateField::new(seed),
-        ));
+            biomes: &biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        assert!(surface_size_allows(0, &context));
     }
 
     #[test]
@@ -819,25 +803,29 @@ mod tests {
         let candidate_cell = IVec2::new(1, 0);
         let candidate_site = surface_site_position(candidate_cell, spacing, 42);
 
-        assert!(authored_adjacency_allows(
-            0,
-            candidate_cell,
-            candidate_site,
+        let climate = MacroClimateField::new(42);
+        let adjacency_biomes = [plains.clone()];
+        let adjacency_context = SurfaceSelectionContext {
+            cell: candidate_cell,
+            site: candidate_site,
             spacing,
-            42,
-            &[plains.clone()],
-            true,
-            &MacroClimateField::new(42),
-        ));
-        assert!(!surface_size_allows(
-            0,
-            candidate_cell,
-            candidate_site,
+            seed: 42,
+            biomes: &adjacency_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        assert!(authored_adjacency_allows(0, &adjacency_context));
+
+        let size_biomes = [plains];
+        let size_context = SurfaceSelectionContext {
+            cell: candidate_cell,
+            site: candidate_site,
             spacing,
-            42,
-            &[plains],
-            true,
-            &MacroClimateField::new(42),
-        ));
+            seed: 42,
+            biomes: &size_biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+        assert!(!surface_size_allows(0, &size_context));
     }
 }
