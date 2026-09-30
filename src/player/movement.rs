@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::crash_log::log_gameplay_event,
     gameplay::availability::world_interaction_available,
-    player::game_mode::not_spectator,
+    player::{PlayerEntity, game_mode::{GameMode, not_spectator}},
 };
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
@@ -41,7 +41,7 @@ fn log_movement_diagnostics(
         &swimming::SwimmingState,
         &gravity::GravityState,
         &walking::WalkingState,
-    ),
+    ), With<PlayerEntity>>,
     mut state: Local<MovementLogState>,
 ) {
     let timer = state.timer.get_or_insert_with(|| Timer::from_seconds(1.0, TimerMode::Repeating));
