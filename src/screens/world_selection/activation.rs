@@ -76,14 +76,17 @@ impl PreparedWorldActivation {
             snapshot.world_generation,
         );
         if let Some(player) = snapshot.player {
+            let game_mode = if player.spectator {
+                GameMode::Spectator
+            } else if player.creative {
+                GameMode::Creative
+            } else {
+                GameMode::Survival
+            };
             save.save_player_state_with_health(
                 LOCAL_PLAYER_ID,
                 Vec3::from_array(player.position),
-                if player.creative {
-                    GameMode::Creative
-                } else {
-                    GameMode::Survival
-                },
+                game_mode,
                 player.health,
                 Some((player.yaw, player.pitch)),
                 player.flying,
