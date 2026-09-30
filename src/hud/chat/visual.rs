@@ -198,7 +198,11 @@ pub(super) fn render_autocomplete(
     let (panel_entity, visibility) = &mut *panel;
     let panel_entity = *panel_entity;
     let visible = chat.open && autocomplete.visible();
-    let desired = if visible { Visibility::Inherited } else { Visibility::Hidden };
+    let desired = if visible {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
     if **visibility != desired {
         **visibility = desired;
     }
@@ -215,15 +219,29 @@ pub(super) fn render_autocomplete(
         return;
     }
     let count = autocomplete.suggestions.len();
-    let first = autocomplete.selected.saturating_sub(MAX_SUGGESTIONS / 2)
+    let first = autocomplete
+        .selected
+        .saturating_sub(MAX_SUGGESTIONS / 2)
         .min(count.saturating_sub(MAX_SUGGESTIONS));
     commands.entity(panel_entity).with_children(|list| {
         list.spawn((
-            typography::caption("Use ↑ and ↓ to choose an option. Press Tab to complete it. Press Esc to close suggestions."),
-            Node { width: percent(100), padding: UiRect::horizontal(px(5)), ..default() },
+            typography::caption(
+                "Use ↑ and ↓ to choose an option. Press Tab to complete it. Press Esc to close suggestions.",
+            ),
+            Node {
+                width: percent(100),
+                padding: UiRect::horizontal(px(5)),
+                ..default()
+            },
             Pickable::IGNORE,
         ));
-        for (index, suggestion) in autocomplete.suggestions.iter().enumerate().skip(first).take(MAX_SUGGESTIONS) {
+        for (index, suggestion) in autocomplete
+            .suggestions
+            .iter()
+            .enumerate()
+            .skip(first)
+            .take(MAX_SUGGESTIONS)
+        {
             let selected = index == autocomplete.selected;
             list.spawn((
                 Node {
@@ -245,7 +263,10 @@ pub(super) fn render_autocomplete(
                 row.spawn((typography::hud(suggestion.value.clone()), Pickable::IGNORE));
                 row.spawn((
                     typography::caption(suggestion.description.clone()),
-                    Node { width: percent(100), ..default() },
+                    Node {
+                        width: percent(100),
+                        ..default()
+                    },
                     Pickable::IGNORE,
                 ));
             });
@@ -373,10 +394,10 @@ pub(super) fn handle_chat_warp_links(
             continue;
         }
         let target = link.0;
-        submissions.write(ChatSubmission(format!(
-            "/warp {} {} {}",
-            target.x, target.z, target.y
-        )));
+        submissions.write(ChatSubmission {
+            line: format!("/warp {} {} {}", target.x, target.z, target.y),
+            target: None,
+        });
     }
 }
 
