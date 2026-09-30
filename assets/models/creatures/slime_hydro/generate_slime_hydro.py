@@ -225,7 +225,8 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     # the same voxel shading language instead of flat-colored slabs.
     drop_buckets = [bucket() for _ in range(len(PALETTE))]
     cell_x = 0.055 * s
-    cell_y = 0.055 * s
+    # Keep the droplet broad, but compress it vertically so it reads as a drop rather than a spike.
+    cell_y = 0.040 * s
     cell_z = 0.055 * s
     base_y = top - 0.105 * s
 
@@ -430,7 +431,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     visual_height = body_height + detail_height
     visual_width = max(body_width, detail_width)
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Hydro integrated droplet rebuild v2"},
+        "asset": {"version": "2.0", "generator": "Asteria Hydro integrated droplet rebuild v3"},
         "scene": 0,
         "scenes": [{"name": "GeoSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],
