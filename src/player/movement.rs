@@ -32,16 +32,18 @@ struct MovementLogState {
     last_running: Option<bool>,
 }
 
+type MovementLogComponents<'w> = (
+    &'w Transform,
+    &'w GameMode,
+    &'w flight::FlightState,
+    &'w swimming::SwimmingState,
+    &'w gravity::GravityState,
+    &'w walking::WalkingState,
+);
+
 #[derive(SystemParam)]
 struct MovementLogPlayer<'w, 's> {
-    player: Single<'w, 's, (
-        &'static Transform,
-        &'static GameMode,
-        &'static flight::FlightState,
-        &'static swimming::SwimmingState,
-        &'static gravity::GravityState,
-        &'static walking::WalkingState,
-    ), With<PlayerEntity>>,
+    player: Single<'w, 's, MovementLogComponents<'w>, With<PlayerEntity>>,
 }
 fn log_movement_diagnostics(
     time: Res<Time<Real>>,
