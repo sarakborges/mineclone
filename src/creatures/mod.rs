@@ -18,7 +18,7 @@ pub(crate) use combat::CreatureAttackRuntime;
 pub(crate) use lifecycle::CreatureDeathTimer;
 use lifecycle::despawn_dead_creatures;
 pub(crate) use material::apply_creature_material_overrides;
-pub(crate) use metadata::{EntityMetaTags, NO_AI_META_TAG, normalized_meta_tag};
+pub(crate) use metadata::EntityMetaTags;
 use motion::move_creatures;
 pub(crate) use persistence::{PendingCreatureRestores, SavedCreature};
 use natural_spawn::natural_spawn_creatures;
