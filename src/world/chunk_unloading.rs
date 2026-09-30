@@ -100,6 +100,16 @@ pub(super) struct ChunkEvictionRuntime<'w> {
 }
 
 #[derive(SystemParam)]
+struct ChunkRenderRetirementRuntime<'w, 's> {
+    commands: Commands<'w, 's>,
+    render_pool: ResMut<'w, ChunkRenderPool>,
+    presentation_selection: Res<'w, ChunkPresentationSelection>,
+    world: Res<'w, VoxelWorld>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
+}
+
+#[derive(SystemParam)]
 pub(super) struct ChunkMeshResidencyRuntime<'w> {
     streaming: ResMut<'w, ChunkStreamingState>,
     world: Res<'w, VoxelWorld>,
@@ -108,13 +118,9 @@ pub(super) struct ChunkMeshResidencyRuntime<'w> {
 }
 
 pub(super) fn retire_distant_chunk_meshes(
-    mut renderer: ChunkRenderer,
     streaming: Res<ChunkStreamingState>,
-    presentation_selection: Res<ChunkPresentationSelection>,
-    world: Res<VoxelWorld>,
     frame_budget: Res<WorldFrameWorkBudget>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
-    mut remesh_tasks: ResMut<ChunkRemeshTasks>,
+    mut runtime: ChunkRenderRetirementRuntime<'_, '_>,
     mut state: Local<RenderRetirementState>,
 ) {
     // Do not churn render residency while the current show radius still has
@@ -125,10 +131,10 @@ pub(super) fn retire_distant_chunk_meshes(
         return;
     }
 
-    let selection_revision = presentation_selection.revision();
+    let selection_revision = runtime.presentation_selection.revision();
     if state.selection_revision != Some(selection_revision) {
-        for coord in renderer.pool.active_coords() {
-            if !presentation_selection.retains_render_mesh(coord) {
+        for coord in runtime.render_pool.active_coords() {
+            if !runtime.presentation_selection.retains_render_mesh(coord) {
                 state.enqueue(coord);
             }
         }
@@ -154,20 +160,26 @@ pub(super) fn retire_distant_chunk_meshes(
         // drained. Revalidate just before destructive work so moving back
         // toward a chunk cancels its stale retirement rather than causing
         // unnecessary despawn/remesh churn.
-        if !renderer.pool.contains(coord) || presentation_selection.retains_render_mesh(coord) {
+        if !runtime.render_pool.contains(coord)
+            || runtime.presentation_selection.retains_render_mesh(coord)
+        {
             continue;
         }
 
-        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
-        remesh_queue.remove(coord);
-        remesh_tasks.cancel_coord(coord);
-        remesh_tasks.remove_lighting_revision(coord);
+        retire_chunk_render_allocation(
+            &mut runtime.commands,
+            &mut runtime.render_pool,
+            coord,
+        );
+        runtime.remesh_queue.remove(coord);
+        runtime.remesh_tasks.cancel_coord(coord);
+        runtime.remesh_tasks.remove_lighting_revision(coord);
         enqueue_retired_render_halo_remeshes(
             coord,
-            &world,
-            &renderer.pool,
-            &presentation_selection,
-            &mut remesh_queue,
+            &runtime.world,
+            &runtime.render_pool,
+            &runtime.presentation_selection,
+            &mut runtime.remesh_queue,
         );
     }
 }
