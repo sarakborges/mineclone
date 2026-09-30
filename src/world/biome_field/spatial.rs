@@ -128,11 +128,28 @@ pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec
         return base;
     }
 
-    let hash = volume_cell_hash(cell, seed);
+    // Independent 3D jitter allowed neighboring volume sites to move toward
+    // one another on the same axis, shrinking a 60-block vertical interval to
+    // almost half of its authored spacing. Ignore the coordinate being
+    // displaced when deriving each jitter component. Axis neighbors therefore
+    // share that component and retain the full authored spacing, while the
+    // other two components still keep the 3D lattice irregular.
+    let jitter_x_hash = volume_cell_hash(
+        IVec3::new(0, cell.y, cell.z),
+        seed ^ 0x243f_6a88_85a3_08d3,
+    );
+    let jitter_y_hash = volume_cell_hash(
+        IVec3::new(cell.x, 0, cell.z),
+        seed ^ 0x1319_8a2e_0370_7344,
+    );
+    let jitter_z_hash = volume_cell_hash(
+        IVec3::new(cell.x, cell.y, 0),
+        seed ^ 0xa409_3822_299f_31d0,
+    );
     let jitter = Vec3::new(
-        hash_signed(hash) * spacing.x * VOLUME_SITE_JITTER_FRACTION,
-        hash_signed(hash.rotate_left(21)) * spacing.y * VOLUME_SITE_JITTER_FRACTION,
-        hash_signed(hash.rotate_left(43)) * spacing.z * VOLUME_SITE_JITTER_FRACTION,
+        hash_signed(jitter_x_hash) * spacing.x * VOLUME_SITE_JITTER_FRACTION,
+        hash_signed(jitter_y_hash) * spacing.y * VOLUME_SITE_JITTER_FRACTION,
+        hash_signed(jitter_z_hash) * spacing.z * VOLUME_SITE_JITTER_FRACTION,
     );
     let mut position = base + jitter;
 
@@ -218,6 +235,29 @@ mod tests {
                             );
                         }
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn volume_site_jitter_preserves_lattice_axis_spacing() {
+        let spacing = Vec3::new(120.0, 60.0, 120.0);
+        let tolerance = spacing.max_element() * 1e-5;
+        let seed = 42;
+
+        for y in 1..=4 {
+            for z in -4..=4 {
+                for x in -4..=4 {
+                    let cell = IVec3::new(x, y, z);
+                    let site = volume_site_position(cell, spacing, seed);
+                    let right = volume_site_position(cell + IVec3::X, spacing, seed);
+                    let above = volume_site_position(cell + IVec3::Y, spacing, seed);
+                    let forward = volume_site_position(cell + IVec3::Z, spacing, seed);
+
+                    assert!((right.x - site.x - spacing.x).abs() <= tolerance);
+                    assert!((above.y - site.y - spacing.y).abs() <= tolerance);
+                    assert!((forward.z - site.z - spacing.z).abs() <= tolerance);
                 }
             }
         }
