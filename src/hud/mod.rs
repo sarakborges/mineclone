@@ -183,6 +183,10 @@ impl HudSettings {
         self.hints.enabled(kind)
     }
 
+    pub(crate) fn set_hint_preference(&mut self, kind: HintKind, enabled: bool) {
+        self.hints.set(kind, enabled);
+    }
+
     pub(crate) const fn hint_enabled(&self, kind: HintKind) -> bool {
         !self.hide_hints && self.hints.enabled(kind)
     }
