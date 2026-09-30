@@ -182,3 +182,4 @@ Regressões do shape cobrem conexão core/lobe, topo amplo + underside afunilado
 - corrigir root cause de Clippy/Check, nunca esconder warning com `allow`;
 - preservar gameplay/content/UI/assets válidos durante o rebuild;
 - não inventar performance claims sem logs reais.
+- 0.68.56: Cryo Slime rebuilt from the supplied reference: integrated icy upper shell, tall central stepped crystal, outward diagonal voxel spikes, and smaller shards; normal + large regenerated with cardinal-only geometry.
