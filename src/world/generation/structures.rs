@@ -8,7 +8,8 @@ use crate::{
     content::{
         biome_density::BiomeDensityModifier,
         biome_structure::{
-            BiomeStructurePlacementRules, StructurePlacementRules, VolumeStructurePlacementRules,
+            BiomeStructurePlacementRules, StructurePlacementRules,
+            VolumeStructurePlacementMode, VolumeStructurePlacementRules,
         },
         block::BlockRegistry,
         fluid::FluidRegistry,
@@ -890,16 +891,42 @@ fn collect_volume_structure_candidates<'a>(
                 )
             });
         let rotation = structure.rotation_for_hash(member_hash.rotate_left(23));
-        if !volume_root_satisfies_restrictions(
-            biome_id,
-            structure,
-            rotation,
-            anchor,
-            context,
-            &region,
-        ) {
-            continue;
-        }
+
+        let (root_origin, restriction_biome_id) = match placement.mode {
+            VolumeStructurePlacementMode::Volume => {
+                if !volume_root_satisfies_restrictions(
+                    biome_id,
+                    structure,
+                    rotation,
+                    anchor,
+                    context,
+                    &region,
+                ) {
+                    continue;
+                }
+                (anchor, biome_id)
+            }
+            VolumeStructurePlacementMode::SurfaceIndicator => {
+                let surface_anchor = anchor.xz();
+                let surface_biome_id = context
+                    .biome_field
+                    .sample_surface(surface_anchor.as_vec2() + Vec2::splat(0.5))
+                    .primary_id;
+                let Some(origin_y) = validated_structure_origin_y(
+                    surface_biome_id,
+                    structure,
+                    rotation,
+                    surface_anchor,
+                    context,
+                ) else {
+                    continue;
+                };
+                (
+                    IVec3::new(surface_anchor.x, origin_y, surface_anchor.y),
+                    surface_biome_id,
+                )
+            }
+        };
 
         let resolved = context.feature_fields.connected_structure_forest(
             biome_id,
@@ -911,11 +938,11 @@ fn collect_volume_structure_candidates<'a>(
                     context.biome_field.seed(),
                     structure,
                     rotation,
-                    anchor,
+                    root_origin,
                     context.structures,
                     |child, child_rotation, geometric_origin| {
                         validated_structure_origin_y(
-                            biome_id,
+                            restriction_biome_id,
                             child,
                             child_rotation,
                             geometric_origin.xz(),

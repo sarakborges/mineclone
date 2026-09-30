@@ -72,7 +72,7 @@ Commit `cc116cb8d477259bc0ccc6d954177b6b2d7805a0`, CI #10323 success.
 
 ### Cut 26 — volume biome constraints por surface biome
 
-Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`, `c4b62f5bdf103a63807d0340234be5169c2e1bb9` e correção de gate `99cd6456af1f77b670f1e771d3b372cc46dac735`.
+Commits publicados: `0c659fa3376fcc7f59594fe29dde97ca40b7ce22`, `4d84cae3783bdbfc20020ca5b7ee8ec424d8b472`, `c4b62f5bdf103a63807d0340234be5169c2e1bb9` e correção de gate `99cd6456af1f77b670f1e771d3b372cc46dac735`. O merge de `develop` em `12806bd94b08498d15ac92111b74e22863935b93` preservou o corte e passou CI #10341.
 
 - `BiomeDefinition.tags`: tags semânticas opcionais para surface biomes (e reutilizáveis futuramente);
 - `BiomeDefinition.surfaceConstraints` opcional para volume biomes;
@@ -92,10 +92,25 @@ Gate history:
 
 Regressões cobrem ID/tag matching, allow/deny + deny precedence, unrestricted behavior e filtro positivo/negativo.
 
-### Próximos workstreams
+### Cut 27 — volume biome surface indicators
 
-1. **Volume surface indicator:** metadata opcional + structure/structure group no surface usando planner generalizado.
-2. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
+Implementação preparada em `tmp/cut27-volume-surface-indicator`:
+
+- `VolumeStructurePlacementRules` ganhou `mode`, com default `volume` para preservar todo conteúdo existente;
+- novo modo data-driven `surface_indicator`; JSON usa `"mode": "surface_indicator"` dentro de `volumePlacement`;
+- não existe segundo sistema de indicator: continua sendo `BiomeStructure`, portanto structure groups, chance, priority, conflict groups, reserve-space e connectors continuam usando o planner generalizado;
+- a identidade determinística/chance continuam derivadas do volume site 3D original;
+- no modo `surface_indicator`, o X/Z do volume site é projetado para o surface terrain e o root Y é resolvido por `validated_structure_origin_y`;
+- restrictions e ground-fit do root/children usam o surface biome efetivo da projeção, não o ID do volume biome;
+- antes da projeção o planner continua verificando que o volume site está realmente selecionado naquele X/Z, portanto `surfaceConstraints` do Cut 26 também se aplicam ao indicator;
+- `volume` permanece o comportamento default e segue usando as restrictions volumétricas existentes;
+- nenhuma structure concreta foi inventada para biomes atuais; o corte entrega a capacidade genérica para conteúdo autorado.
+
+Regressão cobre default `volume` do novo placement mode. O gate deve ser executado após consolidação no branch principal.
+
+### Próximo workstream
+
+1. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
 
 Princípios:
 
@@ -107,11 +122,10 @@ Princípios:
 
 ## Próximos passos
 
-1. fechar CI do Cut 26 após sync de `develop`;
-2. implementar surface indicator via structures;
-3. reescrever floating islands e estratificação;
-4. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
-5. retomar cold-start de `PrepareResources` depois do pacote.
+1. consolidar e fechar CI do Cut 27;
+2. reescrever floating islands e estratificação;
+3. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
+4. retomar cold-start de `PrepareResources` depois do pacote.
 
 ## Regras de continuidade
 
