@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub(crate) use combat::CreatureAttackRuntime;
+pub(crate) use lifecycle::CreatureDeathTimer;
 use lifecycle::despawn_dead_creatures;
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use metadata::{EntityMetaTags, NO_AI_META_TAG, normalized_meta_tag};
@@ -27,14 +28,11 @@ use visual::{attach_loaded_models, sync_creature_animations, sync_creature_facin
 pub(crate) use spawn::{spawn_creature_at, spawn_creature_at_with_tags};
 pub(crate) use visual::CreatureAnimationState;
 
-/// The entity root owns position and collision; only its visual child is animated or rotated.
 #[derive(Component)]
 pub(crate) struct CreatureInstance {
     pub definition_id: String,
 }
 
-/// Visual targeting can be larger than the physics AABB. This prevents a ray
-/// from visually entering a creature before gameplay considers it targeted.
 #[derive(Component, Clone, Copy)]
 pub(crate) struct CreatureTargetCollider(pub(crate) CreatureCollider);
 
