@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::{
         biome::{BiomeKind, BiomeRegistry},
         biome_structure::BiomeStructurePlacementRules,
@@ -234,6 +235,10 @@ impl ChatLocateContext<'_> {
             feature_fields: self.feature_fields.as_ref().clone(),
             world_generation: *self.world_generation,
         };
+        log_gameplay_event(format!(
+            "command.locate.start kind={} id={} variation={:?} player={:?}",
+            target_kind, search_id, variation, player_block
+        ));
         let response = format!("Locating {name}...");
         self.pending.task = Some(AsyncComputeTaskPool::get().spawn(async move {
             let position = locate_target(&snapshot, kind, &search_id, player_block);
@@ -257,6 +262,10 @@ pub(super) fn poll_locate_task(
     pending.task = None;
 
     if let Some(position) = result.position {
+        log_gameplay_event(format!(
+            "command.locate.success name={} position={:?}",
+            result.name, position
+        ));
         chat.append(ChatMessage::Located {
             prefix: format!(
                 "{} found at X: {} Z: {} Y: {}. ",
@@ -265,6 +274,10 @@ pub(super) fn poll_locate_task(
             target: position,
         });
     } else {
+        log_gameplay_event(format!(
+            "command.locate.failed name={} radius={}",
+            result.name, MAX_LOCATE_BLOCK_RADIUS
+        ));
         chat.append(ChatMessage::Text(format!(
             "{} could not be found within {} blocks.",
             result.name, MAX_LOCATE_BLOCK_RADIUS
