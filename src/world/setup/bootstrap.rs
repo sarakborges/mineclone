@@ -5,6 +5,7 @@ use bevy::{
 };
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::{
         LoadedContent,
         biome::{BiomeKind, BiomeRegistry},
@@ -456,6 +457,16 @@ pub(in crate::world) fn begin_world_loading(
         &feature_fields,
     );
     let column_top_chunks = bootstrap_column_top_chunks(&coords);
+    log_gameplay_event(format!(
+        "world.load.begin mode={:?} seed={} dimension={} spawn_biome={:?} spawn_column={:?} initial_center={:?} bootstrap_chunks={}",
+        persistence.load_mode,
+        config.seed.0,
+        dimension.id,
+        forced_spawn_biome,
+        spawn_column,
+        initial_center,
+        coords.len()
+    ));
     let bootstrap_chunks = coords
         .iter()
         .copied()
