@@ -35,6 +35,7 @@ use super::{
         apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    chunk_visibility::ChunkPresentationSelection,
     presentation_snapshot::PresentationLightingRevisions,
     streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
@@ -50,6 +51,7 @@ struct RemeshDispatchContext<'a> {
     render_pool: &'a ChunkRenderPool,
     streaming: &'a ChunkStreamingState,
     lighting_revisions: &'a PresentationLightingRevisions,
+    presentation_selection: &'a ChunkPresentationSelection,
     async_work: &'a ChunkAsyncWorkLimiter,
     center: Option<IVec3>,
     deadline: Instant,
@@ -58,6 +60,7 @@ struct RemeshDispatchContext<'a> {
 struct RemeshCollectionContext<'a> {
     world: &'a VoxelWorld,
     streaming: &'a ChunkStreamingState,
+    presentation_selection: &'a ChunkPresentationSelection,
     lighting_revisions: &'a PresentationLightingRevisions,
     deadline: Instant,
 }
@@ -73,6 +76,7 @@ pub(super) fn process_chunk_remesh_queue(
     frame_budget: Res<WorldFrameWorkBudget>,
     async_work: Res<ChunkAsyncWorkLimiter>,
     streaming: Res<ChunkStreamingState>,
+    presentation_selection: Res<ChunkPresentationSelection>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
     mut last_reconciled_selection: Local<Option<u64>>,
 ) {
@@ -95,7 +99,7 @@ pub(super) fn process_chunk_remesh_queue(
         queue.retain_resident(&world);
     }
     if *last_reconciled_selection != Some(selection_revision) {
-        for request in tasks.cancel_where(|coord| !streaming.retains_render_mesh(coord)) {
+        for request in tasks.cancel_where(|coord| !presentation_selection.retains_render_mesh(coord)) {
             if renderer.pool.contains(request.coord) && world.chunk(request.coord).is_some() {
                 queue.enqueue_task_meshlets_priority(
                     request.coord,
@@ -116,6 +120,7 @@ pub(super) fn process_chunk_remesh_queue(
             RemeshCollectionContext {
                 world: &world,
                 streaming: &streaming,
+                presentation_selection: &presentation_selection,
                 lighting_revisions: &lighting_revisions,
                 deadline: frame_budget.deadline(),
             },
@@ -139,6 +144,7 @@ pub(super) fn process_chunk_remesh_queue(
             world: &world,
             render_pool: &renderer.pool,
             streaming: &streaming,
+            presentation_selection: &presentation_selection,
             lighting_revisions: &lighting_revisions,
             async_work: &async_work,
             center: streaming.center(),
@@ -179,7 +185,7 @@ fn collect_completed_remesh_tasks(
         if !renderer.pool.contains(coord) || context.world.chunk(coord).is_none() {
             continue;
         }
-        if !context.streaming.retains_render_mesh(coord) {
+        if !context.presentation_selection.retains_render_mesh(coord) {
             // Selection can reverse before the budgeted render-retirement pass
             // reaches this allocation. Preserve the dirty meshlets until the
             // allocation is actually retired, or until the chunk re-enters the
