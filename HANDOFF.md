@@ -44,6 +44,15 @@ VERSION: `0.68.52`.
 VERSION: `0.68.51`.
 
 
+## 2026-09-30 — 0.68.55 Geo integrated shell correction
+
+- Geo reference reread: dark stone is an integrated shell covering the upper half of the head and surrounding the eyes, not a crown/accessory above the blob.
+- Side stone peaks lean outward through voxel stair-steps; no smooth/rotated diagonal geometry.
+- Lower half remains pale and clean; forehead/temple stone masses are partially embedded in the blob.
+- Geo normal + large regenerated; GLB audit + cardinal-normal audit passed.
+
+VERSION: `0.68.55`.
+
 ## Estado atual — 2026-09-30
 
 - Repo: `sarakborges/mineclone`.

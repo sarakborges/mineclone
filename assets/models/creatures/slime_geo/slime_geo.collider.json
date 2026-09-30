@@ -93,9 +93,9 @@
       20,
       22
     ],
-    "construction": "clean stone-grey slime_blob body + irregular rock masses embedded into the upper body + square texture-driven face",
+    "construction": "pale slime_blob lower body + integrated dark rocky upper shell around the eyes + outward-leaning voxel-stair side peaks + square texture-driven face",
     "base_language": "slime_blob",
-    "reference": "user Geo reference: upper head is broken rocky mass, not a separate crown; two uneven outer peaks and lower central forehead rock",
+    "reference": "user Geo reference: rocky shell covers the upper head; side peaks lean outward rather than standing vertically",
     "pixel_art_geometry": "all crown geometry is axis-aligned; tapered silhouettes are staircases of boxes"
   }
 }

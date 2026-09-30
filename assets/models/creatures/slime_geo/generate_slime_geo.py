@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate pixel-art Geo Slime models from the rounded slime_blob body language.
 
-The body remains a clean stone-grey blob. Geo identity is concentrated in an
-axis-aligned stepped stone crown: two taller outer horn-like spires plus smaller
-central rocks. No rotated prisms, curved geometry, or smooth diagonal faces are
-used. The face remains a square texture-driven SlimeFace decal.
+The lower body stays pale stone-grey while the upper half becomes an integrated
+dark rocky shell around the eyes. Two outer rock peaks grow from that shell and
+lean outward through voxel stair-steps. No rotated prisms or smooth diagonal
+faces are used; every apparent diagonal is pixel-art stepping. The face remains
+a square texture-driven SlimeFace decal.
 """
 from __future__ import annotations
 
@@ -112,25 +113,43 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
         gx = (ix - cx_mid) / (NX * 0.5)
         gy = iy / (NY - 1)
         gz = (iz - cz_mid) / (NZ * 0.5)
+
+        # The reference is not a clean blob wearing rocks: the upper half itself
+        # is a dark rocky shell. The boundary is deliberately blocky and uneven.
+        shell_front = (
+            gy >= 0.60
+            or (gy >= 0.49 and abs(gx) >= 0.42)
+            or (gy >= 0.43 and abs(gx) >= 0.60)
+            or (gy >= 0.47 and abs(gx) <= 0.19)
+        )
+        shell_side = gy >= 0.52 or (gy >= 0.42 and abs(gz) <= 0.46)
+        shell_back = gy >= 0.50
+
         if normal == (0, 0, -1):
+            if shell_front:
+                if gy >= 0.78 or abs(gx) >= 0.67:
+                    return 9
+                if ((ix + iy) % 5) == 0:
+                    return 10
+                return 7 if ((ix + iy) % 3) else 8
             if gy < 0.18:
                 return 3
             if abs(gx) > 0.73:
                 return 2
-            if gy > 0.80:
-                return 4
-            if abs(gx) < 0.58 and 0.18 < gy < 0.70:
+            if abs(gx) < 0.58 and 0.18 < gy < 0.43:
                 return 1
             return 0
         if normal == (0, 1, 0):
-            return 5 if gy > 0.72 else 4
+            return 9 if gy > 0.62 else 7
         if normal == (0, -1, 0):
             return 3
-        if normal == (1, 0, 0):
-            return 2
-        if normal == (-1, 0, 0):
-            return 4 if gy > 0.62 else 0
+        if normal in ((1, 0, 0), (-1, 0, 0)):
+            if shell_side:
+                return 9 if gy > 0.72 else 7
+            return 2 if normal == (1, 0, 0) else 0
         if normal == (0, 0, 1):
+            if shell_back:
+                return 9 if gy > 0.72 else 7
             return 2 if abs(gx) > 0.66 or abs(gz) > 0.66 else 0
         return 0
 
@@ -181,7 +200,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "mode": 4,
         }
 
-    body_buckets = [bucket() for _ in range(7)]
+    body_buckets = [bucket() for _ in range(len(PALETTE))]
     for ix, iy, iz in sorted(vox, key=lambda v: (v[1], v[2], v[0])):
         for normal, corners in faces:
             if (ix + normal[0], iy + normal[1], iz + normal[2]) in vox:
@@ -223,77 +242,78 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     def rock_step(bucket_, x, y, z, w, h, d):
         add_box(bucket_, (x * s, top + y * s, z * s), (w * s, h * s, d * s))
 
-    # Irregular rock cap grown into the slime body. There is intentionally no
-    # continuous band/base: every rock is an independent mass partially buried
-    # into the upper blob, matching the reference rather than reading as a crown.
+    # Protrusions grow out of the integrated shell. They are not a crown and
+    # there is no connecting band. Side peaks lean OUTWARD through voxel stairs.
     if not large:
-        # Left temple: the taller horn-like rock mass, sunk deeply into the body.
-        rock_step(rock_dark, -0.39, -0.105, -0.045, 0.33, 0.30, 0.31)
-        rock_step(rock_mid,  -0.425, 0.075, -0.030, 0.25, 0.22, 0.26)
-        rock_step(rock_dark, -0.455, 0.225, -0.012, 0.18, 0.16, 0.21)
-        rock_step(rock_light,-0.475, 0.335,  0.000, 0.11, 0.09, 0.16)
-
-        # Right temple: deliberately shorter, broader and offset forward.
-        rock_step(rock_dark,  0.36, -0.125, -0.070, 0.35, 0.27, 0.32)
-        rock_step(rock_mid,   0.395, 0.040, -0.055, 0.27, 0.20, 0.27)
-        rock_step(rock_dark,  0.425, 0.175, -0.040, 0.19, 0.14, 0.21)
-        rock_step(rock_light, 0.440, 0.270, -0.025, 0.12, 0.08, 0.16)
-
-        # Low forehead boulder between the eyes, visibly embedded rather than perched.
-        rock_step(rock_dark,   0.015, -0.120, -0.155, 0.31, 0.25, 0.24)
-        rock_step(rock_mid,    0.030,  0.020, -0.165, 0.24, 0.17, 0.20)
-        rock_step(rock_light,  0.045,  0.120, -0.175, 0.15, 0.09, 0.16)
-
-        # Independent rubble fills gaps without forming a continuous strip.
-        rock_step(rock_mid,   -0.205, -0.045, -0.030, 0.16, 0.16, 0.18)
-        rock_step(rock_dark,   0.205, -0.065,  0.010, 0.15, 0.14, 0.17)
-        rock_step(rock_light, -0.120,  0.080,  0.095, 0.12, 0.11, 0.14)
-        rock_step(rock_mid,    0.145,  0.045,  0.115, 0.13, 0.10, 0.15)
-
-        # Tiny front facet blocks break up the large stone faces in pixel-art style.
-        rock_step(rock_light, -0.385, 0.000, -0.215, 0.10, 0.09, 0.035)
-        rock_step(rock_mid,    0.350,-0.020, -0.230, 0.11, 0.08, 0.035)
-        detail_height = 0.43 * s
-        detail_width = 1.05 * s
-    else:
-        # Large variant keeps the same composition, with heavier overlapping masses.
-        rock_step(rock_dark, -0.40, -0.125, -0.045, 0.38, 0.34, 0.35)
-        rock_step(rock_mid,  -0.445, 0.075, -0.030, 0.30, 0.25, 0.30)
-        rock_step(rock_dark, -0.485, 0.245, -0.010, 0.22, 0.18, 0.24)
-        rock_step(rock_light,-0.510, 0.370,  0.005, 0.13, 0.10, 0.18)
-
-        rock_step(rock_dark,  0.355, -0.145, -0.085, 0.42, 0.31, 0.37)
-        rock_step(rock_mid,   0.405,  0.035, -0.070, 0.31, 0.22, 0.30)
-        rock_step(rock_dark,  0.445,  0.185, -0.050, 0.22, 0.16, 0.23)
-        rock_step(rock_light, 0.465,  0.295, -0.035, 0.13, 0.09, 0.17)
-
-        # Broader low central mass, still lower than both outer peaks.
-        rock_step(rock_dark,  -0.015, -0.145, -0.175, 0.38, 0.28, 0.28)
-        rock_step(rock_mid,    0.015,  0.010, -0.185, 0.29, 0.19, 0.23)
-        rock_step(rock_light,  0.035,  0.120, -0.195, 0.18, 0.10, 0.17)
-
-        # Uneven rubble field; placements intentionally avoid mirror symmetry.
-        for bucket_, x, y, z, w, h, d in [
-            (rock_mid,  -0.235, -0.055, -0.010, 0.18, 0.17, 0.20),
-            (rock_dark,  0.220, -0.085,  0.015, 0.17, 0.15, 0.19),
-            (rock_light,-0.145,  0.090,  0.105, 0.13, 0.12, 0.15),
-            (rock_mid,   0.155,  0.055,  0.125, 0.15, 0.11, 0.16),
-            (rock_dark, -0.285,  0.055,  0.130, 0.14, 0.13, 0.16),
-            (rock_mid,   0.285,  0.015,  0.145, 0.13, 0.11, 0.15),
+        # Left peak: broad temple root, then progressively higher + farther left.
+        for x, y, z, w, h, d, mat in [
+            (-0.40, -0.115, -0.045, 0.34, 0.28, 0.31, rock_dark),
+            (-0.46,  0.020, -0.035, 0.29, 0.20, 0.28, rock_mid),
+            (-0.53,  0.130, -0.025, 0.23, 0.16, 0.24, rock_dark),
+            (-0.59,  0.225, -0.015, 0.18, 0.13, 0.20, rock_mid),
+            (-0.64,  0.305, -0.005, 0.13, 0.10, 0.16, rock_light),
         ]:
-            rock_step(bucket_, x, y, z, w, h, d)
+            rock_step(mat, x, y, z, w, h, d)
 
-        rock_step(rock_light, -0.390, -0.005, -0.250, 0.12, 0.10, 0.04)
-        rock_step(rock_mid,    0.345, -0.030, -0.265, 0.13, 0.09, 0.04)
-        detail_height = 0.48 * s
-        detail_width = 1.08 * s
+        # Right peak: same outward-sloping language, intentionally different rhythm.
+        for x, y, z, w, h, d, mat in [
+            (0.37, -0.135, -0.070, 0.36, 0.27, 0.32, rock_dark),
+            (0.43, -0.005, -0.055, 0.30, 0.20, 0.28, rock_mid),
+            (0.49,  0.100, -0.042, 0.24, 0.16, 0.24, rock_dark),
+            (0.55,  0.188, -0.030, 0.18, 0.12, 0.20, rock_mid),
+            (0.59,  0.258, -0.020, 0.12, 0.08, 0.15, rock_light),
+        ]:
+            rock_step(mat, x, y, z, w, h, d)
+
+        # Forehead plates sit low and merge into the rocky mask around the eyes.
+        rock_step(rock_dark,   0.010, -0.150, -0.185, 0.34, 0.25, 0.25)
+        rock_step(rock_mid,    0.025, -0.020, -0.190, 0.27, 0.17, 0.21)
+        rock_step(rock_light, -0.010,  0.075, -0.185, 0.17, 0.09, 0.17)
+
+        # Irregular fillers bridging the shell visually, but never forming a band.
+        for x, y, z, w, h, d, mat in [
+            (-0.23, -0.070, -0.105, 0.22, 0.20, 0.24, rock_mid),
+            ( 0.24, -0.095, -0.120, 0.20, 0.19, 0.23, rock_dark),
+            (-0.18,  0.105,  0.030, 0.15, 0.13, 0.16, rock_dark),
+            ( 0.20,  0.080,  0.045, 0.14, 0.12, 0.15, rock_mid),
+        ]:
+            rock_step(mat, x, y, z, w, h, d)
+        detail_height = 0.38 * s
+        detail_width = 1.34 * s
+    else:
+        for x, y, z, w, h, d, mat in [
+            (-0.42, -0.145, -0.050, 0.38, 0.31, 0.34, rock_dark),
+            (-0.49,  0.000, -0.040, 0.33, 0.23, 0.31, rock_mid),
+            (-0.57,  0.125, -0.028, 0.27, 0.19, 0.27, rock_dark),
+            (-0.64,  0.235, -0.016, 0.21, 0.15, 0.23, rock_mid),
+            (-0.70,  0.325, -0.005, 0.15, 0.11, 0.18, rock_light),
+            ( 0.39, -0.160, -0.075, 0.40, 0.30, 0.35, rock_dark),
+            ( 0.46, -0.020, -0.060, 0.34, 0.22, 0.31, rock_mid),
+            ( 0.53,  0.098, -0.045, 0.28, 0.18, 0.27, rock_dark),
+            ( 0.60,  0.198, -0.032, 0.21, 0.14, 0.22, rock_mid),
+            ( 0.65,  0.278, -0.020, 0.14, 0.10, 0.17, rock_light),
+        ]:
+            rock_step(mat, x, y, z, w, h, d)
+
+        rock_step(rock_dark,  0.015, -0.175, -0.205, 0.38, 0.28, 0.28)
+        rock_step(rock_mid,   0.030, -0.025, -0.212, 0.30, 0.19, 0.23)
+        rock_step(rock_light,-0.015,  0.080, -0.205, 0.19, 0.10, 0.18)
+        for x, y, z, w, h, d, mat in [
+            (-0.25, -0.090, -0.120, 0.24, 0.22, 0.25, rock_mid),
+            ( 0.26, -0.115, -0.135, 0.22, 0.20, 0.24, rock_dark),
+            (-0.20,  0.115,  0.035, 0.17, 0.14, 0.17, rock_dark),
+            ( 0.22,  0.090,  0.050, 0.16, 0.13, 0.16, rock_mid),
+        ]:
+            rock_step(mat, x, y, z, w, h, d)
+        detail_height = 0.41 * s
+        detail_width = 1.46 * s
 
     details_prims = [
         prim(rock_dark, 9),
         prim(rock_mid, 7),
         prim(rock_light, 8),
     ]
-    meshes.append({"name": "geo_rock_cap", "primitives": [p for p in details_prims if p]})
+    meshes.append({"name": "geo_rock_shell_protrusions", "primitives": [p for p in details_prims if p]})
     details_mesh = len(meshes) - 1
 
     materials = [
@@ -356,7 +376,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     body_pivot = node("BodyPivot", children=[], translation=[0, half_h, 0])
     body_node = node("Shell", mesh=body_mesh)
     face_node = node("Face", mesh=face_mesh)
-    details_node = node("GeoRockCap", mesh=details_mesh)
+    details_node = node("GeoRockShell", mesh=details_mesh)
     nodes[body_pivot]["children"] = [body_node, face_node, details_node]
     nodes[visual]["children"] = [body_pivot]
     hit = node(
