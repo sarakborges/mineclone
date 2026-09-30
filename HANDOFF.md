@@ -351,11 +351,21 @@ Commit `909a193c4e41113cb5a4cb0add5c5915cbbe59db` (`Use presentation scheduler o
 - CI #10301 passou os audits e falhou no Clippy porque `render_diagnostics.rs` ainda importava o nome removido `ChunkMeshTasks`; `1f1cdd2f4e3ba793a0e0f9e06a1f3be3c422b4d3` migrou esse último consumer para `PresentationScheduler`, sem mudança intencional no diagnóstico;
 - por erro de processo, esse corretivo foi publicado via Contents API antes do update do HANDOFF e portanto não ficou atômico com esta documentação; o histórico não foi reescrito/forçado e a exceção fica registrada aqui;
 - CI #10303 passou os audits e expôs outro efeito colateral do mesmo rewrite manual: o campo `async_chunk_base_limit={async_chunk_work_base_limit}` havia sido apagado da format string de `render_diagnostics`, deixando a variável sem uso e falhando Clippy;
-- a correção subsequente restaura exatamente esse campo de diagnóstico; não remove a variável, não usa `allow` e não altera scheduler/render behavior.
+- `c6777b96cf202402689177a9f798bb4afe1fbe0f` (`Restore async base limit diagnostic`) restaura exatamente esse campo, sem remover a variável e sem alterar scheduler/render behavior; CI #10304 passou audits + Clippy + Check.
+
+### Cut 11 — identidade de render section é explícita
+
+- `ChunkRenderSectionKind` define `Terrain` e `Fluid` como sections distintas de presentation;
+- `ChunkRenderSectionId` define identidade estável como `coord + kind + meshlet_index`, em vez de deixar a identidade implícita em qual array foi indexado;
+- `ChunkPublishedPresentationSource` substitui o tuple alias e nomeia explicitamente o par `content + lighting` que produziu a section publicada;
+- initial publication e partial remesh continuam chamando as APIs específicas já existentes, mas essas APIs agora convergem internamente para `record_presentation_sources`, que materializa um `ChunkRenderSectionId` para cada meshlet selecionado antes de gravar o stamp;
+- storage permanece compacto: um `HashMap` por chunk com dois arrays fixos de oito slots. Não foi criado HashMap por section nem allocation adicional no hot path;
+- retirement/clear continuam removendo toda a metadata junto do render allocation owner; patch/replace/spawn/asset behavior não muda neste cut;
+- este cut fecha o item formal de **render-section identity + source revision** sem transformar a identidade de domínio em custo estrutural extra.
 
 ### Próximos cuts
 
-1. auditar render-section identity/source stamps como base para o exit criterion de rebuild descartável;
+1. expor/auditar a identidade + source stamps como base verificável para o exit criterion de rebuild descartável;
 2. separar/medir custo de meshing de render submission/assets e então atacar o spike de startup com evidência.
 
 ## Regras de continuidade

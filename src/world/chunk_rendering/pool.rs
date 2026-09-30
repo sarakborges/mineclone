@@ -48,12 +48,41 @@ pub(super) struct DetachedRenderAllocationParts {
 
 const MESH_ASSET_RETIREMENT_FRAMES: u8 = 3;
 const CHUNK_PRESENTATION_MESHLET_COUNT: usize = 8;
-type ChunkPresentationSourceStamp = (ChunkPresentationSource, PresentationLightingSource);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum ChunkRenderSectionKind {
+    Terrain,
+    Fluid,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct ChunkRenderSectionId {
+    pub(crate) coord: IVec3,
+    pub(crate) kind: ChunkRenderSectionKind,
+    pub(crate) meshlet_index: usize,
+}
+
+impl ChunkRenderSectionId {
+    fn new(coord: IVec3, kind: ChunkRenderSectionKind, meshlet_index: usize) -> Self {
+        debug_assert!(meshlet_index < CHUNK_PRESENTATION_MESHLET_COUNT);
+        Self {
+            coord,
+            kind,
+            meshlet_index,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkPublishedPresentationSource {
+    pub(crate) content: ChunkPresentationSource,
+    pub(crate) lighting: PresentationLightingSource,
+}
 
 #[derive(Default)]
 struct ChunkPublishedPresentationSources {
-    terrain: [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
-    fluid: [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
+    terrain: [Option<ChunkPublishedPresentationSource>; CHUNK_PRESENTATION_MESHLET_COUNT],
+    fluid: [Option<ChunkPublishedPresentationSource>; CHUNK_PRESENTATION_MESHLET_COUNT],
 }
 
 #[derive(Default)]
@@ -170,19 +199,16 @@ impl ChunkRenderPool {
         content: ChunkPresentationSource,
         lighting: PresentationLightingSource,
     ) {
-        assert!(
-            self.active.contains_key(&coord),
-            "initial presentation source requires an active render allocation: {coord:?}"
-        );
-        let published = self.published_sources.entry(coord).or_default();
-        record_published_source_slots(
-            &mut published.terrain,
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Terrain,
             ChunkMeshletMask::ALL,
             content,
             lighting,
         );
-        record_published_source_slots(
-            &mut published.fluid,
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Fluid,
             ChunkMeshletMask::ALL,
             content,
             lighting,
@@ -196,12 +222,13 @@ impl ChunkRenderPool {
         content: ChunkPresentationSource,
         lighting: PresentationLightingSource,
     ) {
-        assert!(
-            self.active.contains_key(&coord),
-            "terrain presentation source requires an active render allocation: {coord:?}"
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Terrain,
+            meshlets,
+            content,
+            lighting,
         );
-        let published = self.published_sources.entry(coord).or_default();
-        record_published_source_slots(&mut published.terrain, meshlets, content, lighting);
     }
 
     pub(crate) fn record_fluid_presentation_sources(
@@ -211,12 +238,49 @@ impl ChunkRenderPool {
         content: ChunkPresentationSource,
         lighting: PresentationLightingSource,
     ) {
+        self.record_presentation_sources(
+            coord,
+            ChunkRenderSectionKind::Fluid,
+            meshlets,
+            content,
+            lighting,
+        );
+    }
+
+    fn record_presentation_sources(
+        &mut self,
+        coord: IVec3,
+        kind: ChunkRenderSectionKind,
+        meshlets: ChunkMeshletMask,
+        content: ChunkPresentationSource,
+        lighting: PresentationLightingSource,
+    ) {
         assert!(
             self.active.contains_key(&coord),
-            "fluid presentation source requires an active render allocation: {coord:?}"
+            "presentation source requires an active render allocation: {coord:?}"
         );
-        let published = self.published_sources.entry(coord).or_default();
-        record_published_source_slots(&mut published.fluid, meshlets, content, lighting);
+        let source = ChunkPublishedPresentationSource { content, lighting };
+        for meshlet_index in 0..CHUNK_PRESENTATION_MESHLET_COUNT {
+            if meshlets.contains_index(meshlet_index) {
+                self.record_presentation_source(
+                    ChunkRenderSectionId::new(coord, kind, meshlet_index),
+                    source,
+                );
+            }
+        }
+    }
+
+    fn record_presentation_source(
+        &mut self,
+        section: ChunkRenderSectionId,
+        source: ChunkPublishedPresentationSource,
+    ) {
+        let published = self.published_sources.entry(section.coord).or_default();
+        let slots = match section.kind {
+            ChunkRenderSectionKind::Terrain => &mut published.terrain,
+            ChunkRenderSectionKind::Fluid => &mut published.fluid,
+        };
+        slots[section.meshlet_index] = Some(source);
     }
 
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
@@ -654,20 +718,6 @@ impl ChunkRenderPool {
             .membership_revision
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
-    }
-}
-
-fn record_published_source_slots(
-    slots: &mut [Option<ChunkPresentationSourceStamp>; CHUNK_PRESENTATION_MESHLET_COUNT],
-    meshlets: ChunkMeshletMask,
-    content: ChunkPresentationSource,
-    lighting: PresentationLightingSource,
-) {
-    let stamp = Some((content, lighting));
-    for (index, slot) in slots.iter_mut().enumerate() {
-        if meshlets.contains_index(index) {
-            *slot = stamp;
-        }
     }
 }
 
