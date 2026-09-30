@@ -367,6 +367,8 @@ Commit `2b62bc899cbf54cfe063c0c1423bd23dbba625cc` (`Define explicit render secti
 
 ### Cut 12 — publication/submission ganha timing separado
 
+Commit `230de26a8390b54dd26f780123f6907adb10e9df` (`Measure presentation publication cost`), CI #10306 success.
+
 - `render_work_diagnostics` passa a manter counters atômicos process-wide apenas para diagnóstico de `InitialPublish` e `RemeshApply`; eles não são gameplay state e não entram em scheduler, queue ou lifecycle autoritativo;
 - Loading e streaming medem somente a janela main-thread que cria a allocation/`Assets<Mesh>`/entity commands e registra os source stamps; o build async continua medido separadamente em `async_initial_mesh`;
 - remesh mede a janela de patch/replace/detach/spawn fallback em `apply_built_chunk_*_meshlets`; o build async continua em `async_remesh`;
@@ -376,10 +378,30 @@ Commit `2b62bc899cbf54cfe063c0c1423bd23dbba625cc` (`Define explicit render secti
 - audit complementar: `chunk_visibility.rs` usa somente câmera + render distance + `ChunkRenderCoord`, sem consultar `VoxelWorld`; render entities carregam mesh/material/transform/coord/visibility e não possuem authoritative voxel state;
 - com este cut, o exit criterion formal de **meshing cost e submission/publication cost separadamente observáveis** passa a ser atendido. O próximo passo de performance depende de gameplay log novo; não atribuir o spike de startup antes dessa evidência.
 
+### Evidência após Cut 12
+
+Gameplay log `2026-09-30_01-46-22-083021400.txt` localiza a dívida fora da publication main-thread:
+
+- no primeiro intervalo de Gameplay, `frame_max_us=272327`, `render work max_us=228307` e `main_work_max_us=12128`; o spike acompanha RenderApp, não main-world publication;
+- no mesmo intervalo, `publish_initial_count=3235`, `publish_initial_avg_us=11`, `publish_initial_max_us=8714`, `publish_remesh_apply_avg_us=26` e `publish_remesh_apply_max_us=106`;
+- após startup, `publish_initial` estabiliza tipicamente em ~8–11 µs de média e dezenas de µs de máximo, enquanto `render work` continua ~16–22 ms de média em várias janelas;
+- `async_initial_mesh` permanece normalmente ~1.7–2.0 ms durante gameplay; o outlier de `async_remesh` de 2.6 s ocorreu no intervalo inicial e é worker-side, não explica o `main_work_max_us` baixo;
+- portanto **publication/Assets<Mesh>/entity commands no main world não são o gargalo dominante atual**. O próximo profiling precisa decompor o Render schedule antes de qualquer pooling/batching especulativo.
+
+### Cut 13 — RenderApp ganha timing por estágio
+
+- o timer total existente continua cobrindo o mesmo intervalo `ExtractCommands -> PostCleanup` e mantém seus percentis para comparação histórica;
+- checkpoints novos medem separadamente `ExtractCommands`, `PrepareAssets`, `PrepareMeshes`, o bloco `CreateViews + Specialize + PrepareViews`, `Queue + PhaseSort`, `Prepare`, `Render` e `Cleanup + PostCleanup`;
+- os campos novos do log são `stage_extract_*`, `stage_assets_*`, `stage_meshes_*`, `stage_views_*`, `stage_queue_*`, `stage_prepare_*`, `stage_render_*` e `stage_cleanup_*`, cada um com média e máximo por janela;
+- os checkpoints usam somente `Instant` + counters atômicos relaxed de diagnóstico; nenhum valor entra em world state, scheduling, asset ownership ou decisões de gameplay;
+- stage metrics são limpas junto dos samples totais em cada lifecycle reset para não misturar Loading e Gameplay; publication mantém a política específica do Cut 12;
+- este cut não tenta otimizar o estágio ainda: se `stage_render` dominar, investigar render graph/submit/present/GPU synchronization; se `stage_assets`/`stage_meshes` dominar, atacar upload/churn de assets; se `stage_queue`/`stage_prepare` dominar, atacar quantidade/batching de render entities somente com essa evidência.
+
 ### Próximos cuts
 
-1. coletar gameplay log novo com `publish_initial_*`, `publish_remesh_apply_*`, `async_initial_mesh`, `async_remesh` e `render work` para localizar o spike de startup;
-2. auditar o exit criterion de rebuild descartável como um todo e só então decidir se pooling/churn precisa de novo cut estrutural.
+1. coletar gameplay log novo com `stage_*` para localizar precisamente o custo dentro do RenderApp;
+2. aplicar um único cut de performance no estágio dominante e comparar contra o log `2026-09-30_01-46-22-083021400.txt`;
+3. depois da dívida de performance localizada, auditar o exit criterion de rebuild descartável como um todo antes de encerrar Phase 7.
 
 ## Regras de continuidade
 
