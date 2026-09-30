@@ -23,6 +23,10 @@ pub struct SwimmingState {
 }
 
 impl SwimmingState {
+    pub(crate) fn is_active(&self) -> bool {
+        self.active
+    }
+
     pub(crate) fn reset_motion(&mut self) {
         self.active = false;
     }
