@@ -7,7 +7,7 @@ use super::{
     placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
-    app::game_state::GameState,
+    app::{crash_log::log_gameplay_event, game_state::GameState},
     content::object::ObjectRegistry,
     creatures::{CreatureInstance, CreatureTargetCollider},
     entity::EntityHealth,
@@ -188,15 +188,32 @@ fn update_targets(
     };
     let next_block = if closest.is_none() { block_hit } else { None };
     if targets.block.0 != next_block {
+        log_gameplay_event(format!(
+            "target.block from={:?} to={:?}",
+            targets.block.0.map(|hit| (hit.voxel, hit.block_id)),
+            next_block.map(|hit| (hit.voxel, hit.block_id))
+        ));
         targets.block.0 = next_block;
     }
     if targets.creature.0 != next_creature {
+        log_gameplay_event(format!(
+            "target.entity from={:?} to={:?}",
+            targets.creature.0, next_creature
+        ));
         targets.creature.0 = next_creature;
     }
     if targets.world_item.0 != next_world_item {
+        log_gameplay_event(format!(
+            "target.item from={:?} to={:?}",
+            targets.world_item.0, next_world_item
+        ));
         targets.world_item.0 = next_world_item;
     }
     if targets.object.0 != next_object {
+        log_gameplay_event(format!(
+            "target.object from={:?} to={:?}",
+            targets.object.0, next_object
+        ));
         targets.object.0 = next_object;
     }
 }
