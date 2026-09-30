@@ -14,6 +14,7 @@
 - Hydrology legado foi removido deliberadamente e não deve voltar.
 - Old saves/legacy compatibility não são prioridade.
 - CI obrigatório = audits + Clippy + Check; `cargo test` não é gate automático.
+- `HANDOFF.md` é `paths-ignore` no workflow, portanto commits exclusivamente documentais não disparam novo gate.
 - Não declarar ganho de performance sem gameplay log real.
 
 ## Invariantes
@@ -24,7 +25,7 @@
 - trabalho frame-sensitive precisa ser incremental/budgetado;
 - generation não possui side effects de render/UI/ECS;
 - presentation é derivada e descartável; `ChunkRenderPool` nunca é world truth;
-- cada cut coerente termina com HANDOFF atualizado e CI verde;
+- cada cut coerente termina com HANDOFF atualizado e último gate aplicável verde;
 - não reintroduzir Hydrology legado.
 
 ## Fases
@@ -111,17 +112,17 @@ Implementação:
 - após primar, o loading permanece por 12 frames completos antes de solicitar a transição para `Gameplay`;
 - nenhuma mudança em worldgen, streaming, residency, meshing budgets, save ou authoritative state;
 - implementação passou audits + Clippy + Check no CI #10496;
-- branch foi sincronizado depois com `develop` até 0.68.61; o gate final do HANDOFF/sync deve permanecer verde antes de considerar o cut fechado.
+- sync final com `develop` 0.68.61 passou audits + Clippy + Check no CI #10500;
+- commits posteriores são exclusivamente de HANDOFF/no-op e não alteram o código validado.
 
-Sem claim de ganho ainda: precisa de log runtime novo dessa build.
+**Cut 29 estruturalmente fechado. Sem claim de ganho ainda:** precisa de log runtime novo dessa build.
 
 ## Próximos passos
 
-1. fechar o gate final do branch após sync + HANDOFF;
-2. rodar gameplay em build do Cut 29 e comparar o primeiro bloco de Gameplay com `2026-09-30_21-05-23-706780000.txt`;
-3. validar visualmente em mundo novo: ocean/coast, volume constraints/indicator e floating islands;
-4. se o spike de cold-start continuar, instrumentar readiness/sequence do RenderApp e decompor `PrepareResources`/`Render` antes do próximo corte;
-5. depois retomar a dívida restante de voxel presentation / meshing v2.
+1. rodar gameplay em build do Cut 29 e comparar o primeiro bloco de Gameplay com `2026-09-30_21-05-23-706780000.txt`;
+2. validar visualmente em mundo novo: ocean/coast, volume constraints/indicator e floating islands;
+3. se o spike de cold-start continuar, instrumentar readiness/sequence do RenderApp e decompor `PrepareResources`/`Render` antes do próximo corte;
+4. depois retomar a dívida restante de voxel presentation / meshing v2.
 
 ## Regras de continuidade
 
