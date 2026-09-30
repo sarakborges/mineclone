@@ -1,6 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    app::crash_log::log_gameplay_event,
     content::{
         block::{BlockDefinition, BlockRegistry, DEFAULT_BLOCK_BREAK_TICKS},
         block_id::intern_block_id,
