@@ -14,6 +14,7 @@ use crate::{
     },
     gameplay::modal::GameplayModalState,
     player::{
+        game_mode::GameMode,
         model::{
             PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
             PLAYER_MODEL_HUD_RENDER_LAYER,
@@ -110,12 +111,14 @@ pub(super) struct PlayerPreviewState<'w> {
     settings: Res<'w, State<SettingsState>>,
     modal: Res<'w, State<GameplayModalState>>,
     orbit: Res<'w, CharacterPreviewOrbit>,
+    game_mode: Single<'w, &'static GameMode>,
 }
 
 impl PlayerPreviewState<'_> {
     fn hud_visible(&self) -> bool {
         *self.pause.get() == PauseState::Running
             && *self.settings.get() == SettingsState::Closed
+            && !self.game_mode.is_spectator()
     }
 
     fn character_visible(&self) -> bool {
