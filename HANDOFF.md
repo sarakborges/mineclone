@@ -2,6 +2,19 @@
 
 > Handoff corrente. O histórico integral anterior foi preservado em `HANDOFF_ARCHIVE_2026-09-25.md`. Para continuidade normal, comece por este arquivo.
 
+## 2026-09-30 — 0.68.50 corrige SlimeFace 1:1 e simplifica Electro
+
+- A causa do rosto achatado era geométrica: os quads `SlimeFace` antigos tinham proporção aproximada `0.86 x 0.48`, apesar das texturas faciais serem quadradas 64x64.
+- `tools/fix_slime_face_quads.py` normaliza os accessors `POSITION` dos `SlimeFace` para 1:1, preservando o UV completo `0..1`, centro e topologia do decal.
+- Foram verificados 20 GLBs de slime com `SlimeFace`: 18 assets legados precisaram ser corrigidos e os dois Electro recém-regenerados já saíram 1:1 do generator.
+- O generator base `assets/models/creatures/slime_blob/generate_slime_blob.py` também passou a gerar o face quad em `0.86 x 0.86`, evitando reintroduzir o achatamento em futuras regenerações.
+- Electro normal e large foram regenerados como bolota amarelo/dourada + antena elétrica central apenas. As marcas frontais em geometria e os destaques localizados no `body_material` foram removidos; rosto e demais marcas elétricas agora são texture-driven.
+- Electro normal e large usam `textures/creatures/slime_electro/face.png` através do material `SlimeFace`.
+- Validação do bloco: `tools/fix_slime_face_quads.py --check` passou em 20/20 `SlimeFace`; `tools/check_glb_assets.py` passou em 22/22 GLBs.
+- Ainda falta QA visual em gameplay para confirmar escala/posição perceptual das faces e a silhueta final do Electro.
+
+VERSION: `0.68.50`.
+
 ## 2026-09-30 — 0.68.49 refaz Electro Slime a partir do slime_blob
 
 - Os GLBs Electro normal e large anteriores foram integralmente substituídos por uma geração nova; nenhum dado ou geometria dos GLBs antigos foi reaproveitado.
@@ -93,7 +106,7 @@ VERSION: `0.68.45`.
 
 ## Continuidade imediata
 
-1. Rodar a **0.68.49** e conferir visualmente o novo Electro normal + large, incluindo a face exata do Anemo, detalhes elétricos e animações.
-2. Gerar log de gameplay com período parado e movimento/streaming normal.
-3. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização.
-4. Antes de cada novo bloco de alteração, manter CI sem erros e sem warnings.
+1. Rodar a **0.68.50** e conferir visualmente que todos os rostos usam a área quadrada 64x64 sem achatamento.
+2. Conferir Electro normal + large: bolota amarelo/dourada + antena, sem marcas geométricas frontais, usando a face própria do Electro.
+3. Gerar log de gameplay com período parado e movimento/streaming normal.
+4. Comparar no mesmo intervalo `frame_*`, `main_work_*` e `render work` para escolher o próximo domínio de otimização; antes de cada novo bloco, manter CI sem erros e sem warnings.
