@@ -458,8 +458,8 @@ mod tests {
 
     #[test]
     fn floating_island_top_layer_depth_stays_within_the_surface_block() {
-        let top = 0.24;
-        let local_y = top - (0.64 / 36.0);
+        let top: f32 = 0.24;
+        let local_y: f32 = top - (0.64 / 36.0);
         let depth =
             ((top - local_y).max(0.0) * 36.0).floor() as u32;
 
