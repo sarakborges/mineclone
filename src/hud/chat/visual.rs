@@ -11,7 +11,7 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    ui::{scrollbar, text_input, theme, typography},
+    ui::{scrollbar, text_input, typography},
 };
 
 use super::{
@@ -286,8 +286,7 @@ pub(super) fn rebuild_chat_history(
                 }
                 ChatMessage::Error(text) => {
                     list.spawn((
-                        typography::hud(text.clone()),
-                        TextColor(theme::DANGER),
+                        typography::hud_error(text.clone()),
                         typography::tooltip_shadow(),
                         Node {
                             width: percent(100),
