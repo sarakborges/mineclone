@@ -111,7 +111,7 @@ pub(super) struct PlayerPreviewState<'w> {
     settings: Res<'w, State<SettingsState>>,
     modal: Res<'w, State<GameplayModalState>>,
     orbit: Res<'w, CharacterPreviewOrbit>,
-    game_mode: Single<'w, &'static GameMode>,
+    game_mode: Single<'w, 's, &'static GameMode>,
 }
 
 impl PlayerPreviewState<'_> {
