@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
@@ -21,6 +24,7 @@ use super::{
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
+const SLOW_PRESENTATION_SCHEDULER_WARNING: Duration = Duration::from_millis(8);
 
 pub(crate) struct ChunkMeshTaskOutput {
     pub(crate) meshes: Vec<BuiltChunkMesh>,
@@ -41,8 +45,17 @@ impl PresentationScheduler {
             return;
         }
 
+        let started = Instant::now();
         self.revision = self.revision.next();
         self.snapshot = Some(Arc::new(PresentationContentSnapshot::capture(content)));
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming presentation snapshot refresh: elapsed_us={} revision={:?}",
+                elapsed.as_micros(),
+                self.revision,
+            );
+        }
     }
 
     pub(crate) fn revision(&self) -> TaskInputRevision {
@@ -133,11 +146,23 @@ impl PresentationScheduler {
         &mut self,
         mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending
+        let started = Instant::now();
+        let cancelled = self
+            .pending
             .cancel_where(|coord| predicate(coord.as_ivec3()))
             .into_iter()
             .map(ChunkCoord::as_ivec3)
-            .collect()
+            .collect::<Vec<_>>();
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming mesh task cancellation: cancelled={} remaining={} elapsed_us={}",
+                cancelled.len(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn cancel_farthest_where(
@@ -145,11 +170,23 @@ impl PresentationScheduler {
         center: IVec3,
         mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Option<IVec3> {
-        self.pending
+        let started = Instant::now();
+        let cancelled = self
+            .pending
             .cancel_farthest_where(ChunkCoord::from_ivec3(center), |coord| {
                 predicate(coord.as_ivec3())
             })
-            .map(ChunkCoord::as_ivec3)
+            .map(ChunkCoord::as_ivec3);
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_PRESENTATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming mesh task preemption: cancelled={} remaining={} elapsed_us={}",
+                cancelled.is_some(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn poll_ready_by_key<K: Ord>(

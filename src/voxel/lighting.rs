@@ -6,6 +6,8 @@ mod queue;
 #[cfg(test)]
 mod tests;
 
+use std::time::{Duration, Instant};
+
 use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::*,
@@ -33,6 +35,8 @@ use super::{
     neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
 };
+
+const SLOW_INITIAL_DIRECT_LIGHT_SEED_WARNING: Duration = Duration::from_millis(8);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct DirectLightingSeedResult {
@@ -160,14 +164,23 @@ impl PendingLightingUpdates {
         fluids: &FluidRegistry,
         secondary_properties: &SecondaryPropertyRegistry,
     ) -> DirectLightingSeedResult {
-        seed_chunk_direct_lighting(
+        let started = Instant::now();
+        let result = seed_chunk_direct_lighting(
             world,
             coord,
             blocks,
             fluids,
             secondary_properties,
             &mut self.context,
-        )
+        );
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_INITIAL_DIRECT_LIGHT_SEED_WARNING {
+            warn!(
+                "slow streaming initial direct-light seed: coord={coord:?} elapsed_us={}",
+                elapsed.as_micros(),
+            );
+        }
+        result
     }
 
     pub(crate) fn has_propagation_work(&self) -> bool {

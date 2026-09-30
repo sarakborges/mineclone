@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
@@ -14,6 +17,7 @@ use super::{
 };
 
 pub(crate) const MAX_GENERATION_TASKS_IN_FLIGHT: usize = 8;
+const SLOW_GENERATION_SCHEDULER_WARNING: Duration = Duration::from_millis(8);
 
 #[derive(Resource, Default)]
 pub(crate) struct GenerationScheduler {
@@ -33,6 +37,7 @@ impl GenerationScheduler {
             return;
         }
 
+        let started = Instant::now();
         let fresh_feature_caches =
             self.snapshot.is_some() && generation.world_generation.is_changed();
         self.revision = self.revision.next();
@@ -41,6 +46,15 @@ impl GenerationScheduler {
             content,
             fresh_feature_caches,
         )));
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_GENERATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming generation snapshot refresh: elapsed_us={} fresh_feature_caches={} revision={:?}",
+                elapsed.as_micros(),
+                fresh_feature_caches,
+                self.revision,
+            );
+        }
     }
 
     pub(crate) fn sync_streaming_region(&mut self, _center: IVec3) {
@@ -121,11 +135,23 @@ impl GenerationScheduler {
         &mut self,
         mut predicate: impl FnMut(IVec3) -> bool,
     ) -> Vec<IVec3> {
-        self.pending
+        let started = Instant::now();
+        let cancelled = self
+            .pending
             .cancel_where(|coord| predicate(coord.as_ivec3()))
             .into_iter()
             .map(ChunkCoord::as_ivec3)
-            .collect()
+            .collect::<Vec<_>>();
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_GENERATION_SCHEDULER_WARNING {
+            warn!(
+                "slow streaming generation task cancellation: cancelled={} remaining={} elapsed_us={}",
+                cancelled.len(),
+                self.pending.len(),
+                elapsed.as_micros(),
+            );
+        }
+        cancelled
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {

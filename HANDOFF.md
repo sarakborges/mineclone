@@ -157,7 +157,9 @@ Gameplay `2026-09-30_14-05-57-794802200.txt`:
 - os demais buckets ficaram muito abaixo desses máximos nas mesmas janelas;
 - portanto a observabilidade do Cut 19 localizou o hitch de movimento no bucket **streaming**; a próxima investigação de performance deve decompor `stream_chunks`, sem mexer nos demais subsistemas por hipótese.
 
-### Correção de correctness durante Phase 7 — surface biome `size.max`
+### Cut 20 — enforce surface biome `size.max`
+
+Commit `3525c290f13e5c361507f5097dd1c28569ffe98d` (`Enforce surface biome max size`), CI #10318 success.
 
 Relato em gameplay: regiões de Plains ocupando a maior parte do terreno e ultrapassando o `size.max` autorado.
 
@@ -168,7 +170,7 @@ Root cause confirmado no código:
 - em `asteria:overworld/plains`, o conteúdo autorado é `x/z min=120, max=420`, mas esse `max=420` não participava da seleção normal; ele só tinha efeito no caso especial de forced surface biome;
 - o problema é anterior ao core rebuild: o primeiro gradual biome field já carregava/validava `max` sem aplicá-lo ao field normal.
 
-Correção preparada no Cut 20:
+Correção:
 
 - surface selection passa a derivar uma região determinística candidate-specific cujo extent é o diâmetro correspondente aos `size.x.max` / `size.z.max` autorados;
 - sites vizinhos com o mesmo raw biome continuam podendo se fundir dentro da mesma região;
@@ -178,12 +180,31 @@ Correção preparada no Cut 20:
 
 Esta correção altera determinísticamente worldgen de surface biomes; validação visual limpa deve ser feita em **mundo novo**, não esperando que chunks já gerados de um save sejam reescritos.
 
+### Cut 21 — diagnóstico direcionado dentro de streaming
+
+Observação adicional sobre o mesmo gameplay pós-Cut 19:
+
+- não existe nenhuma ocorrência de `slow streaming selection rebuild` no log inteiro;
+- esse warning já existia com threshold de 8 ms exclusivamente ao redor de `rebuild_queue`, então o rebuild de seleção em si fica excluído como causa dos picos de ~95 ms e ~209 ms;
+- `ChunkTaskQueue::poll_ready` e `poll_ready_by_key` usam `check_ready`, portanto polling de generation/mesh tasks não espera worker completar.
+
+Instrumentação adicionada sem alterar scheduling, budgets ou world truth:
+
+- `GenerationScheduler::sync_snapshot` avisa se refresh de snapshot passar de 8 ms;
+- `GenerationScheduler::cancel_where` avisa se cancelamento de generation tasks passar de 8 ms;
+- `PresentationScheduler::sync_snapshot` avisa se refresh de snapshot passar de 8 ms;
+- `PresentationScheduler::cancel_where` e `cancel_farthest_where` avisam se cancelamento/preemption de mesh tasks passar de 8 ms;
+- `PendingLightingUpdates::seed_chunk_direct_lighting` avisa se o initial direct-light seed passar de 8 ms;
+- esse seed inicial ocorre dentro de `dispatch_initial_mesh_tasks` e, portanto, está contabilizado em `streaming`, não no bucket dinâmico `lighting` do Cut 19.
+
+O Cut 21 é observabilidade direcionada apenas. Nenhum ganho de performance é reivindicado até novo gameplay log reproduzir os hitches.
+
 ## Próximos passos
 
-1. passar audits + Clippy + Check do Cut 20;
-2. criar mundo novo e validar que Plains e os demais surface biomes não formam cadeias ilimitadas além das regiões derivadas de `size.max`;
-3. se a validação de biome estiver correta, retomar performance decompondo internamente `stream_chunks`, pois o Cut 19 localizou hitches de ~95 ms e ~209 ms nesse bucket;
-4. medir novamente end-to-end após qualquer correção de streaming;
+1. passar audits + Clippy + Check do Cut 21;
+2. coletar gameplay log novo reproduzindo movimento até ocorrer hitch;
+3. correlacionar `streaming_max_us` com warnings `slow streaming ...` de task cancellation, snapshot refresh, mesh preemption e initial direct-light seed;
+4. otimizar somente o hot path confirmado pela evidência e medir novamente end-to-end;
 5. retomar a investigação do cold-start de `PrepareResources` sem repetir `ClusterConfig::None` nem o lighting warm-up refutado;
 6. executar audit final da Phase 7 quando a dívida de performance estiver localizada/endereçada.
 
