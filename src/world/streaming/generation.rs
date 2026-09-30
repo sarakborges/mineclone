@@ -514,8 +514,13 @@ fn select_generation_wave(
         let Some(coord) = work.state.pop_pending_by_priority() else {
             break;
         };
+        // Priority selection itself is the expensive operation: it scans the
+        // pending frontier. Count every scan immediately, including stale or
+        // already-owned entries, so those discard paths cannot bypass the
+        // frame deadline and drain an arbitrarily large queue in one Update.
+        budget.record(1);
+
         if !wants_generation(&work.state, coord) {
-            budget.record(1);
             continue;
         }
 
@@ -531,7 +536,6 @@ fn select_generation_wave(
         match chunk_availability(&work.world, coord) {
             ChunkAvailability::Resident => {
                 work.state.mark_ready(coord);
-                budget.record(1);
                 continue;
             }
             ChunkAvailability::Archived => {
@@ -540,14 +544,12 @@ fn select_generation_wave(
                     "archived chunk must remain restorable: {coord:?}"
                 );
                 work.state.mark_ready(coord);
-                budget.record(1);
                 continue;
             }
             ChunkAvailability::Absent => {}
         }
 
         work.state.generation_wave.start_target(coord);
-        budget.record(1);
     }
 }
 
