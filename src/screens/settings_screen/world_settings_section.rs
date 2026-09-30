@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{
+        crash_log::log_gameplay_event,
+        game_state::GameState,
+    },
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
@@ -104,6 +107,10 @@ pub(crate) fn handle_game_mode_buttons(
 
         if *game_state.get() == GameState::NewWorld {
             if new_world.game_mode() != button.0 {
+                log_gameplay_event(format!(
+                    "world_settings.game_mode change=world_creation from={:?} to={:?}",
+                    new_world.game_mode(), button.0
+                ));
                 new_world.set_game_mode(button.0);
             }
             continue;
@@ -113,6 +120,10 @@ pub(crate) fn handle_game_mode_buttons(
             continue;
         };
         if *current_game_mode != button.0 {
+            log_gameplay_event(format!(
+                "player.game_mode from={:?} to={:?}",
+                *current_game_mode, button.0
+            ));
             *current_game_mode = button.0;
         }
     }
