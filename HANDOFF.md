@@ -340,12 +340,16 @@ Commit `88671dd37c0b89d5f4326d82c316c74ce6d82549` (`Remove presentation snapshot
 
 ### Cut 10 — scheduler de presentation é o único owner nominal
 
+Commit `909a193c4e41113cb5a4cb0add5c5915cbbe59db` (`Use presentation scheduler owner directly`).
+
 - lifecycle do `WorldPlugin`, Loading `SystemParam`/meshing e gameplay streaming passam a referenciar `PresentationScheduler` diretamente;
 - o alias `ChunkMeshTasks = PresentationScheduler` é removido de `chunk_mesh_tasks.rs`; não resta compatibility name para initial presentation scheduling;
 - init/reset de resource continua nos mesmos lifecycle hooks; somente o tipo nominal muda;
 - métodos de sync/schedule/cancel/poll, caps, revision semantics e publication behavior não mudam;
 - `streaming.rs` teve somente o import e o `ResMut` do SystemParam renomeados; `mod.rs` teve somente import + init/resets equivalentes;
-- com isso os bridges transitórios de snapshot/scheduler ownership introduzidos pela Phase 7 foram removidos.
+- com isso os bridges transitórios de snapshot/scheduler ownership introduzidos pela Phase 7 foram removidos;
+- CI #10301 passou os audits e falhou no Clippy porque `render_diagnostics.rs` ainda importava o nome removido `ChunkMeshTasks`; `1f1cdd2f4e3ba793a0e0f9e06a1f3be3c422b4d3` migrou esse último consumer para `PresentationScheduler`, sem mudança no diagnóstico;
+- por erro de processo, esse corretivo foi publicado via Contents API antes do update do HANDOFF e portanto não ficou atômico com esta documentação; o histórico não foi reescrito/forçado e a exceção fica registrada aqui.
 
 ### Próximos cuts
 
