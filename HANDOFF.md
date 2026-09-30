@@ -1,5 +1,13 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-09-30 — 0.68.54 Geo embedded rock-cap correction
+
+- Geo normal + large no longer use a crown/band sitting above the slime.
+- Rock masses are independent, asymmetric and partially buried into the upper blob; side masses descend into the temples and the center stone sits lower on the forehead, matching the supplied reference.
+- Pixel-art invariant preserved: all rock-detail faces remain cardinal/axis-aligned.
+- Generator: `assets/models/creatures/slime_geo/generate_slime_geo.py`.
+
+
 ## 2026-09-30 — 0.68.53 Geo stone-crown rebuild
 
 - Geo normal + large refeitos a partir do slime_blob e da referência do usuário.

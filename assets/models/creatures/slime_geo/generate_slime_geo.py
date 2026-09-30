@@ -223,51 +223,77 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     def rock_step(bucket_, x, y, z, w, h, d):
         add_box(bucket_, (x * s, top + y * s, z * s), (w * s, h * s, d * s))
 
-    # Low crown band sitting on the blob, deliberately asymmetric by one pixel-step.
-    rock_step(rock_dark, 0.00, 0.035, 0.025, 0.72, 0.11, 0.26)
-    rock_step(rock_mid, -0.23, 0.115, 0.005, 0.21, 0.16, 0.22)
-    rock_step(rock_mid, 0.23, 0.105, 0.015, 0.20, 0.14, 0.22)
-    rock_step(rock_light, 0.00, 0.135, -0.005, 0.19, 0.20, 0.20)
-
+    # Irregular rock cap grown into the slime body. There is intentionally no
+    # continuous band/base: every rock is an independent mass partially buried
+    # into the upper blob, matching the reference rather than reading as a crown.
     if not large:
-        # Two outer horn-like spires. Each taper is a staircase of axis-aligned boxes.
-        for sign in (-1, 1):
-            rock_step(rock_dark, sign * 0.40, 0.105, 0.025, 0.25, 0.18, 0.25)
-            rock_step(rock_mid, sign * 0.43, 0.245, 0.020, 0.20, 0.15, 0.22)
-            rock_step(rock_mid, sign * 0.46, 0.365, 0.015, 0.16, 0.12, 0.19)
-            rock_step(rock_light, sign * 0.475, 0.455, 0.010, 0.11, 0.08, 0.15)
-        # Central faceted-looking stone, still made only from boxes.
-        rock_step(rock_dark, 0.00, 0.235, 0.000, 0.29, 0.12, 0.28)
-        rock_step(rock_mid, 0.00, 0.335, -0.005, 0.22, 0.10, 0.23)
-        rock_step(rock_light, 0.00, 0.410, -0.010, 0.14, 0.06, 0.18)
-        # Small rear chips visible between the main stones.
-        rock_step(rock_mid, -0.20, 0.255, 0.15, 0.12, 0.11, 0.13)
-        rock_step(rock_mid, 0.21, 0.235, 0.16, 0.12, 0.10, 0.13)
-        detail_height = 0.50 * s
-        detail_width = 1.08 * s
+        # Left temple: the taller horn-like rock mass, sunk deeply into the body.
+        rock_step(rock_dark, -0.39, -0.105, -0.045, 0.33, 0.30, 0.31)
+        rock_step(rock_mid,  -0.425, 0.075, -0.030, 0.25, 0.22, 0.26)
+        rock_step(rock_dark, -0.455, 0.225, -0.012, 0.18, 0.16, 0.21)
+        rock_step(rock_light,-0.475, 0.335,  0.000, 0.11, 0.09, 0.16)
+
+        # Right temple: deliberately shorter, broader and offset forward.
+        rock_step(rock_dark,  0.36, -0.125, -0.070, 0.35, 0.27, 0.32)
+        rock_step(rock_mid,   0.395, 0.040, -0.055, 0.27, 0.20, 0.27)
+        rock_step(rock_dark,  0.425, 0.175, -0.040, 0.19, 0.14, 0.21)
+        rock_step(rock_light, 0.440, 0.270, -0.025, 0.12, 0.08, 0.16)
+
+        # Low forehead boulder between the eyes, visibly embedded rather than perched.
+        rock_step(rock_dark,   0.015, -0.120, -0.155, 0.31, 0.25, 0.24)
+        rock_step(rock_mid,    0.030,  0.020, -0.165, 0.24, 0.17, 0.20)
+        rock_step(rock_light,  0.045,  0.120, -0.175, 0.15, 0.09, 0.16)
+
+        # Independent rubble fills gaps without forming a continuous strip.
+        rock_step(rock_mid,   -0.205, -0.045, -0.030, 0.16, 0.16, 0.18)
+        rock_step(rock_dark,   0.205, -0.065,  0.010, 0.15, 0.14, 0.17)
+        rock_step(rock_light, -0.120,  0.080,  0.095, 0.12, 0.11, 0.14)
+        rock_step(rock_mid,    0.145,  0.045,  0.115, 0.13, 0.10, 0.15)
+
+        # Tiny front facet blocks break up the large stone faces in pixel-art style.
+        rock_step(rock_light, -0.385, 0.000, -0.215, 0.10, 0.09, 0.035)
+        rock_step(rock_mid,    0.350,-0.020, -0.230, 0.11, 0.08, 0.035)
+        detail_height = 0.43 * s
+        detail_width = 1.05 * s
     else:
-        # Heavier crown for the large variant, closer to a rocky diadem.
-        for sign in (-1, 1):
-            rock_step(rock_dark, sign * 0.42, 0.10, 0.025, 0.31, 0.18, 0.29)
-            rock_step(rock_dark, sign * 0.455, 0.225, 0.020, 0.26, 0.16, 0.26)
-            rock_step(rock_mid, sign * 0.49, 0.335, 0.015, 0.21, 0.13, 0.23)
-            rock_step(rock_mid, sign * 0.515, 0.425, 0.010, 0.16, 0.10, 0.19)
-            rock_step(rock_light, sign * 0.53, 0.500, 0.005, 0.11, 0.07, 0.15)
-        rock_step(rock_dark, 0.00, 0.220, -0.005, 0.35, 0.14, 0.31)
-        rock_step(rock_mid, 0.00, 0.320, -0.010, 0.28, 0.11, 0.27)
-        rock_step(rock_mid, 0.00, 0.400, -0.015, 0.21, 0.08, 0.22)
-        rock_step(rock_light, 0.00, 0.460, -0.020, 0.14, 0.06, 0.17)
-        for x, y, z in [(-0.23, 0.25, 0.17), (0.24, 0.24, 0.17), (-0.10, 0.19, 0.21), (0.12, 0.18, 0.22)]:
-            rock_step(rock_mid, x, y, z, 0.13, 0.12, 0.14)
-        detail_height = 0.55 * s
-        detail_width = 1.20 * s
+        # Large variant keeps the same composition, with heavier overlapping masses.
+        rock_step(rock_dark, -0.40, -0.125, -0.045, 0.38, 0.34, 0.35)
+        rock_step(rock_mid,  -0.445, 0.075, -0.030, 0.30, 0.25, 0.30)
+        rock_step(rock_dark, -0.485, 0.245, -0.010, 0.22, 0.18, 0.24)
+        rock_step(rock_light,-0.510, 0.370,  0.005, 0.13, 0.10, 0.18)
+
+        rock_step(rock_dark,  0.355, -0.145, -0.085, 0.42, 0.31, 0.37)
+        rock_step(rock_mid,   0.405,  0.035, -0.070, 0.31, 0.22, 0.30)
+        rock_step(rock_dark,  0.445,  0.185, -0.050, 0.22, 0.16, 0.23)
+        rock_step(rock_light, 0.465,  0.295, -0.035, 0.13, 0.09, 0.17)
+
+        # Broader low central mass, still lower than both outer peaks.
+        rock_step(rock_dark,  -0.015, -0.145, -0.175, 0.38, 0.28, 0.28)
+        rock_step(rock_mid,    0.015,  0.010, -0.185, 0.29, 0.19, 0.23)
+        rock_step(rock_light,  0.035,  0.120, -0.195, 0.18, 0.10, 0.17)
+
+        # Uneven rubble field; placements intentionally avoid mirror symmetry.
+        for bucket_, x, y, z, w, h, d in [
+            (rock_mid,  -0.235, -0.055, -0.010, 0.18, 0.17, 0.20),
+            (rock_dark,  0.220, -0.085,  0.015, 0.17, 0.15, 0.19),
+            (rock_light,-0.145,  0.090,  0.105, 0.13, 0.12, 0.15),
+            (rock_mid,   0.155,  0.055,  0.125, 0.15, 0.11, 0.16),
+            (rock_dark, -0.285,  0.055,  0.130, 0.14, 0.13, 0.16),
+            (rock_mid,   0.285,  0.015,  0.145, 0.13, 0.11, 0.15),
+        ]:
+            rock_step(bucket_, x, y, z, w, h, d)
+
+        rock_step(rock_light, -0.390, -0.005, -0.250, 0.12, 0.10, 0.04)
+        rock_step(rock_mid,    0.345, -0.030, -0.265, 0.13, 0.09, 0.04)
+        detail_height = 0.48 * s
+        detail_width = 1.08 * s
 
     details_prims = [
         prim(rock_dark, 9),
         prim(rock_mid, 7),
         prim(rock_light, 8),
     ]
-    meshes.append({"name": "geo_stone_crown", "primitives": [p for p in details_prims if p]})
+    meshes.append({"name": "geo_rock_cap", "primitives": [p for p in details_prims if p]})
     details_mesh = len(meshes) - 1
 
     materials = [
@@ -330,7 +356,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     body_pivot = node("BodyPivot", children=[], translation=[0, half_h, 0])
     body_node = node("Shell", mesh=body_mesh)
     face_node = node("Face", mesh=face_mesh)
-    details_node = node("GeoCrown", mesh=details_mesh)
+    details_node = node("GeoRockCap", mesh=details_mesh)
     nodes[body_pivot]["children"] = [body_node, face_node, details_node]
     nodes[visual]["children"] = [body_pivot]
     hit = node(
@@ -372,7 +398,7 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
     visual_height = body_height + detail_height
     visual_width = max(body_width, detail_width)
     scene = {
-        "asset": {"version": "2.0", "generator": "Asteria Geo slime stone crown rebuild v1"},
+        "asset": {"version": "2.0", "generator": "Asteria Geo slime embedded rock-cap rebuild v2"},
         "scene": 0,
         "scenes": [{"name": "GeoSlime", "nodes": [root]}],
         "extensionsUsed": ["KHR_materials_unlit"],
@@ -392,8 +418,8 @@ def generate(asset_id: str, out_path: Path, body_width: float, body_height: floa
             "occupied_voxels": len(vox),
             "visual_height": visual_height,
             "visual_width": visual_width,
-            "pixel_art_geometry": "all Geo crown faces are axis-aligned; tapered stone silhouettes use box staircases",
-            "reference_design": "clean grey blob with a dark stone crown and two taller outer horn-like spires",
+            "pixel_art_geometry": "all Geo rock-detail faces are axis-aligned; irregular silhouettes use embedded box staircases",
+            "reference_design": "clean grey blob with irregular dark rocks embedded into the upper body, two uneven outer peaks, and a lower forehead boulder",
         },
     }
     json_chunk = json.dumps(scene, separators=(",", ":")).encode("utf-8")

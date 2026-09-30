@@ -93,9 +93,9 @@
       20,
       22
     ],
-    "construction": "clean stone-grey slime_blob body + heavier strict pixel-art stepped stone crown + square texture-driven face",
+    "construction": "clean stone-grey slime_blob body + irregular rock masses embedded into the upper body + square texture-driven face",
     "base_language": "slime_blob",
-    "reference": "user Geo reference: clean blob with crown/horns made from dark stones",
+    "reference": "user Geo reference: upper head is broken rocky mass, not a separate crown; two uneven outer peaks and lower central forehead rock",
     "pixel_art_geometry": "all crown geometry is axis-aligned; tapered silhouettes are staircases of boxes"
   }
 }
