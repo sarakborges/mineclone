@@ -22,7 +22,7 @@ use crate::{
             BRUSH_PAINT_BEHAVIOR_ID, STRUCTURE_SELECT_BEHAVIOR_ID,
         },
     },
-    player::camera::GameplayCamera,
+    player::{camera::GameplayCamera, game_mode::GameMode},
     tools::BrushMode,
     world_objects::{TargetedWorldObject, world_object_position},
     voxel::{
@@ -113,6 +113,7 @@ struct TargetHighlightInput<'w, 's> {
     targeted_object: Res<'w, TargetedWorldObject>,
     brush_mode: Res<'w, BrushMode>,
     artisans_kit_resolution: Res<'w, ArtisansKitResolution>,
+    game_mode: Single<'w, &'static GameMode>,
 }
 
 #[derive(SystemParam)]
@@ -194,6 +195,13 @@ fn update_highlight(
     mut view: TargetHighlightView,
     mut last_scene: Local<Option<BlockTargetingVisualSnapshot>>,
 ) {
+    if input.game_mode.is_spectator() {
+        hide_if_visible(&mut view.highlight.1);
+        hide_if_visible(&mut view.brush_ghost.1);
+        hide_if_visible(&mut view.artisans_kit_placement.1);
+        return;
+    }
+
     let scene_snapshot = input.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
     let selected_tool = input
