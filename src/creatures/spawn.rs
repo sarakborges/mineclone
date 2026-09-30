@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{crash_log::log_gameplay_event, game_state::GameState},
     content::creature::CreatureRegistry,
     entity::EntityHealth,
     localization::{ActiveLanguage, Language},
@@ -75,7 +75,7 @@ fn spawn_creature_with_state(
         .get(id)
         .ok_or_else(|| format!("Unknown creature id: {id}"))?;
     let name = definition.name.text(language).to_owned();
-    commands.spawn((
+    let entity = commands.spawn((
         Name::new(name.clone()),
         CreatureInstance {
             definition_id: definition.id.clone(),
@@ -93,6 +93,15 @@ fn spawn_creature_with_state(
         Transform::from_translation(feet),
         Visibility::default(),
         DespawnOnExit(GameState::Gameplay),
+    )).id();
+    log_gameplay_event(format!(
+        "entity.spawn entity={:?} type=creature id={} name={} position={:?} health={:.3} meta_tags={:?}",
+        entity,
+        definition.id,
+        name,
+        feet,
+        state.health.unwrap_or(definition.health),
+        state.meta_tags
     ));
     Ok(name)
 }
