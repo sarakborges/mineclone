@@ -30,6 +30,7 @@ pub(crate) mod new_world;
 mod noise;
 mod presentation_snapshot;
 mod render_diagnostics;
+mod render_prepare_diagnostics;
 mod render_work_diagnostics;
 pub(crate) mod render_distance;
 mod revision;
@@ -94,6 +95,10 @@ use render_diagnostics::{
     slow_frame_context_due,
 };
 use render_distance::RenderDistanceSettings;
+use render_prepare_diagnostics::{
+    install_render_prepare_diagnostics, log_render_prepare_work,
+    reset_render_prepare_diagnostics,
+};
 use render_work_diagnostics::{
     collect_render_frame_work, install_render_work_diagnostics, log_render_frame_work,
     reset_render_frame_work_samples,
@@ -119,6 +124,7 @@ pub(crate) struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         install_render_work_diagnostics(app);
+        install_render_prepare_diagnostics(app);
 
         app.init_resource::<CurrentDimension>()
             .init_resource::<DimensionEntityCounts>()
@@ -164,6 +170,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<FrameTimeSamples>,
                     reset_resource::<MainFrameWorkSamples>,
                     reset_render_frame_work_samples,
+                    reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
                     begin_world_loading,
@@ -183,6 +190,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingWarp>,
                     reset_resource::<MainFrameWorkSamples>,
                     reset_render_frame_work_samples,
+                    reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
                 )
@@ -272,6 +280,7 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
             .add_systems(Last, log_render_frame_work.run_if(render_diagnostics_due))
+            .add_systems(Last, log_render_prepare_work.run_if(render_diagnostics_due))
             .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(
                 Last,
