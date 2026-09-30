@@ -71,6 +71,7 @@ pub(crate) struct WorldLoadingState {
     assets_loaded: usize,
     assets_total: usize,
     finalization_frames: u8,
+    presentation_prewarm_frames: u8,
     column_top_chunks: HashMap<IVec2, i32>,
     spawn_column: IVec2,
     fluid_settling: GeneratedFluidSettling,
@@ -115,6 +116,11 @@ impl WorldLoadingState {
             )),
             WorldLoadingPhase::Spawning => None,
         }
+    }
+
+    pub(crate) fn set_presentation_prewarm_frames(&mut self, frames: u8) {
+        self.presentation_prewarm_frames = frames
+            .min(progress::INITIAL_PRESENTATION_PREWARM_FRAMES);
     }
 
     fn extend_column_to_structure_top(&mut self, horizontal: IVec2, structure_top_chunk: i32) {
