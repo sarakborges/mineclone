@@ -59,7 +59,6 @@ struct RemeshDispatchContext<'a> {
 
 struct RemeshCollectionContext<'a> {
     world: &'a VoxelWorld,
-    streaming: &'a ChunkStreamingState,
     presentation_selection: &'a ChunkPresentationSelection,
     lighting_revisions: &'a PresentationLightingRevisions,
     deadline: Instant,
@@ -119,7 +118,6 @@ pub(super) fn process_chunk_remesh_queue(
             &mut tasks,
             RemeshCollectionContext {
                 world: &world,
-                streaming: &streaming,
                 presentation_selection: &presentation_selection,
                 lighting_revisions: &lighting_revisions,
                 deadline: frame_budget.deadline(),
@@ -143,7 +141,6 @@ pub(super) fn process_chunk_remesh_queue(
         RemeshDispatchContext {
             world: &world,
             render_pool: &renderer.pool,
-            streaming: &streaming,
             presentation_selection: &presentation_selection,
             lighting_revisions: &lighting_revisions,
             async_work: &async_work,
