@@ -312,6 +312,8 @@ fn command_target_position(transform: &Transform) -> IVec3 {
     transform.translation.floor().as_ivec3()
 }
 
+// Bevy systems expose their independent ECS inputs as function parameters.
+#[allow(clippy::too_many_arguments)]
 fn interpret_chat_submissions(
     mut submissions: MessageReader<ChatSubmission>,
     mut chat: ResMut<ChatState>,
