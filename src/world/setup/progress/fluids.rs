@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
-
 use crate::app::crash_log::log_gameplay_event;
 use crate::world::{
     PendingFluidUpdates,
@@ -19,8 +17,6 @@ pub(super) fn settle_initial_fluids(
     content: &ChunkContent<'_>,
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
-    mut diagnostics: Local<FluidSettlingDiagnostics>,
-    time: Res<Time<Real>>,
 ) {
     if !progress.loading_state.fluid_settling.is_active() {
         let coords = progress.loading_state.coords.clone();
@@ -45,14 +41,6 @@ pub(super) fn settle_initial_fluids(
             &mut budget,
         )
     };
-
-    let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
-    timer.tick(time.delta());
-    if timer.just_finished() {
-        let (_, generated, mutable, initialization, work, verification, verification_chunks) =
-            progress.loading_state.fluid_settling.diagnostic_counts();
-        log_gameplay_event(format!("world.loading.fluid_settling.progress generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}"));
-    }
 
     if complete {
         let completion = progress
