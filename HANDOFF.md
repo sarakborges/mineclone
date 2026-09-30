@@ -20,6 +20,26 @@
 
 
 > Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
+## 2026-09-30 — Comprehensive gameplay event logging
+
+- Centralized gameplay event logging was added through `app::crash_log::log_gameplay_event`.
+- Every gameplay event is emitted through Bevy logging under target `asteria::gameplay` and also appended to the active session log as `[RUNTIME ...] [EVENT] ...`.
+- Logged interactions now include:
+  - block mining start and block breaking (survival/creative);
+  - block placement and layer placement;
+  - world-object placement/removal/pickup/break requests and applied mutations;
+  - tool uses and targets;
+  - creature/player spawn, natural spawn, damage, death and death-timer despawn;
+  - command submission, chat feedback, successful spawn/place/locate/warp/kill/modify flows and entity metadata modifications;
+  - command-driven kill damage/death;
+  - locate start/success/failure and warp request/success/failure;
+  - world item spawn/drop/settle/pickup;
+  - inventory slot clicks, creative item selection, sorting and discard;
+  - target transitions for blocks/entities/world items/objects;
+  - player game-mode changes;
+  - world load bootstrap/completion, save success/failure, and authoritative chunk unloads.
+- Event messages include contextual identifiers/positions/quantities/health/modes where available, so gameplay logs can be correlated without reconstructing state from screenshots.
+- CI is green on `38438ed86d551e958420524b3dac799e132cb0ff`.
 ## 2026-09-30 — Floating island shape/material correction + spectator HUD cleanup
 
 - Floating island sites now use `84..120` X/Z and `24..36` Y, reducing the near-touching footprint while making the landmass vertically thicker.
