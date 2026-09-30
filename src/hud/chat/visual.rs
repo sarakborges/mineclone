@@ -11,7 +11,7 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    ui::{scrollbar, text_input, typography},
+    ui::{scrollbar, text_input, theme, typography},
 };
 
 use super::{
@@ -19,8 +19,6 @@ use super::{
     autocomplete::ChatAutocomplete,
 };
 
-// The chat grows naturally until fifteen lines of 17px HUD text at 22px
-// line spacing, including wrapped visual lines. Beyond this, it scrolls.
 const MAX_VISIBLE_LINES: f32 = 15.0;
 const CHAT_LINE_HEIGHT: f32 = 22.0;
 const MAX_HISTORY_HEIGHT: f32 = MAX_VISIBLE_LINES * CHAT_LINE_HEIGHT;
@@ -189,7 +187,6 @@ pub(super) fn sync_chat_visibility(
     }
 }
 
-/// Updates only when the completion list or selection changes, not on every frame.
 pub(super) fn render_autocomplete(
     mut commands: Commands,
     chat: Res<ChatState>,
@@ -245,7 +242,6 @@ pub(super) fn render_autocomplete(
                 Pickable::IGNORE,
             ))
             .with_children(|row| {
-                // Selection is conveyed only by the highlighted background, never a chevron.
                 row.spawn((typography::hud(suggestion.value.clone()), Pickable::IGNORE));
                 row.spawn((
                     typography::caption(suggestion.description.clone()),
@@ -275,13 +271,23 @@ pub(super) fn rebuild_chat_history(
         }
     }
     commands.entity(root).with_children(|list| {
-        // Older messages above; new messages are appended at the bottom.
-        // Wrapped lines contribute to the actual computed scroll height.
         for message in &chat.history {
             match message {
                 ChatMessage::Text(text) => {
                     list.spawn((
                         typography::hud(text.clone()),
+                        typography::tooltip_shadow(),
+                        Node {
+                            width: percent(100),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ));
+                }
+                ChatMessage::Error(text) => {
+                    list.spawn((
+                        typography::hud(text.clone()),
+                        TextColor(theme::DANGER),
                         typography::tooltip_shadow(),
                         Node {
                             width: percent(100),
@@ -384,7 +390,7 @@ pub(super) fn handle_chat_open_structure_file(
             continue;
         }
         if let Err(error) = open_structure_file(&link.0) {
-            chat.append_text(format!(
+            chat.append_error(format!(
                 "failed to open structure file {}: {error}",
                 link.0.display()
             ));
@@ -450,8 +456,6 @@ pub(super) fn scroll_chat_history(
     }
 }
 
-/// Last runs after UI layout: use measured, wrapped content height to follow
-/// new messages rather than guessing the number of visual lines.
 pub(super) fn scroll_chat_to_bottom(
     chat: Res<ChatState>,
     mut history: Single<(&mut ScrollPosition, &ComputedNode), With<ChatHistory>>,
