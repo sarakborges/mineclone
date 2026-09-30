@@ -75,6 +75,8 @@ fn spawn_creature_with_state(
         .get(id)
         .ok_or_else(|| format!("Unknown creature id: {id}"))?;
     let name = definition.name.text(language).to_owned();
+    let meta_tags_for_log = state.meta_tags.clone();
+    let health_for_log = state.health.unwrap_or(definition.health);
     let entity = commands.spawn((
         Name::new(name.clone()),
         CreatureInstance {
@@ -100,8 +102,8 @@ fn spawn_creature_with_state(
         definition.id,
         name,
         feet,
-        state.health.unwrap_or(definition.health),
-        state.meta_tags
+        health_for_log,
+        meta_tags_for_log
     ));
     Ok(name)
 }
