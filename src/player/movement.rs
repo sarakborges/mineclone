@@ -32,16 +32,20 @@ struct MovementLogState {
     last_running: Option<bool>,
 }
 
+#[derive(SystemParam)]
+struct MovementLogPlayer<'w, 's> {
+    player: Single<'w, 's, (
+        &'static Transform,
+        &'static GameMode,
+        &'static flight::FlightState,
+        &'static swimming::SwimmingState,
+        &'static gravity::GravityState,
+        &'static walking::WalkingState,
+    ), With<PlayerEntity>>,
+}
 fn log_movement_diagnostics(
     time: Res<Time<Real>>,
-    player: Single<(
-        &Transform,
-        &GameMode,
-        &flight::FlightState,
-        &swimming::SwimmingState,
-        &gravity::GravityState,
-        &walking::WalkingState,
-    ), With<PlayerEntity>>,
+    player: MovementLogPlayer,
     mut state: Local<MovementLogState>,
 ) {
     let timer_finished = {
@@ -52,7 +56,7 @@ fn log_movement_diagnostics(
         timer.just_finished()
     };
 
-    let (transform, game_mode, flight, swimming, gravity, walking) = player.into_inner();
+    let (transform, game_mode, flight, swimming, gravity, walking) = player.player.into_inner();
     let flying = flight.is_active();
     let swimming = swimming.is_active();
     let grounded = gravity.grounded();
