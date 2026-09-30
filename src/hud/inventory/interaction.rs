@@ -7,7 +7,10 @@ use bevy::{
 };
 
 use crate::{
-    app::keybinds::{KeybindAction, Keybinds},
+    app::{
+        crash_log::log_gameplay_event,
+        keybinds::{KeybindAction, Keybinds},
+    },
     gameplay::modal::GameplayModalState,
     player::{hotbar::PlayerHotbar, inventory::InventoryCursor},
     ui::text_input::editable_value,
@@ -149,6 +152,7 @@ pub(super) fn handle_inventory_sort_clicks(
     for interaction in &buttons {
         if *interaction == Interaction::Pressed {
             hotbar.sort_backpack_by_id();
+            log_gameplay_event("inventory.sort backpack_by_id".to_owned());
             player_view.blur_search();
             break;
         }
@@ -239,6 +243,7 @@ pub(super) fn handle_creative_slot_clicks(
         }
         if let Some(item) = slot.item {
             cursor.pick_creative_item(item);
+            log_gameplay_event(format!("inventory.creative_pick item={item}"));
         }
         break;
     }
@@ -262,7 +267,23 @@ pub(super) fn handle_slot_clicks(
         if player_view.search_focused() {
             player_view.blur_search();
         }
+        let before_cursor = cursor
+            .stack()
+            .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
+        let before_slot = hotbar
+            .stack_at(slot.index)
+            .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
         cursor.click_slot(&mut hotbar, slot.index);
+        let after_cursor = cursor
+            .stack()
+            .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
+        let after_slot = hotbar
+            .stack_at(slot.index)
+            .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
+        log_gameplay_event(format!(
+            "inventory.slot_click slot={} cursor_before={:?} slot_before={:?} cursor_after={:?} slot_after={:?}",
+            slot.index, before_cursor, before_slot, after_cursor, after_slot
+        ));
         break;
     }
 }
@@ -273,7 +294,11 @@ pub(super) fn handle_inventory_trash_clicks(
 ) {
     for interaction in &buttons {
         if *interaction == Interaction::Pressed {
+            let discarded = cursor
+                .stack()
+                .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
             cursor.discard();
+            log_gameplay_event(format!("inventory.discard cursor={discarded:?}"));
             break;
         }
     }
