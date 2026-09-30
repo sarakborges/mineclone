@@ -9,7 +9,7 @@ use super::{
     seed::WorldSeed,
 };
 
-#[derive(Resource, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Resource, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WorldLoadMode {
     #[default]
     New,
