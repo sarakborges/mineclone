@@ -33,7 +33,7 @@ impl BiomeField {
                     .iter()
                     .copied()
                     .any(|distribution| distribution.is_regional())
-                && climate_suitability(ocean.climate, climate) >= 1.0 - f32::EPSILON
+                && climate_weight(climate, ocean.climate) >= 1.0 - f32::EPSILON
             {
                 return ocean_index;
             }
@@ -743,9 +743,9 @@ mod tests {
             ..ocean_core
         };
 
-        assert_eq!(climate_suitability(ocean_climate, ocean_core), 1.0);
-        assert!((0.0..1.0).contains(&climate_suitability(ocean_climate, shoreline)));
-        assert_eq!(climate_suitability(ocean_climate, inland), 0.0);
+        assert_eq!(climate_weight(ocean_core, ocean_climate), 1.0);
+        assert!((0.0..1.0).contains(&climate_weight(shoreline, ocean_climate)));
+        assert_eq!(climate_weight(inland, ocean_climate), 0.0);
     }
 
     #[test]
