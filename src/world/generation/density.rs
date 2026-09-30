@@ -91,7 +91,7 @@ pub(super) fn sample_density_field(
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
                 let base_density = terrain_density(column.surface_height, world_position.y);
-                let volume = pass.biome_field.volume_selection_in_region(
+                let volume = pass.biome_field.volume_selection_in_region_for_surface(
                     sample_position,
                     pass.volume_region,
                     column.identity_surface_index,

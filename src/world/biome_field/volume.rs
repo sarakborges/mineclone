@@ -78,6 +78,19 @@ impl BiomeField {
         &self,
         position: Vec3,
         region: &VolumeBiomeRegion,
+    ) -> Option<VolumeBiomeSelection> {
+        let surface = self.sample_surface(Vec2::new(position.x, position.z));
+        self.volume_selection_in_region_for_surface(
+            position,
+            region,
+            surface.identity_surface_index,
+        )
+    }
+
+    pub(crate) fn volume_selection_in_region_for_surface(
+        &self,
+        position: Vec3,
+        region: &VolumeBiomeRegion,
         surface_index: usize,
     ) -> Option<VolumeBiomeSelection> {
         if position.y < 0.0 || region.sites.is_empty() {
