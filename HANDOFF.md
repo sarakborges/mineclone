@@ -198,6 +198,21 @@ Commit: `ceb7bb0a580c915ca42084a620269ed8dc4fe4d6`. CI Rust validation #10525: s
 - o helper de halo remesh permanece no caminho de retirement da apresentação, portanto a invalidação acontece enquanto a fonte ainda está disponível;
 - nenhum comportamento de residency/streaming pretendido foi alterado.
 
+## Cut 31 — presentation selection separated from authoritative streaming residency
+
+Commit final: `2f6c8d9d8d7a81ee276b3c2f8d204fcf723df13b`. CI Rust validation: success.
+
+- criada `ChunkPresentationSelection` como snapshot explícito da seleção de apresentação: center X/Z + hide radius + revision;
+- `ChunkStreamingState` deixou de expor `retains_render_mesh`; streaming publica a seleção para a camada de presentation;
+- initial meshing, remeshing e render retirement passaram a consultar `ChunkPresentationSelection`, não a inferir a retenção de mesh a partir da residency;
+- `retire_distant_chunk_meshes` agora usa a revision própria da apresentação, permitindo que mudanças de seleção invalidem somente o backlog de retirement;
+- halo remesh após retirement também usa a seleção de apresentação;
+- dependências de retirement foram agrupadas em `ChunkRenderRetirementRuntime`, mantendo o boundary de presentation sem aumentar a assinatura do sistema;
+- remesh contexts perderam a referência desnecessária ao streaming;
+- lifecycle de `ChunkPresentationSelection` é resetado junto do Gameplay/Loading lifecycle;
+- testes adicionados para revision estável, mudança de pose e independência de authoritative residency;
+- mudanças paralelas de conteúdo do Hydro foram preservadas; não fazem parte deste cut.
+
 ## Floating Islands follow-up — integrado em develop
 
 - Floating Islands agora aceitam somente `asteria:overworld/plains` como surface biome;
