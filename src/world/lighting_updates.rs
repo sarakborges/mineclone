@@ -93,6 +93,7 @@ pub(super) fn process_dynamic_lighting(
         });
     }
 
+    let dirty_meshlet_count = dirty_meshlets.len();
     for (&coord, &meshlets) in dirty_meshlets.iter() {
         runtime.lighting_revisions.bump(coord, meshlets);
     }
@@ -129,7 +130,7 @@ pub(super) fn process_dynamic_lighting(
             diagnostics.processed_voxels,
             changed_chunk_count,
             changed_position_count,
-            dirty_meshlets.len(),
+            dirty_meshlet_count,
             runtime.lighting.has_propagation_work(),
         ));
         diagnostics.processed_voxels = 0;
