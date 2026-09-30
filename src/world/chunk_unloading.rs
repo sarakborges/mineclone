@@ -100,7 +100,7 @@ pub(super) struct ChunkEvictionRuntime<'w> {
 }
 
 #[derive(SystemParam)]
-struct ChunkRenderRetirementRuntime<'w, 's> {
+pub(super) struct ChunkRenderRetirementRuntime<'w, 's> {
     commands: Commands<'w, 's>,
     render_pool: ResMut<'w, ChunkRenderPool>,
     presentation_selection: Res<'w, ChunkPresentationSelection>,
