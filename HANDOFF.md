@@ -63,56 +63,57 @@
 
 ## Cut 24 — limitar scans stale do generation frontier
 
-Gameplay `2026-09-30_16-23-13-909518300.txt` reproduziu novamente o hitch com evidência mais precisa:
+Commit `75f476f54942f69ccd08df819b8b6ad5479099d8`, CI #10322 success.
 
-- frame máximo ~100.9 ms;
-- `main_work_max_us` ~97.5 ms;
-- `streaming_max_us` ~93.9 ms;
-- retirement, fluid, lighting, remesh, residency, visibility, generation refill e deferred mesh retirement permaneceram muito menores na mesma janela;
-- nenhum warning `slow streaming ...` do Cut 21 disparou no arquivo inteiro.
+Gameplay `2026-09-30_16-23-13-909518300.txt` reproduziu o hitch com frame máximo ~100.9 ms, `main_work_max_us` ~97.5 ms e `streaming_max_us` ~93.9 ms, enquanto os demais buckets ficaram muito menores e nenhum warning direcionado do Cut 21 disparou.
 
-Root cause confirmado em `streaming/generation.rs`:
+Root cause e correção:
 
 - `select_generation_wave` usa `pop_pending_by_priority`, que faz o scan caro da pending frontier;
-- o `FrameWorkBudget` de generation dispatch é 1 ms / máximo 16 itens;
-- entradas já cobertas por render pool, ready queue, mesh task, generation task ou generated-unpublished eram descartadas com `continue` **sem** `budget.record(1)`;
-- com milhares de pending entries, o loop podia realizar uma sequência arbitrária de priority scans O(n) no mesmo Update sem atingir o item cap nem observar novamente o deadline.
+- stale/already-owned entries eram descartadas sem `budget.record(1)`, permitindo scans O(n) repetidos fora do item cap;
+- agora todo `pop_pending_by_priority()` bem-sucedido consome imediatamente uma unidade do budget de 1 ms / máximo 16 scans;
+- prioridades, wave size, worker limits e world truth não mudaram.
 
-Correção:
-
-- cada `pop_pending_by_priority()` bem-sucedido agora registra imediatamente uma unidade de budget, antes de qualquer stale/ownership filter;
-- cada scan passa a custar budget exatamente uma vez, inclusive quando o coord é descartado;
-- o loop volta a respeitar o limite de 16 scans e o deadline global/frame budget;
-- nenhuma prioridade, wave size, worker limit, world truth ou conteúdo foi alterado.
-
-Ainda não há claim de ganho até gameplay pós-Cut 24 confirmar que o pico de ~94 ms desapareceu/reduziu como esperado.
+Ainda não há claim de ganho até gameplay pós-Cut 24.
 
 ## Pacote Worldgen coherence — execução autorizada agora
 
-O pacote antes deferido em `docs/post-refactor-worldgen-coherence.md` foi explicitamente promovido pelo usuário para implementação imediata após o Cut 24. Executar em cortes independentes, sempre com CI verde entre eles:
+### Cut 25 — ocean/coast height influence lower-only
 
-1. **Ocean margin lower-only:** margens oceânicas nunca podem elevar o terreno do vizinho; isso deve valer inclusive contra mountains/alps/mountain belts/volcano/gorge e qualquer futura mountain family.
-2. **Volume → surface constraints:** volume biomes podem declarar em quais surface biomes podem existir; seleção deve permanecer determinística e chunk-order invariant.
-3. **Volume surface indicator:** volume biome pode declarar structure/structure group opcional no surface biome para indicar sua presença; usar o pipeline generalizado de structures, não side effect ad-hoc.
-4. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, com transição gradual entre lobes/pedaços e estratificação grass -> dirt -> stone em vez de blobs aleatórios de stone.
+Implementação preparada em `terrain.rs`:
 
-Princípios do pacote:
+- terrain influences agora possuem política explícita de composição: `Blend` ou `LowerOnly`;
+- `BiomeTerrain::Ocean` resolve para `LowerOnly`; todos os demais terrains permanecem `Blend`;
+- o compositor calcula a altura blended normal e, quando existem influências unrestricted, limita o resultado ao baseline que existiria sem as influências lower-only;
+- consequência/invariante: adicionar ocean/coast influence nunca pode produzir altura maior que o terrain blend não-oceânico anterior;
+- ocean continua livre para abaixar/truncar/coastal-soften qualquer terrain, inclusive mountains/alps/mountain belt/volcano/gorge, sem enumerar IDs/famílias;
+- quando a região é somente ocean, o shape oceânico permanece inalterado;
+- shoreline material/surfaceMargin identity não foi alterada.
 
-- metadata/data-driven sempre que a regra é de conteúdo;
-- não hardcodar IDs de bioma quando uma primitive geral resolve;
+Regressões unitárias cobrem: lower-only não eleva, lower-only ainda reduz, composição only-lower-only preserva shape e Ocean resolve para a política correta.
+
+### Próximos workstreams
+
+1. **Volume → surface constraints:** volume biomes podem declarar em quais surface biomes podem existir; determinístico e chunk-order invariant.
+2. **Volume surface indicator:** volume biome pode declarar structure/structure group opcional no surface biome; usar structure planner generalizado.
+3. **Floating islands rewrite:** ilhas grandes, irregulares e coerentes, smooth lobe transitions e grass -> dirt -> stone.
+
+Princípios:
+
+- metadata/data-driven para relações de conteúdo;
+- sem hardcode de biome IDs quando primitive geral resolve;
 - determinismo, chunk seams e generation-order invariance obrigatórios;
 - Hydrology legado continua proibido;
-- mudanças de worldgen devem ser validadas em mundo novo.
+- validar mudanças de worldgen em mundo novo.
 
 ## Próximos passos
 
-1. fechar CI do Cut 24;
-2. implementar ocean margin lower-only;
-3. implementar constraints volume→surface;
-4. implementar surface indicator via structures;
-5. reescrever floating islands e estratificação;
-6. gameplay em mundo novo para validar o pacote e coletar novo log do hitch;
-7. retomar cold-start de `PrepareResources` depois do pacote.
+1. fechar CI do Cut 25;
+2. implementar constraints volume→surface;
+3. implementar surface indicator via structures;
+4. reescrever floating islands e estratificação;
+5. gameplay em mundo novo para validar pacote + novo log pós-Cut 24;
+6. retomar cold-start de `PrepareResources` depois do pacote.
 
 ## Regras de continuidade
 

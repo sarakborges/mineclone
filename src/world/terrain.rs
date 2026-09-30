@@ -12,6 +12,12 @@ use super::biome_field::{BiomeField, BiomeFieldSample};
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HeightInfluencePolicy {
+    Blend,
+    LowerOnly,
+}
+
 pub fn surface_height(
     position: IVec2,
     dimension: &DimensionDefinition,
@@ -29,23 +35,66 @@ pub(crate) fn surface_height_from_sample(
     biome_field: &BiomeField,
     sample: &BiomeFieldSample<'_>,
 ) -> i32 {
-    let mut height = 0.0;
     let horizontal = position.as_vec2();
-
-    for influence in &sample.influences {
+    let height = compose_surface_height(sample.influences.iter().map(|influence| {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
-        height += biome_surface_height(
+        let sampled_height = biome_surface_height(
             horizontal,
             dimension.sea_level,
             terrain_seed,
             terrain,
             modifiers,
             influence.terrain_strength,
-        ) * influence.weight;
-    }
+        );
+        (
+            sampled_height,
+            influence.weight,
+            height_influence_policy(terrain),
+        )
+    }));
 
     height.round().max(1.0) as i32
+}
+
+fn height_influence_policy(terrain: BiomeTerrain) -> HeightInfluencePolicy {
+    match terrain {
+        BiomeTerrain::Ocean { .. } => HeightInfluencePolicy::LowerOnly,
+        _ => HeightInfluencePolicy::Blend,
+    }
+}
+
+fn compose_surface_height(
+    influences: impl IntoIterator<Item = (f32, f32, HeightInfluencePolicy)>,
+) -> f32 {
+    let mut blended_sum = 0.0_f32;
+    let mut blended_weight = 0.0_f32;
+    let mut unrestricted_sum = 0.0_f32;
+    let mut unrestricted_weight = 0.0_f32;
+
+    for (height, weight, policy) in influences {
+        if weight <= 0.0 {
+            continue;
+        }
+        blended_sum += height * weight;
+        blended_weight += weight;
+        if policy == HeightInfluencePolicy::Blend {
+            unrestricted_sum += height * weight;
+            unrestricted_weight += weight;
+        }
+    }
+
+    if blended_weight <= f32::EPSILON {
+        return 0.0;
+    }
+
+    let blended = blended_sum / blended_weight;
+    if unrestricted_weight <= f32::EPSILON {
+        return blended;
+    }
+
+    let height_before_lower_only = unrestricted_sum / unrestricted_weight;
+    blended.min(height_before_lower_only)
 }
 
 pub(crate) fn terrain_density(surface_height: i32, world_y: i32) -> f32 {
@@ -320,4 +369,59 @@ fn smoothstep(value: f32) -> f32 {
 
 fn lerp(from: f32, to: f32, amount: f32) -> f32 {
     from + (to - from) * amount
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lower_only_influence_cannot_raise_unrestricted_height() {
+        let composed = compose_surface_height([
+            (84.0, 0.6, HeightInfluencePolicy::Blend),
+            (120.0, 0.4, HeightInfluencePolicy::LowerOnly),
+        ]);
+
+        assert_eq!(composed, 84.0);
+    }
+
+    #[test]
+    fn lower_only_influence_can_lower_unrestricted_height() {
+        let composed = compose_surface_height([
+            (140.0, 0.75, HeightInfluencePolicy::Blend),
+            (80.0, 0.25, HeightInfluencePolicy::LowerOnly),
+        ]);
+
+        assert_eq!(composed, 125.0);
+    }
+
+    #[test]
+    fn lower_only_terrain_without_unrestricted_neighbor_keeps_its_shape() {
+        let composed = compose_surface_height([
+            (72.0, 0.7, HeightInfluencePolicy::LowerOnly),
+            (68.0, 0.3, HeightInfluencePolicy::LowerOnly),
+        ]);
+
+        assert!((composed - 70.8).abs() < 0.001);
+    }
+
+    #[test]
+    fn ocean_uses_lower_only_height_policy() {
+        let ocean = BiomeTerrain::Ocean {
+            depth: 18.0,
+            amplitude: 6.0,
+            scale: 0.006,
+            detail_amplitude: 3.0,
+            detail_scale: 0.026,
+        };
+        let mountains = BiomeTerrain::Mountains {
+            base_height: 10.0,
+            amplitude: 80.0,
+            scale: 0.005,
+            sharpness: 2.0,
+        };
+
+        assert_eq!(height_influence_policy(ocean), HeightInfluencePolicy::LowerOnly);
+        assert_eq!(height_influence_policy(mountains), HeightInfluencePolicy::Blend);
+    }
 }
