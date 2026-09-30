@@ -16,6 +16,7 @@ use bevy::{
 
 use crate::{
     app::{
+        crash_log::log_gameplay_event,
         game_state::GameState,
         keybinds::{KeybindAction, Keybinds},
         pause_state::PauseState,
@@ -95,11 +96,15 @@ impl ChatState {
     }
 
     pub(crate) fn append_text(&mut self, text: impl Into<String>) {
-        self.append(ChatMessage::Text(text.into()));
+        let text = text.into();
+        log_gameplay_event(format!("chat.feedback kind=text text={text:?}"));
+        self.append(ChatMessage::Text(text));
     }
 
     pub(crate) fn append_error(&mut self, text: impl Into<String>) {
-        self.append(ChatMessage::Error(text.into()));
+        let text = text.into();
+        log_gameplay_event(format!("chat.feedback kind=error text={text:?}"));
+        self.append(ChatMessage::Error(text));
     }
 
     pub(crate) fn append_structure_file(&mut self, path: PathBuf) {
@@ -611,6 +616,13 @@ fn interpret_chat_submissions(
         let language = content.language.get();
         let localization = content.localization.as_ref();
         let parsed = parse_line(&submission.line);
+        log_gameplay_event(format!(
+            "command.submit line={:?} target={:?} parsed={:?} spectator={}",
+            submission.line,
+            submission.target,
+            parsed,
+            game_mode.is_spectator()
+        ));
         if game_mode.is_spectator() && !matches!(parsed, ParsedLine::Say(_)) {
             chat.append_error(feedback(
                 localization,
@@ -823,6 +835,7 @@ fn interpret_chat_submissions(
                     ));
                     continue;
                 };
+                let before_tags = meta_tags.clone();
                 let result = match action {
                     ModifyAction::Add => meta_tags.add(tag, value.map(str::to_owned)),
                     ModifyAction::Remove => meta_tags.remove(tag),
@@ -836,6 +849,16 @@ fn interpret_chat_submissions(
                     ));
                     continue;
                 }
+                log_gameplay_event(format!(
+                    "entity.modify entity={:?} name={} action={:?} tag={} value={:?} before={:?} after={:?}",
+                    entity,
+                    name,
+                    action,
+                    tag,
+                    value,
+                    before_tags,
+                    meta_tags
+                ));
                 let key = match action {
                     ModifyAction::Add => "chat.command.modify.addSuccess",
                     ModifyAction::Remove => "chat.command.modify.removeSuccess",
