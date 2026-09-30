@@ -65,29 +65,27 @@ jobs:
                   raise SystemExit(f'{path}: {bad} non-cardinal normals in {mesh_name}')
               return doc, mesh
 
-          hydro_paths = [
+          for path in [
               Path('assets/models/creatures/slime_hydro/slime_hydro.glb'),
               Path('assets/models/creatures/slime_hydro_large/slime_hydro_large.glb'),
-          ]
-          for path in hydro_paths:
+          ]:
               doc, mesh = cardinal_audit(path, 'hydro_water_droplet')
               mats = {p['material'] for p in mesh['primitives']}
               if 5 not in mats:
-                  raise SystemExit(f'{path}: Hydro droplet root/top material 5 missing')
+                  raise SystemExit(f'{path}: Hydro root/top material missing')
               if len(mats) < 4:
-                  raise SystemExit(f'{path}: Hydro droplet still too flat; only {len(mats)} materials')
-              print(path, 'Hydro continuation OK, materials=', sorted(mats))
+                  raise SystemExit(f'{path}: Hydro still too flat: {sorted(mats)}')
+              print(path, 'Hydro continuation OK', sorted(mats))
 
-          pyro_paths = [
+          for path in [
               Path('assets/models/creatures/slime_pyro/slime_pyro.glb'),
               Path('assets/models/creatures/slime_pyro_large/slime_pyro_large.glb'),
-          ]
-          for path in pyro_paths:
+          ]:
               doc, mesh = cardinal_audit(path, 'pyro_flame_tuft')
               mats = {p['material'] for p in mesh['primitives']}
               if 5 not in mats:
-                  raise SystemExit(f'{path}: Pyro flame root material does not match top material')
-              print(path, 'Pyro flame root transition OK, materials=', sorted(mats))
+                  raise SystemExit(f'{path}: Pyro root/top material missing')
+              print(path, 'Pyro transition OK', sorted(mats))
           PY
 
       - name: Commit refined models
