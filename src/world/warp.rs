@@ -109,16 +109,28 @@ fn warp_offset_index(offset: IVec3) -> Option<usize> {
     Some(x + y * WARP_SEARCH_DIAMETER + z * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WarpOutcome {
+    Succeeded(IVec3),
+    Failed,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct PendingWarp {
     target: Option<IVec3>,
     search: WarpSearchState,
+    outcome: Option<WarpOutcome>,
 }
 
 impl PendingWarp {
     pub(crate) fn request(&mut self, target: IVec3) {
         self.target = Some(target);
         self.search.reset();
+        self.outcome = None;
+    }
+
+    pub(crate) fn take_outcome(&mut self) -> Option<WarpOutcome> {
+        self.outcome.take()
     }
 
     pub(super) fn streaming_center(&self) -> Option<IVec3> {
@@ -192,8 +204,10 @@ pub(super) fn resolve_pending_warp(
             flight.reset_motion();
             gravity.reset_motion();
             swimming.reset_motion();
+            let feet = (destination - Vec3::Y * PLAYER_EYE_HEIGHT).floor().as_ivec3();
             pending.target = None;
             pending.search.reset();
+            pending.outcome = Some(WarpOutcome::Succeeded(feet));
             *slow_search_warned = false;
         }
         WarpSearchResult::Exhausted => {
@@ -204,6 +218,7 @@ pub(super) fn resolve_pending_warp(
             );
             pending.target = None;
             pending.search.reset();
+            pending.outcome = Some(WarpOutcome::Failed);
             *slow_search_warned = false;
         }
     }
@@ -319,7 +334,6 @@ fn candidate_state(world: &VoxelWorld, feet: IVec3) -> CandidateState {
     CandidateState::Valid(eye)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,5 +410,6 @@ mod tests {
         assert_eq!(pending.search.radius, 0);
         assert!(pending.search.frontier.is_empty());
         assert!(pending.search.visited.is_empty());
+        assert!(pending.outcome.is_none());
     }
 }
