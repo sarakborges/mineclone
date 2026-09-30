@@ -86,10 +86,8 @@ hydro_block = r'''    s = body_width / 1.20
     max_layer = max(layer_info)
 
     def droplet_material(ix: int, iy: int, iz: int, normal) -> int:
-        # The first two layers are literally the top material of the body.
-        # This removes the visible color seam where the droplet emerges.
         if iy <= 1:
-            return 5  # SlimeShellLight: same material used by upward top faces.
+            return 5  # exact upward/top material of the Hydro body
         t = iy / max_layer
         rx, _rz, shift = layer_info[iy]
         rel_x = (ix - shift) / max(rx, 1.0)
@@ -117,8 +115,6 @@ hydro_block = r'''    s = body_width / 1.20
         for normal, corners in detail_faces:
             if (ix + normal[0], iy + normal[1], iz + normal[2]) in droplet:
                 continue
-            # Do not draw the buried underside: the extension is meant to grow
-            # through the slime top, not sit on it as a separate prop.
             if iy == 0 and normal == (0, -1, 0):
                 continue
             pts = [
@@ -129,9 +125,7 @@ hydro_block = r'''    s = body_width / 1.20
             ]
             quad(drop_buckets[droplet_material(ix, iy, iz, normal)], pts, normal)
 
-    details_prims = [
-        p for p in (prim(b, i) for i, b in enumerate(drop_buckets)) if p
-    ]
+    details_prims = [p for p in (prim(b, i) for i, b in enumerate(drop_buckets)) if p]
     meshes.append({"name": "hydro_water_droplet", "primitives": details_prims})
     details_mesh = len(meshes) - 1
     detail_height = (max_layer + 1) * cell_y - 0.105 * s
@@ -147,37 +141,35 @@ hydro_path.write_text(hydro)
 
 pyro_path = ROOT / 'assets/models/creatures/slime_pyro/generate_slime_pyro.py'
 pyro = pyro_path.read_text()
-# Preserve every flame coordinate/shape. Only introduce a dedicated root bucket
-# using exactly the same material as the top surface of the blob.
-pyro = pyro.replace('    fire_dark = bucket()\n    fire_orange = bucket()', '    fire_root = bucket()\n    fire_dark = bucket()\n    fire_orange = bucket()', 1)
-pyro = pyro.replace(', fire_dark),', ', fire_root),')
-pyro = pyro.replace('    details_prims = [\n        prim(fire_dark, 9),', '    details_prims = [\n        prim(fire_root, 5),\n        prim(fire_dark, 9),', 1)
+# Preserve every flame coordinate and size. Only re-route the existing dark
+# root layers to a bucket rendered with the exact top-surface material.
+needle = '    fire_dark = bucket()\n    fire_orange = bucket()'
+if needle not in pyro:
+    raise SystemExit('Pyro bucket marker not found')
+pyro = pyro.replace(needle, '    fire_root = bucket()\n    fire_dark = bucket()\n    fire_orange = bucket()', 1)
+root_count = pyro.count('fire_dark),')
+if root_count == 0:
+    raise SystemExit('No Pyro root tuples found')
+pyro = pyro.replace('fire_dark),', 'fire_root),')
+pyro, primitive_count = re.subn(
+    r'(\s*details_prims\s*=\s*\[\s*)prim\(fire_dark,\s*9\),',
+    r'\1prim(fire_root, 5),\n        prim(fire_dark, 9),',
+    pyro,
+    count=1,
+)
+if primitive_count != 1 or 'prim(fire_root, 5)' not in pyro:
+    raise SystemExit('Could not insert Pyro root primitive')
+print(f'Pyro flame roots moved to top material: {root_count} root blocks')
 pyro = pyro.replace('"generator": "Asteria Pyro flame rebuild v1"', '"generator": "Asteria Pyro flame rebuild v2"')
 pyro = pyro.replace('"reference_design": "orange fire blob with no horns and an asymmetric integrated flame tuft on top"', '"reference_design": "irregular flames rise from the slime top; every flame root begins in the exact top-surface color before transitioning into fire colors"')
 pyro_path.write_text(pyro)
 
 
 for path, construction, reference in [
-    (
-        ROOT / 'assets/models/creatures/slime_hydro/slime_hydro.collider.json',
-        'rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face',
-        'Hydro top is pulled upward as part of the slime silhouette, not a separate droplet object; no color seam at the root',
-    ),
-    (
-        ROOT / 'assets/models/creatures/slime_hydro_large/slime_hydro_large.collider.json',
-        'rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face',
-        'Hydro top is pulled upward as part of the slime silhouette, not a separate droplet object; no color seam at the root',
-    ),
-    (
-        ROOT / 'assets/models/creatures/slime_pyro/slime_pyro.collider.json',
-        'rounded Pyro blob + irregular asymmetric voxel flames; flame roots use the exact top body material before transitioning to fire colors + square texture face',
-        'Pyro flame geometry retained; color transition now starts from the slime top color',
-    ),
-    (
-        ROOT / 'assets/models/creatures/slime_pyro_large/slime_pyro_large.collider.json',
-        'rounded Pyro blob + irregular asymmetric voxel flames; flame roots use the exact top body material before transitioning to fire colors + square texture face',
-        'Pyro flame geometry retained; color transition now starts from the slime top color',
-    ),
+    (ROOT / 'assets/models/creatures/slime_hydro/slime_hydro.collider.json', 'rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face', 'Hydro top is pulled upward as part of the slime silhouette, not a separate droplet object; no color seam at the root'),
+    (ROOT / 'assets/models/creatures/slime_hydro_large/slime_hydro_large.collider.json', 'rounded Hydro blob + broad exposed-face voxel continuation of the top that tapers into a pointed droplet; root uses the exact top body material + square texture face', 'Hydro top is pulled upward as part of the slime silhouette, not a separate droplet object; no color seam at the root'),
+    (ROOT / 'assets/models/creatures/slime_pyro/slime_pyro.collider.json', 'rounded Pyro blob + irregular asymmetric voxel flames; flame roots use the exact top body material before transitioning to fire colors + square texture face', 'Pyro flame geometry retained; color transition now starts from the slime top color'),
+    (ROOT / 'assets/models/creatures/slime_pyro_large/slime_pyro_large.collider.json', 'rounded Pyro blob + irregular asymmetric voxel flames; flame roots use the exact top body material before transitioning to fire colors + square texture face', 'Pyro flame geometry retained; color transition now starts from the slime top color'),
 ]:
     data = json.loads(path.read_text())
     data.setdefault('authoring', {})['construction'] = construction
