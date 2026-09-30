@@ -8,6 +8,8 @@ mod spawning;
 
 use std::time::Duration;
 
+use bevy::ecs::system::Local;
+
 use self::{
     assets::wait_for_gameplay_assets,
     finalization::finalize_initial_world,
