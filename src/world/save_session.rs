@@ -14,7 +14,7 @@ use crate::{
         fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
         object::ObjectRegistry, tool::ToolRegistry,
     },
-    creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
+    creatures::{CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
@@ -137,6 +137,7 @@ type SavedCreatureQuery<'w, 's> = Query<
         &'static CreatureInstance,
         &'static Transform,
         &'static EntityHealth,
+        &'static EntityMetaTags,
     ),
 >;
 
@@ -158,6 +159,7 @@ impl WorldSaveEntities<'_, '_> {
         Ok(SavedPlayer {
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
+            spectator: *mode == GameMode::Spectator,
             flying: flight.is_active(),
             health: Some(health.current()),
             yaw: camera.yaw,
@@ -170,11 +172,12 @@ impl WorldSaveEntities<'_, '_> {
         creatures.extend(
             self.creatures
                 .iter()
-                .filter(|(_, _, health)| !health.is_dead())
-                .map(|(instance, transform, health)| SavedCreature {
+                .filter(|(_, _, health, _)| !health.is_dead())
+                .map(|(instance, transform, health, meta_tags)| SavedCreature {
                     definition_id: instance.definition_id.clone(),
                     position: transform.translation.to_array(),
                     health: health.current(),
+                    meta_tags: meta_tags.clone(),
                 }),
         );
         creatures.sort_unstable_by(|left, right| {
