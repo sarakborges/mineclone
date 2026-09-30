@@ -11,6 +11,7 @@ use crate::{
     },
     gameplay::modal::GameplayModalState,
     localization::{ActiveLanguage, UiLocalization},
+    player::game_mode::GameMode,
     ui::typography,
 };
 
@@ -44,7 +45,6 @@ impl Plugin for PlayerHudPlugin {
 
 #[derive(Component)]
 struct PlayerHudRoot;
-
 
 #[derive(Component)]
 struct InventoryHint;
@@ -94,6 +94,7 @@ fn spawn_player_hud(
     hint: InventoryHintContent,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
+    game_mode: Single<&GameMode>,
 ) {
     commands
         .spawn((
@@ -107,7 +108,7 @@ fn spawn_player_hud(
                 row_gap: px(8),
                 ..default()
             },
-            player_hud_visibility(*pause_state.get(), *settings_state.get()),
+            player_hud_visibility(*pause_state.get(), *settings_state.get(), *game_mode),
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
@@ -123,8 +124,15 @@ fn spawn_player_hud(
         });
 }
 
-fn player_hud_visibility(pause: PauseState, settings: SettingsState) -> Visibility {
-    if pause == PauseState::Paused || settings == SettingsState::Open {
+fn player_hud_visibility(
+    pause: PauseState,
+    settings: SettingsState,
+    game_mode: GameMode,
+) -> Visibility {
+    if pause == PauseState::Paused
+        || settings == SettingsState::Open
+        || game_mode.is_spectator()
+    {
         Visibility::Hidden
     } else {
         Visibility::Visible
@@ -134,15 +142,15 @@ fn player_hud_visibility(pause: PauseState, settings: SettingsState) -> Visibili
 fn sync_player_hud_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
+    game_mode: Single<&GameMode>,
     mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
 ) {
-    let next = player_hud_visibility(*pause.get(), *settings.get());
+    let next = player_hud_visibility(*pause.get(), *settings.get(), *game_mode);
     for mut visibility in &mut roots {
         if *visibility != next {
             *visibility = next;
         }
     }
-
 }
 
 fn sync_inventory_hint(
