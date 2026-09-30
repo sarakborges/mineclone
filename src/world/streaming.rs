@@ -57,6 +57,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    chunk_visibility::ChunkPresentationSelection,
     fluid_updates::PendingFluidUpdates,
     presentation_snapshot::PresentationLightingRevisions,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
@@ -100,15 +101,6 @@ impl ChunkStreamingState {
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.residency.keeps_loaded(coord)
-    }
-
-    pub(super) fn retains_render_mesh(&self, coord: IVec3) -> bool {
-        let Some(center) = self.selection_state.center() else {
-            return false;
-        };
-        let (_, hide_radius) =
-            chunk_visibility_radii(self.selection_state.horizontal_radius());
-        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -548,6 +540,8 @@ pub(super) fn stream_chunks(
     let allow_forward_preload = warp_center.is_none();
     let current_tick = work.world_ticks.current_tick();
 
+    presentation_selection.sync_from_streaming(Some(center), horizontal_radius);
+
     if work
         .state
         .selection_state
@@ -594,7 +588,7 @@ pub(super) fn stream_chunks(
         let cancelled_meshes = {
             let state = &work.state;
             work.mesh_tasks
-                .cancel_where(|coord| !state.retains_render_mesh(coord))
+                .cancel_where(|coord| !presentation_selection.retains_render_mesh(coord))
         };
         for coord in cancelled_meshes {
             work.state.clear_initial_mesh_seed_catchup(coord);
@@ -612,6 +606,7 @@ pub(super) fn stream_chunks(
             &mut renderer,
             &mut work,
             &mut queues,
+            &presentation_selection,
             current_tick,
         );
     }
@@ -840,28 +835,6 @@ mod tests {
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(state.initial_mesh_seed_catchup(coord).is_none());
-    }
-
-    #[test]
-    fn forward_preload_stays_resident_without_allocating_a_gpu_mesh() {
-        let visible = IVec3::new(13, 0, 0);
-        let hysteresis = IVec3::new(14, 0, 0);
-        let preload_only = IVec3::new(20, 0, 0);
-        let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::ZERO, 12);
-        state
-            .residency
-            .desired
-            .extend([visible, hysteresis, preload_only]);
-
-        assert!(state.retains_render_mesh(hysteresis));
-        assert!(!state.retains_render_mesh(preload_only));
-
-        state.mark_ready(preload_only);
-        state.mark_ready(hysteresis);
-        state.mark_ready(visible);
-        assert_eq!(state.pop_ready(), Some(visible));
-        assert!(state.ready.contains(hysteresis));
-        assert!(state.ready.contains(preload_only));
     }
 
     #[test]
