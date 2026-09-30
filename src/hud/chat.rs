@@ -703,6 +703,10 @@ fn interpret_chat_submissions(
                         ));
                         continue;
                     }
+                    log_gameplay_event(format!(
+                        "command.spawn success id={} name={} position={} meta_tag={:?}",
+                        id, name, position_text, meta_tag
+                    ));
                     chat.append_text(feedback(
                         localization,
                         language,
@@ -714,6 +718,10 @@ fn interpret_chat_submissions(
 
                 let response = placement.spawn(&mut commands, id, &mut reserved);
                 if response.starts_with("Spawned ") {
+                    log_gameplay_event(format!(
+                        "command.spawn success id={} name={} position={} meta_tag=None",
+                        id, name, position_text
+                    ));
                     chat.append_text(feedback(
                         localization,
                         language,
@@ -731,6 +739,10 @@ fn interpret_chat_submissions(
             ParsedLine::Place(id, variation) => {
                 let response = placement.place(id, variation, &reserved);
                 if response.starts_with("Placed ") {
+                    log_gameplay_event(format!(
+                        "command.place success reference={} variation={:?} response={:?}",
+                        id, variation, response
+                    ));
                     chat.append_text(localize_place_success(&response, localization, language)
                         .unwrap_or_else(|| {
                             feedback(localization, language, "chat.command.failed", &[])
