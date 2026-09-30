@@ -1,14 +1,27 @@
 # HANDOFF — Asteria / Mineclone
 
 > Handoff corrente e operacional. Histórico anterior ao Cut 16: `HANDOFF_ARCHIVE_2026-09-30_PRE_CUT16.md`; histórico antigo: `HANDOFF_ARCHIVE_2026-09-25.md`; decisões de arquitetura: `docs/asteria-core-rebuild.md`.
+## 2026-09-30 — 0.68.51 Dendro reference rebuild + slime asset regression repair
+
+- O merge do Asteria core rebuild em `develop` (`48197a30ed78cc6b3eadd5f2be7fcf0d2a9c4204`) trouxe de volta versões antigas dos assets de slime e sobrescreveu o patch visual aprovado logo antes; este bloco restaura explicitamente o estado aprovado de `aaad2601eccd99336994479261aa15c349cd0022` antes de aplicar o Dendro novo.
+- Todos os `SlimeFace` aprovados permanecem 1:1 para texturas 64x64 e as nove faces elementais do patch do usuário são preservadas, incluindo a face própria do Electro.
+- Electro continua como bolota amarelo/dourada + antena central; detalhes elétricos restantes ficam na textura, sem circuitos frontais em geometria.
+- Dendro normal: bolota verde-clara limpa + broto, frondes de samambaia e gavinha apenas no topo.
+- Dendro large: bolota verde-clara limpa + flor laranja larga, botão verde compacto, sépalas e folhagem no topo.
+- Generator reproduzível: `assets/models/creatures/slime_dendro/generate_slime_dendro.py`; normal + large preservam os seis clips de animação existentes.
+- Colliders físicos continuam do corpo blob. `SlimeFace` continua em `textures/creatures/slime_dendro/face.png`.
+- Validação: face check 1:1 + audit de todos os GLBs antes do commit. QA visual final permanece in-game.
+
+VERSION: `0.68.51`.
+
 
 ## Estado atual — 2026-09-30
 
 - Repo: `sarakborges/mineclone`.
-- Branch: `architecture/asteria-core-rebuild`.
-- PR draft: #22 `Asteria core rebuild` -> `develop`.
-- `develop` sincronizado até `c3821a124d37c8d22ff981a3f3fb01badf2a193e` (`0.68.49`).
-- `VERSION` acompanha agora `develop` em `0.68.49`; os cutovers internos seguintes não devem criar bumps isolados sem necessidade de release/content.
+- Branch: `develop` (Asteria core rebuild já integrado).
+- Asteria core rebuild integrado em `develop` pelo merge `48197a30ed78cc6b3eadd5f2be7fcf0d2a9c4204`.
+- `develop` contém o core rebuild integrado e os patches de slime subsequentes; versão de conteúdo atual `0.68.51`.
+- `VERSION` em `0.68.51`; este bump cobre mudanças de conteúdo/modelos de slime.
 - Rust + Bevy permanecem; o rebuild troca boundaries/ownership, não a stack.
 - Hydrology legado foi removido deliberadamente e não deve voltar.
 - Old saves/legacy compatibility não são prioridade.

@@ -42,7 +42,8 @@
     "ElementDark",
     "ElementWhite",
     "ElementRose",
-    "FlowerOrange"
+    "FlowerOrange",
+    "FlowerOrangeLight"
   ],
   "animations": {
     "idle": "Idle",
