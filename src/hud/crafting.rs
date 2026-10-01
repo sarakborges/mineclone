@@ -35,6 +35,7 @@ use super::inventory::{CharacterInfoInventoryRoot, CharacterInfoInventorySpawn};
 const RUSTIC_WORKBENCH_ID: &str = "asteria:rustic_workbench";
 const RECIPE_LIST_WIDTH: f32 = 280.0;
 const RECIPE_DETAILS_WIDTH: f32 = 520.0;
+const CURRENT_WORK_STATION_WIDTH: f32 = 220.0;
 const CRAFTING_PANEL_GAP: f32 = 18.0;
 const CRAFTING_SECTION_GAP: f32 = 12.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
@@ -288,6 +289,7 @@ fn spawn_crafting_root(
                 spawn_recipe_details(right, selected_recipe, content, hotbar);
                 inventory.spawn_player_only(right);
             });
+            spawn_current_work_station(root, &station, content);
         });
 }
 
@@ -405,6 +407,35 @@ fn spawn_recipe_details(
         panel.spawn((
             CraftingStatusText,
             typography::muted(""),
+            Pickable::IGNORE,
+        ));
+    });
+}
+
+fn spawn_current_work_station(
+    root: &mut ChildSpawnerCommands,
+    station: &str,
+    content: &CraftingContent<'_>,
+) {
+    root.spawn((
+        surface::hud_container(Node {
+            width: px(CURRENT_WORK_STATION_WIDTH),
+            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(CRAFTING_SECTION_GAP),
+            ..default()
+        }),
+        Pickable::IGNORE,
+    ))
+    .with_children(|panel| {
+        panel.spawn((
+            typography::hud_heading("Current Work Station"),
+            Pickable::IGNORE,
+        ));
+        panel.spawn((
+            typography::hud_subheading(content.item_name(station)),
             Pickable::IGNORE,
         ));
     });
