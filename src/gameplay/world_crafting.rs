@@ -64,7 +64,7 @@ fn apply_world_recipe(
     let game_mode = player.into_inner();
     let interaction_override = keys.pressed(keybinds.key_code(KeybindAction::Descend));
     if !buttons.just_pressed(MouseButton::Right)
-        || *game_mode != GameMode::Survival
+        || game_mode.is_spectator()
         || interaction_override
     {
         return;
