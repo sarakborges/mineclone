@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_gameplay_event, log_gameplay_warn},
     content::{
         block::{BlockDefinition, BlockRegistry, DEFAULT_BLOCK_BREAK_TICKS},
         block_id::intern_block_id,
@@ -13,8 +13,8 @@ use crate::{
         object::ObjectRegistry,
         object_id::intern_object_id,
         tool::{ToolDefinition, ToolRegistry},
-        tool_id::intern_tool_id,
         tool_behavior::MINE_TOOL_BEHAVIOR_ID,
+        tool_id::intern_tool_id,
     },
     gameplay::{
         availability::world_interaction_available,
@@ -110,6 +110,20 @@ impl Plugin for BlockMiningPlugin {
     }
 }
 
+fn cancel_mining(mining: &mut BlockMiningState, reason: &'static str) {
+    if let Some(target) = mining.target {
+        log_gameplay_event(format!(
+            "block.mine.cancel voxel={:?} block={} tool={} accumulated_work={:.3} reason={}",
+            target.voxel,
+            target.block_id,
+            target.selected_item.unwrap_or("<empty>"),
+            mining.accumulated_work,
+            reason
+        ));
+    }
+    mining.reset();
+}
+
 fn advance_survival_mining(
     buttons: Res<ButtonInput<MouseButton>>,
     player: Single<&GameMode, With<GameplayCamera>>,
@@ -118,17 +132,21 @@ fn advance_survival_mining(
     world_ticks: Res<WorldTickClock>,
     mut runtime: MiningRuntime,
 ) {
-    if *player.into_inner() != GameMode::Survival || !buttons.pressed(MouseButton::Left) {
-        runtime.mining.reset();
+    if *player.into_inner() != GameMode::Survival {
+        cancel_mining(&mut runtime.mining, "not_survival");
+        return;
+    }
+    if !buttons.pressed(MouseButton::Left) {
+        cancel_mining(&mut runtime.mining, "input_released");
         return;
     }
 
     let Some(hit) = runtime.targeted.0 else {
-        runtime.mining.reset();
+        cancel_mining(&mut runtime.mining, "target_lost");
         return;
     };
     if runtime.world.read().block_id_at(hit.voxel) != Some(hit.block_id) {
-        runtime.mining.reset();
+        cancel_mining(&mut runtime.mining, "target_changed");
         return;
     }
 
@@ -136,7 +154,7 @@ fn advance_survival_mining(
     let selected_tool = selected_item.and_then(|item_id| content.tools.get(item_id));
 
     if selected_tool.is_some_and(|tool| tool.left_behavior != MINE_TOOL_BEHAVIOR_ID) {
-        runtime.mining.reset();
+        cancel_mining(&mut runtime.mining, "tool_behavior_changed");
         return;
     }
 
@@ -147,6 +165,9 @@ fn advance_survival_mining(
     };
     let started = runtime.mining.target != Some(target);
     if started {
+        if runtime.mining.target.is_some() {
+            cancel_mining(&mut runtime.mining, "target_or_tool_changed");
+        }
         runtime.mining.begin(target);
         log_gameplay_event(format!(
             "block.mine.start voxel={:?} block={} tool={}",
@@ -167,10 +188,22 @@ fn advance_survival_mining(
     }
 
     let Some(block) = content.blocks.get(hit.block_id) else {
-        runtime.mining.reset();
+        log_gameplay_warn(format!(
+            "block.mine rejected voxel={:?} block={} reason=missing_block_definition",
+            hit.voxel, hit.block_id
+        ));
+        cancel_mining(&mut runtime.mining, "missing_block_definition");
         return;
     };
     let Some(speed) = effective_mining_speed(block, selected_tool) else {
+        if started {
+            log_gameplay_event(format!(
+                "block.mine blocked voxel={:?} block={} tool={} reason=required_tool_mismatch",
+                hit.voxel,
+                hit.block_id,
+                selected_item.unwrap_or("<empty>")
+            ));
+        }
         return;
     };
 
@@ -209,8 +242,24 @@ fn advance_survival_mining(
             &content,
             &mut runtime.item_spawns,
         );
+        log_gameplay_event(format!(
+            "block.mine.finish voxel={:?} block={} tool={} required_work={:.3} accumulated_work={:.3} speed={:.3}",
+            hit.voxel,
+            hit.block_id,
+            selected_item.unwrap_or("<empty>"),
+            required_work,
+            runtime.mining.accumulated_work,
+            speed
+        ));
         runtime.targeted.0 = None;
         runtime.viewmodel.play_break_fast();
+    } else {
+        log_gameplay_warn(format!(
+            "block.mine failed voxel={:?} block={} tool={} reason=block_mutation_rejected",
+            hit.voxel,
+            hit.block_id,
+            selected_item.unwrap_or("<empty>")
+        ));
     }
     runtime.mining.reset();
 }
