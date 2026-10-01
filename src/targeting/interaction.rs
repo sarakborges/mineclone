@@ -155,7 +155,7 @@ fn edit_targeted_block(
         {
             let mut stack = ItemStack::new(hit.block_id);
             if let Some(cell) = runtime.read().cell_at(hit.voxel)
-                && let Some(biome_id) = cell.secondary_property(BIOME_TINT_METADATA_KEY)
+                && let Some(biome_id) = cell.state(BIOME_TINT_METADATA_KEY)
             {
                 stack = stack.with_metadata(BIOME_TINT_METADATA_KEY, biome_id);
             }
@@ -535,7 +535,7 @@ fn edit_targeted_voxel(
     let orientation = placement_orientation.for_block(request.selected_slot, block);
     let mut cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
     if let Some(biome_id) = request.biome_tint {
-        cell = cell.with_secondary_property(BIOME_TINT_METADATA_KEY, biome_id);
+        cell = cell.with_state(BIOME_TINT_METADATA_KEY, biome_id);
     }
     if is_stackable_layer(block) {
         cell = stackable_layer_mask(1).apply_to_cell(cell, false);
