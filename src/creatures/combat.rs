@@ -77,7 +77,7 @@ impl CreatureAttackRuntime<'_, '_> {
         animation.trigger(if dead { "death" } else { "hurt" });
         if dead {
             log_gameplay_event(format!(
-                "entity.death entity={:?} type=creature id={} source=creature_attack position={:?}",
+                "entity.death entity={:?} type=creature id={} source=player_attack position={:?}",
                 entity, instance.definition_id, creature_transform.translation
             ));
             self.commands
