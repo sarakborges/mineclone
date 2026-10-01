@@ -347,10 +347,10 @@ fn update_target_hud(
         return;
     }
 
-    if let Some(support) = state.object_target.0
-        && let Some(object_cell) = state.world.object_at(support)
-        && let Some(object) = content.objects.get(object_cell.object_id)
+    if let Some(key) = state.object_target.0
+        && let Some(object) = content.objects.get(key.object.object_id)
     {
+        let support = key.support;
         let language = state.language.get();
         let light = state.world.light_at(support + IVec3::Y);
         let sky_light = light.sky();
