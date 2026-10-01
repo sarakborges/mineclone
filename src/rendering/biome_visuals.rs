@@ -23,14 +23,23 @@ impl CurrentBiomeVisuals<'_> {
         &self,
         value: impl Fn(&BiomeDefinition) -> f32,
     ) -> f32 {
+        let surface_strength = (1.0 - self.current.volume_strength).clamp(0.0, 1.0);
+        let volume_strength = self.current.volume_strength.clamp(0.0, 1.0);
+        let value = &value;
+
         self.current
-            .influences
+            .surface_influences
             .iter()
             .filter_map(|influence| {
                 self.biomes
                     .get(&influence.id)
-                    .map(|biome| value(biome) * influence.weight)
+                    .map(|biome| value(biome) * influence.weight * surface_strength)
             })
+            .chain(self.current.volume_influences.iter().filter_map(|influence| {
+                self.biomes
+                    .get(&influence.id)
+                    .map(|biome| value(biome) * influence.weight * volume_strength)
+            }))
             .sum()
     }
 
@@ -38,10 +47,24 @@ impl CurrentBiomeVisuals<'_> {
         &self,
         value: impl Fn(&BiomeDefinition) -> Hsi,
     ) -> Hsi {
-        Hsi::blend_weighted(self.current.influences.iter().filter_map(|influence| {
-            self.biomes
-                .get(&influence.id)
-                .map(|biome| (value(biome), influence.weight))
-        }))
+        let surface_strength = (1.0 - self.current.volume_strength).clamp(0.0, 1.0);
+        let volume_strength = self.current.volume_strength.clamp(0.0, 1.0);
+        let value = &value;
+
+        Hsi::blend_weighted(
+            self.current
+                .surface_influences
+                .iter()
+                .filter_map(|influence| {
+                    self.biomes.get(&influence.id).map(|biome| {
+                        (value(biome), influence.weight * surface_strength)
+                    })
+                })
+                .chain(self.current.volume_influences.iter().filter_map(|influence| {
+                    self.biomes.get(&influence.id).map(|biome| {
+                        (value(biome), influence.weight * volume_strength)
+                    })
+                })),
+        )
     }
 }
