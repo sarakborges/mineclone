@@ -56,6 +56,9 @@ impl InventoryCursor {
         if let Some((key, value)) = metadata {
             creative_stack = creative_stack.with_metadata(key, value);
         }
+        if fill_stack {
+            creative_stack = creative_stack.with_quantity(MAX_STACK_SIZE);
+        }
 
         let Some(mut held_stack) = self.item.take() else {
             self.item = Some(creative_stack);
@@ -66,9 +69,6 @@ impl InventoryCursor {
             return;
         }
 
-        if fill_stack {
-            creative_stack = creative_stack.with_quantity(MAX_STACK_SIZE);
-        }
         let _ = held_stack.merge_from(creative_stack);
         self.item = Some(held_stack);
     }
@@ -105,6 +105,15 @@ mod tests {
         cursor.pick_creative_item("asteria:pebble", None, false);
 
         assert_eq!(cursor.stack().unwrap().quantity(), 2);
+    }
+
+    #[test]
+    fn creative_shift_click_fills_empty_cursor_stack() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item("asteria:pebble", None, true);
+
+        assert_eq!(cursor.stack().unwrap().quantity(), MAX_STACK_SIZE);
     }
 
     #[test]
