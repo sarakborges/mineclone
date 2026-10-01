@@ -13,7 +13,7 @@ use crate::{
         builtin_ids::BUCKET_FLUID_METADATA_KEY,
         fluid::FluidRegistry,
         inventory_category::InventoryCategoryRegistry,
-        item::{ItemRegistry, display_name_with_metadata},
+        item::{ItemDisplayContext, ItemRegistry, display_name_with_metadata},
         layer::LayerRegistry,
         object::ObjectRegistry,
         tool::ToolRegistry,
@@ -103,18 +103,17 @@ struct MetadataDisplayContent<'w> {
 
 impl MetadataDisplayContent<'_> {
     fn name(&self, item_id: &str, metadata: Option<(&str, &str)>) -> String {
-        display_name_with_metadata(
-            item_id,
-            metadata,
-            &self.items,
-            &self.blocks,
-            &self.layers,
-            &self.objects,
-            &self.tools,
-            &self.fluids,
-            &self.localization,
-            self.language.get(),
-        )
+        let context = ItemDisplayContext {
+            items: &self.items,
+            blocks: &self.blocks,
+            layers: &self.layers,
+            objects: &self.objects,
+            tools: &self.tools,
+            fluids: &self.fluids,
+            localization: &self.localization,
+            language: self.language.get(),
+        };
+        display_name_with_metadata(item_id, metadata, &context)
     }
 }
 
