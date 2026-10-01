@@ -87,6 +87,7 @@ pub(super) fn build_world_object_chunk(
     let chunk_origin_vec = chunk_origin.as_vec3();
     let mut batches: HashMap<ObjectBatchKey, Vec<ObjectBatchAccumulator>> = HashMap::new();
     let mut primitive_meshes: HashMap<String, Mesh> = HashMap::new();
+    let mut model_entities = Vec::new();
     let mut object_count = 0usize;
 
     for (x, y, z, object) in chunk.object_voxels() {
@@ -96,6 +97,25 @@ pub(super) fn build_world_object_chunk(
         };
         let support_cell = content.world.cell_at(support);
         let mut transform = world_object_transform(support, support_cell, object, definition);
+
+        if let ObjectVisualDefinition::Model { path } = &definition.visual {
+            let world_asset = content
+                .asset_server
+                .load(GltfAssetLabel::Scene(0).from_asset(path.clone()));
+            let entity = commands
+                .spawn((
+                    Name::new(format!("World Object Model ({})", definition.id)),
+                    WorldAssetRoot(world_asset),
+                    transform,
+                    Visibility::Visible,
+                    DespawnOnExit(GameState::Gameplay),
+                ))
+                .id();
+            model_entities.push(entity);
+            object_count += 1;
+            continue;
+        }
+
         let tint = block_tint_at(
             definition.tint,
             Vec2::new(transform.translation.x, transform.translation.z),
@@ -150,8 +170,10 @@ pub(super) fn build_world_object_chunk(
         object_count += 1;
     }
 
-    let batch_count = batches.values().map(Vec::len).sum();
-    let mut entities = Vec::with_capacity(batch_count);
+    let mesh_batch_count = batches.values().map(Vec::len).sum::<usize>();
+    let batch_count = model_entities.len() + mesh_batch_count;
+    let mut entities = model_entities;
+    entities.reserve(mesh_batch_count);
     for (key, segments) in batches {
         for segment in segments {
             let mesh = assets.meshes.add(segment.mesh);
