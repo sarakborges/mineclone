@@ -1,5 +1,14 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-10-01 — Biome exclusivity, minimum size and locate/warp correction
+
+- Wasteland, Witchwood and Enchanted Forest now share `exclusiveNeighborGroup: "inland_biomes"`, so different members of that set cannot border one another.
+- Fixed `exclusiveNeighborGroup` semantics so a biome can remain continuous with another site of the **same biome**; the group only blocks different biome IDs.
+- Surface biome `size.min` is now enforced as a hard lower bound during site selection, including against different neighboring biome sites that define the candidate region boundary.
+- `/locate biome` for volume biomes now verifies the anchor with the same resolved volume selection used by terrain generation. It no longer reports a geometric volume anchor when surface constraints (such as Floating Islands requiring Plains) reject it.
+- Warp safe-position search radius increased from 32 to 48 blocks so current Floating Islands (`size.y.max = 36`) can be reached from their located anchor.
+- Validation for the latest warp commit is running; localization/content/GLB audits have completed successfully so far.
+
 ## 2026-10-01 — Independent random spawn weighting
 
 - Corrected the previous interpretation: the five mountain surface biomes are **individual spawn choices**, not one family for random starting biome selection.
