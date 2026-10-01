@@ -8,8 +8,8 @@ use bevy::{
 
 use crate::{
     content::{
-        builtin_ids::DYED_PROPERTY_ID,
         biome::BiomeRegistry,
+        builtin_ids::{BUCKET_FLUID_METADATA_KEY, DYED_PROPERTY_ID, WATER_FLUID_ID},
         item::ItemRegistry,
         object::{ObjectRegistry, ObjectVisualDefinition},
         object_id::intern_object_id,
@@ -29,6 +29,11 @@ use crate::{
 const HELD_SPRITE_SIZE: f32 = 0.52;
 const HELD_TOOL_DISPLAY_ANGLE: f32 = 0.30;
 const HELD_TINT_DEPTH: f32 = 0.004;
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum HeldSpriteKind {
@@ -94,7 +99,8 @@ pub(crate) struct HeldSpriteContent<'w> {
 
 impl HeldSpriteContent<'_> {
     fn selected_visual(&self) -> Option<HeldSpriteVisual<'_>> {
-        let item_id = self.hotbar.item_at(self.hotbar.selected_slot())?;
+        let stack = self.hotbar.stack_at(self.hotbar.selected_slot())?;
+        let item_id = stack.id();
 
         if let Some(item) = self.items.get(item_id) {
             return Some(HeldSpriteVisual {
@@ -119,6 +125,19 @@ impl HeldSpriteContent<'_> {
         }
 
         let tool = self.tools.get(item_id)?;
+        if item_id == BUCKET_TOOL_ID {
+            let icon = match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
+                Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
+                Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
+                _ => BUCKET_EMPTY_ICON,
+            };
+            return Some(HeldSpriteVisual {
+                icon,
+                tint_icon: None,
+                tint: None,
+                kind: HeldSpriteKind::Tool,
+            });
+        }
         if tool.icon.is_empty() {
             return None;
         }
