@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use bevy::prelude::*;
 
 use super::{
-    SurfaceSelectionContext, cell_hash, climate_weight, distribution_strength, raw_surface_biome_index,
-    region_claim_hash, surface_sites_share_border, surface_site_position,
+    SurfaceSelectionContext, cell_hash, climate_weight, distribution_strength,
+    raw_surface_biome_index, region_claim_hash, surface_site_position, surface_sites_share_border,
 };
 use crate::world::biome_field::BiomeFieldEntry;
 
@@ -76,15 +76,25 @@ pub(super) fn raw_conflict_left_wins(
         (false, true) => true,
         (true, false) => false,
         _ => {
-            let left = adjacency_claim_hash(left_cell, left_index, context.seed);
-            let right = adjacency_claim_hash(right_cell, right_index, context.seed);
+            let left = (
+                adjacency_claim_hash(left_cell, left_index, context.seed),
+                left_cell.y,
+                left_cell.x,
+                left_index,
+            );
+            let right = (
+                adjacency_claim_hash(right_cell, right_index, context.seed),
+                right_cell.y,
+                right_cell.x,
+                right_index,
+            );
             left <= right
         }
     }
 }
 
 pub(super) fn cell_has_alternative(
-    cell: IVec2,
+    _cell: IVec2,
     site: Vec2,
     candidate_index: usize,
     context: &SurfaceSelectionContext<'_>,
@@ -279,14 +289,17 @@ fn fit_component_mask(
                 .iter()
                 .map(|index| u128::from(nodes[*index].claim))
                 .sum::<u128>();
-            let replace = best.as_ref().is_none_or(|(_, best_improvement, best_len, best_claim)| {
-                improvement > *best_improvement + FIT_EPSILON
-                    || ((improvement - *best_improvement).abs() <= FIT_EPSILON
-                        && (batch.len() < *best_len
-                            || (batch.len() == *best_len && claim_sum > *best_claim)))
-            });
+            let batch_len = batch.len();
+            let replace = best.as_ref().is_none_or(
+                |(_, best_improvement, best_len, best_claim)| {
+                    improvement > *best_improvement + FIT_EPSILON
+                        || ((improvement - *best_improvement).abs() <= FIT_EPSILON
+                            && (batch_len < *best_len
+                                || (batch_len == *best_len && claim_sum > *best_claim)))
+                },
+            );
             if replace {
-                best = Some((batch, improvement, batch.len(), claim_sum));
+                best = Some((batch, improvement, batch_len, claim_sum));
             }
         }
 
