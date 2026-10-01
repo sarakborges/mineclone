@@ -1,5 +1,6 @@
 pub(crate) mod block_face;
 pub(crate) mod block_metadata;
+pub(crate) mod block_state;
 pub(crate) mod cell;
 pub(crate) mod chunk;
 pub(crate) mod chunk_archive;
@@ -28,7 +29,6 @@ pub(crate) mod quad;
 pub(crate) mod raycast;
 pub(crate) mod read;
 pub(crate) mod revision;
-pub(crate) mod secondary_properties;
 pub(crate) mod spatial_search;
 pub(crate) mod stackable_layer;
 pub(crate) mod texture_rotation;
