@@ -145,8 +145,14 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn enqueue_loaded_column_below(&mut self, world: &VoxelWorld, coord: IVec3) {
+        let top_y = CHUNK_SIZE as i32 - 1;
         for lower in world.loaded_chunk_coords_below(coord) {
-            self.queue.enqueue_chunk_voxels(chunk_origin(lower));
+            let origin = chunk_origin(lower);
+            for z in 0..CHUNK_SIZE as i32 {
+                for x in 0..CHUNK_SIZE as i32 {
+                    self.queue.enqueue(origin + IVec3::new(x, top_y, z));
+                }
+            }
         }
     }
 
