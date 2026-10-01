@@ -9,7 +9,10 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        material_field::{SurfaceMaterialColumn, resolve_surface_material_column, solid_block_id},
+        material_field::{
+            SurfaceMaterialColumn, SurfaceMaterialSample, resolve_surface_material_column,
+            solid_block_id,
+        },
     },
 };
 
@@ -57,12 +60,13 @@ pub(super) fn rasterize_material_pass(
                         chunk_origin.y + local_y as i32,
                         chunk_origin.z + local_z as i32,
                     );
-                    let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
-                    let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
+                    let surface_sample = SurfaceMaterialSample {
+                        position: world_position.as_vec3() + Vec3::splat(0.5),
+                        depth: (column.surface_height - world_position.y - 1).max(0) as u32,
+                        steep: column.steep_surface,
+                    };
                     let block_id = solid_block_id(
-                        sample_position,
-                        surface_depth,
-                        column.steep_surface,
+                        surface_sample,
                         density.volume_at(index),
                         density.volume_surface_depth_at(index),
                         &surface_materials,
