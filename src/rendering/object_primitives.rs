@@ -212,7 +212,7 @@ impl PrimitiveMeshBuffers {
         let base = u32::try_from(self.positions.len())
             .expect("bounded object primitive mesh must fit u32 indices");
         self.positions
-            .extend(positions.into_iter().map(Vec3::to_array));
+            .extend(positions.into_iter().map(|position| position.to_array()));
         self.normals.extend_from_slice(&[normal.to_array(); 4]);
         self.uvs.extend_from_slice(&uvs);
         self.indices
