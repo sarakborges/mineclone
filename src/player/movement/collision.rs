@@ -83,10 +83,6 @@ pub(super) fn move_axis_with_height(
     MoveAxisResult::Clear
 }
 
-pub(crate) fn player_collides(eye_position: Vec3, world: &VoxelWorld) -> bool {
-    player_collides_with_height(eye_position, world, PLAYER_HEIGHT)
-}
-
 pub(crate) fn player_collides_with_height(
     eye_position: Vec3,
     world: &VoxelWorld,

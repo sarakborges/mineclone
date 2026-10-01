@@ -5,7 +5,7 @@ use crate::player::{PlayerEntity, model::PlayerModelRoot};
 use super::walking::WalkingState;
 
 #[derive(Component, Clone, Copy)]
-struct CrouchPoseBase {
+pub(super) struct CrouchPoseBase {
     translation: Vec3,
 }
 
