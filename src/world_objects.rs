@@ -27,7 +27,7 @@ use crate::{
         item_id::intern_item_id,
         layer::LayerRegistry,
         layer_id::intern_layer_id,
-        object::{ObjectDefinition, ObjectRegistry, ObjectVisualDefinition},
+        object::{ObjectDefinition, ObjectPlacementFace, ObjectRegistry, ObjectVisualDefinition},
         object_id::intern_object_id,
         tool::ToolRegistry,
         tool_id::intern_tool_id,
@@ -62,7 +62,6 @@ use crate::{
     },
     world_items::WorldItemSpawnRequest,
 };
-
 
 #[derive(Clone, Copy)]
 struct MaterializedWorldObject {
@@ -263,7 +262,6 @@ impl Plugin for WorldObjectsPlugin {
             );
     }
 }
-
 
 fn apply_object_placement_requests(
     mut requests: MessageReader<WorldObjectPlaceRequest>,
@@ -521,7 +519,6 @@ fn world_object_sync_budget_exhausted(
                 || Instant::now() >= global_deadline))
 }
 
-
 fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool {
     if radius < 0 {
         return false;
@@ -548,15 +545,14 @@ fn spawn_world_object(
     definition: &ObjectDefinition,
     content: &WorldObjectSceneContent<'_>,
 ) -> Entity {
-    let position = world_object_position(support, support_cell, object, definition);
+    let transform = world_object_transform(support, support_cell, object, definition);
+    let position = transform.translation;
     let tint = block_tint_at(
         definition.tint,
         Vec2::new(position.x, position.z),
         &content.biome_field,
         &content.biomes,
     );
-    let transform = Transform::from_translation(position)
-        .with_rotation(Quat::from_rotation_y(texture_rotation_radians(object.rotation)));
 
     let mut root = commands.spawn((
         Name::new(format!("World Object ({})", definition.id)),
@@ -614,6 +610,24 @@ fn spawn_world_object(
     root.id()
 }
 
+pub(crate) fn world_object_transform(
+    support: IVec3,
+    support_cell: Option<VoxelCell>,
+    object: ObjectCell,
+    definition: &ObjectDefinition,
+) -> Transform {
+    let rotation = world_object_rotation(object);
+    let position = world_object_position_with_rotation(
+        support,
+        support_cell,
+        object,
+        definition,
+        rotation,
+    );
+    Transform::from_translation(position)
+        .with_rotation(rotation)
+        .with_scale(object.transform.scale())
+}
 
 pub(crate) fn world_object_position(
     support: IVec3,
@@ -621,9 +635,20 @@ pub(crate) fn world_object_position(
     object: ObjectCell,
     definition: &ObjectDefinition,
 ) -> Vec3 {
+    let rotation = world_object_rotation(object);
+    world_object_position_with_rotation(support, support_cell, object, definition, rotation)
+}
+
+fn world_object_position_with_rotation(
+    support: IVec3,
+    support_cell: Option<VoxelCell>,
+    object: ObjectCell,
+    definition: &ObjectDefinition,
+    rotation: Quat,
+) -> Vec3 {
     let hollow_orientation = support_cell
         .filter(|cell| is_hollow_log_id(cell.block_id))
-        .filter(|_| object.face == crate::content::object::ObjectPlacementFace::Top)
+        .filter(|_| object.face == ObjectPlacementFace::Top)
         .map(|cell| cell.orientation);
     let base_position = if hollow_orientation.is_some() {
         support.as_vec3()
@@ -633,7 +658,25 @@ pub(crate) fn world_object_position(
             + Vec3::splat(0.5)
             + object.face.normal().as_vec3() * 0.5
     };
-    base_position + object_position_jitter(definition, support, hollow_orientation)
+    let local_offset = object.transform.offset()
+        + object_position_jitter(definition, support, hollow_orientation, object.transform.scale());
+    base_position + rotation * local_offset
+}
+
+fn world_object_rotation(object: ObjectCell) -> Quat {
+    object_face_rotation(object.face)
+        * Quat::from_rotation_y(texture_rotation_radians(object.rotation))
+}
+
+fn object_face_rotation(face: ObjectPlacementFace) -> Quat {
+    match face {
+        ObjectPlacementFace::Top => Quat::IDENTITY,
+        ObjectPlacementFace::Bottom => Quat::from_rotation_x(FRAC_PI_2 * 2.0),
+        ObjectPlacementFace::Right => Quat::from_rotation_z(-FRAC_PI_2),
+        ObjectPlacementFace::Left => Quat::from_rotation_z(FRAC_PI_2),
+        ObjectPlacementFace::Front => Quat::from_rotation_x(FRAC_PI_2),
+        ObjectPlacementFace::Back => Quat::from_rotation_x(-FRAC_PI_2),
+    }
 }
 
 pub(crate) fn detached_object_drop_request(
@@ -659,6 +702,7 @@ fn object_position_jitter(
     definition: &ObjectDefinition,
     support: IVec3,
     hollow_orientation: Option<BlockOrientation>,
+    instance_scale: Vec3,
 ) -> Vec3 {
     let seed = mix_u32_components(
         hash_string(&definition.id),
@@ -666,7 +710,10 @@ fn object_position_jitter(
     );
     let mut maximum = Vec2::from_array(definition.position_jitter);
     if let Some(orientation) = hollow_orientation {
-        let half = Vec2::new(definition.target.size[0], definition.target.size[2]) * 0.5;
+        let half = Vec2::new(
+            definition.target.size[0] * instance_scale.x,
+            definition.target.size[2] * instance_scale.z,
+        ) * 0.5;
         let cavity_half = 0.5 - HOLLOW_LOG_WALL_THICKNESS;
         let full_half = Vec2::splat(0.5);
         let available_half = match orientation {
