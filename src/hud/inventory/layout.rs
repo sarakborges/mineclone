@@ -14,6 +14,7 @@ use crate::{
         hotbar::PlayerHotbar,
         inventory::InventoryCursor,
     },
+    ui::button::{self, ButtonVariant},
 };
 
 pub(super) use crate::hud::item_icon::HudItemIconView as InventoryItemView;
@@ -25,7 +26,12 @@ pub(super) use self::{
     },
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
-use super::state::{InventoryHudRoot, PANEL_GAP};
+use super::state::{
+    InventoryHudRoot, InventoryViewPane, InventoryViewToggleButton, PANEL_GAP,
+};
+
+const INVENTORY_VIEW_TOGGLE_WIDTH: f32 = 96.0;
+const INVENTORY_VIEW_TOGGLE_HEIGHT: f32 = 40.0;
 
 pub(super) struct InventoryLayoutState<'a> {
     pub(super) categories: &'a InventoryCategoryRegistry,
@@ -53,7 +59,11 @@ pub(super) fn spawn_player_inventory(
     state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
 ) {
-    spawn_player_inventory_panel(root, state, items);
+    if state.game_mode.has_creative_inventory() {
+        spawn_inventory_switcher(root, state, items, false);
+    } else {
+        spawn_player_inventory_panel(root, state, items);
+    }
     spawn_inventory_overlay(root, state, items);
 }
 
@@ -63,10 +73,89 @@ fn spawn_game_mode_inventory_panel(
     items: &mut InventoryItemView<'_>,
 ) {
     if state.game_mode.has_creative_inventory() {
-        spawn_creative_panel(root, state, items);
+        spawn_inventory_switcher(root, state, items, true);
     } else {
         spawn_player_inventory_panel(root, state, items);
     }
+}
+
+fn spawn_inventory_switcher(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+    creative_visible: bool,
+) {
+    root.spawn((
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(0),
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
+    .with_children(|switcher| {
+        switcher
+            .spawn((
+                InventoryViewPane { creative: false },
+                Node {
+                    display: if creative_visible {
+                        Display::None
+                    } else {
+                        Display::Flex
+                    },
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|pane| {
+                spawn_player_inventory_panel(pane, state, items);
+            });
+
+        switcher
+            .spawn((
+                InventoryViewPane { creative: true },
+                Node {
+                    display: if creative_visible {
+                        Display::Flex
+                    } else {
+                        Display::None
+                    },
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|pane| {
+                spawn_creative_panel(pane, state, items);
+            });
+
+        switcher
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(0),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|tabs| {
+                tabs.spawn(button::button(
+                    "Inventory",
+                    InventoryViewToggleButton { creative: false },
+                    px(INVENTORY_VIEW_TOGGLE_WIDTH),
+                    INVENTORY_VIEW_TOGGLE_HEIGHT,
+                    ButtonVariant::from_active(!creative_visible),
+                ));
+                tabs.spawn(button::button(
+                    "Creative",
+                    InventoryViewToggleButton { creative: true },
+                    px(INVENTORY_VIEW_TOGGLE_WIDTH),
+                    INVENTORY_VIEW_TOGGLE_HEIGHT,
+                    ButtonVariant::from_active(creative_visible),
+                ));
+            });
+    });
 }
 
 fn spawn_inventory_overlay(

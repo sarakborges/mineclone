@@ -27,6 +27,16 @@ pub(super) const CREATIVE_CATEGORY_HEIGHT: f32 =
 pub(super) struct InventoryHudRoot;
 
 #[derive(Component)]
+pub(super) struct InventoryViewPane {
+    pub(super) creative: bool,
+}
+
+#[derive(Component)]
+pub(super) struct InventoryViewToggleButton {
+    pub(super) creative: bool,
+}
+
+#[derive(Component)]
 pub(super) struct InventorySlot {
     pub(super) index: usize,
     pub(super) item: Option<&'static str>,

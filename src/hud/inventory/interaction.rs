@@ -13,7 +13,7 @@ use crate::{
     },
     gameplay::modal::GameplayModalState,
     player::{hotbar::PlayerHotbar, inventory::InventoryCursor},
-    ui::text_input::editable_value,
+    ui::{button::ButtonVariant, text_input::editable_value},
     world_items::PlayerDropRequest,
 };
 
@@ -22,7 +22,8 @@ use super::state::{
     CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
     CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
     InventorySearchBar, InventorySearchFrame, InventorySlot, InventorySortButton,
-    InventoryTrashButton, PlayerInventoryView, SLOT_GAP, SLOT_SIZE,
+    InventoryTrashButton, InventoryViewPane, InventoryViewToggleButton, PlayerInventoryView,
+    SLOT_GAP, SLOT_SIZE,
 };
 
 pub(super) fn handle_search_focus(
@@ -53,6 +54,38 @@ pub(super) fn handle_inventory_close_shortcut(
         && !player_view.search_focused()
     {
         next_modal.set(GameplayModalState::Closed);
+    }
+}
+
+pub(super) fn handle_inventory_view_toggle_clicks(
+    mut creative_view: ResMut<CreativeInventoryView>,
+    mut player_view: ResMut<PlayerInventoryView>,
+    mut buttons: Query<(&Interaction, &InventoryViewToggleButton, &mut ButtonVariant)>,
+    mut panes: Query<(&InventoryViewPane, &mut Node)>,
+) {
+    let mut next_creative = None;
+    for (interaction, action, _) in &mut buttons {
+        if *interaction == Interaction::Pressed {
+            next_creative = Some(action.creative);
+            break;
+        }
+    }
+    let Some(next_creative) = next_creative else {
+        return;
+    };
+
+    creative_view.blur_search();
+    player_view.blur_search();
+
+    for (_, action, mut variant) in &mut buttons {
+        *variant = ButtonVariant::from_active(action.creative == next_creative);
+    }
+    for (pane, mut node) in &mut panes {
+        node.display = if pane.creative == next_creative {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 }
 
@@ -183,6 +216,7 @@ pub(super) fn handle_category_clicks(
 
 pub(super) fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
+    panes: Query<(&InventoryViewPane, &Node)>,
     category_buttons: Query<&Interaction, With<CreativeCategoryButton>>,
     category_scrollbars: Query<&Interaction, With<CreativeCategoryScrollbar>>,
     mut category_scroll: Query<
@@ -208,7 +242,10 @@ pub(super) fn handle_creative_scroll(
         };
     }
 
-    if delta == 0.0 {
+    let creative_visible = panes
+        .iter()
+        .any(|(pane, node)| pane.creative && node.display != Display::None);
+    if !creative_visible || delta == 0.0 {
         return;
     }
 
@@ -313,6 +350,7 @@ pub(super) struct InventoryControlInteractions<'w, 's> {
     player_search_frames: Query<'w, 's, &'static Interaction, With<InventorySearchFrame>>,
     sort_buttons: Query<'w, 's, &'static Interaction, With<InventorySortButton>>,
     trash_buttons: Query<'w, 's, &'static Interaction, With<InventoryTrashButton>>,
+    view_toggles: Query<'w, 's, &'static Interaction, With<InventoryViewToggleButton>>,
     category_scrollbars: Query<'w, 's, &'static Interaction, With<CreativeCategoryScrollbar>>,
     catalog_scrollbars: Query<'w, 's, &'static Interaction, With<CreativeCatalogScrollbar>>,
 }
@@ -327,6 +365,7 @@ impl InventoryControlInteractions<'_, '_> {
             .chain(self.player_search_frames.iter())
             .chain(self.sort_buttons.iter())
             .chain(self.trash_buttons.iter())
+            .chain(self.view_toggles.iter())
             .chain(self.category_scrollbars.iter())
             .chain(self.catalog_scrollbars.iter())
             .any(|interaction| *interaction != Interaction::None)
