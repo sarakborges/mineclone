@@ -1,5 +1,17 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-10-01 — Attached Objects: chunk-batched presentation
+
+- O storage/targeting de Attached Objects continua autoritativo no `VoxelWorld`; objetos individuais não precisam mais existir como Bevy Entity para interação, loot ou remoção.
+- Removido o vínculo `WorldObjectKey -> Entity` do `WorldObjectStore`. A presentation agora mantém apenas batches por chunk, com contagem separada de objetos e batches para diagnóstico.
+- `grass` (GLB/model) e `pebble`/`stick` (`extrudedSprite`) usam o mesmo pipeline de batching por chunk, agrupado por source mesh + material + flags de shadow.
+- Cada batch é limitado a 256 instâncias para manter o tamanho de mesh previsível; alterações em Attached Objects invalidam/reconstroem somente o chunk cujo `chunk_object_revision` mudou.
+- O resolver/cache de `extrudedSprite` foi reaproveitado pela presentation batched, sem duplicar geração de mesh/material.
+- Targeting, transform, jitter, loot e interação continuam data-driven e independentes da existência de uma Entity por objeto.
+- Esta mudança remove a arquitetura anterior de 1 Bevy Entity por Attached Object; **nenhum claim de ganho de FPS é feito sem log/runtime comparativo**.
+- Commits principais: `5d6d745cc769eb7fe398a64530cd4a77f8dc6150`, `ffaf1fb46b928f05f1ae78086337bb66f5072157`, `4066093f4c98fb74757adb3f4276a0168ec8b5d1`, correções de gate `befd6e01ca6e212beb8588f2b08cc0c71f1e65ea`, `a8c97c2f9801447846b81a19b2d277cf1deeac7a`, `767b3b36f23155d75d51e80665fb504bccef5312`.
+- CI Rust validation verde no HEAD `767b3b36f23155d75d51e80665fb504bccef5312` para push e PR (audits + Clippy + Check).
+
 ## 2026-10-01 — Log attack: locate, logging and streaming findings
 
 - The provided runtime logs contain no Rust panic, ECS B000x error, or gameplay ERROR. The reported Floating Islands locate/warp failure was reproduced in the log sequence: `/locate biome asteria:overworld/floating_islands` returned `(-213, 219, 568)` before the volume-anchor validation fix, while the same run had no `warp.success` and later manual travel reached the area without an island. The locate result was therefore stale/invalid under the pre-fix volume selection behavior.
