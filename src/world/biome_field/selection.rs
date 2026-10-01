@@ -1,3 +1,5 @@
+pub(super) mod fitting;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -56,6 +58,7 @@ impl BiomeField {
             seed: self.seed,
             biomes: &self.surface_biomes,
             spawn_oceans: self.spawn_oceans,
+            ocean_surface_index: self.ocean_surface_index,
             climate_field: &self.climate,
         };
 
@@ -71,7 +74,7 @@ impl BiomeField {
         }
 
         panic!(
-            "surface biome site {cell:?} has no biome compatible with minimum size, maximum size, and authored adjacency constraints"
+            "surface biome site {cell:?} has no biome compatible with fitted size and authored adjacency constraints"
         );
     }
 
@@ -136,23 +139,33 @@ struct WeightedSurfaceCandidate {
     weight: f32,
 }
 
-struct SurfaceSelectionContext<'a> {
-    cell: IVec2,
-    site: Vec2,
-    spacing: Vec2,
-    seed: u64,
-    biomes: &'a [BiomeFieldEntry],
-    spawn_oceans: bool,
-    climate_field: &'a MacroClimateField,
+pub(super) struct SurfaceSelectionContext<'a> {
+    pub(super) cell: IVec2,
+    pub(super) site: Vec2,
+    pub(super) spacing: Vec2,
+    pub(super) seed: u64,
+    pub(super) biomes: &'a [BiomeFieldEntry],
+    pub(super) spawn_oceans: bool,
+    pub(super) ocean_surface_index: Option<usize>,
+    pub(super) climate_field: &'a MacroClimateField,
 }
 
 fn surface_constraints_allow(
     candidate_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
-    surface_minimum_size_allows(candidate_index, context)
-        && authored_adjacency_allows(candidate_index, context)
-        && surface_size_allows(candidate_index, context)
+    // The site lattice is built from the largest authored minimum radius and
+    // its jitter preserves axis spacing. Minimum size is therefore a geometry
+    // invariant, not a reason to eliminate a biome candidate. Eliminating it
+    // here was what allowed min/max + adjacency to empty a site's domain.
+    debug_assert!(
+        surface_minimum_size_allows(candidate_index, context),
+        "surface biome site {:?} violates the authored minimum-size lattice invariant",
+        context.cell,
+    );
+
+    authored_adjacency_allows(candidate_index, context)
+        && fitting::surface_size_allows(candidate_index, context)
 }
 
 pub(super) fn select_volume_biome_index(
@@ -192,6 +205,15 @@ fn authored_adjacency_allows(
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
     let candidate = &context.biomes[candidate_index];
+    let raw_index = raw_surface_biome_index(
+        context.cell,
+        context.site,
+        context.climate_field.sample(context.site),
+        cell_hash(context.cell, context.seed),
+        context.biomes,
+        context.seed,
+        context.spawn_oceans,
+    );
 
     for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
         for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
@@ -214,39 +236,40 @@ fn authored_adjacency_allows(
                 continue;
             }
 
-            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
-            let neighbor_climate = context.climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
-                neighbor_climate,
-                neighbor_hash,
+                context.climate_field.sample(neighbor_site),
+                cell_hash(neighbor_cell, context.seed),
                 context.biomes,
                 context.seed,
                 context.spawn_oceans,
             );
             let neighbor = &context.biomes[neighbor_index];
 
-            if candidate
-                .avoid_near
-                .iter()
-                .any(|id| id == &neighbor.id)
-                || neighbor.avoid_near.iter().any(|id| id == &candidate.id)
-            {
+            if !authored_pair_conflicts(candidate, neighbor) {
+                continue;
+            }
+
+            // An alternate candidate is only a fallback after this site's raw
+            // choice yielded. It may not displace an unrelated raw neighbor in
+            // order to make itself legal.
+            if candidate_index != raw_index {
                 return false;
             }
 
-            if candidate.id != neighbor.id
-                && candidate
-                    .exclusive_neighbor_group
-                    .as_ref()
-                    .is_some_and(|group| {
-                        neighbor
-                            .exclusive_neighbor_group
-                            .as_ref()
-                            .is_some_and(|neighbor_group| neighbor_group == group)
-                    })
-            {
+            // A raw/raw collision must have one deterministic winner. The old
+            // code rejected both independently, which was the main source of
+            // empty domains after exclusive-neighbor groups were authored.
+            if !fitting::raw_conflict_left_wins(
+                context.cell,
+                context.site,
+                candidate_index,
+                neighbor_cell,
+                neighbor_site,
+                neighbor_index,
+                context,
+            ) {
                 return false;
             }
         }
@@ -277,13 +300,11 @@ fn authored_adjacency_allows(
                 continue;
             }
 
-            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
-            let neighbor_climate = context.climate_field.sample(neighbor_site);
             let neighbor_index = raw_surface_biome_index(
                 neighbor_cell,
                 neighbor_site,
-                neighbor_climate,
-                neighbor_hash,
+                context.climate_field.sample(neighbor_site),
+                cell_hash(neighbor_cell, context.seed),
                 context.biomes,
                 context.seed,
                 context.spawn_oceans,
@@ -299,6 +320,22 @@ fn authored_adjacency_allows(
     }
 
     false
+}
+
+fn authored_pair_conflicts(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
+    if left.avoid_near.iter().any(|id| id == &right.id)
+        || right.avoid_near.iter().any(|id| id == &left.id)
+    {
+        return true;
+    }
+
+    left.id != right.id
+        && left.exclusive_neighbor_group.as_ref().is_some_and(|group| {
+            right
+                .exclusive_neighbor_group
+                .as_ref()
+                .is_some_and(|right_group| right_group == group)
+        })
 }
 
 fn surface_minimum_size_allows(
@@ -329,10 +366,6 @@ fn surface_minimum_size_allows(
                 continue;
             }
 
-            // A different neighboring biome is still relevant to the minimum:
-            // its site defines the nearest possible boundary of this region.
-            // Check the half-distance in the authored ellipse so size.min is
-            // enforced independently of which biome wins the neighbor site.
             let half_delta = (neighbor_site - context.site) * 0.5;
             let normalized = Vec2::new(
                 half_delta.x / minimum_radii.x,
@@ -349,99 +382,14 @@ fn surface_minimum_size_allows(
     true
 }
 
-fn surface_size_allows(
-    candidate_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    let candidate = &context.biomes[candidate_index];
-    let candidate_region = surface_region(context.site, candidate);
-
-    for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-        for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-            let offset = IVec2::new(x, z);
-            if offset == IVec2::ZERO {
-                continue;
-            }
-
-            let neighbor_cell = context.cell + offset;
-            let neighbor_site =
-                surface_site_position(neighbor_cell, context.spacing, context.seed);
-            if !surface_sites_share_border(
-                context.cell,
-                context.site,
-                neighbor_cell,
-                neighbor_site,
-                context.spacing,
-                context.seed,
-            ) {
-                continue;
-            }
-
-            // size.max only limits continuity of the same biome.
-            // Different neighboring biomes must never consume this candidate's
-            // size budget.
-            let neighbor_hash = cell_hash(neighbor_cell, context.seed);
-            let neighbor_index = raw_surface_biome_index(
-                neighbor_cell,
-                neighbor_site,
-                context.climate_field.sample(neighbor_site),
-                neighbor_hash,
-                context.biomes,
-                context.seed,
-                context.spawn_oceans,
-            );
-            if neighbor_index != candidate_index {
-                continue;
-            }
-
-            let neighbor_region = surface_region(neighbor_site, candidate);
-            if candidate_region != neighbor_region
-                && !candidate_region_claim_wins(
-                    context.cell,
-                    neighbor_cell,
-                    candidate_index,
-                    context.seed,
-                )
-            {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
-fn surface_region(site: Vec2, biome: &BiomeFieldEntry) -> IVec2 {
-    let extent = surface_region_extent(biome);
-    IVec2::new(
-        (site.x / extent.x).floor() as i32,
-        (site.y / extent.y).floor() as i32,
-    )
-}
-
-fn surface_region_extent(biome: &BiomeFieldEntry) -> Vec2 {
-    Vec2::new(biome.size.x.max * 2.0, biome.size.z.max * 2.0)
-}
-
-fn candidate_region_claim_wins(
-    candidate_cell: IVec2,
-    neighbor_cell: IVec2,
-    biome_index: usize,
-    seed: u64,
-) -> bool {
-    let candidate = region_claim_hash(candidate_cell, biome_index, seed);
-    let neighbor = region_claim_hash(neighbor_cell, biome_index, seed);
-    candidate <= neighbor
-}
-
-fn region_claim_hash(cell: IVec2, biome_index: usize, seed: u64) -> u64 {
+pub(super) fn region_claim_hash(cell: IVec2, biome_index: usize, seed: u64) -> u64 {
     let hash = cell_hash(cell, seed)
         ^ (biome_index as u64).wrapping_mul(0x517c_c1b7_2722_0a95)
         ^ 0x94d0_49bb_1331_11eb;
     mix_hash_u64(hash)
 }
 
-fn raw_surface_biome_index(
+pub(super) fn raw_surface_biome_index(
     _cell: IVec2,
     site: Vec2,
     climate: MacroClimateSample,
@@ -473,7 +421,7 @@ fn raw_surface_biome_index(
             }
             Some(WeightedSurfaceCandidate {
                 index,
-                weight: biome.weight * climate_weight * distribution,
+                weight: biome.weight * climate_weight,
             })
         })
         .collect::<Vec<_>>();
@@ -494,7 +442,7 @@ fn raw_surface_biome_index(
         .unwrap_or(0)
 }
 
-fn climate_weight(sample: MacroClimateSample, climate: BiomeClimate) -> f32 {
+pub(super) fn climate_weight(sample: MacroClimateSample, climate: BiomeClimate) -> f32 {
     [
         (sample.temperature, climate.temperature),
         (sample.humidity, climate.humidity),
@@ -536,7 +484,7 @@ fn candidate_hash(source_hash: u64, biome_id: &str) -> u64 {
     mix_hash_u64(hash)
 }
 
-fn surface_sites_share_border(
+pub(super) fn surface_sites_share_border(
     left_cell: IVec2,
     left_site: Vec2,
     right_cell: IVec2,
@@ -601,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn distant_sites_do_not_trigger_avoid_near() {
+    fn distant_sites_do_not_trigger_adjacency() {
         let spacing = Vec2::splat(360.0);
         let left = IVec2::ZERO;
         let right = IVec2::new(2, 0);
@@ -642,108 +590,22 @@ mod tests {
         }
     }
 
-    #[test]
-    fn surface_region_extent_uses_authored_maximum_radius() {
-        let mut plains = test_surface_entry("plains", None);
-        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-
-        assert_eq!(surface_region_extent(&plains), Vec2::splat(840.0));
-    }
-
-    #[test]
-    fn cross_region_same_biome_pair_has_one_deterministic_winner() {
-        let mut plains = test_surface_entry("plains", None);
-        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-        let spacing = Vec2::splat(360.0);
-        let left = IVec2::new(1, 0);
-        let right = IVec2::new(2, 0);
-        let left_site = surface_site_position(left, spacing, 42);
-        let right_site = surface_site_position(right, spacing, 42);
-
-        assert_ne!(surface_region(left_site, &plains), surface_region(right_site, &plains));
-        let climate = MacroClimateField::new(42);
-        let left_biomes = [plains.clone()];
-        let right_biomes = [plains];
-        let left_context = SurfaceSelectionContext {
-            cell: left,
-            site: left_site,
+    fn test_context<'a>(
+        cell: IVec2,
+        spacing: Vec2,
+        biomes: &'a [BiomeFieldEntry],
+        climate: &'a MacroClimateField,
+    ) -> SurfaceSelectionContext<'a> {
+        SurfaceSelectionContext {
+            cell,
+            site: surface_site_position(cell, spacing, 42),
             spacing,
             seed: 42,
-            biomes: &left_biomes,
+            biomes,
             spawn_oceans: true,
-            climate_field: &climate,
-        };
-        let right_context = SurfaceSelectionContext {
-            cell: right,
-            site: right_site,
-            spacing,
-            seed: 42,
-            biomes: &right_biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-
-        assert_ne!(
-            surface_size_allows(0, &left_context),
-            surface_size_allows(0, &right_context),
-        );
-    }
-
-    #[test]
-    fn same_region_same_biome_pair_can_remain_continuous() {
-        let mut plains = test_surface_entry("plains", None);
-        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 420.0,
-        };
-        let spacing = Vec2::splat(360.0);
-        let left = IVec2::ZERO;
-        let right = IVec2::X;
-        let left_site = surface_site_position(left, spacing, 42);
-        let right_site = surface_site_position(right, spacing, 42);
-
-        assert_eq!(surface_region(left_site, &plains), surface_region(right_site, &plains));
-        let climate = MacroClimateField::new(42);
-        let left_biomes = [plains.clone()];
-        let left_context = SurfaceSelectionContext {
-            cell: left,
-            site: left_site,
-            spacing,
-            seed: 42,
-            biomes: &left_biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-        assert!(surface_size_allows(0, &left_context));
-        let right_biomes = [plains];
-        let right_context = SurfaceSelectionContext {
-            cell: right,
-            site: right_site,
-            spacing,
-            seed: 42,
-            biomes: &right_biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-        assert!(surface_size_allows(0, &right_context));
+            ocean_surface_index: None,
+            climate_field: climate,
+        }
     }
 
     #[test]
@@ -778,26 +640,15 @@ mod tests {
     #[test]
     fn exclusive_group_allows_same_biome_continuity() {
         let mountain = test_surface_entry("mountain", Some("mountain_terrain"));
-        let spacing = Vec2::splat(360.0);
-        let cell = IVec2::ZERO;
-        let site = surface_site_position(cell, spacing, 42);
         let climate = MacroClimateField::new(42);
         let biomes = [mountain];
-        let context = SurfaceSelectionContext {
-            cell,
-            site,
-            spacing,
-            seed: 42,
-            biomes: &biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
+        let context = test_context(IVec2::ZERO, Vec2::splat(360.0), &biomes, &climate);
 
         assert!(authored_adjacency_allows(0, &context));
     }
 
     #[test]
-    fn minimum_size_rejects_a_region_with_a_too_close_neighbor() {
+    fn minimum_size_guard_detects_an_artificially_compressed_lattice() {
         let mut plains = test_surface_entry("plains", None);
         plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
             min: 180.0,
@@ -807,27 +658,15 @@ mod tests {
             min: 180.0,
             max: 420.0,
         };
-
-        let spacing = Vec2::splat(300.0);
-        let candidate_cell = IVec2::ZERO;
-        let candidate_site = surface_site_position(candidate_cell, spacing, 42);
         let climate = MacroClimateField::new(42);
         let biomes = [plains];
-        let context = SurfaceSelectionContext {
-            cell: candidate_cell,
-            site: candidate_site,
-            spacing,
-            seed: 42,
-            biomes: &biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
+        let context = test_context(IVec2::ZERO, Vec2::splat(300.0), &biomes, &climate);
 
         assert!(!surface_minimum_size_allows(0, &context));
     }
 
     #[test]
-    fn minimum_size_accepts_the_authored_spacing_guarantee() {
+    fn minimum_size_guard_accepts_authored_spacing() {
         let mut plains = test_surface_entry("plains", None);
         plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
             min: 180.0,
@@ -837,121 +676,47 @@ mod tests {
             min: 180.0,
             max: 420.0,
         };
-
-        let spacing = Vec2::splat(360.0);
-        let candidate_cell = IVec2::ZERO;
-        let candidate_site = surface_site_position(candidate_cell, spacing, 42);
         let climate = MacroClimateField::new(42);
         let biomes = [plains];
-        let context = SurfaceSelectionContext {
-            cell: candidate_cell,
-            site: candidate_site,
-            spacing,
-            seed: 42,
-            biomes: &biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
+        let context = test_context(IVec2::ZERO, Vec2::splat(360.0), &biomes, &climate);
 
         assert!(surface_minimum_size_allows(0, &context));
     }
 
     #[test]
-    fn size_limit_ignores_different_neighbor_biome() {
-        let mut plains = test_surface_entry("plains", None);
-        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 180.0,
-        };
-        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 180.0,
-        };
-
-        let mut other = test_surface_entry("other", None);
-        let spacing = Vec2::splat(360.0);
-        let seed = 42;
-        let candidate_cell = IVec2::new(1, 0);
-        let candidate_site = surface_site_position(candidate_cell, spacing, seed);
-        let neighbor_cell = IVec2::new(2, 0);
-        let neighbor_site = surface_site_position(neighbor_cell, spacing, seed);
-        let neighbor_climate = MacroClimateField::new(seed).sample(neighbor_site);
-
-        plains.climate = BiomeClimate {
-            continentalness: Some(BiomeClimateRange {
-                min: (neighbor_climate.continentalness + 0.1).min(1.0),
-                max: 1.0,
-            }),
-            ..Default::default()
-        };
-        other.climate = BiomeClimate {
-            continentalness: Some(BiomeClimateRange {
-                min: neighbor_climate.continentalness,
-                max: neighbor_climate.continentalness,
-            }),
-            ..Default::default()
-        };
-
-        assert!(surface_sites_share_border(
-            candidate_cell,
-            candidate_site,
-            neighbor_cell,
-            neighbor_site,
-            spacing,
-            seed,
-        ));
-        let climate = MacroClimateField::new(seed);
-        let biomes = [plains, other];
-        let context = SurfaceSelectionContext {
-            cell: candidate_cell,
-            site: candidate_site,
-            spacing,
-            seed,
-            biomes: &biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-        assert!(surface_size_allows(0, &context));
-    }
-
-    #[test]
-    fn size_rejection_does_not_turn_authored_adjacency_into_an_impossible_domain() {
-        let mut plains = test_surface_entry("plains", None);
-        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 180.0,
-        };
-        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
-            min: 120.0,
-            max: 180.0,
-        };
-        let spacing = Vec2::splat(360.0);
-        let candidate_cell = IVec2::new(1, 0);
-        let candidate_site = surface_site_position(candidate_cell, spacing, 42);
-
+    fn raw_exclusive_conflict_has_exactly_one_winner() {
+        let left = test_surface_entry("left", Some("inland"));
+        let right = test_surface_entry("right", Some("inland"));
+        let fallback = test_surface_entry("fallback", None);
+        let biomes = [left, right, fallback];
         let climate = MacroClimateField::new(42);
-        let adjacency_biomes = [plains.clone()];
-        let adjacency_context = SurfaceSelectionContext {
-            cell: candidate_cell,
-            site: candidate_site,
-            spacing,
-            seed: 42,
-            biomes: &adjacency_biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-        assert!(authored_adjacency_allows(0, &adjacency_context));
+        let spacing = Vec2::splat(360.0);
+        let left_cell = IVec2::ZERO;
+        let right_cell = IVec2::X;
+        let left_site = surface_site_position(left_cell, spacing, 42);
+        let right_site = surface_site_position(right_cell, spacing, 42);
+        let left_context = test_context(left_cell, spacing, &biomes, &climate);
+        let right_context = test_context(right_cell, spacing, &biomes, &climate);
 
-        let size_biomes = [plains];
-        let size_context = SurfaceSelectionContext {
-            cell: candidate_cell,
-            site: candidate_site,
-            spacing,
-            seed: 42,
-            biomes: &size_biomes,
-            spawn_oceans: true,
-            climate_field: &climate,
-        };
-        assert!(!surface_size_allows(0, &size_context));
+        let left_wins = fitting::raw_conflict_left_wins(
+            left_cell,
+            left_site,
+            0,
+            right_cell,
+            right_site,
+            1,
+            &left_context,
+        );
+        let right_wins = fitting::raw_conflict_left_wins(
+            right_cell,
+            right_site,
+            1,
+            left_cell,
+            left_site,
+            0,
+            &right_context,
+        );
+
+        assert_ne!(left_wins, right_wins);
     }
 }
