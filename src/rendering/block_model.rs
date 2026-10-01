@@ -8,7 +8,7 @@ use super::{
     block_model_material::BlockModelMaterial,
 };
 use crate::{
-    content::{block::BlockRegistry, block_shape::is_stackable_layer},
+    content::block::BlockRegistry,
     voxel::{block_face::BlockFace, log_variant::is_hollow_log_id},
 };
 
