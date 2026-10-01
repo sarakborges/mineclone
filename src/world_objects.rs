@@ -36,8 +36,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell,
-        chunk::CHUNK_SIZE,
-        coordinates::{chunk_coord_from_position, chunk_coord_from_world},
+        coordinates::chunk_coord_from_position,
         log_variant::is_hollow_log_id,
         microblock::HOLLOW_LOG_WALL_THICKNESS,
         object::ObjectCell,
@@ -209,6 +208,14 @@ struct WorldObjectSceneContent<'w> {
     asset_server: Res<'w, AssetServer>,
 }
 
+#[derive(SystemParam)]
+struct WorldObjectSyncRuntime<'w> {
+    render_distance: Res<'w, RenderDistanceSettings>,
+    render_pool: Res<'w, ChunkRenderPool>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
+    store: ResMut<'w, WorldObjectStore>,
+}
+
 pub(crate) struct WorldObjectsPlugin;
 
 impl Plugin for WorldObjectsPlugin {
@@ -314,12 +321,15 @@ fn sync_world_objects(
     mut commands: Commands,
     content: WorldObjectSceneContent,
     player: Single<&Transform, With<GameplayCamera>>,
-    render_distance: Res<RenderDistanceSettings>,
-    render_pool: Res<ChunkRenderPool>,
-    frame_budget: Res<WorldFrameWorkBudget>,
     mut batch_assets: WorldObjectBatchAssets,
-    mut store: ResMut<WorldObjectStore>,
+    runtime: WorldObjectSyncRuntime,
 ) {
+    let WorldObjectSyncRuntime {
+        render_distance,
+        render_pool,
+        frame_budget,
+        mut store,
+    } = runtime;
     let world_revision = content.world.object_scene_revision();
     let render_pool_revision = render_pool.membership_revision();
     let player_chunk = chunk_coord_from_position(player.translation);
