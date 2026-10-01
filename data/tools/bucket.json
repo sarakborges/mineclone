@@ -11,7 +11,7 @@
     "spanish": "Recoge y coloca fuentes de fluido."
   },
   "category": "tools",
-  "icon": "",
+  "icon": "textures/tools/iron_bucket_empty.png",
   "leftBehavior": "asteria:none",
   "rightBehavior": "asteria:bucket/use"
 }

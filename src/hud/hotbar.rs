@@ -4,6 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
         block::BlockRegistry, block_orientation::BlockOrientation,
+        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
         item::{ItemRegistry, display_name},
         layer::LayerRegistry, object::ObjectRegistry, secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
@@ -16,6 +17,7 @@ use crate::{
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
+        item_stack::ItemStack,
     },
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
@@ -25,10 +27,38 @@ use crate::{
 
 const SLOT_SIZE: f32 = 44.0;
 const ITEM_ICON_SIZE: f32 = 34.0;
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
+
+fn bucket_icon_for_stack(stack: &ItemStack) -> Option<&'static str> {
+    if stack.id() != BUCKET_TOOL_ID {
+        return None;
+    }
+    Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
+        Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
+        Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
+        _ => BUCKET_EMPTY_ICON,
+    })
+}
+
+fn stack_display_name(stack: &ItemStack, base_name: &str) -> String {
+    if stack.id() != BUCKET_TOOL_ID {
+        return base_name.to_owned();
+    }
+    let variant = stack
+        .metadata()
+        .get(BUCKET_FLUID_METADATA_KEY)
+        .and_then(|fluid| fluid.rsplit(':').next())
+        .filter(|fluid| !fluid.is_empty())
+        .unwrap_or("empty");
+    format!("{base_name} ({variant})")
+}
 
 #[derive(Component)]
 struct HotbarHudRoot;
-
 
 #[derive(Component)]
 struct HotbarSelectedName;
@@ -38,6 +68,7 @@ struct HotbarSlot {
     index: usize,
     item: Option<&'static str>,
     quantity: u32,
+    bucket_icon: Option<&'static str>,
 }
 
 #[derive(Component)]
@@ -129,19 +160,20 @@ fn spawn_hotbar(
     let language = content.language.get();
     let selected_name = content
         .hotbar
-        .item_at(content.hotbar.selected_slot())
-        .map(|item_id| {
-            display_name(
-                item_id,
+        .stack_at(content.hotbar.selected_slot())
+        .map(|stack| {
+            let base_name = display_name(
+                stack.id(),
                 &content.items,
                 &content.blocks,
                 &content.layers,
                 &content.objects,
                 &content.tools,
                 language,
-            )
+            );
+            stack_display_name(stack, base_name)
         })
-        .unwrap_or("");
+        .unwrap_or_default();
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
         items: &content.items,
@@ -196,15 +228,16 @@ fn spawn_hotbar(
                     let selected = index == content.hotbar.selected_slot();
                     let (background, border) = selectable::static_colors(selected);
                     let stack = content.hotbar.stack_at(index);
-                    let item = stack.map(crate::player::item_stack::ItemStack::id);
-                    let quantity =
-                        stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
+                    let item = stack.map(ItemStack::id);
+                    let quantity = stack.map_or(0, ItemStack::quantity);
+                    let bucket_icon = stack.and_then(bucket_icon_for_stack);
 
                     row.spawn((
                         HotbarSlot {
                             index,
                             item,
                             quantity,
+                            bucket_icon,
                         },
                         Node {
                             width: px(SLOT_SIZE),
@@ -219,8 +252,8 @@ fn spawn_hotbar(
                         Pickable::IGNORE,
                     ))
                     .with_children(|slot| {
-                        if let Some(item_id) = item {
-                            spawn_hotbar_item(slot, index, item_id, &mut items);
+                        if let Some(stack) = stack {
+                            spawn_hotbar_item(slot, index, stack, &mut items);
                             spawn_item_stack_count(slot, quantity);
                         }
                     });
@@ -271,21 +304,22 @@ fn sync_hotbar(
     let language = content.language.get();
     let next_name = content
         .hotbar
-        .item_at(content.hotbar.selected_slot())
-        .map(|item_id| {
-            display_name(
-                item_id,
+        .stack_at(content.hotbar.selected_slot())
+        .map(|stack| {
+            let base_name = display_name(
+                stack.id(),
                 &content.items,
                 &content.blocks,
                 &content.layers,
                 &content.objects,
                 &content.tools,
                 language,
-            )
+            );
+            stack_display_name(stack, base_name)
         })
-        .unwrap_or("");
+        .unwrap_or_default();
     if selected_name.0 != next_name {
-        selected_name.0 = next_name.to_owned();
+        selected_name.0 = next_name;
     }
 
     let language_changed = content.language.is_changed();
@@ -306,10 +340,14 @@ fn sync_hotbar(
         selectable::apply_colors(selectable::static_colors(selected), background, border);
 
         let next_stack = content.hotbar.stack_at(slot.index);
-        let next_item = next_stack.map(crate::player::item_stack::ItemStack::id);
-        let next_quantity =
-            next_stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
-        if slot.item == next_item && slot.quantity == next_quantity && !language_changed {
+        let next_item = next_stack.map(ItemStack::id);
+        let next_quantity = next_stack.map_or(0, ItemStack::quantity);
+        let next_bucket_icon = next_stack.and_then(bucket_icon_for_stack);
+        if slot.item == next_item
+            && slot.quantity == next_quantity
+            && slot.bucket_icon == next_bucket_icon
+            && !language_changed
+        {
             continue;
         }
 
@@ -320,12 +358,13 @@ fn sync_hotbar(
         }
         slot.item = next_item;
         slot.quantity = next_quantity;
+        slot.bucket_icon = next_bucket_icon;
 
-        let Some(item_id) = next_item else {
+        let Some(stack) = next_stack else {
             continue;
         };
         commands.entity(entity).with_children(|slot_node| {
-            spawn_hotbar_item(slot_node, slot.index, item_id, &mut items);
+            spawn_hotbar_item(slot_node, slot.index, stack, &mut items);
             spawn_item_stack_count(slot_node, next_quantity);
         });
     }
@@ -334,9 +373,23 @@ fn sync_hotbar(
 fn spawn_hotbar_item(
     slot: &mut ChildSpawnerCommands,
     index: usize,
-    item_id: &'static str,
+    stack: &ItemStack,
     items: &mut HotbarItemView<'_>,
 ) {
+    let item_id = stack.id();
+    if let Some(icon) = bucket_icon_for_stack(stack) {
+        slot.spawn((
+            ImageNode::new(items.asset_server.load(icon)),
+            Node {
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
     if let Some(item) = items.items.get(item_id) {
         slot.spawn((
             ImageNode::new(items.asset_server.load(item.icon.clone())),

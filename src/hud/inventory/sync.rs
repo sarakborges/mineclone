@@ -2,6 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
+        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
         inventory_category::InventoryCategoryRegistry,
         item::{ItemRegistry, display_name},
         layer::LayerRegistry,
@@ -14,6 +15,7 @@ use crate::{
         game_mode::GameMode,
         hotbar::PlayerHotbar,
         inventory::InventoryCursor,
+        item_stack::ItemStack,
     },
     rendering::block_visual_content::BlockVisualContent,
     tools::BrushMode,
@@ -38,6 +40,67 @@ use super::{
         PlayerInventoryView,
     },
 };
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
+
+fn bucket_icon_for_stack(stack: &ItemStack) -> Option<&'static str> {
+    if stack.id() != BUCKET_TOOL_ID {
+        return None;
+    }
+    Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
+        Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
+        Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
+        _ => BUCKET_EMPTY_ICON,
+    })
+}
+
+fn bucket_display_name_from_metadata(
+    item_id: &str,
+    base_name: &str,
+    metadata: Option<(&str, &str)>,
+) -> String {
+    if item_id != BUCKET_TOOL_ID {
+        return base_name.to_owned();
+    }
+    let variant = metadata
+        .filter(|(key, _)| *key == BUCKET_FLUID_METADATA_KEY)
+        .map(|(_, fluid)| fluid)
+        .and_then(|fluid| fluid.rsplit(':').next())
+        .filter(|fluid| !fluid.is_empty())
+        .unwrap_or("empty");
+    format!("{base_name} ({variant})")
+}
+
+fn bucket_display_name_for_stack(stack: &ItemStack, base_name: &str) -> String {
+    let metadata = stack
+        .metadata()
+        .get(BUCKET_FLUID_METADATA_KEY)
+        .map(|fluid| (BUCKET_FLUID_METADATA_KEY, fluid));
+    bucket_display_name_from_metadata(stack.id(), base_name, metadata)
+}
+
+fn creative_slot_matches_cursor(slot: &CreativeInventorySlot, cursor: &InventoryCursor) -> bool {
+    let Some(slot_item) = slot.item else {
+        return false;
+    };
+    let Some(stack) = cursor.stack() else {
+        return false;
+    };
+    if stack.id() != slot_item {
+        return false;
+    }
+    if slot_item != BUCKET_TOOL_ID {
+        return true;
+    }
+    match slot.metadata {
+        Some((key, value)) => stack.metadata().get(key) == Some(value),
+        None => stack.metadata().get(BUCKET_FLUID_METADATA_KEY).is_none(),
+    }
+}
 
 #[derive(SystemParam)]
 pub(super) struct InventoryItemContent<'w> {
@@ -264,6 +327,18 @@ struct InventoryTooltipCopyView<'w, 's> {
     stats: InventoryTooltipStatsQuery<'w, 's>,
 }
 
+#[derive(Clone, Copy)]
+enum HoveredInventoryItem {
+    Inventory {
+        item_id: &'static str,
+        index: usize,
+    },
+    Creative {
+        item_id: &'static str,
+        metadata: Option<(&'static str, &'static str)>,
+    },
+}
+
 #[derive(SystemParam)]
 pub(super) struct InventoryTooltipView<'w, 's> {
     window: Single<'w, 's, &'static Window>,
@@ -274,19 +349,27 @@ pub(super) struct InventoryTooltipView<'w, 's> {
 }
 
 impl InventoryTooltipView<'_, '_> {
-    fn hovered_item(&self) -> Option<&'static str> {
+    fn hovered_item(&self) -> Option<HoveredInventoryItem> {
         self.inventory_slots
             .iter()
             .find_map(|(interaction, slot)| {
                 (*interaction != Interaction::None)
                     .then_some(slot.item)
                     .flatten()
+                    .map(|item_id| HoveredInventoryItem::Inventory {
+                        item_id,
+                        index: slot.index,
+                    })
             })
             .or_else(|| {
                 self.creative_slots.iter().find_map(|(interaction, slot)| {
                     (*interaction != Interaction::None)
                         .then_some(slot.item)
                         .flatten()
+                        .map(|item_id| HoveredInventoryItem::Creative {
+                            item_id,
+                            metadata: slot.metadata,
+                        })
                 })
             })
     }
@@ -336,9 +419,10 @@ pub(super) fn sync_inventory_cursor_icon(
         commands.entity(entity).despawn();
     }
 
-    let Some(item_id) = context.cursor.item() else {
+    let Some(stack) = context.cursor.stack() else {
         return;
     };
+    let item_id = stack.id();
     let Some(root_entity) = context.roots.iter().next() else {
         return;
     };
@@ -347,15 +431,24 @@ pub(super) fn sync_inventory_cursor_icon(
     let mut items = content.view(player_position, &mut icon_materials);
 
     commands.entity(root_entity).with_children(|root| {
-        spawn_cursor_icon(root, item_id, position, &mut items);
-        spawn_cursor_stack_count(
-            root,
-            context
-                .cursor
-                .stack()
-                .map_or(0, crate::player::item_stack::ItemStack::quantity),
-            position,
-        );
+        if let Some(icon) = bucket_icon_for_stack(stack) {
+            root.spawn((
+                InventoryCursorIcon,
+                ImageNode::new(items.asset_server.load(icon)),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                    top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                    width: px(ITEM_ICON_SIZE),
+                    height: px(ITEM_ICON_SIZE),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+        } else {
+            spawn_cursor_icon(root, item_id, position, &mut items);
+        }
+        spawn_cursor_stack_count(root, stack.quantity(), position);
     });
 }
 
@@ -376,9 +469,10 @@ pub(super) fn sync_inventory_slot_contents(
 
     for (entity, mut slot, children) in &mut slots {
         let stack = hotbar.inventory_stack_at(slot.index);
-        let item = stack.map(crate::player::item_stack::ItemStack::id);
-        let quantity = stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
-        if slot.item == item && slot.quantity == quantity {
+        let item = stack.map(ItemStack::id);
+        let quantity = stack.map_or(0, ItemStack::quantity);
+        let is_bucket = item == Some(BUCKET_TOOL_ID);
+        if slot.item == item && slot.quantity == quantity && !is_bucket {
             continue;
         }
 
@@ -390,12 +484,25 @@ pub(super) fn sync_inventory_slot_contents(
 
         slot.item = item;
         slot.quantity = quantity;
-        let Some(item_id) = item else {
+        let Some(stack) = stack else {
             continue;
         };
+        let item_id = stack.id();
 
         commands.entity(entity).with_children(|slot_node| {
-            spawn_inventory_item(slot_node, item_id, &mut items);
+            if let Some(icon) = bucket_icon_for_stack(stack) {
+                slot_node.spawn((
+                    ImageNode::new(items.asset_server.load(icon)),
+                    Node {
+                        width: px(ITEM_ICON_SIZE),
+                        height: px(ITEM_ICON_SIZE),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+            } else {
+                spawn_inventory_item(slot_node, item_id, &mut items);
+            }
             crate::hud::item_stack_count::spawn_item_stack_count(slot_node, quantity);
         });
     }
@@ -466,6 +573,7 @@ fn logical_text_size(node: &ComputedNode) -> Vec2 {
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
+    hotbar: Res<PlayerHotbar>,
     localization: Res<UiLocalization>,
     view: InventoryTooltipView,
 ) {
@@ -486,7 +594,7 @@ pub(super) fn sync_inventory_item_tooltip(
     } = copy;
     let (mut node, mut visibility) = tooltip.into_inner();
 
-    let Some(item_id) = hovered_item else {
+    let Some(hovered_item) = hovered_item else {
         if *visibility != Visibility::Hidden {
             *visibility = Visibility::Hidden;
         }
@@ -499,10 +607,25 @@ pub(super) fn sync_inventory_item_tooltip(
         return;
     };
 
+    let (item_id, name) = match hovered_item {
+        HoveredInventoryItem::Inventory { item_id, index } => {
+            let base_name = content.item_name(item_id);
+            let name = hotbar
+                .inventory_stack_at(index)
+                .filter(|stack| stack.id() == item_id)
+                .map(|stack| bucket_display_name_for_stack(stack, base_name))
+                .unwrap_or_else(|| base_name.to_owned());
+            (item_id, name)
+        }
+        HoveredInventoryItem::Creative { item_id, metadata } => (
+            item_id,
+            bucket_display_name_from_metadata(item_id, content.item_name(item_id), metadata),
+        ),
+    };
+
     let (mut text, text_layout) = tooltip_text.into_inner();
-    let name = content.item_name(item_id);
     if text.0 != name {
-        text.0 = name.to_owned();
+        text.0 = name;
     }
 
     let (mut id_text, id_layout) = tooltip_id.into_inner();
@@ -681,7 +804,7 @@ pub(super) fn style_creative_slots(
             continue;
         }
 
-        let selected = slot.item.is_some() && slot.item == cursor.item();
+        let selected = creative_slot_matches_cursor(slot, &cursor);
         selectable::apply_colors(
             selectable::colors(*interaction, selected),
             background,
