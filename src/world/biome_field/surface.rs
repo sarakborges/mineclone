@@ -101,20 +101,25 @@ impl BiomeField {
             }
         }
 
-        // The site identities are now fixed. Fit the actual boundaries between
-        // them by solving the authored min/max intervals as a local power
-        // diagram. This is where an adjacent biome can give up exactly the
-        // amount of space another biome needs without either crossing its own
-        // authored bounds.
-        let site_weights = fit_surface_site_weights(
-            &sampled_sites[..sample_count],
-            &self.surface_biomes,
-            self.surface_site_spacing,
-            self.seed,
-        )
-        .unwrap_or_else(|reason| {
-            panic!("surface biome boundary fitting failed near site {center:?}: {reason}")
-        });
+        // A center cell always resolves the same canonical 5x5 site window.
+        // Cache its power-diagram solution so terrain sampling pays the graph
+        // fitting cost once per site cell instead of once per world column.
+        let site_weights = if let Some(weights) = self.surface_site_cache.fitted_weights(center) {
+            weights
+        } else {
+            let weights = fit_surface_site_weights(
+                &sampled_sites[..sample_count],
+                &self.surface_biomes,
+                self.surface_site_spacing,
+                self.seed,
+            )
+            .unwrap_or_else(|reason| {
+                panic!("surface biome boundary fitting failed near site {center:?}: {reason}")
+            });
+            debug_assert_eq!(weights.len(), sample_count);
+            self.surface_site_cache
+                .cache_fitted_weights(center, weights)
+        };
 
         let mut nearest_score = f32::INFINITY;
         let mut nearest_site = Vec2::ZERO;
@@ -137,7 +142,7 @@ impl BiomeField {
             nearest_sample_index,
             nearest_score,
             &sampled_sites[..sample_count],
-            &site_weights,
+            site_weights.as_ref(),
         );
 
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
