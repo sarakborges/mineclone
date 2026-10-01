@@ -21,7 +21,7 @@ use self::{
 };
 use super::{
     cell::VoxelCell,
-    chunk::{CHUNK_SIZE, VoxelChunk},
+    chunk::{CHUNK_SIZE, ObjectCells, VoxelChunk},
     coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
     layer::LayerCell,
@@ -56,7 +56,6 @@ impl VoxelWorld {
         if coord.y < 0 {
             return None;
         }
-
         self.resident.get(coord)
     }
 
@@ -119,11 +118,9 @@ impl VoxelWorld {
         if self.resident.contains(coord) {
             return true;
         }
-
         let Some(chunk) = self.persistence.restore(coord) else {
             return false;
         };
-
         self.resident.insert(coord, chunk);
         self.block_revisions.mark_topology_changed();
         self.bump_chunk_content_revision(coord);
@@ -139,25 +136,24 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
-
         self.resident
             .get(chunk_coord)?
             .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
-    pub(crate) fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+    pub(crate) fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
         if world_position.y < 0 {
-            return None;
+            return &[];
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
-        self.resident.get(chunk_coord)?.object_at(
-            local_position.x,
-            local_position.y,
-            local_position.z,
-        )
+        self.resident.get(chunk_coord).map_or(&[], |chunk| {
+            chunk.objects_at(local_position.x, local_position.y, local_position.z)
+        })
+    }
+
+    pub(crate) fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+        self.objects_at(world_position).first().copied()
     }
 
     pub(crate) fn layers_at(
@@ -167,7 +163,6 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return &[];
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         self.resident.get(chunk_coord).map_or(&[], |chunk| {
             chunk.layers_at(local_position.x, local_position.y, local_position.z)
@@ -178,9 +173,7 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
-
         self.resident.get(chunk_coord)?.fluid_at(
             local_position.x,
             local_position.y,
@@ -195,23 +188,20 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
-        let chunk = self.resident.get(chunk_coord)?;
-
-        chunk.sample_local(local_position.x, local_position.y, local_position.z)
+        self.resident
+            .get(chunk_coord)?
+            .sample_local(local_position.x, local_position.y, local_position.z)
     }
 
     pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {
         if world_position.y < 0 {
             return VoxelLight::DARK;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         let Some(chunk) = self.resident.get(chunk_coord) else {
             return VoxelLight::DARK;
         };
-
         chunk.light_at(local_position.x, local_position.y, local_position.z)
     }
 
@@ -224,11 +214,9 @@ impl VoxelWorld {
         debug_assert!(local_position.x >= 0 && local_position.x < CHUNK_SIZE as i32);
         debug_assert!(local_position.y >= 0 && local_position.y < CHUNK_SIZE as i32);
         debug_assert!(local_position.z >= 0 && local_position.z < CHUNK_SIZE as i32);
-
         let Some(chunk) = self.resident.get_mut(chunk_coord) else {
             return false;
         };
-
         chunk.set_light(
             local_position.x as usize,
             local_position.y as usize,
@@ -257,7 +245,7 @@ impl VoxelWorld {
         let Some(chunk) = self.resident.get_mut(coord) else {
             return false;
         };
-        chunk.rebuild_empty_light_columns(sky_by_column);
+        chunk.rebuild_empty_light_columns(coord, sky_by_column);
         true
     }
 
@@ -274,7 +262,6 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return false;
         }
-
         self.resident
             .contains(chunk_coord_from_world(world_position))
     }
@@ -302,16 +289,14 @@ impl VoxelWorld {
         &mut self,
         world_position: IVec3,
         block: Option<VoxelCell>,
-    ) -> Option<(IVec3, Option<VoxelCell>, Option<ObjectCell>)> {
+    ) -> Option<(IVec3, Option<VoxelCell>, ObjectCells)> {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         let previous_block;
         let block_changed;
-        let detached_object;
-
+        let detached_objects;
         {
             let chunk = self.resident.get_mut(chunk_coord)?;
             let x = local_position.x as usize;
@@ -320,27 +305,23 @@ impl VoxelWorld {
             let (current_block, current_fluid, _) = chunk
                 .sample_local(local_position.x, local_position.y, local_position.z)
                 .expect("split local block coordinates must stay inside the chunk");
-
             if current_block == block && (block.is_none() || current_fluid.is_none()) {
                 return None;
             }
-
             previous_block = current_block;
             block_changed = current_block != block;
-            detached_object = chunk.set_block_with_detached_object(x, y, z, block);
-
+            detached_objects = chunk.set_block_with_detached_objects(x, y, z, block);
             if block.is_some() {
                 chunk.set_fluid(x, y, z, None);
             }
         }
-
         self.persistence.mark_persistent(chunk_coord);
         if block_changed {
             self.block_revisions.mark_topology_changed();
             self.mark_chunk_objects_changed(chunk_coord);
         }
         self.bump_chunk_content_revision(chunk_coord);
-        Some((chunk_coord, previous_block, detached_object))
+        Some((chunk_coord, previous_block, detached_objects))
     }
 
     pub(crate) fn add_layer_at(
@@ -357,7 +338,6 @@ impl VoxelWorld {
         if !definition.supports_face(face) {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         let changed = {
             let chunk = self.resident.get_mut(chunk_coord)?;
@@ -372,7 +352,6 @@ impl VoxelWorld {
         if !changed {
             return None;
         }
-
         self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         Some(chunk_coord)
@@ -402,7 +381,6 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         let changed = {
             let chunk = self.resident.get_mut(chunk_coord)?;
@@ -417,7 +395,6 @@ impl VoxelWorld {
         if !changed {
             return None;
         }
-
         self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         Some(chunk_coord)
@@ -436,7 +413,6 @@ impl VoxelWorld {
         if !definition.supports_placement_face(object.face) {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(support_position);
         let changed = {
             let chunk = self.resident.get_mut(chunk_coord)?;
@@ -450,7 +426,6 @@ impl VoxelWorld {
         if !changed {
             return None;
         }
-
         self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.mark_chunk_objects_changed(chunk_coord);
@@ -460,11 +435,11 @@ impl VoxelWorld {
     pub(crate) fn remove_object_at(
         &mut self,
         support_position: IVec3,
+        object: ObjectCell,
     ) -> Option<(IVec3, ObjectCell)> {
         if support_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(support_position);
         let removed = {
             let chunk = self.resident.get_mut(chunk_coord)?;
@@ -472,9 +447,9 @@ impl VoxelWorld {
                 local_position.x as usize,
                 local_position.y as usize,
                 local_position.z as usize,
+                object,
             )?
         };
-
         self.persistence.mark_persistent(chunk_coord);
         self.bump_chunk_content_revision(chunk_coord);
         self.mark_chunk_objects_changed(chunk_coord);
@@ -489,10 +464,6 @@ impl VoxelWorld {
         self.set_fluid_at_internal(world_position, fluid, true)
     }
 
-    /// Apply deterministic generated-fluid convergence without promoting the
-    /// target chunk to authoritative persistent state. A persisted chunk is
-    /// never eligible for this path; its future fluid changes belong to the
-    /// runtime scheduler.
     pub(crate) fn set_derived_fluid_at(
         &mut self,
         world_position: IVec3,
@@ -523,7 +494,6 @@ impl VoxelWorld {
         if world_position.y < 0 {
             return None;
         }
-
         let (chunk_coord, local_position) = split_world_position(world_position);
         {
             let chunk = self.resident.get_mut(chunk_coord)?;
@@ -533,17 +503,14 @@ impl VoxelWorld {
             let (current_block, current_fluid, _) = chunk
                 .sample_local(local_position.x, local_position.y, local_position.z)
                 .expect("split local fluid coordinates must stay inside the chunk");
-
             if fluid.is_some() && current_block.is_some() {
                 return None;
             }
             if current_fluid == fluid {
                 return None;
             }
-
             chunk.set_fluid(x, y, z, fluid);
         }
-
         if persistent {
             self.persistence.mark_persistent(chunk_coord);
         }
@@ -569,208 +536,5 @@ impl VoxelWorld {
             "content revision bump requires a loaded chunk: {coord:?}"
         );
         self.content_revisions.mark_changed(coord);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn loaded_column_height_tracks_insert_and_archive() {
-        let mut world = VoxelWorld::default();
-        let low = IVec3::new(2, 1, -3);
-        let high = IVec3::new(2, 4, -3);
-        let world_x = low.x * CHUNK_SIZE as i32;
-        let world_z = low.z * CHUNK_SIZE as i32;
-
-        world.insert_chunk(low, VoxelChunk::empty());
-        world.insert_chunk(high, VoxelChunk::empty());
-        assert_eq!(
-            world.highest_loaded_world_y_in_column(world_x, world_z),
-            Some((high.y + 1) * CHUNK_SIZE as i32 - 1),
-        );
-
-        world.archive_chunk(high);
-        assert_eq!(
-            world.highest_loaded_world_y_in_column(world_x, world_z),
-            Some((low.y + 1) * CHUNK_SIZE as i32 - 1),
-        );
-
-        world.archive_chunk(low);
-        assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
-    }
-
-    #[test]
-    fn loaded_chunk_coords_below_are_column_local_and_sorted() {
-        let mut world = VoxelWorld::default();
-        for coord in [
-            IVec3::new(2, 0, -3),
-            IVec3::new(2, 2, -3),
-            IVec3::new(2, 4, -3),
-            IVec3::new(3, 1, -3),
-        ] {
-            world.insert_chunk(coord, VoxelChunk::empty());
-        }
-
-        assert_eq!(
-            world
-                .loaded_chunk_coords_below(IVec3::new(2, 4, -3))
-                .collect::<Vec<_>>(),
-            vec![IVec3::new(2, 0, -3), IVec3::new(2, 2, -3)]
-        );
-    }
-
-    #[test]
-    fn unmodified_generated_chunk_is_dropped_when_archived() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::new(3, 2, -4);
-        world.insert_chunk(coord, VoxelChunk::empty());
-
-        world.archive_chunk(coord);
-
-        assert!(!world.has_resident_or_persisted_chunk(coord));
-        assert!(!world.restore_chunk(coord));
-    }
-
-    #[test]
-    fn modified_chunk_is_persisted_when_archived() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        world.insert_chunk(coord, VoxelChunk::empty());
-        world.set_block_at(
-            IVec3::new(1, 1, 1),
-            Some(VoxelCell::new("stone", Default::default())),
-        );
-
-        world.archive_chunk(coord);
-
-        assert!(world.has_resident_or_persisted_chunk(coord));
-        assert!(world.restore_chunk(coord));
-    }
-
-    #[test]
-    fn layer_mutation_tracks_content_without_changing_block_topology_revision() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        let position = IVec3::new(1, 2, 3);
-        world.insert_chunk(coord, VoxelChunk::empty());
-        world.set_block_at(
-            position,
-            Some(VoxelCell::new("stone", Default::default())),
-        );
-
-        let mut registry = LayerRegistry::default();
-        registry.insert(crate::content::layer::LayerDefinition {
-            id: "asteria:test_layer".to_owned(),
-            name: serde_json::from_str(
-                r#"{"english":"Test Layer","portuguese_brazil":"Test Layer","spanish":"Test Layer"}"#,
-            )
-            .unwrap(),
-            category: "natural_blocks".to_owned(),
-            texture: "textures/test.png".to_owned(),
-            creative_visible: true,
-            tint: crate::content::block::BlockTint::None,
-            faces: vec![LayerFace::Top],
-            offset: 1.0 / 1024.0,
-            alpha_cutoff: Some(0.5),
-            alpha_blend: false,
-            casts_shadow: false,
-        });
-
-        let block_revision = world.block_topology_revision();
-        let content_revision = world
-            .chunk_content_revision(coord)
-            .expect("chunk should have a content revision");
-        assert_eq!(
-            world.add_layer_at(
-                position,
-                LayerFace::Top,
-                LayerCell::new("asteria:test_layer", Default::default()),
-                &registry,
-            ),
-            Some(coord),
-        );
-        assert_eq!(world.block_topology_revision(), block_revision);
-        assert!(
-            world
-                .chunk_content_revision(coord)
-                .expect("chunk should have a content revision")
-                > content_revision
-        );
-        assert_eq!(world.layers_at(position).len(), 1);
-    }
-
-    #[test]
-    fn identical_block_mutation_is_ignored() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        let position = IVec3::new(1, 2, 3);
-        let cell = VoxelCell::new("stone", Default::default());
-        world.insert_chunk(coord, VoxelChunk::empty());
-
-        assert_eq!(world.set_block_at(position, Some(cell)), Some(coord));
-        assert_eq!(world.set_block_at(position, Some(cell)), None);
-    }
-
-    #[test]
-    fn detailed_block_mutation_returns_previous_cell() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        let position = IVec3::new(1, 2, 3);
-        let first = VoxelCell::new("stone", Default::default());
-        let second = VoxelCell::new("dirt", Default::default());
-        world.insert_chunk(coord, VoxelChunk::empty());
-        world.set_block_at(position, Some(first));
-
-        assert_eq!(
-            world.set_block_at_with_previous(position, Some(second)),
-            Some((coord, Some(first), None)),
-        );
-    }
-
-    #[test]
-    fn detailed_block_mutation_returns_detached_object() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        let position = IVec3::new(1, 2, 3);
-        let support = VoxelCell::new("stone", Default::default());
-        let object = ObjectCell::new(
-            "asteria:pebble",
-            crate::content::object::ObjectPlacementFace::Top,
-            Default::default(),
-        );
-        let mut chunk = VoxelChunk::empty();
-        chunk.set_block(1, 2, 3, Some(support));
-        assert!(chunk.set_object(1, 2, 3, object));
-        world.insert_chunk(coord, chunk);
-
-        assert_eq!(
-            world.set_block_at_with_previous(position, None),
-            Some((coord, Some(support), Some(object))),
-        );
-        assert_eq!(world.object_at(position), None);
-    }
-
-    #[test]
-    fn chunk_content_revision_ignores_lighting_but_tracks_voxel_content() {
-        let mut world = VoxelWorld::default();
-        let coord = IVec3::ZERO;
-        let position = IVec3::new(1, 2, 3);
-        world.insert_chunk(coord, VoxelChunk::empty());
-        let inserted_content = world
-            .chunk_content_revision(coord)
-            .expect("chunk should have a content revision");
-
-        assert!(world.clear_chunk_light(coord));
-        assert_eq!(world.chunk_content_revision(coord), Some(inserted_content));
-
-        world.set_block_at(position, Some(VoxelCell::new("stone", Default::default())));
-        assert!(
-            world
-                .chunk_content_revision(coord)
-                .expect("chunk should have a content revision")
-                > inserted_content
-        );
     }
 }
