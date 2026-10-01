@@ -72,10 +72,16 @@ impl BiomeField {
             return candidate.index;
         }
 
-        // Authored adjacency constraints are hard. size.max is a spatial
-        // continuity preference layered on top of them: if enforcing both
-        // locally would leave the site without any legal biome, preserve the
-        // authored adjacency solution instead of panicking world generation.
+        // Keep size.max ahead of authored adjacency when the two constraints
+        // have no common local solution. This prevents a fallback candidate
+        // from reintroducing an oversized Plains/Ocean region.
+        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
+            candidate.index != raw_index
+                && surface_size_allows(candidate.index, &selection_context)
+        }) {
+            return candidate.index;
+        }
+
         if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
             candidate.index != raw_index
                 && authored_adjacency_allows(candidate.index, &selection_context)
