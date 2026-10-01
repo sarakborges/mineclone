@@ -3,6 +3,7 @@
   "name": { "english": "Moss", "portuguese_brazil": "Moss", "spanish": "Moss" },
   "category": "natural_blocks",
   "texture": "textures/layers/moss.png",
+  "tint": "foliage",
   "offset": 0.001,
   "alphaCutoff": 0.5,
   "alphaBlend": false,
