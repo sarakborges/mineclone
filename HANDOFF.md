@@ -7,7 +7,7 @@
 - Surface biome `size.min` is now enforced as a hard lower bound during site selection, including against different neighboring biome sites that define the candidate region boundary.
 - `/locate biome` for volume biomes now verifies the anchor with the same resolved volume selection used by terrain generation. It no longer reports a geometric volume anchor when surface constraints (such as Floating Islands requiring Plains) reject it.
 - Warp safe-position search radius increased from 32 to 48 blocks so current Floating Islands (`size.y.max = 36`) can be reached from their located anchor.
-- Validation for the latest warp commit is running; localization/content/GLB audits have completed successfully so far.
+- Validation is green on `9a0a52cdff035794ba438cedfcef8ec8c610e082` (Clippy + Check + localization/content/GLB audits). An obsolete random-spawn test helper left from the previous spawn-weight change was also removed.
 
 ## 2026-10-01 — Independent random spawn weighting
 
