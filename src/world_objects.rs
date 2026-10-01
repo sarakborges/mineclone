@@ -6,9 +6,7 @@ use std::{
 use bevy::{
     asset::AssetId,
     ecs::system::SystemParam,
-    gltf::GltfAssetLabel,
-    light::{NotShadowCaster, NotShadowReceiver},
-    platform::collections::{HashMap, HashSet},
+    platform::collections::HashMap,
     prelude::*,
 };
 
@@ -19,7 +17,6 @@ use crate::{
         resource_systems::reset_resource,
     },
     content::{
-        biome::BiomeRegistry,
         block::BlockRegistry,
         block_id::intern_block_id,
         block_orientation::BlockOrientation,
@@ -27,7 +24,7 @@ use crate::{
         item_id::intern_item_id,
         layer::LayerRegistry,
         layer_id::intern_layer_id,
-        object::{ObjectDefinition, ObjectPlacementFace, ObjectRegistry, ObjectVisualDefinition},
+        object::{ObjectDefinition, ObjectPlacementFace, ObjectRegistry},
         object_id::intern_object_id,
         tool::ToolRegistry,
         tool_id::intern_tool_id,
@@ -36,11 +33,6 @@ use crate::{
     player::{
         camera::GameplayCamera,
         item_stack::{ItemStack, MAX_STACK_SIZE},
-    },
-    rendering::{
-        block_tint::block_tint_at,
-        color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS},
-        extruded_sprite::{ExtrudedSpriteGeometry, PendingExtrudedSprite},
     },
     voxel::{
         cell::VoxelCell,
@@ -53,15 +45,18 @@ use crate::{
         world::VoxelWorld,
     },
     world::{
-        biome_field::BiomeField,
         chunk_rendering::ChunkRenderPool,
         deterministic::{hash_signed, hash_string, mix_u32_components},
-        render_distance::{RenderDistanceSettings, chunk_visibility_radii},
+        render_distance::{chunk_visibility_radii, RenderDistanceSettings},
         tick::WorldTickClock,
         WorldFrameWorkBudget,
     },
     world_items::WorldItemSpawnRequest,
 };
+
+mod batch;
+
+use batch::{build_world_object_chunk, BuiltWorldObjectChunk, WorldObjectBatchAssets};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct WorldObjectKey {
@@ -75,16 +70,15 @@ impl WorldObjectKey {
     }
 }
 
-#[derive(Clone, Copy)]
-struct MaterializedWorldObject {
-    entity: Entity,
-    support_cell: Option<VoxelCell>,
+struct MaterializedWorldObjectChunk {
+    entities: Vec<Entity>,
+    object_count: usize,
+    batch_count: usize,
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct WorldObjectStore {
-    by_key: HashMap<WorldObjectKey, MaterializedWorldObject>,
-    by_chunk: HashMap<IVec3, HashSet<WorldObjectKey>>,
+    by_chunk: HashMap<IVec3, MaterializedWorldObjectChunk>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
     synced_world_revision: u64,
     synced_render_pool_revision: u64,
@@ -95,55 +89,41 @@ pub(crate) struct WorldObjectStore {
 
 impl WorldObjectStore {
     pub(crate) fn materialized_object_count(&self) -> usize {
-        self.by_key.len()
+        self.by_chunk.values().map(|chunk| chunk.object_count).sum()
     }
 
     pub(crate) fn materialized_chunk_count(&self) -> usize {
-        self.synced_chunk_revisions.len()
+        self.by_chunk.len()
     }
 
-    fn insert(
-        &mut self,
-        key: WorldObjectKey,
-        support_cell: Option<VoxelCell>,
-        entity: Entity,
-    ) {
-        let previous = self.by_key.insert(
-            key,
-            MaterializedWorldObject {
-                entity,
-                support_cell,
-            },
-        );
-        debug_assert!(previous.is_none(), "world object instance key must be unique");
-        self.by_chunk
-            .entry(chunk_coord_from_world(key.support))
-            .or_default()
-            .insert(key);
+    pub(crate) fn materialized_batch_count(&self) -> usize {
+        self.by_chunk.values().map(|chunk| chunk.batch_count).sum()
     }
 
-    fn remove_key(&mut self, key: WorldObjectKey) -> Option<Entity> {
-        let entity = self.by_key.remove(&key)?.entity;
-        let coord = chunk_coord_from_world(key.support);
-        let remove_chunk_entry = if let Some(keys) = self.by_chunk.get_mut(&coord) {
-            keys.remove(&key);
-            keys.is_empty()
-        } else {
-            false
-        };
-        if remove_chunk_entry {
-            self.by_chunk.remove(&coord);
+    fn replace_chunk(&mut self, coord: IVec3, built: BuiltWorldObjectChunk) -> Vec<Entity> {
+        let retired = self
+            .by_chunk
+            .remove(&coord)
+            .map(|chunk| chunk.entities)
+            .unwrap_or_default();
+        if built.object_count > 0 {
+            self.by_chunk.insert(
+                coord,
+                MaterializedWorldObjectChunk {
+                    entities: built.entities,
+                    object_count: built.object_count,
+                    batch_count: built.batch_count,
+                },
+            );
         }
-        Some(entity)
+        retired
     }
 
     fn take_chunk_entities(&mut self, coord: IVec3) -> Vec<Entity> {
-        let Some(keys) = self.by_chunk.remove(&coord) else {
-            return Vec::new();
-        };
-        keys.into_iter()
-            .filter_map(|key| self.by_key.remove(&key).map(|entry| entry.entity))
-            .collect()
+        self.by_chunk
+            .remove(&coord)
+            .map(|chunk| chunk.entities)
+            .unwrap_or_default()
     }
 }
 
@@ -165,7 +145,6 @@ pub(crate) struct WorldObjectRemoveRequest {
 #[derive(SystemParam)]
 struct WorldObjectRemovalRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
-    store: ResMut<'w, WorldObjectStore>,
     world_ticks: Res<'w, WorldTickClock>,
     drops: MessageWriter<'w, WorldItemSpawnRequest>,
 }
@@ -205,22 +184,11 @@ impl<'a> ObjectLootRegistries<'a> {
     }
 }
 
-#[derive(Component)]
-struct WorldObjectAppearance {
-    tint: Color,
-    unlit: bool,
-}
-
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct ObjectMaterialKey {
     material: AssetId<StandardMaterial>,
     tint: [u8; 4],
     unlit: bool,
-}
-
-#[derive(Component)]
-struct PendingObjectModelMaterial {
-    source: Handle<StandardMaterial>,
 }
 
 #[derive(Resource, Default)]
@@ -236,8 +204,8 @@ impl ObjectMaterialCache {
 struct WorldObjectSceneContent<'w> {
     world: Res<'w, VoxelWorld>,
     objects: Res<'w, ObjectRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
+    biomes: Res<'w, crate::content::biome::BiomeRegistry>,
+    biome_field: Res<'w, crate::world::biome_field::BiomeField>,
     asset_server: Res<'w, AssetServer>,
 }
 
@@ -256,7 +224,6 @@ impl Plugin for WorldObjectsPlugin {
                     apply_object_placement_requests,
                     apply_object_removal_requests,
                     sync_world_objects,
-                    configure_pending_object_model_materials,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -300,7 +267,6 @@ fn apply_object_placement_requests(
 }
 
 fn apply_object_removal_requests(
-    mut commands: Commands,
     mut requests: MessageReader<WorldObjectRemoveRequest>,
     content: WorldObjectRemovalContent,
     mut runtime: WorldObjectRemovalRuntime,
@@ -320,9 +286,6 @@ fn apply_object_removal_requests(
             continue;
         };
 
-        if let Some(entity) = runtime.store.remove_key(key) {
-            commands.entity(entity).despawn();
-        }
         if request.drop_loot {
             spawn_object_loot(
                 definition,
@@ -354,6 +317,7 @@ fn sync_world_objects(
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
     frame_budget: Res<WorldFrameWorkBudget>,
+    mut batch_assets: WorldObjectBatchAssets,
     mut store: ResMut<WorldObjectStore>,
 ) {
     let world_revision = content.world.object_scene_revision();
@@ -441,59 +405,27 @@ fn sync_world_objects(
             let Some(chunk) = content.world.chunk(coord) else {
                 continue;
             };
-            let chunk_origin = coord * CHUNK_SIZE as i32;
-            let existing_keys = store.by_chunk.get(&coord).cloned().unwrap_or_default();
-            let mut desired_keys = HashSet::new();
-
-            for (x, y, z, object) in chunk.object_voxels() {
-                let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-                debug_assert_eq!(
-                    content.world.object_at(support),
-                    chunk.object_at(x as i32, y as i32, z as i32),
-                    "world/chunk first-object lookup must stay consistent",
-                );
-                let key = WorldObjectKey::new(support, object);
-                desired_keys.insert(key);
-                let support_cell = content.world.cell_at(support);
-                if store
-                    .by_key
-                    .get(&key)
-                    .is_some_and(|existing| existing.support_cell == support_cell)
-                {
-                    continue;
-                }
-
-                if let Some(entity) = store.remove_key(key) {
-                    commands.entity(entity).despawn();
-                }
-                let Some(definition) = content.objects.get(object.object_id) else {
-                    continue;
-                };
-                let entity = spawn_world_object(
-                    &mut commands,
-                    support,
-                    support_cell,
-                    object,
-                    definition,
-                    &content,
-                );
-                store.insert(key, support_cell, entity);
-            }
-
-            for key in existing_keys {
-                if desired_keys.contains(&key) {
-                    continue;
-                }
-                if let Some(entity) = store.remove_key(key) {
-                    commands.entity(entity).despawn();
-                }
-            }
-
-            if desired_keys.is_empty() {
+            if !chunk.has_objects() {
+                despawn_chunk_objects(&mut commands, coord, &mut store);
                 store.synced_chunk_revisions.remove(&coord);
-            } else {
-                store.synced_chunk_revisions.insert(coord, revision);
+                processed_chunks += 1;
+                continue;
             }
+
+            let Some(built) = build_world_object_chunk(
+                &mut commands,
+                coord,
+                chunk,
+                &content,
+                &mut batch_assets,
+            ) else {
+                deferred = true;
+                break;
+            };
+            for entity in store.replace_chunk(coord, built) {
+                commands.entity(entity).despawn();
+            }
+            store.synced_chunk_revisions.insert(coord, revision);
             processed_chunks += 1;
         }
     }
@@ -509,12 +441,13 @@ fn sync_world_objects(
     let elapsed = sync_started.elapsed();
     if elapsed >= SLOW_WORLD_OBJECT_SYNC_WARNING {
         warn!(
-            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} processed_chunks={} deferred={} materialized_chunks={} materialized_objects={} elapsed_ms={:.2}",
+            "slow world-object sync: center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} processed_chunks={} deferred={} materialized_chunks={} materialized_objects={} materialized_batches={} elapsed_ms={:.2}",
             candidate_chunk_count,
             processed_chunks,
             deferred,
             store.materialized_chunk_count(),
             store.materialized_object_count(),
+            store.materialized_batch_count(),
             elapsed.as_secs_f64() * 1_000.0,
         );
     }
@@ -547,79 +480,6 @@ fn despawn_chunk_objects(
     for entity in store.take_chunk_entities(coord) {
         commands.entity(entity).despawn();
     }
-}
-
-fn spawn_world_object(
-    commands: &mut Commands,
-    support: IVec3,
-    support_cell: Option<VoxelCell>,
-    object: ObjectCell,
-    definition: &ObjectDefinition,
-    content: &WorldObjectSceneContent<'_>,
-) -> Entity {
-    let transform = world_object_transform(support, support_cell, object, definition);
-    let position = transform.translation;
-    let tint = block_tint_at(
-        definition.tint,
-        Vec2::new(position.x, position.z),
-        &content.biome_field,
-        &content.biomes,
-    );
-
-    let mut root = commands.spawn((
-        Name::new(format!("World Object ({})", definition.id)),
-        transform,
-        Visibility::Visible,
-        DespawnOnExit(GameState::Gameplay),
-    ));
-
-    match &definition.visual {
-        ObjectVisualDefinition::Model { path } => {
-            let mesh = content.asset_server.load(
-                GltfAssetLabel::Primitive {
-                    mesh: 0,
-                    primitive: 0,
-                }
-                .from_asset(path.clone()),
-            );
-            let source_material: Handle<StandardMaterial> =
-                content.asset_server.load(format!("{path}#Material0/std"));
-            root.insert((
-                Mesh3d(mesh),
-                MeshMaterial3d(source_material.clone()),
-                WorldObjectAppearance {
-                    tint,
-                    unlit: definition.unlit,
-                },
-                PendingObjectModelMaterial {
-                    source: source_material,
-                },
-            ));
-            apply_shadow_flags(&mut root, definition);
-        }
-        ObjectVisualDefinition::ExtrudedSprite {
-            texture,
-            base_offset,
-            height,
-            size,
-            alpha_cutoff,
-        } => {
-            root.insert(PendingExtrudedSprite::new(
-                content.asset_server.load(texture.clone()),
-                ExtrudedSpriteGeometry {
-                    size: *size,
-                    height: *height,
-                    base_offset: *base_offset,
-                    alpha_cutoff: *alpha_cutoff,
-                },
-                tint,
-                definition.unlit,
-            ));
-            apply_shadow_flags(&mut root, definition);
-        }
-    }
-
-    root.id()
 }
 
 pub(crate) fn world_object_transform(
@@ -829,52 +689,5 @@ fn texture_rotation_radians(rotation: TextureRotation) -> f32 {
         TextureRotation::Degrees90 => FRAC_PI_2,
         TextureRotation::Degrees180 => FRAC_PI_2 * 2.0,
         TextureRotation::Degrees270 => FRAC_PI_2 * 3.0,
-    }
-}
-
-fn configure_pending_object_model_materials(
-    mut commands: Commands,
-    pending: Query<(
-        Entity,
-        &PendingObjectModelMaterial,
-        &WorldObjectAppearance,
-    )>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut cache: ResMut<ObjectMaterialCache>,
-) {
-    for (entity, pending, appearance) in &pending {
-        let (tint, tint_key) = quantize_srgba(appearance.tint, MATERIAL_TINT_RGB_LEVELS);
-        let key = ObjectMaterialKey {
-            material: pending.source.id(),
-            tint: tint_key,
-            unlit: appearance.unlit,
-        };
-        let replacement = if let Some(existing) = cache.0.get(&key) {
-            existing.clone()
-        } else {
-            let Some(mut material) = materials.get(&pending.source).cloned() else {
-                continue;
-            };
-            material.base_color = tint;
-            material.unlit = appearance.unlit;
-            let handle = materials.add(material);
-            cache.0.insert(key, handle.clone());
-            handle
-        };
-
-        commands
-            .entity(entity)
-            .insert(MeshMaterial3d(replacement))
-            .remove::<PendingObjectModelMaterial>()
-            .remove::<WorldObjectAppearance>();
-    }
-}
-
-fn apply_shadow_flags(root: &mut EntityCommands<'_>, definition: &ObjectDefinition) {
-    if !definition.casts_shadow {
-        root.insert(NotShadowCaster);
-    }
-    if !definition.receives_shadow {
-        root.insert(NotShadowReceiver);
     }
 }
