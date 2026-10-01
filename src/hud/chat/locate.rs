@@ -317,45 +317,49 @@ fn locate_surface_biome(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    let center = chunk_coord_from_world(player).xz();
+    // Surface biomes are authored around deterministic site cells. Sampling
+    // every block in every chunk made rare biomes (such as Volcano) scale into
+    // billions of terrain samples before the 32k-block locate radius was
+    // exhausted. Search the same site lattice used by terrain selection
+    // instead; the winning site itself is guaranteed to lie inside its region.
+    let spacing = snapshot.biome_field.surface_site_spacing();
+    let center = IVec2::new(
+        (player.x as f32 / spacing.x).floor() as i32,
+        (player.z as f32 / spacing.y).floor() as i32,
+    );
+    let maximum_distance_squared =
+        i64::from(MAX_LOCATE_BLOCK_RADIUS) * i64::from(MAX_LOCATE_BLOCK_RADIUS);
+    let cell_radius = (MAX_LOCATE_BLOCK_RADIUS as f32 / spacing.min_element())
+        .ceil() as i32
+        + 2;
     let mut best: Option<(i64, IVec3)> = None;
 
-    for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
-        visit_square_chunk_ring(center, radius, |chunk| {
-            let Some(origin) = chunk_block_origin(chunk) else {
+    for radius in 0..=cell_radius {
+        visit_square_cell_ring(center, radius, |cell| {
+            let site = snapshot.biome_field.surface_site_position(cell);
+            let horizontal_dx = (site.x - player.x as f32) as f64;
+            let horizontal_dz = (site.y - player.z as f32) as f64;
+            let horizontal_distance_squared =
+                (horizontal_dx * horizontal_dx + horizontal_dz * horizontal_dz) as i64;
+            if horizontal_distance_squared > maximum_distance_squared {
                 return;
-            };
-            for local_z in 0..CHUNK_SIZE as i32 {
-                for local_x in 0..CHUNK_SIZE as i32 {
-                    let (Some(x), Some(z)) = (
-                        origin.x.checked_add(local_x),
-                        origin.y.checked_add(local_z),
-                    ) else {
-                        continue;
-                    };
-                    let horizontal = IVec2::new(x, z);
-                    let sample = snapshot
-                        .biome_field
-                        .sample_surface(horizontal.as_vec2() + Vec2::splat(0.5));
-                    if sample.primary_id != id {
-                        continue;
-                    }
-
-                    let y = surface_height(
-                        horizontal,
-                        &snapshot.dimension,
-                        &snapshot.biomes,
-                        &snapshot.biome_field,
-                    );
-                    let position = IVec3::new(horizontal.x, y, horizontal.y);
-                    consider_nearest(&mut best, player, position);
-                }
             }
-        });
 
-        if best_is_final(best, radius) {
-            break;
-        }
+            let sample = snapshot.biome_field.sample_surface(site);
+            if sample.primary_id != id {
+                return;
+            }
+
+            let column = site.floor().as_ivec2();
+            let y = surface_height(
+                column,
+                &snapshot.dimension,
+                &snapshot.biomes,
+                &snapshot.biome_field,
+            );
+            let position = IVec3::new(column.x, y, column.y);
+            consider_nearest(&mut best, player, position);
+        });
     }
 
     best.map(|(_, position)| position)
