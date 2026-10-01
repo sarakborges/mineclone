@@ -34,6 +34,11 @@ pub struct DimensionBiome {
     pub id: String,
     #[serde(default = "default_biome_weight")]
     pub weight: f32,
+    /// Relative probability of selecting this biome as the starting biome
+    /// when creating a new normal world. This is intentionally separate from
+    /// world-generation weight.
+    #[serde(default = "default_spawn_biome_weight")]
+    pub spawn_weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
     #[serde(default)]
@@ -62,6 +67,7 @@ pub struct DimensionDefinition {
 }
 
 fn default_max_entities() -> usize { 128 }
+fn default_spawn_biome_weight() -> f32 { 1.0 }
 
 impl DimensionDefinition {
     pub fn validate_biomes(&self, biomes: &BiomeRegistry) {
@@ -96,6 +102,12 @@ impl DimensionDefinition {
             assert!(
                 entry.weight.is_finite() && entry.weight >= 0.0,
                 "dimension {} biome {} weight must be finite and non-negative",
+                self.id,
+                entry.id
+            );
+            assert!(
+                entry.spawn_weight.is_finite() && entry.spawn_weight >= 0.0,
+                "dimension {} biome {} spawnWeight must be finite and non-negative",
                 self.id,
                 entry.id
             );
