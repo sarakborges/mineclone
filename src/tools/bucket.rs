@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_gameplay_event, log_gameplay_warn},
     content::{
         builtin_ids::BUCKET_FLUID_METADATA_KEY, fluid::FluidRegistry,
         tool_behavior::BUCKET_USE_BEHAVIOR_ID,
@@ -54,30 +54,67 @@ fn handle_bucket_use(
 
         if let Some(fluid_definition_id) = contained_fluid {
             let Some(fluid_id) = fluids.id_of(&fluid_definition_id) else {
+                log_gameplay_warn(format!(
+                    "bucket.reject action=place fluid={} reason=unknown_fluid_metadata",
+                    fluid_definition_id
+                ));
                 continue;
             };
             let Some(hit) = usage.target else {
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} reason=no_target",
+                    fluid_definition_id
+                ));
                 continue;
             };
             if runtime.read().block_id_at(hit.voxel) != Some(hit.block_id) {
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=stale_target",
+                    fluid_definition_id, hit.voxel
+                ));
                 continue;
             }
 
             let destination = hit.voxel + hit.normal;
-            if destination.y < 0
-                || runtime.read().cell_at(destination).is_some()
-                || runtime.read().fluid_at(destination).is_some()
-            {
+            if destination.y < 0 {
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=below_world",
+                    fluid_definition_id, destination
+                ));
+                continue;
+            }
+            if runtime.read().cell_at(destination).is_some() {
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=destination_blocked",
+                    fluid_definition_id, destination
+                ));
+                continue;
+            }
+            if runtime.read().fluid_at(destination).is_some() {
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=destination_has_fluid",
+                    fluid_definition_id, destination
+                ));
                 continue;
             }
 
             let placed = FluidCell::source(fluid_id, MAX_FLUID_LEVEL);
             if runtime.set_fluid(destination, Some(placed)).is_none() {
+                log_gameplay_warn(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=fluid_mutation_rejected",
+                    fluid_definition_id, destination
+                ));
                 continue;
             }
             if !transition_selected_bucket(&mut hotbar, None) {
                 let restored = runtime.set_fluid(destination, None);
                 debug_assert!(restored.is_some(), "bucket placement rollback must succeed");
+                log_gameplay_event(format!(
+                    "bucket.reject action=place fluid={} voxel={:?} reason=inventory_transition_failed rollback={}",
+                    fluid_definition_id,
+                    destination,
+                    restored.is_some(),
+                ));
                 continue;
             }
 
@@ -94,19 +131,34 @@ fn handle_bucket_use(
         let Some((voxel, collected)) =
             raycast_collectible_fluid(&runtime.read(), origin, direction, BUCKET_TARGET_RANGE)
         else {
+            log_gameplay_event("bucket.reject action=collect reason=no_collectible_source");
             continue;
         };
         let Some(definition) = fluids.get(collected.fluid_id) else {
+            log_gameplay_warn(format!(
+                "bucket.reject action=collect voxel={:?} runtime_fluid_id={} reason=missing_fluid_definition",
+                voxel, collected.fluid_id
+            ));
             continue;
         };
         let fluid_definition_id = definition.id.clone();
 
         if runtime.set_fluid(voxel, None).is_none() {
+            log_gameplay_warn(format!(
+                "bucket.reject action=collect fluid={} voxel={:?} reason=fluid_mutation_rejected",
+                fluid_definition_id, voxel
+            ));
             continue;
         }
         if !transition_selected_bucket(&mut hotbar, Some(&fluid_definition_id)) {
             let restored = runtime.set_fluid(voxel, Some(collected));
             debug_assert!(restored.is_some(), "bucket collection rollback must succeed");
+            log_gameplay_event(format!(
+                "bucket.reject action=collect fluid={} voxel={:?} reason=inventory_full rollback={}",
+                fluid_definition_id,
+                voxel,
+                restored.is_some(),
+            ));
             continue;
         }
 
