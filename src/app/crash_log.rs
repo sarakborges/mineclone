@@ -59,9 +59,30 @@ pub(crate) fn log_gameplay_event(message: impl Into<String>) {
     log_gameplay_line("EVENT", message.into());
 }
 
+pub(crate) fn log_gameplay_warn(message: impl Into<String>) {
+    log_gameplay_line("WARN", message.into());
+}
 
 pub(crate) fn log_gameplay_error(message: impl Into<String>) {
     log_gameplay_line("ERROR", message.into());
+}
+
+pub(crate) fn log_system_event(message: impl Into<String>) {
+    log_system_line("EVENT", message.into());
+}
+
+pub(crate) fn log_system_warn(message: impl Into<String>) {
+    log_system_line("WARN", message.into());
+}
+
+pub(crate) fn log_system_error(message: impl Into<String>) {
+    log_system_line("ERROR", message.into());
+}
+
+pub(crate) fn log_diagnostic(message: impl Into<String>) {
+    let message = message.into();
+    bevy::log::info!(target: "asteria::diagnostic", "{message}");
+    let _ = append_runtime_diagnostic(&format!("[DIAGNOSTIC] {message}"));
 }
 
 fn log_gameplay_line(level: &str, message: String) {
@@ -71,6 +92,15 @@ fn log_gameplay_line(level: &str, message: String) {
         _ => bevy::log::info!(target: "asteria::gameplay", "{message}"),
     }
     let _ = append_runtime_diagnostic(&format!("[{level}] {message}"));
+}
+
+fn log_system_line(level: &str, message: String) {
+    match level {
+        "WARN" => bevy::log::warn!(target: "asteria::system", "{message}"),
+        "ERROR" => bevy::log::error!(target: "asteria::system", "{message}"),
+        _ => bevy::log::info!(target: "asteria::system", "{message}"),
+    }
+    let _ = append_runtime_diagnostic(&format!("[SYSTEM {level}] {message}"));
 }
 
 fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
