@@ -107,6 +107,13 @@ fn run_game() {
         .init_state::<PauseState>()
         .init_state::<ControlsState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
+        .add_systems(OnEnter(GameState::StartingScreen), log_game_state)
+        .add_systems(OnEnter(GameState::NewWorld), log_game_state)
+        .add_systems(OnEnter(GameState::WorldSelection), log_game_state)
+        .add_systems(OnEnter(GameState::Loading), log_game_state)
+        .add_systems(OnEnter(GameState::Gameplay), log_game_state)
+        .add_systems(OnEnter(PauseState::Running), log_pause_state)
+        .add_systems(OnEnter(PauseState::Paused), log_pause_state)
         .add_plugins((
             WindowIconPlugin,
             GameConfigPlugin,
@@ -125,6 +132,14 @@ fn run_game() {
             HudPlugin,
         ))
         .run();
+}
+
+fn log_game_state(state: Res<State<GameState>>) {
+    log_system_event(format!("state.game entered={:?}", state.get()));
+}
+
+fn log_pause_state(state: Res<State<PauseState>>) {
+    log_system_event(format!("state.pause entered={:?}", state.get()));
 }
 
 #[cfg(target_os = "windows")]
