@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_gameplay_event, log_gameplay_warn},
     content::{
         attack::AttackRegistry,
         block::BlockRegistry,
@@ -9,7 +9,8 @@ use crate::{
         block_shape::{is_stackable_layer, stackable_layer_full_block_id},
         builtin_ids::BIOME_TINT_METADATA_KEY,
         layer::{LayerFace, LayerRegistry},
-        object::{ObjectInteraction, ObjectPlacementFace, ObjectRegistry}, player::PlayerDefinition,
+        object::{ObjectInteraction, ObjectPlacementFace, ObjectRegistry},
+        player::PlayerDefinition,
         tool::ToolRegistry,
         tool_behavior::{MINE_TOOL_BEHAVIOR_ID, NONE_TOOL_BEHAVIOR_ID},
     },
@@ -34,8 +35,8 @@ use crate::{
     },
     world_items::{TargetedWorldItem, WorldItemSpawnRequest},
     world_objects::{
-        detached_object_drop_request, TargetedWorldObject, WorldObjectPlaceRequest,
-        WorldObjectRemoveRequest,
+        TargetedWorldObject, WorldObjectPlaceRequest, WorldObjectRemoveRequest,
+        detached_object_drop_request,
     },
 };
 
@@ -110,6 +111,7 @@ struct TargetedVoxelEdit<'a> {
 #[derive(Clone)]
 enum VoxelEditOutcome {
     Consumed,
+    Rejected(&'static str),
     LayerPlaced,
     BlockPlaced(IVec3),
     BlockBroken(VoxelBlockMutation),
@@ -141,6 +143,10 @@ fn edit_targeted_block(
             input
                 .hotbar
                 .set_selected_stack(Some(ItemStack::new(key.object.object_id)));
+            log_gameplay_event(format!(
+                "creative.pick object={} support={:?}",
+                key.object.object_id, key.support
+            ));
             return;
         }
 
@@ -190,6 +196,11 @@ fn edit_targeted_block(
                     ));
                     input.object_target.0 = None;
                     actions.viewmodel_animation.play_place();
+                } else {
+                    log_gameplay_event(format!(
+                        "object.pickup rejected object={} support={:?} reason=inventory_full",
+                        key.object.object_id, key.support
+                    ));
                 }
                 return;
             }
@@ -225,10 +236,19 @@ fn edit_targeted_block(
 
     if left_pressed && let Some(entity) = input.creature_target.0 {
         let Some(attack) = definitions.attacks.get(&definitions.player.attack) else {
+            log_gameplay_warn(format!(
+                "entity.attack rejected target={entity:?} attack={} reason=missing_attack_definition",
+                definitions.player.attack
+            ));
             return;
         };
         if creature_attack.apply(entity, attack, player_transform.translation) {
             actions.viewmodel_animation.play_hit();
+        } else {
+            log_gameplay_event(format!(
+                "entity.attack rejected target={entity:?} attack={} reason=attack_runtime_rejected",
+                definitions.player.attack
+            ));
         }
         return;
     }
@@ -256,29 +276,44 @@ fn edit_targeted_block(
             .objects
             .get(object_id)
             .expect("selected object definition must exist");
-        if let Some((support, face)) =
-            object_placement_attachment(hit, definition, &runtime.read())
-        {
-            let object = ObjectCell::new(
-                object_id,
-                face,
-                TextureRotation::for_position(support, true),
-            );
-            let existing = runtime.read();
-            let objects = existing.objects_at(support);
-            if objects.len() >= MAX_OBJECTS_PER_VOXEL || objects.contains(&object) {
-                return;
-            }
-            actions
-                .object_placements
-                .write(WorldObjectPlaceRequest { support, object });
+        let Some((support, face)) = object_placement_attachment(hit, definition, &runtime.read())
+        else {
             log_gameplay_event(format!(
-                "object.place object={} support={:?} face={:?} mode={:?}",
-                object_id, support, face, game_mode
+                "object.place rejected object={} target={:?} reason=no_valid_attachment",
+                object_id, hit.voxel
             ));
-            consume_survival_placement(&mut input.hotbar, *game_mode);
-            actions.viewmodel_animation.play_place();
+            return;
+        };
+        let object = ObjectCell::new(
+            object_id,
+            face,
+            TextureRotation::for_position(support, true),
+        );
+        let existing = runtime.read();
+        let objects = existing.objects_at(support);
+        if objects.len() >= MAX_OBJECTS_PER_VOXEL {
+            log_gameplay_event(format!(
+                "object.place rejected object={} support={:?} face={:?} reason=object_limit",
+                object_id, support, face
+            ));
+            return;
         }
+        if objects.contains(&object) {
+            log_gameplay_event(format!(
+                "object.place rejected object={} support={:?} face={:?} reason=duplicate_object",
+                object_id, support, face
+            ));
+            return;
+        }
+        actions
+            .object_placements
+            .write(WorldObjectPlaceRequest { support, object });
+        log_gameplay_event(format!(
+            "object.place object={} support={:?} face={:?} mode={:?}",
+            object_id, support, face, game_mode
+        ));
+        consume_survival_placement(&mut input.hotbar, *game_mode);
+        actions.viewmodel_animation.play_place();
         return;
     }
 
@@ -301,6 +336,18 @@ fn edit_targeted_block(
 
     match outcome {
         VoxelEditOutcome::Consumed => {}
+        VoxelEditOutcome::Rejected(reason) => {
+            let action = if left_pressed { "left" } else { "right" };
+            log_gameplay_event(format!(
+                "voxel.edit rejected action={} item={} target={:?} block={} mode={:?} reason={}",
+                action,
+                selected_item.unwrap_or("<empty>"),
+                hit.voxel,
+                hit.block_id,
+                game_mode,
+                reason
+            ));
+        }
         VoxelEditOutcome::LayerPlaced => {
             log_gameplay_event(format!(
                 "layer.place layer={} voxel={:?} face={:?} mode={:?}",
@@ -416,7 +463,7 @@ fn edit_targeted_voxel(
             .filter(|item_id| layers.get(item_id).is_some())
     {
         let Some(face) = LayerFace::from_normal(request.hit.normal) else {
-            return VoxelEditOutcome::Consumed;
+            return VoxelEditOutcome::Rejected("invalid_layer_face");
         };
         let layer = LayerCell::new(layer_id, TextureRotation::default());
         return if runtime
@@ -425,7 +472,7 @@ fn edit_targeted_voxel(
         {
             VoxelEditOutcome::LayerPlaced
         } else {
-            VoxelEditOutcome::Consumed
+            VoxelEditOutcome::Rejected("layer_mutation_rejected")
         };
     }
 
@@ -436,15 +483,15 @@ fn edit_targeted_voxel(
         return if let Some(mutation) = runtime.set_block_detailed(request.hit.voxel, None) {
             VoxelEditOutcome::BlockBroken(mutation)
         } else {
-            VoxelEditOutcome::Consumed
+            VoxelEditOutcome::Rejected("block_break_mutation_rejected")
         };
     }
 
     let Some(block_id) = request.selected_item else {
-        return VoxelEditOutcome::Consumed;
+        return VoxelEditOutcome::Rejected("empty_hand");
     };
     let Some(block) = blocks.get(block_id) else {
-        return VoxelEditOutcome::Consumed;
+        return VoxelEditOutcome::Rejected("selected_item_not_placeable_block");
     };
 
     if request.right_pressed
@@ -459,10 +506,10 @@ fn edit_targeted_voxel(
         let mask = stackable_layer_mask(next_layer_count);
         let cell = if next_layer_count == MICROBLOCK_EDGE as usize {
             let Some(full_block_id) = stackable_layer_full_block_id(block) else {
-                return VoxelEditOutcome::Consumed;
+                return VoxelEditOutcome::Rejected("missing_stackable_full_block_id");
             };
             if blocks.get(full_block_id).is_none() {
-                return VoxelEditOutcome::Consumed;
+                return VoxelEditOutcome::Rejected("missing_stackable_full_block_definition");
             }
             mask.apply_to_cell(
                 existing.with_block_id(intern_block_id(full_block_id)),
@@ -477,12 +524,12 @@ fn edit_targeted_voxel(
         {
             VoxelEditOutcome::BlockPlaced(request.hit.voxel)
         } else {
-            VoxelEditOutcome::Consumed
+            VoxelEditOutcome::Rejected("stackable_layer_mutation_rejected")
         };
     }
 
     let Some(voxel) = placement_voxel(request.hit, &runtime.read(), request.player_position) else {
-        return VoxelEditOutcome::Consumed;
+        return VoxelEditOutcome::Rejected("no_valid_placement_voxel");
     };
     let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
     let orientation = placement_orientation.for_block(request.selected_slot, block);
@@ -497,7 +544,7 @@ fn edit_targeted_voxel(
     if runtime.set_block(voxel, Some(cell)).is_some() {
         VoxelEditOutcome::BlockPlaced(voxel)
     } else {
-        VoxelEditOutcome::Consumed
+        VoxelEditOutcome::Rejected("block_mutation_rejected")
     }
 }
 
