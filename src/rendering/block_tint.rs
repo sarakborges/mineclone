@@ -11,8 +11,8 @@ use crate::{
         secondary_property::SecondaryPropertyRegistry,
     },
     voxel::{
+        block_state::{BlockState, BlockStateToken},
         cell::VoxelCell,
-        secondary_properties::{SecondaryProperties, SecondaryPropertyToken},
     },
     world::biome_field::BiomeField,
 };
@@ -72,9 +72,7 @@ pub(crate) fn secondary_property_dye_tint(
         return None;
     }
 
-    let value_id = cell
-        .secondary_properties()
-        .get_token(dyed_property_token())?;
+    let value_id = cell.block_state().get_token(dyed_property_token())?;
     let dye = secondary_properties.get(DYED_PROPERTY_ID, value_id)?;
     if dye.color.intensity <= f32::EPSILON {
         return Some(Color::BLACK);
@@ -89,9 +87,9 @@ pub(crate) fn secondary_property_dye_tint(
     )
 }
 
-fn dyed_property_token() -> SecondaryPropertyToken {
-    static TOKEN: OnceLock<SecondaryPropertyToken> = OnceLock::new();
-    *TOKEN.get_or_init(|| SecondaryProperties::token(DYED_PROPERTY_ID))
+fn dyed_property_token() -> BlockStateToken {
+    static TOKEN: OnceLock<BlockStateToken> = OnceLock::new();
+    *TOKEN.get_or_init(|| BlockState::token(DYED_PROPERTY_ID))
 }
 
 pub(crate) fn block_vertex_tint(
