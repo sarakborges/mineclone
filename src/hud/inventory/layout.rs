@@ -57,19 +57,6 @@ pub(super) fn spawn_character_info_inventory(
     spawn_inventory_overlay(root, state, items);
 }
 
-pub(super) fn spawn_player_inventory(
-    root: &mut ChildSpawnerCommands,
-    state: &InventoryLayoutState<'_>,
-    items: &mut InventoryItemView<'_>,
-) {
-    if state.game_mode.has_creative_inventory() {
-        spawn_inventory_switcher(root, state, items, false);
-    } else {
-        spawn_player_inventory_panel(root, state, items);
-    }
-    spawn_inventory_overlay(root, state, items);
-}
-
 fn spawn_game_mode_inventory_panel(
     root: &mut ChildSpawnerCommands,
     state: &InventoryLayoutState<'_>,
