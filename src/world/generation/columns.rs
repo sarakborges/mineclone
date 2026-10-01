@@ -4,8 +4,13 @@ use smallvec::SmallVec;
 use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
-    world::{biome_field::BiomeField, terrain::surface_height_from_sample},
+    world::{
+        biome_field::BiomeField,
+        terrain::{surface_height, surface_height_from_sample},
+    },
 };
+
+const SURFACE_LAYER_MAX_SLOPE: i32 = 1;
 
 pub(crate) struct GenerationColumnSample {
     pub(crate) surface_height: i32,
@@ -13,6 +18,7 @@ pub(crate) struct GenerationColumnSample {
     pub(crate) primary_terrain_strength: f32,
     pub(crate) ocean_weight: f32,
     pub(crate) surface_margin_index: Option<usize>,
+    pub(crate) steep_surface: bool,
     pub(super) surface_influences: SmallVec<[(usize, f32); 4]>,
 }
 
@@ -48,6 +54,7 @@ pub(crate) fn sample_flat_generation_columns(
                 primary_terrain_strength,
                 ocean_weight: ocean_weight_from_surface(&surface, biome_field),
                 surface_margin_index: None,
+                steep_surface: false,
                 surface_influences,
             });
         }
@@ -100,12 +107,66 @@ pub(crate) fn sample_generation_columns(
                 primary_terrain_strength,
                 ocean_weight: ocean_weight_from_surface(&surface, biome_field),
                 surface_margin_index,
+                steep_surface: false,
                 surface_influences,
             });
         }
     }
 
+    mark_steep_surface_columns(
+        horizontal_chunk,
+        dimension,
+        biomes,
+        biome_field,
+        &mut columns,
+    );
+
     columns
+}
+
+fn mark_steep_surface_columns(
+    horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    columns: &mut [GenerationColumnSample],
+) {
+    const NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
+
+    let heights = columns
+        .iter()
+        .map(|column| column.surface_height)
+        .collect::<Vec<_>>();
+    let chunk_origin = horizontal_chunk * CHUNK_SIZE as i32;
+
+    for local_z in 0..CHUNK_SIZE {
+        for local_x in 0..CHUNK_SIZE {
+            let index = local_z * CHUNK_SIZE + local_x;
+            let height = heights[index];
+            let world_position = chunk_origin + IVec2::new(local_x as i32, local_z as i32);
+
+            columns[index].steep_surface = NEIGHBORS.into_iter().any(|offset| {
+                let neighbor_local =
+                    IVec2::new(local_x as i32 + offset.x, local_z as i32 + offset.y);
+                let neighbor_height = if neighbor_local.x >= 0
+                    && neighbor_local.y >= 0
+                    && neighbor_local.x < CHUNK_SIZE as i32
+                    && neighbor_local.y < CHUNK_SIZE as i32
+                {
+                    heights[neighbor_local.y as usize * CHUNK_SIZE + neighbor_local.x as usize]
+                } else {
+                    surface_height(
+                        world_position + offset,
+                        dimension,
+                        biomes,
+                        biome_field,
+                    )
+                };
+
+                (neighbor_height - height).abs() > SURFACE_LAYER_MAX_SLOPE
+            });
+        }
+    }
 }
 
 pub(crate) fn ocean_weight_from_surface(
