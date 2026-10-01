@@ -25,16 +25,25 @@ use crate::{
     },
     ui::{
         button::{self, ButtonVariant},
-        surface, typography,
+        surface, theme, typography,
     },
 };
 
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
-const CRAFTING_PANEL_WIDTH: f32 = 380.0;
-const CRAFTING_PANEL_GAP: f32 = 12.0;
+const CRAFTING_PANEL_WIDTH: f32 = 420.0;
+const CRAFTING_PANEL_GAP: f32 = 14.0;
+const CRAFTING_INSET_GAP: f32 = 8.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
 const CRAFTING_PANEL_BORDER: f32 = 2.0;
 const CRAFTING_SCREEN_PADDING: f32 = 24.0;
+const CRAFTING_RECIPE_ROW_HEIGHT: f32 = 58.0;
+const CRAFTING_INGREDIENT_ROW_HEIGHT: f32 = 58.0;
+const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
+const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
+const CRAFTING_ICON_SIZE: f32 = 32.0;
+const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
+const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
+const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
 
 #[derive(Resource, Default)]
 struct CraftingSession {
@@ -58,7 +67,6 @@ struct CraftRecipeButton {
 #[derive(Component)]
 struct CraftingIngredientLabel {
     item_id: String,
-    item_name: String,
     required: u32,
 }
 
@@ -80,6 +88,7 @@ type CraftInteractionQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 struct CraftingContent<'w> {
+    asset_server: Res<'w, AssetServer>,
     recipes: Res<'w, CraftingRecipeRegistry>,
     items: Res<'w, ItemRegistry>,
     blocks: Res<'w, BlockRegistry>,
@@ -101,6 +110,29 @@ impl CraftingContent<'_> {
             self.language.get(),
         )
         .to_owned()
+    }
+
+    fn item_icon_path<'a>(&'a self, item_id: &str) -> Option<&'a str> {
+        if let Some(item) = self.items.get(item_id) {
+            return Some(item.icon.as_str());
+        }
+        if let Some(object) = self.objects.get(item_id) {
+            return Some(object.icon.as_str());
+        }
+        if let Some(layer) = self.layers.get(item_id) {
+            return Some(layer.texture.as_str());
+        }
+        if let Some(tool) = self.tools.get(item_id) {
+            return (!tool.icon.is_empty()).then_some(tool.icon.as_str());
+        }
+        let block = self.blocks.get(item_id)?;
+        block
+            .textures
+            .top
+            .first()
+            .or_else(|| block.textures.front.first())
+            .or_else(|| block.textures.right.first())
+            .map(|layer| layer.texture.as_str())
     }
 
     fn resolve_inventory_item_id(&self, item_id: &str) -> Option<&'static str> {
@@ -141,7 +173,7 @@ impl Plugin for CraftingHudPlugin {
                     select_crafting_recipe,
                     rebuild_crafting_screen,
                     handle_craft_clicks,
-                    sync_ingredient_labels,
+                    sync_crafting_availability,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay))
@@ -222,7 +254,6 @@ fn spawn_crafting_root(
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexStart,
                 justify_content: JustifyContent::Center,
-                row_gap: px(CRAFTING_PANEL_GAP),
                 ..default()
             },
             GlobalZIndex(100),
@@ -231,62 +262,21 @@ fn spawn_crafting_root(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_recipe_list(root, &recipes, session, content);
-            spawn_recipe_details(root, selected_recipe, content, hotbar);
+            spawn_crafting_panel(root, &recipes, selected_recipe, session, content, hotbar);
         });
 }
 
-fn spawn_recipe_list(
+fn spawn_crafting_panel(
     root: &mut ChildSpawnerCommands,
     recipes: &[&CraftingRecipeDefinition],
+    selected_recipe: Option<&CraftingRecipeDefinition>,
     session: &CraftingSession,
-    content: &CraftingContent<'_>,
-) {
-    root.spawn((
-        surface::hud_container(Node {
-            width: px(CRAFTING_PANEL_WIDTH),
-            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_PANEL_GAP),
-            ..default()
-        }),
-        Pickable::IGNORE,
-    ))
-    .with_children(|panel| {
-        panel.spawn((typography::hud_heading("Crafting"), Pickable::IGNORE));
-
-        if recipes.is_empty() {
-            panel.spawn((typography::muted("No recipes available."), Pickable::IGNORE));
-            return;
-        }
-
-        for recipe in recipes {
-            let selected = session.selected_recipe.as_deref() == Some(recipe.id.as_str());
-            panel.spawn(button::button(
-                content.item_name(&recipe.result.item),
-                CraftingRecipeSelectionButton {
-                    recipe_id: recipe.id.clone(),
-                },
-                percent(100),
-                46.0,
-                ButtonVariant::from_active(selected),
-            ));
-        }
-    });
-}
-
-fn spawn_recipe_details(
-    root: &mut ChildSpawnerCommands,
-    recipe: Option<&CraftingRecipeDefinition>,
     content: &CraftingContent<'_>,
     hotbar: &PlayerHotbar,
 ) {
     root.spawn((
         surface::hud_container(Node {
             width: px(CRAFTING_PANEL_WIDTH),
-            min_height: px(220),
             padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
             border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
             flex_direction: FlexDirection::Column,
@@ -297,61 +287,396 @@ fn spawn_recipe_details(
         Pickable::IGNORE,
     ))
     .with_children(|panel| {
-        let Some(recipe) = recipe else {
-            panel.spawn((typography::hud_heading("Recipe"), Pickable::IGNORE));
-            panel.spawn((typography::muted("Select a recipe."), Pickable::IGNORE));
-            return;
-        };
+        panel
+            .spawn((
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|header| {
+                header.spawn((typography::hud_heading("Crafting"), Pickable::IGNORE));
+                header.spawn((
+                    typography::caption(format!("{} recipe(s)", recipes.len())),
+                    Pickable::IGNORE,
+                ));
+            });
 
-        let result_name = content.item_name(&recipe.result.item);
         panel.spawn((
-            typography::hud_heading(result_name.clone()),
+            typography::caption("AVAILABLE RECIPES"),
             Pickable::IGNORE,
         ));
+        spawn_recipe_list(panel, recipes, session, content);
+
         panel.spawn((
-            typography::muted(format!(
-                "Produces {} × {}",
-                recipe.result.quantity, result_name
-            )),
-            Pickable::IGNORE,
-        ));
-        panel.spawn((
-            typography::hud_subheading("Ingredients"),
+            Node {
+                width: percent(100),
+                height: px(CRAFTING_PANEL_BORDER),
+                margin: UiRect::vertical(px(2)),
+                ..default()
+            },
+            BackgroundColor(theme::BORDER),
             Pickable::IGNORE,
         ));
 
-        for ingredient in &recipe.ingredients {
-            let item_name = content.item_name(&ingredient.item);
-            let available = inventory_quantity(hotbar, &ingredient.item);
-            panel.spawn((
+        spawn_recipe_details(panel, selected_recipe, content, hotbar);
+    });
+}
+
+fn spawn_recipe_list(
+    parent: &mut ChildSpawnerCommands,
+    recipes: &[&CraftingRecipeDefinition],
+    session: &CraftingSession,
+    content: &CraftingContent<'_>,
+) {
+    if recipes.is_empty() {
+        parent.spawn((typography::muted("No recipes available."), Pickable::IGNORE));
+        return;
+    }
+
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                padding: UiRect::all(px(CRAFTING_INSET_GAP)),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                row_gap: px(CRAFTING_INSET_GAP),
+                ..default()
+            },
+            BackgroundColor(theme::SURFACE_INSET),
+            BorderColor::all(theme::BORDER),
+            Pickable::IGNORE,
+        ))
+        .with_children(|list| {
+            for recipe in recipes {
+                let selected = session.selected_recipe.as_deref() == Some(recipe.id.as_str());
+                spawn_recipe_button(list, recipe, selected, content);
+            }
+        });
+}
+
+fn spawn_recipe_button(
+    parent: &mut ChildSpawnerCommands,
+    recipe: &CraftingRecipeDefinition,
+    selected: bool,
+    content: &CraftingContent<'_>,
+) {
+    let mut recipe_button = parent.spawn(button::button(
+        "",
+        CraftingRecipeSelectionButton {
+            recipe_id: recipe.id.clone(),
+        },
+        percent(100),
+        CRAFTING_RECIPE_ROW_HEIGHT,
+        ButtonVariant::from_active(selected),
+    ));
+    recipe_button.insert(Node {
+        width: percent(100),
+        height: px(CRAFTING_RECIPE_ROW_HEIGHT),
+        padding: UiRect::horizontal(px(10)),
+        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        justify_content: JustifyContent::FlexStart,
+        column_gap: px(10),
+        ..default()
+    });
+    recipe_button.with_children(|button_node| {
+        if selected {
+            button_node.spawn((
+                Node {
+                    width: px(3),
+                    height: percent(72),
+                    ..default()
+                },
+                BackgroundColor(theme::BORDER_FOCUS),
+                Pickable::IGNORE,
+            ));
+        }
+        spawn_item_icon_frame(
+            button_node,
+            &recipe.result.item,
+            CRAFTING_ICON_FRAME_SIZE,
+            CRAFTING_ICON_SIZE,
+            content,
+        );
+        button_node
+            .spawn((
+                Node {
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
+                    row_gap: px(2),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|copy| {
+                copy.spawn((
+                    typography::hud(content.item_name(&recipe.result.item)),
+                    Pickable::IGNORE,
+                ));
+                copy.spawn((
+                    typography::caption(format!("Creates ×{}", recipe.result.quantity)),
+                    Pickable::IGNORE,
+                ));
+            });
+    });
+}
+
+fn spawn_recipe_details(
+    parent: &mut ChildSpawnerCommands,
+    recipe: Option<&CraftingRecipeDefinition>,
+    content: &CraftingContent<'_>,
+    hotbar: &PlayerHotbar,
+) {
+    let Some(recipe) = recipe else {
+        parent.spawn((typography::hud_subheading("Recipe"), Pickable::IGNORE));
+        parent.spawn((typography::muted("Select a recipe."), Pickable::IGNORE));
+        return;
+    };
+
+    parent.spawn((typography::caption("SELECTED RECIPE"), Pickable::IGNORE));
+    spawn_result_card(parent, recipe, content);
+
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|header| {
+            header.spawn((typography::hud_subheading("Ingredients"), Pickable::IGNORE));
+            header.spawn((
+                typography::caption(format!("{} required", recipe.ingredients.len())),
+                Pickable::IGNORE,
+            ));
+        });
+
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                row_gap: px(CRAFTING_INSET_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|ingredients| {
+            for ingredient in &recipe.ingredients {
+                spawn_ingredient_row(ingredients, ingredient, content, hotbar);
+            }
+        });
+
+    let craftable = recipe_craftable(hotbar, recipe);
+    parent.spawn(button::button(
+        "Craft Item",
+        CraftRecipeButton {
+            recipe_id: recipe.id.clone(),
+        },
+        percent(100),
+        50.0,
+        ButtonVariant::from_active(craftable),
+    ));
+    parent.spawn((
+        CraftingStatusText,
+        typography::caption(if craftable {
+            "All materials available."
+        } else {
+            "Missing required materials."
+        }),
+        Pickable::IGNORE,
+    ));
+}
+
+fn spawn_result_card(
+    parent: &mut ChildSpawnerCommands,
+    recipe: &CraftingRecipeDefinition,
+    content: &CraftingContent<'_>,
+) {
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                min_height: px(96),
+                padding: UiRect::all(px(12)),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(14),
+                ..default()
+            },
+            BackgroundColor(theme::SURFACE_INSET),
+            BorderColor::all(theme::BORDER_STRONG),
+            Pickable::IGNORE,
+        ))
+        .with_children(|card| {
+            spawn_item_icon_frame(
+                card,
+                &recipe.result.item,
+                CRAFTING_RESULT_ICON_FRAME_SIZE,
+                CRAFTING_RESULT_ICON_SIZE,
+                content,
+            );
+            card.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
+                    row_gap: px(4),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|copy| {
+                copy.spawn((
+                    typography::caption("RESULT"),
+                    TextColor(theme::TEXT_SUBTLE),
+                    Pickable::IGNORE,
+                ));
+                copy.spawn((
+                    typography::hud_subheading(content.item_name(&recipe.result.item)),
+                    Pickable::IGNORE,
+                ));
+                copy.spawn((
+                    typography::muted(format!("Output ×{}", recipe.result.quantity)),
+                    Pickable::IGNORE,
+                ));
+            });
+        });
+}
+
+fn spawn_ingredient_row(
+    parent: &mut ChildSpawnerCommands,
+    ingredient: &crate::content::crafting_recipe::CraftingRecipeIngredientDefinition,
+    content: &CraftingContent<'_>,
+    hotbar: &PlayerHotbar,
+) {
+    let available = inventory_quantity(hotbar, &ingredient.item);
+    let enough = available >= ingredient.quantity;
+    let semantic_color = if enough {
+        CRAFTING_READY_COLOR
+    } else {
+        CRAFTING_MISSING_COLOR
+    };
+
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                min_height: px(CRAFTING_INGREDIENT_ROW_HEIGHT),
+                padding: UiRect::axes(px(10), px(8)),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(10),
+                ..default()
+            },
+            BackgroundColor(theme::SURFACE_INSET),
+            BorderColor::all(if enough {
+                CRAFTING_READY_COLOR
+            } else {
+                theme::BORDER
+            }),
+            Pickable::IGNORE,
+        ))
+        .with_children(|row| {
+            spawn_item_icon_frame(
+                row,
+                &ingredient.item,
+                CRAFTING_ICON_FRAME_SIZE,
+                CRAFTING_ICON_SIZE,
+                content,
+            );
+            row.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
+                    row_gap: px(2),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|copy| {
+                copy.spawn((
+                    typography::hud(content.item_name(&ingredient.item)),
+                    Pickable::IGNORE,
+                ));
+                copy.spawn((typography::caption("Material"), Pickable::IGNORE));
+            });
+
+            let mut availability = row.spawn((
                 CraftingIngredientLabel {
                     item_id: ingredient.item.clone(),
-                    item_name: item_name.clone(),
                     required: ingredient.quantity,
                 },
-                typography::hud(format!(
-                    "{item_name}   {available}/{}",
+                typography::inventory_category(format!(
+                    "{} {available}/{}",
+                    if enough { "✓" } else { "•" },
                     ingredient.quantity
                 )),
                 Pickable::IGNORE,
             ));
-        }
+            availability.insert(TextColor(semantic_color));
+        });
+}
 
-        panel.spawn(button::button(
-            "Craft",
-            CraftRecipeButton {
-                recipe_id: recipe.id.clone(),
+fn spawn_item_icon_frame(
+    parent: &mut ChildSpawnerCommands,
+    item_id: &str,
+    frame_size: f32,
+    icon_size: f32,
+    content: &CraftingContent<'_>,
+) {
+    parent
+        .spawn((
+            Node {
+                width: px(frame_size),
+                height: px(frame_size),
+                min_width: px(frame_size),
+                min_height: px(frame_size),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
             },
-            percent(100),
-            46.0,
-            ButtonVariant::Primary,
-        ));
-        panel.spawn((
-            CraftingStatusText,
-            typography::muted(""),
+            BackgroundColor(theme::SURFACE_ELEVATED),
+            BorderColor::all(theme::BORDER),
             Pickable::IGNORE,
-        ));
-    });
+        ))
+        .with_children(|frame| {
+            if let Some(icon) = content.item_icon_path(item_id) {
+                frame.spawn((
+                    ImageNode::new(content.asset_server.load(icon.to_owned())),
+                    Node {
+                        width: px(icon_size),
+                        height: px(icon_size),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+            } else {
+                frame.spawn((
+                    typography::hud("?"),
+                    TextLayout::justify(Justify::Center),
+                    Pickable::IGNORE,
+                ));
+            }
+        });
 }
 
 fn select_crafting_recipe(
@@ -387,11 +712,7 @@ fn handle_craft_clicks(
             set_status(&mut status, "Recipe unavailable in this environment.");
             continue;
         }
-        if !recipe
-            .ingredients
-            .iter()
-            .all(|ingredient| inventory_quantity(&hotbar, &ingredient.item) >= ingredient.quantity)
-        {
+        if !recipe_craftable(&hotbar, recipe) {
             set_status(&mut status, "Missing ingredients.");
             continue;
         }
@@ -439,18 +760,45 @@ fn handle_craft_clicks(
     }
 }
 
-fn sync_ingredient_labels(
+fn sync_crafting_availability(
     hotbar: Res<PlayerHotbar>,
-    mut labels: Query<(&CraftingIngredientLabel, &mut Text)>,
+    content: CraftingContent,
+    mut labels: Query<(&CraftingIngredientLabel, &mut Text, &mut TextColor)>,
+    mut buttons: Query<(&CraftRecipeButton, &mut ButtonVariant)>,
 ) {
     if !hotbar.is_changed() {
         return;
     }
 
-    for (label, mut text) in &mut labels {
+    for (label, mut text, mut color) in &mut labels {
         let available = inventory_quantity(&hotbar, &label.item_id);
-        text.0 = format!("{}   {available}/{}", label.item_name, label.required);
+        let enough = available >= label.required;
+        text.0 = format!(
+            "{} {available}/{}",
+            if enough { "✓" } else { "•" },
+            label.required
+        );
+        color.0 = if enough {
+            CRAFTING_READY_COLOR
+        } else {
+            CRAFTING_MISSING_COLOR
+        };
     }
+
+    for (action, mut variant) in &mut buttons {
+        let craftable = content
+            .recipes
+            .get(&action.recipe_id)
+            .is_some_and(|recipe| recipe_craftable(&hotbar, recipe));
+        *variant = ButtonVariant::from_active(craftable);
+    }
+}
+
+fn recipe_craftable(hotbar: &PlayerHotbar, recipe: &CraftingRecipeDefinition) -> bool {
+    recipe
+        .ingredients
+        .iter()
+        .all(|ingredient| inventory_quantity(hotbar, &ingredient.item) >= ingredient.quantity)
 }
 
 fn set_status(status: &mut Query<&mut Text, With<CraftingStatusText>>, message: &str) {
