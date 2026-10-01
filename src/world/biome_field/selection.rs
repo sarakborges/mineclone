@@ -59,42 +59,19 @@ impl BiomeField {
             climate_field: &self.climate,
         };
 
-        if surface_minimum_size_allows(raw_index, &selection_context)
-            && authored_adjacency_allows(raw_index, &selection_context)
-            && surface_size_allows(raw_index, &selection_context)
-        {
+        if surface_constraints_allow(raw_index, &selection_context) {
             return raw_index;
         }
 
-        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            surface_minimum_size_allows(candidate.index, &selection_context)
-                && authored_adjacency_allows(candidate.index, &selection_context)
-                && surface_size_allows(candidate.index, &selection_context)
-        }) {
-            return candidate.index;
-        }
-
-        // Minimum size is a hard lower bound. Prefer preserving it even when
-        // the authored adjacency and maximum-size constraints have no common
-        // local solution.
-        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            candidate.index != raw_index
-                && surface_minimum_size_allows(candidate.index, &selection_context)
-                && surface_size_allows(candidate.index, &selection_context)
-        }) {
-            return candidate.index;
-        }
-
-        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            candidate.index != raw_index
-                && surface_minimum_size_allows(candidate.index, &selection_context)
-                && authored_adjacency_allows(candidate.index, &selection_context)
-        }) {
+        if let Some(candidate) = weighted_candidates
+            .iter()
+            .find(|candidate| surface_constraints_allow(candidate.index, &selection_context))
+        {
             return candidate.index;
         }
 
         panic!(
-            "surface biome site {cell:?} has no biome compatible with size or adjacency constraints"
+            "surface biome site {cell:?} has no biome compatible with minimum size, maximum size, and authored adjacency constraints"
         );
     }
 
@@ -167,6 +144,15 @@ struct SurfaceSelectionContext<'a> {
     biomes: &'a [BiomeFieldEntry],
     spawn_oceans: bool,
     climate_field: &'a MacroClimateField,
+}
+
+fn surface_constraints_allow(
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    surface_minimum_size_allows(candidate_index, context)
+        && authored_adjacency_allows(candidate_index, context)
+        && surface_size_allows(candidate_index, context)
 }
 
 pub(super) fn select_volume_biome_index(
