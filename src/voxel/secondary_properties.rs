@@ -25,6 +25,10 @@ pub(crate) struct SecondaryProperties {
     values: [u64; MAX_SECONDARY_PROPERTIES],
 }
 
+/// Canonical name for the compact, palette-friendly state stored in a voxel.
+/// `SecondaryProperties` remains available while existing systems migrate.
+pub(crate) type BlockState = SecondaryProperties;
+
 impl Default for SecondaryProperties {
     fn default() -> Self {
         Self {
