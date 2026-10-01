@@ -296,10 +296,10 @@ fn can_incrementally_rebuild_desired(
     allow_forward_preload
         && previous_horizontal_radius == horizontal_radius
         && previous_vertical_radius == vertical_radius
-        && delta.y == 0
         && delta.x.abs() <= 1
+        && delta.y.abs() <= 1
         && delta.z.abs() <= 1
-        && delta.xz() != IVec2::ZERO
+        && delta != IVec3::ZERO
 }
 
 fn collect_retired_chunk_coords(
@@ -854,7 +854,7 @@ mod tests {
     }
 
     #[test]
-    fn incremental_rebuild_handles_adjacent_direction_and_region_changes() {
+    fn incremental_rebuild_handles_adjacent_direction_region_and_vertical_changes() {
         let previous = IVec3::new(10, 2, 10);
 
         assert!(can_incrementally_rebuild_desired(
@@ -870,7 +870,16 @@ mod tests {
             Some(previous),
             12,
             2,
-            previous + IVec3::X,
+            previous + IVec3::Y,
+            12,
+            2,
+            true,
+        ));
+        assert!(can_incrementally_rebuild_desired(
+            Some(previous),
+            12,
+            2,
+            previous + IVec3::new(1, 1, 1),
             12,
             2,
             true,
@@ -908,7 +917,7 @@ mod tests {
             Some(previous),
             12,
             2,
-            previous + IVec3::Y,
+            previous + IVec3::new(0, 2, 0),
             12,
             2,
             true,
