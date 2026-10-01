@@ -106,7 +106,7 @@ struct TargetedVoxelEdit<'a> {
     game_mode: &'a GameMode,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum VoxelEditOutcome {
     Consumed,
     LayerPlaced,
@@ -213,9 +213,6 @@ fn edit_targeted_block(
         }
     }
 
-    // Left-clicking empty space still swings the player's arm. Mining tools use
-    // the break swing; everything else uses the generic hit swing. World edits
-    // and damage remain target-dependent below.
     if left_pressed && input.creature_target.0.is_none() && input.targeted.0.is_none() {
         let mining_tool = selected_item
             .and_then(|item_id| definitions.tools.get(item_id))
@@ -329,15 +326,15 @@ fn edit_targeted_block(
                 hit.block_id,
                 selected_item.unwrap_or("<empty>")
             ));
-            if let Some(object) = mutation.detached_object
-                && let Some(drop) = detached_object_drop_request(
+            for object in mutation.detached_objects {
+                if let Some(drop) = detached_object_drop_request(
                     hit.voxel,
                     mutation.previous_cell,
                     object,
                     &definitions.objects,
-                )
-            {
-                actions.item_spawns.write(drop);
+                ) {
+                    actions.item_spawns.write(drop);
+                }
             }
             actions.viewmodel_animation.play_break();
             input.targeted.0 = None;
@@ -432,9 +429,7 @@ fn edit_targeted_voxel(
         if matches!(request.game_mode, GameMode::Survival) {
             return VoxelEditOutcome::Consumed;
         }
-        return if let Some(mutation) =
-            runtime.set_block_detailed(request.hit.voxel, None)
-        {
+        return if let Some(mutation) = runtime.set_block_detailed(request.hit.voxel, None) {
             VoxelEditOutcome::BlockBroken(mutation)
         } else {
             VoxelEditOutcome::Consumed
