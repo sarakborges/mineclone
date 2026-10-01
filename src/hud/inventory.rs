@@ -8,10 +8,19 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::inventory_category::InventoryCategoryRegistry,
+    content::{
+        block::BlockRegistry,
+        builtin_ids::BUCKET_FLUID_METADATA_KEY,
+        fluid::FluidRegistry,
+        inventory_category::InventoryCategoryRegistry,
+        item::{ItemRegistry, display_name_with_metadata},
+        layer::LayerRegistry,
+        object::ObjectRegistry,
+        tool::ToolRegistry,
+    },
     gameplay::modal::GameplayModalState,
-    localization::UiLocalization,
-    player::inventory::InventoryCursor,
+    localization::{ActiveLanguage, UiLocalization},
+    player::{hotbar::PlayerHotbar, inventory::InventoryCursor},
 };
 
 use crate::hud::block_icon::BlockIconMaterial;
@@ -29,7 +38,8 @@ use search_style::{
     style_player_inventory_search_field,
 };
 use state::{
-    CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, PlayerInventoryView,
+    CreativeInventorySlot, CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState,
+    InventoryItemTooltipText, InventorySlot, PlayerInventoryView,
 };
 use sync::{
     InventoryItemContent, InventoryPanelState, rebuild_inventory_when_changed, spawn_inventory,
@@ -37,6 +47,8 @@ use sync::{
     style_search_bar, sync_inventory_cursor_icon, sync_inventory_item_tooltip,
     sync_inventory_slot_contents, sync_inventory_sort_tooltip, update_cursor_icon_position,
 };
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum InventoryHudSet {
@@ -74,6 +86,35 @@ impl CharacterInfoInventorySpawn<'_, '_> {
         );
 
         spawn_character_info_inventory(root, &layout, &mut items);
+    }
+}
+
+#[derive(SystemParam)]
+struct MetadataDisplayContent<'w> {
+    items: Res<'w, ItemRegistry>,
+    blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
+    objects: Res<'w, ObjectRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
+impl MetadataDisplayContent<'_> {
+    fn name(&self, item_id: &str, metadata: Option<(&str, &str)>) -> String {
+        display_name_with_metadata(
+            item_id,
+            metadata,
+            &self.items,
+            &self.blocks,
+            &self.layers,
+            &self.objects,
+            &self.tools,
+            &self.fluids,
+            &self.localization,
+            self.language.get(),
+        )
     }
 }
 
@@ -166,6 +207,8 @@ impl Plugin for InventoryHudPlugin {
                     sync_inventory_sort_tooltip,
                     update_cursor_icon_position,
                     sync_inventory_item_tooltip,
+                    sync_bucket_variant_tooltip,
+                    localize_inventory_crafting_text,
                 )
                     .chain()
                     .in_set(InventoryHudSet::Style)
@@ -173,6 +216,123 @@ impl Plugin for InventoryHudPlugin {
                     .run_if(inventory_ui_open),
             );
     }
+}
+
+fn sync_bucket_variant_tooltip(
+    content: MetadataDisplayContent,
+    hotbar: Res<PlayerHotbar>,
+    inventory_slots: Query<(&Interaction, &InventorySlot)>,
+    creative_slots: Query<(&Interaction, &CreativeInventorySlot)>,
+    mut tooltip_text: Single<&mut Text, With<InventoryItemTooltipText>>,
+) {
+    let inventory_bucket = inventory_slots.iter().find_map(|(interaction, slot)| {
+        if *interaction == Interaction::None || slot.item != Some(BUCKET_TOOL_ID) {
+            return None;
+        }
+        let stack = hotbar.inventory_stack_at(slot.index)?;
+        let metadata = stack
+            .metadata()
+            .get(BUCKET_FLUID_METADATA_KEY)
+            .map(|fluid| (BUCKET_FLUID_METADATA_KEY, fluid));
+        Some(metadata)
+    });
+
+    let creative_bucket = creative_slots.iter().find_map(|(interaction, slot)| {
+        (*interaction != Interaction::None && slot.item == Some(BUCKET_TOOL_ID))
+            .then_some(slot.metadata)
+    });
+
+    let metadata = inventory_bucket.or(creative_bucket);
+    let Some(metadata) = metadata else {
+        return;
+    };
+
+    let next = content.name(BUCKET_TOOL_ID, metadata);
+    if tooltip_text.0 != next {
+        tooltip_text.0 = next;
+    }
+}
+
+fn localize_inventory_crafting_text(
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    mut texts: Query<&mut Text>,
+) {
+    let language = language.get();
+    for mut text in &mut texts {
+        let Some(next) = localized_inventory_crafting_text(&text.0, &localization, language) else {
+            continue;
+        };
+        if text.0 != next {
+            text.0 = next;
+        }
+    }
+}
+
+fn localized_inventory_crafting_text(
+    source: &str,
+    localization: &UiLocalization,
+    language: crate::localization::Language,
+) -> Option<String> {
+    let exact_key = match source {
+        "Inventory" => "inventory.title",
+        "Creative" => "inventory.view.creative",
+        "Crafting" => "crafting.title",
+        "AVAILABLE RECIPES" => "crafting.availableRecipes",
+        "Current Station" => "crafting.currentStation",
+        "BASE STATION" => "crafting.baseStation",
+        "Personal crafting" => "crafting.personalCrafting",
+        "STATUS" => "crafting.status",
+        "Available" => "crafting.available",
+        "No recipes available." => "crafting.noRecipes",
+        "Recipe" => "crafting.recipe",
+        "Select a recipe." => "crafting.selectRecipe",
+        "SELECTED RECIPE" => "crafting.selectedRecipe",
+        "Ingredients" => "crafting.ingredients",
+        "Craft Item" => "crafting.craftItem",
+        "All materials available." => "crafting.allMaterialsAvailable",
+        "Missing required materials." => "crafting.missingRequiredMaterials",
+        "RESULT" => "crafting.result",
+        "Material" => "crafting.material",
+        "Recipe unavailable." => "crafting.recipeUnavailable",
+        "Recipe unavailable in this environment." => "crafting.recipeUnavailableEnvironment",
+        "Missing ingredients." => "crafting.missingIngredients",
+        "Recipe result unavailable." => "crafting.resultUnavailable",
+        "Not enough inventory space." => "crafting.inventoryFull",
+        _ => "",
+    };
+    if !exact_key.is_empty() {
+        return Some(localization.text(language, exact_key).to_owned());
+    }
+
+    if let Some(count) = source.strip_suffix(" recipe(s)") {
+        return Some(localization.format(language, "crafting.recipeCount", &[("count", count)]));
+    }
+    if let Some(count) = source.strip_prefix("Creates ×") {
+        return Some(localization.format(language, "crafting.creates", &[("count", count)]));
+    }
+    if let Some(count) = source.strip_suffix(" required") {
+        return Some(localization.format(
+            language,
+            "crafting.requiredCount",
+            &[("count", count)],
+        ));
+    }
+    if let Some(count) = source.strip_prefix("Output ×") {
+        return Some(localization.format(
+            language,
+            "crafting.outputCount",
+            &[("count", count)],
+        ));
+    }
+    if let Some(item) = source
+        .strip_prefix("Crafted ")
+        .and_then(|value| value.strip_suffix('.'))
+    {
+        return Some(localization.format(language, "crafting.crafted", &[("item", item)]));
+    }
+
+    None
 }
 
 fn inventory_ui_open(modal: Res<State<GameplayModalState>>) -> bool {
