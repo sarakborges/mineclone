@@ -19,7 +19,7 @@ use crate::{
         world::VoxelWorld,
     },
     world_items::{TargetedWorldItem, WorldItem, target_bounds},
-    world_objects::{TargetedWorldObject, world_object_transform},
+    world_objects::{TargetedWorldObject, WorldObjectKey, world_object_transform},
 };
 
 const TARGET_RANGE: f32 = 8.0;
@@ -69,8 +69,6 @@ impl Plugin for BlockTargetingPlugin {
 #[derive(Resource, Default)]
 pub struct TargetedBlock(pub Option<VoxelHit>);
 
-/// Exclusive target: when a creature is in front, no block may be highlighted,
-/// edited, previewed or displayed in the block HUD.
 #[derive(Resource, Default)]
 pub(crate) struct TargetedCreature(pub Option<Entity>);
 
@@ -108,7 +106,7 @@ struct TargetSelection<'w> {
 enum TargetKind {
     Creature(Entity),
     WorldItem(Entity),
-    Object(IVec3),
+    Object(WorldObjectKey),
 }
 
 fn update_targets(
@@ -146,9 +144,6 @@ fn update_targets(
         )
         .unwrap_or(0.0)
     });
-    // Re-evaluate scene targets every frame. World objects are voxel-backed;
-    // nearest-hit arbitration decides whether the object or the terrain behind
-    // it receives the interaction.
     let creature_hits = candidates.creatures.iter().filter_map(
         |(entity, transform, collider, health)| {
             if health.is_dead() {
@@ -183,7 +178,7 @@ fn update_targets(
         _ => None,
     };
     let next_object = match closest {
-        Some(TargetKind::Object(support)) => Some(support),
+        Some(TargetKind::Object(key)) => Some(key),
         _ => None,
     };
     let next_block = if closest.is_none() { block_hit } else { None };
@@ -262,7 +257,10 @@ fn closest_world_object_hit(
                         .as_ref()
                         .is_none_or(|(_, best_distance)| distance < *best_distance)
                     {
-                        closest = Some((TargetKind::Object(support), distance));
+                        closest = Some((
+                            TargetKind::Object(WorldObjectKey::new(support, object)),
+                            distance,
+                        ));
                     }
                 }
             }
@@ -285,8 +283,7 @@ fn object_target_bounds(
         for y in [-1.0, 1.0] {
             for z in [-1.0, 1.0] {
                 let local = center + half * Vec3::new(x, y, z);
-                let world = transform.translation
-                    + transform.rotation * (local * transform.scale);
+                let world = transform.translation + transform.rotation * (local * transform.scale);
                 minimum = minimum.min(world);
                 maximum = maximum.max(world);
             }
@@ -296,7 +293,6 @@ fn object_target_bounds(
     (minimum, maximum)
 }
 
-/// Ray versus a static AABB; returns the first forward intersection in blocks.
 fn ray_box_distance(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
     let mut entry = f32::NEG_INFINITY;
     let mut exit = f32::INFINITY;
@@ -326,8 +322,32 @@ mod tests {
     fn ray_selects_near_creature_and_rejects_creature_behind_block() {
         let origin = Vec3::ZERO;
         let ray = Vec3::Z;
-        assert_eq!(ray_box_distance(origin, ray, Vec3::new(-1.0, -1.0, 2.0), Vec3::new(1.0, 1.0, 3.0)), Some(2.0));
-        assert_eq!(ray_box_distance(origin, ray, Vec3::new(-1.0, -1.0, 4.0), Vec3::new(1.0, 1.0, 5.0)), Some(4.0));
-        assert_eq!(ray_box_distance(origin, ray, Vec3::new(2.0, -1.0, 2.0), Vec3::new(3.0, 1.0, 3.0)), None);
+        assert_eq!(
+            ray_box_distance(
+                origin,
+                ray,
+                Vec3::new(-1.0, -1.0, 2.0),
+                Vec3::new(1.0, 1.0, 3.0)
+            ),
+            Some(2.0)
+        );
+        assert_eq!(
+            ray_box_distance(
+                origin,
+                ray,
+                Vec3::new(-1.0, -1.0, 4.0),
+                Vec3::new(1.0, 1.0, 5.0)
+            ),
+            Some(4.0)
+        );
+        assert_eq!(
+            ray_box_distance(
+                origin,
+                ray,
+                Vec3::new(2.0, -1.0, 2.0),
+                Vec3::new(3.0, 1.0, 3.0)
+            ),
+            None
+        );
     }
 }
