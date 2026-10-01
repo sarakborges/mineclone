@@ -6,6 +6,7 @@ use smallvec::SmallVec;
 use crate::content::layer::LayerFace;
 
 use super::{
+    block_metadata::{BlockMetadata, BlockMetadataStore},
     cell::VoxelCell,
     fluid::FluidCell,
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
@@ -197,12 +198,18 @@ fn shared_empty_objects() -> Arc<HashMap<u16, ObjectCells>> {
     Arc::clone(EMPTY_OBJECTS.get_or_init(|| Arc::new(HashMap::new())))
 }
 
+fn shared_empty_metadata() -> Arc<BlockMetadataStore> {
+    static EMPTY_METADATA: OnceLock<Arc<BlockMetadataStore>> = OnceLock::new();
+    Arc::clone(EMPTY_METADATA.get_or_init(|| Arc::new(BlockMetadataStore::default())))
+}
+
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
     blocks: Arc<BlockStorage>,
     fluids: Arc<FluidStorage>,
     layers: Arc<HashMap<u16, Vec<AttachedLayer>>>,
     objects: Arc<HashMap<u16, ObjectCells>>,
+    metadata: Arc<BlockMetadataStore>,
     light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
@@ -252,6 +259,7 @@ pub(crate) struct VoxelChunkStructureMut<'a> {
     fluids: &'a mut FluidStorage,
     layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
     objects: &'a mut HashMap<u16, ObjectCells>,
+    metadata: &'a mut BlockMetadataStore,
     block_palette_indices: HashMap<VoxelCell, u16>,
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
@@ -294,6 +302,7 @@ impl VoxelChunkStructureMut<'_> {
                     .expect("chunk layer count cannot underflow");
             }
             self.objects.remove(&(voxel_index as u16));
+            self.metadata.remove(voxel_index as u16);
         }
 
         let next = if let Some(&palette_index) = self.block_palette_indices.get(&block) {
@@ -373,6 +382,7 @@ impl VoxelChunkStructureMut<'_> {
                 .expect("chunk layer count cannot underflow");
         }
         self.objects.remove(&(voxel_index as u16));
+        self.metadata.remove(voxel_index as u16);
         if self.fluids.get(voxel_index).is_none() {
             adjust_boundary_counts(self.boundary_content_counts, x, y, z, false);
         }
@@ -556,6 +566,7 @@ impl VoxelChunk {
             fluids: shared_empty_fluids(),
             layers: shared_empty_layers(),
             objects: shared_empty_objects(),
+            metadata: shared_empty_metadata(),
             light: shared_dark_light(),
             block_count: 0,
             fluid_count: 0,
@@ -572,6 +583,7 @@ impl VoxelChunk {
             && self.fluid_count == 0
             && self.layer_count == 0
             && self.objects.is_empty()
+            && self.metadata.is_empty()
     }
 
     pub(crate) fn has_fluid(&self) -> bool {
@@ -704,6 +716,52 @@ impl VoxelChunk {
 
         self.blocks
             .get_ref(index(x as usize, y as usize, z as usize))
+    }
+
+    pub(crate) fn block_metadata_at(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Option<&BlockMetadata> {
+        if !in_bounds(x, y, z) {
+            return None;
+        }
+        self.metadata.get(index(x as usize, y as usize, z as usize) as u16)
+    }
+
+    pub(crate) fn block_metadata_entries(
+        &self,
+    ) -> impl Iterator<Item = (usize, &BlockMetadata)> + '_ {
+        self.metadata
+            .iter()
+            .map(|(voxel_index, metadata)| (voxel_index as usize, metadata))
+    }
+
+    pub(crate) fn set_block_metadata(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        metadata: BlockMetadata,
+    ) -> bool {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        let voxel_index = index(x, y, z);
+        if self.blocks.get(voxel_index).is_none() {
+            return false;
+        }
+        Arc::make_mut(&mut self.metadata).set(voxel_index as u16, metadata);
+        true
+    }
+
+    pub(crate) fn remove_block_metadata(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> Option<BlockMetadata> {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        Arc::make_mut(&mut self.metadata).remove(index(x, y, z) as u16)
     }
 
     pub(crate) fn occupied_block_voxels(
@@ -918,6 +976,7 @@ impl VoxelChunk {
         let fluids = Arc::make_mut(&mut self.fluids);
         let layers = Arc::make_mut(&mut self.layers);
         let objects = Arc::make_mut(&mut self.objects);
+        let metadata = Arc::make_mut(&mut self.metadata);
         let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
         let block_palette_indices = blocks
             .palette
@@ -940,6 +999,7 @@ impl VoxelChunk {
                 fluids,
                 layers,
                 objects,
+                metadata,
                 block_palette_indices,
                 block_count: &mut self.block_count,
                 fluid_count: &mut self.fluid_count,
@@ -1028,12 +1088,14 @@ impl VoxelChunk {
         let blocks = Arc::make_mut(&mut self.blocks);
         let layers = Arc::make_mut(&mut self.layers);
         let objects = Arc::make_mut(&mut self.objects);
+        let metadata = Arc::make_mut(&mut self.metadata);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         set_block_in_storage(
             blocks,
             self.fluids.as_ref(),
             layers,
             objects,
+            metadata,
             &mut self.block_count,
             &mut self.layer_count,
             fluid_frontier_sources,
@@ -1196,6 +1258,7 @@ fn set_block_in_storage(
     fluids: &FluidStorage,
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     objects: &mut HashMap<u16, ObjectCells>,
+    metadata: &mut BlockMetadataStore,
     block_count: &mut usize,
     layer_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
@@ -1218,6 +1281,7 @@ fn set_block_in_storage(
                     .checked_sub(removed.len())
                     .expect("chunk layer count cannot underflow");
             }
+            metadata.remove(index as u16);
             objects.remove(&(index as u16)).unwrap_or_default()
         } else {
             ObjectCells::new()
@@ -1559,6 +1623,8 @@ fn coordinates(index: usize) -> (usize, usize, usize) {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -1583,6 +1649,7 @@ mod tests {
         assert!(Arc::ptr_eq(&first.fluids, &second.fluids));
         assert!(Arc::ptr_eq(&first.layers, &second.layers));
         assert!(Arc::ptr_eq(&first.objects, &second.objects));
+        assert!(Arc::ptr_eq(&first.metadata, &second.metadata));
         assert!(Arc::ptr_eq(&first.light, &second.light));
         assert!(Arc::ptr_eq(
             &first.fluid_frontier_sources,
@@ -1592,6 +1659,49 @@ mod tests {
             &first.dynamic_fluid_cells,
             &second.dynamic_fluid_cells
         ));
+    }
+
+    #[test]
+    fn metadata_is_sparse_and_follows_block_identity() {
+        let mut chunk = VoxelChunk::empty();
+        let stone = VoxelCell::new("stone", Default::default());
+        chunk.set_block(2, 3, 4, Some(stone));
+
+        let mut metadata = BlockMetadata::default();
+        metadata.insert_value("custom_name", json!("Storage"));
+        assert!(chunk.set_block_metadata(2, 3, 4, metadata));
+        assert_eq!(
+            chunk
+                .block_metadata_at(2, 3, 4)
+                .and_then(|metadata| metadata.get("custom_name")),
+            Some(&json!("Storage"))
+        );
+
+        chunk.set_block(
+            2,
+            3,
+            4,
+            Some(stone.with_state("variant", "mossy")),
+        );
+        assert!(chunk.block_metadata_at(2, 3, 4).is_some());
+
+        chunk.set_block(
+            2,
+            3,
+            4,
+            Some(VoxelCell::new("dirt", Default::default())),
+        );
+        assert!(chunk.block_metadata_at(2, 3, 4).is_none());
+    }
+
+    #[test]
+    fn metadata_requires_a_supporting_block() {
+        let mut chunk = VoxelChunk::empty();
+        let mut metadata = BlockMetadata::default();
+        metadata.insert_value("value", json!(1));
+
+        assert!(!chunk.set_block_metadata(1, 1, 1, metadata));
+        assert!(chunk.block_metadata_entries().next().is_none());
     }
 
     #[test]
@@ -1840,10 +1950,14 @@ mod tests {
         chunk.set_block(1, 2, 3, Some(VoxelCell::new("stone", Default::default())));
         chunk.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
         chunk.set_light(7, 8, 9, VoxelLight::new_hsi(12, Default::default()));
+        let mut metadata = BlockMetadata::default();
+        metadata.insert_value("value", json!(1));
+        chunk.set_block_metadata(1, 2, 3, metadata);
 
         let mut clone = chunk.clone();
         assert!(Arc::ptr_eq(&chunk.blocks, &clone.blocks));
         assert!(Arc::ptr_eq(&chunk.fluids, &clone.fluids));
+        assert!(Arc::ptr_eq(&chunk.metadata, &clone.metadata));
         assert!(Arc::ptr_eq(&chunk.light, &clone.light));
 
         clone.set_block(1, 2, 3, None);
@@ -1852,8 +1966,10 @@ mod tests {
 
         assert!(!Arc::ptr_eq(&chunk.blocks, &clone.blocks));
         assert!(!Arc::ptr_eq(&chunk.fluids, &clone.fluids));
+        assert!(!Arc::ptr_eq(&chunk.metadata, &clone.metadata));
         assert!(!Arc::ptr_eq(&chunk.light, &clone.light));
         assert!(chunk.cell_at(1, 2, 3).is_some());
+        assert!(chunk.block_metadata_at(1, 2, 3).is_some());
         assert!(chunk.fluid_at(4, 5, 6).is_some());
         assert_ne!(chunk.light_at(7, 8, 9), VoxelLight::DARK);
     }
