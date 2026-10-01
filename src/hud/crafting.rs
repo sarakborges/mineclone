@@ -224,7 +224,7 @@ fn spawn_crafting_root(
         .clone()
         .unwrap_or_else(|| RUSTIC_WORKBENCH_ID.to_owned());
     let mut recipes = content.recipes.for_station(&station).collect::<Vec<_>>();
-    recipes.sort_by(|left, right| left.id.cmp(&right.id));
+    recipes.sort_by_key(|recipe| recipe.id.clone());
 
     let selection_valid = session
         .selected_recipe
@@ -496,7 +496,7 @@ fn sync_ingredient_labels(
 }
 
 fn set_status(status: &mut Query<&mut Text, With<CraftingStatusText>>, message: &str) {
-    for mut text in status.iter_mut() {
+    for mut text in status {
         text.0 = message.to_owned();
     }
 }
