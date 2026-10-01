@@ -58,6 +58,10 @@ impl VoxelTopologyRead for VoxelWorld {
     fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
         VoxelWorld::objects_at(self, world_position)
     }
+
+    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+        VoxelWorld::object_at(self, world_position)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -83,5 +87,9 @@ impl VoxelRead for VoxelTopologyReader<'_> {
 impl VoxelTopologyRead for VoxelTopologyReader<'_> {
     fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
         self.world.objects_at(world_position)
+    }
+
+    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+        self.world.object_at(world_position)
     }
 }
