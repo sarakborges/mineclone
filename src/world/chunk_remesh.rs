@@ -44,6 +44,7 @@ use super::{
 const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME: usize = 4;
+const MAX_REMESH_DISPATCH_ATTEMPTS_DURING_STREAMING: usize = 1;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 
 struct RemeshDispatchContext<'a> {
@@ -128,13 +129,16 @@ pub(super) fn process_chunk_remesh_queue(
         return;
     }
 
-    // Initial publication is foreground work. While any chunk inside the
-    // current show radius is still pending/generated/ready, do not start new
-    // background remesh tasks. Completed remeshes above are still integrated,
-    // but fresh async capacity is reserved for closing visible terrain holes.
-    if streaming.has_renderable_streaming_backlog() {
-        return;
-    }
+    // Initial publication remains foreground work, but completely starving
+    // remesh while visible streaming is continuously active lets dirty geometry
+    // and lighting grow without bound during flight. Allow one background
+    // attempt in that state. The shared async limiter still refuses the task if
+    // generation/initial mesh already consumes available worker capacity.
+    let max_dispatch_attempts = if streaming.has_renderable_streaming_backlog() {
+        MAX_REMESH_DISPATCH_ATTEMPTS_DURING_STREAMING
+    } else {
+        MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME
+    };
 
     dispatch_remesh_tasks(
         RemeshDispatchContext {
@@ -149,6 +153,7 @@ pub(super) fn process_chunk_remesh_queue(
         &mut queue,
         &mut tasks,
         &mut deferred,
+        max_dispatch_attempts,
     );
 }
 
@@ -269,10 +274,11 @@ fn dispatch_remesh_tasks(
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>,
+    max_attempts: usize,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
         .with_global_deadline(context.deadline)
-        .with_maximum_items(MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME);
+        .with_maximum_items(max_attempts);
     deferred.clear();
     let mut snapshots = HashMap::<(IVec3, ChunkMeshletMask), ChunkMeshSnapshot>::new();
 
