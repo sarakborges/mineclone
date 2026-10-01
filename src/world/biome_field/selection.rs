@@ -250,15 +250,16 @@ fn authored_adjacency_allows(
                 return false;
             }
 
-            if candidate
-                .exclusive_neighbor_group
-                .as_ref()
-                .is_some_and(|group| {
-                    neighbor
-                        .exclusive_neighbor_group
-                        .as_ref()
-                        .is_some_and(|neighbor_group| neighbor_group == group)
-                })
+            if candidate.id != neighbor.id
+                && candidate
+                    .exclusive_neighbor_group
+                    .as_ref()
+                    .is_some_and(|group| {
+                        neighbor
+                            .exclusive_neighbor_group
+                            .as_ref()
+                            .is_some_and(|neighbor_group| neighbor_group == group)
+                    })
             {
                 return false;
             }
@@ -786,6 +787,27 @@ mod tests {
         assert_eq!(climate_weight(ocean_core, ocean_climate), 1.0);
         assert!((0.0..1.0).contains(&climate_weight(shoreline, ocean_climate)));
         assert_eq!(climate_weight(inland, ocean_climate), 0.0);
+    }
+
+    #[test]
+    fn exclusive_group_allows_same_biome_continuity() {
+        let mountain = test_surface_entry("mountain", Some("mountain_terrain"));
+        let spacing = Vec2::splat(360.0);
+        let cell = IVec2::ZERO;
+        let site = surface_site_position(cell, spacing, 42);
+        let climate = MacroClimateField::new(42);
+        let biomes = [mountain];
+        let context = SurfaceSelectionContext {
+            cell,
+            site,
+            spacing,
+            seed: 42,
+            biomes: &biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+
+        assert!(authored_adjacency_allows(0, &context));
     }
 
     #[test]
