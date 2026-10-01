@@ -1,5 +1,6 @@
 use crate::content::fluid::FluidId;
 
+pub const MIN_FLUID_LEVEL: u8 = 1;
 pub const MAX_FLUID_LEVEL: u8 = 8;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -26,8 +27,8 @@ impl FluidCell {
 
     pub fn with_state(fluid_id: FluidId, level: u8, source: bool, spread_distance: u16) -> Self {
         assert!(
-            (1..=MAX_FLUID_LEVEL).contains(&level),
-            "fluid level must be between 1 and {MAX_FLUID_LEVEL}"
+            (MIN_FLUID_LEVEL..=MAX_FLUID_LEVEL).contains(&level),
+            "fluid level must be between {MIN_FLUID_LEVEL} and {MAX_FLUID_LEVEL}"
         );
 
         Self {
