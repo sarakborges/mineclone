@@ -20,7 +20,11 @@
       "block": "asteria:stone"
     },
     "P": {
-      "object": "asteria:pebble"
+      "objects": [
+        {
+          "object": "asteria:pebble"
+        }
+      ]
     }
   },
   "layers": [

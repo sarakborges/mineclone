@@ -133,14 +133,25 @@ def main() -> int:
                     "fluid",
                 )
             if "object" in entry:
-                require(
-                    errors,
-                    structure,
-                    f"palette[{symbol!r}].object",
-                    entry["object"],
-                    objects,
-                    "object",
+                errors.append(
+                    f"{structure} palette[{symbol!r}].object uses removed singular object payload; use objects[]"
                 )
+            attached_objects = entry.get("objects") or []
+            if not isinstance(attached_objects, list):
+                errors.append(
+                    f"{structure} palette[{symbol!r}].objects must be an array"
+                )
+            else:
+                for index, attached in enumerate(attached_objects):
+                    object_id = (attached or {}).get("object") if isinstance(attached, dict) else None
+                    require(
+                        errors,
+                        structure,
+                        f"palette[{symbol!r}].objects[{index}].object",
+                        object_id,
+                        objects,
+                        "object",
+                    )
             connector = entry.get("connector")
             if isinstance(connector, dict) and "target" in connector:
                 require(
