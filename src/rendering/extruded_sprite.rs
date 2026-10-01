@@ -59,6 +59,24 @@ impl PendingExtrudedSprite {
     }
 }
 
+pub(crate) struct ExtrudedSpriteAssetRequest {
+    pub(crate) texture: Handle<Image>,
+    pub(crate) geometry: ExtrudedSpriteGeometry,
+    pub(crate) tint: Color,
+    pub(crate) unlit: bool,
+}
+
+pub(crate) struct ExtrudedSpriteAssetContext<'a> {
+    pub(crate) images: &'a Assets<Image>,
+    pub(crate) meshes: &'a mut Assets<Mesh>,
+    pub(crate) materials: &'a mut Assets<StandardMaterial>,
+    pub(crate) mesh_cache: &'a mut ExtrudedSpriteMeshCache,
+    pub(crate) material_cache: &'a mut ExtrudedSpriteMaterialCache,
+}
+
+pub(crate) type ResolvedExtrudedSpriteAssets = (Handle<Mesh>, Handle<StandardMaterial>);
+pub(crate) type ExtrudedSpriteAssetResult = Result<Option<ResolvedExtrudedSpriteAssets>, String>;
+
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct ExtrudedSpriteMeshKey {
     texture: AssetId<Image>,
@@ -120,18 +138,20 @@ fn configure_pending_extruded_sprites(
     } = assets;
 
     for (entity, pending) in &pending {
-        let resolved = resolve_extruded_sprite_assets(
-            pending.texture.clone(),
-            pending.geometry,
-            pending.tint,
-            pending.unlit,
-            &images,
-            &mut meshes,
-            &mut materials,
-            &mut mesh_cache,
-            &mut material_cache,
-        );
-        match resolved {
+        let request = ExtrudedSpriteAssetRequest {
+            texture: pending.texture.clone(),
+            geometry: pending.geometry,
+            tint: pending.tint,
+            unlit: pending.unlit,
+        };
+        let context = ExtrudedSpriteAssetContext {
+            images: &images,
+            meshes: &mut meshes,
+            materials: &mut materials,
+            mesh_cache: &mut mesh_cache,
+            material_cache: &mut material_cache,
+        };
+        match resolve_extruded_sprite_assets(request, context) {
             Ok(Some((mesh, material))) => {
                 commands
                     .entity(entity)
@@ -151,16 +171,23 @@ fn configure_pending_extruded_sprites(
 }
 
 pub(crate) fn resolve_extruded_sprite_assets(
-    texture: Handle<Image>,
-    geometry: ExtrudedSpriteGeometry,
-    tint: Color,
-    unlit: bool,
-    images: &Assets<Image>,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    mesh_cache: &mut ExtrudedSpriteMeshCache,
-    material_cache: &mut ExtrudedSpriteMaterialCache,
-) -> Result<Option<(Handle<Mesh>, Handle<StandardMaterial>)>, String> {
+    request: ExtrudedSpriteAssetRequest,
+    context: ExtrudedSpriteAssetContext<'_>,
+) -> ExtrudedSpriteAssetResult {
+    let ExtrudedSpriteAssetRequest {
+        texture,
+        geometry,
+        tint,
+        unlit,
+    } = request;
+    let ExtrudedSpriteAssetContext {
+        images,
+        meshes,
+        materials,
+        mesh_cache,
+        material_cache,
+    } = context;
+
     let key = mesh_key(texture.id(), geometry);
     let mesh = if let Some(mesh) = mesh_cache.0.get(&key) {
         mesh.clone()
