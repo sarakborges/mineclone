@@ -1,0 +1,10 @@
+{
+  "id": "work_stations",
+  "displayName": {
+    "english": "Work Stations",
+    "portuguese_brazil": "Estações de Trabalho",
+    "spanish": "Estaciones de Trabajo"
+  },
+  "order": 65,
+  "icon": "textures/creative_categories/work_stations.png"
+}

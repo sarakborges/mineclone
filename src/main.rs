@@ -55,7 +55,7 @@ use hud::HudPlugin;
 use localization::LocalizationPlugin;
 use rendering::RenderingPlugin;
 use screens::ScreensPlugin;
-use targeting::block::BlockTargetingPlugin;
+use targeting::{RusticWorkbenchPlugin, block::BlockTargetingPlugin};
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
@@ -115,6 +115,7 @@ fn run_game() {
             WorldObjectsPlugin,
             WorldItemsPlugin,
             BlockTargetingPlugin,
+            RusticWorkbenchPlugin,
             ToolsPlugin,
             HudPlugin,
         ))
