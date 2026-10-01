@@ -420,7 +420,7 @@ fn directional_radius(radius_x: f32, radius_z: f32, direction: Vec2) -> f32 {
 /// loop count is derived from the graph size rather than an arbitrary fitting
 /// pass cap. A negative cycle means the authored min/max intervals around this
 /// local graph are mathematically incompatible.
-pub(super) fn fit_surface_site_weights(
+pub(in crate::world::biome_field) fn fit_surface_site_weights(
     sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
     biomes: &[BiomeFieldEntry],
     spacing: Vec2,
