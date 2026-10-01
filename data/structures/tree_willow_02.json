@@ -72,7 +72,11 @@
       "block": "asteria:leaf_willow"
     },
     "S": {
-      "object": "asteria:stick"
+      "objects": [
+        {
+          "object": "asteria:stick"
+        }
+      ]
     }
   },
   "layers": [

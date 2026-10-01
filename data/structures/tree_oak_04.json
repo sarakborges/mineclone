@@ -50,7 +50,11 @@
       "block": "asteria:leaf_oak"
     },
     "S": {
-      "object": "asteria:stick"
+      "objects": [
+        {
+          "object": "asteria:stick"
+        }
+      ]
     }
   },
   "layers": [
