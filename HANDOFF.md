@@ -1,5 +1,15 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-10-01 — Independent random spawn weighting
+
+- Corrected the previous interpretation: the five mountain surface biomes are **individual spawn choices**, not one family for random starting biome selection.
+- Removed the `exclusiveNeighborGroup` family collapsing from random spawn selection.
+- Added `DimensionBiome.spawnWeight`, independent from world-generation `weight`, so spawn balance can be tuned without changing biome distribution across the world.
+- Random spawn now performs deterministic weighted selection using each biome's `spawnWeight`.
+- Mountain variants currently use `spawnWeight: 0.5` individually; other surface biomes retain the default `1.0`. This makes the five mountain starts collectively less frequent while keeping each mountain biome independently selectable.
+- World-generation `weight` values were not changed by this fix.
+- Validation for commit `9726ef1deb27017053f975ee74a935eab6524603` was still running when this handoff entry was written.
+
 ## 2026-09-30 — Biome distribution, spawn and shoreline correction
 
 - Random-biome spawn no longer counts every member of an `exclusiveNeighborGroup` as a separate top-level spawn option. Mountain variants now share one spawn-family slot, so the five mountain surface variants no longer make mountain starts disproportionately likely.
