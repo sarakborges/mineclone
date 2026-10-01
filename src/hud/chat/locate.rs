@@ -57,6 +57,12 @@ pub(super) struct PendingLocate {
     task: Option<Task<LocateTaskResult>>,
 }
 
+impl PendingLocate {
+    fn is_running(&self) -> bool {
+        self.task.is_some()
+    }
+}
+
 #[derive(Clone)]
 struct LocateSnapshot {
     blocks: BlockRegistry,
@@ -112,6 +118,14 @@ impl ChatLocateContext<'_> {
         let Some(dimension) = self.dimension.definition() else {
             return "Cannot locate: current dimension is unavailable.".to_owned();
         };
+
+        if self.pending.is_running() {
+            log_gameplay_event(format!(
+                "command.locate.rejected reason=in_progress kind={} id={} player={:?}",
+                target_kind, id, player_block
+            ));
+            return "Cannot locate: another locate command is already in progress.".to_owned();
+        }
 
         let (kind, name, search_id) = match target_kind {
             "biome" => {
