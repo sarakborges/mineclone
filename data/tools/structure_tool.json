@@ -11,7 +11,7 @@
     "spanish": "Selecciona regiones para exportarlas como estructuras."
   },
   "category": "creative_tools",
-  "icon": "textures/tools/archiects-compass.png",
+  "icon": "textures/tools/architects-compass.png",
   "leftBehavior": "asteria:none",
   "rightBehavior": "asteria:structure/select"
 }
