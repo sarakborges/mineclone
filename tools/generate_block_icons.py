@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate authored isometric PNG icons for all normal voxel blocks.
 
-The geometry and face shading match the former HUD block renderer. Output paths
-follow BlockDefinition.id exactly: assets/block_icons/{block.id}.png.
+The geometry and face shading match the former HUD block renderer. Namespaced
+block ids are stored with their local id so the assets remain Windows-safe:
+asteria:stone -> assets/block_icons/stone.png.
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 BLOCKS_DIR = ROOT / "data" / "blocks"
-TEXTURES_DIR = ROOT / "assets" / "textures"
-OUTPUT_DIR = ROOT / "assets" / "block_icons"
+ASSETS_DIR = ROOT / "assets"
+TEXTURES_DIR = ASSETS_DIR / "textures"
+OUTPUT_DIR = ASSETS_DIR / "block_icons"
 
 SIZE = 256
 
@@ -36,8 +38,7 @@ FACE_SHADE = {
     "right": 0.74,
 }
 
-# Authored grass/foliage tint for layers marked dyable. Block icons are static,
-# so runtime biome tinting is intentionally baked into the PNG.
+# Static authored tint for layers marked dyable (grass, etc.).
 DEFAULT_DYE_SRGB = (0.48, 0.72, 0.34)
 LUMA = (0.2126, 0.7152, 0.0722)
 
@@ -125,27 +126,26 @@ def normalize_layers(spec: Any) -> list[dict[str, Any]]:
 
 
 def load_texture(path: str) -> Image.Image:
-    texture_path = TEXTURES_DIR / path
-    if not texture_path.is_file():
-        raise FileNotFoundError(f"Missing texture: {texture_path.relative_to(ROOT)}")
-    return Image.open(texture_path).convert("RGBA")
+    candidates = [ASSETS_DIR / path, TEXTURES_DIR / path]
+    for texture_path in candidates:
+        if texture_path.is_file():
+            return Image.open(texture_path).convert("RGBA")
+    raise FileNotFoundError(f"Missing texture: {path}")
 
 
 def prepare_face_layers(spec: Any) -> list[tuple[Image.Image, bool]]:
     return [(load_texture(layer["texture"]), bool(layer["dyable"])) for layer in normalize_layers(spec)]
 
 
-def face_spec(faces: dict[str, Any], face: str) -> Any:
-    # Current definitions use explicit six faces; aliases keep the generator
-    # compatible with simple authored blocks.
+def face_spec(textures: dict[str, Any], face: str) -> Any:
     aliases = {
         "top": ("top", "all"),
         "front": ("front", "side", "all"),
         "right": ("right", "side", "all"),
     }
     for key in aliases[face]:
-        if key in faces:
-            return faces[key]
+        if key in textures:
+            return textures[key]
     raise KeyError(f"Block has no texture for visible face {face!r}")
 
 
@@ -194,20 +194,23 @@ def draw_face(canvas: Image.Image, face: str, layers: list[tuple[Image.Image, bo
 
 
 def generate_icon(block: dict[str, Any]) -> Image.Image:
-    faces = block.get("faces")
-    if not isinstance(faces, dict):
-        raise ValueError(f"{block.get('id', '<unknown>')}: missing faces object")
+    textures = block.get("textures", block.get("faces"))
+    if not isinstance(textures, dict):
+        raise ValueError(f"{block.get('id', '<unknown>')}: missing textures object")
 
     canvas = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    # Draw side faces first, then top, matching the cube silhouette with clean seams.
     for face in ("front", "right", "top"):
-        draw_face(canvas, face, prepare_face_layers(face_spec(faces, face)))
+        draw_face(canvas, face, prepare_face_layers(face_spec(textures, face)))
     return canvas
 
 
 def should_skip(path: Path, block: dict[str, Any]) -> bool:
     block_id = str(block.get("id", ""))
     return path.stem.endswith("_layer") or block_id.endswith("_layer")
+
+
+def local_block_id(block_id: str) -> str:
+    return block_id.split(":", 1)[1] if ":" in block_id else block_id
 
 
 def main() -> None:
@@ -228,7 +231,7 @@ def main() -> None:
             raise ValueError(f"{definition_path}: missing block id")
 
         icon = generate_icon(block)
-        output = OUTPUT_DIR / f"{block_id}.png"
+        output = OUTPUT_DIR / f"{local_block_id(block_id)}.png"
         output.parent.mkdir(parents=True, exist_ok=True)
         icon.save(output, format="PNG", optimize=True)
         generated += 1
