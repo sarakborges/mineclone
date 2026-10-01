@@ -8,8 +8,9 @@
 - The old ocean continentalness core was restored: when Ocean is fully inside its authored continentalness range, it is authoritative instead of competing with land candidates.
 - Wasteland, Witchwood and Enchanted Forest no longer have hard mutual `avoidNear` exclusions in the overworld dimension. Those exclusions were suppressing the biomes almost completely because the rule was evaluated against every bordering raw site.
 - Ocean shoreline margins are now explicitly forbidden from applying over any surface influence tagged `mountain`. Mountains, Gorge, Alps, Mountain Belt and Volcano carry the semantic `mountain` tag. This prevents a gradual mountain slope from passing the local `maxSlope` test block-by-block while still receiving ocean sand.
-- Validation: CI Rust validation is green on `c8a62387a468c6d173fb91bea1a78035e0ce9450` (Clippy + Check + content/localization/GLB audits).
-- Relevant commits: `c264683e384d1cd8a6c9c3504006a1033e5fa000`, `c8a62387a468c6d173fb91bea1a78035e0ce9450`.
+- Validation: CI Rust validation is green on `c3859d5b45ad2935329da8fb9e24e668f69e4da2` (Clippy + Check + content/localization/GLB audits).
+- Size fallback now prioritizes `size.max` before authored adjacency when the two constraints have no common local solution, so the max-size bound cannot be bypassed by reselecting Plains/Ocean.
+- Relevant commits: `c264683e384d1cd8a6c9c3504006a1033e5fa000`, `c8a62387a468c6d173fb91bea1a78035e0ce9450`, `c3859d5b45ad2935329da8fb9e24e668f69e4da2`.
 
 ## 2026-09-30 — 0.68.54 Geo embedded rock-cap correction
 
