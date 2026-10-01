@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{crash_log::log_gameplay_event, game_state::GameState},
+    app::{
+        crash_log::{log_gameplay_event, log_gameplay_warn},
+        game_state::GameState,
+    },
     content::creature::CreatureRegistry,
     entity::EntityHealth,
     localization::{ActiveLanguage, Language},
@@ -142,10 +145,10 @@ pub(super) fn restore_saved_creatures(
                 meta_tags: creature.meta_tags,
             },
         ) {
-            warn!(
-                "Could not restore creature {}: {error}",
-                creature.definition_id
-            );
+            log_gameplay_warn(format!(
+                "entity.restore type=creature id={} position={:?} rejected reason=spawn_failed error={error}",
+                creature.definition_id, feet
+            ));
         }
     }
 }
