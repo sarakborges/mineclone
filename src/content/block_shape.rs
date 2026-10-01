@@ -16,3 +16,11 @@ pub(crate) fn stackable_layer_full_block_id(block: &BlockDefinition) -> Option<&
     }
     block.id.strip_suffix("_layer")
 }
+
+pub(crate) fn block_model_height(block: &BlockDefinition) -> f32 {
+    if is_stackable_layer(block) {
+        STACKABLE_LAYER_HEIGHT
+    } else {
+        1.0
+    }
+}
