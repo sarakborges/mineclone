@@ -4,6 +4,8 @@ pub(crate) mod block_face;
 #[allow(dead_code)]
 pub(crate) mod block_metadata;
 #[allow(dead_code)]
+pub(crate) mod block_state;
+#[allow(dead_code)]
 pub(crate) mod cell;
 #[allow(dead_code)]
 pub(crate) mod chunk;
@@ -33,7 +35,6 @@ pub(crate) mod quad;
 pub(crate) mod raycast;
 pub(crate) mod read;
 pub(crate) mod revision;
-pub(crate) mod secondary_properties;
 pub(crate) mod spatial_search;
 pub(crate) mod stackable_layer;
 pub(crate) mod texture_rotation;

@@ -22,7 +22,6 @@ pub(crate) const MICROBLOCK_EDGE: i32 = 8;
 pub(crate) const HOLLOW_LOG_EDGE: i32 = MICROBLOCK_EDGE * 2;
 pub(crate) const HOLLOW_LOG_WALL_THICKNESS: f32 = 1.0 / HOLLOW_LOG_EDGE as f32;
 pub(crate) const ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:artisans_kit_mask";
-pub(crate) const LEGACY_ARTISANS_KIT_MASK_PROPERTY: &str = "asteria:chisel_mask";
 const LAYERS: usize = MICROBLOCK_EDGE as usize;
 const ENCODED_LENGTH: usize = LAYERS * 16;
 const TRANSIENT_PREFIX: char = 't';
@@ -154,8 +153,8 @@ impl MicroblockMask {
             && Self::from_cell(cell) != Self::FULL
     }
 
-    /// Reject corrupted disk masks before interning properties or exposing a
-    /// partially loaded world. Existing saves without a mask remain valid.
+    /// Reject corrupted disk masks before interning state or exposing a
+    /// partially loaded world.
     pub(crate) fn valid_saved(encoded: &str) -> bool {
         Self::decode_saved(encoded).is_some()
     }
@@ -243,7 +242,7 @@ impl MicroblockMask {
     }
 
     pub(crate) fn has_room(cell: VoxelCell) -> bool {
-        Self::is_modified(cell) || cell.secondary_properties().len() < 8
+        Self::is_modified(cell) || cell.block_state().len() < 8
     }
 
     fn encode(self, transient: bool) -> String {

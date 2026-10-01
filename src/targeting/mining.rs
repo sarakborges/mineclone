@@ -219,7 +219,7 @@ fn advance_survival_mining(
         .world
         .read()
         .cell_at(hit.voxel)
-        .and_then(|cell| cell.secondary_property(BIOME_TINT_METADATA_KEY))
+        .and_then(|cell| cell.state(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
     if let Some(mutation) = runtime.world.set_block_detailed(hit.voxel, None) {

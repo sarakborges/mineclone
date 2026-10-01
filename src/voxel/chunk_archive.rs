@@ -1,6 +1,7 @@
 use crate::content::{layer::LayerFace, object::ObjectPlacementFace};
 
 use super::{
+    block_metadata::BlockMetadata,
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
@@ -31,12 +32,19 @@ struct ArchivedObjectCell {
     scale: [u16; 3],
 }
 
+#[derive(Clone)]
+struct ArchivedBlockMetadata {
+    voxel_index: u16,
+    metadata: BlockMetadata,
+}
+
 pub struct ArchivedChunk {
     occupancy: [u64; OCCUPANCY_WORDS],
     palette: Vec<VoxelCell>,
     cells: Vec<u16>,
     layers: Vec<ArchivedLayerCell>,
     objects: Vec<ArchivedObjectCell>,
+    metadata: Vec<ArchivedBlockMetadata>,
     fluid_occupancy: [u64; OCCUPANCY_WORDS],
     fluid_palette: Vec<FluidCell>,
     fluid_cells: Vec<u16>,
@@ -47,6 +55,7 @@ impl ArchivedChunk {
         block_entries: impl IntoIterator<Item = (usize, VoxelCell)>,
         layer_entries: impl IntoIterator<Item = (usize, usize, AttachedLayer)>,
         object_entries: impl IntoIterator<Item = (usize, ObjectCell)>,
+        metadata_entries: impl IntoIterator<Item = (usize, BlockMetadata)>,
         fluid_entries: impl IntoIterator<Item = (usize, FluidCell)>,
     ) -> Self {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
@@ -54,6 +63,7 @@ impl ArchivedChunk {
         let mut cells = Vec::new();
         let mut layers = Vec::new();
         let mut objects = Vec::new();
+        let mut metadata = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut fluid_palette = Vec::<FluidCell>::new();
         let mut fluid_cells = Vec::new();
@@ -101,6 +111,26 @@ impl ArchivedChunk {
         }
         objects.sort_unstable_by_key(|object| object.voxel_index);
 
+        for (index, entry) in metadata_entries {
+            assert!(index < CHUNK_VOLUME, "archived metadata index must stay inside the chunk");
+            assert!(!entry.is_empty(), "archived block metadata cannot be empty");
+            assert!(
+                occupancy[index / u64::BITS as usize] & (1_u64 << (index % u64::BITS as usize)) != 0,
+                "archived block metadata must have a supporting block"
+            );
+            metadata.push(ArchivedBlockMetadata {
+                voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
+                metadata: entry,
+            });
+        }
+        metadata.sort_unstable_by_key(|entry| entry.voxel_index);
+        for pair in metadata.windows(2) {
+            assert_ne!(
+                pair[0].voxel_index, pair[1].voxel_index,
+                "archived block metadata cannot contain duplicate voxels"
+            );
+        }
+
         for (index, fluid) in fluid_entries {
             assert!(index < CHUNK_VOLUME, "archived fluid index must stay inside the chunk");
             fluid_occupancy[index / u64::BITS as usize] |=
@@ -126,6 +156,7 @@ impl ArchivedChunk {
             cells,
             layers,
             objects,
+            metadata,
             fluid_occupancy,
             fluid_palette,
             fluid_cells,
@@ -138,6 +169,7 @@ impl ArchivedChunk {
         let mut cells = Vec::new();
         let mut layers = Vec::new();
         let mut objects = Vec::new();
+        let mut metadata = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut fluid_palette = Vec::<FluidCell>::new();
         let mut fluid_cells = Vec::new();
@@ -211,6 +243,12 @@ impl ArchivedChunk {
             });
         }
         objects.sort_unstable_by_key(|object| object.voxel_index);
+        for (index, entry) in chunk.block_metadata_entries() {
+            metadata.push(ArchivedBlockMetadata {
+                voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
+                metadata: entry.clone(),
+            });
+        }
 
         Self {
             occupancy,
@@ -218,6 +256,7 @@ impl ArchivedChunk {
             cells,
             layers,
             objects,
+            metadata,
             fluid_occupancy,
             fluid_palette,
             fluid_cells,
@@ -266,6 +305,14 @@ impl ArchivedChunk {
         })
     }
 
+    pub(crate) fn block_metadata_entries(
+        &self,
+    ) -> impl Iterator<Item = (usize, &BlockMetadata)> + '_ {
+        self.metadata
+            .iter()
+            .map(|entry| (entry.voxel_index as usize, &entry.metadata))
+    }
+
     pub(crate) fn fluid_entries(&self) -> impl Iterator<Item = (usize, FluidCell)> + '_ {
         occupied_indices(&self.fluid_occupancy)
             .zip(self.fluid_cells.iter().copied())
@@ -281,6 +328,13 @@ impl ArchivedChunk {
                 content.set_block(x, y, z, cell);
             }
         });
+        for (index, entry) in self.block_metadata_entries() {
+            let (x, y, z) = coordinates(index);
+            assert!(
+                chunk.set_block_metadata(x, y, z, entry.clone()),
+                "archived metadata must restore onto its supporting block"
+            );
+        }
         for (index, _order, attached) in self.layer_entries() {
             let (x, y, z) = coordinates(index);
             assert!(

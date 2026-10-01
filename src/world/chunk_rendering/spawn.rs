@@ -203,7 +203,7 @@ fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
             } else if let Some(tint) = cell
-                .secondary_property(BIOME_TINT_METADATA_KEY)
+                .state(BIOME_TINT_METADATA_KEY)
                 .and_then(|biome_id| block_tint_for_biome(block.tint, biome_id, context.biomes))
             {
                 tint

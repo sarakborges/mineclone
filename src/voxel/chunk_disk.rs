@@ -16,19 +16,20 @@ use crate::content::{
 };
 
 use super::{
+    block_metadata::BlockMetadata,
+    block_state::BlockState,
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     chunk_archive::ArchivedChunk,
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     log_variant::is_hollow_log_id,
+    microblock::{ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
     object::{ObjectCell, ObjectTransform},
-    microblock::{ARTISANS_KIT_MASK_PROPERTY, LEGACY_ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
-    secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
 
-const MAX_PROPERTIES: usize = 8;
+const MAX_BLOCK_STATE_ENTRIES: usize = 8;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -43,6 +44,7 @@ pub(crate) struct DiskChunk {
     layers: Vec<DiskLayerState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     objects: Vec<DiskObjectState>,
+    metadata: Vec<DiskBlockMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fluid_palette: Vec<DiskFluidState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -55,7 +57,7 @@ struct DiskBlockState {
     id: String,
     rotation: u8,
     orientation: u8,
-    properties: Vec<(String, String)>,
+    state: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -93,6 +95,13 @@ struct DiskObjectState {
     scale: [u16; 3],
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DiskBlockMetadata {
+    voxel: u16,
+    metadata: BlockMetadata,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct DiskFluidState {
@@ -117,6 +126,7 @@ struct DiskChunkBuilder {
     block_runs: Vec<DiskRun>,
     layers: Vec<DiskLayerState>,
     objects: Vec<DiskObjectState>,
+    metadata: Vec<DiskBlockMetadata>,
     fluid_palette: Vec<DiskFluidState>,
     runtime_fluid_palette: Vec<(FluidCell, u16)>,
     fluid_runs: Vec<DiskRun>,
@@ -131,6 +141,7 @@ impl DiskChunkBuilder {
             block_runs: Vec::new(),
             layers: Vec::new(),
             objects: Vec::new(),
+            metadata: Vec::new(),
             fluid_palette: Vec::new(),
             runtime_fluid_palette: Vec::new(),
             fluid_runs: Vec::new(),
@@ -145,20 +156,20 @@ impl DiskChunkBuilder {
         {
             *state_index
         } else {
-            let mut properties = cell
-                .secondary_properties()
+            let mut state = cell
+                .block_state()
                 .iter_for_save()
                 .map(|(key, value)| (key.to_owned(), value.to_owned()))
                 .collect::<Vec<_>>();
             if let Some(encoded) = MicroblockMask::encoded_for_save(cell) {
-                properties.push((ARTISANS_KIT_MASK_PROPERTY.to_owned(), encoded));
+                state.push((ARTISANS_KIT_MASK_PROPERTY.to_owned(), encoded));
             }
-            properties.sort_unstable();
+            state.sort_unstable();
             let state = DiskBlockState {
                 id: cell.block_id.to_owned(),
                 rotation: rotation_index(cell.texture_rotation),
                 orientation: cell.orientation.index(),
-                properties,
+                state,
             };
             let state_index = palette_index(&mut self.block_palette, state)?;
             self.runtime_block_palette.push((cell, state_index));
@@ -198,6 +209,18 @@ impl DiskChunkBuilder {
         Ok(())
     }
 
+    fn push_metadata(&mut self, index: usize, metadata: &BlockMetadata) -> io::Result<()> {
+        if metadata.is_empty() {
+            return Err(invalid_data("block metadata cannot be empty"));
+        }
+        self.metadata.push(DiskBlockMetadata {
+            voxel: u16::try_from(index)
+                .map_err(|_| invalid_data("chunk metadata voxel index overflow"))?,
+            metadata: metadata.clone(),
+        });
+        Ok(())
+    }
+
     fn push_fluid(
         &mut self,
         index: usize,
@@ -231,12 +254,14 @@ impl DiskChunkBuilder {
         self.layers
             .sort_unstable_by_key(|layer| (layer.voxel, layer.order));
         self.objects.sort_unstable_by_key(|object| object.voxel);
+        self.metadata.sort_unstable_by_key(|entry| entry.voxel);
         DiskChunk {
             coord: self.coord,
             block_palette: self.block_palette,
             block_runs: self.block_runs,
             layers: self.layers,
             objects: self.objects,
+            metadata: self.metadata,
             fluid_palette: self.fluid_palette,
             fluid_runs: self.fluid_runs,
         }
@@ -281,6 +306,9 @@ impl DiskChunk {
         for (index, object) in chunk.object_entries() {
             builder.push_object(index, object)?;
         }
+        for (index, metadata) in chunk.block_metadata_entries() {
+            builder.push_metadata(index, metadata)?;
+        }
 
         Ok(builder.finish())
     }
@@ -300,6 +328,9 @@ impl DiskChunk {
         }
         for (index, object) in chunk.object_entries() {
             builder.push_object(index, object)?;
+        }
+        for (index, metadata) in chunk.block_metadata_entries() {
+            builder.push_metadata(index, metadata)?;
         }
         for (index, cell) in chunk.fluid_entries() {
             builder.push_fluid(index, cell, fluids)?;
@@ -323,6 +354,7 @@ impl DiskChunk {
             self.block_runs,
             self.layers,
             self.objects,
+            self.metadata,
             self.fluid_palette,
             self.fluid_runs,
             blocks,
@@ -373,6 +405,7 @@ fn decode_archived_compact(
     block_runs: Vec<DiskRun>,
     layer_states: Vec<DiskLayerState>,
     object_states: Vec<DiskObjectState>,
+    metadata_states: Vec<DiskBlockMetadata>,
     fluid_palette: Vec<DiskFluidState>,
     fluid_runs: Vec<DiskRun>,
     blocks: &BlockRegistry,
@@ -393,6 +426,7 @@ fn decode_archived_compact(
     validate_runs(&fluid_runs, fluid_states.len())?;
     let layer_entries = decode_layer_entries(&block_runs, layer_states, layers)?;
     let object_entries = decode_object_entries(&block_runs, object_states, objects)?;
+    let metadata_entries = decode_metadata_entries(&block_runs, metadata_states)?;
 
     let block_entries = block_runs.iter().flat_map(|run| {
         let cell = block_states[run.state as usize];
@@ -407,7 +441,13 @@ fn decode_archived_compact(
 
     Ok((
         coord,
-        ArchivedChunk::from_entries(block_entries, layer_entries, object_entries, fluid_entries),
+        ArchivedChunk::from_entries(
+            block_entries,
+            layer_entries,
+            object_entries,
+            metadata_entries,
+            fluid_entries,
+        ),
     ))
 }
 
@@ -544,6 +584,35 @@ fn decode_object_entries(
     Ok(entries)
 }
 
+fn decode_metadata_entries(
+    block_runs: &[DiskRun],
+    states: Vec<DiskBlockMetadata>,
+) -> io::Result<Vec<(usize, BlockMetadata)>> {
+    let mut previous_voxel = None;
+    let mut entries = Vec::with_capacity(states.len());
+
+    for state in states {
+        let voxel = state.voxel as usize;
+        if voxel >= CHUNK_VOLUME {
+            return Err(invalid_data("saved block metadata voxel is out of range"));
+        }
+        if previous_voxel.is_some_and(|previous| state.voxel <= previous) {
+            return Err(invalid_data("saved block metadata must be strictly ordered by voxel"));
+        }
+        if state.metadata.is_empty() {
+            return Err(invalid_data("saved block metadata cannot be empty"));
+        }
+        if !run_contains_index(block_runs, voxel) {
+            return Err(invalid_data("saved block metadata is missing its supporting block"));
+        }
+
+        entries.push((voxel, state.metadata));
+        previous_voxel = Some(state.voxel);
+    }
+
+    Ok(entries)
+}
+
 fn run_contains_index(runs: &[DiskRun], index: usize) -> bool {
     runs.iter().any(|run| {
         let start = run.start as usize;
@@ -572,23 +641,23 @@ fn validate_runs(runs: &[DiskRun], palette_len: usize) -> io::Result<()> {
 fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Result<VoxelCell> {
     if state.rotation > 3
         || state.orientation > 2
-        || state.properties.len() > MAX_PROPERTIES
+        || state.state.len() > MAX_BLOCK_STATE_ENTRIES
     {
         return Err(invalid_data(
-            "invalid block rotation, orientation or property count",
+            "invalid block rotation, orientation or state entry count",
         ));
     }
     let definition = blocks
         .get(&state.id)
         .ok_or_else(|| invalid_data(format!("missing block definition: {}", state.id)))?;
-    validate_properties(&state.properties, definition.can_fragment())?;
-    let mut properties = SecondaryProperties::default();
+    validate_block_state(&state.state, definition.can_fragment())?;
+    let mut block_state = BlockState::default();
     let mut artisans_kit_mask = None;
-    for (key, value) in state.properties {
-        if key == ARTISANS_KIT_MASK_PROPERTY || key == LEGACY_ARTISANS_KIT_MASK_PROPERTY {
+    for (key, value) in state.state {
+        if key == ARTISANS_KIT_MASK_PROPERTY {
             artisans_kit_mask = Some(value);
         } else {
-            properties.set(&key, &value);
+            block_state.set(&key, &value);
         }
     }
 
@@ -597,7 +666,7 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
         TextureRotation::from_quarter_turn(state.rotation),
         BlockOrientation::from_index(state.orientation),
     )
-    .with_secondary_properties(properties);
+    .with_block_state(block_state);
     if let Some(encoded) = artisans_kit_mask {
         cell = MicroblockMask::apply_saved(cell, &encoded)
             .ok_or_else(|| invalid_data("invalid Artisan's Kit mask"))?;
@@ -623,20 +692,17 @@ fn decode_fluid_state(state: DiskFluidState, fluids: &FluidRegistry) -> io::Resu
     ))
 }
 
-fn validate_properties(
-    properties: &[(String, String)],
-    can_fragment: bool,
-) -> io::Result<()> {
-    for (property_index, (key, value)) in properties.iter().enumerate() {
+fn validate_block_state(state: &[(String, String)], can_fragment: bool) -> io::Result<()> {
+    for (entry_index, (key, value)) in state.iter().enumerate() {
         if key.is_empty()
             || value.is_empty()
-            || properties[..property_index]
+            || state[..entry_index]
                 .iter()
                 .any(|(previous_key, _)| previous_key == key)
         {
-            return Err(invalid_data("empty or duplicate secondary property"));
+            return Err(invalid_data("empty or duplicate block state entry"));
         }
-        if (key == ARTISANS_KIT_MASK_PROPERTY || key == LEGACY_ARTISANS_KIT_MASK_PROPERTY)
+        if key == ARTISANS_KIT_MASK_PROPERTY
             && (!can_fragment || !MicroblockMask::valid_saved(value))
         {
             return Err(invalid_data("invalid Artisan's Kit mask or ineligible block"));
@@ -667,8 +733,11 @@ fn invalid_data(message: impl Into<String>) -> io::Error {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::voxel::{
+        block_metadata::BlockMetadata,
         chunk_archive::ArchivedChunk,
         texture_rotation::TextureRotation,
     };
@@ -682,7 +751,10 @@ mod tests {
             1,
             2,
             3,
-            Some(VoxelCell::new("asteria:test", TextureRotation::Degrees90)),
+            Some(
+                VoxelCell::new("asteria:test", TextureRotation::Degrees90)
+                    .with_state("variant", "mossy"),
+            ),
         );
         chunk.set_block(
             4,
@@ -690,6 +762,9 @@ mod tests {
             6,
             Some(VoxelCell::new("asteria:other", TextureRotation::Degrees180)),
         );
+        let mut metadata = BlockMetadata::default();
+        metadata.insert_value("inventory", json!({"slots": [1, 2, 3]}));
+        assert!(chunk.set_block_metadata(1, 2, 3, metadata));
 
         let archived = ArchivedChunk::from_chunk(&chunk);
         let resident_disk = DiskChunk::from_chunk(coord, &chunk, &fluids).unwrap();
@@ -700,6 +775,12 @@ mod tests {
             serde_json::to_string(&resident_disk).unwrap(),
             serde_json::to_string(&archived_disk).unwrap()
         );
+    }
+
+    #[test]
+    fn old_chunk_without_metadata_channel_is_rejected() {
+        let result = serde_json::from_str::<DiskChunk>(r#"{"coord":[0,0,0]}"#);
+        assert!(result.is_err());
     }
 
     #[test]

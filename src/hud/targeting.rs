@@ -23,7 +23,7 @@ use crate::{
         block::{BlockTargetingSet, TargetedBlock},
     },
     ui::{selectable, typography, visibility::set_visibility},
-    voxel::{cell::VoxelCell, secondary_properties::SecondaryProperties, world::VoxelWorld},
+    voxel::{block_state::BlockState, cell::VoxelCell, world::VoxelWorld},
     world_objects::TargetedWorldObject,
 };
 
@@ -84,7 +84,7 @@ struct TargetHudSnapshot {
     voxel: IVec3,
     block_id: &'static str,
     normal: IVec3,
-    properties: SecondaryProperties,
+    properties: BlockState,
     layers: SmallVec<[(LayerFace, &'static str); 8]>,
     sky_light: u8,
     block_light: u8,
@@ -438,7 +438,7 @@ fn update_target_hud(
     let language = state.language.get();
     let cell = state.world.cell_at(hit.voxel);
     let properties = cell
-        .map(|cell| cell.secondary_properties())
+        .map(|cell| cell.block_state())
         .unwrap_or_default();
     let light_position = if hit.normal == IVec3::ZERO {
         hit.voxel + IVec3::Y
