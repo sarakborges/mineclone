@@ -140,11 +140,6 @@ fn spawn_inventory_search_field(
         .spawn((
             Button,
             InventorySearchFrame,
-            EditableText {
-                max_characters: Some(128),
-                ..EditableText::new(state.player_view.search_query())
-            },
-            text_input::editor_style(17.0, FontWeight::NORMAL),
             Node {
                 position_type: PositionType::Relative,
                 width: px(PLAYER_SEARCH_WIDTH),
