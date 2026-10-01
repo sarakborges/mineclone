@@ -38,35 +38,21 @@ pub(super) fn surface_size_allows(
         return true;
     }
 
-    let candidate = &context.biomes[candidate_index];
-    let center_span_limit = Vec2::new(
-        ((candidate.size.x.max - candidate.size.x.min) * 2.0).max(0.0),
-        ((candidate.size.z.max - candidate.size.z.min) * 2.0).max(0.0),
-    );
-    let search_radius = component_search_radius(center_span_limit, context.spacing);
-    let nodes = collect_raw_component(candidate_index, context, search_radius);
+    let nodes = collect_raw_component(candidate_index, context);
     if nodes.len() <= 1 {
         return true;
     }
 
     let neighbors = component_neighbors(&nodes, context);
+    let candidate = &context.biomes[candidate_index];
+    let center_span_limit = Vec2::new(
+        ((candidate.size.x.max - candidate.size.x.min) * 2.0).max(0.0),
+        ((candidate.size.z.max - candidate.size.z.min) * 2.0).max(0.0),
+    );
+
     fit_component_mask(&nodes, &neighbors, center_span_limit)
         .map(|active| active[0])
         .unwrap_or(false)
-}
-
-/// A component only needs to be inspected far enough to prove whether the
-/// current site can fit inside `size.max`. The radius is derived from the
-/// authored max-minus-min slack and the site spacing, plus the exact Voronoi
-/// neighbor-search halo. This keeps the fitter finite even when a raw Plains
-/// component extends for thousands of sites.
-fn component_search_radius(center_span_limit: Vec2, spacing: Vec2) -> IVec2 {
-    let spacing_x = spacing.x.max(FIT_EPSILON);
-    let spacing_z = spacing.y.max(FIT_EPSILON);
-    IVec2::new(
-        (center_span_limit.x / spacing_x).ceil() as i32 + super::SITE_SEARCH_RADIUS,
-        (center_span_limit.y / spacing_z).ceil() as i32 + super::SITE_SEARCH_RADIUS,
-    )
 }
 
 /// When two authored adjacency rules conflict, exactly one raw side yields.
@@ -140,7 +126,6 @@ pub(super) fn cell_has_alternative(
 fn collect_raw_component(
     candidate_index: usize,
     context: &SurfaceSelectionContext<'_>,
-    search_radius: IVec2,
 ) -> Vec<ComponentNode> {
     let mut nodes = Vec::new();
     let mut queue = VecDeque::new();
@@ -165,10 +150,6 @@ fn collect_raw_component(
                 }
 
                 let neighbor_cell = cell + offset;
-                let relative = neighbor_cell - context.cell;
-                if relative.x.abs() > search_radius.x || relative.y.abs() > search_radius.y {
-                    continue;
-                }
                 if seen.contains(&neighbor_cell) {
                     continue;
                 }
@@ -578,11 +559,5 @@ mod tests {
             .expect("the removable side should yield");
         assert!(active[0]);
         assert!(!active[1]);
-    }
-
-    #[test]
-    fn component_search_radius_scales_from_authored_slack() {
-        let radius = component_search_radius(Vec2::new(600.0, 200.0), Vec2::splat(440.0));
-        assert_eq!(radius, IVec2::new(4, 3));
     }
 }
