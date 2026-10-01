@@ -60,5 +60,8 @@ impl BlockIconMaterial {
 }
 
 fn block_icon_asset_path(block_id: &str) -> String {
-    format!("{BLOCK_ICON_DIRECTORY}/{block_id}.png")
+    let local_id = block_id
+        .split_once(':')
+        .map_or(block_id, |(_, local_id)| local_id);
+    format!("{BLOCK_ICON_DIRECTORY}/{local_id}.png")
 }
