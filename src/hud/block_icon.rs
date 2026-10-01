@@ -5,7 +5,7 @@ use bevy::{
 use crate::content::{block::BlockDefinition, block_orientation::BlockOrientation};
 
 const BLOCK_ICON_SHADER_PATH: &str = "shaders/block_icon_material.wgsl";
-const BLOCK_ICON_DIRECTORY: &str = "block_icons";
+const BLOCK_ICON_DIRECTORY: &str = "textures/block_icons";
 
 #[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
 pub(crate) struct BlockIconMaterial {
@@ -50,8 +50,7 @@ impl BlockIconMaterial {
         self.set_block(block, asset_server);
     }
 
-    // Block icons are authored PNGs. Biome/dye tinting belongs in the authored
-    // icon instead of being recomputed by the HUD renderer.
+    // Block icons are authored PNGs and are not tinted by the HUD renderer.
     pub(crate) fn has_tint(&self, _tint: Color) -> bool {
         true
     }
