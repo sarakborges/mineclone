@@ -627,11 +627,6 @@ fn random_spawn_biome_id<'a>(
         .expect("random spawn candidate list cannot become empty")
 }
 
-fn random_spawn_candidate_index(seed: u64, candidate_count: usize) -> usize {
-    assert!(candidate_count > 0, "random spawn requires at least one biome candidate");
-    (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) % candidate_count as u64) as usize
-}
-
 fn validate_forced_spawn_biome(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
@@ -751,7 +746,7 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
 mod tests {
     use bevy::prelude::{IVec2, IVec3};
 
-    use super::{bootstrap_column_top_chunks, random_spawn_candidate_index};
+    use super::bootstrap_column_top_chunks;
 
     #[test]
     fn bootstrap_column_tops_track_the_highest_selected_chunk() {
@@ -764,20 +759,4 @@ mod tests {
         assert_eq!(tops.get(&IVec2::new(1, 7)), Some(&2));
     }
 
-    #[test]
-    fn random_spawn_candidate_is_deterministic_for_same_seed() {
-        assert_eq!(
-            random_spawn_candidate_index(42, 7),
-            random_spawn_candidate_index(42, 7)
-        );
-    }
-
-    #[test]
-    fn random_spawn_candidate_changes_across_seeds() {
-        let first = random_spawn_candidate_index(0, 7);
-        assert!(
-            (1..64).any(|seed| random_spawn_candidate_index(seed, 7) != first),
-            "random spawn candidate must not collapse every seed to one biome"
-        );
-    }
 }
