@@ -56,6 +56,7 @@ pub(crate) fn resolve_surface_material_column<'a>(
 pub(crate) fn solid_block_id(
     position: Vec3,
     surface_depth: u32,
+    steep_surface: bool,
     volume: Option<VolumeBiomeSelection>,
     volume_surface_depth: Option<u32>,
     surface_materials: &SurfaceMaterialColumn<'_>,
@@ -80,8 +81,16 @@ pub(crate) fn solid_block_id(
         }
     }
 
-    let base_material = strongest_surface_material(surface_materials, surface_depth);
-    let resolved_material = if surface_depth > 0 {
+    // Surface layers are horizontal cover. On a cliff/steep mountain edge,
+    // expose the biome's deepest authored substrate instead of wrapping grass,
+    // dirt, sand, or another shallow surface layer down the wall.
+    let material_depth = if steep_surface {
+        u32::MAX
+    } else {
+        surface_depth
+    };
+    let base_material = strongest_surface_material(surface_materials, material_depth);
+    let resolved_material = if !steep_surface && surface_depth > 0 {
         strongest_surface_material(
             surface_materials,
             irregular_layer_depth(position, surface_depth, biome_field.seed()),
