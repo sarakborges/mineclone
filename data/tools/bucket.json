@@ -1,0 +1,17 @@
+{
+  "id": "asteria:bucket",
+  "name": {
+    "english": "Bucket",
+    "portuguese_brazil": "Balde",
+    "spanish": "Cubo"
+  },
+  "hint": {
+    "english": "Collects and places fluid sources.",
+    "portuguese_brazil": "Coleta e posiciona fontes de fluido.",
+    "spanish": "Recoge y coloca fuentes de fluido."
+  },
+  "category": "tools",
+  "icon": "",
+  "leftBehavior": "asteria:none",
+  "rightBehavior": "asteria:bucket/use"
+}

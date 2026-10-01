@@ -1,5 +1,6 @@
 mod artisans_kit;
 mod brush;
+mod bucket;
 mod carpenters_axe;
 mod shears;
 mod structure_tool;
@@ -7,6 +8,7 @@ mod structure_tool;
 use artisans_kit::ArtisansKitPlugin;
 use bevy::prelude::*;
 use brush::BrushPlugin;
+use bucket::BucketPlugin;
 use carpenters_axe::CarpentersAxePlugin;
 use shears::ShearsPlugin;
 use structure_tool::StructureToolPlugin;
@@ -20,6 +22,7 @@ impl Plugin for ToolsPlugin {
         app.add_plugins((
             ArtisansKitPlugin,
             BrushPlugin,
+            BucketPlugin,
             CarpentersAxePlugin,
             ShearsPlugin,
             StructureToolPlugin,

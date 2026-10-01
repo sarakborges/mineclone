@@ -94,6 +94,11 @@ impl ItemStack {
         self
     }
 
+    pub(crate) fn without_metadata(mut self, key: &str) -> Self {
+        self.metadata.values.remove(key);
+        self
+    }
+
     pub(crate) fn can_stack_with(&self, other: &Self) -> bool {
         self.id == other.id && self.metadata == other.metadata
     }
@@ -231,6 +236,15 @@ mod tests {
 
         assert!(!plain.can_stack_with(&enchanted));
         assert!(enchanted.can_stack_with(&enchanted.clone()));
+    }
+
+    #[test]
+    fn metadata_can_be_removed_without_rebuilding_the_stack() {
+        let stack = ItemStack::new("asteria:bucket")
+            .with_metadata("contained_fluid", "asteria:water")
+            .without_metadata("contained_fluid");
+
+        assert!(stack.metadata().get("contained_fluid").is_none());
     }
 
     #[test]
