@@ -4,10 +4,13 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 const NO_AI_META_TAG: &str = "NO_AI";
+const PERSISTENT_META_TAG: &str = "PERSISTENT";
 
 fn normalized_meta_tag(tag: &str) -> Option<&'static str> {
     if tag.eq_ignore_ascii_case(NO_AI_META_TAG) {
         Some(NO_AI_META_TAG)
+    } else if tag.eq_ignore_ascii_case(PERSISTENT_META_TAG) {
+        Some(PERSISTENT_META_TAG)
     } else {
         None
     }
@@ -24,6 +27,10 @@ impl EntityMetaTags {
 
     pub(crate) fn is_no_ai(&self) -> bool {
         self.contains(NO_AI_META_TAG)
+    }
+
+    pub(crate) fn is_persistent(&self) -> bool {
+        self.contains(PERSISTENT_META_TAG)
     }
 
     pub(crate) fn add(&mut self, tag: &str, value: Option<String>) -> Result<(), String> {

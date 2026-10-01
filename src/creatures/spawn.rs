@@ -9,9 +9,8 @@ use crate::{
 };
 
 use super::{
-    CreatureInstance, CreatureTargetCollider, EntityMetaTags, PendingCreatureRestores,
-    motion::CreatureMotion,
-    particles::CreatureParticleEmitter,
+    CreatureDespawnGrace, CreatureInstance, CreatureTargetCollider, EntityMetaTags,
+    PendingCreatureRestores, motion::CreatureMotion, particles::CreatureParticleEmitter,
     visual::CreatureModel,
 };
 
@@ -77,25 +76,28 @@ fn spawn_creature_with_state(
     let name = definition.name.text(language).to_owned();
     let meta_tags_for_log = state.meta_tags.clone();
     let health_for_log = state.health.unwrap_or(definition.health);
-    let entity = commands.spawn((
-        Name::new(name.clone()),
-        CreatureInstance {
-            definition_id: definition.id.clone(),
-        },
-        CreatureModel(asset_server.load(definition.model.clone())),
-        CreatureMotion::default(),
-        CreatureParticleEmitter::default(),
-        state.health.map_or_else(
-            || EntityHealth::new(definition.health),
-            |health| EntityHealth::restored(definition.health, health),
-        ),
-        state.meta_tags,
-        definition.collider,
-        CreatureTargetCollider(definition.target_collider()),
-        Transform::from_translation(feet),
-        Visibility::default(),
-        DespawnOnExit(GameState::Gameplay),
-    )).id();
+    let entity = commands
+        .spawn((
+            Name::new(name.clone()),
+            CreatureInstance {
+                definition_id: definition.id.clone(),
+            },
+            CreatureModel(asset_server.load(definition.model.clone())),
+            CreatureMotion::default(),
+            CreatureParticleEmitter::default(),
+            CreatureDespawnGrace::default(),
+            state.health.map_or_else(
+                || EntityHealth::new(definition.health),
+                |health| EntityHealth::restored(definition.health, health),
+            ),
+            state.meta_tags,
+            definition.collider,
+            CreatureTargetCollider(definition.target_collider()),
+            Transform::from_translation(feet),
+            Visibility::default(),
+            DespawnOnExit(GameState::Gameplay),
+        ))
+        .id();
     log_gameplay_event(format!(
         "entity.spawn entity={:?} type=creature id={} name={} position={:?} health={:.3} meta_tags={:?}",
         entity,
