@@ -34,7 +34,8 @@
           "max": 420
         },
         "y": null
-      }
+      },
+      "exclusiveNeighborGroup": "inland_biomes"
     },
     {
       "id": "asteria:overworld/witchwood",
@@ -49,7 +50,8 @@
           "max": 460
         },
         "y": null
-      }
+      },
+      "exclusiveNeighborGroup": "inland_biomes"
     },
     {
       "id": "asteria:overworld/enchanted_forest",
@@ -64,7 +66,8 @@
           "max": 460
         },
         "y": null
-      }
+      },
+      "exclusiveNeighborGroup": "inland_biomes"
     },
     {
       "id": "asteria:overworld/mountains",
