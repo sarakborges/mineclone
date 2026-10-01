@@ -34,7 +34,11 @@ pub(crate) trait VoxelRead: Send + Sync {
 }
 
 pub(crate) trait VoxelTopologyRead: VoxelRead {
-    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell>;
+    fn objects_at(&self, world_position: IVec3) -> &[ObjectCell];
+
+    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
+        self.objects_at(world_position).first().copied()
+    }
 }
 
 impl VoxelRead for VoxelWorld {
@@ -51,8 +55,8 @@ impl VoxelRead for VoxelWorld {
 }
 
 impl VoxelTopologyRead for VoxelWorld {
-    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
-        VoxelWorld::object_at(self, world_position)
+    fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
+        VoxelWorld::objects_at(self, world_position)
     }
 }
 
@@ -77,7 +81,7 @@ impl VoxelRead for VoxelTopologyReader<'_> {
 }
 
 impl VoxelTopologyRead for VoxelTopologyReader<'_> {
-    fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
-        self.world.object_at(world_position)
+    fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
+        self.world.objects_at(world_position)
     }
 }
