@@ -14,11 +14,12 @@ use crate::{
         block_tint::block_tint_at,
         color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS},
         extruded_sprite::{
-            resolve_extruded_sprite_assets, ExtrudedSpriteGeometry,
-            ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache,
+            resolve_extruded_sprite_assets, ExtrudedSpriteAssetContext,
+            ExtrudedSpriteAssetRequest, ExtrudedSpriteGeometry, ExtrudedSpriteMaterialCache,
+            ExtrudedSpriteMeshCache,
         },
     },
-    voxel::{chunk::VoxelChunk, object::ObjectCell},
+    voxel::chunk::VoxelChunk,
 };
 
 use super::{
@@ -83,18 +84,9 @@ pub(super) fn build_world_object_chunk(
             &content.biomes,
         );
 
-        let Some((source_mesh, material)) = resolve_object_render_assets(
-            object,
-            definition,
-            tint,
-            content,
-            assets,
-        ) else {
-            return None;
-        };
-        let Some(base_mesh) = assets.meshes.get(&source_mesh).cloned() else {
-            return None;
-        };
+        let (source_mesh, material) =
+            resolve_object_render_assets(definition, tint, content, assets)?;
+        let base_mesh = assets.meshes.get(&source_mesh).cloned()?;
 
         transform.translation -= chunk_origin_vec;
         let instance_mesh = base_mesh.transformed_by(transform);
@@ -169,7 +161,6 @@ pub(super) fn build_world_object_chunk(
 }
 
 fn resolve_object_render_assets(
-    _object: ObjectCell,
     definition: &ObjectDefinition,
     tint: Color,
     content: &WorldObjectSceneContent<'_>,
@@ -184,9 +175,7 @@ fn resolve_object_render_assets(
                 }
                 .from_asset(path.clone()),
             );
-            if assets.meshes.get(&mesh).is_none() {
-                return None;
-            }
+            assets.meshes.get(&mesh)?;
 
             let source_material: Handle<StandardMaterial> =
                 content.asset_server.load(format!("{path}#Material0/std"));
@@ -206,27 +195,32 @@ fn resolve_object_render_assets(
             size,
             alpha_cutoff,
         } => {
-            let texture = content.asset_server.load(texture.clone());
-            match resolve_extruded_sprite_assets(
-                texture,
-                ExtrudedSpriteGeometry {
+            let request = ExtrudedSpriteAssetRequest {
+                texture: content.asset_server.load(texture.clone()),
+                geometry: ExtrudedSpriteGeometry {
                     size: *size,
                     height: *height,
                     base_offset: *base_offset,
                     alpha_cutoff: *alpha_cutoff,
                 },
                 tint,
-                definition.unlit,
-                &assets.images,
-                &mut assets.meshes,
-                &mut assets.materials,
-                &mut assets.extruded_mesh_cache,
-                &mut assets.extruded_material_cache,
-            ) {
-                Ok(Some(assets)) => Some(assets),
+                unlit: definition.unlit,
+            };
+            let context = ExtrudedSpriteAssetContext {
+                images: &assets.images,
+                meshes: &mut assets.meshes,
+                materials: &mut assets.materials,
+                mesh_cache: &mut assets.extruded_mesh_cache,
+                material_cache: &mut assets.extruded_material_cache,
+            };
+            match resolve_extruded_sprite_assets(request, context) {
+                Ok(Some(resolved)) => Some(resolved),
                 Ok(None) => None,
                 Err(error) => {
-                    warn!("cannot build world-object extruded sprite {}: {error}", definition.id);
+                    warn!(
+                        "cannot build world-object extruded sprite {}: {error}",
+                        definition.id
+                    );
                     None
                 }
             }
