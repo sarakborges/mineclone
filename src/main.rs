@@ -115,10 +115,10 @@ fn run_game() {
             WorldObjectsPlugin,
             WorldItemsPlugin,
             BlockTargetingPlugin,
-            RusticWorkbenchPlugin,
             ToolsPlugin,
             HudPlugin,
         ))
+        .add_plugins(RusticWorkbenchPlugin)
         .run();
 }
 
