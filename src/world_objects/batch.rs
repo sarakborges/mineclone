@@ -20,7 +20,8 @@ use crate::{
         },
         object_primitives::{
             crossed_sprite_mesh, cuboid_set_mesh, resolve_object_primitive_material,
-            ObjectPrimitiveMaterialCache,
+            ObjectPrimitiveMaterialCache, ObjectPrimitiveMaterialContext,
+            ObjectPrimitiveMaterialRequest,
         },
     },
     voxel::chunk::VoxelChunk,
@@ -269,13 +270,17 @@ fn resolve_object_render_assets(
                 .or_insert_with(|| crossed_sprite_mesh(*width, *height, *base_offset, *planes))
                 .clone();
             let material = resolve_object_primitive_material(
-                content.asset_server.load(texture.clone()),
-                tint,
-                definition.unlit,
-                *alpha_cutoff,
-                true,
-                &mut assets.materials,
-                &mut assets.primitive_material_cache,
+                ObjectPrimitiveMaterialRequest {
+                    texture: content.asset_server.load(texture.clone()),
+                    tint,
+                    unlit: definition.unlit,
+                    alpha_cutoff: *alpha_cutoff,
+                    double_sided: true,
+                },
+                ObjectPrimitiveMaterialContext {
+                    materials: &mut assets.materials,
+                    cache: &mut assets.primitive_material_cache,
+                },
             );
             Some(ResolvedObjectRender {
                 geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),
@@ -293,13 +298,17 @@ fn resolve_object_render_assets(
                 .or_insert_with(|| cuboid_set_mesh(parts))
                 .clone();
             let material = resolve_object_primitive_material(
-                content.asset_server.load(texture.clone()),
-                tint,
-                definition.unlit,
-                *alpha_cutoff,
-                false,
-                &mut assets.materials,
-                &mut assets.primitive_material_cache,
+                ObjectPrimitiveMaterialRequest {
+                    texture: content.asset_server.load(texture.clone()),
+                    tint,
+                    unlit: definition.unlit,
+                    alpha_cutoff: *alpha_cutoff,
+                    double_sided: false,
+                },
+                ObjectPrimitiveMaterialContext {
+                    materials: &mut assets.materials,
+                    cache: &mut assets.primitive_material_cache,
+                },
             );
             Some(ResolvedObjectRender {
                 geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),

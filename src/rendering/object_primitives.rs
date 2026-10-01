@@ -34,38 +34,49 @@ pub(crate) struct ObjectPrimitiveMaterialCache(
     HashMap<ObjectPrimitiveMaterialKey, Handle<StandardMaterial>>,
 );
 
+pub(crate) struct ObjectPrimitiveMaterialRequest {
+    pub(crate) texture: Handle<Image>,
+    pub(crate) tint: Color,
+    pub(crate) unlit: bool,
+    pub(crate) alpha_cutoff: f32,
+    pub(crate) double_sided: bool,
+}
+
+pub(crate) struct ObjectPrimitiveMaterialContext<'a> {
+    pub(crate) materials: &'a mut Assets<StandardMaterial>,
+    pub(crate) cache: &'a mut ObjectPrimitiveMaterialCache,
+}
+
 pub(crate) fn resolve_object_primitive_material(
-    texture: Handle<Image>,
-    tint: Color,
-    unlit: bool,
-    alpha_cutoff: f32,
-    double_sided: bool,
-    materials: &mut Assets<StandardMaterial>,
-    cache: &mut ObjectPrimitiveMaterialCache,
+    request: ObjectPrimitiveMaterialRequest,
+    context: ObjectPrimitiveMaterialContext<'_>,
 ) -> Handle<StandardMaterial> {
-    let (tint, tint_key) = quantize_srgba(tint, MATERIAL_TINT_RGB_LEVELS);
+    let (tint, tint_key) = quantize_srgba(request.tint, MATERIAL_TINT_RGB_LEVELS);
     let key = ObjectPrimitiveMaterialKey {
-        texture: texture.id(),
+        texture: request.texture.id(),
         tint: tint_key,
-        unlit,
-        alpha_cutoff: alpha_cutoff.to_bits(),
-        double_sided,
+        unlit: request.unlit,
+        alpha_cutoff: request.alpha_cutoff.to_bits(),
+        double_sided: request.double_sided,
     };
-    if let Some(existing) = cache.0.get(&key) {
+    if let Some(existing) = context.cache.0.get(&key) {
         return existing.clone();
     }
 
-    let material = materials.add(StandardMaterial {
+    let mut material = StandardMaterial {
         base_color: tint,
-        base_color_texture: Some(texture),
-        alpha_mode: AlphaMode::Mask(alpha_cutoff),
+        base_color_texture: Some(request.texture),
+        alpha_mode: AlphaMode::Mask(request.alpha_cutoff),
         perceptual_roughness: 1.0,
-        unlit,
-        double_sided,
-        cull_mode: double_sided.then_some(None).flatten(),
+        unlit: request.unlit,
+        double_sided: request.double_sided,
         ..default()
-    });
-    cache.0.insert(key, material.clone());
+    };
+    if request.double_sided {
+        material.cull_mode = None;
+    }
+    let material = context.materials.add(material);
+    context.cache.0.insert(key, material.clone());
     material
 }
 
