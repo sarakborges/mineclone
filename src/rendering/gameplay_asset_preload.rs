@@ -57,7 +57,9 @@ impl GameplayAssetPreloads {
                 ObjectVisualDefinition::Model { path } => {
                     model_paths.insert(path.clone());
                 }
-                ObjectVisualDefinition::ExtrudedSprite { texture, .. } => {
+                ObjectVisualDefinition::ExtrudedSprite { texture, .. }
+                | ObjectVisualDefinition::CrossedSprite { texture, .. }
+                | ObjectVisualDefinition::CuboidSet { texture, .. } => {
                     image_paths.insert(texture.clone());
                 }
             }

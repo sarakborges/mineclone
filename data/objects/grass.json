@@ -13,13 +13,13 @@
   ],
   "target": {
     "size": [
+      0.72,
       0.62,
-      0.6,
-      0.56
+      0.72
     ],
     "centerOffset": [
       0,
-      0.29,
+      0.31,
       0
     ]
   },
@@ -28,8 +28,12 @@
   "receivesShadow": false,
   "dropSelf": false,
   "visual": {
-    "type": "model",
-    "path": "models/objects/grass/grass.glb"
+    "type": "crossedSprite",
+    "texture": "textures/objects/grass.png",
+    "width": 0.72,
+    "height": 0.62,
+    "planes": 3,
+    "alphaCutoff": 0.5
   },
   "interaction": "break",
   "positionJitter": [

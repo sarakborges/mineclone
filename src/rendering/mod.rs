@@ -15,6 +15,7 @@ mod sun_lighting;
 mod dynamic_lights;
 mod environment;
 mod fog;
+pub(crate) mod object_primitives;
 mod gameplay_asset_preload;
 mod lighting;
 mod mesh_allocator_diagnostics;
@@ -34,6 +35,7 @@ use extruded_sprite::ExtrudedSpritePlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
 use mesh_allocator_diagnostics::MeshAllocatorDiagnosticsPlugin;
+use object_primitives::ObjectPrimitivesPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
@@ -54,6 +56,7 @@ impl Plugin for RenderingPlugin {
             .add_plugins((
                 AssetUploadPlugin,
                 ExtrudedSpritePlugin,
+                ObjectPrimitivesPlugin,
                 MeshAllocatorDiagnosticsPlugin,
                 EnvironmentPlugin,
                 LightingPlugin,

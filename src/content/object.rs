@@ -12,8 +12,10 @@ use super::{
     registry::DefinitionMap,
 };
 
-const MAX_EXTRUDED_SPRITE_SIZE: f32 = 4.0;
-const MAX_EXTRUDED_SPRITE_OFFSET: f32 = 2.0;
+const MAX_OBJECT_VISUAL_SIZE: f32 = 4.0;
+const MAX_OBJECT_VISUAL_OFFSET: f32 = 2.0;
+const MAX_CROSSED_SPRITE_PLANES: u8 = 8;
+const MAX_CUBOID_SET_PARTS: usize = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -102,13 +104,62 @@ fn default_position_jitter() -> [f32; 2] {
     [0.0, 0.0]
 }
 
-
 fn default_extruded_sprite_size() -> [f32; 2] {
     [0.75, 0.75]
 }
 
+fn default_crossed_sprite_width() -> f32 {
+    0.75
+}
+
+fn default_crossed_sprite_planes() -> u8 {
+    2
+}
+
 fn default_alpha_cutoff() -> f32 {
     0.5
+}
+
+fn default_uv_rect() -> [f32; 4] {
+    [0.0, 0.0, 1.0, 1.0]
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectCuboidPartDefinition {
+    pub(crate) from: [f32; 3],
+    pub(crate) to: [f32; 3],
+    #[serde(default = "default_uv_rect")]
+    pub(crate) uv: [f32; 4],
+}
+
+impl ObjectCuboidPartDefinition {
+    fn validate(&self, object_id: &str, index: usize) {
+        assert!(
+            self.from
+                .iter()
+                .chain(self.to.iter())
+                .all(|value| value.is_finite() && value.abs() <= MAX_OBJECT_VISUAL_SIZE),
+            "object {object_id} cuboidSet parts[{index}] coordinates must be finite and within +/-{MAX_OBJECT_VISUAL_SIZE}"
+        );
+        assert!(
+            self.from
+                .iter()
+                .zip(self.to.iter())
+                .all(|(from, to)| from < to),
+            "object {object_id} cuboidSet parts[{index}] to must be greater than from on every axis"
+        );
+        assert!(
+            self.uv
+                .iter()
+                .all(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+            "object {object_id} cuboidSet parts[{index}] uv values must be between 0 and 1"
+        );
+        assert!(
+            self.uv[0] < self.uv[2] && self.uv[1] < self.uv[3],
+            "object {object_id} cuboidSet parts[{index}] uv must have positive width and height"
+        );
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -124,6 +175,24 @@ pub enum ObjectVisualDefinition {
         height: f32,
         #[serde(default = "default_extruded_sprite_size")]
         size: [f32; 2],
+        #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
+        alpha_cutoff: f32,
+    },
+    CrossedSprite {
+        texture: String,
+        #[serde(default, rename = "baseOffset")]
+        base_offset: f32,
+        #[serde(default = "default_crossed_sprite_width")]
+        width: f32,
+        height: f32,
+        #[serde(default = "default_crossed_sprite_planes")]
+        planes: u8,
+        #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
+        alpha_cutoff: f32,
+    },
+    CuboidSet {
+        texture: String,
+        parts: Vec<ObjectCuboidPartDefinition>,
         #[serde(default = "default_alpha_cutoff", rename = "alphaCutoff")]
         alpha_cutoff: f32,
     },
@@ -146,33 +215,81 @@ impl ObjectVisualDefinition {
                 size,
                 alpha_cutoff,
             } => {
-                *texture = texture.trim().to_owned();
-                assert!(
-                    is_safe_relative_asset_path(texture),
-                    "object {object_id} extruded sprite texture must be a safe relative asset path: {texture}"
-                );
-                assert!(
-                    base_offset.is_finite()
-                        && (0.0..=MAX_EXTRUDED_SPRITE_OFFSET).contains(base_offset),
-                    "object {object_id} extrudedSprite baseOffset must be finite and between 0 and {MAX_EXTRUDED_SPRITE_OFFSET}"
-                );
-                assert!(
-                    height.is_finite() && *height > 0.0 && *height <= MAX_EXTRUDED_SPRITE_SIZE,
-                    "object {object_id} extrudedSprite height must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
-                );
+                normalize_texture(texture, object_id, "extrudedSprite");
+                validate_base_offset(*base_offset, object_id, "extrudedSprite");
+                validate_positive_size(*height, object_id, "extrudedSprite height");
                 assert!(
                     size.iter().all(|value| {
-                        value.is_finite() && *value > 0.0 && *value <= MAX_EXTRUDED_SPRITE_SIZE
+                        value.is_finite() && *value > 0.0 && *value <= MAX_OBJECT_VISUAL_SIZE
                     }),
-                    "object {object_id} extrudedSprite size must be positive, finite and <= {MAX_EXTRUDED_SPRITE_SIZE}"
+                    "object {object_id} extrudedSprite size must be positive, finite and <= {MAX_OBJECT_VISUAL_SIZE}"
                 );
+                validate_alpha_cutoff(*alpha_cutoff, object_id, "extrudedSprite");
+            }
+            Self::CrossedSprite {
+                texture,
+                base_offset,
+                width,
+                height,
+                planes,
+                alpha_cutoff,
+            } => {
+                normalize_texture(texture, object_id, "crossedSprite");
+                validate_base_offset(*base_offset, object_id, "crossedSprite");
+                validate_positive_size(*width, object_id, "crossedSprite width");
+                validate_positive_size(*height, object_id, "crossedSprite height");
                 assert!(
-                    alpha_cutoff.is_finite() && (0.0..=1.0).contains(alpha_cutoff),
-                    "object {object_id} extrudedSprite alphaCutoff must be between 0 and 1"
+                    (2..=MAX_CROSSED_SPRITE_PLANES).contains(planes),
+                    "object {object_id} crossedSprite planes must be between 2 and {MAX_CROSSED_SPRITE_PLANES}"
                 );
+                validate_alpha_cutoff(*alpha_cutoff, object_id, "crossedSprite");
+            }
+            Self::CuboidSet {
+                texture,
+                parts,
+                alpha_cutoff,
+            } => {
+                normalize_texture(texture, object_id, "cuboidSet");
+                assert!(
+                    !parts.is_empty() && parts.len() <= MAX_CUBOID_SET_PARTS,
+                    "object {object_id} cuboidSet must contain between 1 and {MAX_CUBOID_SET_PARTS} parts"
+                );
+                for (index, part) in parts.iter().enumerate() {
+                    part.validate(object_id, index);
+                }
+                validate_alpha_cutoff(*alpha_cutoff, object_id, "cuboidSet");
             }
         }
     }
+}
+
+fn normalize_texture(texture: &mut String, object_id: &str, visual_type: &str) {
+    *texture = texture.trim().to_owned();
+    assert!(
+        is_safe_relative_asset_path(texture),
+        "object {object_id} {visual_type} texture must be a safe relative asset path: {texture}"
+    );
+}
+
+fn validate_base_offset(base_offset: f32, object_id: &str, visual_type: &str) {
+    assert!(
+        base_offset.is_finite() && (0.0..=MAX_OBJECT_VISUAL_OFFSET).contains(&base_offset),
+        "object {object_id} {visual_type} baseOffset must be finite and between 0 and {MAX_OBJECT_VISUAL_OFFSET}"
+    );
+}
+
+fn validate_positive_size(value: f32, object_id: &str, field: &str) {
+    assert!(
+        value.is_finite() && value > 0.0 && value <= MAX_OBJECT_VISUAL_SIZE,
+        "object {object_id} {field} must be positive, finite and <= {MAX_OBJECT_VISUAL_SIZE}"
+    );
+}
+
+fn validate_alpha_cutoff(alpha_cutoff: f32, object_id: &str, visual_type: &str) {
+    assert!(
+        alpha_cutoff.is_finite() && (0.0..=1.0).contains(&alpha_cutoff),
+        "object {object_id} {visual_type} alphaCutoff must be between 0 and 1"
+    );
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -316,7 +433,6 @@ impl ObjectRegistry {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::ObjectVisualDefinition;
@@ -351,6 +467,55 @@ mod tests {
         assert_eq!(height, 0.012);
         assert_eq!(size, [0.42, 0.42]);
         assert_eq!(alpha_cutoff, 0.5);
+    }
+
+    #[test]
+    fn crossed_sprite_visual_deserializes() {
+        let visual: ObjectVisualDefinition = serde_json::from_str(
+            r#"{
+                "type": "crossedSprite",
+                "texture": "textures/objects/grass.png",
+                "width": 0.72,
+                "height": 0.62,
+                "planes": 3
+            }"#,
+        )
+        .expect("crossed sprite visual should deserialize");
+
+        let ObjectVisualDefinition::CrossedSprite {
+            texture,
+            width,
+            height,
+            planes,
+            ..
+        } = visual
+        else {
+            panic!("expected crossedSprite visual");
+        };
+        assert_eq!(texture, "textures/objects/grass.png");
+        assert_eq!(width, 0.72);
+        assert_eq!(height, 0.62);
+        assert_eq!(planes, 3);
+    }
+
+    #[test]
+    fn cuboid_set_visual_deserializes() {
+        let visual: ObjectVisualDefinition = serde_json::from_str(
+            r#"{
+                "type": "cuboidSet",
+                "texture": "textures/objects/torch.png",
+                "parts": [
+                    {"from": [-0.08, 0.0, -0.08], "to": [0.08, 0.65, 0.08]}
+                ]
+            }"#,
+        )
+        .expect("cuboid set visual should deserialize");
+
+        let ObjectVisualDefinition::CuboidSet { texture, parts, .. } = visual else {
+            panic!("expected cuboidSet visual");
+        };
+        assert_eq!(texture, "textures/objects/torch.png");
+        assert_eq!(parts.len(), 1);
     }
 
     #[test]

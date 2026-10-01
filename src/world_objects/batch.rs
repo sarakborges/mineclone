@@ -18,6 +18,10 @@ use crate::{
             ExtrudedSpriteAssetRequest, ExtrudedSpriteGeometry, ExtrudedSpriteMaterialCache,
             ExtrudedSpriteMeshCache,
         },
+        object_primitives::{
+            crossed_sprite_mesh, cuboid_set_mesh, resolve_object_primitive_material,
+            ObjectPrimitiveMaterialCache,
+        },
     },
     voxel::chunk::VoxelChunk,
 };
@@ -35,12 +39,19 @@ pub(super) struct WorldObjectBatchAssets<'w> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
     extruded_mesh_cache: ResMut<'w, ExtrudedSpriteMeshCache>,
     extruded_material_cache: ResMut<'w, ExtrudedSpriteMaterialCache>,
+    primitive_material_cache: ResMut<'w, ObjectPrimitiveMaterialCache>,
     object_material_cache: ResMut<'w, ObjectMaterialCache>,
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
+enum ObjectBatchGeometryKey {
+    Asset(AssetId<Mesh>),
+    Definition(String),
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct ObjectBatchKey {
-    source_mesh: AssetId<Mesh>,
+    geometry: ObjectBatchGeometryKey,
     material: AssetId<StandardMaterial>,
     casts_shadow: bool,
     receives_shadow: bool,
@@ -50,6 +61,12 @@ struct ObjectBatchAccumulator {
     mesh: Mesh,
     material: Handle<StandardMaterial>,
     instances: usize,
+}
+
+struct ResolvedObjectRender {
+    geometry: ObjectBatchGeometryKey,
+    mesh: Mesh,
+    material: Handle<StandardMaterial>,
 }
 
 pub(super) struct BuiltWorldObjectChunk {
@@ -68,6 +85,7 @@ pub(super) fn build_world_object_chunk(
     let chunk_origin = coord * crate::voxel::chunk::CHUNK_SIZE as i32;
     let chunk_origin_vec = chunk_origin.as_vec3();
     let mut batches: HashMap<ObjectBatchKey, Vec<ObjectBatchAccumulator>> = HashMap::new();
+    let mut primitive_meshes: HashMap<String, Mesh> = HashMap::new();
     let mut object_count = 0usize;
 
     for (x, y, z, object) in chunk.object_voxels() {
@@ -84,15 +102,19 @@ pub(super) fn build_world_object_chunk(
             &content.biomes,
         );
 
-        let (source_mesh, material) =
-            resolve_object_render_assets(definition, tint, content, assets)?;
-        let base_mesh = assets.meshes.get(&source_mesh).cloned()?;
+        let resolved = resolve_object_render_assets(
+            definition,
+            tint,
+            content,
+            assets,
+            &mut primitive_meshes,
+        )?;
 
         transform.translation -= chunk_origin_vec;
-        let instance_mesh = base_mesh.transformed_by(transform);
+        let instance_mesh = resolved.mesh.transformed_by(transform);
         let key = ObjectBatchKey {
-            source_mesh: source_mesh.id(),
-            material: material.id(),
+            geometry: resolved.geometry,
+            material: resolved.material.id(),
             casts_shadow: definition.casts_shadow,
             receives_shadow: definition.receives_shadow,
         };
@@ -103,7 +125,7 @@ pub(super) fn build_world_object_chunk(
         {
             segments.push(ObjectBatchAccumulator {
                 mesh: instance_mesh,
-                material: material.clone(),
+                material: resolved.material.clone(),
                 instances: 1,
             });
         } else {
@@ -117,7 +139,7 @@ pub(super) fn build_world_object_chunk(
                 );
                 segments.push(ObjectBatchAccumulator {
                     mesh: instance_mesh,
-                    material: material.clone(),
+                    material: resolved.material.clone(),
                     instances: 1,
                 });
             } else {
@@ -165,7 +187,8 @@ fn resolve_object_render_assets(
     tint: Color,
     content: &WorldObjectSceneContent<'_>,
     assets: &mut WorldObjectBatchAssets<'_>,
-) -> Option<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    primitive_meshes: &mut HashMap<String, Mesh>,
+) -> Option<ResolvedObjectRender> {
     match &definition.visual {
         ObjectVisualDefinition::Model { path } => {
             let mesh: Handle<Mesh> = content.asset_server.load(
@@ -175,7 +198,7 @@ fn resolve_object_render_assets(
                 }
                 .from_asset(path.clone()),
             );
-            assets.meshes.get(&mesh)?;
+            let base_mesh = assets.meshes.get(&mesh)?.clone();
 
             let source_material: Handle<StandardMaterial> =
                 content.asset_server.load(format!("{path}#Material0/std"));
@@ -186,7 +209,11 @@ fn resolve_object_render_assets(
                 &mut assets.materials,
                 &mut assets.object_material_cache,
             )?;
-            Some((mesh, material))
+            Some(ResolvedObjectRender {
+                geometry: ObjectBatchGeometryKey::Asset(mesh.id()),
+                mesh: base_mesh,
+                material,
+            })
         }
         ObjectVisualDefinition::ExtrudedSprite {
             texture,
@@ -214,7 +241,11 @@ fn resolve_object_render_assets(
                 material_cache: &mut assets.extruded_material_cache,
             };
             match resolve_extruded_sprite_assets(request, context) {
-                Ok(Some(resolved)) => Some(resolved),
+                Ok(Some((mesh, material))) => Some(ResolvedObjectRender {
+                    geometry: ObjectBatchGeometryKey::Asset(mesh.id()),
+                    mesh: assets.meshes.get(&mesh)?.clone(),
+                    material,
+                }),
                 Ok(None) => None,
                 Err(error) => {
                     warn!(
@@ -224,6 +255,57 @@ fn resolve_object_render_assets(
                     None
                 }
             }
+        }
+        ObjectVisualDefinition::CrossedSprite {
+            texture,
+            base_offset,
+            width,
+            height,
+            planes,
+            alpha_cutoff,
+        } => {
+            let mesh = primitive_meshes
+                .entry(definition.id.clone())
+                .or_insert_with(|| crossed_sprite_mesh(*width, *height, *base_offset, *planes))
+                .clone();
+            let material = resolve_object_primitive_material(
+                content.asset_server.load(texture.clone()),
+                tint,
+                definition.unlit,
+                *alpha_cutoff,
+                true,
+                &mut assets.materials,
+                &mut assets.primitive_material_cache,
+            );
+            Some(ResolvedObjectRender {
+                geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),
+                mesh,
+                material,
+            })
+        }
+        ObjectVisualDefinition::CuboidSet {
+            texture,
+            parts,
+            alpha_cutoff,
+        } => {
+            let mesh = primitive_meshes
+                .entry(definition.id.clone())
+                .or_insert_with(|| cuboid_set_mesh(parts))
+                .clone();
+            let material = resolve_object_primitive_material(
+                content.asset_server.load(texture.clone()),
+                tint,
+                definition.unlit,
+                *alpha_cutoff,
+                false,
+                &mut assets.materials,
+                &mut assets.primitive_material_cache,
+            );
+            Some(ResolvedObjectRender {
+                geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),
+                mesh,
+                material,
+            })
         }
     }
 }
