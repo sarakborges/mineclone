@@ -1,5 +1,16 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-09-30 — Biome distribution, spawn and shoreline correction
+
+- Random-biome spawn no longer counts every member of an `exclusiveNeighborGroup` as a separate top-level spawn option. Mountain variants now share one spawn-family slot, so the five mountain surface variants no longer make mountain starts disproportionately likely.
+- Surface `size.max` enforcement was corrected to compare a candidate only against neighboring sites whose raw biome candidate is the same biome. The previous post-rebuild guard compared against unrelated neighboring biomes, causing the fallback path to reselect Plains/Ocean and allowing very long continuous regions.
+- The surface adjacency checks now sample the real macro-climate field at neighboring sites instead of synthesizing unrelated climate values from the cell hash.
+- The old ocean continentalness core was restored: when Ocean is fully inside its authored continentalness range, it is authoritative instead of competing with land candidates.
+- Wasteland, Witchwood and Enchanted Forest no longer have hard mutual `avoidNear` exclusions in the overworld dimension. Those exclusions were suppressing the biomes almost completely because the rule was evaluated against every bordering raw site.
+- Ocean shoreline margins are now explicitly forbidden from applying over any surface influence tagged `mountain`. Mountains, Gorge, Alps, Mountain Belt and Volcano carry the semantic `mountain` tag. This prevents a gradual mountain slope from passing the local `maxSlope` test block-by-block while still receiving ocean sand.
+- Validation: CI Rust validation is green on `c8a62387a468c6d173fb91bea1a78035e0ce9450` (Clippy + Check + content/localization/GLB audits).
+- Relevant commits: `c264683e384d1cd8a6c9c3504006a1033e5fa000`, `c8a62387a468c6d173fb91bea1a78035e0ce9450`.
+
 ## 2026-09-30 — 0.68.54 Geo embedded rock-cap correction
 
 - Geo normal + large no longer use a crown/band sitting above the slime.
