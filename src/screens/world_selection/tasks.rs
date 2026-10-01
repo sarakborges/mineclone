@@ -5,9 +5,8 @@ use std::{
     time::Instant,
 };
 
-use bevy::log::{info, warn};
-
 use crate::{
+    app::crash_log::{log_system_error, log_system_event, log_system_warn},
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
@@ -40,10 +39,10 @@ impl PendingWorldScan {
     pub(super) fn start(registries: SaveRegistries<'_>) -> io::Result<Self> {
         let copy_started = Instant::now();
         let owned = registries.owned_for_pruning();
-        info!(
-            "Saved-world catalog definitions copied on main thread: {:?}",
-            copy_started.elapsed()
-        );
+        log_system_event(format!(
+            "world_catalog.scan definitions_copied duration_ms={:.2}",
+            copy_started.elapsed().as_secs_f64() * 1_000.0,
+        ));
 
         let result: WorldScanResult = Arc::new(Mutex::new(None));
         let worker_result = Arc::clone(&result);
@@ -57,14 +56,20 @@ impl PendingWorldScan {
                 .unwrap_or_else(|_| {
                     Err(io::Error::other("saved-world verification worker panicked"))
                 });
-                info!(
-                    "Saved-world catalog verification: duration={:?}, successful={}, worlds={}",
-                    scan_started.elapsed(),
-                    verified.is_ok(),
-                    verified.as_ref().map_or(0, Vec::len)
-                );
+                let duration_ms = scan_started.elapsed().as_secs_f64() * 1_000.0;
+                match &verified {
+                    Ok(worlds) => log_system_event(format!(
+                        "world_catalog.scan success worlds={} duration_ms={duration_ms:.2}",
+                        worlds.len()
+                    )),
+                    Err(error) => log_system_error(format!(
+                        "world_catalog.scan failed duration_ms={duration_ms:.2} error={error}"
+                    )),
+                }
                 if let Ok(mut slot) = worker_result.lock() {
                     *slot = Some(verified);
+                } else {
+                    log_system_error("world_catalog.scan result_publish_failed reason=poisoned_mutex");
                 }
             })?;
 
@@ -163,10 +168,11 @@ impl PendingWorldLoad {
     pub(super) fn start(id: String, registries: SaveRegistries<'_>) -> io::Result<Self> {
         let copy_started = Instant::now();
         let owned = OwnedLoadContent::capture(registries);
-        info!(
-            "World {id} load definitions copied on main thread: {:?}",
-            copy_started.elapsed()
-        );
+        log_system_event(format!(
+            "world.load definitions_copied id={} duration_ms={:.2}",
+            id,
+            copy_started.elapsed().as_secs_f64() * 1_000.0,
+        ));
 
         let result: WorldLoadResult = Arc::new(Mutex::new(WorldLoadSlot::default()));
         let worker_result = Arc::clone(&result);
@@ -179,11 +185,15 @@ impl PendingWorldLoad {
                     load_world(&worker_id, owned.registries())
                 }))
                 .unwrap_or_else(|_| Err(io::Error::other("saved-world loading worker panicked")));
-                info!(
-                    "World {worker_id} load worker: duration={:?}, successful={}",
-                    load_started.elapsed(),
-                    loaded.is_ok()
-                );
+                let duration_ms = load_started.elapsed().as_secs_f64() * 1_000.0;
+                match &loaded {
+                    Ok(_) => log_system_event(format!(
+                        "world.load success id={worker_id} duration_ms={duration_ms:.2}"
+                    )),
+                    Err(error) => log_system_error(format!(
+                        "world.load failed id={worker_id} duration_ms={duration_ms:.2} error={error}"
+                    )),
+                }
                 let mut loaded = Some(loaded);
                 {
                     let mut slot = worker_result
@@ -192,6 +202,10 @@ impl PendingWorldLoad {
                     slot.complete = true;
                     if !slot.abandoned {
                         slot.result = loaded.take();
+                    } else {
+                        log_system_event(format!(
+                            "world.load discarded id={worker_id} reason=abandoned"
+                        ));
                     }
                 }
                 drop(loaded);
@@ -216,6 +230,7 @@ impl PendingWorldLoad {
     }
 
     pub(super) fn abandon(&self) {
+        log_system_event(format!("world.load cancel_requested id={}", self.id));
         // Cancellation and worker publication are serialized by THIS small
         // mutex. An already-completed large world is moved to a disposer rather
         // than being dropped on the input frame; a late result is discarded by
@@ -233,7 +248,10 @@ impl PendingWorldLoad {
                 .name("asteria-discard-world".to_owned())
                 .spawn(move || drop(stale))
         {
-            warn!("Could not start abandoned-world cleanup worker: {error}");
+            log_system_warn(format!(
+                "world.load abandoned_cleanup_worker_failed id={} error={error}",
+                self.id
+            ));
         }
     }
 }
