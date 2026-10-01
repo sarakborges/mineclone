@@ -514,7 +514,7 @@ fn stackable_layer_count(mask: MicroblockMask) -> Option<usize> {
     let edge = MICROBLOCK_EDGE as usize;
     let plane_area = edge * edge;
     let occupied = mask.occupied_count();
-    if occupied % plane_area != 0 {
+    if !occupied.is_multiple_of(plane_area) {
         return None;
     }
 
