@@ -62,6 +62,7 @@ pub(super) fn rasterize_material_pass(
                     let block_id = solid_block_id(
                         sample_position,
                         surface_depth,
+                        column.steep_surface,
                         density.volume_at(index),
                         density.volume_surface_depth_at(index),
                         &surface_materials,
