@@ -5,7 +5,7 @@ use crate::voxel::{
     deduplicated_queue::DeduplicatedQueue,
 };
 
-const MAX_RETIRED_SCAN_STEPS_PER_POLL: usize = 16;
+const MAX_RETIRED_SCAN_STEPS_PER_POLL: usize = 64;
 const MAX_RETIRED_RESULTS_BEFORE_YIELD: usize = 16;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -98,13 +98,20 @@ impl RetiredChunkQueue {
             self.scan.remaining -= 1;
 
             let world_coord = coord.as_ivec3();
+
+            // A chunk that became desired/retained again has cancelled its old
+            // retirement. Keeping that stale entry in the queue made it rotate
+            // forever during flight, inflating retired diagnostics and scan
+            // cost even though it was no longer eligible for eviction.
+            if desired.contains(&world_coord) || retained.contains(&world_coord) {
+                self.scan.queue_revision = self.queue.revision();
+                continue;
+            }
+
             let delta_x = i64::from(world_coord.x) - i64::from(center.x);
             let delta_z = i64::from(world_coord.z) - i64::from(center.y);
             let outside_radius = delta_x * delta_x + delta_z * delta_z > radius_squared;
-            if outside_radius
-                && !desired.contains(&world_coord)
-                && !retained.contains(&world_coord)
-            {
+            if outside_radius {
                 self.scan.queue_revision = self.queue.revision();
                 self.returned_since_yield += 1;
                 return Some(world_coord);
@@ -270,6 +277,30 @@ mod tests {
     }
 
     #[test]
+    fn stale_retired_entries_are_discarded_when_selected_again() {
+        let stale = IVec3::new(100, 0, 0);
+        let eligible = IVec3::new(101, 0, 0);
+        let mut queue = RetiredChunkQueue::default();
+        queue.enqueue(stale);
+        queue.enqueue(eligible);
+        let mut desired = HashSet::default();
+        desired.insert(stale);
+        let retained = HashSet::default();
+
+        assert_eq!(
+            queue.pop_outside_horizontal_radius(
+                ResidencySelectionRevision::default(),
+                IVec2::ZERO,
+                0,
+                &desired,
+                &retained,
+            ),
+            Some(eligible),
+        );
+        assert_eq!(queue.len(), 0);
+    }
+
+    #[test]
     fn exhausted_retired_scan_restarts_after_selection_revision_change() {
         let coord = IVec3::new(5, 0, 0);
         let mut queue = RetiredChunkQueue::default();
@@ -289,17 +320,9 @@ mod tests {
             ),
             None,
         );
+        assert_eq!(queue.len(), 0);
         retained.remove(&coord);
-        assert_eq!(
-            queue.pop_outside_horizontal_radius(
-                revision,
-                IVec2::ZERO,
-                0,
-                &desired,
-                &retained,
-            ),
-            None,
-        );
+        queue.enqueue(coord);
         assert_eq!(
             queue.pop_outside_horizontal_radius(
                 revision.next(),
