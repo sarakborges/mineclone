@@ -16,6 +16,7 @@ pub(crate) mod block_orientation;
 pub(crate) mod block_shape;
 pub(crate) mod builtin_ids;
 pub(crate) mod color;
+pub(crate) mod crafting_recipe;
 pub(crate) mod creature;
 pub(crate) mod day_night_cycle;
 pub(crate) mod day_night_phase;

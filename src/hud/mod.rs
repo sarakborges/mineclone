@@ -1,6 +1,7 @@
 mod block_icon;
 pub(crate) mod chat;
 mod character_info;
+mod crafting;
 mod crosshair;
 mod entity_card;
 mod entity_targeting;
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
 use chat::ChatHudPlugin;
 use character_info::CharacterInfoHudPlugin;
+use crafting::CraftingHudPlugin;
 use crosshair::CrosshairPlugin;
 use entity_targeting::EntityHudPlugin;
 use fps::FpsHudPlugin;
@@ -234,6 +236,7 @@ impl Plugin for HudPlugin {
             .add_plugins((
                 FluidImmersionTintPlugin,
                 CharacterInfoHudPlugin,
+                CraftingHudPlugin,
                 CrosshairPlugin,
                 HotbarHudPlugin,
                 InventoryHudPlugin,

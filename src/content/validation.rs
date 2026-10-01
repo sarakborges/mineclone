@@ -78,7 +78,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
         );
         assert!(
             content.tools.get(&layer.id).is_none(),
-            "content id {} cannot be both a layer and a tool",
+            "content id {} cannot be both a tool and a layer",
             layer.id
         );
         assert!(
@@ -125,6 +125,16 @@ pub(super) fn validate_content(content: &LoadedContent) {
             item.id
         );
         item.validate_references(&content.inventory_categories);
+    }
+
+    for recipe in content.crafting_recipes.iter() {
+        recipe.validate_references(&content.objects, |item_id| {
+            content.blocks.get(item_id).is_some()
+                || content.items.get(item_id).is_some()
+                || content.layers.get(item_id).is_some()
+                || content.objects.get(item_id).is_some()
+                || content.tools.get(item_id).is_some()
+        });
     }
 
     for recipe in content.world_recipes.iter() {

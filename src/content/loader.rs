@@ -2,14 +2,13 @@ use std::{ffi::OsStr, path::Path, time::Instant};
 
 use bevy::prelude::*;
 
-use crate::{
-    app::{crash_log::log_system_event, runtime_paths::data_root},
-};
+use crate::app::{crash_log::log_system_event, runtime_paths::data_root};
 
 use super::{
     attack::{AttackDefinition, AttackRegistry},
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
+    crafting_recipe::{CraftingRecipeDefinition, CraftingRecipeRegistry},
     creature::{CreatureDefinition, CreatureRegistry},
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
@@ -35,6 +34,7 @@ pub(crate) struct LoadedContent {
     pub attacks: AttackRegistry,
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
+    pub crafting_recipes: CraftingRecipeRegistry,
     pub creatures: CreatureRegistry,
     pub player: PlayerDefinition,
     pub dimensions: DimensionRegistry,
@@ -58,6 +58,7 @@ impl LoadedContent {
         commands.insert_resource(self.attacks);
         commands.insert_resource(self.biomes);
         commands.insert_resource(self.blocks);
+        commands.insert_resource(self.crafting_recipes);
         commands.insert_resource(self.creatures);
         commands.insert_resource(self.player);
         commands.insert_resource(self.dimensions);
@@ -145,6 +146,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content
             .inventory_categories
             .insert(read_json_definition::<InventoryCategoryDefinition>(path));
+    } else if path_has_component(path, "crafting_recipes") {
+        content
+            .crafting_recipes
+            .insert(read_json_definition::<CraftingRecipeDefinition>(path));
     } else if path_has_component(path, "items") {
         content
             .items

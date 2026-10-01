@@ -15,6 +15,7 @@ pub(crate) enum GameplayModalState {
     Closed,
     Inventory,
     CharacterInfo,
+    Crafting,
     BrushPalette,
 }
 
@@ -24,7 +25,10 @@ impl GameplayModalState {
     }
 
     pub(crate) const fn shows_inventory(self) -> bool {
-        matches!(self, Self::Inventory | Self::CharacterInfo)
+        matches!(
+            self,
+            Self::Inventory | Self::CharacterInfo | Self::Crafting
+        )
     }
 }
 
