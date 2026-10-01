@@ -1,4 +1,5 @@
 pub(crate) mod block_face;
+pub(crate) mod block_metadata;
 pub(crate) mod cell;
 pub(crate) mod chunk;
 pub(crate) mod chunk_archive;

@@ -1,13 +1,16 @@
 use crate::content::block_orientation::BlockOrientation;
 
-use super::{secondary_properties::SecondaryProperties, texture_rotation::TextureRotation};
+use super::{
+    secondary_properties::{BlockState, SecondaryProperties},
+    texture_rotation::TextureRotation,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct VoxelCell {
     pub block_id: &'static str,
     pub texture_rotation: TextureRotation,
     pub orientation: BlockOrientation,
-    secondary_properties: SecondaryProperties,
+    block_state: BlockState,
     microblock_layers: Option<&'static [u64; 8]>,
     microblock_transient: bool,
 }
@@ -26,7 +29,7 @@ impl VoxelCell {
             block_id,
             texture_rotation,
             orientation,
-            secondary_properties: SecondaryProperties::default(),
+            block_state: BlockState::default(),
             microblock_layers: None,
             microblock_transient: false,
         }
@@ -37,27 +40,52 @@ impl VoxelCell {
         self
     }
 
-    pub fn with_secondary_property(mut self, property: &str, value: &str) -> Self {
-        self.secondary_properties.set(property, value);
+    pub fn with_state(mut self, property: &str, value: &str) -> Self {
+        self.block_state.set(property, value);
         self
     }
 
-    pub fn without_secondary_property(mut self, property: &str) -> Self {
-        self.secondary_properties.remove(property);
+    pub fn without_state(mut self, property: &str) -> Self {
+        self.block_state.remove(property);
         self
     }
 
+    pub fn state(self, property: &str) -> Option<&'static str> {
+        self.block_state.get(property)
+    }
+
+    pub(crate) fn block_state(self) -> BlockState {
+        self.block_state
+    }
+
+    pub(crate) fn with_block_state(mut self, state: BlockState) -> Self {
+        self.block_state = state;
+        self
+    }
+
+    /// Compatibility API while callers migrate from the old terminology.
+    pub fn with_secondary_property(self, property: &str, value: &str) -> Self {
+        self.with_state(property, value)
+    }
+
+    /// Compatibility API while callers migrate from the old terminology.
+    pub fn without_secondary_property(self, property: &str) -> Self {
+        self.without_state(property)
+    }
+
+    /// Compatibility API while callers migrate from the old terminology.
     pub fn secondary_property(self, property: &str) -> Option<&'static str> {
-        self.secondary_properties.get(property)
+        self.state(property)
     }
 
+    /// Compatibility API while save/load callers migrate from the old terminology.
     pub(crate) fn secondary_properties(self) -> SecondaryProperties {
-        self.secondary_properties
+        self.block_state
     }
 
-    pub(crate) fn with_secondary_properties(mut self, properties: SecondaryProperties) -> Self {
-        self.secondary_properties = properties;
-        self
+    /// Compatibility API while save/load callers migrate from the old terminology.
+    pub(crate) fn with_secondary_properties(self, properties: SecondaryProperties) -> Self {
+        self.with_block_state(properties)
     }
 
     pub(crate) fn microblock_layers(self) -> Option<&'static [u64; 8]> {
@@ -76,5 +104,20 @@ impl VoxelCell {
         self.microblock_layers = layers;
         self.microblock_transient = layers.is_some() && transient;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VoxelCell;
+    use crate::voxel::texture_rotation::TextureRotation;
+
+    #[test]
+    fn canonical_block_state_api_preserves_compact_state() {
+        let cell = VoxelCell::new("stone", TextureRotation::Degrees0)
+            .with_state("variant", "mossy");
+
+        assert_eq!(cell.state("variant"), Some("mossy"));
+        assert_eq!(cell.secondary_property("variant"), Some("mossy"));
     }
 }
