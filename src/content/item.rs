@@ -109,19 +109,31 @@ pub(crate) fn display_name<'a>(
     item_id
 }
 
+pub(crate) struct ItemDisplayContext<'a> {
+    pub(crate) items: &'a ItemRegistry,
+    pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) layers: &'a LayerRegistry,
+    pub(crate) objects: &'a ObjectRegistry,
+    pub(crate) tools: &'a ToolRegistry,
+    pub(crate) fluids: &'a FluidRegistry,
+    pub(crate) localization: &'a UiLocalization,
+    pub(crate) language: Language,
+}
+
 pub(crate) fn display_name_with_metadata(
     item_id: &str,
     metadata: Option<(&str, &str)>,
-    items: &ItemRegistry,
-    blocks: &BlockRegistry,
-    layers: &LayerRegistry,
-    objects: &ObjectRegistry,
-    tools: &ToolRegistry,
-    fluids: &FluidRegistry,
-    localization: &UiLocalization,
-    language: Language,
+    context: &ItemDisplayContext<'_>,
 ) -> String {
-    let base_name = display_name(item_id, items, blocks, layers, objects, tools, language);
+    let base_name = display_name(
+        item_id,
+        context.items,
+        context.blocks,
+        context.layers,
+        context.objects,
+        context.tools,
+        context.language,
+    );
     if item_id != BUCKET_TOOL_ID {
         return base_name.to_owned();
     }
@@ -130,16 +142,19 @@ pub(crate) fn display_name_with_metadata(
         .filter(|(key, _)| *key == BUCKET_FLUID_METADATA_KEY)
         .map(|(_, value)| value);
     let content_name = match contained_fluid {
-        Some(fluid_definition_id) => fluids
+        Some(fluid_definition_id) => context
+            .fluids
             .id_of(fluid_definition_id)
-            .and_then(|fluid_id| fluids.get(fluid_id))
-            .map(|fluid| fluid.name.text(language))
+            .and_then(|fluid_id| context.fluids.get(fluid_id))
+            .map(|fluid| fluid.name.text(context.language))
             .unwrap_or(fluid_definition_id),
-        None => localization.text(language, "inventory.bucket.empty"),
+        None => context
+            .localization
+            .text(context.language, "inventory.bucket.empty"),
     };
 
-    localization.format(
-        language,
+    context.localization.format(
+        context.language,
         "inventory.bucket.variant",
         &[("bucket", base_name), ("content", content_name)],
     )
