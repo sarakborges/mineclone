@@ -8,7 +8,10 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::keybinds::Keybinds,
+    app::{
+        crash_log::{log_system_event, log_system_warn},
+        keybinds::Keybinds,
+    },
     hud::HudSettings,
     localization::{ActiveLanguage, Language},
     world::render_distance::{DEFAULT_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings},
@@ -31,23 +34,35 @@ impl GameConfig {
         let path = config_path();
         let source = match fs::read_to_string(&path) {
             Ok(source) => source,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Self::default(),
-            Err(error) => {
-                eprintln!(
-                    "failed to read game config {}: {error}; using defaults",
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                log_system_event(format!(
+                    "config.load defaults path={} reason=not_found",
                     path.display()
-                );
+                ));
+                return Self::default();
+            }
+            Err(error) => {
+                log_system_warn(format!(
+                    "config.load defaults path={} reason=read_failed error={error}",
+                    path.display()
+                ));
                 return Self::default();
             }
         };
 
-        serde_json::from_str(&source).unwrap_or_else(|error| {
-            eprintln!(
-                "failed to parse game config {}: {error}; using defaults",
-                path.display()
-            );
-            Self::default()
-        })
+        match serde_json::from_str(&source) {
+            Ok(config) => {
+                log_system_event(format!("config.load success path={}", path.display()));
+                config
+            }
+            Err(error) => {
+                log_system_warn(format!(
+                    "config.load defaults path={} reason=parse_failed error={error}",
+                    path.display()
+                ));
+                Self::default()
+            }
+        }
     }
 
     fn from_resources(
@@ -69,22 +84,28 @@ impl GameConfig {
     fn save(&self) {
         let path = config_path();
         let Some(parent) = path.parent() else {
-            eprintln!("game config path has no parent: {}", path.display());
+            log_system_warn(format!(
+                "config.save failed path={} reason=missing_parent",
+                path.display()
+            ));
             return;
         };
 
         if let Err(error) = fs::create_dir_all(parent) {
-            eprintln!(
-                "failed to create game config directory {}: {error}",
-                parent.display()
-            );
+            log_system_warn(format!(
+                "config.save failed path={} reason=create_directory_failed error={error}",
+                path.display()
+            ));
             return;
         }
 
         let source = match serde_json::to_string_pretty(self) {
             Ok(source) => format!("{source}\n"),
             Err(error) => {
-                eprintln!("failed to serialize game config: {error}");
+                log_system_warn(format!(
+                    "config.save failed path={} reason=serialize_failed error={error}",
+                    path.display()
+                ));
                 return;
             }
         };
@@ -93,8 +114,12 @@ impl GameConfig {
             return;
         }
 
-        if let Err(error) = fs::write(&path, source) {
-            eprintln!("failed to write game config {}: {error}", path.display());
+        match fs::write(&path, source) {
+            Ok(()) => log_system_event(format!("config.save success path={}", path.display())),
+            Err(error) => log_system_warn(format!(
+                "config.save failed path={} reason=write_failed error={error}",
+                path.display()
+            )),
         }
     }
 }
