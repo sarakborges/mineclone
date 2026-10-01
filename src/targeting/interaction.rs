@@ -20,8 +20,9 @@ use crate::{
         cell::VoxelCell,
         edit::{VoxelBlockMutation, VoxelTopologyRuntime},
         layer::LayerCell,
-        object::ObjectCell,
         log_variant::is_hollow_log_id,
+        microblock::{ArtisansKitResolution, MicroblockMask, MICROBLOCK_EDGE},
+        object::ObjectCell,
         raycast::VoxelHit,
         read::{VoxelRead, VoxelTopologyRead},
         texture_rotation::TextureRotation,
@@ -38,6 +39,8 @@ use super::{
     placement::placement_voxel,
     placement_orientation::PlacementOrientation,
 };
+
+const STACKABLE_LAYER_BLOCK_TAG: &str = "stackable_layer";
 
 #[derive(Message, Clone)]
 pub(crate) struct ToolUse {
@@ -105,7 +108,7 @@ struct TargetedVoxelEdit<'a> {
 enum VoxelEditOutcome {
     Consumed,
     LayerPlaced,
-    BlockPlaced,
+    BlockPlaced(IVec3),
     BlockBroken(VoxelBlockMutation),
 }
 
@@ -306,11 +309,11 @@ fn edit_targeted_block(
             consume_survival_placement(&mut input.hotbar, *game_mode);
             actions.viewmodel_animation.play_place();
         }
-        VoxelEditOutcome::BlockPlaced => {
+        VoxelEditOutcome::BlockPlaced(voxel) => {
             log_gameplay_event(format!(
                 "block.place block={} voxel={:?} mode={:?}",
                 selected_item.unwrap_or("<empty>"),
-                hit.voxel + hit.normal,
+                voxel,
                 game_mode
             ));
             consume_survival_placement(&mut input.hotbar, *game_mode);
@@ -439,10 +442,31 @@ fn edit_targeted_voxel(
     let Some(block_id) = request.selected_item else {
         return VoxelEditOutcome::Consumed;
     };
-    let Some(voxel) = placement_voxel(request.hit, &runtime.read(), request.player_position) else {
+    let Some(block) = blocks.get(block_id) else {
         return VoxelEditOutcome::Consumed;
     };
-    let Some(block) = blocks.get(block_id) else {
+
+    if request.right_pressed
+        && is_stackable_layer_block(block)
+        && request.hit.normal == IVec3::Y
+        && let Some(existing) = runtime.read().cell_at(request.hit.voxel)
+        && existing.block_id == block_id
+        && let Some(layer_count) = stackable_layer_count(MicroblockMask::from_cell(existing))
+        && layer_count < MICROBLOCK_EDGE as usize
+    {
+        let mask = stackable_layer_mask(layer_count + 1);
+        let cell = mask.apply_to_cell(existing, false);
+        return if runtime
+            .set_block(request.hit.voxel, Some(cell))
+            .is_some()
+        {
+            VoxelEditOutcome::BlockPlaced(request.hit.voxel)
+        } else {
+            VoxelEditOutcome::Consumed
+        };
+    }
+
+    let Some(voxel) = placement_voxel(request.hit, &runtime.read(), request.player_position) else {
         return VoxelEditOutcome::Consumed;
     };
     let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
@@ -451,12 +475,65 @@ fn edit_targeted_voxel(
     if let Some(biome_id) = request.biome_tint {
         cell = cell.with_secondary_property(BIOME_TINT_METADATA_KEY, biome_id);
     }
+    if is_stackable_layer_block(block) {
+        cell = stackable_layer_mask(1).apply_to_cell(cell, false);
+    }
 
     if runtime.set_block(voxel, Some(cell)).is_some() {
-        VoxelEditOutcome::BlockPlaced
+        VoxelEditOutcome::BlockPlaced(voxel)
     } else {
         VoxelEditOutcome::Consumed
     }
+}
+
+fn is_stackable_layer_block(block: &crate::content::block::BlockDefinition) -> bool {
+    block
+        .tags
+        .iter()
+        .any(|tag| tag == STACKABLE_LAYER_BLOCK_TAG)
+}
+
+fn stackable_layer_mask(layer_count: usize) -> MicroblockMask {
+    let edge = MICROBLOCK_EDGE as usize;
+    let mut mask = MicroblockMask::EMPTY;
+    for y in 0..layer_count.min(edge) {
+        for z in 0..edge {
+            for x in 0..edge {
+                mask.edit(
+                    [x, y, z],
+                    ArtisansKitResolution::ExtraThin,
+                    true,
+                );
+            }
+        }
+    }
+    mask
+}
+
+fn stackable_layer_count(mask: MicroblockMask) -> Option<usize> {
+    let edge = MICROBLOCK_EDGE as usize;
+    let plane_area = edge * edge;
+    let occupied = mask.occupied_count();
+    if occupied % plane_area != 0 {
+        return None;
+    }
+
+    let layer_count = occupied / plane_area;
+    if layer_count > edge {
+        return None;
+    }
+
+    for y in 0..edge {
+        let expected = y < layer_count;
+        for z in 0..edge {
+            for x in 0..edge {
+                if mask.contains([x, y, z]) != expected {
+                    return None;
+                }
+            }
+        }
+    }
+    Some(layer_count)
 }
 
 fn object_placement_attachment(
