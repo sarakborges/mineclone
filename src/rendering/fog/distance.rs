@@ -18,7 +18,7 @@ use crate::{
 const FOG_START_RADIUS_FRACTION: f32 = 0.78;
 const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
-const MIN_FOG_END_RADIUS_FRACTION: f32 = 0.80;
+const MIN_FOG_END_CHUNKS: f32 = 1.0;
 
 #[derive(Default)]
 pub(super) struct FogDistanceState {
@@ -89,20 +89,23 @@ pub(super) fn update_fog_distance(
     let guard_end =
         nearest_missing_column_distance(player_horizontal, &state.missing_columns)
             .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
-    let minimum_end = minimum_fog_end(render_distance_chunks);
+    let minimum_end = minimum_fog_end();
     let end = guard_end
         .map_or(target_end, |guard_end| guard_end.min(target_end))
         .max(minimum_end);
     let (start, end) = guarded_fog_distances(render_distance_chunks, end);
 
     for mut fog in &mut fogs {
+        // Linear fog reaches the fully opaque fog color at `end`. Allow the
+        // streaming guard to pull that point inward far enough to cover any
+        // not-yet-rendered chunk column instead of exposing the world void.
         fog.falloff = FogFalloff::Linear { start, end };
     }
 }
 
 fn guarded_fog_distances(render_distance_chunks: i32, end: f32) -> (f32, f32) {
     let (target_start, target_end) = fog_distances(render_distance_chunks);
-    let minimum_end = minimum_fog_end(render_distance_chunks);
+    let minimum_end = minimum_fog_end();
     let end = end.min(target_end).max(minimum_end);
     let target_span = target_end - target_start;
     let start = (end - target_span).max(0.0);
@@ -110,10 +113,8 @@ fn guarded_fog_distances(render_distance_chunks: i32, end: f32) -> (f32, f32) {
     (start, end)
 }
 
-fn minimum_fog_end(render_distance_chunks: i32) -> f32 {
-    render_distance_chunks.max(1) as f32
-        * CHUNK_SIZE as f32
-        * MIN_FOG_END_RADIUS_FRACTION
+fn minimum_fog_end() -> f32 {
+    MIN_FOG_END_CHUNKS * CHUNK_SIZE as f32
 }
 
 fn collect_missing_columns(
@@ -234,19 +235,21 @@ mod tests {
     fn guarded_fog_preserves_span_while_receding() {
         let render_distance_chunks = 12;
         let (target_start, target_end) = fog_distances(render_distance_chunks);
-        let minimum_end = minimum_fog_end(render_distance_chunks);
-        let (start, end) = guarded_fog_distances(render_distance_chunks, minimum_end);
+        let guarded_end = 4.0 * CHUNK_SIZE as f32;
+        let (start, end) = guarded_fog_distances(render_distance_chunks, guarded_end);
 
-        assert!((end - minimum_end).abs() < 0.001);
+        assert!((end - guarded_end).abs() < 0.001);
         assert!((end - start - (target_end - target_start)).abs() < 0.001);
         assert!(end < target_end);
     }
 
     #[test]
-    fn streaming_guard_never_pulls_fog_into_the_players_face_at_high_distance() {
+    fn streaming_guard_can_hide_missing_chunks_inside_previous_floor() {
         let render_distance_chunks = 24;
-        let (_, end) = guarded_fog_distances(render_distance_chunks, 0.0);
+        let guarded_end = 3.0 * CHUNK_SIZE as f32;
+        let (_, end) = guarded_fog_distances(render_distance_chunks, guarded_end);
 
-        assert!(end >= 24.0 * CHUNK_SIZE as f32 * 0.79);
+        assert!((end - guarded_end).abs() < 0.001);
+        assert!(end < render_distance_chunks as f32 * CHUNK_SIZE as f32 * 0.80);
     }
 }
