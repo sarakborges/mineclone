@@ -1,6 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
 use bevy::{platform::collections::HashMap, prelude::*};
+use smallvec::SmallVec;
 
 use crate::content::layer::LayerFace;
 
@@ -15,6 +16,8 @@ use super::{
 pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
+pub(crate) const MAX_OBJECTS_PER_VOXEL: usize = 8;
+pub(crate) type ObjectCells = SmallVec<[ObjectCell; 2]>;
 const BOUNDARY_FACE_COUNT: usize = 6;
 const FLUID_FRONTIER_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
 const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
@@ -189,8 +192,8 @@ fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
     Arc::clone(EMPTY_LAYERS.get_or_init(|| Arc::new(HashMap::new())))
 }
 
-fn shared_empty_objects() -> Arc<HashMap<u16, ObjectCell>> {
-    static EMPTY_OBJECTS: OnceLock<Arc<HashMap<u16, ObjectCell>>> = OnceLock::new();
+fn shared_empty_objects() -> Arc<HashMap<u16, ObjectCells>> {
+    static EMPTY_OBJECTS: OnceLock<Arc<HashMap<u16, ObjectCells>>> = OnceLock::new();
     Arc::clone(EMPTY_OBJECTS.get_or_init(|| Arc::new(HashMap::new())))
 }
 
@@ -199,7 +202,7 @@ pub struct VoxelChunk {
     blocks: Arc<BlockStorage>,
     fluids: Arc<FluidStorage>,
     layers: Arc<HashMap<u16, Vec<AttachedLayer>>>,
-    objects: Arc<HashMap<u16, ObjectCell>>,
+    objects: Arc<HashMap<u16, ObjectCells>>,
     light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
@@ -248,7 +251,7 @@ pub(crate) struct VoxelChunkStructureMut<'a> {
     blocks: &'a mut BlockStorage,
     fluids: &'a mut FluidStorage,
     layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
-    objects: &'a mut HashMap<u16, ObjectCell>,
+    objects: &'a mut HashMap<u16, ObjectCells>,
     block_palette_indices: HashMap<VoxelCell, u16>,
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
@@ -742,17 +745,25 @@ impl VoxelChunk {
             .map(|(&index, layers)| (index as usize, layers.as_slice()))
     }
 
-    pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
+    pub(crate) fn objects_at(&self, x: i32, y: i32, z: i32) -> &[ObjectCell] {
         if !in_bounds(x, y, z) {
-            return None;
+            return &[];
         }
-        self.objects.get(&(index(x as usize, y as usize, z as usize) as u16)).copied()
+        let key = index(x as usize, y as usize, z as usize) as u16;
+        self.objects.get(&key).map_or(&[], |objects| objects.as_slice())
+    }
+
+    pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
+        self.objects_at(x, y, z).first().copied()
     }
 
     pub(crate) fn object_entries(&self) -> impl Iterator<Item = (usize, ObjectCell)> + '_ {
-        self.objects
-            .iter()
-            .map(|(&index, &object)| (index as usize, object))
+        self.objects.iter().flat_map(|(&index, objects)| {
+            objects
+                .iter()
+                .copied()
+                .map(move |object| (index as usize, object))
+        })
     }
 
     pub(crate) fn object_voxels(
@@ -1004,16 +1015,16 @@ impl VoxelChunk {
 
     #[cfg(test)]
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
-        let _ = self.set_block_with_detached_object(x, y, z, block);
+        let _ = self.set_block_with_detached_objects(x, y, z, block);
     }
 
-    pub(crate) fn set_block_with_detached_object(
+    pub(crate) fn set_block_with_detached_objects(
         &mut self,
         x: usize,
         y: usize,
         z: usize,
         block: Option<VoxelCell>,
-    ) -> Option<ObjectCell> {
+    ) -> ObjectCells {
         let blocks = Arc::make_mut(&mut self.blocks);
         let layers = Arc::make_mut(&mut self.layers);
         let objects = Arc::make_mut(&mut self.objects);
@@ -1078,8 +1089,25 @@ impl VoxelChunk {
         set_object_in_storage(self.blocks.as_ref(), objects, x, y, z, object)
     }
 
-    pub(crate) fn remove_object(&mut self, x: usize, y: usize, z: usize) -> Option<ObjectCell> {
-        Arc::make_mut(&mut self.objects).remove(&(index(x, y, z) as u16))
+    pub(crate) fn remove_object(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        object: ObjectCell,
+    ) -> Option<ObjectCell> {
+        let key = index(x, y, z) as u16;
+        let objects = Arc::make_mut(&mut self.objects);
+        let (removed, became_empty) = {
+            let entries = objects.get_mut(&key)?;
+            let position = entries.iter().position(|candidate| *candidate == object)?;
+            let removed = entries.remove(position);
+            (removed, entries.is_empty())
+        };
+        if became_empty {
+            objects.remove(&key);
+        }
+        Some(removed)
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
@@ -1157,7 +1185,6 @@ impl VoxelChunk {
     pub(crate) fn clear_light(&mut self) {
         self.light = shared_dark_light();
     }
-
 }
 
 #[expect(
@@ -1168,7 +1195,7 @@ fn set_block_in_storage(
     blocks: &mut BlockStorage,
     fluids: &FluidStorage,
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
-    objects: &mut HashMap<u16, ObjectCell>,
+    objects: &mut HashMap<u16, ObjectCells>,
     block_count: &mut usize,
     layer_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
@@ -1177,23 +1204,23 @@ fn set_block_in_storage(
     y: usize,
     z: usize,
     block: Option<VoxelCell>,
-) -> Option<ObjectCell> {
+) -> ObjectCells {
     let index = index(x, y, z);
     let previous_block = blocks.get(index);
     let had_block = previous_block.is_some();
     let had_content = had_block || fluids.get(index).is_some();
     let has_block = block.is_some();
 
-    let detached_object =
+    let detached_objects =
         if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id) {
             if let Some(removed) = layers.remove(&(index as u16)) {
                 *layer_count = layer_count
                     .checked_sub(removed.len())
                     .expect("chunk layer count cannot underflow");
             }
-            objects.remove(&(index as u16))
+            objects.remove(&(index as u16)).unwrap_or_default()
         } else {
-            None
+            ObjectCells::new()
         };
 
     let has_content = has_block || fluids.get(index).is_some();
@@ -1207,7 +1234,7 @@ fn set_block_in_storage(
 
     blocks.set(index, block);
     refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
-    detached_object
+    detached_objects
 }
 
 #[expect(
@@ -1252,7 +1279,7 @@ fn add_layer_in_storage(
 
 fn set_object_in_storage(
     blocks: &BlockStorage,
-    objects: &mut HashMap<u16, ObjectCell>,
+    objects: &mut HashMap<u16, ObjectCells>,
     x: usize,
     y: usize,
     z: usize,
@@ -1262,11 +1289,11 @@ fn set_object_in_storage(
     if blocks.get(voxel_index).is_none() {
         return false;
     }
-    let key = voxel_index as u16;
-    if objects.get(&key).copied() == Some(object) {
+    let entries = objects.entry(voxel_index as u16).or_default();
+    if entries.contains(&object) || entries.len() >= MAX_OBJECTS_PER_VOXEL {
         return false;
     }
-    objects.insert(key, object);
+    entries.push(object);
     true
 }
 
@@ -1555,6 +1582,7 @@ mod tests {
         assert!(Arc::ptr_eq(&first.blocks, &second.blocks));
         assert!(Arc::ptr_eq(&first.fluids, &second.fluids));
         assert!(Arc::ptr_eq(&first.layers, &second.layers));
+        assert!(Arc::ptr_eq(&first.objects, &second.objects));
         assert!(Arc::ptr_eq(&first.light, &second.light));
         assert!(Arc::ptr_eq(
             &first.fluid_frontier_sources,
@@ -1597,7 +1625,6 @@ mod tests {
         let mut chunk = VoxelChunk::empty();
         let support = VoxelCell::new("stone", Default::default());
         chunk.set_block(2, 3, 4, Some(support));
-
         let moss = LayerCell::new("asteria:moss", Default::default());
         let lichen = LayerCell::new("asteria:lichen", Default::default());
         assert!(chunk.add_layer(2, 3, 4, LayerFace::Top, moss));
@@ -1611,6 +1638,35 @@ mod tests {
             Some(VoxelCell::new("dirt", Default::default())),
         );
         assert!(chunk.layers_at(2, 3, 4).is_empty());
+    }
+
+    #[test]
+    fn objects_stack_per_support_and_follow_support_identity() {
+        let mut chunk = VoxelChunk::empty();
+        let support = VoxelCell::new("stone", Default::default());
+        let pebble = ObjectCell::new(
+            "asteria:pebble",
+            crate::content::object::ObjectPlacementFace::Top,
+            Default::default(),
+        );
+        let stick = ObjectCell::new(
+            "asteria:stick",
+            crate::content::object::ObjectPlacementFace::Top,
+            Default::default(),
+        );
+        chunk.set_block(2, 3, 4, Some(support));
+        assert!(chunk.set_object(2, 3, 4, pebble));
+        assert!(chunk.set_object(2, 3, 4, stick));
+        assert!(!chunk.set_object(2, 3, 4, pebble));
+        assert_eq!(chunk.objects_at(2, 3, 4), &[pebble, stick]);
+
+        chunk.set_block(
+            2,
+            3,
+            4,
+            Some(VoxelCell::new("dirt", Default::default())),
+        );
+        assert!(chunk.objects_at(2, 3, 4).is_empty());
     }
 
     #[test]
