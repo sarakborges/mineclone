@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
-    gameplay::modal::GameplayModalState,
+    gameplay::{modal::GameplayModalState, storage_box::StorageInteractionConsumed},
     hud::chat::ChatState,
 };
 
@@ -13,6 +13,7 @@ pub(crate) struct WorldInteractionState<'w> {
     settings: Res<'w, State<SettingsState>>,
     modal: Res<'w, State<GameplayModalState>>,
     chat: Res<'w, ChatState>,
+    storage_consumed: Res<'w, StorageInteractionConsumed>,
 }
 
 impl WorldInteractionState<'_> {
@@ -22,6 +23,7 @@ impl WorldInteractionState<'_> {
             && *self.settings.get() == SettingsState::Closed
             && *self.modal.get() == GameplayModalState::Closed
             && !self.chat.is_open()
+            && !self.storage_consumed.is_consumed()
     }
 }
 

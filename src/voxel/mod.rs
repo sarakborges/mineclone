@@ -1,7 +1,13 @@
 pub(crate) mod block_face;
+// Block metadata/state plumbing is intentionally staged ahead of all runtime consumers.
+// Keep strict dead-code linting everywhere else while these modules are being wired in.
+#[allow(dead_code)]
 pub(crate) mod block_metadata;
+#[allow(dead_code)]
 pub(crate) mod block_state;
+#[allow(dead_code)]
 pub(crate) mod cell;
+#[allow(dead_code)]
 pub(crate) mod chunk;
 pub(crate) mod chunk_archive;
 pub(crate) mod chunk_disk;

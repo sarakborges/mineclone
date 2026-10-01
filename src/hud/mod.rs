@@ -11,6 +11,7 @@ mod inventory;
 mod item_icon;
 mod item_stack_count;
 mod player;
+mod storage_box;
 mod targeting;
 mod time;
 mod tool_icon;
@@ -34,6 +35,7 @@ use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
 use inventory::InventoryHudPlugin;
 use player::PlayerHudPlugin;
+use storage_box::StorageBoxHudPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
 use fluid_immersion::FluidImmersionTintPlugin;
@@ -240,6 +242,7 @@ impl Plugin for HudPlugin {
                 CrosshairPlugin,
                 HotbarHudPlugin,
                 InventoryHudPlugin,
+                StorageBoxHudPlugin,
                 PlayerHudPlugin,
                 ChatHudPlugin,
                 TimeHudPlugin,

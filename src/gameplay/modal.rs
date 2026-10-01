@@ -16,6 +16,7 @@ pub(crate) enum GameplayModalState {
     Inventory,
     CharacterInfo,
     BrushPalette,
+    StorageBox,
 }
 
 impl GameplayModalState {
@@ -25,6 +26,10 @@ impl GameplayModalState {
 
     pub(crate) const fn shows_inventory(self) -> bool {
         matches!(self, Self::Inventory | Self::CharacterInfo)
+    }
+
+    const fn unavailable_to_spectator(self) -> bool {
+        matches!(self, Self::Inventory | Self::CharacterInfo | Self::StorageBox)
     }
 }
 
@@ -57,7 +62,7 @@ fn close_spectator_inventory_modals(
     mut next_state: ResMut<NextState<GameplayModalState>>,
     mut focus: ResMut<InputFocus>,
 ) {
-    if !game_mode.is_spectator() || !state.get().shows_inventory() {
+    if !game_mode.is_spectator() || !state.get().unavailable_to_spectator() {
         return;
     }
 

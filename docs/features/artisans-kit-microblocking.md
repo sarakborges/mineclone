@@ -1,6 +1,6 @@
 # Artisan's Kit — microgeometria persistente e colocação por restauração
 
-Atualizado em 2026-09-17. A implementação inicial entrou em `develop` pela [PR #12](https://github.com/sarakborges/mineclone/pull/12), merge `cf7f3bd866b9e142e6cb8a73f5d1f61b080c2424`. O texto histórico anterior à integração permanece em [`docs/handoffs/handoff-artisan's kit-pre-merge-2026-09-17.md`](handoffs/handoff-artisan's kit-pre-merge-2026-09-17.md). Esta especificação descreve o código atual. `VERSION` raiz `0.21.0` representa a nova funcionalidade, **não** uma certificação de QA Windows; o formato de snapshot continua na versão 1 e `Cargo.toml` tem versão independente.
+Atualizado em 2026-09-17. A implementação inicial entrou em `develop` pela [PR #12](https://github.com/sarakborges/mineclone/pull/12), merge `cf7f3bd866b9e142e6cb8a73f5d1f61b080c2424`. O texto histórico anterior à integração permanece em [`docs/handoffs/handoff-artisan's kit-pre-merge-2026-09-17.md`](../handoffs/handoff-artisan's kit-pre-merge-2026-09-17.md). Esta especificação descreve o código atual. `VERSION` raiz `0.21.0` representa a nova funcionalidade, **não** uma certificação de QA Windows; o formato de snapshot continua na versão 1 e `Cargo.toml` tem versão independente.
 
 ## Geometria, controles e elegibilidade
 
@@ -26,7 +26,7 @@ A revisão de edição do mundo já é incrementada por modificações reais de 
 
 ## QA manual obrigatório — ainda NÃO EXECUTADO
 
-Use somente mundos descartáveis, siga [`docs/save-roundtrip-qa.md`](save-roundtrip-qa.md) e registre commit, Windows/FS, log, PASS/FAIL/NOT RUN e tempos reais. Em cada uma das três precisões, esculpa um bloco elegível, deixe uma forma assimétrica identificável e confira remoção e reposição. Tente colocar em bloco intacto, ar e macrobloco adjacente: não deve haver edição nem preview verde. Confira que o preview some quando a microcélula selecionada já está ocupada e que o Artisan's Kit acompanha animações de mão e alternância da hotbar como o Brush.
+Use somente mundos descartáveis, siga [`docs/qa/save-roundtrip.md`](../qa/save-roundtrip.md) e registre commit, Windows/FS, log, PASS/FAIL/NOT RUN e tempos reais. Em cada uma das três precisões, esculpa um bloco elegível, deixe uma forma assimétrica identificável e confira remoção e reposição. Tente colocar em bloco intacto, ar e macrobloco adjacente: não deve haver edição nem preview verde. Confira que o preview some quando a microcélula selecionada já está ocupada e que o Artisan's Kit acompanha animações de mão e alternância da hotbar como o Brush.
 
 Crie um tronco oco, uma placa de espessura 1/8, formas nos limites entre chunks e em coordenadas X/Z negativas. Afaste-se até arquivar os chunks, volte, force autosave ou use Leave, feche o processo, reinicie e carregue: forma, textura, rotação e propriedades devem continuar idênticas. Gere pelo menos duas gerações recuperáveis em cópia isolada, corrompa o texto `asteria:artisans_kit_mask` na geração mais recente e confirme fallback para a anterior, sem cubo cheio inesperado. Verifique também saves pré-Artisan's Kit sem máscara. Não execute `cargo test` sem autorização explícita.
 

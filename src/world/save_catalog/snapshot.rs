@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     content::fluid::FluidRegistry,
     creatures::SavedCreature,
+    gameplay::storage_box::SavedStorageBox,
     player::item_stack::SavedItemStack,
 };
 
@@ -67,6 +68,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<SavedItemStack>>,
     pub(crate) selected_hotbar_slot: usize,
+    pub(crate) storage_boxes: Vec<SavedStorageBox>,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
 }
@@ -91,6 +93,8 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) tick_in_day: u64,
     pub(super) inventory: Vec<Option<SavedItemStack>>,
     pub(super) selected_hotbar_slot: usize,
+    #[serde(default)]
+    pub(super) storage_boxes: Vec<SavedStorageBox>,
     pub(super) fluid_updates: SavedFluidUpdates,
     pub(super) creatures: Vec<SavedCreature>,
 }
@@ -113,6 +117,7 @@ pub(super) struct DiskWorldSnapshot<'a> {
     tick_in_day: u64,
     inventory: &'a [Option<SavedItemStack>],
     selected_hotbar_slot: usize,
+    storage_boxes: &'a [SavedStorageBox],
     fluid_updates: &'a SavedFluidUpdates,
     creatures: &'a [SavedCreature],
 }
@@ -135,6 +140,7 @@ impl StoredWorldSnapshot {
             tick_in_day: self.tick_in_day,
             inventory: self.inventory,
             selected_hotbar_slot: self.selected_hotbar_slot,
+            storage_boxes: self.storage_boxes,
             fluid_updates: self.fluid_updates,
             creatures: self.creatures,
         }
@@ -156,6 +162,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<SavedItemStack>>,
     pub(crate) selected_hotbar_slot: usize,
+    pub(crate) storage_boxes: Vec<SavedStorageBox>,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) pending_fluids: &'a PendingFluidUpdates,
     pub(crate) world_tick: u64,
@@ -181,6 +188,7 @@ impl WorldSnapshot {
             tick_in_day: self.tick_in_day,
             inventory: &self.inventory,
             selected_hotbar_slot: self.selected_hotbar_slot,
+            storage_boxes: &self.storage_boxes,
             fluid_updates: &self.fluid_updates,
             creatures: &self.creatures,
         }
@@ -225,6 +233,7 @@ impl WorldSnapshot {
             tick_in_day: source.tick_in_day,
             inventory: source.inventory,
             selected_hotbar_slot: source.selected_hotbar_slot,
+            storage_boxes: source.storage_boxes,
             fluid_updates: source
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
@@ -255,6 +264,7 @@ mod tests {
             tick_in_day: 0,
             inventory: Vec::new(),
             selected_hotbar_slot: 0,
+            storage_boxes: Vec::new(),
             fluid_updates: SavedFluidUpdates::default(),
             creatures: Vec::new(),
         };
