@@ -1,4 +1,5 @@
 mod banner;
+mod compass;
 mod coordinates;
 mod layout;
 mod named;
@@ -10,6 +11,7 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     world::{biome::CurrentBiome, dimension::CurrentDimension},
 };
+use compass::update_compass_hud;
 use coordinates::update_coordinates_hud;
 use layout::spawn_world_hud;
 use named::{BiomeHudText, DimensionHudText, update_localized_name_hud};
@@ -29,6 +31,7 @@ impl Plugin for WorldHudPlugin {
                     >,
                     update_localized_name_hud::<CurrentBiome, BiomeRegistry, BiomeHudText>,
                     update_coordinates_hud,
+                    update_compass_hud,
                 )
                     .run_if(in_state(GameState::Gameplay)),
             );
