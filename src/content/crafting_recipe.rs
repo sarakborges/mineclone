@@ -26,7 +26,7 @@ pub(crate) struct CraftingRecipeResultDefinition {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CraftingRecipeDefinition {
     pub(crate) id: String,
-    pub(crate) station: String,
+    pub(crate) environment: String,
     pub(crate) ingredients: Vec<CraftingRecipeIngredientDefinition>,
     pub(crate) result: CraftingRecipeResultDefinition,
 }
@@ -34,13 +34,13 @@ pub(crate) struct CraftingRecipeDefinition {
 impl CraftingRecipeDefinition {
     fn normalize_and_validate(&mut self) {
         self.id = self.id.trim().to_owned();
-        self.station = self.station.trim().to_owned();
+        self.environment = self.environment.trim().to_owned();
         self.result.item = self.result.item.trim().to_owned();
 
         assert!(!self.id.is_empty(), "crafting recipe id cannot be empty");
         assert!(
-            !self.station.is_empty(),
-            "crafting recipe {} station cannot be empty",
+            !self.environment.is_empty(),
+            "crafting recipe {} environment cannot be empty",
             self.id
         );
         assert!(
@@ -87,15 +87,9 @@ impl CraftingRecipeDefinition {
 
     pub(crate) fn validate_references(
         &self,
-        objects: &ObjectRegistry,
+        _objects: &ObjectRegistry,
         item_exists: impl Fn(&str) -> bool,
     ) {
-        assert!(
-            objects.get(&self.station).is_some(),
-            "crafting recipe {} references missing station object {}",
-            self.id,
-            self.station
-        );
         for ingredient in &self.ingredients {
             assert!(
                 item_exists(&ingredient.item),
@@ -128,13 +122,13 @@ impl CraftingRecipeRegistry {
         self.definitions.get(id)
     }
 
-    pub(crate) fn for_station<'a>(
+    pub(crate) fn for_environment<'a>(
         &'a self,
-        station: &'a str,
+        environment: &'a str,
     ) -> impl Iterator<Item = &'a CraftingRecipeDefinition> + 'a {
         self.definitions
             .values()
-            .filter(move |definition| definition.station == station)
+            .filter(move |definition| definition.environment == environment)
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &CraftingRecipeDefinition> {
@@ -151,7 +145,7 @@ mod tests {
         let recipe: CraftingRecipeDefinition = serde_json::from_str(
             r#"{
                 "id": "asteria:test_hatchet",
-                "station": "asteria:rustic_workbench",
+                "environment": "inventory",
                 "ingredients": [
                     {"item": "asteria:pebble", "quantity": 2},
                     {"item": "asteria:stick", "quantity": 3}
@@ -161,7 +155,7 @@ mod tests {
         )
         .expect("crafting recipe should deserialize");
 
-        assert_eq!(recipe.station, "asteria:rustic_workbench");
+        assert_eq!(recipe.environment, "inventory");
         assert_eq!(recipe.ingredients[0].quantity, 2);
         assert_eq!(recipe.result.item, "asteria:hatchet_rustic");
         assert_eq!(recipe.result.quantity, 1);

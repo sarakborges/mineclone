@@ -15,35 +15,29 @@ use crate::{
         tool::ToolRegistry,
         tool_id::intern_tool_id,
     },
-    gameplay::{availability::world_interaction_available, modal::GameplayModalState},
+    gameplay::modal::GameplayModalState,
     localization::ActiveLanguage,
     player::{
+        camera::GameplayCamera,
+        game_mode::GameMode,
         hotbar::{INVENTORY_SLOT_COUNT, PlayerHotbar},
-        inventory::InventoryCursor,
         item_stack::{ItemStack, MAX_STACK_SIZE},
     },
-    targeting::block::BlockTargetingSet,
     ui::{
         button::{self, ButtonVariant},
         surface, typography,
     },
-    world_objects::TargetedWorldObject,
 };
 
-use super::inventory::{CharacterInfoInventoryRoot, CharacterInfoInventorySpawn};
-
-const RUSTIC_WORKBENCH_ID: &str = "asteria:rustic_workbench";
-const RECIPE_LIST_WIDTH: f32 = 280.0;
-const RECIPE_DETAILS_WIDTH: f32 = 520.0;
-const CURRENT_WORK_STATION_WIDTH: f32 = 220.0;
-const CRAFTING_PANEL_GAP: f32 = 18.0;
-const CRAFTING_SECTION_GAP: f32 = 12.0;
+const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
+const CRAFTING_PANEL_WIDTH: f32 = 380.0;
+const CRAFTING_PANEL_GAP: f32 = 12.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
 const CRAFTING_PANEL_BORDER: f32 = 2.0;
+const CRAFTING_SCREEN_PADDING: f32 = 24.0;
 
 #[derive(Resource, Default)]
 struct CraftingSession {
-    station: Option<String>,
     selected_recipe: Option<String>,
     rebuild_requested: bool,
 }
@@ -132,21 +126,14 @@ impl Plugin for CraftingHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CraftingSession>()
             .add_systems(
-                Update,
-                open_rustic_workbench
-                    .before(BlockTargetingSet::Interaction)
-                    .run_if(world_interaction_available),
+                OnEnter(GameplayModalState::Inventory),
+                spawn_crafting_screen
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(survival_mode),
             )
             .add_systems(
-                OnEnter(GameplayModalState::Crafting),
-                spawn_crafting_screen.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnExit(GameplayModalState::Crafting),
-                (
-                    reset_resource::<CraftingSession>,
-                    reset_resource::<InventoryCursor>,
-                ),
+                OnExit(GameplayModalState::Inventory),
+                reset_resource::<CraftingSession>,
             )
             .add_systems(
                 Update,
@@ -158,52 +145,27 @@ impl Plugin for CraftingHudPlugin {
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(GameplayModalState::Crafting)),
+                    .run_if(in_state(GameplayModalState::Inventory))
+                    .run_if(survival_mode),
             );
     }
 }
 
-fn open_rustic_workbench(
-    buttons: Res<ButtonInput<MouseButton>>,
-    targeted: Res<TargetedWorldObject>,
-    mut session: ResMut<CraftingSession>,
-    mut next_modal: ResMut<NextState<GameplayModalState>>,
-) {
-    if !buttons.just_pressed(MouseButton::Right) {
-        return;
-    }
-    let Some(target) = targeted.0 else {
-        return;
-    };
-    if target.object.object_id != RUSTIC_WORKBENCH_ID {
-        return;
-    }
-
-    session.station = Some(RUSTIC_WORKBENCH_ID.to_owned());
-    session.selected_recipe = None;
-    session.rebuild_requested = false;
-    next_modal.set(GameplayModalState::Crafting);
+fn survival_mode(game_mode: Single<&GameMode, With<GameplayCamera>>) -> bool {
+    **game_mode == GameMode::Survival
 }
 
 fn spawn_crafting_screen(
     mut commands: Commands,
-    mut inventory: CharacterInfoInventorySpawn,
     content: CraftingContent,
     hotbar: Res<PlayerHotbar>,
     mut session: ResMut<CraftingSession>,
 ) {
-    spawn_crafting_root(
-        &mut commands,
-        &mut inventory,
-        &content,
-        &hotbar,
-        &mut session,
-    );
+    spawn_crafting_root(&mut commands, &content, &hotbar, &mut session);
 }
 
 fn rebuild_crafting_screen(
     mut commands: Commands,
-    mut inventory: CharacterInfoInventorySpawn,
     content: CraftingContent,
     hotbar: Res<PlayerHotbar>,
     mut session: ResMut<CraftingSession>,
@@ -217,27 +179,19 @@ fn rebuild_crafting_screen(
     for root in &roots {
         commands.entity(root).despawn();
     }
-    spawn_crafting_root(
-        &mut commands,
-        &mut inventory,
-        &content,
-        &hotbar,
-        &mut session,
-    );
+    spawn_crafting_root(&mut commands, &content, &hotbar, &mut session);
 }
 
 fn spawn_crafting_root(
     commands: &mut Commands,
-    inventory: &mut CharacterInfoInventorySpawn<'_, '_>,
     content: &CraftingContent<'_>,
     hotbar: &PlayerHotbar,
     session: &mut CraftingSession,
 ) {
-    let station = session
-        .station
-        .clone()
-        .unwrap_or_else(|| RUSTIC_WORKBENCH_ID.to_owned());
-    let mut recipes = content.recipes.for_station(&station).collect::<Vec<_>>();
+    let mut recipes = content
+        .recipes
+        .for_environment(INVENTORY_CRAFTING_ENVIRONMENT)
+        .collect::<Vec<_>>();
     recipes.sort_by_key(|recipe| recipe.id.clone());
 
     let selection_valid = session
@@ -248,48 +202,37 @@ fn spawn_crafting_root(
         session.selected_recipe = recipes.first().map(|recipe| recipe.id.clone());
     }
 
-    let selected_recipe = session
-        .selected_recipe
-        .as_deref()
-        .and_then(|id| content.recipes.get(id));
+    let selected_recipe = session.selected_recipe.as_deref().and_then(|selected| {
+        recipes
+            .iter()
+            .copied()
+            .find(|recipe| recipe.id == selected)
+    });
 
     commands
         .spawn((
             CraftingRoot,
-            CharacterInfoInventoryRoot,
             Node {
                 position_type: PositionType::Absolute,
                 left: px(0),
                 top: px(0),
                 width: percent(100),
                 height: percent(100),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
+                padding: UiRect::all(px(CRAFTING_SCREEN_PADDING)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::FlexStart,
                 justify_content: JustifyContent::Center,
-                column_gap: px(CRAFTING_PANEL_GAP),
+                row_gap: px(CRAFTING_PANEL_GAP),
                 ..default()
             },
             GlobalZIndex(100),
             Pickable::IGNORE,
-            DespawnOnExit(GameplayModalState::Crafting),
+            DespawnOnExit(GameplayModalState::Inventory),
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
             spawn_recipe_list(root, &recipes, session, content);
-            root.spawn((
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::FlexStart,
-                    row_gap: px(CRAFTING_PANEL_GAP),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ))
-            .with_children(|right| {
-                spawn_recipe_details(right, selected_recipe, content, hotbar);
-                inventory.spawn_player_only(right);
-            });
-            spawn_current_work_station(root, &station, content);
+            spawn_recipe_details(root, selected_recipe, content, hotbar);
         });
 }
 
@@ -301,13 +244,12 @@ fn spawn_recipe_list(
 ) {
     root.spawn((
         surface::hud_container(Node {
-            width: px(RECIPE_LIST_WIDTH),
-            min_height: px(420),
+            width: px(CRAFTING_PANEL_WIDTH),
             padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
             border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_SECTION_GAP),
+            row_gap: px(CRAFTING_PANEL_GAP),
             ..default()
         }),
         Pickable::IGNORE,
@@ -343,13 +285,13 @@ fn spawn_recipe_details(
 ) {
     root.spawn((
         surface::hud_container(Node {
-            width: px(RECIPE_DETAILS_WIDTH),
+            width: px(CRAFTING_PANEL_WIDTH),
             min_height: px(220),
             padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
             border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_SECTION_GAP),
+            row_gap: px(CRAFTING_PANEL_GAP),
             ..default()
         }),
         Pickable::IGNORE,
@@ -412,35 +354,6 @@ fn spawn_recipe_details(
     });
 }
 
-fn spawn_current_work_station(
-    root: &mut ChildSpawnerCommands,
-    station: &str,
-    content: &CraftingContent<'_>,
-) {
-    root.spawn((
-        surface::hud_container(Node {
-            width: px(CURRENT_WORK_STATION_WIDTH),
-            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_SECTION_GAP),
-            ..default()
-        }),
-        Pickable::IGNORE,
-    ))
-    .with_children(|panel| {
-        panel.spawn((
-            typography::hud_heading("Current Work Station"),
-            Pickable::IGNORE,
-        ));
-        panel.spawn((
-            typography::hud_subheading(content.item_name(station)),
-            Pickable::IGNORE,
-        ));
-    });
-}
-
 fn select_crafting_recipe(
     interactions: RecipeSelectionInteractionQuery,
     mut session: ResMut<CraftingSession>,
@@ -470,6 +383,10 @@ fn handle_craft_clicks(
             set_status(&mut status, "Recipe unavailable.");
             continue;
         };
+        if recipe.environment != INVENTORY_CRAFTING_ENVIRONMENT {
+            set_status(&mut status, "Recipe unavailable in this environment.");
+            continue;
+        }
         if !recipe
             .ingredients
             .iter()
@@ -516,8 +433,8 @@ fn handle_craft_clicks(
         let result_name = content.item_name(&recipe.result.item);
         set_status(&mut status, &format!("Crafted {result_name}."));
         log_gameplay_event(format!(
-            "craft station={} recipe={} result={} quantity={}",
-            recipe.station, recipe.id, recipe.result.item, recipe.result.quantity
+            "craft environment={} recipe={} result={} quantity={}",
+            recipe.environment, recipe.id, recipe.result.item, recipe.result.quantity
         ));
     }
 }

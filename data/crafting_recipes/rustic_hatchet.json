@@ -1,6 +1,6 @@
 {
   "id": "asteria:rustic_hatchet",
-  "station": "asteria:rustic_workbench",
+  "environment": "inventory",
   "ingredients": [
     {
       "item": "asteria:pebble",
