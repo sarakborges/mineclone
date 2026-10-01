@@ -44,6 +44,26 @@ pub(crate) fn block_display_face_points_for_height(
     block_display_face_geometry(face, height).points()
 }
 
+pub(crate) fn block_display_face_basis(face: BlockFace) -> (Vec4, Vec4) {
+    block_display_face_basis_for_height(face, 1.0)
+}
+
+pub(crate) fn block_display_face_basis_for_height(
+    face: BlockFace,
+    height: f32,
+) -> (Vec4, Vec4) {
+    let geometry = block_display_face_geometry(face, height);
+    (
+        Vec4::new(
+            geometry.origin.x,
+            geometry.origin.y,
+            geometry.axis_u.x,
+            geometry.axis_u.y,
+        ),
+        Vec4::new(geometry.axis_v.x, geometry.axis_v.y, 0.0, 0.0),
+    )
+}
+
 pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
     match face {
         BlockFace::Top => 1.0,
