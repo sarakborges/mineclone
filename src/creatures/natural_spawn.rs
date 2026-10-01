@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_diagnostic, log_gameplay_event, log_gameplay_warn},
     content::{
         biome::{BiomeRegistry, CreatureSpawnRule},
         creature::CreatureRegistry,
@@ -10,10 +10,7 @@ use crate::{
     entity::EntityHealth,
     localization::ActiveLanguage,
     player::camera::GameplayCamera,
-    voxel::{
-        coordinates::chunk_coord_from_position,
-        world::VoxelWorld,
-    },
+    voxel::{coordinates::chunk_coord_from_position, world::VoxelWorld},
     world::{
         biome_field::BiomeField,
         dimension::{CurrentDimension, DimensionEntityCounts},
@@ -28,6 +25,7 @@ use crate::gameplay::random::next_u32;
 use super::{CreatureInstance, spawn_creature_at};
 
 const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
+const NATURAL_SPAWN_DIAGNOSTIC_INTERVAL: f32 = 10.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
 const NATURAL_SPAWN_MAX_DISTANCE: f32 = 32.0;
 const NATURAL_SPAWN_ATTEMPTS: usize = 8;
@@ -43,9 +41,70 @@ type NaturalSpawnCreatures<'w, 's> = Query<
 >;
 
 #[derive(Default)]
+struct NaturalSpawnCounters {
+    cycles: u64,
+    candidate_attempts: u64,
+    successes: u64,
+    dimension_cap: u64,
+    missing_dimension: u64,
+    no_ground: u64,
+    missing_biome: u64,
+    no_eligible_rule: u64,
+    light_rejected: u64,
+    spacing_rejected: u64,
+    unloaded_rejected: u64,
+    fluid_rejected: u64,
+    spawn_errors: u64,
+}
+
+impl NaturalSpawnCounters {
+    fn has_activity(&self) -> bool {
+        self.cycles > 0
+            || self.candidate_attempts > 0
+            || self.successes > 0
+            || self.dimension_cap > 0
+            || self.missing_dimension > 0
+            || self.spawn_errors > 0
+    }
+}
+
+#[derive(Default)]
 pub(super) struct NaturalSpawnState {
     seconds_until_attempt: f32,
     random_state: u32,
+    diagnostic_elapsed: f32,
+    counters: NaturalSpawnCounters,
+}
+
+impl NaturalSpawnState {
+    fn advance_diagnostics(&mut self, delta_seconds: f32) {
+        self.diagnostic_elapsed += delta_seconds;
+        if self.diagnostic_elapsed < NATURAL_SPAWN_DIAGNOSTIC_INTERVAL {
+            return;
+        }
+        self.diagnostic_elapsed = 0.0;
+        if !self.counters.has_activity() {
+            return;
+        }
+
+        let counters = std::mem::take(&mut self.counters);
+        log_diagnostic(format!(
+            "natural_spawn cycles={} candidate_attempts={} successes={} dimension_cap={} missing_dimension={} no_ground={} missing_biome={} no_eligible_rule={} light_rejected={} spacing_rejected={} unloaded_rejected={} fluid_rejected={} spawn_errors={}",
+            counters.cycles,
+            counters.candidate_attempts,
+            counters.successes,
+            counters.dimension_cap,
+            counters.missing_dimension,
+            counters.no_ground,
+            counters.missing_biome,
+            counters.no_eligible_rule,
+            counters.light_rejected,
+            counters.spacing_rejected,
+            counters.unloaded_rejected,
+            counters.fluid_rejected,
+            counters.spawn_errors,
+        ));
+    }
 }
 
 #[derive(SystemParam)]
@@ -71,15 +130,18 @@ pub(super) fn natural_spawn_creatures(
     mut commands: Commands,
     mut state: Local<NaturalSpawnState>,
 ) {
+    let delta_seconds = time.delta_secs();
+    state.advance_diagnostics(delta_seconds);
     if !context.rules.spawn_creatures() {
         return;
     }
 
-    state.seconds_until_attempt -= time.delta_secs();
+    state.seconds_until_attempt -= delta_seconds;
     if state.seconds_until_attempt > 0.0 {
         return;
     }
     state.seconds_until_attempt = NATURAL_SPAWN_INTERVAL;
+    state.counters.cycles += 1;
     if state.random_state == 0 {
         state.random_state = context.player.translation.x.to_bits()
             ^ context.player.translation.z.to_bits().rotate_left(13)
@@ -97,41 +159,65 @@ pub(super) fn natural_spawn_creatures(
         .dimensions
         .get(context.current_dimension.id.as_str())
     else {
+        if state.counters.missing_dimension == 0 {
+            log_gameplay_warn(format!(
+                "entity.spawn source=natural rejected reason=missing_dimension_definition dimension={}",
+                context.current_dimension.id
+            ));
+        }
+        state.counters.missing_dimension += 1;
         return;
     };
+    if context.entity_counts.total >= dimension_definition.max_entities {
+        state.counters.dimension_cap += 1;
+        return;
+    }
+
     let Some((feet, creature_id)) = find_natural_spawn(
         &context,
         dimension_definition.max_entities,
-        &mut state.random_state,
+        &mut state,
     ) else {
         return;
     };
-    if spawn_creature_at(
+    match spawn_creature_at(
         &mut commands,
         &context.definitions,
         &context.asset_server,
         context.language.get(),
         creature_id,
         feet,
-    ).is_ok() {
-        log_gameplay_event(format!(
-            "entity.spawn source=natural type=creature id={} position={:?}",
-            creature_id, feet
-        ));
+    ) {
+        Ok(_) => {
+            state.counters.successes += 1;
+            log_gameplay_event(format!(
+                "entity.spawn source=natural type=creature id={} position={:?}",
+                creature_id, feet
+            ));
+        }
+        Err(error) => {
+            state.counters.spawn_errors += 1;
+            log_gameplay_warn(format!(
+                "entity.spawn source=natural type=creature id={} position={:?} rejected reason=spawn_failed error={error}",
+                creature_id, feet
+            ));
+        }
     }
 }
 
 fn find_natural_spawn<'a>(
     context: &'a NaturalSpawnContext<'_, '_>,
     max_entities: usize,
-    random_state: &mut u32,
+    state: &mut NaturalSpawnState,
 ) -> Option<(Vec3, &'a str)> {
     for _ in 0..NATURAL_SPAWN_ATTEMPTS {
+        state.counters.candidate_attempts += 1;
         let Some(feet) = random_natural_spawn_position(
             &context.world,
             context.player.translation,
-            random_state,
+            &mut state.random_state,
         ) else {
+            state.counters.no_ground += 1;
             continue;
         };
         let biome_id = natural_spawn_biome_id(
@@ -140,6 +226,7 @@ fn find_natural_spawn<'a>(
             feet - Vec3::Y * 0.5,
         );
         let Some(biome) = context.biomes.get(biome_id) else {
+            state.counters.missing_biome += 1;
             continue;
         };
         let Some(rule) = select_natural_spawn_rule(
@@ -147,14 +234,17 @@ fn find_natural_spawn<'a>(
             &context.definitions,
             &context.entity_counts,
             max_entities,
-            random_state,
+            &mut state.random_state,
         ) else {
+            state.counters.no_eligible_rule += 1;
             continue;
         };
 
-        let light = context.world.light_at(feet.floor().as_ivec3());
+        let voxel = feet.floor().as_ivec3();
+        let light = context.world.light_at(voxel);
         let light_level = light.sky().max(light.block());
         if light_level < rule.light_min || light_level > rule.light_max {
+            state.counters.light_rejected += 1;
             continue;
         }
         if context.creatures.iter().any(|(instance, transform, health)| {
@@ -162,11 +252,15 @@ fn find_natural_spawn<'a>(
                 && instance.definition_id == rule.creature
                 && transform.translation.distance(feet) < rule.spacing
         }) {
+            state.counters.spacing_rejected += 1;
             continue;
         }
-        if !context.world.is_loaded_at(feet.floor().as_ivec3())
-            || context.world.fluid_at(feet.floor().as_ivec3()).is_some()
-        {
+        if !context.world.is_loaded_at(voxel) {
+            state.counters.unloaded_rejected += 1;
+            continue;
+        }
+        if context.world.fluid_at(voxel).is_some() {
+            state.counters.fluid_rejected += 1;
             continue;
         }
 
