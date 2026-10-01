@@ -135,8 +135,6 @@ fn advance_survival_mining(
     let selected_item = hotbar.item_at(hotbar.selected_slot());
     let selected_tool = selected_item.and_then(|item_id| content.tools.get(item_id));
 
-    // The left-click behavior owns dispatch. Only tools explicitly configured
-    // with the mining behavior may participate in the mining loop.
     if selected_tool.is_some_and(|tool| tool.left_behavior != MINE_TOOL_BEHAVIOR_ID) {
         runtime.mining.reset();
         return;
@@ -173,8 +171,6 @@ fn advance_survival_mining(
         return;
     };
     let Some(speed) = effective_mining_speed(block, selected_tool) else {
-        // A required tool mismatch is intentionally a hard gate: the player can
-        // keep swinging forever, but mining work never advances.
         return;
     };
 
@@ -194,15 +190,15 @@ fn advance_survival_mining(
         .map(str::to_owned);
 
     if let Some(mutation) = runtime.world.set_block_detailed(hit.voxel, None) {
-        if let Some(object) = mutation.detached_object
-            && let Some(drop) = detached_object_drop_request(
+        for object in mutation.detached_objects {
+            if let Some(drop) = detached_object_drop_request(
                 hit.voxel,
                 mutation.previous_cell,
                 object,
                 &content.objects,
-            )
-        {
-            runtime.item_spawns.write(drop);
+            ) {
+                runtime.item_spawns.write(drop);
+            }
         }
 
         spawn_survival_loot(
