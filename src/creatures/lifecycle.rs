@@ -39,7 +39,7 @@ impl CreatureDespawnGrace {
 }
 
 #[derive(Default)]
-struct CreatureDespawnState {
+pub(super) struct CreatureDespawnState {
     seconds_until_check: f32,
 }
 
