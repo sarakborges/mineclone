@@ -179,11 +179,12 @@ fn consume_inventory_quantity(hotbar: &mut PlayerHotbar, item_id: &str, quantity
             continue;
         }
 
-        let removed = remaining.min(stack.quantity());
-        let replacement = if removed == stack.quantity() {
+        let stack_quantity = stack.quantity();
+        let removed = remaining.min(stack_quantity);
+        let replacement = if removed == stack_quantity {
             None
         } else {
-            Some(stack.with_quantity(stack.quantity() - removed))
+            Some(stack.with_quantity(stack_quantity - removed))
         };
         hotbar.replace_inventory_item(index, replacement);
         remaining -= removed;
