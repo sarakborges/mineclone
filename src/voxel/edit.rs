@@ -10,20 +10,20 @@ use crate::{
 
 use super::{
     cell::VoxelCell,
+    chunk::ObjectCells,
     coordinates::ChunkCoord,
     fluid::FluidCell,
     layer::LayerCell,
     lighting::PendingLightingUpdates,
-    object::ObjectCell,
     read::VoxelTopologyReader,
     world::VoxelWorld,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct VoxelBlockMutation {
     pub(crate) chunk: ChunkCoord,
     pub(crate) previous_cell: Option<VoxelCell>,
-    pub(crate) detached_object: Option<ObjectCell>,
+    pub(crate) detached_objects: ObjectCells,
 }
 
 #[derive(SystemParam)]
@@ -81,7 +81,7 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<VoxelBlockMutation> {
-        let (chunk, previous_cell, detached_object) = self
+        let (chunk, previous_cell, detached_objects) = self
             .world
             .set_block_at_with_previous(world_position, block)?;
         self.lighting
@@ -91,7 +91,7 @@ impl VoxelMutationRuntime<'_> {
         Some(VoxelBlockMutation {
             chunk: ChunkCoord::from_ivec3(chunk),
             previous_cell,
-            detached_object,
+            detached_objects,
         })
     }
 
