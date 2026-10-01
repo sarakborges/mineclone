@@ -25,23 +25,29 @@ impl InventoryCursor {
     }
 
     pub(crate) fn click_slot(&mut self, inventory: &mut PlayerHotbar, index: usize) {
-        let cursor = self.item.take();
-        let slot = inventory.replace_inventory_item(index, None);
+        let mut slot = inventory.replace_inventory_item(index, None);
+        self.click_item_slot(&mut slot);
+        inventory.replace_inventory_item(index, slot);
+    }
 
-        match (cursor, slot) {
-            (None, slot) => {
-                self.item = slot;
+    pub(crate) fn click_item_slot(&mut self, slot: &mut Option<ItemStack>) {
+        let cursor = self.item.take();
+        let slot_item = slot.take();
+
+        match (cursor, slot_item) {
+            (None, slot_item) => {
+                self.item = slot_item;
             }
             (Some(cursor), None) => {
-                inventory.replace_inventory_item(index, Some(cursor));
+                *slot = Some(cursor);
             }
-            (Some(cursor), Some(mut slot)) if slot.can_stack_with(&cursor) => {
-                self.item = slot.merge_from(cursor);
-                inventory.replace_inventory_item(index, Some(slot));
+            (Some(cursor), Some(mut slot_stack)) if slot_stack.can_stack_with(&cursor) => {
+                self.item = slot_stack.merge_from(cursor);
+                *slot = Some(slot_stack);
             }
-            (Some(cursor), Some(slot)) => {
-                inventory.replace_inventory_item(index, Some(cursor));
-                self.item = Some(slot);
+            (Some(cursor), Some(slot_stack)) => {
+                *slot = Some(cursor);
+                self.item = Some(slot_stack);
             }
         }
     }
@@ -75,6 +81,10 @@ impl InventoryCursor {
 
     pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {
         self.item.take()
+    }
+
+    pub(crate) fn set_stack(&mut self, stack: Option<ItemStack>) {
+        self.item = stack;
     }
 
     pub(crate) fn discard(&mut self) {
@@ -152,5 +162,17 @@ mod tests {
         );
 
         assert!(cursor.stack().is_none());
+    }
+
+    #[test]
+    fn generic_slot_click_swaps_cursor_and_slot() {
+        let mut cursor = InventoryCursor::default();
+        cursor.set_stack(Some(ItemStack::new("asteria:pebble")));
+        let mut slot = Some(ItemStack::new("asteria:stick"));
+
+        cursor.click_item_slot(&mut slot);
+
+        assert_eq!(cursor.item(), Some("asteria:stick"));
+        assert_eq!(slot.as_ref().map(ItemStack::id), Some("asteria:pebble"));
     }
 }

@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, io};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+};
 
 use crate::{
     content::{
@@ -14,7 +17,11 @@ use crate::{
         object::ObjectRegistry,
         tool::ToolRegistry,
     },
-    player::hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
+    gameplay::storage_box::STORAGE_BOX_SLOT_COUNT,
+    player::{
+        hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
+        item_stack::SavedItemStack,
+    },
 };
 
 use super::{invalid_data, snapshot::WorldSnapshot};
@@ -216,25 +223,56 @@ fn validate_playable(
         return Err(invalid_data("invalid selected hotbar slot"));
     }
     for stack in snapshot.inventory.iter().flatten() {
-        if !valid_item(stack.id()) {
-            return Err(invalid_data(format!(
-                "unknown inventory item ID: {}",
-                stack.id()
-            )));
+        validate_saved_stack(stack, "inventory", &valid_item, &valid_biome)?;
+    }
+
+    let mut storage_positions = HashSet::new();
+    for storage_box in &snapshot.storage_boxes {
+        if storage_box.items().len() != STORAGE_BOX_SLOT_COUNT {
+            return Err(invalid_data("invalid storage box inventory length"));
         }
-        if !stack.quantity_is_valid() {
-            return Err(invalid_data("saved inventory item quantity is invalid"));
+        let position = storage_box.position();
+        if position[1] < 0 {
+            return Err(invalid_data("storage box position cannot be below the world"));
         }
-        if !stack.metadata_is_valid() {
-            return Err(invalid_data("saved inventory item metadata is invalid"));
+        if !storage_positions.insert(position) {
+            return Err(invalid_data("duplicate storage box position"));
         }
-        if let Some(biome_id) = stack.metadata_value(BIOME_TINT_METADATA_KEY)
-            && !valid_biome(biome_id)
-        {
-            return Err(invalid_data(format!(
-                "saved inventory biome tint references missing biome: {biome_id}"
-            )));
+        for stack in storage_box.items().iter().flatten() {
+            validate_saved_stack(stack, "storage box", &valid_item, &valid_biome)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_saved_stack(
+    stack: &SavedItemStack,
+    source: &str,
+    valid_item: &impl Fn(&str) -> bool,
+    valid_biome: &impl Fn(&str) -> bool,
+) -> io::Result<()> {
+    if !valid_item(stack.id()) {
+        return Err(invalid_data(format!(
+            "unknown {source} item ID: {}",
+            stack.id()
+        )));
+    }
+    if !stack.quantity_is_valid() {
+        return Err(invalid_data(format!(
+            "saved {source} item quantity is invalid"
+        )));
+    }
+    if !stack.metadata_is_valid() {
+        return Err(invalid_data(format!(
+            "saved {source} item metadata is invalid"
+        )));
+    }
+    if let Some(biome_id) = stack.metadata_value(BIOME_TINT_METADATA_KEY)
+        && !valid_biome(biome_id)
+    {
+        return Err(invalid_data(format!(
+            "saved {source} biome tint references missing biome: {biome_id}"
+        )));
     }
     Ok(())
 }

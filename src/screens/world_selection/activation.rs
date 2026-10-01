@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     creatures::PendingCreatureRestores,
+    gameplay::storage_box::StorageBoxStorage,
     player::{
         game_mode::GameMode,
         hotbar::PlayerHotbar,
@@ -27,6 +28,7 @@ pub(super) enum WorldActivationError {
 
 pub(super) struct PreparedWorldActivation {
     inventory: PlayerHotbar,
+    storage_boxes: StorageBoxStorage,
     save: InMemoryWorldSave,
     session_lock: WorldDirectoryLock,
     pending_fluids: PendingFluidUpdates,
@@ -52,6 +54,15 @@ impl PreparedWorldActivation {
         let inventory = PlayerHotbar::from_saved_items_and_selection(
             &snapshot.inventory,
             snapshot.selected_hotbar_slot,
+            registries.items,
+            registries.blocks,
+            registries.layers,
+            registries.objects,
+            registries.tools,
+        )
+        .map_err(WorldActivationError::Inventory)?;
+        let storage_boxes = StorageBoxStorage::from_saved_boxes(
+            &snapshot.storage_boxes,
             registries.items,
             registries.blocks,
             registries.layers,
@@ -95,6 +106,7 @@ impl PreparedWorldActivation {
 
         Ok(Self {
             inventory,
+            storage_boxes,
             save,
             session_lock,
             pending_fluids,
@@ -119,6 +131,7 @@ impl PreparedWorldActivation {
     ) {
         *inventory = self.inventory;
         *save = self.save;
+        commands.insert_resource(self.storage_boxes);
         commands.insert_resource(self.session_lock);
         commands.insert_resource(self.pending_fluids);
         commands.insert_resource(self.pending_creatures);

@@ -21,6 +21,7 @@ use crate::{
     },
     creatures::{CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
+    gameplay::storage_box::StorageBoxStorage,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         movement::flight::FlightState, player_id::PlayerId,
@@ -140,6 +141,7 @@ struct WorldSnapshotState<'w> {
     biome: Res<'w, CurrentBiome>,
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
+    storage_boxes: Res<'w, StorageBoxStorage>,
     world: Res<'w, VoxelWorld>,
     pending_fluids: Res<'w, PendingFluidUpdates>,
     world_ticks: Res<'w, WorldTickClock>,
@@ -274,6 +276,7 @@ impl WorldSaveContext<'_, '_> {
             tick_in_day: self.state.clock.tick_in_day(),
             inventory: self.state.inventory.saved_items(),
             selected_hotbar_slot: self.state.inventory.selected_slot(),
+            storage_boxes: self.state.storage_boxes.saved_boxes(),
             fluids: &self.registries.fluids,
             pending_fluids: &self.state.pending_fluids,
             world_tick: self.state.world_ticks.current_tick(),
