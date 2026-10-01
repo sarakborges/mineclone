@@ -8,6 +8,7 @@ use super::{
     SurfaceBoundarySample, SurfaceSiteCacheEntry,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
+    selection::fitting::fit_surface_site_weights,
     spatial::{
         smoothstep, surface_site_position, varied_surface_margin_width,
         warp_surface_position,
@@ -100,32 +101,60 @@ impl BiomeField {
             }
         }
 
-        let mut nearest_distance = f32::MAX;
+        // The site identities are now fixed. Fit the actual boundaries between
+        // them by solving the authored min/max intervals as a local power
+        // diagram. This is where an adjacent biome can give up exactly the
+        // amount of space another biome needs without either crossing its own
+        // authored bounds.
+        let site_weights = fit_surface_site_weights(
+            &sampled_sites[..sample_count],
+            &self.surface_biomes,
+            self.surface_site_spacing,
+            self.seed,
+        )
+        .unwrap_or_else(|reason| {
+            panic!("surface biome boundary fitting failed near site {center:?}: {reason}")
+        });
+
+        let mut nearest_score = f32::INFINITY;
         let mut nearest_site = Vec2::ZERO;
+        let mut nearest_sample_index = 0;
         let mut primary_index = 0;
-        for (_, site, distance, candidate_index) in &sampled_sites[..sample_count] {
+        for (sample_index, (_, site, distance, candidate_index)) in
+            sampled_sites[..sample_count].iter().enumerate()
+        {
             let candidate_index = candidate_index.expect("surface biome site must be resolved");
-            if *distance < nearest_distance {
-                nearest_distance = *distance;
+            let score = distance * distance - site_weights[sample_index];
+            if score < nearest_score {
+                nearest_score = score;
                 nearest_site = *site;
+                nearest_sample_index = sample_index;
                 primary_index = candidate_index;
             }
         }
-        let geometric_primary_index = primary_index;
-        let geometric_boundary = nearest_surface_boundary(
-            nearest_site,
-            nearest_distance,
-            geometric_primary_index,
+        let fitted_primary_index = primary_index;
+        let fitted_boundary = nearest_surface_boundary(
+            nearest_sample_index,
+            nearest_score,
             &sampled_sites[..sample_count],
+            &site_weights,
         );
 
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
         let mut weight_count = 0;
-        for (_, _, distance, candidate_index) in &sampled_sites[..sample_count] {
+        for (sample_index, (_, site, distance, candidate_index)) in
+            sampled_sites[..sample_count].iter().enumerate()
+        {
             let candidate_index = candidate_index.expect("surface biome site must be resolved");
-            let distance_gap = (*distance - nearest_distance).max(0.0);
+            let pair_distance = nearest_site.distance(*site);
+            let boundary_distance = if pair_distance <= f32::EPSILON {
+                0.0
+            } else {
+                let candidate_score = distance * distance - site_weights[sample_index];
+                ((candidate_score - nearest_score) / (2.0 * pair_distance)).max(0.0)
+            };
             let border_progress =
-                1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+                1.0 - (boundary_distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             let smooth_progress = smoothstep(border_progress);
             set_max_weight(
                 &mut weights,
@@ -225,8 +254,8 @@ impl BiomeField {
                 .unwrap_or(forced_index);
         }
 
-        let nearest_boundary = (primary_index == geometric_primary_index)
-            .then_some(geometric_boundary)
+        let nearest_boundary = (primary_index == fitted_primary_index)
+            .then_some(fitted_boundary)
             .flatten();
         let surface_margin_index = nearest_boundary.and_then(|boundary| {
             let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
@@ -296,31 +325,32 @@ fn forced_distribution_strength(
     }
 }
 
-
 fn nearest_surface_boundary(
-    primary_site: Vec2,
-    primary_distance: f32,
-    primary_index: usize,
+    primary_sample_index: usize,
+    primary_score: f32,
     sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
+    site_weights: &[f32],
 ) -> Option<SurfaceBoundarySample> {
+    let (_, primary_site, _, primary_index) = sampled_sites[primary_sample_index];
+    let primary_index = primary_index.expect("surface biome site must be resolved");
+
     sampled_sites
         .iter()
-        .filter_map(|(_, site, distance, candidate_index)| {
-            let candidate_index =
-                candidate_index.expect("surface biome site must be resolved");
+        .enumerate()
+        .filter_map(|(sample_index, (_, site, distance, candidate_index))| {
+            let candidate_index = candidate_index.expect("surface biome site must be resolved");
             if candidate_index == primary_index {
                 return None;
             }
 
-            let site_distance = primary_site.distance(*site);
-            if site_distance <= f32::EPSILON {
+            let pair_distance = primary_site.distance(*site);
+            if pair_distance <= f32::EPSILON {
                 return None;
             }
 
+            let candidate_score = distance * distance - site_weights[sample_index];
             let boundary_distance =
-                ((distance * distance - primary_distance * primary_distance)
-                    / (2.0 * site_distance))
-                    .max(0.0);
+                ((candidate_score - primary_score) / (2.0 * pair_distance)).max(0.0);
             Some(SurfaceBoundarySample {
                 neighbor_surface_index: candidate_index,
                 distance: boundary_distance,
