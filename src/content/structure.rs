@@ -1,15 +1,25 @@
-use std::{collections::{HashMap, HashSet}, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use crate::localization::LocalizedText;
+use crate::{
+    localization::LocalizedText,
+    voxel::{
+        chunk::MAX_OBJECTS_PER_VOXEL,
+        object::{ObjectCell, ObjectTransform},
+        texture_rotation::TextureRotation,
+    },
+};
 
 use super::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
     fluid::FluidRegistry,
     layer::{LayerFace, LayerRegistry},
-    object::ObjectRegistry,
+    object::{ObjectPlacementFace, ObjectRegistry},
     registry::DefinitionMap,
     structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
@@ -103,6 +113,26 @@ impl StructureRotation {
             },
         }
     }
+
+    pub(crate) fn rotate_object_face(self, face: ObjectPlacementFace) -> ObjectPlacementFace {
+        ObjectPlacementFace::from_normal(self.rotate_offset(face.normal()))
+            .expect("structure rotation preserves cardinal object faces")
+    }
+
+    pub(crate) fn rotate_object_rotation(
+        self,
+        face: ObjectPlacementFace,
+        rotation: TextureRotation,
+    ) -> TextureRotation {
+        let structure_turn = structure_rotation_index(self);
+        let object_turn = texture_rotation_index(rotation);
+        let rotated = if face == ObjectPlacementFace::Bottom {
+            object_turn + structure_turn
+        } else {
+            object_turn + 4 - structure_turn
+        };
+        TextureRotation::from_quarter_turn(rotated)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -117,14 +147,14 @@ pub struct StructureAnchor {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StructurePaletteEntry {
     #[serde(default)]
     pub block: Option<String>,
     #[serde(default)]
     pub fluid: Option<String>,
     #[serde(default)]
-    pub object: Option<String>,
+    pub objects: Vec<StructureAttachedObject>,
     #[serde(default)]
     pub clear: bool,
     #[serde(default)]
@@ -135,6 +165,41 @@ pub struct StructurePaletteEntry {
     pub orientation: BlockOrientation,
     #[serde(default)]
     pub surface_layers: Vec<StructureSurfaceLayer>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StructureAttachedObject {
+    pub object: String,
+    #[serde(default = "default_object_face")]
+    pub face: ObjectPlacementFace,
+    #[serde(default)]
+    pub rotation: Option<u16>,
+    #[serde(default)]
+    pub offset: [f32; 3],
+    #[serde(default = "default_object_scale")]
+    pub scale: [f32; 3],
+}
+
+impl StructureAttachedObject {
+    pub(crate) fn object_cell(
+        &self,
+        structure_rotation: StructureRotation,
+        support_world_position: IVec3,
+    ) -> ObjectCell {
+        let base_rotation = self.rotation.map_or_else(
+            || TextureRotation::for_position(support_world_position, true),
+            texture_rotation_from_degrees,
+        );
+        let face = structure_rotation.rotate_object_face(self.face);
+        let rotation = structure_rotation.rotate_object_rotation(self.face, base_rotation);
+        let transform = ObjectTransform::from_parts(
+            Vec3::from_array(self.offset),
+            Vec3::from_array(self.scale),
+        )
+        .expect("structure object transform is validated during content loading");
+        ObjectCell::with_transform(&self.object, face, rotation, transform)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -185,9 +250,6 @@ pub(crate) struct StructureConnectorPoint {
     pub(crate) min_distance: u32,
     pub(crate) max_distance: u32,
 }
-
-
-
 
 #[derive(Clone, Debug, Default)]
 struct StructureRuntime {
@@ -327,8 +389,7 @@ impl StructureDefinition {
         required_world_face: LayerFace,
         hash: u64,
     ) -> Option<(StructureRotation, IVec3)> {
-        let candidates =
-            self.compatible_input_attachments(world_position, required_world_face);
+        let candidates = self.compatible_input_attachments(world_position, required_world_face);
         if candidates.is_empty() {
             return None;
         }
@@ -362,12 +423,19 @@ impl StructureDefinition {
                     fluid
                 );
             }
-            if let Some(object) = entry.object.as_deref() {
+            for attached in &entry.objects {
+                let definition = objects.get(&attached.object).unwrap_or_else(|| {
+                    panic!(
+                        "structure {} references missing object: {}",
+                        self.id, attached.object
+                    )
+                });
                 assert!(
-                    objects.get(object).is_some(),
-                    "structure {} references missing object: {}",
+                    definition.supports_placement_face(attached.face),
+                    "structure {} object {} does not support face {:?}",
                     self.id,
-                    object
+                    attached.object,
+                    attached.face
                 );
             }
             for surface in &entry.surface_layers {
@@ -461,10 +529,13 @@ impl StructureDefinition {
             maximum,
             IVec2::new(minimum.x, maximum.y),
         ];
-        corners.into_iter().map(|corner| rotation.rotate_horizontal(corner)).fold(
-            (IVec2::splat(i32::MAX), IVec2::splat(i32::MIN)),
-            |(minimum, maximum), corner| (minimum.min(corner), maximum.max(corner)),
-        )
+        corners
+            .into_iter()
+            .map(|corner| rotation.rotate_horizontal(corner))
+            .fold(
+                (IVec2::splat(i32::MAX), IVec2::splat(i32::MIN)),
+                |(minimum, maximum), corner| (minimum.min(corner), maximum.max(corner)),
+            )
     }
 
     pub(crate) fn effective_max_y_offset(&self) -> i32 {
@@ -546,9 +617,11 @@ impl StructureDefinition {
             .and_then(|entry| entry.fluid.as_deref())
     }
 
-    pub(crate) fn object_for_voxel(&self, voxel: &StructureVoxel) -> Option<&str> {
+    pub(crate) fn objects_for_voxel(&self, voxel: &StructureVoxel) -> &[StructureAttachedObject] {
         self.palette_entry(voxel.palette_symbol)
-            .and_then(|entry| entry.object.as_deref())
+            .expect("runtime structure voxel must retain a valid palette symbol")
+            .objects
+            .as_slice()
     }
 
     pub(crate) fn clears_voxel(&self, voxel: &StructureVoxel) -> bool {
@@ -569,6 +642,16 @@ impl StructureDefinition {
             .expect("runtime structure voxel must retain a valid palette symbol")
             .surface_layers
             .as_slice()
+    }
+
+    fn attachment_only_voxel(&self, voxel: &StructureVoxel) -> bool {
+        let entry = self
+            .palette_entry(voxel.palette_symbol)
+            .expect("runtime structure voxel must retain a valid palette symbol");
+        entry.block.is_none()
+            && entry.fluid.is_none()
+            && !entry.clear
+            && (entry.layers_only || !entry.objects.is_empty())
     }
 
     fn rebuild_runtime(&mut self) {
@@ -622,7 +705,7 @@ impl StructureDefinition {
                     }
                     let has_persistent_payload = entry.block.is_some()
                         || entry.fluid.is_some()
-                        || entry.object.is_some()
+                        || !entry.objects.is_empty()
                         || entry.clear
                         || entry.layers_only;
                     if !has_persistent_payload {
@@ -635,7 +718,8 @@ impl StructureDefinition {
                     max_y_offset = max_y_offset.max(offset.y);
                     if !entry.clear {
                         max_added_y_offset = Some(
-                            max_added_y_offset.map_or(offset.y, |current: i32| current.max(offset.y)),
+                            max_added_y_offset
+                                .map_or(offset.y, |current: i32| current.max(offset.y)),
                         );
                     }
                     voxels.push(StructureVoxel {
@@ -671,10 +755,7 @@ impl StructureDefinition {
             let horizontal = (voxel.offset.x, voxel.offset.z);
             footprint.insert(horizontal);
             column_voxels.entry(horizontal).or_default().push(*voxel);
-            if voxel.offset.y == min_y_offset
-                && !self.layers_only_voxel(voxel)
-                && self.object_for_voxel(voxel).is_none()
-            {
+            if voxel.offset.y == min_y_offset && !self.attachment_only_voxel(voxel) {
                 supports.insert(horizontal);
             }
             spans
@@ -773,14 +854,19 @@ impl StructureDefinition {
                 "structure {} palette keys must be exactly one non-dot character",
                 self.id
             );
-            let payload_count = usize::from(entry.block.is_some())
+            let primary_payload_count = usize::from(entry.block.is_some())
                 + usize::from(entry.fluid.is_some())
-                + usize::from(entry.object.is_some())
                 + usize::from(entry.clear)
                 + usize::from(entry.layers_only);
+            let has_persistent_payload = primary_payload_count == 1 || !entry.objects.is_empty();
             assert!(
-                payload_count == 1 || (payload_count == 0 && entry.connector.is_some()),
-                "structure {} palette symbol {symbol} must define exactly one persistent payload or be connector-only",
+                primary_payload_count <= 1,
+                "structure {} palette symbol {symbol} cannot define multiple primary payloads",
+                self.id
+            );
+            assert!(
+                has_persistent_payload || entry.connector.is_some(),
+                "structure {} palette symbol {symbol} must define content or be connector-only",
                 self.id
             );
             if let Some(block) = entry.block.as_deref() {
@@ -797,22 +883,15 @@ impl StructureDefinition {
                     self.id
                 );
                 assert!(
-                    entry.surface_layers.is_empty(),
-                    "structure {} palette symbol {symbol} fluid entries cannot define surfaceLayers",
-                    self.id
-                );
-            }
-            if entry.object.is_some() {
-                assert!(
-                    entry.surface_layers.is_empty(),
-                    "structure {} palette symbol {symbol} object entries cannot define surfaceLayers",
+                    entry.surface_layers.is_empty() && entry.objects.is_empty(),
+                    "structure {} palette symbol {symbol} fluid entries cannot define attachments",
                     self.id
                 );
             }
             if entry.clear {
                 assert!(
-                    entry.surface_layers.is_empty(),
-                    "structure {} palette symbol {symbol} clear entries cannot define surfaceLayers",
+                    entry.surface_layers.is_empty() && entry.objects.is_empty(),
+                    "structure {} palette symbol {symbol} clear entries cannot define attachments",
                     self.id
                 );
             }
@@ -822,12 +901,46 @@ impl StructureDefinition {
                     "structure {} palette symbol {symbol} layersOnly entries must define surfaceLayers",
                     self.id
                 );
+            } else if entry.block.is_none() {
+                assert!(
+                    entry.surface_layers.is_empty(),
+                    "structure {} palette symbol {symbol} surfaceLayers require block or layersOnly",
+                    self.id
+                );
+            }
+            assert!(
+                entry.objects.len() <= MAX_OBJECTS_PER_VOXEL,
+                "structure {} palette symbol {symbol} cannot define more than {MAX_OBJECTS_PER_VOXEL} attached objects",
+                self.id
+            );
+            for (object_index, attached) in entry.objects.iter().enumerate() {
+                assert!(
+                    !attached.object.trim().is_empty(),
+                    "structure {} palette symbol {symbol} objects[{object_index}] must reference an object",
+                    self.id
+                );
+                if let Some(rotation) = attached.rotation {
+                    assert!(
+                        matches!(rotation, 0 | 90 | 180 | 270),
+                        "structure {} palette symbol {symbol} objects[{object_index}].rotation must be 0, 90, 180 or 270",
+                        self.id
+                    );
+                }
+                assert!(
+                    ObjectTransform::from_parts(
+                        Vec3::from_array(attached.offset),
+                        Vec3::from_array(attached.scale),
+                    )
+                    .is_some(),
+                    "structure {} palette symbol {symbol} objects[{object_index}] has invalid offset/scale",
+                    self.id
+                );
             }
 
             if let Some(connector) = entry.connector.as_ref() {
                 if connector.target.is_none() {
-                    assert_eq!(
-                        payload_count, 0,
+                    assert!(
+                        !has_persistent_payload,
                         "structure {} palette symbol {symbol} input connectors must be connector-only",
                         self.id
                     );
@@ -980,7 +1093,7 @@ impl StructureDefinition {
                     });
                     if entry.block.is_some()
                         || entry.fluid.is_some()
-                        || entry.object.is_some()
+                        || !entry.objects.is_empty()
                         || entry.clear
                         || entry.layers_only
                     {
@@ -1157,7 +1270,6 @@ impl StructureRegistry {
             Some((reference.as_str(), structure, members.len()))
         })
     }
-
 }
 
 fn stable_structure_hash(value: &str) -> u64 {
@@ -1187,6 +1299,33 @@ fn structure_rotation_index(rotation: StructureRotation) -> u8 {
         StructureRotation::Degrees180 => 2,
         StructureRotation::Degrees270 => 3,
     }
+}
+
+fn texture_rotation_index(rotation: TextureRotation) -> u8 {
+    match rotation {
+        TextureRotation::Degrees0 => 0,
+        TextureRotation::Degrees90 => 1,
+        TextureRotation::Degrees180 => 2,
+        TextureRotation::Degrees270 => 3,
+    }
+}
+
+fn texture_rotation_from_degrees(degrees: u16) -> TextureRotation {
+    match degrees {
+        0 => TextureRotation::Degrees0,
+        90 => TextureRotation::Degrees90,
+        180 => TextureRotation::Degrees180,
+        270 => TextureRotation::Degrees270,
+        _ => unreachable!("structure object rotation is validated during content loading"),
+    }
+}
+
+fn default_object_face() -> ObjectPlacementFace {
+    ObjectPlacementFace::Top
+}
+
+fn default_object_scale() -> [f32; 3] {
+    [1.0, 1.0, 1.0]
 }
 
 fn default_connector_strength() -> f32 {
