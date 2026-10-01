@@ -248,8 +248,7 @@ fn raycast_collectible_fluid(
             return None;
         }
         if let Some(fluid) = world.fluid_at(voxel) {
-            return (fluid.is_source() && fluid.level == MAX_FLUID_LEVEL)
-                .then_some((voxel, fluid));
+            return fluid.is_source().then_some((voxel, fluid));
         }
     }
 }
