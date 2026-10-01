@@ -143,9 +143,6 @@ fn spawn_highlight(
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
-            // The highlight cube is already scaled/offset away from the block
-            // surface. A large depth bias turns it into an x-ray overlay that
-            // can render through opaque creatures in front of the block.
             depth_bias: 0.0,
             ..default()
         })),
@@ -240,12 +237,13 @@ fn update_highlight(
         material.base_color = highlight_color;
     }
 
-    if let Some(support) = input.targeted_object.0
-        && let Some(object_cell) = input.scene.world().object_at(support)
-        && let Some(object) = content.objects.get(object_cell.object_id)
+    if let Some(key) = input.targeted_object.0
+        && let Some(object) = content.objects.get(key.object.object_id)
     {
         hide_if_visible(&mut view.brush_ghost.1);
         hide_if_visible(&mut view.artisans_kit_placement.1);
+        let support = key.support;
+        let object_cell = key.object;
         let position = world_object_position(
             support,
             input.scene.world().cell_at(support),
@@ -297,9 +295,6 @@ fn update_highlight(
 
         let placement_cell = precise.fine + precise.normal;
         let placement_voxel = parent_voxel(placement_cell);
-        // The preview must match the actual Artisan's Kit edit: only a previously
-        // carved cell of the targeted macroblock can be restored, never air or
-        // a fresh neighboring block. Also suppress no-op green previews.
         let can_place = precise.normal != IVec3::ZERO
             && placement_voxel == precise.voxel
             && input.scene.world().cell_at(placement_voxel).is_some_and(|cell| {
@@ -439,5 +434,4 @@ fn show_if_hidden(visibility: &mut Visibility) {
         *visibility = Visibility::Visible;
     }
 }
-
 
