@@ -1,8 +1,10 @@
-use std::{ffi::OsStr, path::Path};
+use std::{ffi::OsStr, path::Path, time::Instant};
 
 use bevy::prelude::*;
 
-use crate::app::runtime_paths::data_root;
+use crate::{
+    app::{crash_log::log_system_event, runtime_paths::data_root},
+};
 
 use super::{
     attack::{AttackDefinition, AttackRegistry},
@@ -80,12 +82,15 @@ pub fn load_content(mut commands: Commands) {
 }
 
 pub(crate) fn read_content() -> LoadedContent {
+    let started = Instant::now();
+    let root = data_root();
     let mut content = LoadedContent::default();
     let mut files = Vec::new();
     let mut player_loaded = false;
 
-    collect_json_files(&data_root(), &mut files);
+    collect_json_files(&root, &mut files);
     files.sort();
+    let file_count = files.len();
 
     for path in files {
         load_definition(&path, &mut content, &mut player_loaded);
@@ -96,6 +101,12 @@ pub(crate) fn read_content() -> LoadedContent {
         "missing player definition under data/entities/player.json"
     );
     validate_content(&content);
+    log_system_event(format!(
+        "content.load success root={} files={} duration_ms={:.2}",
+        root.display(),
+        file_count,
+        started.elapsed().as_secs_f64() * 1_000.0,
+    ));
     content
 }
 
