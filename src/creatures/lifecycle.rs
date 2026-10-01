@@ -43,14 +43,23 @@ pub(super) struct CreatureDespawnState {
     seconds_until_check: f32,
 }
 
+type DistantCreatureQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static EntityMetaTags,
+        &'static mut CreatureDespawnGrace,
+    ),
+    (With<CreatureInstance>, Without<CreatureDeathTimer>),
+>;
+
 pub(super) fn despawn_distant_creatures(
     time: Res<Time>,
     mut commands: Commands,
     player: Single<&Transform, With<GameplayCamera>>,
-    mut creatures: Query<
-        (Entity, &Transform, &EntityMetaTags, &mut CreatureDespawnGrace),
-        (With<CreatureInstance>, Without<CreatureDeathTimer>),
-    >,
+    mut creatures: DistantCreatureQuery<'_, '_>,
     mut state: Local<CreatureDespawnState>,
 ) {
     let delta_seconds = time.delta_secs();
