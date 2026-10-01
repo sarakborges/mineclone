@@ -376,6 +376,29 @@ fn locate_volume_biome(
                 if anchor.id != id {
                     continue;
                 }
+
+                // An anchor is only a candidate site. The volume may be
+                // rejected at that exact position by surface constraints or
+                // by a stronger overlapping volume biome. Locate must verify
+                // the same resolved selection used by terrain generation
+                // instead of reporting every geometric site as present.
+                let surface = snapshot
+                    .biome_field
+                    .sample_surface(anchor.position.xz());
+                let Some(selection) = snapshot
+                    .biome_field
+                    .volume_selection_in_region_for_surface(
+                        anchor.position,
+                        &region,
+                        surface.identity_surface_index,
+                    )
+                else {
+                    continue;
+                };
+                if snapshot.biome_field.volume_biome_id(selection) != id {
+                    continue;
+                }
+
                 let position = anchor.position.floor().as_ivec3();
                 if seen.insert(position) {
                     consider_nearest(&mut best, player, position);
