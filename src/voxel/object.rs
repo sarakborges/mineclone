@@ -50,13 +50,11 @@ impl ObjectTransform {
     }
 
     pub(crate) fn from_encoded(offset: [i16; 3], scale: [u16; 3]) -> Option<Self> {
-        if scale.contains(&0) {
-            return None;
-        }
-        let transform = Self { offset, scale };
-        (transform.offset().abs().max_element() <= MAX_LOCAL_OFFSET
-            && transform.scale().max_element() <= MAX_LOCAL_SCALE)
-            .then_some(transform)
+        let offset = Vec3::new(offset[0] as f32, offset[1] as f32, offset[2] as f32)
+            / OBJECT_TRANSFORM_UNITS;
+        let scale = Vec3::new(scale[0] as f32, scale[1] as f32, scale[2] as f32)
+            / OBJECT_TRANSFORM_UNITS;
+        Self::from_parts(offset, scale)
     }
 
     pub(crate) fn offset(self) -> Vec3 {
@@ -81,10 +79,6 @@ impl ObjectTransform {
 
     pub(crate) fn encoded_scale(self) -> [u16; 3] {
         self.scale
-    }
-
-    pub(crate) fn is_identity(self) -> bool {
-        self == Self::default()
     }
 }
 
@@ -145,7 +139,6 @@ mod tests {
 
         assert_eq!(transform.offset(), Vec3::new(0.125, -0.25, 0.375));
         assert_eq!(transform.scale(), Vec3::new(1.0, 0.5, 2.0));
-        assert!(!transform.is_identity());
     }
 
     #[test]
