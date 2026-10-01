@@ -45,7 +45,7 @@ pub(super) fn block_emission_for_cell(
         return BlockLight::new(0, 0, level);
     }
 
-    let Some(dye_id) = cell.secondary_property(DYED_PROPERTY_ID) else {
+    let Some(dye_id) = cell.state(DYED_PROPERTY_ID) else {
         return BlockLight::new(0, 0, level);
     };
     let Some(dye) = secondary_properties.get(DYED_PROPERTY_ID, dye_id) else {
