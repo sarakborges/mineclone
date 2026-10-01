@@ -7,7 +7,6 @@
   },
   "category": "foliage",
   "icon": "textures/objects/grass.png",
-  "tint": "grass",
   "placementFaces": [
     "top"
   ],
