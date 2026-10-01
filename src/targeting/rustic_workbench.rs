@@ -86,9 +86,6 @@ fn craft_rustic_workbench(
         return;
     }
 
-    // World objects are attached to a solid support voxel. Replacing the stone
-    // therefore anchors the table to the block directly below it, so the model
-    // occupies exactly the voxel that used to contain the stone.
     let support = hit.voxel + IVec3::NEG_Y;
     let support_available = {
         let read = context.runtime.read();
@@ -123,15 +120,15 @@ fn craft_rustic_workbench(
         "validated rustic workbench crafting must consume exactly five pebbles"
     );
 
-    if let Some(detached) = mutation.detached_object
-        && let Some(drop) = detached_object_drop_request(
+    for detached in mutation.detached_objects {
+        if let Some(drop) = detached_object_drop_request(
             hit.voxel,
             mutation.previous_cell,
             detached,
             &context.objects,
-        )
-    {
-        context.item_spawns.write(drop);
+        ) {
+            context.item_spawns.write(drop);
+        }
     }
 
     log_gameplay_event(format!(
