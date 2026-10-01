@@ -1,0 +1,16 @@
+{
+  "id": "asteria:craft_rustic_workbench",
+  "targetBlock": "asteria:stone",
+  "heldItem": "asteria:pebble",
+  "ingredients": [
+    {
+      "item": "asteria:pebble",
+      "quantity": 5
+    }
+  ],
+  "result": {
+    "type": "replaceBlockWithObject",
+    "object": "asteria:rustic_workbench",
+    "placementFace": "top"
+  }
+}

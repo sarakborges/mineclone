@@ -9,7 +9,6 @@ use super::{
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
     creature::{CreatureDefinition, CreatureRegistry},
-    player::PlayerDefinition,
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::{FluidDefinition, FluidRegistry},
@@ -18,6 +17,7 @@ use super::{
     json_file::{collect_json_files, read_json_definition},
     layer::{LayerDefinition, LayerRegistry},
     object::{ObjectDefinition, ObjectRegistry},
+    player::PlayerDefinition,
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
@@ -25,6 +25,7 @@ use super::{
     tool::{ToolDefinition, ToolRegistry},
     tool_category::{ToolCategoryDefinition, ToolCategoryRegistry},
     validation::validate_content,
+    world_recipe::{WorldRecipeDefinition, WorldRecipeRegistry},
 };
 
 #[derive(Default)]
@@ -47,6 +48,7 @@ pub(crate) struct LoadedContent {
     pub structure_sets: StructureSetRegistry,
     pub tools: ToolRegistry,
     pub tool_categories: ToolCategoryRegistry,
+    pub world_recipes: WorldRecipeRegistry,
 }
 
 impl LoadedContent {
@@ -69,6 +71,7 @@ impl LoadedContent {
         commands.insert_resource(self.structure_sets);
         commands.insert_resource(self.tools);
         commands.insert_resource(self.tool_categories);
+        commands.insert_resource(self.world_recipes);
     }
 }
 
@@ -88,7 +91,10 @@ pub(crate) fn read_content() -> LoadedContent {
         load_definition(&path, &mut content, &mut player_loaded);
     }
 
-    assert!(player_loaded, "missing player definition under data/entities/player.json");
+    assert!(
+        player_loaded,
+        "missing player definition under data/entities/player.json"
+    );
     validate_content(&content);
     content
 }
@@ -100,12 +106,18 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         .unwrap_or_default();
 
     if file_name == "player.json" && path_has_component(path, "entities") {
-        assert!(!*player_loaded, "duplicate player definition: {}", path.display());
+        assert!(
+            !*player_loaded,
+            "duplicate player definition: {}",
+            path.display()
+        );
         content.player = read_json_definition::<PlayerDefinition>(path);
         content.player.validate();
         *player_loaded = true;
     } else if path_has_component(path, "attacks") {
-        content.attacks.insert(read_json_definition::<AttackDefinition>(path));
+        content
+            .attacks
+            .insert(read_json_definition::<AttackDefinition>(path));
     } else if file_name == "dimension.json" {
         content
             .dimensions
@@ -115,17 +127,29 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
             .day_night_cycles
             .insert(read_json_definition::<DayNightCycleDefinition>(path));
     } else if file_name == "sky.json" {
-        content.skies.insert(read_json_definition::<SkyDefinition>(path));
+        content
+            .skies
+            .insert(read_json_definition::<SkyDefinition>(path));
     } else if path_has_component(path, "inventory_categories") {
         content
             .inventory_categories
             .insert(read_json_definition::<InventoryCategoryDefinition>(path));
     } else if path_has_component(path, "items") {
-        content.items.insert(read_json_definition::<ItemDefinition>(path));
+        content
+            .items
+            .insert(read_json_definition::<ItemDefinition>(path));
     } else if path_has_component(path, "layers") {
-        content.layers.insert(read_json_definition::<LayerDefinition>(path));
+        content
+            .layers
+            .insert(read_json_definition::<LayerDefinition>(path));
     } else if path_has_component(path, "objects") {
-        content.objects.insert(read_json_definition::<ObjectDefinition>(path));
+        content
+            .objects
+            .insert(read_json_definition::<ObjectDefinition>(path));
+    } else if path_has_component(path, "world_recipes") {
+        content
+            .world_recipes
+            .insert(read_json_definition::<WorldRecipeDefinition>(path));
     } else if path_has_component(path, "secondary_properties") {
         let property = secondary_property_group(path).unwrap_or_else(|| {
             panic!(

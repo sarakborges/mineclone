@@ -2,7 +2,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::crash_log::log_gameplay_event,
-    content::object::{ObjectPlacementFace, ObjectRegistry},
+    content::{
+        object::ObjectRegistry,
+        world_recipe::{WorldRecipeIngredientDefinition, WorldRecipeRegistry},
+    },
     gameplay::availability::world_interaction_available,
     player::{
         camera::GameplayCamera,
@@ -11,6 +14,7 @@ use crate::{
         item_stack::ItemStack,
         viewmodel::ViewModelAnimation,
     },
+    targeting::block::{BlockTargetingSet, TargetedBlock},
     voxel::{
         edit::VoxelTopologyRuntime,
         object::ObjectCell,
@@ -21,20 +25,13 @@ use crate::{
     world_objects::{WorldObjectPlaceRequest, detached_object_drop_request},
 };
 
-use super::block::{BlockTargetingSet, TargetedBlock};
+pub(crate) struct WorldCraftingPlugin;
 
-const PEBBLE_ID: &str = "asteria:pebble";
-const STONE_ID: &str = "asteria:stone";
-const RUSTIC_WORKBENCH_ID: &str = "asteria:rustic_workbench";
-const RUSTIC_WORKBENCH_PEBBLE_COST: u32 = 5;
-
-pub(crate) struct RusticWorkbenchPlugin;
-
-impl Plugin for RusticWorkbenchPlugin {
+impl Plugin for WorldCraftingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            craft_rustic_workbench
+            apply_world_recipe
                 .after(BlockTargetingSet::PlacementState)
                 .before(BlockTargetingSet::Interaction)
                 .run_if(world_interaction_available),
@@ -43,9 +40,10 @@ impl Plugin for RusticWorkbenchPlugin {
 }
 
 #[derive(SystemParam)]
-struct RusticWorkbenchContext<'w> {
+struct WorldCraftingContext<'w> {
     targeted: ResMut<'w, TargetedBlock>,
     hotbar: ResMut<'w, PlayerHotbar>,
+    recipes: Res<'w, WorldRecipeRegistry>,
     objects: Res<'w, ObjectRegistry>,
     runtime: VoxelTopologyRuntime<'w>,
     object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
@@ -53,12 +51,12 @@ struct RusticWorkbenchContext<'w> {
     viewmodel_animation: ResMut<'w, ViewModelAnimation>,
 }
 
-fn craft_rustic_workbench(
+fn apply_world_recipe(
     buttons: Res<ButtonInput<MouseButton>>,
-    player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
-    mut context: RusticWorkbenchContext,
+    player: Single<&GameMode, With<GameplayCamera>>,
+    mut context: WorldCraftingContext,
 ) {
-    let (_, game_mode) = player.into_inner();
+    let game_mode = player.into_inner();
     if !buttons.just_pressed(MouseButton::Right) || *game_mode != GameMode::Survival {
         return;
     }
@@ -66,27 +64,30 @@ fn craft_rustic_workbench(
     let Some(hit) = context.targeted.0 else {
         return;
     };
-    if hit.block_id != STONE_ID {
-        return;
-    }
-
     let selected_slot = context.hotbar.selected_slot();
-    if context.hotbar.item_at(selected_slot) != Some(PEBBLE_ID)
-        || inventory_quantity(&context.hotbar, PEBBLE_ID) < RUSTIC_WORKBENCH_PEBBLE_COST
-    {
-        return;
-    }
-
-    let Some(definition) = context.objects.get(RUSTIC_WORKBENCH_ID) else {
-        warn!("rustic workbench definition is missing");
+    let Some(held_item) = context.hotbar.item_at(selected_slot) else {
         return;
     };
-    if !definition.supports_placement_face(ObjectPlacementFace::Top) {
-        warn!("rustic workbench must support top-face placement");
+    let Some(recipe) = context.recipes.matching(hit.block_id, held_item) else {
+        return;
+    };
+    if !has_ingredients(&context.hotbar, &recipe.ingredients) {
         return;
     }
 
-    let support = hit.voxel + IVec3::NEG_Y;
+    let recipe_id = recipe.id.clone();
+    let ingredients = recipe.ingredients.clone();
+    let (object_id, placement_face) = recipe.result.object_placement();
+    let object_id = object_id.to_owned();
+
+    let Some(definition) = context.objects.get(&object_id) else {
+        return;
+    };
+    if !definition.supports_placement_face(placement_face) {
+        return;
+    }
+
+    let support = hit.voxel - placement_face.normal();
     let support_available = {
         let read = context.runtime.read();
         read.cell_at(support).is_some() && read.object_at(support).is_none()
@@ -96,11 +97,10 @@ fn craft_rustic_workbench(
     }
 
     let replacement = ObjectCell::new(
-        RUSTIC_WORKBENCH_ID,
-        ObjectPlacementFace::Top,
+        &object_id,
+        placement_face,
         TextureRotation::default(),
     );
-
     let Some(mutation) = context.runtime.set_block_detailed(hit.voxel, None) else {
         return;
     };
@@ -109,16 +109,7 @@ fn craft_rustic_workbench(
         support,
         object: replacement,
     });
-
-    let consumed = consume_inventory_quantity(
-        &mut context.hotbar,
-        PEBBLE_ID,
-        RUSTIC_WORKBENCH_PEBBLE_COST,
-    );
-    debug_assert!(
-        consumed,
-        "validated rustic workbench crafting must consume exactly five pebbles"
-    );
+    consume_ingredients(&mut context.hotbar, &ingredients);
 
     for detached in mutation.detached_objects {
         if let Some(drop) = detached_object_drop_request(
@@ -132,15 +123,27 @@ fn craft_rustic_workbench(
     }
 
     log_gameplay_event(format!(
-        "workbench.craft workbench={} source_block={} ingredient={} quantity={} voxel={:?}",
-        RUSTIC_WORKBENCH_ID,
-        STONE_ID,
-        PEBBLE_ID,
-        RUSTIC_WORKBENCH_PEBBLE_COST,
-        hit.voxel
+        "world_recipe.apply recipe={} target_block={} result_object={} voxel={:?}",
+        recipe_id, hit.block_id, object_id, hit.voxel
     ));
     context.targeted.0 = None;
     context.viewmodel_animation.play_place();
+}
+
+fn has_ingredients(hotbar: &PlayerHotbar, ingredients: &[WorldRecipeIngredientDefinition]) -> bool {
+    ingredients
+        .iter()
+        .all(|ingredient| inventory_quantity(hotbar, &ingredient.item) >= ingredient.quantity)
+}
+
+fn consume_ingredients(hotbar: &mut PlayerHotbar, ingredients: &[WorldRecipeIngredientDefinition]) {
+    for ingredient in ingredients {
+        let consumed = consume_inventory_quantity(hotbar, &ingredient.item, ingredient.quantity);
+        debug_assert!(
+            consumed,
+            "validated world recipe ingredients must be consumed atomically"
+        );
+    }
 }
 
 fn inventory_quantity(hotbar: &PlayerHotbar, item_id: &str) -> u32 {
@@ -151,11 +154,7 @@ fn inventory_quantity(hotbar: &PlayerHotbar, item_id: &str) -> u32 {
         .sum()
 }
 
-fn consume_inventory_quantity(
-    hotbar: &mut PlayerHotbar,
-    item_id: &str,
-    quantity: u32,
-) -> bool {
+fn consume_inventory_quantity(hotbar: &mut PlayerHotbar, item_id: &str, quantity: u32) -> bool {
     if quantity == 0 {
         return true;
     }
@@ -184,8 +183,7 @@ fn consume_inventory_quantity(
         let replacement = if removed == stack.quantity() {
             None
         } else {
-            let quantity = stack.quantity() - removed;
-            Some(stack.with_quantity(quantity))
+            Some(stack.with_quantity(stack.quantity() - removed))
         };
         hotbar.replace_inventory_item(index, replacement);
         remaining -= removed;
@@ -200,26 +198,38 @@ mod tests {
     use super::*;
     use crate::player::hotbar::BACKPACK_SLOT_COUNT;
 
+    const PEBBLE_ID: &str = "asteria:pebble";
+    const STICK_ID: &str = "asteria:stick";
+
     #[test]
-    fn inventory_quantity_counts_backpack_and_hotbar() {
+    fn ingredient_check_counts_backpack_and_hotbar() {
         let mut hotbar = PlayerHotbar::default();
         hotbar.set_selected_stack(Some(ItemStack::new(PEBBLE_ID).with_quantity(2)));
         hotbar.replace_inventory_item(0, Some(ItemStack::new(PEBBLE_ID).with_quantity(4)));
 
-        assert_eq!(inventory_quantity(&hotbar, PEBBLE_ID), 6);
+        assert!(has_ingredients(
+            &hotbar,
+            &[WorldRecipeIngredientDefinition {
+                item: PEBBLE_ID.to_owned(),
+                quantity: 6,
+            }]
+        ));
     }
 
     #[test]
-    fn workbench_cost_consumes_selected_stack_first_then_backpack() {
+    fn recipe_cost_consumes_selected_stack_first_then_backpack() {
         let mut hotbar = PlayerHotbar::default();
         hotbar.set_selected_stack(Some(ItemStack::new(PEBBLE_ID).with_quantity(2)));
         hotbar.replace_inventory_item(0, Some(ItemStack::new(PEBBLE_ID).with_quantity(4)));
 
-        assert!(consume_inventory_quantity(
+        consume_ingredients(
             &mut hotbar,
-            PEBBLE_ID,
-            RUSTIC_WORKBENCH_PEBBLE_COST
-        ));
+            &[WorldRecipeIngredientDefinition {
+                item: PEBBLE_ID.to_owned(),
+                quantity: 5,
+            }],
+        );
+
         assert!(hotbar.stack_at(hotbar.selected_slot()).is_none());
         assert_eq!(
             hotbar.inventory_stack_at(0).map(ItemStack::quantity),
@@ -228,19 +238,26 @@ mod tests {
     }
 
     #[test]
-    fn insufficient_pebbles_are_not_consumed() {
+    fn multiple_ingredients_must_all_exist_before_recipe_can_run() {
         let mut hotbar = PlayerHotbar::default();
-        hotbar.set_selected_stack(Some(ItemStack::new(PEBBLE_ID).with_quantity(2)));
+        hotbar.set_selected_stack(Some(ItemStack::new(PEBBLE_ID).with_quantity(5)));
         hotbar.replace_inventory_item(
             BACKPACK_SLOT_COUNT - 1,
-            Some(ItemStack::new(PEBBLE_ID).with_quantity(2)),
+            Some(ItemStack::new(STICK_ID).with_quantity(1)),
         );
 
-        assert!(!consume_inventory_quantity(
-            &mut hotbar,
-            PEBBLE_ID,
-            RUSTIC_WORKBENCH_PEBBLE_COST
-        ));
-        assert_eq!(inventory_quantity(&hotbar, PEBBLE_ID), 4);
+        let ingredients = [
+            WorldRecipeIngredientDefinition {
+                item: PEBBLE_ID.to_owned(),
+                quantity: 5,
+            },
+            WorldRecipeIngredientDefinition {
+                item: STICK_ID.to_owned(),
+                quantity: 2,
+            },
+        ];
+        assert!(!has_ingredients(&hotbar, &ingredients));
+        assert_eq!(inventory_quantity(&hotbar, PEBBLE_ID), 5);
+        assert_eq!(inventory_quantity(&hotbar, STICK_ID), 1);
     }
 }

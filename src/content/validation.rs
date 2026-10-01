@@ -127,6 +127,16 @@ pub(super) fn validate_content(content: &LoadedContent) {
         item.validate_references(&content.inventory_categories);
     }
 
+    for recipe in content.world_recipes.iter() {
+        recipe.validate_references(&content.blocks, &content.objects, |item_id| {
+            content.blocks.get(item_id).is_some()
+                || content.items.get(item_id).is_some()
+                || content.layers.get(item_id).is_some()
+                || content.objects.get(item_id).is_some()
+                || content.tools.get(item_id).is_some()
+        });
+    }
+
     for structure in content.structures.iter() {
         structure.validate_references(
             &content.blocks,

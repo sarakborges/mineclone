@@ -43,6 +43,7 @@ pub(crate) mod tool_behavior;
 pub(crate) mod tool_category;
 pub(crate) mod tool_id;
 mod validation;
+pub(crate) mod world_recipe;
 
 use bevy::prelude::*;
 use loader::load_content;

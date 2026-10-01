@@ -2,6 +2,7 @@ pub(crate) mod availability;
 pub(crate) mod modal;
 pub(crate) mod random;
 mod pause;
+mod world_crafting;
 
 use bevy::prelude::*;
 
@@ -12,6 +13,7 @@ use crate::player::{
 };
 use modal::GameplayModalPlugin;
 use pause::PausePlugin;
+use world_crafting::WorldCraftingPlugin;
 
 pub(crate) struct GameplayPlugin;
 
@@ -27,6 +29,7 @@ impl Plugin for GameplayPlugin {
             PlayerViewModelPlugin,
             PlayerCameraPlugin,
             PlayerMovementPlugin,
+            WorldCraftingPlugin,
         ));
     }
 }
