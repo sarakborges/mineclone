@@ -450,8 +450,11 @@ pub(in crate::world::biome_field) fn fit_surface_site_weights(
     for left_index in 0..sampled_sites.len() {
         let (left_cell, left_site, _, left_biome) = sampled_sites[left_index];
         let left_biome = left_biome.expect("surface biome site must be resolved");
-        for right_index in (left_index + 1)..sampled_sites.len() {
-            let (right_cell, right_site, _, right_biome) = sampled_sites[right_index];
+        for (right_index, &(right_cell, right_site, _, right_biome)) in sampled_sites
+            .iter()
+            .enumerate()
+            .skip(left_index + 1)
+        {
             let right_biome = right_biome.expect("surface biome site must be resolved");
             if left_biome == right_biome
                 || !surface_sites_share_border(
