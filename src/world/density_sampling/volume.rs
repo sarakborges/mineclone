@@ -15,6 +15,8 @@ const DENSITY_NOISE_EDGE: f32 = 0.15;
 const ISLAND_EDGE_BLEND: f32 = 0.16;
 const ISLAND_TOP_BLEND: f32 = 0.020;
 const ISLAND_BOTTOM_BLEND: f32 = 0.16;
+const ISLAND_BOTTOM_FOOTPRINT: f32 = 0.12;
+const ISLAND_UNDERSIDE_EXPONENT: f32 = 0.68;
 const SECONDARY_LOBE_MIN_COUNT: usize = 3;
 const SECONDARY_LOBE_VARIATION: usize = 3;
 
@@ -196,7 +198,9 @@ fn floating_island_sample(
         ),
         seed.rotate_left(43),
     );
-    let edge_scale = (1.0 + planar_noise * edge_irregularity + detail_noise * edge_irregularity * 0.3)
+    let edge_scale = (1.0
+        + planar_noise * edge_irregularity
+        + detail_noise * edge_irregularity * 0.3)
         .max(0.62);
     let shared_top = 0.24 + planar_noise * top_roughness + detail_noise * top_roughness * 0.22;
 
@@ -220,16 +224,20 @@ fn floating_island_sample(
         };
 
         let top = shared_top + lobe.top_offset;
-        highest_top = highest_top.max(top);
-        let core = (1.0 - radial).clamp(0.0, 1.0);
-        let authored_bottom = top - (0.16 + lobe.underside_depth * core.powf(0.72));
-        // The solid island is built upward from the volume's core boundary.
-        // Authored lobe depth may taper/lift the underside, but it can never
-        // push solid density into the volume fade where selection strength
-        // would clip the island into a thin disk.
-        let bottom = authored_bottom.max(volume_bottom);
+        let bottom = (top - lobe.underside_depth).max(volume_bottom);
+        let vertical_span = (top - bottom).max(ISLAND_BOTTOM_BLEND + ISLAND_TOP_BLEND);
+        let upward_progress = ((local_position.y - bottom) / vertical_span).clamp(0.0, 1.0);
+
+        // Build the island from the underside upward. Each vertical layer
+        // expands the lobe footprint until it reaches the authored broad top,
+        // so lower slices can never inherit the full top footprint and turn
+        // the island into a thick disk.
+        let footprint_scale = ISLAND_BOTTOM_FOOTPRINT
+            + (1.0 - ISLAND_BOTTOM_FOOTPRINT)
+                * smoothstep(upward_progress.powf(ISLAND_UNDERSIDE_EXPONENT));
+        let layer_edge_blend = ISLAND_EDGE_BLEND * (0.35 + footprint_scale * 0.65);
         let edge_mask = smoothstep(
-            ((1.0 + ISLAND_EDGE_BLEND - radial) / (ISLAND_EDGE_BLEND * 2.0))
+            ((footprint_scale + layer_edge_blend - radial) / (layer_edge_blend * 2.0))
                 .clamp(0.0, 1.0),
         );
         let top_mask =
@@ -238,6 +246,10 @@ fn floating_island_sample(
             ((local_position.y - bottom) / ISLAND_BOTTOM_BLEND).clamp(0.0, 1.0),
         );
         let lobe_mask = edge_mask * top_mask * bottom_mask;
+
+        if lobe_mask > 0.0 {
+            highest_top = highest_top.max(top);
+        }
 
         // Probabilistic-union form is a smooth max for [0, 1] masks. Because
         // every secondary lobe overlaps the central core, this creates one
@@ -279,10 +291,13 @@ fn floating_island_lobe(seed: u64, index: usize) -> FloatingIslandLobe {
 
     let salt = index as u64;
     let angle = std::f32::consts::TAU * hash_unit(seed, 0x9e37_79b9_7f4a_7c15 ^ salt);
-    let offset = 0.28 + 0.16 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
+    let offset =
+        0.28 + 0.16 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
     let center = Vec2::new(angle.cos(), angle.sin()) * offset;
-    let radius_x = 0.34 + 0.18 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
-    let radius_z = 0.34 + 0.18 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
+    let radius_x =
+        0.34 + 0.18 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
+    let radius_z =
+        0.34 + 0.18 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
     let top_offset =
         (hash_unit(seed, 0x27d4_eb2f_1656_67c5 ^ salt.rotate_left(29)) - 0.5) * 0.10;
     let underside_depth =
@@ -474,6 +489,30 @@ mod tests {
     }
 
     #[test]
+    fn floating_island_footprint_expands_from_bottom_to_top() {
+        let seed = 7;
+        let lower_side = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(0.45, -0.72, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+        let upper_side = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(0.45, -0.35, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+
+        assert!(lower_side.mask < 0.1);
+        assert!(upper_side.mask > 0.9);
+    }
+
+    #[test]
     fn floating_island_edge_tapers_before_the_outer_boundary() {
         let seed = 7;
         let inner = floating_island_sample(
@@ -501,8 +540,7 @@ mod tests {
     fn floating_island_top_layer_depth_stays_within_the_surface_block() {
         let top: f32 = 0.24;
         let local_y: f32 = top - (0.64 / 36.0);
-        let depth =
-            ((top - local_y).max(0.0) * 36.0).floor() as u32;
+        let depth = ((top - local_y).max(0.0) * 36.0).floor() as u32;
 
         assert_eq!(depth, 0);
     }
