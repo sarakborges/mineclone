@@ -13,6 +13,13 @@ struct ResolvedSurfaceInfluence<'a> {
     weight: f32,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct SurfaceMaterialSample {
+    pub(crate) position: Vec3,
+    pub(crate) depth: u32,
+    pub(crate) steep: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct SurfaceMaterialColumn<'a> {
     influences: Vec<ResolvedSurfaceInfluence<'a>>,
@@ -54,9 +61,7 @@ pub(crate) fn resolve_surface_material_column<'a>(
 }
 
 pub(crate) fn solid_block_id(
-    position: Vec3,
-    surface_depth: u32,
-    steep_surface: bool,
+    surface: SurfaceMaterialSample,
     volume: Option<VolumeBiomeSelection>,
     volume_surface_depth: Option<u32>,
     surface_materials: &SurfaceMaterialColumn<'_>,
@@ -84,16 +89,16 @@ pub(crate) fn solid_block_id(
     // Surface layers are horizontal cover. On a cliff/steep mountain edge,
     // expose the biome's deepest authored substrate instead of wrapping grass,
     // dirt, sand, or another shallow surface layer down the wall.
-    let material_depth = if steep_surface {
+    let material_depth = if surface.steep {
         u32::MAX
     } else {
-        surface_depth
+        surface.depth
     };
     let base_material = strongest_surface_material(surface_materials, material_depth);
-    let resolved_material = if !steep_surface && surface_depth > 0 {
+    let resolved_material = if !surface.steep && surface.depth > 0 {
         strongest_surface_material(
             surface_materials,
-            irregular_layer_depth(position, surface_depth, biome_field.seed()),
+            irregular_layer_depth(surface.position, surface.depth, biome_field.seed()),
         )
         .or(base_material)
     } else {
@@ -101,7 +106,10 @@ pub(crate) fn solid_block_id(
     };
 
     resolved_material.map(intern_block_id).unwrap_or_else(|| {
-        panic!("surface biome sample did not resolve a material at depth {surface_depth}")
+        panic!(
+            "surface biome sample did not resolve a material at depth {}",
+            surface.depth
+        )
     })
 }
 
