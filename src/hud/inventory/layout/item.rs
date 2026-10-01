@@ -269,7 +269,10 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
             ..default()
         },
         Pickable::IGNORE,
-    ));
+    ))
+    .with_children(|overlay| {
+        spawn_item_stack_count(overlay, quantity);
+    });
 }
 
 pub(in crate::hud::inventory) fn spawn_inventory_item(
