@@ -42,6 +42,10 @@ const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
 const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
 const CRAFTING_ICON_SIZE: f32 = 32.0;
 const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
+const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
+const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 84.0;
+const CURRENT_STATION_ICON_SIZE: f32 = 58.0;
+const CURRENT_STATION_ICON: &str = "textures/creative_categories/crafting_materials.png";
 const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
 const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
 
@@ -263,6 +267,7 @@ fn spawn_crafting_root(
         ))
         .with_children(|root| {
             spawn_crafting_panel(root, &recipes, selected_recipe, session, content, hotbar);
+            spawn_current_station_dock(root, content);
         });
 }
 
@@ -325,6 +330,154 @@ fn spawn_crafting_panel(
 
         spawn_recipe_details(panel, selected_recipe, content, hotbar);
     });
+}
+
+fn spawn_current_station_dock(
+    root: &mut ChildSpawnerCommands,
+    content: &CraftingContent<'_>,
+) {
+    root.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            right: px(CRAFTING_SCREEN_PADDING),
+            top: px(0),
+            bottom: px(0),
+            width: px(CURRENT_STATION_PANEL_WIDTH),
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Stretch,
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
+    .with_children(|dock| {
+        spawn_current_station_panel(dock, content);
+    });
+}
+
+fn spawn_current_station_panel(
+    parent: &mut ChildSpawnerCommands,
+    content: &CraftingContent<'_>,
+) {
+    parent
+        .spawn((
+            surface::hud_container(Node {
+                width: percent(100),
+                padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                row_gap: px(CRAFTING_PANEL_GAP),
+                ..default()
+            }),
+            Pickable::IGNORE,
+        ))
+        .with_children(|panel| {
+            panel.spawn((typography::hud_heading("Current Station"), Pickable::IGNORE));
+
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        padding: UiRect::all(px(14)),
+                        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        row_gap: px(CRAFTING_INSET_GAP),
+                        ..default()
+                    },
+                    BackgroundColor(theme::SURFACE_INSET),
+                    BorderColor::all(theme::BORDER_STRONG),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|card| {
+                    card.spawn((
+                        Node {
+                            width: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                            height: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BackgroundColor(theme::SURFACE_ELEVATED),
+                        BorderColor::all(theme::BORDER),
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|frame| {
+                        frame.spawn((
+                            ImageNode::new(content.asset_server.load(CURRENT_STATION_ICON)),
+                            Node {
+                                width: px(CURRENT_STATION_ICON_SIZE),
+                                height: px(CURRENT_STATION_ICON_SIZE),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ));
+                    });
+
+                    card.spawn((
+                        typography::caption("BASE STATION"),
+                        TextColor(theme::TEXT_SUBTLE),
+                        Pickable::IGNORE,
+                    ));
+                    card.spawn((
+                        typography::hud_subheading("Inventory"),
+                        TextLayout::justify(Justify::Center),
+                        Pickable::IGNORE,
+                    ));
+                    card.spawn((
+                        typography::muted("Personal crafting"),
+                        TextLayout::justify(Justify::Center),
+                        Pickable::IGNORE,
+                    ));
+                });
+
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        padding: UiRect::axes(px(10), px(8)),
+                        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::SpaceBetween,
+                        ..default()
+                    },
+                    BackgroundColor(theme::SURFACE_INSET),
+                    BorderColor::all(theme::BORDER),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|status| {
+                    status.spawn((typography::caption("STATUS"), Pickable::IGNORE));
+                    status
+                        .spawn((
+                            Node {
+                                flex_direction: FlexDirection::Row,
+                                align_items: AlignItems::Center,
+                                column_gap: px(6),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ))
+                        .with_children(|ready| {
+                            ready.spawn((
+                                Node {
+                                    width: px(8),
+                                    height: px(8),
+                                    ..default()
+                                },
+                                BackgroundColor(CRAFTING_READY_COLOR),
+                                Pickable::IGNORE,
+                            ));
+                            ready.spawn((
+                                typography::inventory_category("Available"),
+                                TextColor(CRAFTING_READY_COLOR),
+                                Pickable::IGNORE,
+                            ));
+                        });
+                });
+        });
 }
 
 fn spawn_recipe_list(
