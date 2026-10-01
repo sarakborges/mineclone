@@ -29,7 +29,10 @@ use crate::content::{
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
-    spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
+    spatial::{
+        hash_unit, lerp, smoothstep, surface_minimum_spacing, surface_site_position,
+        warp_surface_position,
+    },
     surface_cache::SurfaceSiteCache,
 };
 use super::{
@@ -367,6 +370,14 @@ impl BiomeField {
 
     pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
         self.ocean_surface_index
+    }
+
+    pub(crate) fn surface_site_spacing(&self) -> Vec2 {
+        self.surface_site_spacing
+    }
+
+    pub(crate) fn surface_site_position(&self, cell: IVec2) -> Vec2 {
+        surface_site_position(cell, self.surface_site_spacing, self.seed)
     }
 
     pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
