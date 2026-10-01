@@ -7,7 +7,7 @@ use std::{
 use bevy::prelude::*;
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_gameplay_event, log_gameplay_warn},
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity,
         movement::{
@@ -125,6 +125,12 @@ pub(crate) struct PendingWarp {
 
 impl PendingWarp {
     pub(crate) fn request(&mut self, target: IVec3) {
+        if let Some(previous) = self.target {
+            log_gameplay_event(format!(
+                "warp.superseded previous_target={:?} target={:?}",
+                previous, target
+            ));
+        }
         log_gameplay_event(format!("warp.request target={:?}", target));
         self.target = Some(target);
         self.search.reset();
@@ -190,10 +196,13 @@ pub(super) fn resolve_pending_warp(
     let result = advance_safe_eye_position_search(&world, target, &mut pending.search);
     let search_elapsed = search_started.elapsed();
     if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
-        warn!(
-            "slow warp safe-position search: target={target:?} elapsed_ms={:.2}",
+        log_gameplay_warn(format!(
+            "warp.search slow target={target:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
+            pending.search.radius,
+            pending.search.frontier.len(),
+            pending.search.visited.iter().filter(|visited| **visited).count(),
             search_elapsed.as_secs_f64() * 1_000.0
-        );
+        ));
         *slow_search_warned = true;
     }
 
@@ -224,8 +233,8 @@ pub(super) fn resolve_pending_warp(
             );
             pending.target = None;
             pending.search.reset();
-            log_gameplay_event(format!(
-                "warp.failed target={:?} search_radius={}",
+            log_gameplay_warn(format!(
+                "warp.failed target={:?} search_radius={} reason=no_safe_destination",
                 target, WARP_SEARCH_RADIUS_BLOCKS
             ));
             pending.outcome = Some(WarpOutcome::Failed);
