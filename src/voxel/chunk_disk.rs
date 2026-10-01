@@ -22,7 +22,7 @@ use super::{
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     log_variant::is_hollow_log_id,
-    object::ObjectCell,
+    object::{ObjectCell, ObjectTransform},
     microblock::{ARTISANS_KIT_MASK_PROPERTY, LEGACY_ARTISANS_KIT_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
@@ -68,6 +68,18 @@ struct DiskLayerState {
     rotation: u8,
 }
 
+fn default_object_scale() -> [u16; 3] {
+    ObjectTransform::default().encoded_scale()
+}
+
+fn object_offset_is_default(offset: &[i16; 3]) -> bool {
+    *offset == [0; 3]
+}
+
+fn object_scale_is_default(scale: &[u16; 3]) -> bool {
+    *scale == default_object_scale()
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct DiskObjectState {
@@ -75,6 +87,10 @@ struct DiskObjectState {
     face: u8,
     id: String,
     rotation: u8,
+    #[serde(default, skip_serializing_if = "object_offset_is_default")]
+    offset: [i16; 3],
+    #[serde(default = "default_object_scale", skip_serializing_if = "object_scale_is_default")]
+    scale: [u16; 3],
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -176,6 +192,8 @@ impl DiskChunkBuilder {
             face: object.face.index(),
             id: object.object_id.to_owned(),
             rotation: rotation_index(object.rotation),
+            offset: object.transform.encoded_offset(),
+            scale: object.transform.encoded_scale(),
         });
         Ok(())
     }
@@ -313,7 +331,6 @@ impl DiskChunk {
             fluids,
         )
     }
-
 }
 
 fn palette_index<T: Eq>(palette: &mut Vec<T>, state: T) -> io::Result<u16> {
@@ -510,13 +527,16 @@ fn decode_object_entries(
             return Err(invalid_data("saved object is missing its supporting block"));
         }
 
+        let transform = ObjectTransform::from_encoded(state.offset, state.scale)
+            .ok_or_else(|| invalid_data("invalid saved object transform"))?;
         entries.push((
             voxel,
-            ObjectCell {
-                object_id: intern_object_id(&state.id),
+            ObjectCell::with_transform(
+                intern_object_id(&state.id),
                 face,
-                rotation: TextureRotation::from_quarter_turn(state.rotation),
-            },
+                TextureRotation::from_quarter_turn(state.rotation),
+                transform,
+            ),
         ));
         previous_voxel = Some(state.voxel);
     }
@@ -680,5 +700,16 @@ mod tests {
             serde_json::to_string(&resident_disk).unwrap(),
             serde_json::to_string(&archived_disk).unwrap()
         );
+    }
+
+    #[test]
+    fn legacy_object_state_defaults_to_identity_transform() {
+        let state: DiskObjectState = serde_json::from_str(
+            r#"{"voxel":1,"face":2,"id":"grass","rotation":0}"#,
+        )
+        .expect("legacy object state should remain readable");
+
+        assert_eq!(state.offset, [0; 3]);
+        assert_eq!(state.scale, ObjectTransform::default().encoded_scale());
     }
 }
