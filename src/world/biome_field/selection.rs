@@ -59,24 +59,27 @@ impl BiomeField {
             climate_field: &self.climate,
         };
 
-        if authored_adjacency_allows(raw_index, &selection_context)
+        if surface_minimum_size_allows(raw_index, &selection_context)
+            && authored_adjacency_allows(raw_index, &selection_context)
             && surface_size_allows(raw_index, &selection_context)
         {
             return raw_index;
         }
 
         if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
-            authored_adjacency_allows(candidate.index, &selection_context)
+            surface_minimum_size_allows(candidate.index, &selection_context)
+                && authored_adjacency_allows(candidate.index, &selection_context)
                 && surface_size_allows(candidate.index, &selection_context)
         }) {
             return candidate.index;
         }
 
-        // Keep size.max ahead of authored adjacency when the two constraints
-        // have no common local solution. This prevents a fallback candidate
-        // from reintroducing an oversized Plains/Ocean region.
+        // Minimum size is a hard lower bound. Prefer preserving it even when
+        // the authored adjacency and maximum-size constraints have no common
+        // local solution.
         if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
             candidate.index != raw_index
+                && surface_minimum_size_allows(candidate.index, &selection_context)
                 && surface_size_allows(candidate.index, &selection_context)
         }) {
             return candidate.index;
@@ -84,13 +87,14 @@ impl BiomeField {
 
         if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
             candidate.index != raw_index
+                && surface_minimum_size_allows(candidate.index, &selection_context)
                 && authored_adjacency_allows(candidate.index, &selection_context)
         }) {
             return candidate.index;
         }
 
         panic!(
-            "surface biome site {cell:?} has no biome compatible with authored adjacency constraints"
+            "surface biome site {cell:?} has no biome compatible with size or adjacency constraints"
         );
     }
 
@@ -308,6 +312,54 @@ fn authored_adjacency_allows(
     }
 
     false
+}
+
+fn surface_minimum_size_allows(
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    let candidate = &context.biomes[candidate_index];
+    let minimum_radii = Vec2::new(candidate.size.x.min, candidate.size.z.min);
+
+    for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+        for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+            let offset = IVec2::new(x, z);
+            if offset == IVec2::ZERO {
+                continue;
+            }
+
+            let neighbor_cell = context.cell + offset;
+            let neighbor_site =
+                surface_site_position(neighbor_cell, context.spacing, context.seed);
+            if !surface_sites_share_border(
+                context.cell,
+                context.site,
+                neighbor_cell,
+                neighbor_site,
+                context.spacing,
+                context.seed,
+            ) {
+                continue;
+            }
+
+            // A different neighboring biome is still relevant to the minimum:
+            // its site defines the nearest possible boundary of this region.
+            // Check the half-distance in the authored ellipse so size.min is
+            // enforced independently of which biome wins the neighbor site.
+            let half_delta = (neighbor_site - context.site) * 0.5;
+            let normalized = Vec2::new(
+                half_delta.x / minimum_radii.x,
+                half_delta.y / minimum_radii.y,
+            )
+            .length();
+
+            if normalized + f32::EPSILON < 1.0 {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 fn surface_size_allows(
@@ -734,6 +786,66 @@ mod tests {
         assert_eq!(climate_weight(ocean_core, ocean_climate), 1.0);
         assert!((0.0..1.0).contains(&climate_weight(shoreline, ocean_climate)));
         assert_eq!(climate_weight(inland, ocean_climate), 0.0);
+    }
+
+    #[test]
+    fn minimum_size_rejects_a_region_with_a_too_close_neighbor() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 180.0,
+            max: 420.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 180.0,
+            max: 420.0,
+        };
+
+        let spacing = Vec2::splat(300.0);
+        let candidate_cell = IVec2::ZERO;
+        let candidate_site = surface_site_position(candidate_cell, spacing, 42);
+        let climate = MacroClimateField::new(42);
+        let biomes = [plains];
+        let context = SurfaceSelectionContext {
+            cell: candidate_cell,
+            site: candidate_site,
+            spacing,
+            seed: 42,
+            biomes: &biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+
+        assert!(!surface_minimum_size_allows(0, &context));
+    }
+
+    #[test]
+    fn minimum_size_accepts_the_authored_spacing_guarantee() {
+        let mut plains = test_surface_entry("plains", None);
+        plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 180.0,
+            max: 420.0,
+        };
+        plains.size.z = crate::content::dimension::DimensionBiomeSizeAxis {
+            min: 180.0,
+            max: 420.0,
+        };
+
+        let spacing = Vec2::splat(360.0);
+        let candidate_cell = IVec2::ZERO;
+        let candidate_site = surface_site_position(candidate_cell, spacing, 42);
+        let climate = MacroClimateField::new(42);
+        let biomes = [plains];
+        let context = SurfaceSelectionContext {
+            cell: candidate_cell,
+            site: candidate_site,
+            spacing,
+            seed: 42,
+            biomes: &biomes,
+            spawn_oceans: true,
+            climate_field: &climate,
+        };
+
+        assert!(surface_minimum_size_allows(0, &context));
     }
 
     #[test]
