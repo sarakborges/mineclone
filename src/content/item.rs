@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use crate::localization::{Language, LocalizedText};
+use crate::localization::{Language, LocalizedText, UiLocalization};
 
 use super::{
     asset_path::is_safe_relative_asset_path,
     block::BlockRegistry,
+    builtin_ids::BUCKET_FLUID_METADATA_KEY,
+    fluid::FluidRegistry,
     inventory_category::InventoryCategoryRegistry,
     item_id::intern_item_id,
     layer::LayerRegistry,
@@ -13,6 +15,8 @@ use super::{
     registry::DefinitionMap,
     tool::ToolRegistry,
 };
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,4 +107,40 @@ pub(crate) fn display_name<'a>(
         return tool.name.text(language);
     }
     item_id
+}
+
+pub(crate) fn display_name_with_metadata(
+    item_id: &str,
+    metadata: Option<(&str, &str)>,
+    items: &ItemRegistry,
+    blocks: &BlockRegistry,
+    layers: &LayerRegistry,
+    objects: &ObjectRegistry,
+    tools: &ToolRegistry,
+    fluids: &FluidRegistry,
+    localization: &UiLocalization,
+    language: Language,
+) -> String {
+    let base_name = display_name(item_id, items, blocks, layers, objects, tools, language);
+    if item_id != BUCKET_TOOL_ID {
+        return base_name.to_owned();
+    }
+
+    let contained_fluid = metadata
+        .filter(|(key, _)| *key == BUCKET_FLUID_METADATA_KEY)
+        .map(|(_, value)| value);
+    let content_name = match contained_fluid {
+        Some(fluid_definition_id) => fluids
+            .id_of(fluid_definition_id)
+            .and_then(|fluid_id| fluids.get(fluid_id))
+            .map(|fluid| fluid.name.text(language))
+            .unwrap_or(fluid_definition_id),
+        None => localization.text(language, "inventory.bucket.empty"),
+    };
+
+    localization.format(
+        language,
+        "inventory.bucket.variant",
+        &[("bucket", base_name), ("content", content_name)],
+    )
 }
