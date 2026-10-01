@@ -6,26 +6,17 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        inventory_category::InventoryCategoryRegistry,
-        item::ItemRegistry,
-        layer::LayerRegistry,
-        object::ObjectRegistry,
-        tool::ToolRegistry,
-    },
+    content::inventory_category::InventoryCategoryRegistry,
     gameplay::modal::GameplayModalState,
-    localization::{Language, UiLocalization},
+    localization::UiLocalization,
     player::{
         game_mode::GameMode,
         hotbar::PlayerHotbar,
         inventory::InventoryCursor,
     },
-    world::biome_field::BiomeField,
 };
 
-use crate::hud::block_icon::BlockIconMaterial;
+pub(super) use crate::hud::item_icon::HudItemIconView as InventoryItemView;
 
 pub(super) use self::{
     creative::spawn_creative_catalog_rows,
@@ -35,22 +26,6 @@ pub(super) use self::{
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
 use super::state::{InventoryHudRoot, PANEL_GAP};
-
-pub(super) struct InventoryItemView<'a> {
-    pub(super) asset_server: &'a AssetServer,
-    pub(super) items: &'a ItemRegistry,
-    pub(super) blocks: &'a BlockRegistry,
-    pub(super) layers: &'a LayerRegistry,
-    pub(super) objects: &'a ObjectRegistry,
-    pub(super) tools: &'a ToolRegistry,
-    pub(super) dyes: &'a crate::content::secondary_property::SecondaryPropertyRegistry,
-    pub(super) brush_mode: &'a crate::tools::BrushMode,
-    pub(super) biomes: &'a BiomeRegistry,
-    pub(super) biome_field: &'a BiomeField,
-    pub(super) player_position: Vec2,
-    pub(super) language: Language,
-    pub(super) icon_materials: &'a mut Assets<BlockIconMaterial>,
-}
 
 pub(super) struct InventoryLayoutState<'a> {
     pub(super) categories: &'a InventoryCategoryRegistry,
