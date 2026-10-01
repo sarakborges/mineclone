@@ -266,10 +266,13 @@ pub(super) fn handle_creative_scroll(
 }
 
 pub(super) fn handle_creative_slot_clicks(
+    keys: Res<ButtonInput<KeyCode>>,
     mut cursor: ResMut<InventoryCursor>,
     mut creative_view: ResMut<CreativeInventoryView>,
     slots: Query<(&Interaction, &CreativeInventorySlot), Changed<Interaction>>,
 ) {
+    let fill_stack = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+
     for (interaction, slot) in &slots {
         if *interaction != Interaction::Pressed {
             continue;
@@ -279,8 +282,16 @@ pub(super) fn handle_creative_slot_clicks(
             creative_view.blur_search();
         }
         if let Some(item) = slot.item {
-            cursor.pick_creative_item(item, slot.metadata);
-            log_gameplay_event(format!("inventory.creative_pick item={item}"));
+            let before_cursor = cursor
+                .stack()
+                .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
+            cursor.pick_creative_item(item, slot.metadata, fill_stack);
+            let after_cursor = cursor
+                .stack()
+                .map(|stack| format!("{}x{}", stack.id(), stack.quantity()));
+            log_gameplay_event(format!(
+                "inventory.creative_click item={item} shift={fill_stack} cursor_before={before_cursor:?} cursor_after={after_cursor:?}"
+            ));
         }
         break;
     }

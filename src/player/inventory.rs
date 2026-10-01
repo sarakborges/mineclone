@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     hotbar::PlayerHotbar,
-    item_stack::ItemStack,
+    item_stack::{ItemStack, MAX_STACK_SIZE},
 };
 
 #[derive(Resource, Default)]
@@ -50,12 +50,27 @@ impl InventoryCursor {
         &mut self,
         item: &'static str,
         metadata: Option<(&'static str, &'static str)>,
+        fill_stack: bool,
     ) {
-        let mut stack = ItemStack::new(item);
+        let mut creative_stack = ItemStack::new(item);
         if let Some((key, value)) = metadata {
-            stack = stack.with_metadata(key, value);
+            creative_stack = creative_stack.with_metadata(key, value);
         }
-        self.item = Some(stack);
+
+        let Some(mut held_stack) = self.item.take() else {
+            self.item = Some(creative_stack);
+            return;
+        };
+
+        if !held_stack.can_stack_with(&creative_stack) {
+            return;
+        }
+
+        if fill_stack {
+            creative_stack = creative_stack.with_quantity(MAX_STACK_SIZE);
+        }
+        let _ = held_stack.merge_from(creative_stack);
+        self.item = Some(held_stack);
     }
 
     pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {
@@ -75,5 +90,58 @@ impl Plugin for PlayerInventoryPlugin {
             OnExit(GameplayModalState::Inventory),
             reset_resource::<InventoryCursor>,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn creative_click_adds_one_to_matching_cursor_stack() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item("asteria:pebble", None, false);
+        cursor.pick_creative_item("asteria:pebble", None, false);
+
+        assert_eq!(cursor.stack().unwrap().quantity(), 2);
+    }
+
+    #[test]
+    fn creative_shift_click_fills_matching_cursor_stack() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item("asteria:pebble", None, false);
+        cursor.pick_creative_item("asteria:pebble", None, true);
+
+        assert_eq!(cursor.stack().unwrap().quantity(), MAX_STACK_SIZE);
+    }
+
+    #[test]
+    fn creative_click_on_different_item_discards_cursor_stack() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item("asteria:pebble", None, false);
+        cursor.pick_creative_item("asteria:stick", None, false);
+
+        assert!(cursor.stack().is_none());
+    }
+
+    #[test]
+    fn creative_click_treats_metadata_variants_as_different_items() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item(
+            "asteria:bucket",
+            Some(("contained_fluid", "asteria:water")),
+            false,
+        );
+        cursor.pick_creative_item(
+            "asteria:bucket",
+            Some(("contained_fluid", "asteria:lava")),
+            false,
+        );
+
+        assert!(cursor.stack().is_none());
     }
 }
