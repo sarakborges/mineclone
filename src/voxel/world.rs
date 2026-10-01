@@ -153,7 +153,15 @@ impl VoxelWorld {
     }
 
     pub(crate) fn object_at(&self, world_position: IVec3) -> Option<ObjectCell> {
-        self.objects_at(world_position).first().copied()
+        if world_position.y < 0 {
+            return None;
+        }
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        self.resident.get(chunk_coord)?.object_at(
+            local_position.x,
+            local_position.y,
+            local_position.z,
+        )
     }
 
     pub(crate) fn layers_at(
