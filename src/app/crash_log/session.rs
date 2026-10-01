@@ -3,7 +3,7 @@ use std::{
     fs::{self, File, OpenOptions, create_dir_all},
     io::Write,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
     time::SystemTime,
 };
 
@@ -16,6 +16,7 @@ const DATA_DIRECTORY: &str = "data";
 const ASSETS_DIRECTORY: &str = "assets";
 
 static SESSION_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+static SESSION_LOG_FILE: OnceLock<Mutex<File>> = OnceLock::new();
 
 pub(super) fn initialize_session_log() {
     let timestamp = format_timestamp(SystemTime::now());
@@ -50,6 +51,7 @@ pub(super) fn initialize_session_log() {
         );
         let _ = writeln!(file);
         let _ = file.flush();
+        let _ = SESSION_LOG_FILE.set(Mutex::new(file));
     }
 
     let _ = SESSION_LOG_PATH.set(path);
@@ -112,6 +114,14 @@ pub(super) fn append_runtime_line(line: &str) -> bool {
 }
 
 pub(super) fn with_session_file(write: impl FnOnce(&mut File)) -> bool {
+    if let Some(file) = SESSION_LOG_FILE.get() {
+        let Ok(mut file) = file.lock() else {
+            return false;
+        };
+        write(&mut file);
+        return file.flush().is_ok();
+    }
+
     let Some(path) = SESSION_LOG_PATH.get() else {
         return false;
     };
