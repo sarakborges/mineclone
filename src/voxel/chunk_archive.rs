@@ -5,7 +5,7 @@ use super::{
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
     layer::{AttachedLayer, LayerCell},
-    object::ObjectCell,
+    object::{ObjectCell, ObjectTransform},
     texture_rotation::TextureRotation,
 };
 
@@ -27,6 +27,8 @@ struct ArchivedObjectCell {
     face: u8,
     object_id: &'static str,
     rotation: u8,
+    offset: [i16; 3],
+    scale: [u16; 3],
 }
 
 pub struct ArchivedChunk {
@@ -93,6 +95,8 @@ impl ArchivedChunk {
                 face: object.face.index(),
                 object_id: object.object_id,
                 rotation: rotation_index(object.rotation),
+                offset: object.transform.encoded_offset(),
+                scale: object.transform.encoded_scale(),
             });
         }
         objects.sort_unstable_by_key(|object| object.voxel_index);
@@ -202,6 +206,8 @@ impl ArchivedChunk {
                 face: object.face.index(),
                 object_id: object.object_id,
                 rotation: rotation_index(object.rotation),
+                offset: object.transform.encoded_offset(),
+                scale: object.transform.encoded_scale(),
             });
         }
         objects.sort_unstable_by_key(|object| object.voxel_index);
@@ -248,12 +254,14 @@ impl ArchivedChunk {
         self.objects.iter().map(|archived| {
             (
                 archived.voxel_index as usize,
-                ObjectCell {
-                    object_id: archived.object_id,
-                    face: ObjectPlacementFace::from_index(archived.face)
+                ObjectCell::with_transform(
+                    archived.object_id,
+                    ObjectPlacementFace::from_index(archived.face)
                         .expect("archived object face must be valid"),
-                    rotation: TextureRotation::from_quarter_turn(archived.rotation),
-                },
+                    TextureRotation::from_quarter_turn(archived.rotation),
+                    ObjectTransform::from_encoded(archived.offset, archived.scale)
+                        .expect("archived object transform must be valid"),
+                ),
             )
         })
     }
