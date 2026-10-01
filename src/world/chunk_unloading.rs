@@ -33,6 +33,7 @@ const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 const RENDER_RETIREMENT_BUDGET: Duration = Duration::from_millis(1);
 const MAX_RENDER_RETIREMENTS_PER_FRAME: usize = 2;
+const MAX_RENDER_RETIREMENTS_DURING_STREAMING: usize = 1;
 const MIN_UNLOAD_RETENTION_MARGIN_CHUNKS: i32 = 10;
 const MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME: usize = 8;
 
@@ -124,13 +125,15 @@ pub(super) fn retire_distant_chunk_meshes(
     mut runtime: ChunkRenderRetirementRuntime<'_, '_>,
     mut state: Local<RenderRetirementState>,
 ) {
-    // Do not churn render residency while the current show radius still has
-    // holes to fill. Normal distance retirement can catch up once visible
-    // streaming is complete; hard mesh-memory pressure is enforced separately
-    // by enforce_chunk_mesh_residency_budget in PostUpdate.
-    if streaming.has_renderable_streaming_backlog() {
-        return;
-    }
+    // Visible streaming remains foreground work, but completely pausing render
+    // retirement makes stale meshes accumulate during sustained travel. Retire
+    // at most one stale allocation per frame while holes are still being filled
+    // and return to the normal budget once foreground streaming converges.
+    let max_retirements = if streaming.has_renderable_streaming_backlog() {
+        MAX_RENDER_RETIREMENTS_DURING_STREAMING
+    } else {
+        MAX_RENDER_RETIREMENTS_PER_FRAME
+    };
 
     let selection_revision = runtime.presentation_selection.revision();
     if state.selection_revision != Some(selection_revision) {
@@ -149,7 +152,7 @@ pub(super) fn retire_distant_chunk_meshes(
 
     let mut budget = FrameWorkBudget::new(RENDER_RETIREMENT_BUDGET, 1)
         .with_global_deadline(frame_budget.deadline())
-        .with_maximum_items(MAX_RENDER_RETIREMENTS_PER_FRAME);
+        .with_maximum_items(max_retirements);
 
     while !budget.exhausted() {
         let Some(coord) = state.pop() else {
@@ -456,11 +459,7 @@ pub(super) fn evict_distant_chunks(
         return;
     }
 
-    log_gameplay_event(format!(
-        "chunk.unload count={} coords={:?}",
-        unloaded.len(),
-        unloaded
-    ));
+    log_gameplay_event(format!("chunk.unload count={}", unloaded.len()));
     eviction.lighting.enqueue_chunk_unloads(unloaded.as_slice());
     unloaded.clear();
 }
