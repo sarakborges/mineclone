@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::crash_log::log_gameplay_event,
@@ -42,37 +42,42 @@ impl Plugin for RusticWorkbenchPlugin {
     }
 }
 
+#[derive(SystemParam)]
+struct RusticWorkbenchContext<'w> {
+    targeted: ResMut<'w, TargetedBlock>,
+    hotbar: ResMut<'w, PlayerHotbar>,
+    objects: Res<'w, ObjectRegistry>,
+    runtime: VoxelTopologyRuntime<'w>,
+    object_placements: MessageWriter<'w, WorldObjectPlaceRequest>,
+    item_spawns: MessageWriter<'w, WorldItemSpawnRequest>,
+    viewmodel_animation: ResMut<'w, ViewModelAnimation>,
+}
+
 fn craft_rustic_workbench(
     buttons: Res<ButtonInput<MouseButton>>,
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
-    mut targeted: ResMut<TargetedBlock>,
-    mut hotbar: ResMut<PlayerHotbar>,
-    objects: Res<ObjectRegistry>,
-    mut runtime: VoxelTopologyRuntime,
-    mut object_placements: MessageWriter<WorldObjectPlaceRequest>,
-    mut item_spawns: MessageWriter<WorldItemSpawnRequest>,
-    mut viewmodel_animation: ResMut<ViewModelAnimation>,
+    mut context: RusticWorkbenchContext,
 ) {
     let (_, game_mode) = player.into_inner();
     if !buttons.just_pressed(MouseButton::Right) || *game_mode != GameMode::Survival {
         return;
     }
 
-    let Some(hit) = targeted.0 else {
+    let Some(hit) = context.targeted.0 else {
         return;
     };
     if hit.block_id != STONE_ID {
         return;
     }
 
-    let selected_slot = hotbar.selected_slot();
-    if hotbar.item_at(selected_slot) != Some(PEBBLE_ID)
-        || inventory_quantity(&hotbar, PEBBLE_ID) < RUSTIC_WORKBENCH_PEBBLE_COST
+    let selected_slot = context.hotbar.selected_slot();
+    if context.hotbar.item_at(selected_slot) != Some(PEBBLE_ID)
+        || inventory_quantity(&context.hotbar, PEBBLE_ID) < RUSTIC_WORKBENCH_PEBBLE_COST
     {
         return;
     }
 
-    let Some(definition) = objects.get(RUSTIC_WORKBENCH_ID) else {
+    let Some(definition) = context.objects.get(RUSTIC_WORKBENCH_ID) else {
         warn!("rustic workbench definition is missing");
         return;
     };
@@ -86,7 +91,7 @@ fn craft_rustic_workbench(
     // occupies exactly the voxel that used to contain the stone.
     let support = hit.voxel + IVec3::NEG_Y;
     let support_available = {
-        let read = runtime.read();
+        let read = context.runtime.read();
         read.cell_at(support).is_some() && read.object_at(support).is_none()
     };
     if !support_available {
@@ -99,17 +104,17 @@ fn craft_rustic_workbench(
         TextureRotation::default(),
     );
 
-    let Some(mutation) = runtime.set_block_detailed(hit.voxel, None) else {
+    let Some(mutation) = context.runtime.set_block_detailed(hit.voxel, None) else {
         return;
     };
 
-    object_placements.write(WorldObjectPlaceRequest {
+    context.object_placements.write(WorldObjectPlaceRequest {
         support,
         object: replacement,
     });
 
     let consumed = consume_inventory_quantity(
-        &mut hotbar,
+        &mut context.hotbar,
         PEBBLE_ID,
         RUSTIC_WORKBENCH_PEBBLE_COST,
     );
@@ -123,10 +128,10 @@ fn craft_rustic_workbench(
             hit.voxel,
             mutation.previous_cell,
             detached,
-            &objects,
+            &context.objects,
         )
     {
-        item_spawns.write(drop);
+        context.item_spawns.write(drop);
     }
 
     log_gameplay_event(format!(
@@ -137,8 +142,8 @@ fn craft_rustic_workbench(
         RUSTIC_WORKBENCH_PEBBLE_COST,
         hit.voxel
     ));
-    targeted.0 = None;
-    viewmodel_animation.play_place();
+    context.targeted.0 = None;
+    context.viewmodel_animation.play_place();
 }
 
 fn inventory_quantity(hotbar: &PlayerHotbar, item_id: &str) -> u32 {
