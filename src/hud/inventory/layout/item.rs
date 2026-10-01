@@ -115,9 +115,18 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
     }
 
     if let Some(object) = items.objects.get(item_id) {
+        let tint = block_tint_at(
+            object.tint,
+            items.player_position,
+            items.biome_field,
+            items.biomes,
+        );
         root.spawn((
             InventoryCursorIcon,
-            ImageNode::new(items.asset_server.load(object.icon.clone())),
+            ImageNode {
+                color: tint,
+                ..ImageNode::new(items.asset_server.load(object.icon.clone()))
+            },
             Node {
                 position_type: PositionType::Absolute,
                 left: px(position.x - ITEM_ICON_SIZE * 0.5),
@@ -260,10 +269,7 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
             ..default()
         },
         Pickable::IGNORE,
-    ))
-    .with_children(|overlay| {
-        spawn_item_stack_count(overlay, quantity);
-    });
+    ));
 }
 
 pub(in crate::hud::inventory) fn spawn_inventory_item(
@@ -285,8 +291,17 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
     }
 
     if let Some(object) = items.objects.get(item_id) {
+        let tint = block_tint_at(
+            object.tint,
+            items.player_position,
+            items.biome_field,
+            items.biomes,
+        );
         slot.spawn((
-            ImageNode::new(items.asset_server.load(object.icon.clone())),
+            ImageNode {
+                color: tint,
+                ..ImageNode::new(items.asset_server.load(object.icon.clone()))
+            },
             Node {
                 width: px(ITEM_ICON_SIZE),
                 height: px(ITEM_ICON_SIZE),
