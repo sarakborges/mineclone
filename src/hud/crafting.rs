@@ -70,6 +70,19 @@ struct CraftingIngredientLabel {
 #[derive(Component)]
 struct CraftingStatusText;
 
+type RecipeSelectionInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static CraftingRecipeSelectionButton),
+    (Changed<Interaction>, With<Button>),
+>;
+type CraftInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static CraftRecipeButton),
+    (Changed<Interaction>, With<Button>),
+>;
+
 #[derive(SystemParam)]
 struct CraftingContent<'w> {
     recipes: Res<'w, CraftingRecipeRegistry>,
@@ -273,7 +286,7 @@ fn spawn_crafting_root(
             ))
             .with_children(|right| {
                 spawn_recipe_details(right, selected_recipe, content, hotbar);
-                inventory.spawn(right);
+                inventory.spawn_player_only(right);
             });
         });
 }
@@ -398,10 +411,7 @@ fn spawn_recipe_details(
 }
 
 fn select_crafting_recipe(
-    interactions: Query<
-        (&Interaction, &CraftingRecipeSelectionButton),
-        (Changed<Interaction>, With<Button>),
-    >,
+    interactions: RecipeSelectionInteractionQuery,
     mut session: ResMut<CraftingSession>,
 ) {
     for (interaction, selection) in &interactions {
@@ -416,7 +426,7 @@ fn select_crafting_recipe(
 }
 
 fn handle_craft_clicks(
-    interactions: Query<(&Interaction, &CraftRecipeButton), (Changed<Interaction>, With<Button>)>,
+    interactions: CraftInteractionQuery,
     content: CraftingContent,
     mut hotbar: ResMut<PlayerHotbar>,
     mut status: Query<&mut Text, With<CraftingStatusText>>,

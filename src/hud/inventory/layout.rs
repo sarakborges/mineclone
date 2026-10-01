@@ -45,6 +45,35 @@ pub(super) fn spawn_character_info_inventory(
     items: &mut InventoryItemView<'_>,
 ) {
     spawn_game_mode_inventory_panel(root, state, items);
+    spawn_inventory_overlay(root, state, items);
+}
+
+pub(super) fn spawn_player_inventory(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    spawn_player_inventory_panel(root, state, items);
+    spawn_inventory_overlay(root, state, items);
+}
+
+fn spawn_game_mode_inventory_panel(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    if state.game_mode.has_creative_inventory() {
+        spawn_creative_panel(root, state, items);
+    } else {
+        spawn_player_inventory_panel(root, state, items);
+    }
+}
+
+fn spawn_inventory_overlay(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
     spawn_item_tooltip(root);
 
     let Some(item_id) = state.cursor.item() else {
@@ -60,18 +89,6 @@ pub(super) fn spawn_character_info_inventory(
             .map_or(0, crate::player::item_stack::ItemStack::quantity),
         position,
     );
-}
-
-fn spawn_game_mode_inventory_panel(
-    root: &mut ChildSpawnerCommands,
-    state: &InventoryLayoutState<'_>,
-    items: &mut InventoryItemView<'_>,
-) {
-    if state.game_mode.has_creative_inventory() {
-        spawn_creative_panel(root, state, items);
-    } else {
-        spawn_player_inventory_panel(root, state, items);
-    }
 }
 
 pub(super) fn spawn_inventory_root(
@@ -101,20 +118,6 @@ pub(super) fn spawn_inventory_root(
         ))
         .with_children(|root| {
             spawn_game_mode_inventory_panel(root, state, items);
-            spawn_item_tooltip(root);
-
-            let Some(item_id) = state.cursor.item() else {
-                return;
-            };
-            let position = state.cursor_position.unwrap_or(Vec2::ZERO);
-            spawn_cursor_icon(root, item_id, position, items);
-            spawn_cursor_stack_count(
-                root,
-                state
-                    .cursor
-                    .stack()
-                    .map_or(0, crate::player::item_stack::ItemStack::quantity),
-                position,
-            );
+            spawn_inventory_overlay(root, state, items);
         });
 }
