@@ -357,7 +357,7 @@ fn spawn_world_item_visual(
                     };
                     set_block_model_tint(&mut material, tint);
                     model.spawn((
-                        Mesh3d(content.block_meshes.world_face(face)),
+                        Mesh3d(content.block_meshes.world_face_for_block(face, block)),
                         MeshMaterial3d(assets.block.add(material)),
                         NotShadowCaster,
                     ));
@@ -539,7 +539,6 @@ fn advance_item_axis(
     }
     true
 }
-
 
 fn pickup_proximity_items(
     time: Res<Time>,

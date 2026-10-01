@@ -2,7 +2,10 @@ use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::block::BlockRegistry,
+    content::{
+        block::BlockRegistry,
+        block_shape::{is_stackable_layer, STACKABLE_LAYER_HEIGHT},
+    },
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -16,6 +19,8 @@ use crate::{
         block_face::BlockFace,
         log_variant::is_hollow_log_id,
         orientation::orientation_rotation,
+        read::VoxelRead,
+        stackable_layer::stackable_layer_count,
     },
 };
 
@@ -143,6 +148,8 @@ fn spawn_placement_preview(
                             .is_some_and(|(block_id, _)| is_hollow_log_id(block_id))
                         {
                             content.block_meshes.hollow_world_face(face)
+                        } else if let Some((_, block)) = selected {
+                            content.block_meshes.world_face_for_block(face, block)
                         } else {
                             content.block_meshes.world_face(face)
                         }),
@@ -241,11 +248,11 @@ fn update_placement_preview(
         hide_if_visible(&mut root.2);
 
         for (face, material_handle, mut mesh, mut visibility) in &mut faces {
-            if block_changed {
+            if block_changed || block_definitions_changed {
                 mesh.0 = if is_hollow_log_id(block_id) {
                     block_meshes.hollow_world_face(face.face)
                 } else {
-                    block_meshes.world_face(face.face)
+                    block_meshes.world_face_for_block(face.face, block)
                 };
             }
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
@@ -283,17 +290,34 @@ fn update_placement_preview(
         *tint_target = None;
         return;
     };
-    let Some(voxel) = placement_voxel(
-        hit,
-        selection.scene.world(),
-        selection.scene.player_translation(),
-    ) else {
-        if root.1.translation != Vec3::ZERO {
-            root.1.translation = Vec3::ZERO;
-        }
-        hide_if_visible(&mut root.2);
-        *tint_target = None;
-        return;
+
+    let stacked_layers = if is_stackable_layer(block) && hit.normal == IVec3::Y {
+        selection
+            .scene
+            .world()
+            .cell_at(hit.voxel)
+            .filter(|cell| cell.block_id == block_id)
+            .and_then(stackable_layer_count)
+    } else {
+        None
+    };
+
+    let (voxel, layer_height_offset) = if let Some(layer_count) = stacked_layers {
+        (hit.voxel, layer_count as f32 * STACKABLE_LAYER_HEIGHT)
+    } else {
+        let Some(voxel) = placement_voxel(
+            hit,
+            selection.scene.world(),
+            selection.scene.player_translation(),
+        ) else {
+            if root.1.translation != Vec3::ZERO {
+                root.1.translation = Vec3::ZERO;
+            }
+            hide_if_visible(&mut root.2);
+            *tint_target = None;
+            return;
+        };
+        (voxel, 0.0)
     };
 
     let horizontal = IVec2::new(voxel.x, voxel.z);
@@ -322,7 +346,11 @@ fn update_placement_preview(
         *tint_target = Some((block_id, horizontal));
     }
 
-    let translation = voxel.as_vec3() + Vec3::splat(0.5);
+    let mut translation = voxel.as_vec3() + Vec3::splat(0.5);
+    if is_stackable_layer(block) {
+        translation.y -= (1.0 - STACKABLE_LAYER_HEIGHT) * 0.5;
+        translation.y += layer_height_offset;
+    }
     if root.1.translation != translation {
         root.1.translation = translation;
     }

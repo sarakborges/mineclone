@@ -13,6 +13,7 @@ pub(crate) mod biome_terrain_modifier;
 pub(crate) mod block;
 pub(crate) mod block_id;
 pub(crate) mod block_orientation;
+pub(crate) mod block_shape;
 pub(crate) mod builtin_ids;
 pub(crate) mod color;
 pub(crate) mod creature;

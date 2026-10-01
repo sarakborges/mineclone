@@ -1,13 +1,13 @@
 {
-  "id": "asteria:snow",
+  "id": "asteria:snow_layer",
   "name": {
-    "english": "Snow",
-    "portuguese_brazil": "Neve",
-    "spanish": "Nieve"
+    "english": "Snow Layer",
+    "portuguese_brazil": "Camada de Neve",
+    "spanish": "Capa de Nieve"
   },
   "category": "natural_blocks",
   "tags": [
-    "fragmentable"
+    "stackable_layer"
   ],
   "textures": {
     "top": "textures/blocks/snow.png",

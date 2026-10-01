@@ -3,7 +3,8 @@ use bevy::{
 };
 
 use crate::{
-    rendering::block_display::block_display_face_points,
+    content::{block::BlockDefinition, block_shape::{STACKABLE_LAYER_HEIGHT, is_stackable_layer}},
+    rendering::block_display::{block_display_face_points, block_display_face_points_for_height},
     voxel::{
         block_face::{BlockFace, BlockFaces},
         quad::{QUAD_TRIANGLE_INDICES, VOXEL_FACE_UVS},
@@ -13,20 +14,39 @@ use crate::{
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
     world: BlockFaces<Handle<Mesh>>,
+    layer_world: BlockFaces<Handle<Mesh>>,
     hollow_world: BlockFaces<Handle<Mesh>>,
     display_top: Handle<Mesh>,
     display_front: Handle<Mesh>,
     display_right: Handle<Mesh>,
+    layer_display_top: Handle<Mesh>,
+    layer_display_front: Handle<Mesh>,
+    layer_display_right: Handle<Mesh>,
 }
 
 impl BlockModelMeshes {
     pub(super) fn new(meshes: &mut Assets<Mesh>) -> Self {
         Self {
             world: BlockFaces::from_fn(|face| meshes.add(block_face_mesh(face))),
+            layer_world: BlockFaces::from_fn(|face| {
+                meshes.add(block_face_mesh_for_height(face, STACKABLE_LAYER_HEIGHT))
+            }),
             hollow_world: BlockFaces::from_fn(|face| meshes.add(hollow_log_face_mesh(face))),
             display_top: meshes.add(block_display_face_mesh(BlockFace::Top)),
             display_front: meshes.add(block_display_face_mesh(BlockFace::Front)),
             display_right: meshes.add(block_display_face_mesh(BlockFace::Right)),
+            layer_display_top: meshes.add(block_display_face_mesh_for_height(
+                BlockFace::Top,
+                STACKABLE_LAYER_HEIGHT,
+            )),
+            layer_display_front: meshes.add(block_display_face_mesh_for_height(
+                BlockFace::Front,
+                STACKABLE_LAYER_HEIGHT,
+            )),
+            layer_display_right: meshes.add(block_display_face_mesh_for_height(
+                BlockFace::Right,
+                STACKABLE_LAYER_HEIGHT,
+            )),
         }
     }
 
@@ -34,17 +54,80 @@ impl BlockModelMeshes {
         self.world.get(face).clone()
     }
 
+    pub(crate) fn world_face_for_block(
+        &self,
+        face: BlockFace,
+        block: &BlockDefinition,
+    ) -> Handle<Mesh> {
+        if is_stackable_layer(block) {
+            self.layer_world.get(face).clone()
+        } else {
+            self.world_face(face)
+        }
+    }
+
     pub(crate) fn hollow_world_face(&self, face: BlockFace) -> Handle<Mesh> {
         self.hollow_world.get(face).clone()
     }
 
     pub(crate) fn display_face(&self, face: BlockFace) -> Handle<Mesh> {
-        match face {
-            BlockFace::Top => self.display_top.clone(),
-            BlockFace::Front => self.display_front.clone(),
-            BlockFace::Right => self.display_right.clone(),
-            _ => panic!("{face:?} is not part of the display block model"),
+        display_face_handle(face, &self.display_top, &self.display_front, &self.display_right)
+    }
+
+    pub(crate) fn display_face_for_block(
+        &self,
+        face: BlockFace,
+        block: &BlockDefinition,
+    ) -> Handle<Mesh> {
+        if is_stackable_layer(block) {
+            display_face_handle(
+                face,
+                &self.layer_display_top,
+                &self.layer_display_front,
+                &self.layer_display_right,
+            )
+        } else {
+            self.display_face(face)
         }
+    }
+
+    pub(crate) fn face_for_mesh(&self, mesh: &Handle<Mesh>) -> Option<BlockFace> {
+        for face in BlockFace::ALL {
+            if self.world.get(face) == mesh
+                || self.layer_world.get(face) == mesh
+                || self.hollow_world.get(face) == mesh
+            {
+                return Some(face);
+            }
+        }
+
+        for face in [BlockFace::Top, BlockFace::Front, BlockFace::Right] {
+            if self.display_face(face) == *mesh
+                || display_face_handle(
+                    face,
+                    &self.layer_display_top,
+                    &self.layer_display_front,
+                    &self.layer_display_right,
+                ) == *mesh
+            {
+                return Some(face);
+            }
+        }
+        None
+    }
+}
+
+fn display_face_handle(
+    face: BlockFace,
+    top: &Handle<Mesh>,
+    front: &Handle<Mesh>,
+    right: &Handle<Mesh>,
+) -> Handle<Mesh> {
+    match face {
+        BlockFace::Top => top.clone(),
+        BlockFace::Front => front.clone(),
+        BlockFace::Right => right.clone(),
+        _ => panic!("{face:?} is not part of the display block model"),
     }
 }
 
@@ -54,6 +137,15 @@ fn display_position(point: Vec2) -> [f32; 3] {
 
 fn block_display_face_mesh(face: BlockFace) -> Mesh {
     let points = block_display_face_points(face);
+    block_display_mesh_from_points(points)
+}
+
+fn block_display_face_mesh_for_height(face: BlockFace, height: f32) -> Mesh {
+    let points = block_display_face_points_for_height(face, height);
+    block_display_mesh_from_points(points)
+}
+
+fn block_display_mesh_from_points(points: [Vec2; 4]) -> Mesh {
     let uvs = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
     Mesh::new(
@@ -70,10 +162,17 @@ fn block_display_face_mesh(face: BlockFace) -> Mesh {
 }
 
 pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
+    block_face_mesh_for_height(face, 1.0)
+}
+
+fn block_face_mesh_for_height(face: BlockFace, height: f32) -> Mesh {
     let center = Vec3::splat(0.5);
-    let vertices = face
-        .unit_vertices()
-        .map(|vertex| (Vec3::from_array(vertex) - center).to_array());
+    let height = height.clamp(0.0, 1.0);
+    let vertices = face.unit_vertices().map(|vertex| {
+        let mut centered = Vec3::from_array(vertex) - center;
+        centered.y *= height;
+        centered.to_array()
+    });
 
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -84,7 +183,6 @@ pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, VOXEL_FACE_UVS.to_vec())
     .with_inserted_indices(Indices::U32(QUAD_TRIANGLE_INDICES.to_vec()))
 }
-
 
 const HOLLOW_PREVIEW_WALL: f32 = 1.0 / 16.0;
 

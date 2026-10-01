@@ -24,7 +24,7 @@ pub(crate) mod terrain_material;
 
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
-use block_model::setup_block_model_assets;
+use block_model::{setup_block_model_assets, sync_block_model_mesh_geometry};
 use block_model_material::BlockModelMaterial;
 use celestial::CelestialPlugin;
 use sun_lighting::SunLightingPlugin;
@@ -46,22 +46,23 @@ impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameplayAssetPreloads>()
             .add_plugins((
-            MaterialPlugin::<TerrainMaterial>::default(),
-            MaterialPlugin::<BlockModelMaterial>::default(),
-        ))
-        .add_systems(Startup, setup_block_model_assets)
-        .add_plugins((
-            AssetUploadPlugin,
-            ExtrudedSpritePlugin,
-            MeshAllocatorDiagnosticsPlugin,
-            EnvironmentPlugin,
-            LightingPlugin,
-            SunLightingPlugin,
-            DynamicLightsPlugin,
-            FogPlugin,
-            SkyPlugin,
-            SkyLayersPlugin,
-            CelestialPlugin,
-        ));
+                MaterialPlugin::<TerrainMaterial>::default(),
+                MaterialPlugin::<BlockModelMaterial>::default(),
+            ))
+            .add_systems(Startup, setup_block_model_assets)
+            .add_systems(PostUpdate, sync_block_model_mesh_geometry)
+            .add_plugins((
+                AssetUploadPlugin,
+                ExtrudedSpritePlugin,
+                MeshAllocatorDiagnosticsPlugin,
+                EnvironmentPlugin,
+                LightingPlugin,
+                SunLightingPlugin,
+                DynamicLightsPlugin,
+                FogPlugin,
+                SkyPlugin,
+                SkyLayersPlugin,
+                CelestialPlugin,
+            ));
     }
 }

@@ -7,7 +7,10 @@ use super::{
     block_display::BLOCK_DISPLAY_FACES,
     block_model_material::BlockModelMaterial,
 };
-use crate::voxel::block_face::BlockFace;
+use crate::{
+    content::{block::BlockRegistry, block_shape::is_stackable_layer},
+    voxel::{block_face::BlockFace, log_variant::is_hollow_log_id},
+};
 
 pub(crate) use geometry::BlockModelMeshes;
 pub(crate) use materials::{
@@ -95,4 +98,44 @@ pub(crate) fn setup_block_model_assets(
 ) {
     commands.insert_resource(BlockModelMeshes::new(&mut meshes));
     commands.insert_resource(BlockModelMaterials::new(&mut materials));
+}
+
+/// Block-model faces are shared by held items and placement previews. Swap only
+/// the mesh handle when a model changes between a full cube and a 1/8 layer;
+/// materials and transforms keep their existing ownership and update paths.
+pub(crate) fn sync_block_model_mesh_geometry(
+    blocks: Res<BlockRegistry>,
+    block_meshes: Res<BlockModelMeshes>,
+    models: Query<&BlockModel>,
+    parents: Query<&ChildOf>,
+    mut mesh_faces: Query<(Entity, &mut Mesh3d)>,
+) {
+    for (entity, mut mesh) in &mut mesh_faces {
+        let Ok(parent) = parents.get(entity) else {
+            continue;
+        };
+        let Ok(model) = models.get(parent.parent()) else {
+            continue;
+        };
+        let Some(block_id) = model.block_id() else {
+            continue;
+        };
+        let Some(block) = blocks.get(block_id) else {
+            continue;
+        };
+        let Some(face) = block_meshes.face_for_mesh(&mesh.0) else {
+            continue;
+        };
+
+        let next = match model.mode {
+            BlockModelMode::Display => block_meshes.display_face_for_block(face, block),
+            BlockModelMode::World if is_hollow_log_id(block_id) => {
+                block_meshes.hollow_world_face(face)
+            }
+            BlockModelMode::World => block_meshes.world_face_for_block(face, block),
+        };
+        if mesh.0 != next {
+            mesh.0 = next;
+        }
+    }
 }

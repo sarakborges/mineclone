@@ -3,9 +3,16 @@ use bevy::{
 };
 
 use crate::{
-    content::{block::BlockDefinition, block_orientation::BlockOrientation},
+    content::{
+        block::BlockDefinition,
+        block_orientation::BlockOrientation,
+        block_shape::block_model_height,
+    },
     rendering::{
-        block_display::{block_display_face_basis, block_display_face_shade},
+        block_display::{
+            block_display_face_basis, block_display_face_basis_for_height,
+            block_display_face_shade,
+        },
         block_texture::{block_face_texture_layers, load_block_texture_layer},
         color::color_to_linear_vec4,
     },
@@ -118,6 +125,13 @@ impl BlockIconMaterial {
         let top = load_oriented_face_layers(asset_server, BlockFace::Top, orientation, block);
         let front = load_oriented_face_layers(asset_server, BlockFace::Front, orientation, block);
         let right = load_oriented_face_layers(asset_server, BlockFace::Right, orientation, block);
+        let height = block_model_height(block);
+        let (top_origin_axis_u, top_axis_v) =
+            block_display_face_basis_for_height(BlockFace::Top, height);
+        let (front_origin_axis_u, front_axis_v) =
+            block_display_face_basis_for_height(BlockFace::Front, height);
+        let (right_origin_axis_u, right_axis_v) =
+            block_display_face_basis_for_height(BlockFace::Right, height);
 
         self.top_texture = top.base;
         self.front_texture = front.base;
@@ -138,6 +152,12 @@ impl BlockIconMaterial {
             right.overlay_present,
             0.0,
         );
+        self.top_origin_axis_u = top_origin_axis_u;
+        self.top_axis_v = top_axis_v;
+        self.front_origin_axis_u = front_origin_axis_u;
+        self.front_axis_v = front_axis_v;
+        self.right_origin_axis_u = right_origin_axis_u;
+        self.right_axis_v = right_axis_v;
     }
 
     pub(crate) fn has_tint(&self, tint: Color) -> bool {

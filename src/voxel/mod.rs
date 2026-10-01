@@ -29,6 +29,7 @@ pub(crate) mod read;
 pub(crate) mod revision;
 pub(crate) mod secondary_properties;
 pub(crate) mod spatial_search;
+pub(crate) mod stackable_layer;
 pub(crate) mod texture_rotation;
 pub(crate) mod update_queue;
 pub(crate) mod world;

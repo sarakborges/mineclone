@@ -34,11 +34,25 @@ impl BlockDisplayFaceGeometry {
 }
 
 pub(crate) fn block_display_face_points(face: BlockFace) -> [Vec2; 4] {
-    block_display_face_geometry(face).points()
+    block_display_face_points_for_height(face, 1.0)
+}
+
+pub(crate) fn block_display_face_points_for_height(
+    face: BlockFace,
+    height: f32,
+) -> [Vec2; 4] {
+    block_display_face_geometry(face, height).points()
 }
 
 pub(crate) fn block_display_face_basis(face: BlockFace) -> (Vec4, Vec4) {
-    let geometry = block_display_face_geometry(face);
+    block_display_face_basis_for_height(face, 1.0)
+}
+
+pub(crate) fn block_display_face_basis_for_height(
+    face: BlockFace,
+    height: f32,
+) -> (Vec4, Vec4) {
+    let geometry = block_display_face_geometry(face, height);
     (
         Vec4::new(
             geometry.origin.x,
@@ -59,24 +73,26 @@ pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
     }
 }
 
-fn block_display_face_geometry(face: BlockFace) -> BlockDisplayFaceGeometry {
+fn block_display_face_geometry(face: BlockFace, height: f32) -> BlockDisplayFaceGeometry {
+    let height = height.clamp(0.0, 1.0);
     let rising = Vec2::new(DISPLAY_HALF_WIDTH, DISPLAY_SLOPE);
     let falling = Vec2::new(DISPLAY_HALF_WIDTH, -DISPLAY_SLOPE);
-    let vertical = Vec2::new(0.0, DISPLAY_SIDE_HEIGHT);
+    let vertical = Vec2::new(0.0, DISPLAY_SIDE_HEIGHT * height);
+    let top_y = DISPLAY_TOP_Y + DISPLAY_SIDE_HEIGHT * (1.0 - height) * 0.5;
 
     match face {
         BlockFace::Top => BlockDisplayFaceGeometry {
-            origin: Vec2::new(DISPLAY_LEFT, DISPLAY_TOP_Y),
+            origin: Vec2::new(DISPLAY_LEFT, top_y),
             axis_u: rising,
             axis_v: falling,
         },
         BlockFace::Front => BlockDisplayFaceGeometry {
-            origin: Vec2::new(DISPLAY_LEFT, DISPLAY_TOP_Y),
+            origin: Vec2::new(DISPLAY_LEFT, top_y),
             axis_u: rising,
             axis_v: vertical,
         },
         BlockFace::Right => BlockDisplayFaceGeometry {
-            origin: Vec2::new(DISPLAY_CENTER_X, DISPLAY_TOP_Y + DISPLAY_SLOPE),
+            origin: Vec2::new(DISPLAY_CENTER_X, top_y + DISPLAY_SLOPE),
             axis_u: falling,
             axis_v: vertical,
         },

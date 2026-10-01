@@ -1,13 +1,13 @@
 {
-  "id": "asteria:sand",
+  "id": "asteria:sand_layer",
   "name": {
-    "english": "Sand",
-    "portuguese_brazil": "Areia",
-    "spanish": "Arena"
+    "english": "Sand Layer",
+    "portuguese_brazil": "Camada de Areia",
+    "spanish": "Capa de Arena"
   },
   "category": "natural_blocks",
   "tags": [
-    "fragmentable"
+    "stackable_layer"
   ],
   "textures": {
     "top": "textures/blocks/sand.png",
