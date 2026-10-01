@@ -5,7 +5,7 @@ use crate::content::biome_distribution::BiomeDistribution;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
-    SurfaceBoundarySample, SurfaceSiteCacheEntry,
+    SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
     selection::fitting::fit_surface_site_weights,
@@ -44,10 +44,15 @@ impl BiomeField {
             (warped.x / self.surface_site_spacing.x).round() as i32,
             (warped.y / self.surface_site_spacing.y).round() as i32,
         );
+
+        // Surface-biome identity is a canonical map now, not a side effect of
+        // terrain sampling. Resolve and stabilize the complete site window
+        // before this sample consumes any biome assignment.
+        self.ensure_surface_map_window(center);
+
         let mut sampled_sites =
             [(IVec2::ZERO, Vec2::ZERO, 0.0_f32, None); SITE_SAMPLE_COUNT];
         let mut sample_count = 0;
-
         {
             let cache = self
                 .surface_site_cache
@@ -61,45 +66,18 @@ impl BiomeField {
                         || surface_site_position(cell, self.surface_site_spacing, self.seed),
                         |entry| entry.position,
                     );
-                    sampled_sites[sample_count] = (
-                        cell,
-                        site,
-                        warped.distance(site),
-                        cached.map(|entry| entry.biome_index),
-                    );
+                    let biome_index = cached.map(|entry| entry.biome_index).unwrap_or_else(|| {
+                        // Keep the legacy selector reachable as an invariant
+                        // fallback, but normal sampling only consumes the map.
+                        self.select_surface_biome_index(cell, site)
+                    });
+                    sampled_sites[sample_count] =
+                        (cell, site, warped.distance(site), Some(biome_index));
                     sample_count += 1;
                 }
             }
         }
         debug_assert_eq!(sample_count, SITE_SAMPLE_COUNT);
-
-        let mut cache_updates = [None; SITE_SAMPLE_COUNT];
-        let mut cache_update_count = 0;
-        for (cell, site, _, candidate_index) in &mut sampled_sites[..sample_count] {
-            if candidate_index.is_some() {
-                continue;
-            }
-
-            let selected = self.select_surface_biome_index(*cell, *site);
-            *candidate_index = Some(selected);
-            cache_updates[cache_update_count] = Some((*cell, *site, selected));
-            cache_update_count += 1;
-        }
-
-        if cache_update_count > 0 {
-            let mut cache = self
-                .surface_site_cache
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            for update in &cache_updates[..cache_update_count] {
-                let (cell, position, selected) =
-                    update.expect("surface biome cache update must be initialized");
-                cache.entry(cell).or_insert(SurfaceSiteCacheEntry {
-                    position,
-                    biome_index: selected,
-                });
-            }
-        }
 
         // A center cell always resolves the same canonical 5x5 site window.
         // Cache its power-diagram solution so terrain sampling pays the graph
