@@ -101,19 +101,17 @@ impl BlockModelMeshes {
             }
         }
 
-        for face in [BlockFace::Top, BlockFace::Front, BlockFace::Right] {
-            if self.display_face(face) == *mesh
-                || display_face_handle(
-                    face,
-                    &self.layer_display_top,
-                    &self.layer_display_front,
-                    &self.layer_display_right,
-                ) == *mesh
-            {
-                return Some(face);
-            }
-        }
-        None
+        [BlockFace::Top, BlockFace::Front, BlockFace::Right]
+            .into_iter()
+            .find(|&face| {
+                self.display_face(face) == *mesh
+                    || display_face_handle(
+                        face,
+                        &self.layer_display_top,
+                        &self.layer_display_front,
+                        &self.layer_display_right,
+                    ) == *mesh
+            })
     }
 }
 
