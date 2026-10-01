@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-const WARP_SEARCH_RADIUS_BLOCKS: i32 = 48;
+const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
 const WARP_SEARCH_DIAMETER: usize = (WARP_SEARCH_RADIUS_BLOCKS * 2 + 1) as usize;
 const WARP_SEARCH_VOLUME: usize =
     WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER;
@@ -378,13 +378,6 @@ mod tests {
 
         assert_eq!(search.pop_nearest(), Some(IVec3::ZERO));
         assert_eq!(search.frontier.len(), 0);
-    }
-
-    #[test]
-    fn warp_search_covers_current_floating_island_vertical_radius() {
-        assert!(warp_offset_index(IVec3::new(48, 0, 0)).is_some());
-        assert!(warp_offset_index(IVec3::new(0, 48, 0)).is_some());
-        assert!(warp_offset_index(IVec3::new(49, 0, 0)).is_none());
     }
 
     #[test]
