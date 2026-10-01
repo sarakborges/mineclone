@@ -8,7 +8,9 @@ use bevy::{
 
 use crate::{
     app::{
-        crash_log::{log_gameplay_error, log_gameplay_event},
+        crash_log::{
+            log_gameplay_error, log_gameplay_event, log_system_error, log_system_event,
+        },
         game_state::GameState,
     },
     content::{
@@ -85,23 +87,45 @@ impl WorldSession {
         let id = self
             .id()
             .ok_or_else(|| io::Error::other("no active world"))?;
+        log_gameplay_event(format!("world.save request id={id}"));
+
         let capture_started = Instant::now();
-        let captured = snapshot.capture(id)?;
+        let captured = match snapshot.capture(id) {
+            Ok(captured) => captured,
+            Err(error) => {
+                log_gameplay_error(format!(
+                    "world.save failed id={id} phase=capture duration_ms={:.2} error={error}",
+                    capture_started.elapsed().as_secs_f64() * 1_000.0,
+                ));
+                return Err(error);
+            }
+        };
         let capture_elapsed = capture_started.elapsed();
+
         let publication_started = Instant::now();
-        save_world(
+        if let Err(error) = save_world(
             &captured,
             &snapshot.state.world,
             &snapshot.registries.fluids,
             snapshot.registries.for_validation(),
-        )?;
+        ) {
+            log_gameplay_error(format!(
+                "world.save failed id={id} phase=publication capture_ms={:.2} publication_ms={:.2} error={error}",
+                capture_elapsed.as_secs_f64() * 1_000.0,
+                publication_started.elapsed().as_secs_f64() * 1_000.0,
+            ));
+            return Err(error);
+        }
         let publication_elapsed = publication_started.elapsed();
+
         // Measured on the machine running the game, not inferred from CI.
         // Publication includes JSON serialization, fsync and cleanup dispatch;
         // final world exit remains blocked until the commit is durable.
         log_gameplay_event(format!(
-            "world.save success id={} capture={:?} publication={:?}",
-            id, capture_elapsed, publication_elapsed
+            "world.save success id={} capture_ms={:.2} publication_ms={:.2}",
+            id,
+            capture_elapsed.as_secs_f64() * 1_000.0,
+            publication_elapsed.as_secs_f64() * 1_000.0,
         ));
         Ok(())
     }
@@ -277,6 +301,10 @@ pub(crate) fn restore_loaded_clock(
         clock.restore(day, tick_in_day, cycle.day_duration_ticks),
         "loaded clock must be validated before entering gameplay"
     );
+    log_gameplay_event(format!(
+        "world.clock restored day={} tick_in_day={} cycle={} day_duration_ticks={}",
+        day, tick_in_day, definition.day_night_cycle, cycle.day_duration_ticks
+    ));
 }
 
 /// The default Bevy close handler is disabled so gameplay can durably save
@@ -294,21 +322,26 @@ pub(crate) fn save_on_gameplay_window_close(
     if close_requests.read().next().is_none() {
         return;
     }
+    log_system_event("app.close requested state=gameplay");
     if !thumbnail_captures.is_empty() {
+        log_system_event("app.close deferred reason=thumbnail_capture_active");
         return;
     }
 
     if let Err(error) = session.persist(&snapshot) {
-        log_gameplay_error(format!("world.save failed error={error}"));
         error!("World save failed; keeping current world open: {error}");
         return;
     }
 
     let Some(world_id) = session.id() else {
-        error!("World was saved without an active world session id");
+        log_system_error("app.close invariant_failed reason=world_saved_without_session_id");
         app_exit.write(AppExit::Success);
         return;
     };
+    log_system_event(format!(
+        "app.close save_complete world={} next=thumbnail_capture",
+        world_id
+    ));
     begin_world_thumbnail_capture(
         &mut commands,
         &mut thumbnail_cameras,
@@ -329,5 +362,6 @@ pub(crate) fn exit_on_window_close_without_gameplay(
         return;
     }
 
+    log_system_event(format!("app.close requested state={:?} save_required=false", state.get()));
     app_exit.write(AppExit::Success);
 }
