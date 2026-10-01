@@ -14,7 +14,6 @@ use crate::{
         block::BlockRegistry,
         fluid::FluidRegistry,
         layer::LayerFace,
-        object::ObjectPlacementFace,
         structure::{StructureDefinition, StructureRotation, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
@@ -23,7 +22,6 @@ use crate::{
         chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkStructureMut},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         layer::LayerCell,
-        object::ObjectCell,
         texture_rotation::TextureRotation,
     },
     world::{
@@ -1084,7 +1082,13 @@ fn rasterize_structure(
                 return false;
             }
 
-            if let Some(object_id) = structure.object_for_voxel(voxel) {
+            let attached_objects = structure.objects_for_voxel(voxel);
+            let attachment_only = voxel.block_id.is_none()
+                && structure.fluid_for_voxel(voxel).is_none()
+                && !structure.clears_voxel(voxel)
+                && (structure.layers_only_voxel(voxel) || !attached_objects.is_empty());
+
+            if attachment_only {
                 let max_rise = structure.restrictions.max_slope.max(0) as usize;
                 let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
                     .rev()
@@ -1095,48 +1099,41 @@ fn rasterize_structure(
                 else {
                     return false;
                 };
-                let object_y = support_y + 1;
-                if object_y >= CHUNK_SIZE
-                    || chunk.fluid_at(local_x, support_y, local_z).is_some()
-                    || chunk.fluid_at(local_x, object_y, local_z).is_some()
-                {
-                    return false;
+                let support_world_position = context.chunk_origin
+                    + IVec3::new(local_x as i32, support_y as i32, local_z as i32);
+
+                if structure.layers_only_voxel(voxel) {
+                    for (face, layer) in surface_layer_placements(
+                        context.world_seed,
+                        structure,
+                        rotation,
+                        voxel,
+                        support_world_position,
+                    ) {
+                        let _ = chunk.add_layer(local_x, support_y, local_z, face, layer);
+                    }
                 }
 
-                let support_world_position =
-                    context.chunk_origin
-                        + IVec3::new(local_x as i32, support_y as i32, local_z as i32);
-                let object = ObjectCell::new(
-                    object_id,
-                    ObjectPlacementFace::Top,
-                    TextureRotation::for_position(support_world_position, true),
-                );
-                let _ = chunk.set_object(local_x, support_y, local_z, object);
-                return false;
-            }
-
-            if structure.layers_only_voxel(voxel) {
-                let max_rise = structure.restrictions.max_slope.max(0) as usize;
-                let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
-                    .rev()
-                    .find(|&candidate_y| {
-                        candidate_y < CHUNK_SIZE
-                            && chunk.cell_at(local_x, candidate_y, local_z).is_some()
-                    })
-                else {
-                    return false;
-                };
-                let support_world_position =
-                    context.chunk_origin
-                        + IVec3::new(local_x as i32, support_y as i32, local_z as i32);
-                for (face, layer) in surface_layer_placements(
-                    context.world_seed,
-                    structure,
-                    rotation,
-                    voxel,
-                    support_world_position,
-                ) {
-                    let _ = chunk.add_layer(local_x, support_y, local_z, face, layer);
+                if !attached_objects.is_empty()
+                    && chunk.fluid_at(local_x, support_y, local_z).is_none()
+                {
+                    for attached in attached_objects {
+                        let object = attached.object_cell(rotation, support_world_position);
+                        let target = IVec3::new(local_x as i32, support_y as i32, local_z as i32)
+                            + object.face.normal();
+                        let target_has_fluid = target.x >= 0
+                            && target.y >= 0
+                            && target.z >= 0
+                            && target.x < CHUNK_SIZE as i32
+                            && target.y < CHUNK_SIZE as i32
+                            && target.z < CHUNK_SIZE as i32
+                            && chunk
+                                .fluid_at(target.x as usize, target.y as usize, target.z as usize)
+                                .is_some();
+                        if !target_has_fluid {
+                            let _ = chunk.set_object(local_x, support_y, local_z, object);
+                        }
+                    }
                 }
                 return false;
             }
@@ -1168,16 +1165,14 @@ fn rasterize_structure(
                     voxel,
                     world_position,
                 ) {
-                    let _ = chunk.add_layer(
-                        local_x,
-                        local_y,
-                        local_z,
-                        face,
-                        layer,
-                    );
+                    let _ = chunk.add_layer(local_x, local_y, local_z, face, layer);
                 }
                 if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
                     chunk.clear_fluid(local_x, local_y, local_z);
+                }
+                for attached in attached_objects {
+                    let object = attached.object_cell(rotation, world_position);
+                    let _ = chunk.set_object(local_x, local_y, local_z, object);
                 }
             } else if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
                 let fluid_id = context.fluids.id_of(fluid_reference).unwrap_or_else(|| {
@@ -1196,7 +1191,7 @@ fn rasterize_structure(
             } else {
                 debug_assert!(
                     structure.clears_voxel(voxel),
-                    "validated structure voxel must reference block, fluid, object, or clear"
+                    "validated structure voxel must reference block, fluid, attachments, or clear"
                 );
                 chunk.clear_block(local_x, local_y, local_z);
                 chunk.clear_fluid(local_x, local_y, local_z);
@@ -1323,8 +1318,7 @@ fn visit_structure_voxels_in_chunk(
         for local_x in 0..chunk_size {
             let world_horizontal = chunk_horizontal + IVec2::new(local_x, local_z);
             let rotated_offset = world_horizontal - origin_horizontal;
-            let structure_offset =
-                rotation.inverse().rotate_horizontal(rotated_offset);
+            let structure_offset = rotation.inverse().rotate_horizontal(rotated_offset);
             for voxel in structure.column_voxels(structure_offset) {
                 let world_y = origin.y + voxel.offset.y;
                 let local_y = world_y - chunk_origin.y;
