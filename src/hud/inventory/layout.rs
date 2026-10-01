@@ -32,6 +32,9 @@ use super::state::{
 
 const INVENTORY_VIEW_TOGGLE_WIDTH: f32 = 96.0;
 const INVENTORY_VIEW_TOGGLE_HEIGHT: f32 = 40.0;
+const INVENTORY_VIEW_TOGGLE_GAP: f32 = 8.0;
+const INVENTORY_VIEW_TOGGLE_TOP_MARGIN: f32 = 12.0;
+const INVENTORY_VIEW_TOGGLE_BORDER_WIDTH: f32 = 2.0;
 
 pub(super) struct InventoryLayoutState<'a> {
     pub(super) categories: &'a InventoryCategoryRegistry,
@@ -134,28 +137,46 @@ fn spawn_inventory_switcher(
                 Node {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
-                    row_gap: px(0),
+                    row_gap: px(INVENTORY_VIEW_TOGGLE_GAP),
+                    margin: UiRect::top(px(INVENTORY_VIEW_TOGGLE_TOP_MARGIN)),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
             .with_children(|tabs| {
-                tabs.spawn(button::button(
-                    "Inventory",
-                    InventoryViewToggleButton { creative: false },
-                    px(INVENTORY_VIEW_TOGGLE_WIDTH),
-                    INVENTORY_VIEW_TOGGLE_HEIGHT,
-                    ButtonVariant::from_active(!creative_visible),
-                ));
-                tabs.spawn(button::button(
-                    "Creative",
-                    InventoryViewToggleButton { creative: true },
-                    px(INVENTORY_VIEW_TOGGLE_WIDTH),
-                    INVENTORY_VIEW_TOGGLE_HEIGHT,
-                    ButtonVariant::from_active(creative_visible),
-                ));
+                spawn_inventory_view_toggle_button(tabs, "Inventory", false, !creative_visible);
+                spawn_inventory_view_toggle_button(tabs, "Creative", true, creative_visible);
             });
     });
+}
+
+fn spawn_inventory_view_toggle_button(
+    parent: &mut ChildSpawnerCommands,
+    label: &str,
+    creative: bool,
+    active: bool,
+) {
+    parent
+        .spawn(button::button(
+            label,
+            InventoryViewToggleButton { creative },
+            px(INVENTORY_VIEW_TOGGLE_WIDTH),
+            INVENTORY_VIEW_TOGGLE_HEIGHT,
+            ButtonVariant::from_active(active),
+        ))
+        .insert(Node {
+            width: px(INVENTORY_VIEW_TOGGLE_WIDTH),
+            height: px(INVENTORY_VIEW_TOGGLE_HEIGHT),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect {
+                left: px(0),
+                right: px(INVENTORY_VIEW_TOGGLE_BORDER_WIDTH),
+                top: px(INVENTORY_VIEW_TOGGLE_BORDER_WIDTH),
+                bottom: px(INVENTORY_VIEW_TOGGLE_BORDER_WIDTH),
+            },
+            ..default()
+        });
 }
 
 fn spawn_inventory_overlay(
