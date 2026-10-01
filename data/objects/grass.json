@@ -6,21 +6,12 @@
     "spanish": "Césped"
   },
   "category": "foliage",
+  "tint": "foliage",
   "icon": "textures/objects/grass.png",
-  "placementFaces": [
-    "top"
-  ],
+  "placementFaces": ["top"],
   "target": {
-    "size": [
-      0.72,
-      0.62,
-      0.72
-    ],
-    "centerOffset": [
-      0,
-      0.31,
-      0
-    ]
+    "size": [0.72, 0.62, 0.72],
+    "centerOffset": [0, 0.31, 0]
   },
   "unlit": true,
   "castsShadow": false,
@@ -35,10 +26,7 @@
     "alphaCutoff": 0.5
   },
   "interaction": "break",
-  "positionJitter": [
-    0.28,
-    0.28
-  ],
+  "positionJitter": [0.28, 0.28],
   "lootTable": [
     {
       "item": "asteria:plant_fiber",
