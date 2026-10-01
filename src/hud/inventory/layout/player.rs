@@ -4,8 +4,12 @@ use bevy::{
 };
 
 use crate::{
-    hud::item_stack_count::spawn_item_stack_count,
-    player::hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
+    content::builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
+    hud::{item_icon::spawn_hud_item_icon, item_stack_count::spawn_item_stack_count},
+    player::{
+        hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
+        item_stack::ItemStack,
+    },
     ui::{
         button::{self, ButtonVariant},
         selectable, surface, text_input, theme, typography,
@@ -14,14 +18,30 @@ use crate::{
 
 use super::{
     InventoryItemView, InventoryLayoutState,
-    item::spawn_inventory_item,
     super::state::{
-        InventorySearchBar, InventorySearchFrame, InventorySearchText, InventorySlot,
-        InventorySortButton, InventorySortTooltip, InventoryTrashButton, PANEL_BORDER_WIDTH,
-        PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT, SECTION_GAP,
-        SLOT_GAP, SLOT_SIZE, TRASH_GAP,
+        ITEM_ICON_SIZE, InventorySearchBar, InventorySearchFrame, InventorySearchText,
+        InventorySlot, InventorySortButton, InventorySortTooltip, InventoryTrashButton,
+        PANEL_BORDER_WIDTH, PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT,
+        SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
     },
 };
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
+
+fn bucket_icon_for_stack(stack: &ItemStack) -> Option<&'static str> {
+    if stack.id() != BUCKET_TOOL_ID {
+        return None;
+    }
+    Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
+        Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
+        Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
+        _ => BUCKET_EMPTY_ICON,
+    })
+}
 
 pub(super) fn spawn_player_inventory_panel(
     root: &mut ChildSpawnerCommands,
@@ -120,6 +140,11 @@ fn spawn_inventory_search_field(
         .spawn((
             Button,
             InventorySearchFrame,
+            EditableText {
+                max_characters: Some(128),
+                ..EditableText::new(state.player_view.search_query())
+            },
+            text_input::editor_style(17.0, FontWeight::NORMAL),
             Node {
                 position_type: PositionType::Relative,
                 width: px(PLAYER_SEARCH_WIDTH),
@@ -334,8 +359,8 @@ fn spawn_slot(
 ) {
     let (background, border) = selectable::static_colors(selected);
     let stack = hotbar.inventory_stack_at(index);
-    let item = stack.map(crate::player::item_stack::ItemStack::id);
-    let quantity = stack.map_or(0, crate::player::item_stack::ItemStack::quantity);
+    let item = stack.map(ItemStack::id);
+    let quantity = stack.map_or(0, ItemStack::quantity);
 
     parent
         .spawn((
@@ -357,8 +382,15 @@ fn spawn_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            if let Some(item_id) = item {
-                spawn_inventory_item(slot, item_id, items);
+            if let Some(stack) = stack {
+                spawn_hud_item_icon(
+                    slot,
+                    stack.id(),
+                    items,
+                    ITEM_ICON_SIZE,
+                    bucket_icon_for_stack(stack),
+                    None,
+                );
                 spawn_item_stack_count(slot, quantity);
             }
         });
