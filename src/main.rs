@@ -30,7 +30,7 @@ mod world_objects;
 use bevy_dylib;
 
 use app::{
-    crash_log::{install_crash_logger, mark_clean_shutdown, write_caught_panic},
+    crash_log::{install_crash_logger, log_system_event, mark_clean_shutdown, write_caught_panic},
     controls_state::ControlsState,
     game_config::GameConfigPlugin,
     game_state::GameState,
@@ -76,6 +76,12 @@ fn main() {
 
 fn run_game() {
     prepare_runtime_directory();
+    log_system_event(format!(
+        "app.start debug={} backend_override={} present_mode={:?} io_pool_percent=0.10 io_pool_max_threads=2 async_compute_percent=0.50 async_compute_max_threads=8",
+        cfg!(debug_assertions),
+        std::env::var("WGPU_BACKEND").unwrap_or_else(|_| "<default>".to_owned()),
+        primary_present_mode(),
+    ));
 
     let default_plugins = DefaultPlugins
         .set(TaskPoolPlugin {
