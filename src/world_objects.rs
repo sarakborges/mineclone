@@ -12,7 +12,7 @@ use bevy::{
 
 use crate::{
     app::{
-        crash_log::log_gameplay_event,
+        crash_log::{log_diagnostic, log_gameplay_event, log_gameplay_warn},
         game_state::GameState,
         resource_systems::reset_resource,
     },
@@ -263,8 +263,8 @@ fn apply_object_placement_requests(
                 request.object.rotation
             ));
         } else {
-            log_gameplay_event(format!(
-                "object.place failed object={} support={:?} face={:?}",
+            log_gameplay_warn(format!(
+                "object.place failed object={} support={:?} face={:?} reason=world_mutation_rejected",
                 request.object.object_id,
                 request.support,
                 request.object.face
@@ -281,15 +281,27 @@ fn apply_object_removal_requests(
     for request in requests.read() {
         let key = request.key;
         if !runtime.world.objects_at(key.support).contains(&key.object) {
+            log_gameplay_event(format!(
+                "object.remove rejected object={} support={:?} reason=stale_request",
+                key.object.object_id, key.support
+            ));
             continue;
         }
         let Some(definition) = content.objects.get(key.object.object_id) else {
+            log_gameplay_warn(format!(
+                "object.remove rejected object={} support={:?} reason=missing_definition",
+                key.object.object_id, key.support
+            ));
             continue;
         };
         let support_cell = runtime.world.cell_at(key.support);
         let loot_position = world_object_position(key.support, support_cell, key.object, definition)
             + Vec3::Y * 0.25;
         let Some((_chunk, removed)) = runtime.world.remove_object_at(key.support, key.object) else {
+            log_gameplay_warn(format!(
+                "object.remove rejected object={} support={:?} reason=world_mutation_rejected",
+                key.object.object_id, key.support
+            ));
             continue;
         };
 
@@ -316,6 +328,7 @@ fn apply_object_removal_requests(
 const WORLD_OBJECT_SYNC_BUDGET: Duration = Duration::from_millis(2);
 const MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME: usize = 16;
 const SLOW_WORLD_OBJECT_SYNC_WARNING: Duration = Duration::from_millis(4);
+const PERSISTED_SLOW_WORLD_OBJECT_SYNC_WARNING: Duration = Duration::from_millis(20);
 
 fn sync_world_objects(
     mut commands: Commands,
@@ -460,6 +473,18 @@ fn sync_world_objects(
             store.materialized_batch_count(),
             elapsed.as_secs_f64() * 1_000.0,
         );
+    }
+    if elapsed >= PERSISTED_SLOW_WORLD_OBJECT_SYNC_WARNING {
+        log_diagnostic(format!(
+            "world_object.sync slow center={center:?} show_radius={show_radius} hide_radius={hide_radius} candidate_chunks={} processed_chunks={} deferred={} materialized_chunks={} materialized_objects={} materialized_batches={} elapsed_ms={:.2}",
+            candidate_chunk_count,
+            processed_chunks,
+            deferred,
+            store.materialized_chunk_count(),
+            store.materialized_object_count(),
+            store.materialized_batch_count(),
+            elapsed.as_secs_f64() * 1_000.0,
+        ));
     }
 }
 
