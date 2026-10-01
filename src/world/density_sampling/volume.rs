@@ -215,11 +215,19 @@ fn floating_island_sample(
         if radial >= 1.0 + ISLAND_EDGE_BLEND {
             continue;
         }
+        let Some(volume_bottom) = floating_island_volume_floor(local_position.xz()) else {
+            continue;
+        };
 
         let top = shared_top + lobe.top_offset;
         highest_top = highest_top.max(top);
         let core = (1.0 - radial).clamp(0.0, 1.0);
-        let bottom = top - (0.16 + lobe.underside_depth * core.powf(0.72));
+        let authored_bottom = top - (0.16 + lobe.underside_depth * core.powf(0.72));
+        // The solid island is built upward from the volume's core boundary.
+        // Authored lobe depth may taper/lift the underside, but it can never
+        // push solid density into the volume fade where selection strength
+        // would clip the island into a thin disk.
+        let bottom = authored_bottom.max(volume_bottom);
         let edge_mask = smoothstep(
             ((1.0 + ISLAND_EDGE_BLEND - radial) / (ISLAND_EDGE_BLEND * 2.0))
                 .clamp(0.0, 1.0),
@@ -241,6 +249,15 @@ fn floating_island_sample(
         mask: union_mask.clamp(0.0, 1.0),
         top: highest_top,
     }
+}
+
+fn floating_island_volume_floor(local_xz: Vec2) -> Option<f32> {
+    let horizontal_distance_squared = local_xz.length_squared();
+    if horizontal_distance_squared >= 1.0 {
+        return None;
+    }
+
+    Some(-(1.0 - horizontal_distance_squared).sqrt())
 }
 
 fn secondary_lobe_count(seed: u64) -> usize {
@@ -433,6 +450,30 @@ mod tests {
     }
 
     #[test]
+    fn floating_island_builds_upward_from_the_volume_floor() {
+        let seed = 7;
+        let below_floor = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(0.0, -1.01, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+        let above_floor = floating_island_sample(
+            Vec3::ZERO,
+            Vec3::new(0.0, -0.90, 0.0),
+            seed,
+            0.03,
+            0.0,
+            0.0,
+        );
+
+        assert_eq!(below_floor.mask, 0.0);
+        assert!(above_floor.mask > 0.0);
+    }
+
+    #[test]
     fn floating_island_edge_tapers_before_the_outer_boundary() {
         let seed = 7;
         let inner = floating_island_sample(
@@ -453,7 +494,7 @@ mod tests {
         );
 
         assert!(inner.mask > boundary.mask);
-        assert!(boundary.mask > 0.0);
+        assert_eq!(boundary.mask, 0.0);
     }
 
     #[test]
