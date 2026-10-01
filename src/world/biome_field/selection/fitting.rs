@@ -38,7 +38,7 @@ pub(super) fn surface_size_allows(
         return true;
     }
 
-    let nodes = collect_raw_component(candidate_index, context);
+    let mut nodes = collect_raw_component(candidate_index, context);
     if nodes.len() <= 1 {
         return true;
     }
@@ -50,16 +50,38 @@ pub(super) fn surface_size_allows(
         ((candidate.size.z.max - candidate.size.z.min) * 2.0).max(0.0),
     );
 
-    fit_component_mask(&nodes, &neighbors, center_span_limit)
-        .map(|active| active[0])
-        .unwrap_or(false)
+    // A component cut is only legal when every removed site has a fallback
+    // that survives the same authored adjacency/boundary rules. The previous
+    // fitter treated any climate-compatible biome as sufficient, then the
+    // selector could discover that every fallback was illegal and panic.
+    // Protect those sites and refit until every remaining cut is actionable.
+    loop {
+        let Ok(active) = fit_component_mask(&nodes, &neighbors, center_span_limit) else {
+            return false;
+        };
+
+        let mut protected = false;
+        for (index, node) in nodes.iter_mut().enumerate() {
+            if active[index]
+                || !node.removable
+                || cell_has_alternative(node.cell, node.site, candidate_index, context)
+            {
+                continue;
+            }
+            node.removable = false;
+            protected = true;
+        }
+
+        if !protected {
+            return active[0];
+        }
+    }
 }
 
 /// When two authored adjacency rules conflict, exactly one raw side yields.
-/// A side with no climate/distribution-compatible alternative is protected;
-/// otherwise a stable hash chooses the winner. Calling this with the pair
-/// reversed therefore produces the opposite answer, so both sites cannot
-/// reject each other merely because they were evaluated independently.
+/// A side only counts as yieldable when it has a fallback that can actually
+/// survive adjacency/boundary checks and fit into that fallback biome's size
+/// budget. This prevents conflict resolution from creating an empty domain.
 pub(super) fn raw_conflict_left_wins(
     left_cell: IVec2,
     left_site: Vec2,
@@ -94,33 +116,193 @@ pub(super) fn raw_conflict_left_wins(
 }
 
 pub(super) fn cell_has_alternative(
-    _cell: IVec2,
+    cell: IVec2,
     site: Vec2,
     candidate_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
     let climate = context.climate_field.sample(site);
 
-    context
-        .biomes
-        .iter()
-        .enumerate()
-        .filter(|(index, biome)| {
-            *index != candidate_index
-                && biome.weight > 0.0
-                && (context.spawn_oceans || Some(*index) != context.ocean_surface_index)
+    for (alternate_index, biome) in context.biomes.iter().enumerate() {
+        if alternate_index == candidate_index
+            || biome.weight <= 0.0
+            || (!context.spawn_oceans
+                && Some(alternate_index) == context.ocean_surface_index)
+        {
+            continue;
+        }
+
+        let distribution = biome
+            .distributions
+            .iter()
+            .copied()
+            .map(|distribution| {
+                distribution_strength(distribution, site, context.seed, biome.id.as_str())
+            })
+            .fold(0.0_f32, f32::max);
+        if distribution <= 0.0 || climate_weight(climate, biome.climate) <= 0.0 {
+            continue;
+        }
+        if !candidate_raw_constraints_allow(cell, site, alternate_index, context) {
+            continue;
+        }
+        if fallback_size_allows(cell, site, alternate_index, context) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn cell_has_adjacency_safe_alternative(
+    cell: IVec2,
+    site: Vec2,
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    let climate = context.climate_field.sample(site);
+
+    for (alternate_index, biome) in context.biomes.iter().enumerate() {
+        if alternate_index == candidate_index
+            || biome.weight <= 0.0
+            || (!context.spawn_oceans
+                && Some(alternate_index) == context.ocean_surface_index)
+        {
+            continue;
+        }
+
+        let distribution = biome
+            .distributions
+            .iter()
+            .copied()
+            .map(|distribution| {
+                distribution_strength(distribution, site, context.seed, biome.id.as_str())
+            })
+            .fold(0.0_f32, f32::max);
+        if distribution <= 0.0 || climate_weight(climate, biome.climate) <= 0.0 {
+            continue;
+        }
+        if candidate_raw_constraints_allow(cell, site, alternate_index, context) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn candidate_raw_constraints_allow(
+    cell: IVec2,
+    site: Vec2,
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    let candidate = &context.biomes[candidate_index];
+    let mut required_neighbor_found = candidate.require_near.is_empty();
+
+    for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
+        for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
+            let offset = IVec2::new(x, z);
+            if offset == IVec2::ZERO {
+                continue;
+            }
+
+            let neighbor_cell = cell + offset;
+            let neighbor_site = surface_site_position(neighbor_cell, context.spacing, context.seed);
+            if !surface_sites_share_border(
+                cell,
+                site,
+                neighbor_cell,
+                neighbor_site,
+                context.spacing,
+                context.seed,
+            ) {
+                continue;
+            }
+
+            let neighbor_index = raw_surface_biome_index(
+                neighbor_cell,
+                neighbor_site,
+                context.climate_field.sample(neighbor_site),
+                cell_hash(neighbor_cell, context.seed),
+                context.biomes,
+                context.seed,
+                context.spawn_oceans,
+            );
+            let neighbor = &context.biomes[neighbor_index];
+            let authored_conflict = authored_pair_conflicts(candidate, neighbor);
+            let fitted_size_conflict = candidate.id != neighbor.id
+                && boundary_fit_interval(candidate, neighbor, site, neighbor_site).is_none();
+            if authored_conflict || fitted_size_conflict {
+                return false;
+            }
+
+            if !required_neighbor_found
+                && candidate.require_near.iter().any(|id| id == &neighbor.id)
+            {
+                required_neighbor_found = true;
+            }
+        }
+    }
+
+    required_neighbor_found
+}
+
+fn authored_pair_conflicts(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
+    if left.avoid_near.iter().any(|id| id == &right.id)
+        || right.avoid_near.iter().any(|id| id == &left.id)
+    {
+        return true;
+    }
+
+    left.id != right.id
+        && left.exclusive_neighbor_group.as_ref().is_some_and(|group| {
+            right
+                .exclusive_neighbor_group
+                .as_ref()
+                .is_some_and(|right_group| right_group == group)
         })
-        .any(|(_, biome)| {
-            let distribution = biome
-                .distributions
-                .iter()
-                .copied()
-                .map(|distribution| {
-                    distribution_strength(distribution, site, context.seed, biome.id.as_str())
-                })
-                .fold(0.0_f32, f32::max);
-            distribution > 0.0 && climate_weight(climate, biome.climate) > 0.0
-        })
+}
+
+fn fallback_size_allows(
+    cell: IVec2,
+    site: Vec2,
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    if context.ocean_surface_index == Some(candidate_index) {
+        return true;
+    }
+
+    let fallback_context = SurfaceSelectionContext {
+        cell,
+        site,
+        spacing: context.spacing,
+        seed: context.seed,
+        biomes: context.biomes,
+        spawn_oceans: context.spawn_oceans,
+        ocean_surface_index: context.ocean_surface_index,
+        climate_field: context.climate_field,
+    };
+    let mut nodes = collect_raw_component(candidate_index, &fallback_context);
+    if nodes.len() <= 1 {
+        return true;
+    }
+
+    // This probe asks whether the fallback site itself can be retained while
+    // surrounding raw component sites yield where they have adjacency-safe
+    // alternatives. It deliberately does not recurse into full fallback-size
+    // validation for those neighbors.
+    nodes[0].removable = false;
+    let neighbors = component_neighbors(&nodes, &fallback_context);
+    let candidate = &context.biomes[candidate_index];
+    let center_span_limit = Vec2::new(
+        ((candidate.size.x.max - candidate.size.x.min) * 2.0).max(0.0),
+        ((candidate.size.z.max - candidate.size.z.min) * 2.0).max(0.0),
+    );
+
+    fit_component_mask(&nodes, &neighbors, center_span_limit)
+        .map(|active| active[0])
+        .unwrap_or(false)
 }
 
 fn collect_raw_component(
@@ -138,7 +320,12 @@ fn collect_raw_component(
         nodes.push(ComponentNode {
             cell,
             site,
-            removable: cell_has_alternative(cell, site, candidate_index, context),
+            removable: cell_has_adjacency_safe_alternative(
+                cell,
+                site,
+                candidate_index,
+                context,
+            ),
             claim: region_claim_hash(cell, candidate_index, context.seed),
         });
 
