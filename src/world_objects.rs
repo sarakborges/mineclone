@@ -447,6 +447,11 @@ fn sync_world_objects(
 
             for (x, y, z, object) in chunk.object_voxels() {
                 let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                debug_assert_eq!(
+                    content.world.object_at(support),
+                    chunk.object_at(x as i32, y as i32, z as i32),
+                    "world/chunk first-object lookup must stay consistent",
+                );
                 let key = WorldObjectKey::new(support, object);
                 desired_keys.insert(key);
                 let support_cell = content.world.cell_at(support);
