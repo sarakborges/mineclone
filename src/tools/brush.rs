@@ -106,19 +106,19 @@ fn handle_brush_use(
         let Some(cell) = runtime.cell_at(hit.voxel) else {
             continue;
         };
-        let current_dye = cell.secondary_property(DYED_PROPERTY_ID);
+        let current_dye = cell.state(DYED_PROPERTY_ID);
         let updated = match mode.dye_id() {
             Some(dye_id) => {
                 if current_dye == Some(dye_id) {
                     continue;
                 }
-                cell.with_secondary_property(DYED_PROPERTY_ID, dye_id)
+                cell.with_state(DYED_PROPERTY_ID, dye_id)
             }
             None => {
                 if current_dye.is_none() {
                     continue;
                 }
-                cell.without_secondary_property(DYED_PROPERTY_ID)
+                cell.without_state(DYED_PROPERTY_ID)
             }
         };
 
