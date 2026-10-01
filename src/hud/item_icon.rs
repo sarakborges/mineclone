@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::{
         biome::BiomeRegistry,
-        block::BlockRegistry,
+        block::{BlockRegistry, BlockTint},
         block_orientation::BlockOrientation,
         item::ItemRegistry,
         layer::LayerRegistry,
@@ -12,20 +12,22 @@ use crate::{
         tool::ToolRegistry,
     },
     localization::Language,
+    player::camera::GameplayCamera,
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     tools::BrushMode,
     world::biome_field::BiomeField,
 };
 
-use super::{
-    block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
-};
+use super::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon};
 
 #[derive(Component)]
 pub(crate) struct HudBlockIcon {
     pub(crate) placement_slot: Option<usize>,
     pub(crate) orientation: BlockOrientation,
 }
+
+#[derive(Component)]
+pub(crate) struct HudBiomeTintIcon(pub(crate) BlockTint);
 
 pub(crate) struct HudItemIconView<'a> {
     pub(crate) asset_server: &'a AssetServer,
@@ -77,6 +79,7 @@ pub(crate) fn spawn_hud_item_icon(
             items.biomes,
         );
         parent.spawn((
+            HudBiomeTintIcon(object.tint),
             ImageNode {
                 color: tint,
                 ..ImageNode::new(items.asset_server.load(object.icon.clone()))
@@ -121,7 +124,15 @@ pub(crate) fn spawn_hud_item_icon(
             items.biome_field,
             items.biomes,
         );
-        spawn_layer_icon(parent, layer, items.asset_server, tint, size);
+        parent.spawn((
+            HudBiomeTintIcon(layer.tint),
+            ImageNode {
+                color: tint,
+                ..ImageNode::new(items.asset_server.load(layer.texture.clone()))
+            },
+            icon_node(size),
+            Pickable::IGNORE,
+        ));
         return;
     }
 
@@ -139,6 +150,31 @@ pub(crate) fn spawn_hud_item_icon(
     }
 
     panic!("HUD references missing item: {item_id}");
+}
+
+pub(crate) fn sync_hud_biome_tint_icons(
+    player: Single<&Transform, With<GameplayCamera>>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
+    mut tint_cell: Local<Option<IVec2>>,
+    mut icons: Query<(&HudBiomeTintIcon, &mut ImageNode)>,
+) {
+    let next_cell = IVec2::new(
+        player.translation.x.floor() as i32,
+        player.translation.z.floor() as i32,
+    );
+    if *tint_cell == Some(next_cell) && !biomes.is_changed() && !biome_field.is_changed() {
+        return;
+    }
+    *tint_cell = Some(next_cell);
+
+    let position = next_cell.as_vec2() + Vec2::splat(0.5);
+    for (tint, mut image) in &mut icons {
+        let color = block_tint_at(tint.0, position, &biome_field, &biomes);
+        if image.color != color {
+            image.color = color;
+        }
+    }
 }
 
 fn icon_node(size: f32) -> Node {
