@@ -5,7 +5,7 @@ use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
         cell::VoxelCell,
-        fluid::{FluidCell, MAX_FLUID_LEVEL},
+        fluid::{FluidCell, MAX_FLUID_LEVEL, MIN_FLUID_LEVEL},
         neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
     },
@@ -189,7 +189,12 @@ fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, 
         return None;
     }
 
-    let level = neighbor.level.saturating_sub(1).max(1);
+    let remaining = u32::from(max_spread - spread_distance);
+    let range = u32::from(MAX_FLUID_LEVEL - MIN_FLUID_LEVEL);
+    let max_spread = u32::from(max_spread);
+    let level_offset = (remaining * range + max_spread / 2) / max_spread;
+    let level = MIN_FLUID_LEVEL + level_offset as u8;
+
     Some((level, spread_distance))
 }
 
@@ -402,18 +407,27 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_spread_respects_data_driven_range_independently_from_level() {
-        let source = FluidCell::source(0, 2);
+    fn horizontal_spread_maps_authored_range_across_full_height_range() {
+        let source = FluidCell::source(0, MAX_FLUID_LEVEL);
         assert_eq!(horizontal_spread_state(source, 0), None);
-        assert_eq!(horizontal_spread_state(source, 1), Some((1, 1)));
+        assert_eq!(horizontal_spread_state(source, 1), Some((MIN_FLUID_LEVEL, 1)));
 
-        let first = FluidCell::spreading(0, 1, 1);
-        assert_eq!(horizontal_spread_state(first, 1), None);
-        assert_eq!(horizontal_spread_state(first, 2), Some((1, 2)));
+        // Water's authored range of 7 keeps the classic 8 -> 1 level ramp.
+        assert_eq!(horizontal_spread_state(source, 7), Some((7, 1)));
+        let water_mid = FluidCell::spreading(0, 4, 4);
+        assert_eq!(horizontal_spread_state(water_mid, 7), Some((3, 5)));
 
-        let far = FluidCell::spreading(0, 1, 20);
-        assert_eq!(horizontal_spread_state(far, 20), None);
-        assert_eq!(horizontal_spread_state(far, 21), Some((1, 21)));
+        // Shorter ranges still consume the entire visual height range instead
+        // of losing one globally fixed level per horizontal step.
+        assert_eq!(horizontal_spread_state(source, 3), Some((6, 1)));
+        let lava_first = FluidCell::spreading(0, 6, 1);
+        assert_eq!(horizontal_spread_state(lava_first, 3), Some((3, 2)));
+        let lava_second = FluidCell::spreading(0, 3, 2);
+        assert_eq!(horizontal_spread_state(lava_second, 3), Some((1, 3)));
+        assert_eq!(
+            horizontal_spread_state(FluidCell::spreading(0, 1, 3), 3),
+            None
+        );
     }
 
     #[test]
