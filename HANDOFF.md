@@ -1,5 +1,16 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-10-01 — Log attack: locate, logging and streaming findings
+
+- The provided runtime logs contain no Rust panic, ECS B000x error, or gameplay ERROR. The reported Floating Islands locate/warp failure was reproduced in the log sequence: `/locate biome asteria:overworld/floating_islands` returned `(-213, 219, 568)` before the volume-anchor validation fix, while the same run had no `warp.success` and later manual travel reached the area without an island. The locate result was therefore stale/invalid under the pre-fix volume selection behavior.
+- `/locate biome asteria:overworld/volcano` started at `00:13:12` but had not completed by the next locate command at `00:13:20`. `PendingLocate` held only one task, so starting another locate could orphan the previous result and violate the command-feedback requirement. New overlapping locate commands are now rejected with explicit feedback instead of replacing the in-flight task.
+- Surface biome locate was scanning every block in every chunk ring. Rare biome searches such as Volcano could therefore become extremely expensive. Locate now searches the deterministic surface-biome site lattice and validates the target at each site, reducing the search space from block-scale sampling to roughly tens of thousands of site samples across the full 32k-block radius.
+- Runtime logs showed malformed diagnostic lines such as duplicated `[RUNTIME]` prefixes/timestamps, caused by concurrent appenders opening the same log file independently. Session logging now uses one mutex-protected persistent file handle, serializing writes and removing that race while avoiding per-event open/close churn.
+- The logs also show real streaming hitches during sustained Creative flight: one 202 ms frame had `streaming_max_us=196704`, with ~3.7k retired chunks and ~2.4k pending chunks. This is a streaming-selection/retirement pressure issue rather than rendering preparation; it remains a separate performance target for the next pass.
+- Runtime lighting also remains continuously backlogged during long flight (`propagation_pending=true` for the entire captured interval), processing hundreds of thousands of voxels per 5s diagnostic window with little visible change. This is another follow-up performance/correctness target, not treated as fixed by the current pass.
+- The 00:10:41 new-world log selecting Plains as the random spawn biome is valid for that seed; the deterministic spawn roll lands inside Plains' configured weighted interval. It is not evidence of a random-spawn regression by itself.
+- Warp search radius remains 32 blocks. The temporary 48-block expansion was reverted because the observed failure came from the pre-fix invalid locate result; increasing the search cube would have expanded worst-case search work 3.3x without addressing the root cause.
+
 ## 2026-10-01 — Biome exclusivity, minimum size and locate/warp correction
 
 - Wasteland, Witchwood and Enchanted Forest now share `exclusiveNeighborGroup: "inland_biomes"`, so different members of that set cannot border one another.
