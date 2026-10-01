@@ -225,6 +225,7 @@ impl Plugin for HudPlugin {
             .add_systems(
                 Update,
                 (
+                    item_icon::sync_hud_biome_tint_icons,
                     tool_icon::sync_brush_tint_icons,
                     entity_card::sync_entity_cards.after(BlockTargetingSet::Raycast),
                 )
