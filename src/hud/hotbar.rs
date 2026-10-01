@@ -3,17 +3,21 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        block::BlockRegistry, block_orientation::BlockOrientation,
+        biome::BiomeRegistry,
+        block::BlockRegistry,
         builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
         item::{ItemRegistry, display_name},
-        layer::LayerRegistry, object::ObjectRegistry, secondary_property::SecondaryPropertyRegistry,
+        layer::LayerRegistry,
+        object::ObjectRegistry,
+        secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
     },
     hud::{
-        block_icon::BlockIconMaterial, item_stack_count::spawn_item_stack_count,
-        layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
+        block_icon::BlockIconMaterial,
+        item_icon::{HudBlockIcon, HudItemIconView, spawn_hud_item_icon},
+        item_stack_count::spawn_item_stack_count,
     },
-    localization::{ActiveLanguage, Language},
+    localization::ActiveLanguage,
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
@@ -23,6 +27,7 @@ use crate::{
     targeting::{PlacementOrientation, block::BlockTargetingSet},
     tools::BrushMode,
     ui::{selectable, typography},
+    world::biome_field::BiomeField,
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -57,6 +62,10 @@ fn stack_display_name(stack: &ItemStack, base_name: &str) -> String {
     format!("{base_name} ({variant})")
 }
 
+fn player_position(player: &Transform) -> Vec2 {
+    Vec2::new(player.translation.x, player.translation.z)
+}
+
 #[derive(Component)]
 struct HotbarHudRoot;
 
@@ -69,12 +78,6 @@ struct HotbarSlot {
     item: Option<&'static str>,
     quantity: u32,
     bucket_icon: Option<&'static str>,
-}
-
-#[derive(Component)]
-struct HotbarBlockModel {
-    index: usize,
-    orientation: BlockOrientation,
 }
 
 #[derive(Default)]
@@ -92,21 +95,10 @@ struct HotbarHudContent<'w> {
     tools: Res<'w, ToolRegistry>,
     dyes: Res<'w, SecondaryPropertyRegistry>,
     brush_mode: Res<'w, BrushMode>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
     hotbar: Res<'w, PlayerHotbar>,
     language: Res<'w, ActiveLanguage>,
-}
-
-struct HotbarItemView<'a> {
-    asset_server: &'a AssetServer,
-    items: &'a ItemRegistry,
-    blocks: &'a BlockRegistry,
-    layers: &'a LayerRegistry,
-    objects: &'a ObjectRegistry,
-    tools: &'a ToolRegistry,
-    dyes: &'a SecondaryPropertyRegistry,
-    brush_mode: &'a BrushMode,
-    language: Language,
-    icon_materials: &'a mut Assets<BlockIconMaterial>,
 }
 
 #[derive(SystemParam)]
@@ -123,7 +115,7 @@ struct HotbarVisualView<'w, 's> {
         's,
         (
             &'static BlockModel,
-            &'static mut HotbarBlockModel,
+            &'static mut HudBlockIcon,
             &'static MaterialNode<BlockIconMaterial>,
         ),
     >,
@@ -152,6 +144,7 @@ impl Plugin for HotbarHudPlugin {
 fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
+    player: Single<&Transform, With<GameplayCamera>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
@@ -174,7 +167,7 @@ fn spawn_hotbar(
             stack_display_name(stack, base_name)
         })
         .unwrap_or_default();
-    let mut items = HotbarItemView {
+    let mut items = HudItemIconView {
         asset_server: &content.asset_server,
         items: &content.items,
         blocks: &content.blocks,
@@ -183,6 +176,9 @@ fn spawn_hotbar(
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
+        biomes: &content.biomes,
+        biome_field: &content.biome_field,
+        player_position: player_position(&player),
         language,
         icon_materials: &mut icon_materials,
     };
@@ -253,7 +249,14 @@ fn spawn_hotbar(
                     ))
                     .with_children(|slot| {
                         if let Some(stack) = stack {
-                            spawn_hotbar_item(slot, index, stack, &mut items);
+                            spawn_hud_item_icon(
+                                slot,
+                                stack.id(),
+                                &mut items,
+                                ITEM_ICON_SIZE,
+                                bucket_icon,
+                                Some(index),
+                            );
                             spawn_item_stack_count(slot, quantity);
                         }
                     });
@@ -287,6 +290,7 @@ fn sync_hotbar_visibility(
 fn sync_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
+    player: Single<&Transform, With<GameplayCamera>>,
     mut selected_name: Single<&mut Text, With<HotbarSelectedName>>,
     mut slots: Query<(
         Entity,
@@ -323,7 +327,7 @@ fn sync_hotbar(
     }
 
     let language_changed = content.language.is_changed();
-    let mut items = HotbarItemView {
+    let mut items = HudItemIconView {
         asset_server: &content.asset_server,
         items: &content.items,
         blocks: &content.blocks,
@@ -332,6 +336,9 @@ fn sync_hotbar(
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
+        biomes: &content.biomes,
+        biome_field: &content.biome_field,
+        player_position: player_position(&player),
         language,
         icon_materials: &mut icon_materials,
     };
@@ -364,105 +371,17 @@ fn sync_hotbar(
             continue;
         };
         commands.entity(entity).with_children(|slot_node| {
-            spawn_hotbar_item(slot_node, slot.index, stack, &mut items);
+            spawn_hud_item_icon(
+                slot_node,
+                stack.id(),
+                &mut items,
+                ITEM_ICON_SIZE,
+                next_bucket_icon,
+                Some(slot.index),
+            );
             spawn_item_stack_count(slot_node, next_quantity);
         });
     }
-}
-
-fn spawn_hotbar_item(
-    slot: &mut ChildSpawnerCommands,
-    index: usize,
-    stack: &ItemStack,
-    items: &mut HotbarItemView<'_>,
-) {
-    let item_id = stack.id();
-    if let Some(icon) = bucket_icon_for_stack(stack) {
-        slot.spawn((
-            ImageNode::new(items.asset_server.load(icon)),
-            Node {
-                width: px(ITEM_ICON_SIZE),
-                height: px(ITEM_ICON_SIZE),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
-        return;
-    }
-
-    if let Some(item) = items.items.get(item_id) {
-        slot.spawn((
-            ImageNode::new(items.asset_server.load(item.icon.clone())),
-            Node {
-                width: px(ITEM_ICON_SIZE),
-                height: px(ITEM_ICON_SIZE),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
-        return;
-    }
-
-    if let Some(block) = items.blocks.get(item_id) {
-        let orientation = block.default_orientation();
-        let material = items.icon_materials.add(BlockIconMaterial::from_block(
-            block,
-            items.asset_server,
-            Color::WHITE,
-        ));
-
-        slot.spawn((
-            HotbarBlockModel { index, orientation },
-            BlockModel::display(item_id),
-            MaterialNode(material),
-            Node {
-                width: px(ITEM_ICON_SIZE),
-                height: px(ITEM_ICON_SIZE),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
-        return;
-    }
-
-    if let Some(layer) = items.layers.get(item_id) {
-        spawn_layer_icon(
-            slot,
-            layer,
-            items.asset_server,
-            Color::WHITE,
-            ITEM_ICON_SIZE,
-        );
-        return;
-    }
-
-    if let Some(object) = items.objects.get(item_id) {
-        slot.spawn((
-            ImageNode::new(items.asset_server.load(object.icon.clone())),
-            Node {
-                width: px(ITEM_ICON_SIZE),
-                height: px(ITEM_ICON_SIZE),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
-        return;
-    }
-
-    if let Some(tool) = items.tools.get(item_id) {
-        spawn_tool_icon(
-            slot,
-            tool,
-            items.asset_server,
-            items.brush_mode,
-            items.dyes,
-            items.language,
-            ITEM_ICON_SIZE,
-        );
-        return;
-    }
-
-    panic!("hotbar references missing item: {item_id}");
 }
 
 fn update_hotbar_item_visuals(
@@ -492,6 +411,9 @@ fn update_hotbar_item_visuals(
             continue;
         }
 
+        let Some(index) = icon.placement_slot else {
+            continue;
+        };
         let Some(block_id) = model.block_id() else {
             continue;
         };
@@ -499,7 +421,7 @@ fn update_hotbar_item_visuals(
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let orientation = state.placement_orientation.for_block(icon.index, block);
+        let orientation = state.placement_orientation.for_block(index, block);
         let tint = content.tint_at(block_id, position).unwrap_or(Color::WHITE);
         let orientation_changed = icon.orientation != orientation;
         let textures_changed = orientation_changed || block_definitions_changed;
@@ -507,8 +429,6 @@ fn update_hotbar_item_visuals(
             .get(&material_handle.0)
             .is_some_and(|material| !material.has_tint(tint));
 
-        // Acquiring mutable asset access emits a modification event, even if the
-        // value written is identical. Compare the rendered inputs first.
         if !textures_changed && !tint_changed {
             continue;
         }
