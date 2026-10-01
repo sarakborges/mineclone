@@ -109,71 +109,100 @@ struct ExtrudedSpriteAssets<'w> {
 fn configure_pending_extruded_sprites(
     mut commands: Commands,
     pending: Query<(Entity, &PendingExtrudedSprite)>,
-    mut assets: ExtrudedSpriteAssets,
+    assets: ExtrudedSpriteAssets,
 ) {
+    let ExtrudedSpriteAssets {
+        images,
+        mut meshes,
+        mut materials,
+        mut mesh_cache,
+        mut material_cache,
+    } = assets;
+
     for (entity, pending) in &pending {
-        let key = mesh_key(pending);
-        let cached = assets.mesh_cache.0.get(&key).cloned();
-        let mesh = if let Some(mesh) = cached {
-            mesh
-        } else {
-            let Some(image) = assets.images.get(&pending.texture) else {
-                continue;
-            };
-            let generated = match extruded_sprite_mesh(image, pending.geometry) {
-                Ok(mesh) => mesh,
-                Err(error) => {
-                    warn!(
-                        "cannot build extruded sprite {:?}: {error}",
-                        pending.texture.id()
-                    );
-                    commands.entity(entity).remove::<PendingExtrudedSprite>();
-                    continue;
-                }
-            };
-            let mesh = assets.meshes.add(generated);
-            assets.mesh_cache.0.insert(key, mesh.clone());
-            mesh
-        };
-
-        let (tint, tint_key) = quantize_srgba(pending.tint, MATERIAL_TINT_RGB_LEVELS);
-        let material_key = ExtrudedSpriteMaterialKey {
-            texture: pending.texture.id(),
-            tint: tint_key,
-            unlit: pending.unlit,
-            alpha_cutoff: pending.geometry.alpha_cutoff.to_bits(),
-        };
-        let material = if let Some(material) = assets.material_cache.0.get(&material_key) {
-            material.clone()
-        } else {
-            let material = assets.materials.add(StandardMaterial {
-                base_color: tint,
-                base_color_texture: Some(pending.texture.clone()),
-                alpha_mode: AlphaMode::Mask(pending.geometry.alpha_cutoff),
-                perceptual_roughness: 1.0,
-                unlit: pending.unlit,
-                double_sided: true,
-                cull_mode: None,
-                ..default()
-            });
-            assets
-                .material_cache
-                .0
-                .insert(material_key, material.clone());
-            material
-        };
-
-        commands
-            .entity(entity)
-            .insert((Mesh3d(mesh), MeshMaterial3d(material)))
-            .remove::<PendingExtrudedSprite>();
+        let resolved = resolve_extruded_sprite_assets(
+            pending.texture.clone(),
+            pending.geometry,
+            pending.tint,
+            pending.unlit,
+            &images,
+            &mut meshes,
+            &mut materials,
+            &mut mesh_cache,
+            &mut material_cache,
+        );
+        match resolved {
+            Ok(Some((mesh, material))) => {
+                commands
+                    .entity(entity)
+                    .insert((Mesh3d(mesh), MeshMaterial3d(material)))
+                    .remove::<PendingExtrudedSprite>();
+            }
+            Ok(None) => {}
+            Err(error) => {
+                warn!(
+                    "cannot build extruded sprite {:?}: {error}",
+                    pending.texture.id()
+                );
+                commands.entity(entity).remove::<PendingExtrudedSprite>();
+            }
+        }
     }
 }
 
-fn mesh_key(pending: &PendingExtrudedSprite) -> ExtrudedSpriteMeshKey {
-    let geometry = pending.geometry;
+pub(crate) fn resolve_extruded_sprite_assets(
+    texture: Handle<Image>,
+    geometry: ExtrudedSpriteGeometry,
+    tint: Color,
+    unlit: bool,
+    images: &Assets<Image>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    mesh_cache: &mut ExtrudedSpriteMeshCache,
+    material_cache: &mut ExtrudedSpriteMaterialCache,
+) -> Result<Option<(Handle<Mesh>, Handle<StandardMaterial>)>, String> {
+    let key = mesh_key(texture.id(), geometry);
+    let mesh = if let Some(mesh) = mesh_cache.0.get(&key) {
+        mesh.clone()
+    } else {
+        let Some(image) = images.get(&texture) else {
+            return Ok(None);
+        };
+        let mesh = meshes.add(extruded_sprite_mesh(image, geometry)?);
+        mesh_cache.0.insert(key, mesh.clone());
+        mesh
+    };
+
+    let (tint, tint_key) = quantize_srgba(tint, MATERIAL_TINT_RGB_LEVELS);
+    let material_key = ExtrudedSpriteMaterialKey {
+        texture: texture.id(),
+        tint: tint_key,
+        unlit,
+        alpha_cutoff: geometry.alpha_cutoff.to_bits(),
+    };
+    let material = if let Some(material) = material_cache.0.get(&material_key) {
+        material.clone()
+    } else {
+        let material = materials.add(StandardMaterial {
+            base_color: tint,
+            base_color_texture: Some(texture),
+            alpha_mode: AlphaMode::Mask(geometry.alpha_cutoff),
+            perceptual_roughness: 1.0,
+            unlit,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        });
+        material_cache.0.insert(material_key, material.clone());
+        material
+    };
+
+    Ok(Some((mesh, material)))
+}
+
+fn mesh_key(texture: AssetId<Image>, geometry: ExtrudedSpriteGeometry) -> ExtrudedSpriteMeshKey {
     ExtrudedSpriteMeshKey {
-        texture: pending.texture.id(),
+        texture,
         width: geometry.size[0].to_bits(),
         depth: geometry.size[1].to_bits(),
         height: geometry.height.to_bits(),
