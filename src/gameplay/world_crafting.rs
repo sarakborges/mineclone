@@ -1,7 +1,10 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::{log_gameplay_event, log_gameplay_warn},
+    app::{
+        crash_log::{log_gameplay_event, log_gameplay_warn},
+        keybinds::{KeybindAction, Keybinds},
+    },
     content::{
         object::ObjectRegistry,
         world_recipe::{WorldRecipeIngredientDefinition, WorldRecipeRegistry},
@@ -53,11 +56,17 @@ struct WorldCraftingContext<'w> {
 
 fn apply_world_recipe(
     buttons: Res<ButtonInput<MouseButton>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    keybinds: Res<Keybinds>,
     player: Single<&GameMode, With<GameplayCamera>>,
     mut context: WorldCraftingContext,
 ) {
     let game_mode = player.into_inner();
-    if !buttons.just_pressed(MouseButton::Right) || *game_mode != GameMode::Survival {
+    let interaction_override = keys.pressed(keybinds.key_code(KeybindAction::Descend));
+    if !buttons.just_pressed(MouseButton::Right)
+        || *game_mode != GameMode::Survival
+        || interaction_override
+    {
         return;
     }
 
