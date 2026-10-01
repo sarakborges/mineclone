@@ -246,8 +246,12 @@ fn authored_adjacency_allows(
                 context.spawn_oceans,
             );
             let neighbor = &context.biomes[neighbor_index];
+            let authored_conflict = authored_pair_conflicts(candidate, neighbor);
+            let fitted_size_conflict = candidate.id != neighbor.id
+                && fitting::boundary_fit_interval(candidate, neighbor, context.site, neighbor_site)
+                    .is_none();
 
-            if !authored_pair_conflicts(candidate, neighbor) {
+            if !authored_conflict && !fitted_size_conflict {
                 continue;
             }
 
@@ -258,9 +262,10 @@ fn authored_adjacency_allows(
                 return false;
             }
 
-            // A raw/raw collision must have one deterministic winner. The old
-            // code rejected both independently, which was the main source of
-            // empty domains after exclusive-neighbor groups were authored.
+            // Raw/raw conflicts have one deterministic winner. This applies to
+            // both authored adjacency and a min/max pair that physically cannot
+            // share their current edge. The losing site tries its next weighted
+            // candidate; no constraint is relaxed.
             if !fitting::raw_conflict_left_wins(
                 context.cell,
                 context.site,
@@ -421,7 +426,7 @@ pub(super) fn raw_surface_biome_index(
             }
             Some(WeightedSurfaceCandidate {
                 index,
-                weight: biome.weight * climate_weight,
+                weight: biome.weight * climate_weight * distribution,
             })
         })
         .collect::<Vec<_>>();
