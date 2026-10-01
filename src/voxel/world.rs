@@ -245,7 +245,7 @@ impl VoxelWorld {
         let Some(chunk) = self.resident.get_mut(coord) else {
             return false;
         };
-        chunk.rebuild_empty_light_columns(coord, sky_by_column);
+        chunk.rebuild_empty_light_columns(sky_by_column);
         true
     }
 
