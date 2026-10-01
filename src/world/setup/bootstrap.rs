@@ -568,54 +568,63 @@ fn random_spawn_biome_id<'a>(
     seed: u64,
 ) -> &'a str {
     let ocean_biome = dimension.ocean_biome.as_deref();
-    let is_candidate = |entry: &&crate::content::dimension::DimensionBiome| {
-        entry.weight > f32::EPSILON
-            && entry.require_near.is_empty()
-            && ocean_biome != Some(entry.id.as_str())
-            && biomes
-                .get(&entry.id)
-                .is_some_and(|biome| biome.kind == BiomeKind::Surface)
-    };
-
     let candidates = dimension
         .biomes
         .iter()
-        .filter(is_candidate)
+        .filter(|entry| {
+            entry.spawn_weight > f32::EPSILON
+                && entry.require_near.is_empty()
+                && ocean_biome != Some(entry.id.as_str())
+                && biomes
+                    .get(&entry.id)
+                    .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+        })
         .collect::<Vec<_>>();
 
     assert!(
         !candidates.is_empty(),
-        "dimension {} must define at least one forceable non-ocean surface biome for random spawn",
+        "dimension {} must define at least one forceable non-ocean surface biome with positive spawnWeight for random spawn",
         dimension.id
     );
 
-    // Exclusive-neighbor groups are biome variants of one terrain family.
-    // Random spawn should not give a family five times the probability merely
-    // because it currently has five mutually exclusive variants.
-    let mut families: Vec<Vec<&crate::content::dimension::DimensionBiome>> = Vec::new();
+    let total_weight = candidates
+        .iter()
+        .map(|entry| entry.spawn_weight as f64)
+        .sum::<f64>();
+    assert!(
+        total_weight.is_finite() && total_weight > 0.0,
+        "dimension {} must define a positive random-spawn weight",
+        dimension.id
+    );
+
+    let roll = (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) as f64
+        / u64::MAX as f64)
+        * total_weight;
+
+    let mut cumulative = 0.0;
     for entry in candidates {
-        if let Some(group) = entry.exclusive_neighbor_group.as_deref() {
-            if let Some(family) = families.iter_mut().find(|family| {
-                family
-                    .first()
-                    .and_then(|member| member.exclusive_neighbor_group.as_deref())
-                    == Some(group)
-            }) {
-                family.push(entry);
-            } else {
-                families.push(vec![entry]);
-            }
-        } else {
-            families.push(vec![entry]);
+        cumulative += entry.spawn_weight as f64;
+        if roll < cumulative {
+            return entry.id.as_str();
         }
     }
 
-    let family_index = random_spawn_candidate_index(seed, families.len());
-    let family = &families[family_index];
-    let member_seed = mix_hash_u64(seed.rotate_left(17) ^ RANDOM_SPAWN_BIOME_SALT);
-    let member_index = random_spawn_candidate_index(member_seed, family.len());
-
-    family[member_index].id.as_str()
+    // Floating-point accumulation can only leave a tiny tail at the upper
+    // boundary; return the last weighted candidate deterministically.
+    dimension
+        .biomes
+        .iter()
+        .rev()
+        .find(|entry| {
+            entry.spawn_weight > f32::EPSILON
+                && entry.require_near.is_empty()
+                && ocean_biome != Some(entry.id.as_str())
+                && biomes
+                    .get(&entry.id)
+                    .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+        })
+        .map(|entry| entry.id.as_str())
+        .expect("random spawn candidate list cannot become empty")
 }
 
 fn random_spawn_candidate_index(seed: u64, candidate_count: usize) -> usize {
