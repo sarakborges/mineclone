@@ -3,7 +3,7 @@
 
 The geometry and face shading match the former HUD block renderer. Namespaced
 block ids are stored with their local id so the assets remain Windows-safe:
-asteria:stone -> assets/block_icons/stone.png.
+asteria:stone -> assets/textures/block_icons/stone.png.
 """
 
 from __future__ import annotations
@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BLOCKS_DIR = ROOT / "data" / "blocks"
 ASSETS_DIR = ROOT / "assets"
 TEXTURES_DIR = ASSETS_DIR / "textures"
-OUTPUT_DIR = ASSETS_DIR / "block_icons"
+OUTPUT_DIR = TEXTURES_DIR / "block_icons"
+LEGACY_OUTPUT_DIR = ASSETS_DIR / "block_icons"
 
 SIZE = 256
 
@@ -37,10 +38,6 @@ FACE_SHADE = {
     "front": 0.86,
     "right": 0.74,
 }
-
-# Static authored tint for layers marked dyable (grass, etc.).
-DEFAULT_DYE_SRGB = (0.48, 0.72, 0.34)
-LUMA = (0.2126, 0.7152, 0.0722)
 
 FACE_BASIS = {
     "top": (
@@ -74,19 +71,6 @@ def linear_to_srgb(c: float) -> float:
     return 1.055 * (c ** (1.0 / 2.4)) - 0.055
 
 
-def apply_dye(pixel: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
-    r, g, b, a = pixel
-    rgb = [srgb_to_linear(v / 255.0) for v in (r, g, b)]
-    tint = [srgb_to_linear(v) for v in DEFAULT_DYE_SRGB]
-    source_luma = max(sum(rgb[i] * LUMA[i] for i in range(3)), 0.0)
-    tint_peak = max(max(tint), 0.001)
-    hue = [v / tint_peak for v in tint]
-    hue_luma = max(sum(hue[i] * LUMA[i] for i in range(3)), 0.001)
-    compensation = min(2.0, 1.0 / hue_luma)
-    out = [min(1.0, source_luma * h * compensation * 1.08) for h in hue]
-    return tuple(round(linear_to_srgb(v) * 255.0) for v in out) + (a,)
-
-
 def shade_pixel(pixel: tuple[int, int, int, int], shade: float) -> tuple[int, int, int, int]:
     r, g, b, a = pixel
     linear = [srgb_to_linear(v / 255.0) * shade for v in (r, g, b)]
@@ -111,10 +95,10 @@ def alpha_over(base: tuple[int, int, int, int], overlay: tuple[int, int, int, in
 
 def normalize_layers(spec: Any) -> list[dict[str, Any]]:
     if isinstance(spec, str):
-        return [{"texture": spec, "dyable": False}]
+        return [{"texture": spec}]
     if isinstance(spec, dict):
         if "texture" in spec:
-            return [{"texture": spec["texture"], "dyable": bool(spec.get("dyable", False))}]
+            return [{"texture": spec["texture"]}]
         if "layers" in spec:
             return normalize_layers(spec["layers"])
     if isinstance(spec, list):
@@ -133,8 +117,8 @@ def load_texture(path: str) -> Image.Image:
     raise FileNotFoundError(f"Missing texture: {path}")
 
 
-def prepare_face_layers(spec: Any) -> list[tuple[Image.Image, bool]]:
-    return [(load_texture(layer["texture"]), bool(layer["dyable"])) for layer in normalize_layers(spec)]
+def prepare_face_layers(spec: Any) -> list[Image.Image]:
+    return [load_texture(layer["texture"]) for layer in normalize_layers(spec)]
 
 
 def face_spec(textures: dict[str, Any], face: str) -> Any:
@@ -149,19 +133,16 @@ def face_spec(textures: dict[str, Any], face: str) -> Any:
     raise KeyError(f"Block has no texture for visible face {face!r}")
 
 
-def sample_layers(layers: list[tuple[Image.Image, bool]], u: float, v: float) -> tuple[int, int, int, int]:
+def sample_layers(layers: list[Image.Image], u: float, v: float) -> tuple[int, int, int, int]:
     out = (0, 0, 0, 0)
-    for image, dyable in layers:
+    for image in layers:
         sx = min(image.width - 1, max(0, int(u * image.width)))
         sy = min(image.height - 1, max(0, int(v * image.height)))
-        pixel = image.getpixel((sx, sy))
-        if dyable:
-            pixel = apply_dye(pixel)
-        out = alpha_over(out, pixel)
+        out = alpha_over(out, image.getpixel((sx, sy)))
     return out
 
 
-def draw_face(canvas: Image.Image, face: str, layers: list[tuple[Image.Image, bool]]) -> None:
+def draw_face(canvas: Image.Image, face: str, layers: list[Image.Image]) -> None:
     origin, axis_u, axis_v = FACE_BASIS[face]
     ox, oy = origin
     ux, uy = axis_u
@@ -213,7 +194,22 @@ def local_block_id(block_id: str) -> str:
     return block_id.split(":", 1)[1] if ":" in block_id else block_id
 
 
+def clear_generated(directory: Path) -> None:
+    if not directory.exists():
+        return
+    for stale in directory.rglob("*.png"):
+        stale.unlink()
+    gitkeep = directory / ".gitkeep"
+    if gitkeep.is_file():
+        gitkeep.unlink()
+    try:
+        directory.rmdir()
+    except OSError:
+        pass
+
+
 def main() -> None:
+    clear_generated(LEGACY_OUTPUT_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for stale in OUTPUT_DIR.rglob("*.png"):
         stale.unlink()
