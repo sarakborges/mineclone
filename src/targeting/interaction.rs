@@ -21,6 +21,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell,
+        chunk::MAX_OBJECTS_PER_VOXEL,
         edit::{VoxelBlockMutation, VoxelTopologyRuntime},
         layer::LayerCell,
         log_variant::is_hollow_log_id,
@@ -134,13 +135,12 @@ fn edit_targeted_block(
         return;
     }
     if middle_pressed && game_mode.has_creative_inventory() {
-        if let Some(support) = input.object_target.0
-            && let Some(object) = runtime.read().object_at(support)
-            && definitions.objects.get(object.object_id).is_some()
+        if let Some(key) = input.object_target.0
+            && definitions.objects.get(key.object.object_id).is_some()
         {
             input
                 .hotbar
-                .set_selected_stack(Some(ItemStack::new(object.object_id)));
+                .set_selected_stack(Some(ItemStack::new(key.object.object_id)));
             return;
         }
 
@@ -170,24 +170,23 @@ fn edit_targeted_block(
         .and_then(|stack| stack.metadata().get(BIOME_TINT_METADATA_KEY))
         .map(str::to_owned);
 
-    if let Some(support) = input.object_target.0
-        && let Some(object) = runtime.read().object_at(support)
-        && let Some(definition) = definitions.objects.get(object.object_id)
+    if let Some(key) = input.object_target.0
+        && let Some(definition) = definitions.objects.get(key.object.object_id)
     {
         match definition.interaction {
             ObjectInteraction::Pickup if right_pressed => {
                 if input
                     .hotbar
-                    .try_insert_stack(ItemStack::new(object.object_id))
+                    .try_insert_stack(ItemStack::new(key.object.object_id))
                     .is_ok()
                 {
                     actions.object_removals.write(WorldObjectRemoveRequest {
-                        support,
+                        key,
                         drop_loot: false,
                     });
                     log_gameplay_event(format!(
                         "object.pickup object={} support={:?}",
-                        object.object_id, support
+                        key.object.object_id, key.support
                     ));
                     input.object_target.0 = None;
                     actions.viewmodel_animation.play_place();
@@ -197,12 +196,12 @@ fn edit_targeted_block(
             ObjectInteraction::Pickup if left_pressed => return,
             ObjectInteraction::Break if left_pressed => {
                 actions.object_removals.write(WorldObjectRemoveRequest {
-                    support,
+                    key,
                     drop_loot: *game_mode == GameMode::Survival,
                 });
                 log_gameplay_event(format!(
                     "object.break object={} support={:?} mode={:?}",
-                    object.object_id, support, game_mode
+                    key.object.object_id, key.support, game_mode
                 ));
                 input.object_target.0 = None;
                 actions.viewmodel_animation.play_break();
@@ -260,14 +259,19 @@ fn edit_targeted_block(
         if let Some((support, face)) =
             object_placement_attachment(hit, definition, &runtime.read())
         {
-            actions.object_placements.write(WorldObjectPlaceRequest {
-                support,
-                object: ObjectCell::new(
-                    object_id,
-                    face,
-                    TextureRotation::for_position(support, true),
-                ),
-            });
+            let object = ObjectCell::new(
+                object_id,
+                face,
+                TextureRotation::for_position(support, true),
+            );
+            let existing = runtime.read();
+            let objects = existing.objects_at(support);
+            if objects.len() >= MAX_OBJECTS_PER_VOXEL || objects.contains(&object) {
+                return;
+            }
+            actions
+                .object_placements
+                .write(WorldObjectPlaceRequest { support, object });
             log_gameplay_event(format!(
                 "object.place object={} support={:?} face={:?} mode={:?}",
                 object_id, support, face, game_mode
@@ -523,7 +527,7 @@ fn object_placement_attachment(
         && world.is_loaded_at(hit.voxel)
         && world.is_loaded_at(object_space)
         && world.cell_at(object_space).is_none()
-        && world.object_at(hit.voxel).is_none())
+        && world.objects_at(hit.voxel).len() < MAX_OBJECTS_PER_VOXEL)
     .then_some((hit.voxel, face))
 }
 
@@ -536,7 +540,7 @@ fn hollow_log_accepts_object(
         return false;
     };
     if !is_hollow_log_id(cell.block_id)
-        || world.object_at(voxel).is_some()
+        || world.objects_at(voxel).len() >= MAX_OBJECTS_PER_VOXEL
         || !world.is_loaded_at(voxel)
     {
         return false;
