@@ -7,6 +7,7 @@ use crate::{
     content::{
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
+        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
         item::{ItemDefinition, ItemRegistry},
         item_id::intern_item_id,
@@ -29,11 +30,17 @@ use super::{
         CREATIVE_CATEGORY_HEIGHT, CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT,
         CreativeCatalogScrollArea, CreativeCatalogScrollbar, CreativeCategoryButton,
         CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
-        CreativeInventoryView, CreativeSearchBar, CreativeSearchText, PANEL_BORDER_WIDTH,
-        PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SCROLLBAR_TOTAL_WIDTH,
-        SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
+        CreativeInventoryView, CreativeSearchBar, CreativeSearchText, ITEM_ICON_SIZE,
+        PANEL_BORDER_WIDTH, PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH,
+        SCROLLBAR_TOTAL_WIDTH, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
     },
 };
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
 
 #[derive(Clone, Copy)]
 struct CreativeCatalogSources<'a> {
@@ -46,6 +53,31 @@ struct CreativeCatalogSources<'a> {
     language: Language,
 }
 
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+enum BucketVariant {
+    Empty,
+    Water,
+    Lava,
+}
+
+impl BucketVariant {
+    fn metadata(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::Empty => None,
+            Self::Water => Some((BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID)),
+            Self::Lava => Some((BUCKET_FLUID_METADATA_KEY, LAVA_FLUID_ID)),
+        }
+    }
+
+    fn icon(self) -> &'static str {
+        match self {
+            Self::Empty => BUCKET_EMPTY_ICON,
+            Self::Water => BUCKET_WATER_ICON,
+            Self::Lava => BUCKET_LAVA_ICON,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum CreativeCatalogItem<'a> {
     Item(&'a ItemDefinition),
@@ -53,6 +85,7 @@ enum CreativeCatalogItem<'a> {
     Layer(&'a LayerDefinition),
     Object(&'a ObjectDefinition),
     Tool(&'a ToolDefinition),
+    Bucket(&'a ToolDefinition, BucketVariant),
 }
 
 impl<'a> CreativeCatalogItem<'a> {
@@ -62,7 +95,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Block(block) => &block.id,
             Self::Layer(layer) => &layer.id,
             Self::Object(object) => &object.id,
-            Self::Tool(tool) => &tool.id,
+            Self::Tool(tool) | Self::Bucket(tool, _) => &tool.id,
         }
     }
 
@@ -72,7 +105,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Block(block) => &block.category,
             Self::Layer(layer) => &layer.category,
             Self::Object(object) => &object.category,
-            Self::Tool(tool) => &tool.category,
+            Self::Tool(tool) | Self::Bucket(tool, _) => &tool.category,
         }
     }
 
@@ -82,7 +115,7 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Block(block) => block.name.text(language),
             Self::Layer(layer) => layer.name.text(language),
             Self::Object(object) => object.name.text(language),
-            Self::Tool(tool) => tool.name.text(language),
+            Self::Tool(tool) | Self::Bucket(tool, _) => tool.name.text(language),
         }
     }
 
@@ -92,7 +125,28 @@ impl<'a> CreativeCatalogItem<'a> {
             Self::Block(block) => intern_block_id(&block.id),
             Self::Layer(layer) => intern_layer_id(&layer.id),
             Self::Object(object) => intern_object_id(&object.id),
-            Self::Tool(tool) => intern_tool_id(&tool.id),
+            Self::Tool(tool) | Self::Bucket(tool, _) => intern_tool_id(&tool.id),
+        }
+    }
+
+    fn metadata(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::Bucket(_, variant) => variant.metadata(),
+            _ => None,
+        }
+    }
+
+    fn bucket_icon(self) -> Option<&'static str> {
+        match self {
+            Self::Bucket(_, variant) => Some(variant.icon()),
+            _ => None,
+        }
+    }
+
+    fn variant_order(self) -> BucketVariant {
+        match self {
+            Self::Bucket(_, variant) => variant,
+            _ => BucketVariant::Empty,
         }
     }
 }
@@ -447,13 +501,17 @@ fn spawn_creative_slot(
     items: &mut InventoryItemView<'_>,
 ) {
     let item_id = item.map(CreativeCatalogItem::interned_id);
+    let metadata = item.and_then(CreativeCatalogItem::metadata);
     let selected = item_id.is_some() && item_id == selected_item;
     let (background, border) = selectable::static_colors(selected);
 
     parent
         .spawn((
             Button,
-            CreativeInventorySlot { item: item_id },
+            CreativeInventorySlot {
+                item: item_id,
+                metadata,
+            },
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
@@ -468,7 +526,17 @@ fn spawn_creative_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            if let Some(item_id) = item_id {
+            if let Some(icon) = item.and_then(CreativeCatalogItem::bucket_icon) {
+                slot.spawn((
+                    ImageNode::new(items.asset_server.load(icon)),
+                    Node {
+                        width: px(ITEM_ICON_SIZE),
+                        height: px(ITEM_ICON_SIZE),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+            } else if let Some(item_id) = item_id {
                 spawn_inventory_item(slot, item_id, items);
             }
         });
@@ -487,7 +555,19 @@ fn filtered_creative_catalog<'a>(
         .chain(sources.blocks.iter().map(CreativeCatalogItem::Block))
         .chain(sources.layers.iter().map(CreativeCatalogItem::Layer))
         .chain(sources.objects.iter().map(CreativeCatalogItem::Object))
-        .chain(sources.tools.iter().map(CreativeCatalogItem::Tool))
+        .chain(sources.tools.iter().flat_map(|tool| {
+            if tool.id == BUCKET_TOOL_ID {
+                [
+                    Some(CreativeCatalogItem::Bucket(tool, BucketVariant::Empty)),
+                    Some(CreativeCatalogItem::Bucket(tool, BucketVariant::Water)),
+                    Some(CreativeCatalogItem::Bucket(tool, BucketVariant::Lava)),
+                ]
+            } else {
+                [Some(CreativeCatalogItem::Tool(tool)), None, None]
+            }
+            .into_iter()
+            .flatten()
+        }))
         .filter(|item| category.is_none_or(|category| item.category() == category))
         .filter(|item| match item {
             CreativeCatalogItem::Layer(layer) => layer.creative_visible,
@@ -506,6 +586,7 @@ fn filtered_creative_catalog<'a>(
         category_order(sources.categories, left.category())
             .cmp(&category_order(sources.categories, right.category()))
             .then_with(|| left.id().cmp(right.id()))
+            .then_with(|| left.variant_order().cmp(&right.variant_order()))
     });
     catalog
 }

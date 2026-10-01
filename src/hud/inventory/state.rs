@@ -54,6 +54,7 @@ pub(super) struct InventorySortTooltip;
 #[derive(Component)]
 pub(super) struct CreativeInventorySlot {
     pub(super) item: Option<&'static str>,
+    pub(super) metadata: Option<(&'static str, &'static str)>,
 }
 
 #[derive(Component)]

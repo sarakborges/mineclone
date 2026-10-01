@@ -242,7 +242,7 @@ pub(super) fn handle_creative_slot_clicks(
             creative_view.blur_search();
         }
         if let Some(item) = slot.item {
-            cursor.pick_creative_item(item);
+            cursor.pick_creative_item(item, slot.metadata);
             log_gameplay_event(format!("inventory.creative_pick item={item}"));
         }
         break;

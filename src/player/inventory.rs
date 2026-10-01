@@ -46,8 +46,16 @@ impl InventoryCursor {
         }
     }
 
-    pub(crate) fn pick_creative_item(&mut self, item: &'static str) {
-        self.item = Some(ItemStack::new(item));
+    pub(crate) fn pick_creative_item(
+        &mut self,
+        item: &'static str,
+        metadata: Option<(&'static str, &'static str)>,
+    ) {
+        let mut stack = ItemStack::new(item);
+        if let Some((key, value)) = metadata {
+            stack = stack.with_metadata(key, value);
+        }
+        self.item = Some(stack);
     }
 
     pub(crate) fn take_stack(&mut self) -> Option<ItemStack> {
