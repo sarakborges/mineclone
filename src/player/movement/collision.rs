@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-use super::config::COLLISION_STEP;
+use super::config::{COLLISION_STEP, GROUND_PROBE};
 
 #[derive(Clone, Copy)]
 pub(super) enum MoveAxisResult {
@@ -31,6 +31,17 @@ pub(super) fn move_axis(
     axis: Axis,
     step_up_height: Option<f32>,
 ) -> MoveAxisResult {
+    move_axis_with_height(transform, world, delta, axis, step_up_height, PLAYER_HEIGHT)
+}
+
+pub(super) fn move_axis_with_height(
+    transform: &mut Transform,
+    world: &VoxelWorld,
+    delta: f32,
+    axis: Axis,
+    step_up_height: Option<f32>,
+    player_height: f32,
+) -> MoveAxisResult {
     if delta == 0.0 {
         return MoveAxisResult::Clear;
     }
@@ -42,7 +53,7 @@ pub(super) fn move_axis(
     for _ in 0..steps {
         translate_axis(&mut transform.translation, step, axis);
 
-        if player_collides(transform.translation, world) {
+        if player_collides_with_height(transform.translation, world, player_height) {
             translate_axis(&mut transform.translation, -step, axis);
 
             if let Some(max_step_height) = step_up_height {
@@ -57,7 +68,7 @@ pub(super) fn move_axis(
                     transform.translation,
                     horizontal_delta,
                     max_step_height,
-                    player_bounds,
+                    |position| player_bounds_for_height(position, player_height),
                 ) {
                     transform.translation = stepped_position;
                     return MoveAxisResult::Stepped(stepped_position);
@@ -73,11 +84,34 @@ pub(super) fn move_axis(
 }
 
 pub(crate) fn player_collides(eye_position: Vec3, world: &VoxelWorld) -> bool {
-    let (min, max) = player_bounds(eye_position);
+    player_collides_with_height(eye_position, world, PLAYER_HEIGHT)
+}
+
+pub(crate) fn player_collides_with_height(
+    eye_position: Vec3,
+    world: &VoxelWorld,
+    player_height: f32,
+) -> bool {
+    let (min, max) = player_bounds_for_height(eye_position, player_height);
     collides_aabb(world, min, max)
 }
 
+pub(crate) fn player_has_ground_support(
+    eye_position: Vec3,
+    world: &VoxelWorld,
+    player_height: f32,
+) -> bool {
+    let (min, max) = player_bounds_for_height(eye_position, player_height);
+    let support_min = Vec3::new(min.x, min.y - GROUND_PROBE, min.z);
+    let support_max = Vec3::new(max.x, min.y, max.z);
+    collides_aabb(world, support_min, support_max)
+}
+
 pub(crate) fn player_bounds(eye_position: Vec3) -> (Vec3, Vec3) {
+    player_bounds_for_height(eye_position, PLAYER_HEIGHT)
+}
+
+pub(crate) fn player_bounds_for_height(eye_position: Vec3, player_height: f32) -> (Vec3, Vec3) {
     let feet_y = eye_position.y - PLAYER_EYE_HEIGHT;
     let min = Vec3::new(
         eye_position.x - PLAYER_HALF_WIDTH,
@@ -86,7 +120,7 @@ pub(crate) fn player_bounds(eye_position: Vec3) -> (Vec3, Vec3) {
     );
     let max = Vec3::new(
         eye_position.x + PLAYER_HALF_WIDTH,
-        feet_y + PLAYER_HEIGHT,
+        feet_y + player_height,
         eye_position.z + PLAYER_HALF_WIDTH,
     );
     (min, max)

@@ -3,15 +3,15 @@ use bevy::prelude::*;
 use crate::{
     app::keybinds::KeybindAction,
     player::PlayerEntity,
-    voxel::world::VoxelWorld,
 };
 
 use super::{
-    collision::{Axis, MoveAxisResult, move_axis, player_collides},
-    config::{FLY_SPEED, GRAVITY, GROUND_PROBE, JUMP_SPEED},
+    collision::{Axis, MoveAxisResult, move_axis_with_height, player_has_ground_support},
+    config::{FLY_SPEED, GRAVITY, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
     vertical::VerticalMovementContext,
+    walking::WalkingState,
 };
 
 #[derive(Component)]
@@ -46,7 +46,7 @@ impl GravityState {
 
 pub(super) fn apply_gravity(
     context: VerticalMovementContext,
-    mut transform: Single<&mut Transform, With<PlayerEntity>>,
+    player: Single<(&mut Transform, &WalkingState), With<PlayerEntity>>,
     flight: Single<&FlightState>,
     swimming: Single<&SwimmingState>,
     mut gravity: Single<&mut GravityState>,
@@ -55,8 +55,11 @@ pub(super) fn apply_gravity(
         return;
     }
 
+    let (mut transform, walking) = player.into_inner();
+    let player_height = walking.collision_height();
+
     if gravity.grounded {
-        if !has_ground_support(&transform, &context.world) {
+        if !player_has_ground_support(transform.translation, &context.world, player_height) {
             gravity.grounded = false;
         } else if context.keys.just_pressed(context.keybinds.key_code(KeybindAction::Jump)) {
             gravity.vertical_velocity = JUMP_SPEED;
@@ -73,12 +76,13 @@ pub(super) fn apply_gravity(
 
     gravity.vertical_velocity = (gravity.vertical_velocity + GRAVITY * delta_seconds).max(-FLY_SPEED);
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
-    let hit_vertical_surface = move_axis(
+    let hit_vertical_surface = move_axis_with_height(
         &mut transform,
         &context.world,
         vertical_delta,
         Axis::Y,
         None,
+        player_height,
     );
 
     if matches!(hit_vertical_surface, MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)) {
@@ -88,8 +92,4 @@ pub(super) fn apply_gravity(
 
         gravity.vertical_velocity = 0.0;
     }
-}
-
-fn has_ground_support(transform: &Transform, world: &VoxelWorld) -> bool {
-    player_collides(transform.translation - Vec3::Y * GROUND_PROBE, world)
 }

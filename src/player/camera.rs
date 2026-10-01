@@ -10,6 +10,7 @@ use crate::{
         availability::world_interaction_available,
         modal::GameplayModalState,
     },
+    player::movement::walking::{CROUCH_CAMERA_DROP, WalkingState},
     voxel::world::VoxelWorld,
 };
 use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cursor};
@@ -18,7 +19,7 @@ use look::{MouseLookInputState, drain_or_apply_mouse_look};
 type PlayerCameraAnchor<'w, 's> = Single<
     'w,
     's,
-    (&'static Transform, &'static GameplayCamera),
+    (&'static Transform, &'static GameplayCamera, &'static WalkingState),
     (With<crate::player::PlayerEntity>, Without<GameplayWorldCamera>),
 >;
 type WorldCameraTransform<'w, 's> = Single<
@@ -93,14 +94,16 @@ pub struct GameplayCamera {
 
 impl GameplayCamera {
     pub(crate) fn restored(yaw: f32, pitch: f32) -> Self {
-        Self { yaw, pitch: pitch.clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH) }
+        Self {
+            yaw,
+            pitch: pitch.clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH),
+        }
     }
 
     pub(crate) fn rotation(self) -> Quat {
         Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, 0.0)
     }
 }
-
 
 const THIRD_PERSON_MAX_DISTANCE: f32 = 4.0;
 const THIRD_PERSON_COLLISION_STEP: f32 = 0.1;
@@ -152,9 +155,7 @@ fn reset_camera_perspective(mut perspective: ResMut<CameraPerspective>) {
     *perspective = CameraPerspective::FirstPerson;
 }
 
-fn activate_gameplay_world_camera(
-    mut cameras: Query<&mut Camera, With<GameplayWorldCamera>>,
-) {
+fn activate_gameplay_world_camera(mut cameras: Query<&mut Camera, With<GameplayWorldCamera>>) {
     for mut camera in &mut cameras {
         camera.is_active = true;
     }
@@ -176,13 +177,15 @@ fn sync_perspective_camera(
     player: PlayerCameraAnchor,
     camera: WorldCameraTransform,
 ) {
-    let (player_transform, gameplay_camera) = *player;
+    let (player_transform, gameplay_camera, walking) = *player;
     let mut camera_transform = camera.into_inner();
+    let world_crouch_offset = Vec3::NEG_Y * (CROUCH_CAMERA_DROP * walking.crouch_blend());
+    let local_crouch_offset = player_transform.rotation.inverse() * world_crouch_offset;
 
     let (local_direction, local_rotation) = match *perspective {
         CameraPerspective::FirstPerson => {
-            if camera_transform.translation != Vec3::ZERO {
-                camera_transform.translation = Vec3::ZERO;
+            if camera_transform.translation != local_crouch_offset {
+                camera_transform.translation = local_crouch_offset;
             }
             if camera_transform.rotation != Quat::IDENTITY {
                 camera_transform.rotation = Quat::IDENTITY;
@@ -199,11 +202,11 @@ fn sync_perspective_camera(
     let world_direction = rotation * local_direction;
     let distance = unobstructed_camera_distance(
         &world,
-        player_transform.translation,
+        player_transform.translation + world_crouch_offset,
         world_direction,
         THIRD_PERSON_MAX_DISTANCE,
     );
-    let local_translation = local_direction * distance;
+    let local_translation = local_crouch_offset + local_direction * distance;
     if camera_transform.translation != local_translation {
         camera_transform.translation = local_translation;
     }
@@ -228,14 +231,12 @@ fn unobstructed_camera_distance(
         let distance = (step as f32 * THIRD_PERSON_COLLISION_STEP).min(maximum);
         let position = origin + direction * distance;
         if world.is_solid(position.floor().as_ivec3()) {
-            return (distance - THIRD_PERSON_COLLISION_STEP)
-                .max(THIRD_PERSON_MIN_DISTANCE);
+            return (distance - THIRD_PERSON_COLLISION_STEP).max(THIRD_PERSON_MIN_DISTANCE);
         }
     }
 
     maximum
 }
-
 
 #[cfg(test)]
 mod tests {

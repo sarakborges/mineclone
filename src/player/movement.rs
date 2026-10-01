@@ -1,9 +1,17 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    app::AnimationSystems,
+    ecs::system::SystemParam,
+    prelude::*,
+    transform::TransformSystems,
+};
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::{crash_log::log_gameplay_event, game_state::GameState},
     gameplay::availability::world_interaction_available,
-    player::{PlayerEntity, game_mode::{GameMode, not_spectator}},
+    player::{
+        PlayerEntity,
+        game_mode::{GameMode, not_spectator},
+    },
 };
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
@@ -13,6 +21,7 @@ use world_bounds::enforce_world_floor;
 
 pub(crate) mod collision;
 pub(crate) mod config;
+mod crouching;
 mod entity_collision;
 pub(crate) mod flight;
 pub(crate) mod gravity;
@@ -30,6 +39,7 @@ struct MovementLogState {
     last_swimming: Option<bool>,
     last_grounded: Option<bool>,
     last_running: Option<bool>,
+    last_crouching: Option<bool>,
 }
 
 type MovementLogComponents = (
@@ -63,17 +73,19 @@ fn log_movement_diagnostics(
     let swimming = swimming.is_active();
     let grounded = gravity.grounded();
     let running = walking.is_running();
+    let crouching = walking.is_crouching();
     let state_changed = state.last_flying != Some(flying)
         || state.last_swimming != Some(swimming)
         || state.last_grounded != Some(grounded)
-        || state.last_running != Some(running);
-    let moved = state.last_position.is_some_and(|previous| {
-        previous.distance_squared(transform.translation) > 0.0001
-    });
+        || state.last_running != Some(running)
+        || state.last_crouching != Some(crouching);
+    let moved = state
+        .last_position
+        .is_some_and(|previous| previous.distance_squared(transform.translation) > 0.0001);
 
     if state_changed || (timer_finished && moved) {
         log_gameplay_event(format!(
-            "player.movement position=({:.3},{:.3},{:.3}) mode={game_mode:?} flying={flying} swimming={swimming} grounded={grounded} running={running} horizontal_speed={:.3} vertical_velocity={:.3}",
+            "player.movement position=({:.3},{:.3},{:.3}) mode={game_mode:?} flying={flying} swimming={swimming} grounded={grounded} running={running} crouching={crouching} horizontal_speed={:.3} vertical_velocity={:.3}",
             transform.translation.x,
             transform.translation.y,
             transform.translation.z,
@@ -87,6 +99,7 @@ fn log_movement_diagnostics(
     state.last_swimming = Some(swimming);
     state.last_grounded = Some(grounded);
     state.last_running = Some(running);
+    state.last_crouching = Some(crouching);
 }
 pub struct PlayerMovementPlugin;
 
@@ -106,6 +119,13 @@ impl Plugin for PlayerMovementPlugin {
             )
                 .chain()
                 .run_if(world_interaction_available),
+        )
+        .add_systems(
+            PostUpdate,
+            crouching::apply_player_crouch_pose
+                .after(AnimationSystems)
+                .before(TransformSystems::Propagate)
+                .run_if(in_state(GameState::Gameplay)),
         )
         .add_systems(
             PostUpdate,
