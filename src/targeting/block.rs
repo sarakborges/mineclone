@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     app::{crash_log::log_gameplay_event, game_state::GameState},
-    content::object::ObjectRegistry,
+    content::object::{ObjectDefinition, ObjectRegistry},
     creatures::{CreatureInstance, CreatureTargetCollider},
     entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
@@ -19,7 +19,7 @@ use crate::{
         world::VoxelWorld,
     },
     world_items::{TargetedWorldItem, WorldItem, target_bounds},
-    world_objects::{TargetedWorldObject, world_object_position},
+    world_objects::{TargetedWorldObject, world_object_transform},
 };
 
 const TARGET_RANGE: f32 = 8.0;
@@ -248,15 +248,13 @@ fn closest_world_object_hit(
                     };
                     let support_cell =
                         chunk.cell_at(local_x as i32, local_y as i32, local_z as i32);
-                    let position =
-                        world_object_position(support, support_cell, object, definition);
-                    let center = position + Vec3::from_array(definition.target.center_offset);
-                    let half = Vec3::from_array(definition.target.size) * 0.5;
-                    let Some(distance) =
-                        ray_box_distance(origin, direction, center - half, center + half)
-                            .filter(|distance| {
-                                *distance <= TARGET_RANGE && *distance <= block_distance
-                            })
+                    let transform =
+                        world_object_transform(support, support_cell, object, definition);
+                    let (minimum, maximum) = object_target_bounds(&transform, definition);
+                    let Some(distance) = ray_box_distance(origin, direction, minimum, maximum)
+                        .filter(|distance| {
+                            *distance <= TARGET_RANGE && *distance <= block_distance
+                        })
                     else {
                         continue;
                     };
@@ -272,6 +270,30 @@ fn closest_world_object_hit(
     }
 
     closest
+}
+
+fn object_target_bounds(
+    transform: &Transform,
+    definition: &ObjectDefinition,
+) -> (Vec3, Vec3) {
+    let center = Vec3::from_array(definition.target.center_offset);
+    let half = Vec3::from_array(definition.target.size) * 0.5;
+    let mut minimum = Vec3::splat(f32::INFINITY);
+    let mut maximum = Vec3::splat(f32::NEG_INFINITY);
+
+    for x in [-1.0, 1.0] {
+        for y in [-1.0, 1.0] {
+            for z in [-1.0, 1.0] {
+                let local = center + half * Vec3::new(x, y, z);
+                let world = transform.translation
+                    + transform.rotation * (local * transform.scale);
+                minimum = minimum.min(world);
+                maximum = maximum.max(world);
+            }
+        }
+    }
+
+    (minimum, maximum)
 }
 
 /// Ray versus a static AABB; returns the first forward intersection in blocks.
