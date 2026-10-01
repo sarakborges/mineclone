@@ -63,17 +63,28 @@ use crate::{
     world_items::WorldItemSpawnRequest,
 };
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct WorldObjectKey {
+    pub(crate) support: IVec3,
+    pub(crate) object: ObjectCell,
+}
+
+impl WorldObjectKey {
+    pub(crate) const fn new(support: IVec3, object: ObjectCell) -> Self {
+        Self { support, object }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct MaterializedWorldObject {
     entity: Entity,
-    object: ObjectCell,
     support_cell: Option<VoxelCell>,
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct WorldObjectStore {
-    by_support: HashMap<IVec3, MaterializedWorldObject>,
-    by_chunk: HashMap<IVec3, HashSet<IVec3>>,
+    by_key: HashMap<WorldObjectKey, MaterializedWorldObject>,
+    by_chunk: HashMap<IVec3, HashSet<WorldObjectKey>>,
     synced_chunk_revisions: HashMap<IVec3, u64>,
     synced_world_revision: u64,
     synced_render_pool_revision: u64,
@@ -84,7 +95,7 @@ pub(crate) struct WorldObjectStore {
 
 impl WorldObjectStore {
     pub(crate) fn materialized_object_count(&self) -> usize {
-        self.by_support.len()
+        self.by_key.len()
     }
 
     pub(crate) fn materialized_chunk_count(&self) -> usize {
@@ -93,32 +104,30 @@ impl WorldObjectStore {
 
     fn insert(
         &mut self,
-        support: IVec3,
-        object: ObjectCell,
+        key: WorldObjectKey,
         support_cell: Option<VoxelCell>,
         entity: Entity,
     ) {
-        let previous = self.by_support.insert(
-            support,
+        let previous = self.by_key.insert(
+            key,
             MaterializedWorldObject {
                 entity,
-                object,
                 support_cell,
             },
         );
-        debug_assert!(previous.is_none(), "world object support must be unique");
+        debug_assert!(previous.is_none(), "world object instance key must be unique");
         self.by_chunk
-            .entry(chunk_coord_from_world(support))
+            .entry(chunk_coord_from_world(key.support))
             .or_default()
-            .insert(support);
+            .insert(key);
     }
 
-    fn remove_support(&mut self, support: IVec3) -> Option<Entity> {
-        let entity = self.by_support.remove(&support)?.entity;
-        let coord = chunk_coord_from_world(support);
-        let remove_chunk_entry = if let Some(supports) = self.by_chunk.get_mut(&coord) {
-            supports.remove(&support);
-            supports.is_empty()
+    fn remove_key(&mut self, key: WorldObjectKey) -> Option<Entity> {
+        let entity = self.by_key.remove(&key)?.entity;
+        let coord = chunk_coord_from_world(key.support);
+        let remove_chunk_entry = if let Some(keys) = self.by_chunk.get_mut(&coord) {
+            keys.remove(&key);
+            keys.is_empty()
         } else {
             false
         };
@@ -129,18 +138,17 @@ impl WorldObjectStore {
     }
 
     fn take_chunk_entities(&mut self, coord: IVec3) -> Vec<Entity> {
-        let Some(supports) = self.by_chunk.remove(&coord) else {
+        let Some(keys) = self.by_chunk.remove(&coord) else {
             return Vec::new();
         };
-        supports
-            .into_iter()
-            .filter_map(|support| self.by_support.remove(&support).map(|entry| entry.entity))
+        keys.into_iter()
+            .filter_map(|key| self.by_key.remove(&key).map(|entry| entry.entity))
             .collect()
     }
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct TargetedWorldObject(pub(crate) Option<IVec3>);
+pub(crate) struct TargetedWorldObject(pub(crate) Option<WorldObjectKey>);
 
 #[derive(Message)]
 pub(crate) struct WorldObjectPlaceRequest {
@@ -150,7 +158,7 @@ pub(crate) struct WorldObjectPlaceRequest {
 
 #[derive(Message)]
 pub(crate) struct WorldObjectRemoveRequest {
-    pub(crate) support: IVec3,
+    pub(crate) key: WorldObjectKey,
     pub(crate) drop_loot: bool,
 }
 
@@ -298,27 +306,27 @@ fn apply_object_removal_requests(
     mut runtime: WorldObjectRemovalRuntime,
 ) {
     for request in requests.read() {
-        let Some(object) = runtime.world.object_at(request.support) else {
+        let key = request.key;
+        if !runtime.world.objects_at(key.support).contains(&key.object) {
+            continue;
+        }
+        let Some(definition) = content.objects.get(key.object.object_id) else {
             continue;
         };
-        let Some(definition) = content.objects.get(object.object_id) else {
-            continue;
-        };
-        let support_cell = runtime.world.cell_at(request.support);
-        let loot_position =
-            world_object_position(request.support, support_cell, object, definition)
-                + Vec3::Y * 0.25;
-        let Some((_chunk, removed)) = runtime.world.remove_object_at(request.support) else {
+        let support_cell = runtime.world.cell_at(key.support);
+        let loot_position = world_object_position(key.support, support_cell, key.object, definition)
+            + Vec3::Y * 0.25;
+        let Some((_chunk, removed)) = runtime.world.remove_object_at(key.support, key.object) else {
             continue;
         };
 
-        if let Some(entity) = runtime.store.remove_support(request.support) {
+        if let Some(entity) = runtime.store.remove_key(key) {
             commands.entity(entity).despawn();
         }
         if request.drop_loot {
             spawn_object_loot(
                 definition,
-                request.support,
+                key.support,
                 loot_position,
                 runtime.world_ticks.current_tick(),
                 &content,
@@ -328,10 +336,10 @@ fn apply_object_removal_requests(
         log_gameplay_event(format!(
             "object.remove applied object={} support={:?} drop_loot={}",
             removed.object_id,
-            request.support,
+            key.support,
             request.drop_loot
         ));
-        debug_assert_eq!(removed.object_id, object.object_id);
+        debug_assert_eq!(removed, key.object);
     }
 }
 
@@ -434,24 +442,23 @@ fn sync_world_objects(
                 continue;
             };
             let chunk_origin = coord * CHUNK_SIZE as i32;
-            let existing_supports = store
-                .by_chunk
-                .get(&coord)
-                .cloned()
-                .unwrap_or_default();
-            let mut desired_supports = HashSet::new();
+            let existing_keys = store.by_chunk.get(&coord).cloned().unwrap_or_default();
+            let mut desired_keys = HashSet::new();
 
             for (x, y, z, object) in chunk.object_voxels() {
                 let support = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-                desired_supports.insert(support);
+                let key = WorldObjectKey::new(support, object);
+                desired_keys.insert(key);
                 let support_cell = content.world.cell_at(support);
-                if store.by_support.get(&support).is_some_and(|existing| {
-                    existing.object == object && existing.support_cell == support_cell
-                }) {
+                if store
+                    .by_key
+                    .get(&key)
+                    .is_some_and(|existing| existing.support_cell == support_cell)
+                {
                     continue;
                 }
 
-                if let Some(entity) = store.remove_support(support) {
+                if let Some(entity) = store.remove_key(key) {
                     commands.entity(entity).despawn();
                 }
                 let Some(definition) = content.objects.get(object.object_id) else {
@@ -465,19 +472,19 @@ fn sync_world_objects(
                     definition,
                     &content,
                 );
-                store.insert(support, object, support_cell, entity);
+                store.insert(key, support_cell, entity);
             }
 
-            for support in existing_supports {
-                if desired_supports.contains(&support) {
+            for key in existing_keys {
+                if desired_keys.contains(&key) {
                     continue;
                 }
-                if let Some(entity) = store.remove_support(support) {
+                if let Some(entity) = store.remove_key(key) {
                     commands.entity(entity).despawn();
                 }
             }
 
-            if desired_supports.is_empty() {
+            if desired_keys.is_empty() {
                 store.synced_chunk_revisions.remove(&coord);
             } else {
                 store.synced_chunk_revisions.insert(coord, revision);
