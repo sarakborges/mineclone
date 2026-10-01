@@ -9,7 +9,6 @@ mod hotbar;
 mod inventory;
 mod item_icon;
 mod item_stack_count;
-mod layer_icon;
 mod player;
 mod targeting;
 mod time;
