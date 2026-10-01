@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::log_gameplay_event,
+    app::crash_log::{log_gameplay_event, log_gameplay_warn},
     content::{
         object::ObjectRegistry,
         world_recipe::{WorldRecipeIngredientDefinition, WorldRecipeRegistry},
@@ -72,6 +72,10 @@ fn apply_world_recipe(
         return;
     };
     if !has_ingredients(&context.hotbar, &recipe.ingredients) {
+        log_gameplay_event(format!(
+            "world_recipe.reject recipe={} target_block={} held_item={} voxel={:?} reason=missing_ingredients",
+            recipe.id, hit.block_id, held_item, hit.voxel
+        ));
         return;
     }
 
@@ -81,9 +85,17 @@ fn apply_world_recipe(
     let object_id = object_id.to_owned();
 
     let Some(definition) = context.objects.get(&object_id) else {
+        log_gameplay_warn(format!(
+            "world_recipe.reject recipe={} target_block={} result_object={} voxel={:?} reason=missing_result_object_definition",
+            recipe_id, hit.block_id, object_id, hit.voxel
+        ));
         return;
     };
     if !definition.supports_placement_face(placement_face) {
+        log_gameplay_warn(format!(
+            "world_recipe.reject recipe={} result_object={} voxel={:?} face={:?} reason=unsupported_placement_face",
+            recipe_id, object_id, hit.voxel, placement_face
+        ));
         return;
     }
 
@@ -93,6 +105,10 @@ fn apply_world_recipe(
         read.cell_at(support).is_some() && read.object_at(support).is_none()
     };
     if !support_available {
+        log_gameplay_event(format!(
+            "world_recipe.reject recipe={} result_object={} voxel={:?} support={:?} reason=support_unavailable",
+            recipe_id, object_id, hit.voxel, support
+        ));
         return;
     }
 
@@ -102,6 +118,10 @@ fn apply_world_recipe(
         TextureRotation::default(),
     );
     let Some(mutation) = context.runtime.set_block_detailed(hit.voxel, None) else {
+        log_gameplay_warn(format!(
+            "world_recipe.reject recipe={} target_block={} voxel={:?} reason=block_mutation_rejected",
+            recipe_id, hit.block_id, hit.voxel
+        ));
         return;
     };
 
