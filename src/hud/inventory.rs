@@ -23,7 +23,7 @@ use interaction::{
     handle_player_search_input, handle_search_focus, handle_search_input, handle_slot_clicks,
     remember_creative_scroll_positions, sync_player_search_focus, sync_search_focus,
 };
-use layout::{spawn_character_info_inventory, spawn_player_inventory};
+use layout::spawn_character_info_inventory;
 use search_style::{
     focus_inventory_search_frame, frame_inventory_search_field, style_inventory_search_field,
     style_player_inventory_search_field,
@@ -74,19 +74,6 @@ impl CharacterInfoInventorySpawn<'_, '_> {
         );
 
         spawn_character_info_inventory(root, &layout, &mut items);
-    }
-
-    pub(super) fn spawn_player_only(&mut self, root: &mut ChildSpawnerCommands) {
-        let mut items = self
-            .content
-            .view(self.panel.player_position(), &mut self.icon_materials);
-        let layout = self.panel.layout(
-            &self.categories,
-            &self.localization,
-            self.window.cursor_position(),
-        );
-
-        spawn_player_inventory(root, &layout, &mut items);
     }
 }
 
