@@ -5,7 +5,7 @@ use crate::content::{
     fluid::FluidRegistry,
 };
 
-use super::types::{DimensionBiomeSizeAxis, DimensionDefinition};
+use super::types::{DimensionBiome, DimensionBiomeSizeAxis, DimensionDefinition};
 
 impl DimensionDefinition {
     pub fn validate_biomes(&self, biomes: &BiomeRegistry) {
@@ -40,15 +40,24 @@ impl DimensionDefinition {
 
         for entry in &self.biomes {
             let biome = biomes.get(&entry.id).expect("biome validated above");
+            if !entry.avoid_near.is_empty() {
+                assert_eq!(biome.kind, BiomeKind::Surface, "dimension {} biome {} avoidNear is only valid for surface biomes", self.id, entry.id);
+            }
             let mut avoided = HashSet::new();
             for id in &entry.avoid_near {
                 assert!(avoided.insert(id.as_str()), "dimension {} biome {} avoidNear cannot contain duplicates: {}", self.id, entry.id, id);
                 assert!(id != &entry.id, "dimension {} biome {} cannot avoid itself", self.id, entry.id);
-                assert!(self.biomes.iter().any(|candidate| candidate.id == *id), "dimension {} biome {} avoidNear references missing biome: {}", self.id, entry.id, id);
+                let avoided_entry = self.biomes.iter().find(|candidate| candidate.id == *id).unwrap_or_else(|| panic!("dimension {} biome {} avoidNear references missing biome: {}", self.id, entry.id, id));
+                let avoided_biome = biomes.get(id).expect("biome validated above");
+                assert_eq!(avoided_biome.kind, BiomeKind::Surface, "dimension {} biome {} avoidNear must reference a surface biome: {}", self.id, entry.id, id);
+                assert!(avoided_entry.weight > 0.0, "dimension {} biome {} avoidNear references disabled biome {}", self.id, entry.id, id);
+                assert!(!same_exclusive_group(entry, avoided_entry), "dimension {} biome {} avoidNear redundantly references {} from the same exclusiveNeighborGroup", self.id, entry.id, id);
             }
             if let Some(group) = entry.exclusive_neighbor_group.as_deref() {
                 assert_eq!(biome.kind, BiomeKind::Surface, "dimension {} biome {} exclusiveNeighborGroup is only valid for surface biomes", self.id, entry.id);
                 assert!(!group.trim().is_empty(), "dimension {} biome {} exclusiveNeighborGroup cannot be empty", self.id, entry.id);
+                let active_members = self.biomes.iter().filter(|candidate| candidate.weight > 0.0 && candidate.exclusive_neighbor_group.as_deref() == Some(group)).count();
+                assert!(active_members >= 2, "dimension {} exclusiveNeighborGroup {} must contain at least two active biomes", self.id, group);
             }
             let mut required = HashSet::new();
             if !entry.require_near.is_empty() {
@@ -62,6 +71,7 @@ impl DimensionDefinition {
                 assert_eq!(required_biome.kind, BiomeKind::Surface, "dimension {} biome {} requireNear must reference a surface biome: {}", self.id, entry.id, id);
                 let required_entry = self.biomes.iter().find(|candidate| candidate.id == *id).unwrap_or_else(|| panic!("dimension {} biome {} requireNear references biome outside this dimension: {}", self.id, entry.id, id));
                 assert!(required_entry.weight > 0.0, "dimension {} biome {} requireNear references disabled biome {}", self.id, entry.id, id);
+                assert!(!same_exclusive_group(entry, required_entry), "dimension {} biome {} cannot requireNear {} because both are in the same exclusiveNeighborGroup", self.id, entry.id, id);
             }
         }
 
@@ -75,6 +85,10 @@ impl DimensionDefinition {
     pub(crate) fn validate_fluid_references(&self, fluids: &FluidRegistry) {
         assert!(fluids.id_of(&self.sea_fluid).is_some(), "dimension {} seaFluid references missing fluid: {}", self.id, self.sea_fluid);
     }
+}
+
+fn same_exclusive_group(left: &DimensionBiome, right: &DimensionBiome) -> bool {
+    left.exclusive_neighbor_group.as_deref().zip(right.exclusive_neighbor_group.as_deref()).is_some_and(|(left, right)| left == right)
 }
 
 fn validate_size_axis(dimension_id: &str, biome_id: &str, axis: &str, size: DimensionBiomeSizeAxis) {
