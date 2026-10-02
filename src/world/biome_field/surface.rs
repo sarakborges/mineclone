@@ -39,27 +39,28 @@ impl BiomeField {
             };
         }
 
-        // Inside the authored forced-spawn core the forced biome owns 100% of
-        // the surface sample. Resolving the underlying 5x5 fitted map here is
-        // both semantically irrelevant and extremely expensive during the
-        // synchronous new-world spawn/bootstrap probes.
-        if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position)
-            && forced_weight >= 1.0 - f32::EPSILON
+        // New worlds deliberately force the selected spawn biome around the
+        // initial spawn point. Inside that authored core its weight is exactly
+        // 1.0, so resolving the underlying recursive surface graph cannot affect
+        // the returned identity or terrain contribution. Avoiding the solver
+        // here keeps spawn probing from synchronously solving the same 5x5
+        // constraint windows hundreds of times before loading can even begin.
+        if let Some((index, weight)) = self.forced_surface_biome_at(position)
+            && weight >= 1.0 - f32::EPSILON
         {
-            let biome = &self.surface_biomes[forced_index];
-            let terrain_strength = self.forced_surface_terrain_strength(forced_index, position);
+            let biome = &self.surface_biomes[index];
             let mut influences = ArrayVec::new();
             influences.push(BiomeInfluence {
                 id: biome.id.as_str(),
                 weight: 1.0,
-                surface_index: forced_index,
-                terrain_strength,
+                surface_index: index,
+                terrain_strength: self.forced_surface_terrain_strength(index, position),
             });
             return BiomeFieldSample {
                 primary_id: biome.id.as_str(),
-                primary_surface_index: forced_index,
+                primary_surface_index: index,
                 surface_margin_index: None,
-                identity_surface_index: forced_index,
+                identity_surface_index: index,
                 influences,
             };
         }
