@@ -3,11 +3,12 @@ use bevy::prelude::*;
 use crate::{
     app::keybinds::KeybindAction,
     player::PlayerEntity,
+    world::current_context::CurrentDimensionContext,
 };
 
 use super::{
     collision::{Axis, MoveAxisResult, move_axis_with_height, player_has_ground_support},
-    config::{FLY_SPEED, GRAVITY, JUMP_SPEED},
+    config::{FLY_SPEED, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
     vertical::VerticalMovementContext,
@@ -46,6 +47,7 @@ impl GravityState {
 
 pub(super) fn apply_gravity(
     context: VerticalMovementContext,
+    dimension: CurrentDimensionContext,
     player: Single<(&mut Transform, &WalkingState), With<PlayerEntity>>,
     flight: Single<&FlightState>,
     swimming: Single<&SwimmingState>,
@@ -54,6 +56,11 @@ pub(super) fn apply_gravity(
     if flight.active || swimming.active {
         return;
     }
+
+    let Some(dimension) = dimension.definition() else {
+        return;
+    };
+    let gravity_strength = dimension.gravity_strength;
 
     let (mut transform, walking) = player.into_inner();
     let player_height = walking.collision_height();
@@ -74,7 +81,8 @@ pub(super) fn apply_gravity(
         return;
     }
 
-    gravity.vertical_velocity = (gravity.vertical_velocity + GRAVITY * delta_seconds).max(-FLY_SPEED);
+    gravity.vertical_velocity =
+        (gravity.vertical_velocity - gravity_strength * delta_seconds).max(-FLY_SPEED);
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
     let hit_vertical_surface = move_axis_with_height(
         &mut transform,
