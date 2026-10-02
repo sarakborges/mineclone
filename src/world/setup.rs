@@ -21,16 +21,6 @@ pub(crate) enum WorldLoadingPhase {
 }
 
 impl WorldLoadingPhase {
-    pub(crate) const ALL: [Self; 7] = [
-        Self::Generating,
-        Self::SettlingFluids,
-        Self::Lighting,
-        Self::Meshing,
-        Self::Assets,
-        Self::Finalizing,
-        Self::Spawning,
-    ];
-
     fn ordinal(self) -> u8 {
         match self {
             Self::Generating => 0,
@@ -40,6 +30,85 @@ impl WorldLoadingPhase {
             Self::Assets => 4,
             Self::Finalizing => 5,
             Self::Spawning => 6,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WorldLoadingStep {
+    BiomeMap,
+    TerrainColumns,
+    VolumeBiomes,
+    DensityField,
+    Materials,
+    InitialFluids,
+    Structures,
+    SurfaceObjects,
+    ChunkIntegration,
+    SettlingFluids,
+    Lighting,
+    Meshing,
+    Assets,
+    Finalizing,
+    Spawning,
+}
+
+impl WorldLoadingStep {
+    pub(crate) const ALL: [Self; 15] = [
+        Self::BiomeMap,
+        Self::TerrainColumns,
+        Self::VolumeBiomes,
+        Self::DensityField,
+        Self::Materials,
+        Self::InitialFluids,
+        Self::Structures,
+        Self::SurfaceObjects,
+        Self::ChunkIntegration,
+        Self::SettlingFluids,
+        Self::Lighting,
+        Self::Meshing,
+        Self::Assets,
+        Self::Finalizing,
+        Self::Spawning,
+    ];
+
+    pub(crate) fn ordinal(self) -> usize {
+        match self {
+            Self::BiomeMap => 0,
+            Self::TerrainColumns => 1,
+            Self::VolumeBiomes => 2,
+            Self::DensityField => 3,
+            Self::Materials => 4,
+            Self::InitialFluids => 5,
+            Self::Structures => 6,
+            Self::SurfaceObjects => 7,
+            Self::ChunkIntegration => 8,
+            Self::SettlingFluids => 9,
+            Self::Lighting => 10,
+            Self::Meshing => 11,
+            Self::Assets => 12,
+            Self::Finalizing => 13,
+            Self::Spawning => 14,
+        }
+    }
+
+    fn phase(self) -> WorldLoadingPhase {
+        match self {
+            Self::BiomeMap
+            | Self::TerrainColumns
+            | Self::VolumeBiomes
+            | Self::DensityField
+            | Self::Materials
+            | Self::InitialFluids
+            | Self::Structures
+            | Self::SurfaceObjects
+            | Self::ChunkIntegration => WorldLoadingPhase::Generating,
+            Self::SettlingFluids => WorldLoadingPhase::SettlingFluids,
+            Self::Lighting => WorldLoadingPhase::Lighting,
+            Self::Meshing => WorldLoadingPhase::Meshing,
+            Self::Assets => WorldLoadingPhase::Assets,
+            Self::Finalizing => WorldLoadingPhase::Finalizing,
+            Self::Spawning => WorldLoadingPhase::Spawning,
         }
     }
 }
@@ -116,6 +185,14 @@ impl WorldLoadingState {
             )),
             WorldLoadingPhase::Spawning => None,
         }
+    }
+
+    pub(crate) fn step_status(&self, step: WorldLoadingStep) -> WorldLoadingPhaseStatus {
+        self.phase_status(step.phase())
+    }
+
+    pub(crate) fn step_progress(&self, step: WorldLoadingStep) -> Option<(usize, usize)> {
+        self.phase_progress(step.phase())
     }
 
     pub(crate) fn set_presentation_prewarm_frames(&mut self, frames: u8) {
