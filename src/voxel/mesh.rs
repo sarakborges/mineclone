@@ -28,7 +28,7 @@ use super::{
     },
     meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
     microblock::MicroblockMask,
-    orientation::source_face_for_oriented_face,
+    orientation::{source_face_for_cell_visual, source_face_for_oriented_face},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
     texture_rotation::TextureRotation,
@@ -189,11 +189,12 @@ where
                 let local_voxel =
                     IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local_voxel;
-                let source_face = if cell.orientation == BlockOrientation::Y {
+                let geometry_source_face = if cell.orientation == BlockOrientation::Y {
                     face
                 } else {
                     source_face_for_oriented_face(face, cell.orientation)
                 };
+                let source_face = source_face_for_cell_visual(face, cell, block);
                 let neighbor_cell = face_neighbor_cell(
                     world,
                     chunk,
@@ -304,7 +305,7 @@ where
 
                 let geometry = orient_face_geometry(
                     face_geometry(
-                        source_face,
+                        geometry_source_face,
                         x,
                         y,
                         z,
