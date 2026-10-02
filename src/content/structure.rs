@@ -464,15 +464,6 @@ impl StructureDefinition {
             .iter()
             .filter(|connector| connector.target.is_some())
         {
-            let maximum_steps =
-                (output.strength / output.strength_loss_on_each_loop).ceil() as u32;
-            assert!(
-                (1..=64).contains(&maximum_steps),
-                "structure {} connector target {:?} has invalid chain budget",
-                self.id,
-                output.target
-            );
-
             let target = output
                 .target
                 .as_deref()
@@ -987,16 +978,9 @@ impl StructureDefinition {
                     );
                     assert!(
                         connector.strength_loss_on_each_loop.is_finite()
-                            && connector.strength_loss_on_each_loop > 0.0
+                            && connector.strength_loss_on_each_loop >= 0.0
                             && connector.strength_loss_on_each_loop <= 1.0,
-                        "structure {} palette symbol {symbol} connector strengthLossOnEachLoop must be > 0 and <= 1",
-                        self.id
-                    );
-                    let maximum_loops =
-                        (connector.strength / connector.strength_loss_on_each_loop).ceil() as u32;
-                    assert!(
-                        maximum_loops <= 64,
-                        "structure {} palette symbol {symbol} connector chain exceeds the maximum 64 loops",
+                        "structure {} palette symbol {symbol} connector strengthLossOnEachLoop must be >= 0 and <= 1",
                         self.id
                     );
                 }
@@ -1333,7 +1317,7 @@ fn default_connector_strength() -> f32 {
 }
 
 fn default_connector_strength_loss() -> f32 {
-    1.0
+    0.0
 }
 
 fn default_surface_layer_chance() -> f32 {
