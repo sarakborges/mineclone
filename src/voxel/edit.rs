@@ -1,7 +1,11 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::layer::{LayerFace, LayerRegistry},
+    content::{
+        block::BlockRegistry,
+        block_shape::is_stackable_layer,
+        layer::{LayerFace, LayerRegistry},
+    },
     world::{
         chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
         fluid_updates::PendingFluidUpdates,
@@ -30,6 +34,7 @@ pub(crate) struct VoxelBlockMutation {
 #[derive(SystemParam)]
 pub(crate) struct VoxelMutationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
+    blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
@@ -83,6 +88,18 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<VoxelBlockMutation> {
+        if block.is_some_and(|cell| {
+            self.blocks
+                .get(cell.block_id)
+                .is_some_and(is_stackable_layer)
+                && self
+                    .world
+                    .cell_at(world_position + IVec3::NEG_Y)
+                    .is_none()
+        }) {
+            return None;
+        }
+
         let (chunk, previous_cell, detached_objects) = self
             .world
             .set_block_at_with_previous(world_position, block)?;

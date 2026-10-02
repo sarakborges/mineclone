@@ -4,13 +4,23 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::{block::BlockRegistry, object::ObjectRegistry},
+    content::{
+        block::BlockRegistry,
+        block_shape::is_stackable_layer,
+        object::ObjectRegistry,
+    },
+    player::item_stack::ItemStack,
     world::tick::WorldTickClock,
     world_items::WorldItemSpawnRequest,
     world_objects::detached_object_drop_request,
 };
 
-use super::{edit::VoxelTopologyRuntime, read::VoxelRead};
+use super::{
+    cell::VoxelCell,
+    edit::VoxelTopologyRuntime,
+    read::VoxelRead,
+    stackable_layer::stackable_layer_count,
+};
 
 pub(crate) const BLOCK_GRAVITY_TAG: &str = "gravity";
 
@@ -85,11 +95,38 @@ fn process_block_gravity(
         let Some(definition) = blocks.get(cell.block_id) else {
             continue;
         };
-        if !definition.tags.iter().any(|tag| tag == BLOCK_GRAVITY_TAG) {
+        let below = position - IVec3::Y;
+
+        if is_stackable_layer(definition) {
+            if below.y >= 0 && !runtime.read().is_loaded_at(below) {
+                runtime.enqueue_block_gravity(position);
+                continue;
+            }
+            if runtime.read().cell_at(below).is_some() {
+                continue;
+            }
+
+            let Some(mutation) = runtime.set_block_detailed(position, None) else {
+                runtime.enqueue_block_gravity(position);
+                continue;
+            };
+            item_spawns.write(WorldItemSpawnRequest::dropped(
+                stackable_layer_drop_stack(cell),
+                position.as_vec3() + Vec3::splat(0.5),
+            ));
+            emit_detached_object_drops(
+                position,
+                mutation.previous_cell,
+                mutation.detached_objects,
+                &objects,
+                &mut item_spawns,
+            );
             continue;
         }
 
-        let below = position - IVec3::Y;
+        if !definition.tags.iter().any(|tag| tag == BLOCK_GRAVITY_TAG) {
+            continue;
+        }
         if below.y < 0 {
             continue;
         }
@@ -112,15 +149,31 @@ fn process_block_gravity(
             continue;
         };
 
-        for object in mutation.detached_objects {
-            if let Some(drop) = detached_object_drop_request(
-                position,
-                mutation.previous_cell,
-                object,
-                &objects,
-            ) {
-                item_spawns.write(drop);
-            }
+        emit_detached_object_drops(
+            position,
+            mutation.previous_cell,
+            mutation.detached_objects,
+            &objects,
+            &mut item_spawns,
+        );
+    }
+}
+
+fn stackable_layer_drop_stack(cell: VoxelCell) -> ItemStack {
+    let quantity = stackable_layer_count(cell).unwrap_or(1) as u32;
+    ItemStack::new(cell.block_id).with_quantity(quantity)
+}
+
+fn emit_detached_object_drops(
+    position: IVec3,
+    previous_cell: Option<VoxelCell>,
+    detached_objects: super::chunk::ObjectCells,
+    objects: &ObjectRegistry,
+    item_spawns: &mut MessageWriter<WorldItemSpawnRequest>,
+) {
+    for object in detached_objects {
+        if let Some(drop) = detached_object_drop_request(position, previous_cell, object, objects) {
+            item_spawns.write(drop);
         }
     }
 }
@@ -128,6 +181,13 @@ fn process_block_gravity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        content::block_orientation::BlockOrientation,
+        voxel::{
+            stackable_layer::stackable_layer_mask,
+            texture_rotation::TextureRotation,
+        },
+    };
 
     #[test]
     fn voxel_edit_wakes_changed_voxel_and_block_above_once() {
@@ -146,5 +206,21 @@ mod tests {
         let mut pending = PendingBlockGravityUpdates::default();
         pending.enqueue(IVec3::new(0, -1, 0));
         assert!(pending.take_batch().is_empty());
+    }
+
+    #[test]
+    fn stackable_layer_drop_preserves_layer_count() {
+        let cell = stackable_layer_mask(4).apply_to_cell(
+            VoxelCell::oriented(
+                "asteria:snow_layer",
+                TextureRotation::default(),
+                BlockOrientation::Y,
+            ),
+            false,
+        );
+
+        let stack = stackable_layer_drop_stack(cell);
+        assert_eq!(stack.id(), "asteria:snow_layer");
+        assert_eq!(stack.quantity(), 4);
     }
 }
