@@ -1,0 +1,10 @@
+{
+  "id": "asteria:voltra_essence",
+  "name": {
+    "english": "Voltra Essence",
+    "portuguese_brazil": "Essência Voltra",
+    "spanish": "Esencia Voltra"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/voltra_essence.png"
+}

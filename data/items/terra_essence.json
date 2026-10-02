@@ -1,0 +1,10 @@
+{
+  "id": "asteria:terra_essence",
+  "name": {
+    "english": "Terra Essence",
+    "portuguese_brazil": "Essência Terra",
+    "spanish": "Esencia Terra"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/terra_essence.png"
+}

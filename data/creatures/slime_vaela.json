@@ -1,12 +1,12 @@
 {
-  "id": "asteria:slime_dendro",
+  "id": "asteria:slime_vaela",
   "name": {
-    "english": "Dendro Slime",
-    "portuguese_brazil": "Slime Dendro",
-    "spanish": "Slime Dendro"
+    "english": "Vaela Slime",
+    "portuguese_brazil": "Slime Vaela",
+    "spanish": "Slime Vaela"
   },
-  "model": "models/creatures/slime_dendro/slime_dendro.glb",
-  "health": 12,
+  "model": "models/creatures/slime_anemo/slime_anemo.glb",
+  "health": 8,
   "maxPerType": 4,
   "collider": {
     "size": [
@@ -33,7 +33,7 @@
     ]
   },
   "textures": {
-    "SlimeFace": "textures/creatures/slime_dendro/face.png"
+    "SlimeFace": "textures/creatures/slime_anemo/face.png"
   },
   "unlitMaterials": [
     "SlimeFace",
@@ -42,8 +42,7 @@
     "ElementDark",
     "ElementWhite",
     "ElementRose",
-    "FlowerOrange",
-    "FlowerOrangeLight"
+    "FlowerOrange"
   ],
   "animations": {
     "idle": "Idle",
@@ -53,19 +52,19 @@
     "hurt": "Hurt",
     "death": "Death"
   },
-  "jumpSpeed": 4.6,
-  "fallGravityScale": 1,
-  "moveSpeed": 1.2,
-  "jumpInterval": 2.45,
-  "anticipationSeconds": 0.26,
-  "landingSeconds": 0.35,
+  "jumpSpeed": 6.75,
+  "fallGravityScale": 0.45,
+  "moveSpeed": 1.65,
+  "jumpInterval": 2.15,
+  "anticipationSeconds": 0.22,
+  "landingSeconds": 0.28,
   "particleEffects": {
     "idle": {
       "count": 2,
       "color": [
-        0.98,
-        0.5,
-        0.16,
+        0.74,
+        1,
+        0.94,
         0.68
       ],
       "size": 0.038,
@@ -82,9 +81,9 @@
     "land": {
       "count": 8,
       "color": [
-        0.98,
-        0.5,
-        0.16,
+        0.74,
+        1,
+        0.94,
         0.68
       ],
       "size": 0.048,
@@ -100,9 +99,9 @@
     "hurt": {
       "count": 7,
       "color": [
-        0.9884,
-        0.71,
-        0.5128,
+        0.8492,
+        1,
+        0.9652,
         0.78
       ],
       "size": 0.05,
@@ -118,9 +117,9 @@
     "death": {
       "count": 18,
       "color": [
-        0.9884,
-        0.71,
-        0.5128,
+        0.8492,
+        1,
+        0.9652,
         0.78
       ],
       "size": 0.062,

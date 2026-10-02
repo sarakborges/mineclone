@@ -1,0 +1,10 @@
+{
+  "id": "asteria:aqua_essence",
+  "name": {
+    "english": "Aqua Essence",
+    "portuguese_brazil": "Essência Aqua",
+    "spanish": "Esencia Aqua"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/aqua_essence.png"
+}
