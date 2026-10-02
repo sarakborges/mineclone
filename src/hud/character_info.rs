@@ -60,12 +60,22 @@ impl Plugin for CharacterInfoHudPlugin {
                 stop_character_preview_drag,
             )
             .add_systems(
+                OnExit(GameplayModalState::Inventory),
+                stop_character_preview_drag,
+            )
+            .add_systems(
                 Update,
                 (rotate_character_preview, sync_character_info_health)
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(GameplayModalState::CharacterInfo)),
+                    .run_if(character_info_panel_visible),
             );
     }
+}
+
+fn character_info_panel_visible(
+    panels: Query<(), With<CharacterInfoHealthFill>>,
+) -> bool {
+    panels.iter().next().is_some()
 }
 
 fn spawn_character_info(
@@ -99,7 +109,7 @@ fn spawn_character_info(
         });
 }
 
-fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
+pub(super) fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
     root.spawn((
         surface::hud_container(Node {
             width: px(CHARACTER_INFO_PANEL_WIDTH),
