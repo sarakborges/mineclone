@@ -16,10 +16,6 @@ use crate::{
 
 use super::{ChunkGenerationContext, generation_surface_height};
 
-const RIVER_CHANNEL_STRUCTURE: &str = "asteria:river_channel";
-const RIVER_LAKE_STRUCTURE: &str = "asteria:river_lake";
-const RIVER_BASIN_CHANCE: f32 = 0.24;
-const RIVER_MEANDER_FRACTION: f32 = 0.18;
 const RIVER_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
 const EDGE_HASH_SALT: u64 = 0xbb67_ae85_84ca_a73b;
 const STAMP_HASH_SALT: u64 = 0x3c6e_f372_fe94_f82b;
@@ -66,6 +62,9 @@ pub(super) fn rasterize_river_network(
     if context.world_generation.mode() != WorldGenerationMode::Normal {
         return;
     }
+    let Some(config) = context.dimension.river_network.as_ref() else {
+        return;
+    };
     let Some(ocean_biome) = context.dimension.ocean_biome.as_deref() else {
         return;
     };
@@ -75,13 +74,14 @@ pub(super) fn rasterize_river_network(
         return;
     }
 
-    let channel_extent = structure_reference_horizontal_extent(context, RIVER_CHANNEL_STRUCTURE);
-    let lake_extent = structure_reference_horizontal_extent(context, RIVER_LAKE_STRUCTURE);
+    let channel_extent =
+        structure_reference_horizontal_extent(context, &config.channel_structure);
+    let lake_extent = structure_reference_horizontal_extent(context, &config.lake_structure);
     let maximum_piece_extent = channel_extent.max(lake_extent) as f32;
     let maximum_adjacent_edge = spacing.length();
     let minimum_site_spacing = spacing.x.min(spacing.y);
     let site_query_margin = 1
-        + ((maximum_piece_extent + maximum_adjacent_edge * RIVER_MEANDER_FRACTION)
+        + ((maximum_piece_extent + maximum_adjacent_edge * config.meander)
             / minimum_site_spacing)
             .ceil() as i32;
 
@@ -115,7 +115,7 @@ pub(super) fn rasterize_river_network(
                 &mut site_cache,
                 &mut sink_cache,
             );
-            if !river_basin_is_active(context.biome_field.seed(), sink) {
+            if !river_basin_is_active(context.biome_field.seed(), sink, config.basin_chance) {
                 continue;
             }
 
@@ -130,6 +130,7 @@ pub(super) fn rasterize_river_network(
                         chunk_min,
                         chunk_max,
                         channel_extent,
+                        config.meander,
                         context,
                         &mut stamps,
                     );
@@ -169,8 +170,8 @@ pub(super) fn rasterize_river_network(
 
     for stamp in stamps {
         let reference = match stamp.kind {
-            RiverStampKind::Channel => RIVER_CHANNEL_STRUCTURE,
-            RiverStampKind::Lake => RIVER_LAKE_STRUCTURE,
+            RiverStampKind::Channel => config.channel_structure.as_str(),
+            RiverStampKind::Lake => config.lake_structure.as_str(),
         };
         let hash = cell_hash(context.biome_field.seed(), stamp.center, STAMP_HASH_SALT);
         let structure = context
@@ -321,8 +322,8 @@ fn drainage_sink(
     sink
 }
 
-fn river_basin_is_active(seed: u64, sink: DrainageSink) -> bool {
-    hash_unit(cell_hash(seed, sink.cell(), RIVER_HASH_SALT)) < RIVER_BASIN_CHANCE
+fn river_basin_is_active(seed: u64, sink: DrainageSink, chance: f32) -> bool {
+    hash_unit(cell_hash(seed, sink.cell(), RIVER_HASH_SALT)) < chance
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -334,6 +335,7 @@ fn collect_edge_stamps(
     chunk_min: IVec2,
     chunk_max: IVec2,
     channel_extent: i32,
+    meander: f32,
     context: &ChunkGenerationContext<'_>,
     stamps: &mut HashSet<RiverStamp>,
 ) {
@@ -347,8 +349,8 @@ fn collect_edge_stamps(
     }
 
     let perpendicular = Vec2::new(-delta.y, delta.x).normalize_or_zero();
-    let control = (start_vec + end_vec) * 0.5
-        + perpendicular * distance * RIVER_MEANDER_FRACTION * hash_signed(hash);
+    let control =
+        (start_vec + end_vec) * 0.5 + perpendicular * distance * meander * hash_signed(hash);
     let steps = distance.ceil().max(1.0) as usize;
     let expanded_min = chunk_min - IVec2::splat(channel_extent);
     let expanded_max = chunk_max + IVec2::splat(channel_extent);
@@ -478,9 +480,16 @@ mod tests {
     fn basin_selection_is_stable_for_same_sink() {
         let sink = DrainageSink::Lake(IVec2::new(12, -7));
         assert_eq!(
-            river_basin_is_active(42, sink),
-            river_basin_is_active(42, sink)
+            river_basin_is_active(42, sink, 0.24),
+            river_basin_is_active(42, sink, 0.24)
         );
+    }
+
+    #[test]
+    fn basin_chance_controls_activation() {
+        let sink = DrainageSink::Lake(IVec2::new(12, -7));
+        assert!(!river_basin_is_active(42, sink, 0.0));
+        assert!(river_basin_is_active(42, sink, 1.0));
     }
 
     #[test]
