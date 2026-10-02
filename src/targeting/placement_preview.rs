@@ -18,7 +18,9 @@ use crate::{
     voxel::{
         block_face::BlockFace,
         log_variant::is_hollow_log_id,
-        orientation::orientation_rotation,
+        orientation::{
+            block_rotation, block_uses_horizontal_facing, horizontal_facing_toward_player,
+        },
         stackable_layer::stackable_layer_count,
     },
 };
@@ -106,7 +108,7 @@ fn spawn_placement_preview(
         .map(|(block_id, _)| BlockModel::world(block_id, PREVIEW_OPACITY))
         .unwrap_or_else(|| BlockModel::empty_world(PREVIEW_OPACITY));
     let initial_rotation = selected.map_or(Quat::IDENTITY, |(_, block)| {
-        orientation_rotation(block.default_orientation())
+        block_rotation(block.default_orientation(), None)
     });
 
     commands
@@ -195,10 +197,16 @@ fn update_placement_preview(
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
     let stack_changed = selection.scene.selected_stack_changed();
     let content_changed = content.inputs_changed();
+    let horizontal_facing_selected = selection
+        .scene
+        .selected_item()
+        .and_then(|block_id| content.blocks.get(block_id))
+        .is_some_and(block_uses_horizontal_facing);
     if !scene_changed
         && !stack_changed
         && !selection.placement_orientation.is_changed()
         && !content_changed
+        && !horizontal_facing_selected
     {
         return;
     }
@@ -276,10 +284,6 @@ fn update_placement_preview(
     let orientation = selection
         .placement_orientation
         .for_block(selected_slot, block);
-    let rotation = orientation_rotation(orientation);
-    if root.1.rotation != rotation {
-        root.1.rotation = rotation;
-    }
 
     let Some(hit) = selection.scene.hit() else {
         if root.1.translation != Vec3::ZERO {
@@ -318,6 +322,14 @@ fn update_placement_preview(
         };
         (voxel, 0.0)
     };
+
+    let facing = block_uses_horizontal_facing(block).then(|| {
+        horizontal_facing_toward_player(voxel, selection.scene.player_translation())
+    });
+    let rotation = block_rotation(orientation, facing);
+    if root.1.rotation != rotation {
+        root.1.rotation = rotation;
+    }
 
     let horizontal = IVec2::new(voxel.x, voxel.z);
     let tint_target_changed = tint_target
