@@ -179,18 +179,9 @@ impl BiomeField {
             }
         }
 
-        if let Some((index, _)) = weights[..weight_count]
-            .iter()
-            .copied()
-            .max_by(|left, right| {
-                left.1
-                    .total_cmp(&right.1)
-                    .then_with(|| left.0.cmp(&right.0))
-            })
-        {
-            primary_index = index;
-        }
-
+        // Blend weights describe the transition across an already-fitted
+        // boundary. They must never reassign topological ownership, otherwise
+        // the blend can move the effective border back inside authored size.min.
         weights[..weight_count].sort_unstable_by_key(|(index, _)| *index);
         let total_weight: f32 = weights[..weight_count]
             .iter()
