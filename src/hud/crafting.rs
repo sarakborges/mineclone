@@ -30,9 +30,10 @@ use crate::{
 };
 
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
-const CRAFTING_PANEL_WIDTH: f32 = 420.0;
+const CRAFTING_PANEL_WIDTH: f32 = 482.0;
+const CRAFTING_PANEL_HEIGHT: f32 = 440.0;
+const CRAFTING_RECIPE_LIST_WIDTH: f32 = 174.0;
 const CRAFTING_PANEL_GAP: f32 = 14.0;
-const CRAFTING_ROWS_GAP: f32 = 14.0;
 const CRAFTING_INSET_GAP: f32 = 8.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
 const CRAFTING_PANEL_BORDER: f32 = 2.0;
@@ -43,9 +44,10 @@ const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
 const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
 const CRAFTING_ICON_SIZE: f32 = 32.0;
 const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
+const CHARACTER_INFO_COLUMN_WIDTH: f32 = 480.0;
 const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
-const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 84.0;
-const CURRENT_STATION_ICON_SIZE: f32 = 58.0;
+const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 180.0;
+const CURRENT_STATION_ICON_SIZE: f32 = 128.0;
 const CURRENT_STATION_ICON: &str = "textures/creative_categories/crafting_materials.png";
 const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
 const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
@@ -254,15 +256,10 @@ fn spawn_crafting_root(
                 left: px(0),
                 top: px(0),
                 width: percent(100),
-                height: percent(50),
-                padding: UiRect {
-                    left: px(CRAFTING_SCREEN_PADDING),
-                    right: px(CRAFTING_SCREEN_PADDING),
-                    bottom: px(CRAFTING_ROWS_GAP * 0.5),
-                    ..default()
-                },
+                height: percent(100),
+                padding: UiRect::all(px(CRAFTING_SCREEN_PADDING)),
                 flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexEnd,
+                align_items: AlignItems::FlexStart,
                 justify_content: JustifyContent::Center,
                 column_gap: px(CRAFTING_SCREEN_PADDING),
                 ..default()
@@ -273,6 +270,14 @@ fn spawn_crafting_root(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
+            root.spawn((
+                Node {
+                    width: px(CHARACTER_INFO_COLUMN_WIDTH),
+                    min_width: px(CHARACTER_INFO_COLUMN_WIDTH),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
             spawn_crafting_panel(root, &recipes, selected_recipe, session, content, hotbar);
             spawn_current_station_panel(root, content);
         });
@@ -287,51 +292,69 @@ fn spawn_crafting_panel(
     hotbar: &PlayerHotbar,
 ) {
     root.spawn((
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
-            column_gap: px(CRAFTING_PANEL_GAP),
+        surface::hud_container(Node {
+            width: px(CRAFTING_PANEL_WIDTH),
+            height: px(CRAFTING_PANEL_HEIGHT),
+            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(CRAFTING_PANEL_GAP),
             ..default()
-        },
+        }),
         Pickable::IGNORE,
     ))
     .with_children(|crafting| {
-        crafting
-            .spawn((
-                surface::hud_container(Node {
-                    width: px(CRAFTING_PANEL_WIDTH),
-                    padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-                    border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Stretch,
-                    row_gap: px(CRAFTING_PANEL_GAP),
-                    ..default()
-                }),
-                Pickable::IGNORE,
-            ))
-            .with_children(|available| {
-                available.spawn((
-                    typography::hud_heading("AVAILABLE RECIPES"),
-                    Pickable::IGNORE,
-                ));
-                spawn_recipe_list(available, recipes, session, content);
-            });
+        crafting.spawn((typography::hud_heading("Crafting"), Pickable::IGNORE));
 
         crafting
             .spawn((
-                surface::hud_container(Node {
-                    width: px(CRAFTING_PANEL_WIDTH),
-                    padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-                    border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Stretch,
-                    row_gap: px(CRAFTING_PANEL_GAP),
+                Node {
+                    width: percent(100),
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::FlexStart,
+                    column_gap: px(CRAFTING_PANEL_GAP),
                     ..default()
-                }),
+                },
                 Pickable::IGNORE,
             ))
-            .with_children(|selected| {
-                spawn_recipe_details(selected, selected_recipe, content, hotbar);
+            .with_children(|workspace| {
+                workspace
+                    .spawn((
+                        Node {
+                            width: px(CRAFTING_RECIPE_LIST_WIDTH),
+                            min_width: px(CRAFTING_RECIPE_LIST_WIDTH),
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Stretch,
+                            row_gap: px(CRAFTING_PANEL_GAP),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|available| {
+                        available.spawn((
+                            typography::hud_subheading("AVAILABLE RECIPES"),
+                            Pickable::IGNORE,
+                        ));
+                        spawn_recipe_list(available, recipes, session, content);
+                    });
+
+                workspace
+                    .spawn((
+                        Node {
+                            min_width: px(0),
+                            flex_grow: 1.0,
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Stretch,
+                            row_gap: px(CRAFTING_PANEL_GAP),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|selected| {
+                        spawn_recipe_details(selected, selected_recipe, content, hotbar);
+                    });
             });
     });
 }
@@ -344,6 +367,7 @@ fn spawn_current_station_panel(
         .spawn((
             surface::hud_container(Node {
                 width: px(CURRENT_STATION_PANEL_WIDTH),
+                height: percent(100),
                 padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
                 border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
                 flex_direction: FlexDirection::Column,
@@ -360,15 +384,14 @@ fn spawn_current_station_panel(
                 .spawn((
                     Node {
                         width: percent(100),
-                        flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Center,
-                        column_gap: px(12),
+                        justify_content: JustifyContent::Center,
                         ..default()
                     },
                     Pickable::IGNORE,
                 ))
-                .with_children(|content_row| {
-                    content_row
+                .with_children(|preview| {
+                    preview
                         .spawn((
                             Node {
                                 width: px(CURRENT_STATION_ICON_FRAME_SIZE),
@@ -395,28 +418,29 @@ fn spawn_current_station_panel(
                                 Pickable::IGNORE,
                             ));
                         });
+                });
 
-                    content_row
-                        .spawn((
-                            Node {
-                                flex_direction: FlexDirection::Column,
-                                align_items: AlignItems::FlexStart,
-                                row_gap: px(4),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ))
-                        .with_children(|copy| {
-                            copy.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
-                            copy.spawn((
-                                typography::hud_subheading("Inventory"),
-                                Pickable::IGNORE,
-                            ));
-                            copy.spawn((
-                                typography::muted("Personal crafting"),
-                                Pickable::IGNORE,
-                            ));
-                        });
+            station
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::FlexStart,
+                        row_gap: px(4),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|copy| {
+                    copy.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
+                    copy.spawn((
+                        typography::hud_subheading("Inventory"),
+                        Pickable::IGNORE,
+                    ));
+                    copy.spawn((
+                        typography::muted("Personal crafting"),
+                        Pickable::IGNORE,
+                    ));
                 });
         });
 }
@@ -531,7 +555,7 @@ fn spawn_recipe_details(
     hotbar: &PlayerHotbar,
 ) {
     parent.spawn((
-        typography::hud_heading("SELECTED RECIPE"),
+        typography::hud_subheading("SELECTED RECIPE"),
         Pickable::IGNORE,
     ));
 
