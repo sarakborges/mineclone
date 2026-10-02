@@ -28,6 +28,10 @@ use crate::{
         log_variant::is_hollow_log_id,
         microblock::MICROBLOCK_EDGE,
         object::ObjectCell,
+        orientation::{
+            HORIZONTAL_FACING_STATE_KEY, block_uses_horizontal_facing,
+            horizontal_facing_toward_player,
+        },
         raycast::VoxelHit,
         read::{VoxelRead, VoxelTopologyRead},
         stackable_layer::{stackable_layer_count, stackable_layer_mask},
@@ -534,6 +538,10 @@ fn edit_targeted_voxel(
     let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
     let orientation = placement_orientation.for_block(request.selected_slot, block);
     let mut cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
+    if block_uses_horizontal_facing(block) {
+        let facing = horizontal_facing_toward_player(voxel, request.player_position);
+        cell = cell.with_state(HORIZONTAL_FACING_STATE_KEY, facing.state_value());
+    }
     if let Some(biome_id) = request.biome_tint {
         cell = cell.with_state(BIOME_TINT_METADATA_KEY, biome_id);
     }
