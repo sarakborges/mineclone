@@ -16,7 +16,7 @@ use crate::{
 
 use super::{ChunkGenerationContext, generation_surface_height};
 
-const RIVER_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
+const SOURCE_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
 const EDGE_HASH_SALT: u64 = 0xbb67_ae85_84ca_a73b;
 const STAMP_HASH_SALT: u64 = 0x3c6e_f372_fe94_f82b;
 
@@ -25,20 +25,6 @@ struct DrainageSite {
     position: IVec2,
     surface_height: i32,
     ocean: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum DrainageSink {
-    Ocean(IVec2),
-    Lake(IVec2),
-}
-
-impl DrainageSink {
-    fn cell(self) -> IVec2 {
-        match self {
-            Self::Ocean(cell) | Self::Lake(cell) => cell,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -97,25 +83,23 @@ pub(super) fn rasterize_river_network(
     );
 
     let mut site_cache = HashMap::<IVec2, DrainageSite>::new();
-    let mut sink_cache = HashMap::<IVec2, DrainageSink>::new();
+    let mut active_cache = HashMap::<IVec2, bool>::new();
     let mut stamps = HashSet::<RiverStamp>::new();
 
     for cell_z in minimum_cell.y..=maximum_cell.y {
         for cell_x in minimum_cell.x..=maximum_cell.x {
             let cell = IVec2::new(cell_x, cell_z);
             let site = drainage_site(cell, ocean_biome, context, &mut site_cache);
-            if site.ocean {
-                continue;
-            }
-
-            let sink = drainage_sink(
-                cell,
-                ocean_biome,
-                context,
-                &mut site_cache,
-                &mut sink_cache,
-            );
-            if !river_basin_is_active(context.biome_field.seed(), sink, config.basin_chance) {
+            if site.ocean
+                || !has_selected_upstream_source(
+                    cell,
+                    ocean_biome,
+                    config.source_chance,
+                    context,
+                    &mut site_cache,
+                    &mut active_cache,
+                )
+            {
                 continue;
             }
 
@@ -135,7 +119,7 @@ pub(super) fn rasterize_river_network(
                         &mut stamps,
                     );
                 }
-                None if sink == DrainageSink::Lake(cell) => {
+                None => {
                     let origin_y = generation_surface_height(site.position, context) - 1;
                     if centered_piece_may_intersect_chunk(
                         site.position,
@@ -150,7 +134,6 @@ pub(super) fn rasterize_river_network(
                         });
                     }
                 }
-                None => {}
             }
         }
     }
@@ -282,48 +265,80 @@ fn downstream_site(
         .or_else(|| best_land.map(|(_, _, cell)| cell))
 }
 
-fn drainage_sink(
-    start: IVec2,
+fn upstream_sites(
+    cell: IVec2,
     ocean_biome: &str,
     context: &ChunkGenerationContext<'_>,
     site_cache: &mut HashMap<IVec2, DrainageSite>,
-    sink_cache: &mut HashMap<IVec2, DrainageSink>,
-) -> DrainageSink {
-    if let Some(sink) = sink_cache.get(&start).copied() {
-        return sink;
+) -> Vec<IVec2> {
+    let mut upstream = Vec::new();
+    for dz in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dz == 0 {
+                continue;
+            }
+            let candidate = cell + IVec2::new(dx, dz);
+            let site = drainage_site(candidate, ocean_biome, context, site_cache);
+            if site.ocean {
+                continue;
+            }
+            if downstream_site(candidate, ocean_biome, context, site_cache) == Some(cell) {
+                upstream.push(candidate);
+            }
+        }
     }
-
-    let mut path = Vec::new();
-    let mut seen = HashSet::new();
-    let mut current = start;
-    let sink = loop {
-        if let Some(sink) = sink_cache.get(&current).copied() {
-            break sink;
-        }
-        if !seen.insert(current) {
-            break DrainageSink::Lake(current);
-        }
-
-        path.push(current);
-        let site = drainage_site(current, ocean_biome, context, site_cache);
-        if site.ocean {
-            break DrainageSink::Ocean(current);
-        }
-
-        match downstream_site(current, ocean_biome, context, site_cache) {
-            Some(next) => current = next,
-            None => break DrainageSink::Lake(current),
-        }
-    };
-
-    for cell in path {
-        sink_cache.insert(cell, sink);
-    }
-    sink
+    upstream.sort_unstable_by_key(|candidate| (candidate.y, candidate.x));
+    upstream
 }
 
-fn river_basin_is_active(seed: u64, sink: DrainageSink, chance: f32) -> bool {
-    hash_unit(cell_hash(seed, sink.cell(), RIVER_HASH_SALT)) < chance
+fn has_selected_upstream_source(
+    start: IVec2,
+    ocean_biome: &str,
+    source_chance: f32,
+    context: &ChunkGenerationContext<'_>,
+    site_cache: &mut HashMap<IVec2, DrainageSite>,
+    active_cache: &mut HashMap<IVec2, bool>,
+) -> bool {
+    if let Some(active) = active_cache.get(&start).copied() {
+        return active;
+    }
+
+    let mut stack = vec![(start, false)];
+    while let Some((cell, expanded)) = stack.pop() {
+        if active_cache.contains_key(&cell) {
+            continue;
+        }
+
+        let upstream = upstream_sites(cell, ocean_biome, context, site_cache);
+        if upstream.is_empty() {
+            active_cache.insert(
+                cell,
+                source_is_selected(context.biome_field.seed(), cell, source_chance),
+            );
+            continue;
+        }
+
+        if expanded {
+            let active = upstream
+                .iter()
+                .any(|candidate| active_cache.get(candidate).copied().unwrap_or(false));
+            active_cache.insert(cell, active);
+            continue;
+        }
+
+        stack.push((cell, true));
+        for candidate in upstream.into_iter().rev() {
+            if !active_cache.contains_key(&candidate) {
+                stack.push((candidate, false));
+            }
+        }
+    }
+
+    active_cache.get(&start).copied().unwrap_or(false)
+}
+
+fn source_is_selected(seed: u64, cell: IVec2, chance: f32) -> bool {
+    hash_unit(cell_hash(seed, cell, SOURCE_HASH_SALT)) < chance
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -477,25 +492,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basin_selection_is_stable_for_same_sink() {
-        let sink = DrainageSink::Lake(IVec2::new(12, -7));
+    fn source_selection_is_stable_for_same_site() {
+        let cell = IVec2::new(12, -7);
         assert_eq!(
-            river_basin_is_active(42, sink, 0.24),
-            river_basin_is_active(42, sink, 0.24)
+            source_is_selected(42, cell, 0.24),
+            source_is_selected(42, cell, 0.24)
         );
     }
 
     #[test]
-    fn basin_chance_controls_activation() {
-        let sink = DrainageSink::Lake(IVec2::new(12, -7));
-        assert!(!river_basin_is_active(42, sink, 0.0));
-        assert!(river_basin_is_active(42, sink, 1.0));
-    }
-
-    #[test]
-    fn sink_cell_is_shared_by_ocean_and_lake_variants() {
-        let cell = IVec2::new(-3, 9);
-        assert_eq!(DrainageSink::Ocean(cell).cell(), cell);
-        assert_eq!(DrainageSink::Lake(cell).cell(), cell);
+    fn source_chance_controls_activation() {
+        let cell = IVec2::new(12, -7);
+        assert!(!source_is_selected(42, cell, 0.0));
+        assert!(source_is_selected(42, cell, 1.0));
     }
 }

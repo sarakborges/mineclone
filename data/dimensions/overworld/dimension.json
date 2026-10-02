@@ -135,7 +135,7 @@
   "riverNetwork": {
     "channelStructure": "asteria:river_channel",
     "lakeStructure": "asteria:river_lake",
-    "basinChance": 0.24,
+    "sourceChance": 0.24,
     "meander": 0.18
   },
   "maxEntities": 128,

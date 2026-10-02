@@ -54,8 +54,8 @@ pub struct DimensionBiome {
 pub struct DimensionRiverNetwork {
     pub channel_structure: String,
     pub lake_structure: String,
-    #[serde(default = "default_river_basin_chance")]
-    pub basin_chance: f32,
+    #[serde(default = "default_river_source_chance")]
+    pub source_chance: f32,
     #[serde(default = "default_river_meander")]
     pub meander: f32,
 }
@@ -87,7 +87,7 @@ fn default_spawn_biome_weight() -> f32 {
     1.0
 }
 
-fn default_river_basin_chance() -> f32 {
+fn default_river_source_chance() -> f32 {
     0.24
 }
 
@@ -136,8 +136,8 @@ impl DimensionDefinition {
                 self.id
             );
             assert!(
-                river.basin_chance.is_finite() && (0.0..=1.0).contains(&river.basin_chance),
-                "dimension {} riverNetwork.basinChance must be between 0 and 1",
+                river.source_chance.is_finite() && (0.0..=1.0).contains(&river.source_chance),
+                "dimension {} riverNetwork.sourceChance must be between 0 and 1",
                 self.id
             );
             assert!(
