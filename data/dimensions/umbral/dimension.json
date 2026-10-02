@@ -131,6 +131,7 @@
   "dayNightCycle": "asteria:overworld/day_night_cycle",
   "sky": "asteria:overworld/sky",
   "seaLevel": 90,
+  "gravityStrength": 18.0,
   "seaFluid": "asteria:water",
   "maxEntities": 128,
   "oceanBiome": "asteria:overworld/ocean"

@@ -1,23 +1,29 @@
 use std::collections::{HashSet, VecDeque};
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::{
-        block::BlockRegistry,
-        block_shape::is_stackable_layer,
-        object::ObjectRegistry,
-    },
+    content::{block_shape::is_stackable_layer, object::ObjectRegistry},
     player::item_stack::ItemStack,
-    world::tick::WorldTickClock,
+    rendering::{
+        block_model::{
+            BlockModelMeshes, block_face_material_data, maximum_block_model_layers,
+            set_block_model_tint,
+        },
+        block_model_material::BlockModelMaterial,
+        block_visual_content::BlockVisualContent,
+    },
+    world::{current_context::CurrentDimensionContext, tick::WorldTickClock},
     world_items::WorldItemSpawnRequest,
     world_objects::detached_object_drop_request,
 };
 
 use super::{
+    block_face::BlockFace,
     cell::VoxelCell,
     edit::VoxelTopologyRuntime,
+    orientation::source_face_for_cell_visual,
     read::VoxelRead,
     stackable_layer::stackable_layer_count,
 };
@@ -47,9 +53,7 @@ impl PendingBlockGravityUpdates {
         let batch_len = self.queue.len();
         let mut batch = Vec::with_capacity(batch_len);
         for _ in 0..batch_len {
-            let Some(position) = self.queue.pop_front() else {
-                break;
-            };
+            let Some(position) = self.queue.pop_front() else { break; };
             self.queued.remove(&position);
             batch.push(position);
         }
@@ -57,44 +61,56 @@ impl PendingBlockGravityUpdates {
     }
 }
 
+#[derive(Component)]
+struct FallingBlock {
+    cell: VoxelCell,
+    column: IVec2,
+    velocity_y: f32,
+}
+
+#[derive(SystemParam)]
+struct BlockGravityContent<'w> {
+    world_ticks: Res<'w, WorldTickClock>,
+    objects: Res<'w, ObjectRegistry>,
+    block_content: BlockVisualContent<'w>,
+    block_meshes: Res<'w, BlockModelMeshes>,
+    dimension: CurrentDimensionContext<'w>,
+}
+
 pub(crate) struct BlockGravityPlugin;
 
 impl Plugin for BlockGravityPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingBlockGravityUpdates>()
-            .add_systems(
-                OnEnter(GameState::Loading),
-                reset_resource::<PendingBlockGravityUpdates>,
-            )
-            .add_systems(
-                OnExit(GameState::Gameplay),
-                reset_resource::<PendingBlockGravityUpdates>,
-            )
+            .add_systems(OnEnter(GameState::Loading), reset_resource::<PendingBlockGravityUpdates>)
+            .add_systems(OnExit(GameState::Gameplay), reset_resource::<PendingBlockGravityUpdates>)
             .add_systems(
                 PostUpdate,
-                process_block_gravity.run_if(in_state(GameState::Gameplay)),
+                (process_block_gravity, simulate_falling_blocks)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
 
 fn process_block_gravity(
-    world_ticks: Res<WorldTickClock>,
-    blocks: Res<BlockRegistry>,
-    objects: Res<ObjectRegistry>,
+    mut commands: Commands,
+    content: BlockGravityContent,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut runtime: VoxelTopologyRuntime,
     mut item_spawns: MessageWriter<WorldItemSpawnRequest>,
 ) {
-    if world_ticks.ticks_this_frame() == 0 {
+    if content.world_ticks.ticks_this_frame() == 0 {
         return;
     }
+    let gravity_strength = content
+        .dimension
+        .definition()
+        .map_or(0.0, |definition| definition.gravity_strength);
 
     for position in runtime.take_block_gravity_batch() {
-        let Some(cell) = runtime.read().cell_at(position) else {
-            continue;
-        };
-        let Some(definition) = blocks.get(cell.block_id) else {
-            continue;
-        };
+        let Some(cell) = runtime.read().cell_at(position) else { continue; };
+        let Some(definition) = content.block_content.blocks.get(cell.block_id) else { continue; };
         let below = position - IVec3::Y;
 
         if is_stackable_layer(definition) {
@@ -105,7 +121,6 @@ fn process_block_gravity(
             if runtime.read().cell_at(below).is_some() {
                 continue;
             }
-
             let Some(mutation) = runtime.set_block_detailed(position, None) else {
                 runtime.enqueue_block_gravity(position);
                 continue;
@@ -118,16 +133,16 @@ fn process_block_gravity(
                 position,
                 mutation.previous_cell,
                 mutation.detached_objects,
-                &objects,
+                &content.objects,
                 &mut item_spawns,
             );
             continue;
         }
 
-        if !definition.tags.iter().any(|tag| tag == BLOCK_GRAVITY_TAG) {
-            continue;
-        }
-        if below.y < 0 {
+        if !definition.tags.iter().any(|tag| tag == BLOCK_GRAVITY_TAG)
+            || gravity_strength <= 0.0
+            || below.y < 0
+        {
             continue;
         }
         if !runtime.read().is_loaded_at(below) {
@@ -138,24 +153,135 @@ fn process_block_gravity(
             continue;
         }
 
-        if runtime.set_block(below, Some(cell)).is_none() {
-            runtime.enqueue_block_gravity(position);
-            continue;
-        }
-
         let Some(mutation) = runtime.set_block_detailed(position, None) else {
-            let _ = runtime.set_block(below, None);
             runtime.enqueue_block_gravity(position);
             continue;
         };
-
         emit_detached_object_drops(
             position,
             mutation.previous_cell,
             mutation.detached_objects,
-            &objects,
+            &content.objects,
             &mut item_spawns,
         );
+        spawn_falling_block(
+            &mut commands,
+            &content.block_content,
+            &content.block_meshes,
+            &mut materials,
+            position,
+            cell,
+        );
+    }
+}
+
+fn spawn_falling_block(
+    commands: &mut Commands,
+    content: &BlockVisualContent,
+    block_meshes: &BlockModelMeshes,
+    materials: &mut Assets<BlockModelMaterial>,
+    position: IVec3,
+    cell: VoxelCell,
+) {
+    let Some(block) = content.blocks.get(cell.block_id) else { return; };
+    let tint = content
+        .tint_at(cell.block_id, Vec2::new(position.x as f32 + 0.5, position.z as f32 + 0.5))
+        .unwrap_or(Color::WHITE);
+
+    commands
+        .spawn((
+            FallingBlock {
+                cell,
+                column: IVec2::new(position.x, position.z),
+                velocity_y: 0.0,
+            },
+            Transform::from_translation(position.as_vec3() + Vec3::splat(0.5)),
+            Visibility::default(),
+            DespawnOnExit(GameState::Gameplay),
+            Name::new(format!("Falling Block ({})", cell.block_id)),
+        ))
+        .with_children(|root| {
+            for world_face in BlockFace::ALL {
+                let source_face = source_face_for_cell_visual(world_face, cell, block);
+                let layer_count = maximum_block_model_layers(&content.blocks, source_face);
+                for layer_index in 0..layer_count {
+                    let Some(mut material) = block_face_material_data(
+                        source_face,
+                        layer_index,
+                        block,
+                        &content.asset_server,
+                        1.0,
+                    ) else {
+                        continue;
+                    };
+                    set_block_model_tint(&mut material, tint);
+                    root.spawn((
+                        Mesh3d(block_meshes.world_face_for_block(world_face, block)),
+                        MeshMaterial3d(materials.add(material)),
+                    ));
+                }
+            }
+        });
+}
+
+fn simulate_falling_blocks(
+    time: Res<Time>,
+    dimension: CurrentDimensionContext,
+    mut runtime: VoxelTopologyRuntime,
+    mut commands: Commands,
+    mut falling: Query<(Entity, &mut Transform, &mut FallingBlock)>,
+) {
+    let Some(dimension) = dimension.definition() else { return; };
+    let dt = time.delta_secs().min(0.05);
+    if dt <= 0.0 {
+        return;
+    }
+
+    for (entity, mut transform, mut block) in &mut falling {
+        if dimension.gravity_strength <= 0.0 {
+            block.velocity_y = 0.0;
+            continue;
+        }
+
+        block.velocity_y -= dimension.gravity_strength * dt;
+        let target_y = transform.translation.y + block.velocity_y * dt;
+        let current_bottom = transform.translation.y - 0.5;
+        let target_bottom = target_y - 0.5;
+        let highest_support = (current_bottom - 0.0001).floor() as i32;
+        let lowest_support = (target_bottom - 0.0001).floor() as i32;
+        let mut landing = None;
+        let mut blocked_by_unloaded = false;
+
+        for support_y in (lowest_support..=highest_support).rev() {
+            if support_y < 0 {
+                landing = Some(IVec3::new(block.column.x, 0, block.column.y));
+                break;
+            }
+            let support = IVec3::new(block.column.x, support_y, block.column.y);
+            if !runtime.read().is_loaded_at(support) {
+                blocked_by_unloaded = true;
+                break;
+            }
+            if runtime.read().cell_at(support).is_some() {
+                landing = Some(support + IVec3::Y);
+                break;
+            }
+        }
+
+        if blocked_by_unloaded {
+            block.velocity_y = 0.0;
+            continue;
+        }
+        if let Some(voxel) = landing {
+            transform.translation.y = voxel.y as f32 + 0.5;
+            block.velocity_y = 0.0;
+            if runtime.set_block(voxel, Some(block.cell)).is_some() {
+                commands.entity(entity).despawn();
+            }
+            continue;
+        }
+
+        transform.translation.y = target_y;
     }
 }
 
@@ -183,20 +309,15 @@ mod tests {
     use super::*;
     use crate::{
         content::block_orientation::BlockOrientation,
-        voxel::{
-            stackable_layer::stackable_layer_mask,
-            texture_rotation::TextureRotation,
-        },
+        voxel::{stackable_layer::stackable_layer_mask, texture_rotation::TextureRotation},
     };
 
     #[test]
     fn voxel_edit_wakes_changed_voxel_and_block_above_once() {
         let mut pending = PendingBlockGravityUpdates::default();
         let position = IVec3::new(3, 7, -2);
-
         pending.enqueue_voxel_edit(position);
         pending.enqueue_voxel_edit(position);
-
         assert_eq!(pending.take_batch(), vec![position, position + IVec3::Y]);
         assert!(pending.take_batch().is_empty());
     }
@@ -218,7 +339,6 @@ mod tests {
             ),
             false,
         );
-
         let stack = stackable_layer_drop_stack(cell);
         assert_eq!(stack.id(), "asteria:snow_layer");
         assert_eq!(stack.quantity(), 4);
