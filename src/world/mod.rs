@@ -207,6 +207,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<MainFrameWorkSamples>,
+                    reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
