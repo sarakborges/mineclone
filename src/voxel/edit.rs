@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{
+    block_gravity::PendingBlockGravityUpdates,
     cell::VoxelCell,
     chunk::ObjectCells,
     coordinates::ChunkCoord,
@@ -33,6 +34,7 @@ pub(crate) struct VoxelMutationRuntime<'w> {
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     fluid_updates: ResMut<'w, PendingFluidUpdates>,
+    block_gravity: ResMut<'w, PendingBlockGravityUpdates>,
 }
 
 impl VoxelMutationRuntime<'_> {
@@ -88,6 +90,7 @@ impl VoxelMutationRuntime<'_> {
             .enqueue_voxel_edit(world_position, previous_cell);
         self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
+        self.block_gravity.enqueue_voxel_edit(world_position);
         Some(VoxelBlockMutation {
             chunk: ChunkCoord::from_ivec3(chunk),
             previous_cell,
@@ -105,6 +108,14 @@ impl VoxelMutationRuntime<'_> {
         self.enqueue_voxel_remesh(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(ChunkCoord::from_ivec3(chunk))
+    }
+
+    pub(crate) fn take_block_gravity_batch(&mut self) -> Vec<IVec3> {
+        self.block_gravity.take_batch()
+    }
+
+    pub(crate) fn enqueue_block_gravity(&mut self, world_position: IVec3) {
+        self.block_gravity.enqueue(world_position);
     }
 
     fn enqueue_voxel_remesh(&mut self, world_position: IVec3) {
@@ -168,5 +179,13 @@ impl VoxelTopologyRuntime<'_> {
         self.mutation
             .set_fluid(world_position, fluid)
             .map(ChunkCoord::as_ivec3)
+    }
+
+    pub(crate) fn take_block_gravity_batch(&mut self) -> Vec<IVec3> {
+        self.mutation.take_block_gravity_batch()
+    }
+
+    pub(crate) fn enqueue_block_gravity(&mut self, world_position: IVec3) {
+        self.mutation.enqueue_block_gravity(world_position);
     }
 }
