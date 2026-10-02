@@ -5,10 +5,12 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField,
-        terrain::{surface_height, surface_height_from_sample},
+        biome_field::{BiomeField, BiomeFieldSample},
+        terrain::surface_height_from_sample,
     },
 };
+
+use super::biome_map::{BIOME_MAP_HALO, BiomeMapSample, BiomeMapTile};
 
 const SURFACE_LAYER_MAX_SLOPE: i32 = 1;
 
@@ -22,26 +24,26 @@ pub(crate) struct GenerationColumnSample {
     pub(super) surface_influences: SmallVec<[(usize, f32); 4]>,
 }
 
+/// Compatibility entry point for callers that do not own the generation-stage
+/// biome map. The streaming generator uses `sample_flat_generation_columns_from_map`.
 pub(crate) fn sample_flat_generation_columns(
     horizontal_chunk: IVec2,
     surface_height: i32,
     biome_field: &BiomeField,
 ) -> Vec<GenerationColumnSample> {
+    let biome_map = BiomeMapTile::sample(horizontal_chunk, biome_field);
+    sample_flat_generation_columns_from_map(surface_height, &biome_map)
+}
+
+pub(super) fn sample_flat_generation_columns_from_map(
+    surface_height: i32,
+    biome_map: &BiomeMapTile,
+) -> Vec<GenerationColumnSample> {
     let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
-    let chunk_origin = horizontal_chunk * CHUNK_SIZE as i32;
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
-            let world_x = chunk_origin.x + local_x as i32;
-            let world_z = chunk_origin.y + local_z as i32;
-            let surface = biome_field.sample_surface(
-                Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5),
-            );
-            let primary_terrain_strength = surface
-                .influences
-                .iter()
-                .find(|influence| influence.surface_index == surface.primary_surface_index)
-                .map_or(1.0, |influence| influence.terrain_strength);
+            let surface = biome_map.sample_at(IVec2::new(local_x as i32, local_z as i32));
             let surface_influences = surface
                 .influences
                 .iter()
@@ -51,8 +53,8 @@ pub(crate) fn sample_flat_generation_columns(
             columns.push(GenerationColumnSample {
                 surface_height,
                 identity_surface_index: surface.primary_surface_index,
-                primary_terrain_strength,
-                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
+                primary_terrain_strength: surface.primary_terrain_strength(),
+                ocean_weight: surface.ocean_weight,
                 surface_margin_index: None,
                 steep_surface: false,
                 surface_influences,
@@ -63,114 +65,103 @@ pub(crate) fn sample_flat_generation_columns(
     columns
 }
 
+/// Compatibility entry point for direct terrain sampling. Runtime generation
+/// builds the biome map first and calls `sample_generation_columns_from_map`.
 pub(crate) fn sample_generation_columns(
     horizontal_chunk: IVec2,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Vec<GenerationColumnSample> {
-    let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
+    let biome_map = BiomeMapTile::sample(horizontal_chunk, biome_field);
+    sample_generation_columns_from_map(
+        horizontal_chunk,
+        dimension,
+        biomes,
+        biome_field,
+        &biome_map,
+    )
+}
+
+pub(super) fn sample_generation_columns_from_map(
+    horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    biome_map: &BiomeMapTile,
+) -> Vec<GenerationColumnSample> {
     let chunk_origin = horizontal_chunk * CHUNK_SIZE as i32;
+    let heights = sample_surface_heights(chunk_origin, dimension, biome_field, biome_map);
+    let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
-            let world_x = chunk_origin.x + local_x as i32;
-            let world_z = chunk_origin.y + local_z as i32;
-            let position = IVec2::new(world_x, world_z);
-            let surface = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
-            let surface_height =
-                surface_height_from_sample(position, dimension, biome_field, &surface);
+            let local = IVec2::new(local_x as i32, local_z as i32);
+            let surface = biome_map.sample_at(local);
+            let surface_height = heights[BiomeMapTile::sample_index(local)];
             let surface_margin_index = resolved_surface_margin_index(
-                position,
+                local,
                 surface_height,
-                &surface,
-                dimension,
+                surface,
+                &heights,
                 biomes,
                 biome_field,
             );
             let identity_surface_index =
                 surface_margin_index.unwrap_or(surface.primary_surface_index);
-            let primary_terrain_strength = surface
-                .influences
-                .iter()
-                .find(|influence| influence.surface_index == surface.primary_surface_index)
-                .map_or(1.0, |influence| influence.terrain_strength);
             let surface_influences = surface
                 .influences
                 .iter()
                 .map(|influence| (influence.surface_index, influence.weight))
                 .collect();
+            let steep_surface = cardinal_neighbors(local).into_iter().any(|neighbor| {
+                let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)];
+                (neighbor_height - surface_height).abs() > SURFACE_LAYER_MAX_SLOPE
+            });
 
             columns.push(GenerationColumnSample {
                 surface_height,
                 identity_surface_index,
-                primary_terrain_strength,
-                ocean_weight: ocean_weight_from_surface(&surface, biome_field),
+                primary_terrain_strength: surface.primary_terrain_strength(),
+                ocean_weight: surface.ocean_weight,
                 surface_margin_index,
-                steep_surface: false,
+                steep_surface,
                 surface_influences,
             });
         }
     }
 
-    mark_steep_surface_columns(
-        horizontal_chunk,
-        dimension,
-        biomes,
-        biome_field,
-        &mut columns,
-    );
-
     columns
 }
 
-fn mark_steep_surface_columns(
-    horizontal_chunk: IVec2,
+fn sample_surface_heights(
+    chunk_origin: IVec2,
     dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    columns: &mut [GenerationColumnSample],
-) {
-    const NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
+    biome_map: &BiomeMapTile,
+) -> Vec<i32> {
+    let edge = CHUNK_SIZE + BIOME_MAP_HALO as usize * 2;
+    let mut heights = Vec::with_capacity(edge * edge);
 
-    let heights = columns
-        .iter()
-        .map(|column| column.surface_height)
-        .collect::<Vec<_>>();
-    let chunk_origin = horizontal_chunk * CHUNK_SIZE as i32;
-
-    for local_z in 0..CHUNK_SIZE {
-        for local_x in 0..CHUNK_SIZE {
-            let index = local_z * CHUNK_SIZE + local_x;
-            let height = heights[index];
-            let world_position = chunk_origin + IVec2::new(local_x as i32, local_z as i32);
-
-            columns[index].steep_surface = NEIGHBORS.into_iter().any(|offset| {
-                let neighbor_local =
-                    IVec2::new(local_x as i32 + offset.x, local_z as i32 + offset.y);
-                let neighbor_height = if neighbor_local.x >= 0
-                    && neighbor_local.y >= 0
-                    && neighbor_local.x < CHUNK_SIZE as i32
-                    && neighbor_local.y < CHUNK_SIZE as i32
-                {
-                    heights[neighbor_local.y as usize * CHUNK_SIZE + neighbor_local.x as usize]
-                } else {
-                    surface_height(
-                        world_position + offset,
-                        dimension,
-                        biomes,
-                        biome_field,
-                    )
-                };
-
-                (neighbor_height - height).abs() > SURFACE_LAYER_MAX_SLOPE
-            });
+    for local_z in -BIOME_MAP_HALO..CHUNK_SIZE as i32 + BIOME_MAP_HALO {
+        for local_x in -BIOME_MAP_HALO..CHUNK_SIZE as i32 + BIOME_MAP_HALO {
+            let local = IVec2::new(local_x, local_z);
+            let world_position = chunk_origin + local;
+            let surface = biome_map.sample_at(local).as_field_sample(biome_field);
+            heights.push(surface_height_from_sample(
+                world_position,
+                dimension,
+                biome_field,
+                &surface,
+            ));
         }
     }
+
+    heights
 }
 
 pub(crate) fn ocean_weight_from_surface(
-    surface: &crate::world::biome_field::BiomeFieldSample<'_>,
+    surface: &BiomeFieldSample<'_>,
     biome_field: &BiomeField,
 ) -> f32 {
     let Some(ocean_index) = biome_field.ocean_surface_index() else {
@@ -187,30 +178,23 @@ pub(crate) fn ocean_weight_from_surface(
 }
 
 fn resolved_surface_margin_index(
-    position: IVec2,
+    local: IVec2,
     surface_height: i32,
-    surface: &crate::world::biome_field::BiomeFieldSample<'_>,
-    dimension: &DimensionDefinition,
+    surface: &BiomeMapSample,
+    heights: &[i32],
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Option<usize> {
     let margin_index = surface.surface_margin_index?;
 
     // Ocean shoreline material must never become a ramp over any biome tagged
-    // as mountain. A gradual mountain slope can satisfy maxSlope block-by-block,
-    // so the authored biome relationship must be checked explicitly.
+    // as mountain. The biome map keeps this authored relationship explicit.
     if biome_field.ocean_surface_index() == Some(margin_index)
         && (surface.primary_surface_index == margin_index
-            || surface
-                .influences
-                .iter()
-                .any(|influence| {
-                    influence.weight > f32::EPSILON
-                        && biome_field.surface_biome_has_tag(
-                            influence.surface_index,
-                            "mountain",
-                        )
-                }))
+            || surface.influences.iter().any(|influence| {
+                influence.weight > f32::EPSILON
+                    && biome_field.surface_biome_has_tag(influence.surface_index, "mountain")
+            }))
     {
         return None;
     }
@@ -226,19 +210,19 @@ fn resolved_surface_margin_index(
         return Some(margin_index);
     };
 
-    const NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
-    let climbs_steep_surface = NEIGHBORS.into_iter().any(|offset| {
-        let neighbor_position = position + offset;
-        let neighbor_surface =
-            biome_field.sample_surface(neighbor_position.as_vec2() + Vec2::splat(0.5));
-        let neighbor_height = surface_height_from_sample(
-            neighbor_position,
-            dimension,
-            biome_field,
-            &neighbor_surface,
-        );
+    let climbs_steep_surface = cardinal_neighbors(local).into_iter().any(|neighbor| {
+        let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)];
         (neighbor_height - surface_height).abs() > max_slope
     });
 
     (!climbs_steep_surface).then_some(margin_index)
+}
+
+fn cardinal_neighbors(local: IVec2) -> [IVec2; 4] {
+    [
+        local + IVec2::X,
+        local + IVec2::NEG_X,
+        local + IVec2::Y,
+        local + IVec2::NEG_Y,
+    ]
 }

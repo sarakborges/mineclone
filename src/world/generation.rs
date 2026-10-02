@@ -1,3 +1,4 @@
+pub(super) mod biome_map;
 mod columns;
 mod density;
 mod fluids;
@@ -24,7 +25,7 @@ use crate::{
         biome_field::BiomeField,
         generation_region::{generation_region_coord, generation_region_world_bounds},
         new_world::{WorldGenerationMode, WorldGenerationSettings},
-        terrain::{chunk_y_bounds, surface_height},
+        terrain::{chunk_y_bounds, surface_height_from_sample},
         world_feature_fields::WorldFeatureFields,
     },
 };
@@ -43,6 +44,8 @@ pub(crate) use self::structures::{
     surface_layer_placements, volume_structure_candidate_probe,
 };
 use self::{
+    biome_map::BiomeMapTile,
+    columns::{sample_flat_generation_columns_from_map, sample_generation_columns_from_map},
     density::{DensityPassContext, sample_density_field},
     fluids::{FluidPassContext, rasterize_fluid_pass},
     materials::{MaterialPassContext, rasterize_material_pass},
@@ -76,7 +79,15 @@ pub(crate) fn generate_chunk(
         return generate_void_chunk(chunk_coord, context);
     }
 
+    // Stage 1: resolve the horizontal biome map once. Every vertical chunk at
+    // this X/Z reuses the same immutable map and one-block neighbor halo.
     let horizontal_chunk = chunk_coord.xz();
+    let biome_map = context
+        .feature_fields
+        .surface_biome_map(horizontal_chunk, || {
+            BiomeMapTile::sample(horizontal_chunk, context.biome_field)
+        });
+
     let structure_top_chunk =
         maximum_structure_top_chunk_for_horizontal_chunk(horizontal_chunk, context);
     let maximum_surface_chunk_y = match context.world_generation.mode() {
@@ -100,20 +111,22 @@ pub(crate) fn generate_chunk(
         return VoxelChunk::empty();
     }
 
+    // Stage 2: convert biome-map samples into terrain columns. This is still a
+    // horizontal artifact and is reused by every vertical chunk section.
     let chunk_origin = chunk_origin(chunk_coord);
     let columns = context
         .feature_fields
         .generation_columns(horizontal_chunk, || match context.world_generation.mode() {
-            WorldGenerationMode::Normal => sample_generation_columns(
+            WorldGenerationMode::Normal => sample_generation_columns_from_map(
                 horizontal_chunk,
                 context.dimension,
                 context.biomes,
                 context.biome_field,
+                biome_map.as_ref(),
             ),
-            WorldGenerationMode::Flat => sample_flat_generation_columns(
-                horizontal_chunk,
+            WorldGenerationMode::Flat => sample_flat_generation_columns_from_map(
                 flat_surface_height(context.dimension),
-                context.biome_field,
+                biome_map.as_ref(),
             ),
             WorldGenerationMode::Void => unreachable!(),
         });
@@ -137,6 +150,7 @@ pub(crate) fn generate_chunk(
         return VoxelChunk::empty();
     }
 
+    // Stage 3: resolve 3D/volume biomes for this generation region.
     let region_coord = generation_region_coord(chunk_coord);
     let volume_region = context
         .feature_fields
@@ -149,6 +163,8 @@ pub(crate) fn generate_chunk(
     let chunk_minimum = chunk_origin.as_vec3();
     let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
     let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
+
+    // Stage 4: turn terrain columns + volume biomes into a density field.
     let density = sample_density_field(
         chunk_origin,
         columns.as_ref(),
@@ -161,6 +177,8 @@ pub(crate) fn generate_chunk(
     );
     let mut chunk = VoxelChunk::empty();
 
+    // Stages 5-8: authoritative voxel content. Rendering consumes the result
+    // later and is intentionally absent from this pipeline.
     rasterize_material_pass(
         &mut chunk,
         chunk_origin,
@@ -202,12 +220,29 @@ pub(crate) fn generation_surface_height(
     context: &ChunkGenerationContext<'_>,
 ) -> i32 {
     match context.world_generation.mode() {
-        WorldGenerationMode::Normal => surface_height(
-            position,
-            context.dimension,
-            context.biomes,
-            context.biome_field,
-        ),
+        WorldGenerationMode::Normal => {
+            let chunk_size = CHUNK_SIZE as i32;
+            let horizontal_chunk = IVec2::new(
+                position.x.div_euclid(chunk_size),
+                position.y.div_euclid(chunk_size),
+            );
+            let chunk_origin = horizontal_chunk * chunk_size;
+            let local = position - chunk_origin;
+            let biome_map = context
+                .feature_fields
+                .surface_biome_map(horizontal_chunk, || {
+                    BiomeMapTile::sample(horizontal_chunk, context.biome_field)
+                });
+            let surface = biome_map
+                .sample_at(local)
+                .as_field_sample(context.biome_field);
+            surface_height_from_sample(
+                position,
+                context.dimension,
+                context.biome_field,
+                &surface,
+            )
+        }
         WorldGenerationMode::Flat => flat_surface_height(context.dimension),
         WorldGenerationMode::Void => 1,
     }

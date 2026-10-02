@@ -17,13 +17,17 @@ pub(crate) use super::structure_metadata::{
 use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
-    generation::GenerationColumnSample,
+    generation::{
+        GenerationColumnSample,
+        biome_map::{BiomeMapCache, BiomeMapTile},
+    },
     structure_field::StructureField,
     structure_metadata::{ResolvedStructurePlacement, StructureMetadata},
 };
 
 #[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
+    biome_maps: Arc<BiomeMapCache>,
     caches: Arc<FeatureCaches>,
     structure_metadata: StructureMetadata,
 }
@@ -31,6 +35,7 @@ pub(crate) struct WorldFeatureFields {
 impl WorldFeatureFields {
     pub(crate) fn new(seed: u64) -> Self {
         Self {
+            biome_maps: Arc::new(BiomeMapCache::new()),
             caches: Arc::new(FeatureCaches::new()),
             structure_metadata: StructureMetadata::new(seed),
         }
@@ -43,6 +48,7 @@ impl WorldFeatureFields {
 
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
+            biome_maps: Arc::new(BiomeMapCache::new()),
             caches: Arc::new(FeatureCaches::new()),
             structure_metadata: self.structure_metadata.clone(),
         }
@@ -58,6 +64,14 @@ impl WorldFeatureFields {
     /// obtain a cache owner through this path.
     pub(crate) fn structure_field(&self) -> &StructureMetadata {
         self.structure_metadata()
+    }
+
+    pub(crate) fn surface_biome_map(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> BiomeMapTile,
+    ) -> Arc<BiomeMapTile> {
+        self.biome_maps.get_or_insert_with(coord, factory)
     }
 
     pub(crate) fn generation_columns(
@@ -154,7 +168,9 @@ impl WorldFeatureFields {
         &self,
         desired: impl IntoIterator<Item = &'a IVec3>,
     ) {
-        self.caches.retain_for_chunks(desired);
+        let desired = desired.into_iter().copied().collect::<Vec<_>>();
+        self.biome_maps.retain_for_chunks(&desired);
+        self.caches.retain_for_chunks(&desired);
     }
 
     #[cfg(test)]
