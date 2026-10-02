@@ -3,7 +3,6 @@ mod density;
 mod fluids;
 mod index;
 mod materials;
-mod rivers;
 mod structures;
 mod surface_objects;
 
@@ -47,7 +46,6 @@ use self::{
     density::{DensityPassContext, sample_density_field},
     fluids::{FluidPassContext, rasterize_fluid_pass},
     materials::{MaterialPassContext, rasterize_material_pass},
-    rivers::rasterize_river_network,
     structures::rasterize_structures,
     surface_objects::rasterize_surface_objects,
 };
@@ -189,7 +187,6 @@ pub(crate) fn generate_chunk(
     );
     if context.world_generation.spawn_structures() {
         rasterize_structures(&mut chunk, chunk_origin, context);
-        rasterize_river_network(&mut chunk, chunk_origin, context);
     }
     rasterize_surface_objects(&mut chunk, chunk_origin, columns.as_ref(), context);
 

@@ -49,17 +49,6 @@ pub struct DimensionBiome {
     pub exclusive_neighbor_group: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct DimensionRiverNetwork {
-    pub channel_structure: String,
-    pub lake_structure: String,
-    #[serde(default = "default_river_source_chance")]
-    pub source_chance: f32,
-    #[serde(default = "default_river_meander")]
-    pub meander: f32,
-}
-
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
@@ -73,27 +62,12 @@ pub struct DimensionDefinition {
     pub sea_fluid: String,
     #[serde(default)]
     pub ocean_biome: Option<String>,
-    #[serde(default)]
-    pub river_network: Option<DimensionRiverNetwork>,
     #[serde(default = "default_max_entities")]
     pub max_entities: usize,
 }
 
-fn default_max_entities() -> usize {
-    128
-}
-
-fn default_spawn_biome_weight() -> f32 {
-    1.0
-}
-
-fn default_river_source_chance() -> f32 {
-    0.24
-}
-
-fn default_river_meander() -> f32 {
-    0.18
-}
+fn default_max_entities() -> usize { 128 }
+fn default_spawn_biome_weight() -> f32 { 1.0 }
 
 impl DimensionDefinition {
     pub fn validate_biomes(&self, biomes: &BiomeRegistry) {
@@ -108,44 +82,12 @@ impl DimensionDefinition {
             "dimension {} sky cannot be empty",
             self.id
         );
-        assert!(
-            self.max_entities > 0,
-            "dimension {} maxEntities must be positive",
-            self.id
-        );
+        assert!(self.max_entities > 0, "dimension {} maxEntities must be positive", self.id);
         assert!(
             !self.biomes.is_empty(),
             "dimension {} must define at least one biome",
             self.id
         );
-
-        if let Some(river) = self.river_network.as_ref() {
-            assert!(
-                self.ocean_biome.is_some(),
-                "dimension {} riverNetwork requires oceanBiome",
-                self.id
-            );
-            assert!(
-                !river.channel_structure.trim().is_empty(),
-                "dimension {} riverNetwork.channelStructure cannot be empty",
-                self.id
-            );
-            assert!(
-                !river.lake_structure.trim().is_empty(),
-                "dimension {} riverNetwork.lakeStructure cannot be empty",
-                self.id
-            );
-            assert!(
-                river.source_chance.is_finite() && (0.0..=1.0).contains(&river.source_chance),
-                "dimension {} riverNetwork.sourceChance must be between 0 and 1",
-                self.id
-            );
-            assert!(
-                river.meander.is_finite() && river.meander >= 0.0,
-                "dimension {} riverNetwork.meander must be finite and non-negative",
-                self.id
-            );
-        }
 
         let mut ids = HashSet::new();
         let mut has_active_surface = false;
@@ -190,6 +132,7 @@ impl DimensionDefinition {
                     if let Some(vertical_size) = size.y {
                         validate_size_axis(&self.id, &entry.id, "y", vertical_size);
                     }
+
                     if entry.weight > 0.0 {
                         has_active_surface = true;
                     }
@@ -221,12 +164,9 @@ impl DimensionDefinition {
         );
 
         for entry in &self.biomes {
-            let biome = biomes.get(&entry.id).unwrap_or_else(|| {
-                panic!(
-                    "dimension {} references missing biome: {}",
-                    self.id, entry.id
-                )
-            });
+            let biome = biomes
+                .get(&entry.id)
+                .unwrap_or_else(|| panic!("dimension {} references missing biome: {}", self.id, entry.id));
             let mut avoided = HashSet::new();
             for avoided_id in &entry.avoid_near {
                 assert!(
