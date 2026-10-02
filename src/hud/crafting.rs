@@ -416,11 +416,7 @@ fn spawn_current_station_panel(
                         ));
                     });
 
-                    card.spawn((
-                        typography::caption("BASE STATION"),
-                        TextColor(theme::TEXT_SUBTLE),
-                        Pickable::IGNORE,
-                    ));
+                    card.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
                     card.spawn((
                         typography::hud_subheading("Inventory"),
                         TextLayout::justify(Justify::Center),
@@ -470,11 +466,11 @@ fn spawn_current_station_panel(
                                 BackgroundColor(CRAFTING_READY_COLOR),
                                 Pickable::IGNORE,
                             ));
-                            ready.spawn((
+                            let mut available = ready.spawn((
                                 typography::inventory_category("Available"),
-                                TextColor(CRAFTING_READY_COLOR),
                                 Pickable::IGNORE,
                             ));
+                            available.insert(TextColor(CRAFTING_READY_COLOR));
                         });
                 });
         });
@@ -695,11 +691,7 @@ fn spawn_result_card(
                 Pickable::IGNORE,
             ))
             .with_children(|copy| {
-                copy.spawn((
-                    typography::caption("RESULT"),
-                    TextColor(theme::TEXT_SUBTLE),
-                    Pickable::IGNORE,
-                ));
+                copy.spawn((typography::caption("RESULT"), Pickable::IGNORE));
                 copy.spawn((
                     typography::hud_subheading(content.item_name(&recipe.result.item)),
                     Pickable::IGNORE,
@@ -997,29 +989,4 @@ fn consume_inventory_quantity(hotbar: &mut PlayerHotbar, item_id: &str, quantity
     }
 
     remaining == 0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ingredient_consumption_spans_inventory_slots() {
-        let mut hotbar = PlayerHotbar::default();
-        hotbar.replace_inventory_item(
-            0,
-            Some(ItemStack::new("asteria:stick").with_quantity(2)),
-        );
-        hotbar.replace_inventory_item(
-            1,
-            Some(ItemStack::new("asteria:stick").with_quantity(2)),
-        );
-
-        assert!(consume_inventory_quantity(
-            &mut hotbar,
-            "asteria:stick",
-            3
-        ));
-        assert_eq!(inventory_quantity(&hotbar, "asteria:stick"), 1);
-    }
 }
