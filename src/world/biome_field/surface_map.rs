@@ -1,6 +1,9 @@
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard};
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::{content::dimension::DimensionBiomeSizeAxis, voxel::chunk::CHUNK_SIZE};
 
@@ -57,8 +60,16 @@ impl SurfaceBiomeRegion {
     ) -> Self {
         let (min_x, max_x) = axis_cell_limits(size_x, spacing.x);
         let (min_z, max_z) = axis_cell_limits(size_z, spacing.y);
-        let target_x = choose_target_span(min_x, max_x, hash_unit(source_hash ^ TARGET_X_HASH_SALT));
-        let target_z = choose_target_span(min_z, max_z, hash_unit(source_hash ^ TARGET_Z_HASH_SALT));
+        let target_x = choose_target_span(
+            min_x,
+            max_x,
+            hash_unit(source_hash ^ TARGET_X_HASH_SALT),
+        );
+        let target_z = choose_target_span(
+            min_z,
+            max_z,
+            hash_unit(source_hash ^ TARGET_Z_HASH_SALT),
+        );
 
         Self {
             biome_index,
@@ -109,10 +120,6 @@ impl SurfaceBiomeRegion {
         improves_deficient_axis(self.span(), self.proposed_bounds(cell).2, self.target_span)
     }
 
-    fn minimum_deficit(&self) -> i32 {
-        span_deficit(self.span(), self.min_span)
-    }
-
     fn target_deficit(&self) -> i32 {
         span_deficit(self.span(), self.target_span)
     }
@@ -140,7 +147,6 @@ impl Default for SurfaceBiomeMapState {
 
 #[derive(Clone, Copy)]
 enum GrowthMode {
-    Minimum,
     Target,
     Maximum,
 }
@@ -246,6 +252,7 @@ impl SurfaceBiomeMap {
 
 fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32) {
     let mut remaining = ring_cells(radius);
+    remaining.retain(|cell| !state.cells.contains_key(cell));
     remaining.sort_unstable_by_key(|cell| {
         (
             cell_hash(*cell, field.seed ^ REGION_HASH_SALT),
@@ -255,11 +262,6 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
     });
 
     while !remaining.is_empty() {
-        if claim_existing(field, state, &remaining, GrowthMode::Minimum) {
-            remaining.retain(|cell| !state.cells.contains_key(cell));
-            continue;
-        }
-
         if claim_existing(field, state, &remaining, GrowthMode::Target) {
             remaining.retain(|cell| !state.cells.contains_key(cell));
             continue;
@@ -298,15 +300,7 @@ fn claim_existing(
             continue;
         };
 
-        let biome_index = state.regions[region_id].biome_index;
-        state.regions[region_id].claim(cell);
-        state.cells.insert(
-            cell,
-            SurfaceBiomeCell {
-                biome_index,
-                region_id,
-            },
-        );
+        claim_cell(state, region_id, cell);
         changed = true;
     }
 
@@ -336,22 +330,16 @@ fn best_neighbor_region(
     let mut best: Option<(i32, u64, usize)> = None;
     for &region_id in &candidates[..candidate_count] {
         let region = &state.regions[region_id];
-        if !region.can_claim(cell) || !claim_respects_adjacency(field, state, region_id, cell) {
+        if region.needs_minimum()
+            || !region.can_claim(cell)
+            || !claim_respects_adjacency(field, state, region_id, cell)
+        {
             continue;
         }
 
         let deficit = match mode {
-            GrowthMode::Minimum => {
-                if !region.needs_minimum() || !region.improves_minimum(cell) {
-                    continue;
-                }
-                region.minimum_deficit()
-            }
             GrowthMode::Target => {
-                if region.needs_minimum()
-                    || !region.needs_target()
-                    || !region.improves_target(cell)
-                {
+                if !region.needs_target() || !region.improves_target(cell) {
                     continue;
                 }
                 region.target_deficit()
@@ -421,11 +409,137 @@ fn spawn_region(field: &BiomeField, state: &mut SurfaceBiomeMapState, remaining:
                     region_id,
                 },
             );
-            return true;
+
+            let mut claimed_cells = vec![cell];
+            if materialize_minimum_region(field, state, region_id, &mut claimed_cells) {
+                debug_assert!(!state.regions[region_id].needs_minimum());
+                return true;
+            }
+
+            rollback_region(state, region_id, &claimed_cells);
         }
     }
 
     false
+}
+
+fn materialize_minimum_region(
+    field: &BiomeField,
+    state: &mut SurfaceBiomeMapState,
+    region_id: usize,
+    claimed_cells: &mut Vec<IVec2>,
+) -> bool {
+    if !state.regions[region_id].needs_minimum() {
+        return true;
+    }
+
+    let origin = claimed_cells[0];
+    let mut wave = vec![origin];
+    let mut visited = HashSet::from([origin]);
+
+    while state.regions[region_id].needs_minimum() {
+        let mut candidates = Vec::new();
+        for &owned_cell in &wave {
+            for neighbor in cardinal_neighbors(owned_cell) {
+                if !visited.insert(neighbor) || state.cells.contains_key(&neighbor) {
+                    continue;
+                }
+
+                let region = &state.regions[region_id];
+                if !region.can_claim(neighbor)
+                    || !claim_respects_adjacency(field, state, region_id, neighbor)
+                {
+                    continue;
+                }
+                candidates.push(neighbor);
+            }
+        }
+
+        if candidates.is_empty() {
+            return false;
+        }
+
+        candidates.sort_unstable_by_key(|cell| {
+            minimum_growth_score(field, state, region_id, *cell)
+        });
+
+        let mut next_wave = Vec::with_capacity(candidates.len());
+        for cell in candidates {
+            let region = &state.regions[region_id];
+            if !region.can_claim(cell)
+                || !claim_respects_adjacency(field, state, region_id, cell)
+            {
+                continue;
+            }
+
+            claim_cell(state, region_id, cell);
+            claimed_cells.push(cell);
+            next_wave.push(cell);
+        }
+
+        if next_wave.is_empty() {
+            return false;
+        }
+        wave = next_wave;
+    }
+
+    true
+}
+
+fn minimum_growth_score(
+    field: &BiomeField,
+    state: &SurfaceBiomeMapState,
+    region_id: usize,
+    cell: IVec2,
+) -> (bool, i32, u64, i32, i32) {
+    let region = &state.regions[region_id];
+    let proposed_span = region.proposed_bounds(cell).2;
+    let deficit = span_deficit(proposed_span, region.min_span);
+    let claim_hash = cell_hash(
+        cell,
+        field.seed
+            ^ REGION_HASH_SALT
+            ^ (region_id as u64).wrapping_mul(0xa076_1d64_78bd_642f),
+    );
+
+    (
+        !region.improves_minimum(cell),
+        deficit,
+        claim_hash,
+        cell.y,
+        cell.x,
+    )
+}
+
+fn claim_cell(state: &mut SurfaceBiomeMapState, region_id: usize, cell: IVec2) {
+    let biome_index = state.regions[region_id].biome_index;
+    state.regions[region_id].claim(cell);
+    state.cells.insert(
+        cell,
+        SurfaceBiomeCell {
+            biome_index,
+            region_id,
+        },
+    );
+}
+
+fn rollback_region(
+    state: &mut SurfaceBiomeMapState,
+    region_id: usize,
+    claimed_cells: &[IVec2],
+) {
+    for &cell in claimed_cells {
+        if state
+            .cells
+            .get(&cell)
+            .is_some_and(|entry| entry.region_id == region_id)
+        {
+            state.cells.remove(&cell);
+        }
+    }
+
+    debug_assert_eq!(region_id + 1, state.regions.len());
+    state.regions.pop();
 }
 
 fn claim_respects_adjacency(
@@ -518,6 +632,60 @@ fn span_deficit(current: IVec2, goal: IVec2) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        content::{
+            biome::BiomeClimate,
+            biome_distribution::BiomeDistribution,
+            dimension::DimensionBiomeSize,
+        },
+        world::macro_climate::MacroClimateField,
+    };
+
+    fn test_field(size: DimensionBiomeSize) -> BiomeField {
+        let entry = super::super::BiomeFieldEntry {
+            id: "test:surface".to_owned(),
+            tags: Vec::new(),
+            surface_constraints: None,
+            distributions: vec![BiomeDistribution::Regional],
+            size,
+            weight: 1.0,
+            climate: BiomeClimate::default(),
+            vertical_range: None,
+            priority: 0,
+            terrain: None,
+            terrain_modifiers: Vec::new(),
+            density_modifier: None,
+            solid_block: None,
+            density_seed: 0,
+            avoid_near: Vec::new(),
+            require_near: Vec::new(),
+            exclusive_neighbor_group: None,
+            surface_margin: None,
+        };
+
+        BiomeField {
+            surface_biomes: Arc::new(vec![entry]),
+            volume_biomes: Arc::new(Vec::new()),
+            surface_site_spacing: Vec2::splat(10.0),
+            volume_site_spacing: None,
+            climate: MacroClimateField::new(42),
+            seed: 42,
+            surface_map: SurfaceBiomeMap::new(),
+            forced_surface_biome: None,
+            single_surface_biome: None,
+            ocean_surface_index: None,
+            spawn_oceans: true,
+        }
+    }
+
+    fn test_size(min: f32, max: f32) -> DimensionBiomeSize {
+        let axis = DimensionBiomeSizeAxis { min, max };
+        DimensionBiomeSize {
+            x: axis,
+            z: axis,
+            y: None,
+        }
+    }
 
     #[test]
     fn radius_zero_contains_only_origin() {
@@ -552,5 +720,39 @@ mod tests {
             let target = choose_target_span(8, 19, unit);
             assert!((8..=19).contains(&target));
         }
+    }
+
+    #[test]
+    fn spawning_materializes_the_region_minimum_before_returning() {
+        let field = test_field(test_size(20.0, 40.0));
+        let mut state = SurfaceBiomeMapState::default();
+
+        assert!(spawn_region(&field, &mut state, &[IVec2::ZERO]));
+        assert_eq!(state.regions.len(), 1);
+        assert!(!state.regions[0].needs_minimum());
+        assert!(state.regions[0].span().x >= 4);
+        assert!(state.regions[0].span().y >= 4);
+
+        let owned_cells = state
+            .cells
+            .values()
+            .filter(|cell| cell.region_id == 0)
+            .count();
+        assert!(owned_cells > 1);
+    }
+
+    #[test]
+    fn preclaimed_minimum_footprint_does_not_break_later_ring_resolution() {
+        let field = test_field(test_size(20.0, 40.0));
+        let mut state = SurfaceBiomeMapState::default();
+
+        expand_ring(&field, &mut state, 0);
+        expand_ring(&field, &mut state, 1);
+
+        assert!(
+            ring_cells(1)
+                .into_iter()
+                .all(|cell| state.cells.contains_key(&cell))
+        );
     }
 }
