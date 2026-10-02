@@ -1,0 +1,43 @@
+{
+  "id": "asteria:mud",
+  "name": {
+    "english": "Mud",
+    "portuguese_brazil": "Lama",
+    "spanish": "Barro"
+  },
+  "category": "natural_blocks",
+  "tags": [
+    "fragmentable"
+  ],
+  "textures": {
+    "top": "textures/blocks/mud.png",
+    "bottom": "textures/blocks/mud.png",
+    "left": "textures/blocks/mud.png",
+    "right": "textures/blocks/mud.png",
+    "front": "textures/blocks/mud.png",
+    "back": "textures/blocks/mud.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true,
+  "mining": {
+    "hardness": 1,
+    "preferredTools": [
+      "shovel"
+    ]
+  },
+  "lootTable": [
+    {
+      "item": "asteria:mud",
+      "chance": 1,
+      "quantity": 1
+    }
+  ]
+}
