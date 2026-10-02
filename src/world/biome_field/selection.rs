@@ -63,14 +63,13 @@ impl BiomeField {
             climate_field: &self.climate,
         };
 
-        if surface_constraints_allow(raw_index, &selection_context) {
+        if surface_constraints_allow(raw_index, raw_index, &selection_context) {
             return raw_index;
         }
 
-        if let Some(candidate) = weighted_candidates
-            .iter()
-            .find(|candidate| surface_constraints_allow(candidate.index, &selection_context))
-        {
+        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
+            surface_constraints_allow(candidate.index, raw_index, &selection_context)
+        }) {
             return candidate.index;
         }
 
@@ -80,6 +79,7 @@ impl BiomeField {
         // external boundary instead of the stale raw-neighbor snapshot.
         if let Some(candidate_index) =
             resolver::component_takeover_candidate(cell, site, raw_index, &selection_context)
+            && surface_fallback_allows(candidate_index, raw_index, &selection_context)
         {
             return candidate_index;
         }
@@ -161,10 +161,26 @@ pub(super) struct SurfaceSelectionContext<'a> {
     pub(super) climate_field: &'a MacroClimateField,
 }
 
-fn surface_constraints_allow(
+fn surface_fallback_allows(
     candidate_index: usize,
+    raw_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
+    candidate_index == raw_index
+        || context.biomes[candidate_index]
+            .exclusive_neighbor_group
+            .is_none()
+}
+
+fn surface_constraints_allow(
+    candidate_index: usize,
+    raw_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    if !surface_fallback_allows(candidate_index, raw_index, context) {
+        return false;
+    }
+
     // The site lattice is built from the largest authored minimum radius and
     // its jitter preserves axis spacing. Minimum size is therefore a geometry
     // invariant, not a reason to eliminate a biome candidate. Eliminating it
@@ -660,6 +676,18 @@ mod tests {
         let context = test_context(IVec2::ZERO, Vec2::splat(360.0), &biomes, &climate);
 
         assert!(authored_adjacency_allows(0, &context));
+    }
+
+    #[test]
+    fn exclusive_group_biome_cannot_replace_another_raw_biome() {
+        let raw = test_surface_entry("plains", None);
+        let exclusive = test_surface_entry("mountain", Some("mountain_terrain"));
+        let climate = MacroClimateField::new(42);
+        let biomes = [raw, exclusive];
+        let context = test_context(IVec2::ZERO, Vec2::splat(360.0), &biomes, &climate);
+
+        assert!(surface_fallback_allows(0, 0, &context));
+        assert!(!surface_fallback_allows(1, 0, &context));
     }
 
     #[test]
