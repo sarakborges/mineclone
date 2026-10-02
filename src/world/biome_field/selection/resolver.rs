@@ -63,14 +63,13 @@ struct RecursiveSurfaceSolver<'a> {
     field: &'a BiomeField,
 }
 
-/// Resolves a canonical group of surface sites as one constraint problem.
+/// Resolves a group of surface sites as one recursive constraint problem.
 ///
-/// The old path selected each site independently and only attempted a bounded
-/// whole-component takeover after local fitting had already failed. A valid
-/// solution can instead require changing A -> B -> C. This solver expands when
-/// a constraint reaches an unresolved neighbor and recursively backtracks until
-/// every reached min/max and authored-adjacency constraint is valid together.
-/// There is deliberately no propagation-depth or component-size cutoff.
+/// Propagation is deliberately unbounded in depth, but each individual probe is
+/// lazy: as soon as an adjacency or max-size violation is proven, the solver
+/// repairs/backtracks that violation before expanding farther. This preserves
+/// recursive A -> B -> C fitting without eagerly flood-filling an arbitrarily
+/// large raw component during world creation.
 pub(in crate::world::biome_field) fn resolve_surface_sites(
     field: &BiomeField,
     requested_cells: &[IVec2],
@@ -99,7 +98,7 @@ pub(in crate::world::biome_field) fn resolve_surface_sites(
 
 impl RecursiveSurfaceSolver<'_> {
     fn solve(&self, mut state: SolverState) -> Option<SolverState> {
-        if self.expand_pair_conflicts(&mut state).is_err() {
+        if self.expand_first_pair_conflict(&mut state).is_err() {
             return None;
         }
 
@@ -235,36 +234,34 @@ impl RecursiveSurfaceSolver<'_> {
             && fitting::boundary_fit_interval(left, right, left_site, right_site).is_some()
     }
 
-    /// Any raw neighbor that conflicts with an already reached assignment must
-    /// become part of the same solve. Compatible raw neighbors remain fixed
-    /// boundary conditions, keeping ordinary world probes local.
-    fn expand_pair_conflicts(&self, state: &mut SolverState) -> Result<(), String> {
-        loop {
-            let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
-            cells.sort_by_key(|cell| (cell.y, cell.x));
-            let mut expansion = None;
+    /// Pull exactly one conflicting raw neighbor into the recursive problem.
+    /// The previous implementation expanded every reachable conflict before it
+    /// attempted a repair, which turned a recursive chain into an eager flood
+    /// fill. One-step expansion lets `solve` repair immediately, then recurse if
+    /// that repair exposes the next conflict.
+    fn expand_first_pair_conflict(&self, state: &mut SolverState) -> Result<(), String> {
+        let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+        cells.sort_by_key(|cell| (cell.y, cell.x));
 
-            'scan: for cell in cells {
-                let left_state = state.cells.get(&cell).expect("solver cell must exist");
-                let left_site = left_state.site;
-                let left_index = left_state.biome_index();
-                for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
-                    if state.cells.contains_key(&neighbor_cell) {
-                        continue;
-                    }
-                    let right_index = self.raw_identity(neighbor_cell, neighbor_site)?;
-                    if !self.pair_allows(left_index, left_site, right_index, neighbor_site) {
-                        expansion = Some(neighbor_cell);
-                        break 'scan;
-                    }
+        for cell in cells {
+            let left_state = state.cells.get(&cell).expect("solver cell must exist");
+            let left_site = left_state.site;
+            let left_index = left_state.biome_index();
+            for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
+                if state.cells.contains_key(&neighbor_cell) {
+                    continue;
                 }
-            }
+                let right_index = self.raw_identity(neighbor_cell, neighbor_site)?;
+                if self.pair_allows(left_index, left_site, right_index, neighbor_site) {
+                    continue;
+                }
 
-            let Some(cell) = expansion else {
+                self.ensure_cell(state, neighbor_cell)?;
                 return Ok(());
-            };
-            self.ensure_cell(state, cell)?;
+            }
         }
+
+        Ok(())
     }
 
     fn first_pair_violation(&self, state: &SolverState) -> Option<(IVec2, IVec2)> {
@@ -293,12 +290,12 @@ impl RecursiveSurfaceSolver<'_> {
         None
     }
 
-    /// Collect the complete currently-connected identity component before
-    /// deciding where it must be cut. This is intentionally unbounded: stopping
-    /// at the first oversized prefix makes the chosen cut depend on which 5x5
-    /// sampling window happened to ask first. Full component collection gives
-    /// every query the same canonical repair set, then recursion/backtracking
-    /// can propagate through neighboring components as far as necessary.
+    /// Walk a same-biome component only until its authored max is already
+    /// mathematically impossible. At that instant the visited cells are a
+    /// sufficient violation witness, so collecting the remainder of a huge raw
+    /// region cannot change the fact that a cut is required. The recursive
+    /// repair may then expose another oversized continuation and propagate as
+    /// far as needed, without any arbitrary traversal-depth cutoff.
     fn first_oversize_violation(
         &self,
         state: &mut SolverState,
@@ -332,6 +329,14 @@ impl RecursiveSurfaceSolver<'_> {
                 component.push(cell);
                 bounds.include(site);
 
+                if bounds.exceeds(center_span_limit) {
+                    for &component_cell in &component {
+                        self.ensure_cell(state, component_cell)?;
+                    }
+                    component.sort_by_key(|cell| (cell.y, cell.x));
+                    return Ok(Some(component));
+                }
+
                 for (neighbor_cell, neighbor_site) in self.neighbors(cell, site) {
                     if seen.contains(&neighbor_cell) {
                         continue;
@@ -343,14 +348,6 @@ impl RecursiveSurfaceSolver<'_> {
                     seen.insert(neighbor_cell);
                     queue.push_back((neighbor_cell, neighbor_site));
                 }
-            }
-
-            component.sort_by_key(|cell| (cell.y, cell.x));
-            if bounds.exceeds(center_span_limit) {
-                for &component_cell in &component {
-                    self.ensure_cell(state, component_cell)?;
-                }
-                return Ok(Some(component));
             }
 
             for cell in component {
