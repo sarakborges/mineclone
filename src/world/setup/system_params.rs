@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-use super::{InitialChunkSelectionTask, WorldLoadingState};
+use super::WorldLoadingState;
 
 #[derive(SystemParam)]
 pub(in crate::world) struct WorldBootstrapContent<'w> {
@@ -66,7 +66,6 @@ pub(in crate::world) struct WorldBootstrapPersistence<'w> {
 pub(in crate::world) struct WorldSetupProgress<'w> {
     pub(super) world: ResMut<'w, VoxelWorld>,
     pub(super) loading_state: ResMut<'w, WorldLoadingState>,
-    pub(super) initial_selection: ResMut<'w, InitialChunkSelectionTask>,
 }
 
 #[derive(SystemParam)]

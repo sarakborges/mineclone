@@ -8,7 +8,7 @@ use super::{
     SurfaceBoundarySample, SurfaceSiteCacheEntry,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
-    selection::{fitting::fit_surface_site_weights, resolver::resolve_surface_sites},
+    selection::fitting::fit_surface_site_weights,
     spatial::{
         smoothstep, surface_site_position, varied_surface_margin_width,
         warp_surface_position,
@@ -35,31 +35,6 @@ impl BiomeField {
                 primary_surface_index: index,
                 surface_margin_index: None,
                 identity_surface_index: index,
-                influences,
-            };
-        }
-
-        // Inside the authored forced-spawn core the forced biome owns 100% of
-        // the surface sample. Resolving the underlying 5x5 fitted map here is
-        // both semantically irrelevant and extremely expensive during the
-        // synchronous new-world spawn/bootstrap probes.
-        if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position)
-            && forced_weight >= 1.0 - f32::EPSILON
-        {
-            let biome = &self.surface_biomes[forced_index];
-            let terrain_strength = self.forced_surface_terrain_strength(forced_index, position);
-            let mut influences = ArrayVec::new();
-            influences.push(BiomeInfluence {
-                id: biome.id.as_str(),
-                weight: 1.0,
-                surface_index: forced_index,
-                terrain_strength,
-            });
-            return BiomeFieldSample {
-                primary_id: biome.id.as_str(),
-                primary_surface_index: forced_index,
-                surface_margin_index: None,
-                identity_surface_index: forced_index,
                 influences,
             };
         }
@@ -98,54 +73,31 @@ impl BiomeField {
         }
         debug_assert_eq!(sample_count, SITE_SAMPLE_COUNT);
 
-        // Resolve the canonical window as one constraint problem before any new
-        // identity is cached. The recursive solver is allowed to propagate past
-        // this 5x5 window when a neighboring assignment must move in order for
-        // min/max or authored adjacency to remain satisfiable.
-        let needs_resolution = sampled_sites[..sample_count]
-            .iter()
-            .any(|(_, _, _, candidate_index)| candidate_index.is_none());
-        if needs_resolution {
-            let requested_cells = sampled_sites[..sample_count]
-                .iter()
-                .map(|(cell, _, _, _)| *cell)
-                .collect::<ArrayVec<_, SITE_SAMPLE_COUNT>>();
-            let resolved = resolve_surface_sites(self, requested_cells.as_slice())
-                .unwrap_or_else(|reason| {
-                    panic!("surface biome recursive fitting failed near site {center:?}: {reason}")
-                });
-
-            {
-                let mut cache = self
-                    .surface_site_cache
-                    .write()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                for &(cell, site, selected) in &resolved {
-                    cache
-                        .entry(cell)
-                        .and_modify(|existing| {
-                            debug_assert_eq!(
-                                existing.biome_index, selected,
-                                "recursive biome fitting must be independent of query order"
-                            );
-                        })
-                        .or_insert(SurfaceSiteCacheEntry {
-                            position: site,
-                            biome_index: selected,
-                        });
-                }
+        let mut cache_updates = [None; SITE_SAMPLE_COUNT];
+        let mut cache_update_count = 0;
+        for (cell, site, _, candidate_index) in &mut sampled_sites[..sample_count] {
+            if candidate_index.is_some() {
+                continue;
             }
 
-            for (cell, _, _, candidate_index) in &mut sampled_sites[..sample_count] {
-                let selected = resolved
-                    .iter()
-                    .find_map(|(resolved_cell, _, selected)| {
-                        (*resolved_cell == *cell).then_some(*selected)
-                    })
-                    .unwrap_or_else(|| {
-                        panic!("recursive biome fitting omitted requested site {cell:?}")
-                    });
-                *candidate_index = Some(selected);
+            let selected = self.select_surface_biome_index(*cell, *site);
+            *candidate_index = Some(selected);
+            cache_updates[cache_update_count] = Some((*cell, *site, selected));
+            cache_update_count += 1;
+        }
+
+        if cache_update_count > 0 {
+            let mut cache = self
+                .surface_site_cache
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for update in &cache_updates[..cache_update_count] {
+                let (cell, position, selected) =
+                    update.expect("surface biome cache update must be initialized");
+                cache.entry(cell).or_insert(SurfaceSiteCacheEntry {
+                    position,
+                    biome_index: selected,
+                });
             }
         }
 
@@ -227,9 +179,18 @@ impl BiomeField {
             }
         }
 
-        // Blend weights describe the transition across an already-fitted
-        // boundary. They must never reassign topological ownership, otherwise
-        // the blend can move the effective border back inside authored size.min.
+        if let Some((index, _)) = weights[..weight_count]
+            .iter()
+            .copied()
+            .max_by(|left, right| {
+                left.1
+                    .total_cmp(&right.1)
+                    .then_with(|| left.0.cmp(&right.0))
+            })
+        {
+            primary_index = index;
+        }
+
         weights[..weight_count].sort_unstable_by_key(|(index, _)| *index);
         let total_weight: f32 = weights[..weight_count]
             .iter()
