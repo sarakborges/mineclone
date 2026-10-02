@@ -15,7 +15,9 @@ use crate::{
     player::camera::GameplayWorldCamera,
     voxel::{
         coordinates::chunk_coord_from_world,
+        fluid::FluidCell,
         raycast::{VoxelHit, raycast_voxels},
+        read::VoxelRead,
         world::VoxelWorld,
     },
     world_items::{TargetedWorldItem, WorldItem, target_bounds},
@@ -38,6 +40,7 @@ pub struct BlockTargetingPlugin;
 impl Plugin for BlockTargetingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TargetedBlock>()
+            .init_resource::<TargetedFluid>()
             .init_resource::<TargetedCreature>()
             .configure_sets(
                 Update,
@@ -69,6 +72,16 @@ impl Plugin for BlockTargetingPlugin {
 #[derive(Resource, Default)]
 pub struct TargetedBlock(pub Option<VoxelHit>);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FluidHit {
+    pub voxel: IVec3,
+    pub fluid: FluidCell,
+    pub normal: IVec3,
+}
+
+#[derive(Resource, Default)]
+pub struct TargetedFluid(pub Option<FluidHit>);
+
 #[derive(Resource, Default)]
 pub(crate) struct TargetedCreature(pub Option<Entity>);
 
@@ -97,6 +110,7 @@ struct TargetCandidates<'w, 's> {
 #[derive(SystemParam)]
 struct TargetSelection<'w> {
     block: ResMut<'w, TargetedBlock>,
+    fluid: ResMut<'w, TargetedFluid>,
     creature: ResMut<'w, TargetedCreature>,
     world_item: ResMut<'w, TargetedWorldItem>,
     object: ResMut<'w, TargetedWorldObject>,
@@ -119,6 +133,9 @@ fn update_targets(
     if !interaction.available() {
         if targets.block.0.is_some() {
             targets.block.0 = None;
+        }
+        if targets.fluid.0.is_some() {
+            targets.fluid.0 = None;
         }
         if targets.creature.0.is_some() {
             targets.creature.0 = None;
@@ -144,6 +161,10 @@ fn update_targets(
         )
         .unwrap_or(0.0)
     });
+    let fluid_hit = raycast_fluid_source(&*world, origin, direction, TARGET_RANGE);
+    let fluid_distance = fluid_hit.as_ref().map_or(TARGET_RANGE, |(_, distance)| *distance);
+    let world_distance = block_distance.min(fluid_distance);
+
     let creature_hits = candidates.creatures.iter().filter_map(
         |(entity, transform, collider, health)| {
             if health.is_dead() {
@@ -151,18 +172,18 @@ fn update_targets(
             }
             let (min, max) = collider.0.bounds(transform.translation);
             ray_box_distance(origin, direction, min, max)
-                .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
+                .filter(|distance| *distance <= TARGET_RANGE && *distance <= world_distance)
                 .map(|distance| (TargetKind::Creature(entity), distance))
         },
     );
     let world_item_hits = candidates.world_items.iter().filter_map(|(entity, transform)| {
         let (min, max) = target_bounds(transform.translation);
         ray_box_distance(origin, direction, min, max)
-            .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
+            .filter(|distance| *distance <= TARGET_RANGE && *distance <= world_distance)
             .map(|distance| (TargetKind::WorldItem(entity), distance))
     });
     let object_hit =
-        closest_world_object_hit(&world, &candidates.objects, origin, direction, block_distance);
+        closest_world_object_hit(&world, &candidates.objects, origin, direction, world_distance);
     let closest = creature_hits
         .chain(world_item_hits)
         .chain(object_hit)
@@ -181,7 +202,16 @@ fn update_targets(
         Some(TargetKind::Object(key)) => Some(key),
         _ => None,
     };
-    let next_block = if closest.is_none() { block_hit } else { None };
+    let (next_block, next_fluid) = if closest.is_some() {
+        (None, None)
+    } else if let Some((hit, distance)) = fluid_hit
+        && distance < block_distance
+    {
+        (None, Some(hit))
+    } else {
+        (block_hit, None)
+    };
+
     if targets.block.0 != next_block {
         log_gameplay_event(format!(
             "target.block from={:?} to={:?}",
@@ -189,6 +219,17 @@ fn update_targets(
             next_block.map(|hit| (hit.voxel, hit.block_id))
         ));
         targets.block.0 = next_block;
+    }
+    if targets.fluid.0 != next_fluid {
+        log_gameplay_event(format!(
+            "target.fluid from={:?} to={:?}",
+            targets
+                .fluid
+                .0
+                .map(|hit| (hit.voxel, hit.fluid.fluid_id)),
+            next_fluid.map(|hit| (hit.voxel, hit.fluid.fluid_id))
+        ));
+        targets.fluid.0 = next_fluid;
     }
     if targets.creature.0 != next_creature {
         log_gameplay_event(format!(
@@ -210,6 +251,75 @@ fn update_targets(
             targets.object.0, next_object
         ));
         targets.object.0 = next_object;
+    }
+}
+
+fn raycast_fluid_source(
+    world: &impl VoxelRead,
+    origin: Vec3,
+    direction: Vec3,
+    max_distance: f32,
+) -> Option<(FluidHit, f32)> {
+    if direction.length_squared() == 0.0 || max_distance < 0.0 {
+        return None;
+    }
+
+    let direction = direction.normalize();
+    let mut voxel = origin.floor().as_ivec3();
+    let step = IVec3::new(
+        direction.x.signum() as i32,
+        direction.y.signum() as i32,
+        direction.z.signum() as i32,
+    );
+    let t_delta = Vec3::new(
+        reciprocal_abs(direction.x),
+        reciprocal_abs(direction.y),
+        reciprocal_abs(direction.z),
+    );
+    let mut t_max = Vec3::new(
+        first_boundary_distance(origin.x, voxel.x, direction.x),
+        first_boundary_distance(origin.y, voxel.y, direction.y),
+        first_boundary_distance(origin.z, voxel.z, direction.z),
+    );
+    let mut entry_normal = IVec3::ZERO;
+
+    loop {
+        let distance = if t_max.x <= t_max.y && t_max.x <= t_max.z {
+            let distance = t_max.x;
+            voxel.x += step.x;
+            entry_normal = IVec3::new(-step.x, 0, 0);
+            t_max.x += t_delta.x;
+            distance
+        } else if t_max.y <= t_max.z {
+            let distance = t_max.y;
+            voxel.y += step.y;
+            entry_normal = IVec3::new(0, -step.y, 0);
+            t_max.y += t_delta.y;
+            distance
+        } else {
+            let distance = t_max.z;
+            voxel.z += step.z;
+            entry_normal = IVec3::new(0, 0, -step.z);
+            t_max.z += t_delta.z;
+            distance
+        };
+
+        if distance > max_distance {
+            return None;
+        }
+        if world.cell_at(voxel).is_some() {
+            return None;
+        }
+        if let Some(fluid) = world.fluid_at(voxel) {
+            return fluid.is_source().then_some((
+                FluidHit {
+                    voxel,
+                    fluid,
+                    normal: entry_normal,
+                },
+                distance,
+            ));
+        }
     }
 }
 
@@ -312,6 +422,24 @@ fn ray_box_distance(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3) -> Opti
         }
     }
     (exit >= 0.0).then_some(entry.max(0.0))
+}
+
+fn reciprocal_abs(value: f32) -> f32 {
+    if value == 0.0 {
+        f32::INFINITY
+    } else {
+        1.0 / value.abs()
+    }
+}
+
+fn first_boundary_distance(origin: f32, voxel: i32, direction: f32) -> f32 {
+    if direction > 0.0 {
+        (voxel as f32 + 1.0 - origin) / direction
+    } else if direction < 0.0 {
+        (origin - voxel as f32) / -direction
+    } else {
+        f32::INFINITY
+    }
 }
 
 #[cfg(test)]
