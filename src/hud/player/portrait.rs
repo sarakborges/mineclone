@@ -122,7 +122,10 @@ impl PlayerPreviewState<'_, '_> {
     }
 
     fn character_visible(&self) -> bool {
-        *self.modal.get() == GameplayModalState::CharacterInfo
+        matches!(
+            self.modal.get(),
+            GameplayModalState::CharacterInfo | GameplayModalState::Inventory
+        )
     }
 
     fn character_yaw(&self) -> f32 {
