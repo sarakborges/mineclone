@@ -1,0 +1,44 @@
+{
+  "id": "asteria:gravel",
+  "name": {
+    "english": "Gravel",
+    "portuguese_brazil": "Cascalho",
+    "spanish": "Grava"
+  },
+  "category": "natural_blocks",
+  "tags": [
+    "fragmentable",
+    "gravity"
+  ],
+  "textures": {
+    "top": "textures/blocks/gravel.png",
+    "bottom": "textures/blocks/gravel.png",
+    "left": "textures/blocks/gravel.png",
+    "right": "textures/blocks/gravel.png",
+    "front": "textures/blocks/gravel.png",
+    "back": "textures/blocks/gravel.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true,
+  "mining": {
+    "hardness": 1,
+    "preferredTools": [
+      "shovel"
+    ]
+  },
+  "lootTable": [
+    {
+      "item": "asteria:gravel",
+      "chance": 1,
+      "quantity": 1
+    }
+  ]
+}
