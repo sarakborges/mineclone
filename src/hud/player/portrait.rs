@@ -123,7 +123,7 @@ impl PlayerPreviewState<'_, '_> {
 
     fn character_visible(&self) -> bool {
         matches!(
-            self.modal.get(),
+            *self.modal.get(),
             GameplayModalState::CharacterInfo | GameplayModalState::Inventory
         )
     }
