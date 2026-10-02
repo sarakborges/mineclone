@@ -84,6 +84,14 @@
         "chance": 0.1,
         "jitter": 33
       }
+    },
+    {
+      "id": "asteria:mountain_waterfall",
+      "placement": {
+        "spacing": 156,
+        "chance": 0.22,
+        "jitter": 46
+      }
     }
   ],
   "visuals": {
