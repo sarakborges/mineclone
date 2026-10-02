@@ -239,7 +239,7 @@ impl RecursiveSurfaceSolver<'_> {
         &self,
         cell: IVec2,
         site: Vec2,
-        climate: crate::content::biome::BiomeClimate,
+        climate: crate::world::macro_climate::MacroClimateSample,
     ) -> Vec<usize> {
         self.field
             .surface_weighted_candidates(cell, site, climate, cell_hash(cell, self.field.seed))
@@ -531,10 +531,6 @@ impl RecursiveSurfaceSolver<'_> {
                 continue;
             }
 
-            // Pull every neighboring domain that can satisfy the authored
-            // requirement into the active graph. Backtracking can then choose
-            // one deterministically instead of treating the raw identity as
-            // immutable.
             for (neighbor_cell, neighbor_site) in neighbors {
                 let domain = self.candidate_order(neighbor_cell, neighbor_site)?;
                 let can_satisfy = domain.iter().any(|candidate_index| {
