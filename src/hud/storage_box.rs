@@ -80,10 +80,27 @@ struct StorageSortButton;
 #[derive(Component)]
 struct StorageSortTooltip;
 
+#[derive(Component)]
+struct StorageInventorySearchFrame;
+
+#[derive(Component)]
+struct StorageInventorySearchBar;
+
+#[derive(Component)]
+struct StorageInventorySearchText;
+
+#[derive(Component)]
+struct StorageInventorySortButton;
+
+#[derive(Component)]
+struct StorageInventorySortTooltip;
+
 #[derive(Resource, Default)]
 struct StorageBoxView {
     search: String,
     search_focused: bool,
+    inventory_search: String,
+    inventory_search_focused: bool,
 }
 
 impl StorageBoxView {
@@ -97,6 +114,7 @@ impl StorageBoxView {
 
     fn focus_search(&mut self) {
         self.search_focused = true;
+        self.inventory_search_focused = false;
     }
 
     fn blur_search(&mut self) {
@@ -106,6 +124,29 @@ impl StorageBoxView {
     fn set_search_query(&mut self, query: String) {
         if self.search != query {
             self.search = query;
+        }
+    }
+
+    fn inventory_search_query(&self) -> &str {
+        &self.inventory_search
+    }
+
+    fn inventory_search_focused(&self) -> bool {
+        self.inventory_search_focused
+    }
+
+    fn focus_inventory_search(&mut self) {
+        self.inventory_search_focused = true;
+        self.search_focused = false;
+    }
+
+    fn blur_inventory_search(&mut self) {
+        self.inventory_search_focused = false;
+    }
+
+    fn set_inventory_search_query(&mut self, query: String) {
+        if self.inventory_search != query {
+            self.inventory_search = query;
         }
     }
 }
@@ -187,15 +228,22 @@ impl Plugin for StorageBoxHudPlugin {
                 Update,
                 (
                     handle_storage_search_focus,
+                    handle_inventory_search_focus,
                     handle_storage_search_input,
+                    handle_inventory_search_input,
                     handle_storage_sort_clicks,
+                    handle_inventory_sort_clicks,
                     handle_storage_slot_clicks,
                     handle_player_slot_clicks,
                     sync_storage_search_focus,
+                    sync_inventory_search_focus,
                     rebuild_storage_box_when_changed,
                     style_storage_search_field,
+                    style_inventory_search_field,
                     style_storage_slots,
+                    style_player_slots,
                     sync_storage_sort_tooltip,
+                    sync_inventory_sort_tooltip,
                     update_storage_cursor_position,
                 )
                     .chain()
@@ -266,7 +314,7 @@ fn spawn_storage_box_root(commands: &mut Commands, context: &mut StorageSpawnCon
             .with_children(|panel| {
                 spawn_storage_header(panel, &context.view);
                 spawn_storage_grid(panel, &context.storage, &mut items);
-                panel.spawn((typography::hud_heading("Inventory"), Pickable::IGNORE));
+                spawn_inventory_header(panel, &context.view);
                 spawn_player_inventory(panel, &context.hotbar, &mut items);
             });
 
@@ -304,6 +352,38 @@ fn spawn_storage_header(parent: &mut ChildSpawnerCommands, view: &StorageBoxView
                 .with_children(|controls| {
                     spawn_storage_search_field(controls, view);
                     spawn_storage_sort_button(controls);
+                });
+        });
+}
+
+fn spawn_inventory_header(parent: &mut ChildSpawnerCommands, view: &StorageBoxView) {
+    parent
+        .spawn((
+            Node {
+                width: px(storage_grid_width()),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                column_gap: px(HEADER_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|header| {
+            header.spawn((typography::hud_heading("Inventory"), Pickable::IGNORE));
+            header
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: px(HEADER_GAP),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|controls| {
+                    spawn_inventory_search_field(controls, view);
+                    spawn_inventory_sort_button(controls);
                 });
         });
 }
@@ -363,6 +443,62 @@ fn spawn_storage_search_field(parent: &mut ChildSpawnerCommands, view: &StorageB
         });
 }
 
+fn spawn_inventory_search_field(parent: &mut ChildSpawnerCommands, view: &StorageBoxView) {
+    let placeholder_visible =
+        view.inventory_search_query().is_empty() && !view.inventory_search_focused();
+    parent
+        .spawn((
+            Button,
+            StorageInventorySearchFrame,
+            Node {
+                position_type: PositionType::Relative,
+                width: px(SEARCH_WIDTH),
+                height: px(SEARCH_HEIGHT),
+                padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
+                border: UiRect::all(px(1)),
+                align_items: AlignItems::Center,
+                overflow: Overflow::clip(),
+                ..default()
+            },
+            text_input::frame_surface(view.inventory_search_focused()),
+        ))
+        .with_children(|frame| {
+            frame.spawn((
+                StorageInventorySearchBar,
+                EditableText {
+                    max_characters: Some(128),
+                    ..EditableText::new(view.inventory_search_query())
+                },
+                text_input::editor_style(17.0, FontWeight::NORMAL),
+                Node {
+                    width: percent(100),
+                    min_width: px(0),
+                    height: px(text_input::INPUT_EDITOR_HEIGHT),
+                    align_items: AlignItems::Center,
+                    overflow: Overflow::clip(),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+            frame.spawn((
+                StorageInventorySearchText,
+                typography::hud("Search..."),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(text_input::INPUT_PADDING_X + 1.0),
+                    top: px(text_input::centered_text_top(SEARCH_HEIGHT)),
+                    ..default()
+                },
+                if placeholder_visible {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                },
+                Pickable::IGNORE,
+            ));
+        });
+}
+
 fn spawn_storage_sort_button(parent: &mut ChildSpawnerCommands) {
     parent
         .spawn(button::icon_button(
@@ -394,6 +530,44 @@ fn spawn_storage_sort_button(parent: &mut ChildSpawnerCommands) {
                 .with_children(|hint| {
                     hint.spawn((
                         typography::caption("Organize storage"),
+                        TextLayout::no_wrap(),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
+}
+
+fn spawn_inventory_sort_button(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn(button::icon_button(
+            StorageInventorySortButton,
+            SEARCH_HEIGHT,
+            ButtonVariant::Normal,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                typography::button_label_light("⇅"),
+                TextLayout::justify(Justify::Center),
+                Pickable::IGNORE,
+            ));
+            button
+                .spawn((
+                    StorageInventorySortTooltip,
+                    surface::hud_container(Node {
+                        position_type: PositionType::Absolute,
+                        right: px(0),
+                        bottom: px(SEARCH_HEIGHT + 8.0),
+                        padding: UiRect::axes(px(9), px(6)),
+                        border: UiRect::all(px(1)),
+                        ..default()
+                    }),
+                    Visibility::Hidden,
+                    GlobalZIndex(210),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|hint| {
+                    hint.spawn((
+                        typography::caption("Organize inventory"),
                         TextLayout::no_wrap(),
                         Pickable::IGNORE,
                     ));
@@ -611,6 +785,22 @@ fn handle_storage_search_focus(
     }
 }
 
+fn handle_inventory_search_focus(
+    frames: Query<&Interaction, (With<StorageInventorySearchFrame>, Changed<Interaction>)>,
+    editor: Query<Entity, With<StorageInventorySearchBar>>,
+    mut focus: ResMut<InputFocus>,
+    mut view: ResMut<StorageBoxView>,
+) {
+    if frames
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+        && let Ok(entity) = editor.single()
+    {
+        view.focus_inventory_search();
+        focus.set(entity, FocusCause::Pressed);
+    }
+}
+
 fn handle_storage_search_input(
     editor: Query<(Entity, &EditableText), With<StorageSearchBar>>,
     focus: Res<InputFocus>,
@@ -632,12 +822,46 @@ fn handle_storage_search_input(
     }
 }
 
+fn handle_inventory_search_input(
+    editor: Query<(Entity, &EditableText), With<StorageInventorySearchBar>>,
+    focus: Res<InputFocus>,
+    mut view: ResMut<StorageBoxView>,
+) {
+    let Ok((entity, editable)) = editor.single() else {
+        return;
+    };
+    let focused = focus.get() == Some(entity);
+    if focused && !view.inventory_search_focused() {
+        view.focus_inventory_search();
+    } else if !focused && view.inventory_search_focused() {
+        view.blur_inventory_search();
+    }
+
+    let next = text_input::editable_value(editable);
+    if next != view.inventory_search_query() {
+        view.set_inventory_search_query(next);
+    }
+}
+
 fn sync_storage_search_focus(
     view: Res<StorageBoxView>,
     mut focus: ResMut<InputFocus>,
     editor: Query<Entity, With<StorageSearchBar>>,
 ) {
     if !view.search_focused()
+        && let Ok(entity) = editor.single()
+        && focus.get() == Some(entity)
+    {
+        focus.clear();
+    }
+}
+
+fn sync_inventory_search_focus(
+    view: Res<StorageBoxView>,
+    mut focus: ResMut<InputFocus>,
+    editor: Query<Entity, With<StorageInventorySearchBar>>,
+) {
+    if !view.inventory_search_focused()
         && let Ok(entity) = editor.single()
         && focus.get() == Some(entity)
     {
@@ -690,6 +914,20 @@ fn handle_storage_sort_clicks(
     view.blur_search();
 }
 
+fn handle_inventory_sort_clicks(
+    buttons: Query<&Interaction, (With<StorageInventorySortButton>, Changed<Interaction>)>,
+    mut hotbar: ResMut<PlayerHotbar>,
+    mut view: ResMut<StorageBoxView>,
+) {
+    if buttons
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+    {
+        hotbar.sort_backpack_by_id();
+        view.blur_inventory_search();
+    }
+}
+
 fn handle_storage_slot_clicks(
     interactions: Query<(&Interaction, &StorageBoxSlot), Changed<Interaction>>,
     mut storage: ResMut<StorageBoxStorage>,
@@ -716,7 +954,7 @@ fn handle_player_slot_clicks(
 ) {
     for (interaction, slot) in &interactions {
         if *interaction == Interaction::Pressed {
-            view.blur_search();
+            view.blur_inventory_search();
             cursor.click_slot(&mut hotbar, slot.0);
             return;
         }
@@ -744,6 +982,44 @@ fn style_storage_search_field(
     } else {
         Visibility::Hidden
     };
+    for (mut visibility, mut color) in &mut placeholders {
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
+        if color.0 != theme::TEXT_MUTED {
+            color.0 = theme::TEXT_MUTED;
+        }
+    }
+}
+
+fn style_inventory_search_field(
+    view: Res<StorageBoxView>,
+    mut frames: Query<
+        (&mut BackgroundColor, &mut BorderColor),
+        With<StorageInventorySearchFrame>,
+    >,
+    mut placeholders: Query<
+        (&mut Visibility, &mut TextColor),
+        With<StorageInventorySearchText>,
+    >,
+) {
+    let fill = BackgroundColor(text_input::INPUT_FILL);
+    let border = BorderColor::all(text_input::input_border(view.inventory_search_focused()));
+    for (mut background, mut current_border) in &mut frames {
+        if *background != fill {
+            *background = fill;
+        }
+        if *current_border != border {
+            *current_border = border;
+        }
+    }
+
+    let next_visibility =
+        if view.inventory_search_query().is_empty() && !view.inventory_search_focused() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     for (mut visibility, mut color) in &mut placeholders {
         if *visibility != next_visibility {
             *visibility = next_visibility;
@@ -790,11 +1066,69 @@ fn style_storage_slots(
     }
 }
 
+fn style_player_slots(
+    content: StorageItemContent,
+    hotbar: Res<PlayerHotbar>,
+    view: Res<StorageBoxView>,
+    mut slots: Query<
+        (
+            Ref<Interaction>,
+            &StoragePlayerSlot,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+) {
+    let selection_changed = hotbar.is_changed() || view.is_changed();
+    let query = view.inventory_search_query().trim().to_lowercase();
+
+    for (interaction, slot, background, border) in &mut slots {
+        if !selection_changed && !interaction.is_changed() {
+            continue;
+        }
+
+        let search_match = !query.is_empty()
+            && hotbar.inventory_stack_at(slot.0).is_some_and(|stack| {
+                let item_id = stack.id();
+                item_id.to_lowercase().contains(&query)
+                    || content.item_name(item_id).to_lowercase().contains(&query)
+            });
+        selectable::apply_colors(
+            selectable::colors(*interaction, search_match),
+            background,
+            border,
+        );
+    }
+}
+
 fn sync_storage_sort_tooltip(
     buttons: Query<&Interaction, (With<StorageSortButton>, Changed<Interaction>)>,
     mut tooltip: Single<
         &mut Visibility,
         (With<StorageSortTooltip>, Without<StorageSortButton>),
+    >,
+) {
+    for interaction in &buttons {
+        let next = if *interaction == Interaction::None {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if **tooltip != next {
+            **tooltip = next;
+        }
+    }
+}
+
+fn sync_inventory_sort_tooltip(
+    buttons: Query<&Interaction, (With<StorageInventorySortButton>, Changed<Interaction>)>,
+    mut tooltip: Single<
+        &mut Visibility,
+        (
+            With<StorageInventorySortTooltip>,
+            Without<StorageInventorySortButton>,
+        ),
     >,
 ) {
     for interaction in &buttons {
@@ -829,6 +1163,7 @@ fn close_storage_box(
     mut view: ResMut<StorageBoxView>,
 ) {
     view.blur_search();
+    view.blur_inventory_search();
     if let Some(stack) = cursor.take_stack() {
         let remainder = storage.try_insert_active(stack).err();
         let remainder = remainder.and_then(|stack| hotbar.try_insert_stack(stack).err());
