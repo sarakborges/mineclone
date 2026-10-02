@@ -121,7 +121,9 @@ use save_session::{
     save_on_gameplay_window_close,
 };
 pub(crate) use seed::WorldSeed;
-pub(crate) use setup::{WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState};
+pub(crate) use setup::{
+    WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingStep,
+};
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
@@ -205,7 +207,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<MainFrameWorkSamples>,
-                    reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
