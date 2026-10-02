@@ -26,11 +26,11 @@ fn remap_player_skin_meshes(
         let Some(layout) = player_skin_layout_for_entity(entity, &names, &parents) else {
             continue;
         };
-        let Some(mesh) = meshes.get_mut(mesh_handle.id()) else {
+        let Some(mut mesh) = meshes.get_mut(mesh_handle.id()) else {
             continue;
         };
 
-        if !remap_mesh_uvs(mesh, layout) {
+        if !remap_mesh_uvs(&mut mesh, layout) {
             warn!(
                 "player skin UV remap skipped for entity {entity:?}: unexpected mesh vertex data"
             );
