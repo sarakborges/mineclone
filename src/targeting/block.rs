@@ -205,7 +205,7 @@ fn update_targets(
     let (next_block, next_fluid) = if closest.is_some() {
         (None, None)
     } else if let Some((hit, distance)) = fluid_hit
-        && distance < block_distance
+        && (block_hit.is_none() || distance < block_distance)
     {
         (None, Some(hit))
     } else {
@@ -281,27 +281,23 @@ fn raycast_fluid_source(
         first_boundary_distance(origin.y, voxel.y, direction.y),
         first_boundary_distance(origin.z, voxel.z, direction.z),
     );
-    let mut entry_normal = IVec3::ZERO;
 
     loop {
-        let distance = if t_max.x <= t_max.y && t_max.x <= t_max.z {
+        let (distance, entry_normal) = if t_max.x <= t_max.y && t_max.x <= t_max.z {
             let distance = t_max.x;
             voxel.x += step.x;
-            entry_normal = IVec3::new(-step.x, 0, 0);
             t_max.x += t_delta.x;
-            distance
+            (distance, IVec3::new(-step.x, 0, 0))
         } else if t_max.y <= t_max.z {
             let distance = t_max.y;
             voxel.y += step.y;
-            entry_normal = IVec3::new(0, -step.y, 0);
             t_max.y += t_delta.y;
-            distance
+            (distance, IVec3::new(0, -step.y, 0))
         } else {
             let distance = t_max.z;
             voxel.z += step.z;
-            entry_normal = IVec3::new(0, 0, -step.z);
             t_max.z += t_delta.z;
-            distance
+            (distance, IVec3::new(0, 0, -step.z))
         };
 
         if distance > max_distance {
