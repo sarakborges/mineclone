@@ -36,21 +36,19 @@ impl Plugin for StartingScreenPlugin {
 
 #[derive(Component, Clone, Copy)]
 enum StartingScreenAction {
-    NewWorld,
-    LoadWorlds,
+    Play,
     Settings,
     Controls,
     ExitGame,
 }
 
 impl StartingScreenAction {
-    const fn localization_key(self) -> &'static str {
+    const fn localization_key(self) -> Option<&'static str> {
         match self {
-            Self::NewWorld => "starting.newWorld",
-            Self::LoadWorlds => "starting.loadWorlds",
-            Self::Settings => "common.settings",
-            Self::Controls => "common.controls",
-            Self::ExitGame => "common.exitGame",
+            Self::Play => None,
+            Self::Settings => Some("common.settings"),
+            Self::Controls => Some("common.controls"),
+            Self::ExitGame => Some("common.exitGame"),
         }
     }
 }
@@ -108,18 +106,11 @@ fn setup_starting_screen(
                     ));
 
                     content.spawn(button(
-                        localization.text(language, "starting.newWorld").to_owned(),
-                        StartingScreenAction::NewWorld,
+                        "Play".to_owned(),
+                        StartingScreenAction::Play,
                         px(MENU_BUTTON_WIDTH),
                         MENU_BUTTON_HEIGHT,
                         ButtonVariant::Primary,
-                    ));
-                    content.spawn(button(
-                        localization.text(language, "starting.loadWorlds").to_owned(),
-                        StartingScreenAction::LoadWorlds,
-                        px(MENU_BUTTON_WIDTH),
-                        MENU_BUTTON_HEIGHT,
-                        ButtonVariant::Normal,
                     ));
                     content.spawn(button(
                         localization.text(language, "common.settings").to_owned(),
@@ -166,13 +157,16 @@ fn sync_starting_screen_labels(
         return;
     }
     for (action, children) in &buttons {
+        let Some(key) = action.localization_key() else {
+            continue;
+        };
         let Some(&label_entity) = children.first() else {
             continue;
         };
         let Ok(mut label) = labels.get_mut(label_entity) else {
             continue;
         };
-        let translated = localization.text(language.get(), action.localization_key());
+        let translated = localization.text(language.get(), key);
         if label.0 != translated {
             label.0 = translated.to_owned();
         }
@@ -190,10 +184,7 @@ fn handle_menu_buttons(
         }
 
         match action {
-            StartingScreenAction::NewWorld => {
-                transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
-            }
-            StartingScreenAction::LoadWorlds => {
+            StartingScreenAction::Play => {
                 transition.request(ScreenTransitionTarget::game(GameState::WorldSelection));
             }
             StartingScreenAction::Settings => {
