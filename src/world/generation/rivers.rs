@@ -206,9 +206,10 @@ fn downstream_site(
                 continue;
             }
 
-            let ranked = (candidate.surface_height, tie, candidate_cell);
-            if best_land.is_none_or(|best| ranked < best) {
-                best_land = Some(ranked);
+            if best_land.is_none_or(|(best_height, best_tie, _)| {
+                (candidate.surface_height, tie) < (best_height, best_tie)
+            }) {
+                best_land = Some((candidate.surface_height, tie, candidate_cell));
             }
         }
     }
