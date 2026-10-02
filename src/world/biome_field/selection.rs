@@ -1,4 +1,5 @@
 pub(super) mod fitting;
+pub(super) mod resolver;
 
 use bevy::prelude::*;
 
@@ -62,15 +63,25 @@ impl BiomeField {
             climate_field: &self.climate,
         };
 
-        if surface_constraints_allow(raw_index, &selection_context) {
+        if surface_constraints_allow(raw_index, raw_index, &selection_context) {
             return raw_index;
         }
 
-        if let Some(candidate) = weighted_candidates
-            .iter()
-            .find(|candidate| surface_constraints_allow(candidate.index, &selection_context))
-        {
+        if let Some(candidate) = weighted_candidates.iter().find(|candidate| {
+            surface_constraints_allow(candidate.index, raw_index, &selection_context)
+        }) {
             return candidate.index;
+        }
+
+        // If every local climate candidate is blocked, let a biome already
+        // touching this raw component continue through it. This is the fitted
+        // continuation path: it validates the replacement against the final
+        // external boundary instead of the stale raw-neighbor snapshot.
+        if let Some(candidate_index) =
+            resolver::component_takeover_candidate(cell, site, raw_index, &selection_context)
+            && surface_fallback_allows(candidate_index, raw_index, &selection_context)
+        {
+            return candidate_index;
         }
 
         panic!(
@@ -150,10 +161,26 @@ pub(super) struct SurfaceSelectionContext<'a> {
     pub(super) climate_field: &'a MacroClimateField,
 }
 
-fn surface_constraints_allow(
+fn surface_fallback_allows(
     candidate_index: usize,
+    raw_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
+    candidate_index == raw_index
+        || context.biomes[candidate_index]
+            .exclusive_neighbor_group
+            .is_none()
+}
+
+fn surface_constraints_allow(
+    candidate_index: usize,
+    raw_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    if !surface_fallback_allows(candidate_index, raw_index, context) {
+        return false;
+    }
+
     // The site lattice is built from the largest authored minimum radius and
     // its jitter preserves axis spacing. Minimum size is therefore a geometry
     // invariant, not a reason to eliminate a biome candidate. Eliminating it
@@ -262,11 +289,10 @@ fn authored_adjacency_allows(
                 return false;
             }
 
-            // Raw/raw conflicts have one deterministic winner. This applies to
-            // both authored adjacency and a min/max pair that physically cannot
-            // share their current edge. The losing site tries its next weighted
-            // candidate; no constraint is relaxed.
-            if !fitting::raw_conflict_left_wins(
+            // Raw/raw conflicts have one deterministic winner. A side is only
+            // considered yieldable when it has either a valid local fallback
+            // or a valid component-level continuation from its boundary.
+            if !resolver::raw_conflict_left_wins(
                 context.cell,
                 context.site,
                 candidate_index,
@@ -653,6 +679,18 @@ mod tests {
     }
 
     #[test]
+    fn exclusive_group_biome_cannot_replace_another_raw_biome() {
+        let raw = test_surface_entry("plains", None);
+        let exclusive = test_surface_entry("mountain", Some("mountain_terrain"));
+        let climate = MacroClimateField::new(42);
+        let biomes = [raw, exclusive];
+        let context = test_context(IVec2::ZERO, Vec2::splat(360.0), &biomes, &climate);
+
+        assert!(surface_fallback_allows(0, 0, &context));
+        assert!(!surface_fallback_allows(1, 0, &context));
+    }
+
+    #[test]
     fn minimum_size_guard_detects_an_artificially_compressed_lattice() {
         let mut plains = test_surface_entry("plains", None);
         plains.size.x = crate::content::dimension::DimensionBiomeSizeAxis {
@@ -703,7 +741,7 @@ mod tests {
         let left_context = test_context(left_cell, spacing, &biomes, &climate);
         let right_context = test_context(right_cell, spacing, &biomes, &climate);
 
-        let left_wins = fitting::raw_conflict_left_wins(
+        let left_wins = resolver::raw_conflict_left_wins(
             left_cell,
             left_site,
             0,
@@ -712,7 +750,7 @@ mod tests {
             1,
             &left_context,
         );
-        let right_wins = fitting::raw_conflict_left_wins(
+        let right_wins = resolver::raw_conflict_left_wins(
             right_cell,
             right_site,
             1,
