@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet, VecDeque},
+};
 
 use bevy::prelude::*;
 
@@ -74,19 +77,26 @@ enum Violation {
 
 struct RecursiveSurfaceSolver<'a> {
     field: &'a BiomeField,
+    candidate_cache: RefCell<HashMap<IVec2, Vec<usize>>>,
+    neighbor_cache: RefCell<HashMap<IVec2, Vec<(IVec2, Vec2)>>>,
 }
 
 /// Resolves a group of surface sites as one recursive constraint problem.
 ///
-/// Propagation remains unbounded in depth, but each step is pruned before
-/// branching. Pairwise arc consistency removes candidates that have no support
-/// in neighboring domains, and failed domain states are memoized so recursive
-/// fitting never explores the same dead branch twice.
+/// Pairwise arc consistency prunes impossible candidates before branching. When
+/// propagation still leaves an authored size/adjacency conflict, search branches
+/// on one minimum-remaining-values cell and fixes it to one candidate. This is
+/// complete backtracking, but avoids the combinatorial duplicate search caused
+/// by branching once for every cell in a conflicting component.
 pub(in crate::world::biome_field) fn resolve_surface_sites(
     field: &BiomeField,
     requested_cells: &[IVec2],
 ) -> Result<Vec<(IVec2, Vec2, usize)>, String> {
-    let solver = RecursiveSurfaceSolver { field };
+    let solver = RecursiveSurfaceSolver {
+        field,
+        candidate_cache: RefCell::default(),
+        neighbor_cache: RefCell::default(),
+    };
     let mut state = SolverState::default();
     for &cell in requested_cells {
         solver.ensure_cell(&mut state, cell)?;
@@ -137,11 +147,28 @@ impl RecursiveSurfaceSolver<'_> {
                 return None;
             }
         };
+        let require_near = if oversize.is_none() && self.first_pair_violation(&state).is_none() {
+            match self.first_require_near_violation(&mut state) {
+                Ok(violation) => violation,
+                Err(_) => {
+                    failed_states.insert(signature);
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+
+        if !self.propagate_pair_domains(&mut state) {
+            failed_states.insert(signature);
+            return None;
+        }
+
         let violation = if let Some((left, right)) = self.first_pair_violation(&state) {
             Some(Violation::Pair { left, right })
         } else if let Some(cells) = oversize {
             Some(Violation::Oversize { cells })
-        } else if let Some(cell) = self.first_require_near_violation(&state) {
+        } else if let Some(cell) = require_near {
             Some(Violation::RequireNear { cell })
         } else {
             self.boundary_cycle_violation(&state)
@@ -172,9 +199,12 @@ impl RecursiveSurfaceSolver<'_> {
     }
 
     fn candidate_order(&self, cell: IVec2, site: Vec2) -> Result<Vec<usize>, String> {
-        let climate = self.field.climate.sample(site);
+        if let Some(cached) = self.candidate_cache.borrow().get(&cell).cloned() {
+            return Ok(cached);
+        }
 
-        if let Some(ocean_index) = self.field.ocean_surface_index
+        let climate = self.field.climate.sample(site);
+        let candidates = if let Some(ocean_index) = self.field.ocean_surface_index
             && self.field.surface_biome_is_enabled(ocean_index)
         {
             let ocean = &self.field.surface_biomes[ocean_index];
@@ -186,23 +216,36 @@ impl RecursiveSurfaceSolver<'_> {
                     .any(|distribution| distribution.is_regional())
                 && climate_weight(climate, ocean.climate) >= 1.0 - f32::EPSILON
             {
-                return Ok(vec![ocean_index]);
+                vec![ocean_index]
+            } else {
+                self.weighted_candidates(cell, site, climate)
             }
-        }
-
-        let candidates = self
-            .field
-            .surface_weighted_candidates(cell, site, climate, cell_hash(cell, self.field.seed))
-            .into_iter()
-            .map(|candidate| candidate.index)
-            .collect::<Vec<_>>();
+        } else {
+            self.weighted_candidates(cell, site, climate)
+        };
 
         if candidates.is_empty() {
             return Err(format!(
                 "surface biome site {cell:?} has no biome compatible with climate/distribution constraints"
             ));
         }
+        self.candidate_cache
+            .borrow_mut()
+            .insert(cell, candidates.clone());
         Ok(candidates)
+    }
+
+    fn weighted_candidates(
+        &self,
+        cell: IVec2,
+        site: Vec2,
+        climate: crate::content::biome::BiomeClimate,
+    ) -> Vec<usize> {
+        self.field
+            .surface_weighted_candidates(cell, site, climate, cell_hash(cell, self.field.seed))
+            .into_iter()
+            .map(|candidate| candidate.index)
+            .collect()
     }
 
     fn raw_identity(&self, cell: IVec2, site: Vec2) -> Result<usize, String> {
@@ -218,6 +261,10 @@ impl RecursiveSurfaceSolver<'_> {
     }
 
     fn neighbors(&self, cell: IVec2, site: Vec2) -> Vec<(IVec2, Vec2)> {
+        if let Some(cached) = self.neighbor_cache.borrow().get(&cell).cloned() {
+            return cached;
+        }
+
         let mut neighbors = Vec::new();
         for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
             for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
@@ -243,7 +290,10 @@ impl RecursiveSurfaceSolver<'_> {
                 }
             }
         }
-        neighbors.sort_by_key(|(cell, _)| (cell.y, cell.x));
+        neighbors.sort_by_key(|(neighbor, _)| (neighbor.y, neighbor.x));
+        self.neighbor_cache
+            .borrow_mut()
+            .insert(cell, neighbors.clone());
         neighbors
     }
 
@@ -270,10 +320,7 @@ impl RecursiveSurfaceSolver<'_> {
             cells.sort_by_key(|cell| (cell.y, cell.x));
 
             for cell in cells {
-                let Some(left) = state.cells.get(&cell) else {
-                    continue;
-                };
-                let left_site = left.site;
+                let left_site = state.cells[&cell].site;
                 for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
                     if (neighbor_cell.y, neighbor_cell.x) <= (cell.y, cell.x) {
                         continue;
@@ -349,9 +396,9 @@ impl RecursiveSurfaceSolver<'_> {
         cells.sort_by_key(|cell| (cell.y, cell.x));
 
         for cell in cells {
-            let left_state = state.cells.get(&cell).expect("solver cell must exist");
-            let left_site = left_state.site;
-            let left_index = left_state.biome_index();
+            let left = state.cells.get(&cell).expect("solver cell must exist");
+            let left_site = left.site;
+            let left_index = left.biome_index();
             for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
                 if state.cells.contains_key(&neighbor_cell) {
                     continue;
@@ -365,7 +412,6 @@ impl RecursiveSurfaceSolver<'_> {
                 return Ok(());
             }
         }
-
         Ok(())
     }
 
@@ -432,20 +478,18 @@ impl RecursiveSurfaceSolver<'_> {
                     for &component_cell in &component {
                         self.ensure_cell(state, component_cell)?;
                     }
-                    component.sort_by_key(|cell| (cell.y, cell.x));
+                    component.sort_by_key(|component_cell| (component_cell.y, component_cell.x));
                     return Ok(Some(component));
                 }
 
                 for (neighbor_cell, neighbor_site) in self.neighbors(cell, site) {
-                    if seen.contains(&neighbor_cell) {
+                    if !seen.insert(neighbor_cell) {
                         continue;
                     }
                     let neighbor_index = self.identity_at(state, neighbor_cell, neighbor_site)?;
-                    if neighbor_index != biome_index {
-                        continue;
+                    if neighbor_index == biome_index {
+                        queue.push_back((neighbor_cell, neighbor_site));
                     }
-                    seen.insert(neighbor_cell);
-                    queue.push_back((neighbor_cell, neighbor_site));
                 }
             }
 
@@ -458,7 +502,10 @@ impl RecursiveSurfaceSolver<'_> {
         Ok(None)
     }
 
-    fn first_require_near_violation(&self, state: &SolverState) -> Option<IVec2> {
+    fn first_require_near_violation(
+        &self,
+        state: &mut SolverState,
+    ) -> Result<Option<IVec2>, String> {
         let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
         cells.sort_by_key(|cell| (cell.y, cell.x));
 
@@ -468,132 +515,157 @@ impl RecursiveSurfaceSolver<'_> {
             if biome.require_near.is_empty() {
                 continue;
             }
+            let current_site = current.site;
+            let neighbors = self.neighbors(cell, current_site);
+            let mut satisfied = false;
 
-            let found = self.neighbors(cell, current.site).into_iter().any(
-                |(neighbor_cell, neighbor_site)| {
-                    self.identity_at(state, neighbor_cell, neighbor_site)
-                        .ok()
-                        .is_some_and(|neighbor_index| {
-                            let neighbor_id = &self.field.surface_biomes[neighbor_index].id;
-                            biome.require_near.iter().any(|id| id == neighbor_id)
-                        })
-                },
-            );
-            if !found {
-                return Some(cell);
+            for &(neighbor_cell, neighbor_site) in &neighbors {
+                let neighbor_index = self.identity_at(state, neighbor_cell, neighbor_site)?;
+                let neighbor_id = &self.field.surface_biomes[neighbor_index].id;
+                if biome.require_near.iter().any(|required| required == neighbor_id) {
+                    satisfied = true;
+                    break;
+                }
             }
+            if satisfied {
+                continue;
+            }
+
+            // Pull every neighboring domain that can satisfy the authored
+            // requirement into the active graph. Backtracking can then choose
+            // one deterministically instead of treating the raw identity as
+            // immutable.
+            for (neighbor_cell, neighbor_site) in neighbors {
+                let domain = self.candidate_order(neighbor_cell, neighbor_site)?;
+                let can_satisfy = domain.iter().any(|candidate_index| {
+                    let id = &self.field.surface_biomes[*candidate_index].id;
+                    biome.require_near.iter().any(|required| required == id)
+                });
+                if can_satisfy {
+                    self.ensure_cell(state, neighbor_cell)?;
+                }
+            }
+            return Ok(Some(cell));
+        }
+        Ok(None)
+    }
+
+    fn boundary_cycle_violation(&self, state: &SolverState) -> Option<Vec<IVec2>> {
+        let mut remaining = state.cells.keys().copied().collect::<HashSet<_>>();
+
+        while !remaining.is_empty() {
+            let start = remaining
+                .iter()
+                .copied()
+                .min_by_key(|cell| (cell.y, cell.x))
+                .expect("non-empty boundary component set must have a start");
+            remaining.remove(&start);
+            let mut component = vec![start];
+            let mut queue = VecDeque::from([start]);
+
+            while let Some(cell) = queue.pop_front() {
+                let current = state.cells.get(&cell).expect("solver cell must exist");
+                for (neighbor_cell, _) in self.neighbors(cell, current.site) {
+                    if !remaining.contains(&neighbor_cell) {
+                        continue;
+                    }
+                    let neighbor = state
+                        .cells
+                        .get(&neighbor_cell)
+                        .expect("remaining solver neighbor must exist");
+                    if neighbor.biome_index() == current.biome_index() {
+                        continue;
+                    }
+                    remaining.remove(&neighbor_cell);
+                    component.push(neighbor_cell);
+                    queue.push_back(neighbor_cell);
+                }
+            }
+
+            if component.len() <= 1 {
+                continue;
+            }
+            component.sort_by_key(|cell| (cell.y, cell.x));
+            let sampled = component
+                .iter()
+                .map(|cell| {
+                    let current = state.cells.get(cell).expect("solver cell must exist");
+                    (*cell, current.site, 0.0, Some(current.biome_index()))
+                })
+                .collect::<Vec<_>>();
+
+            let Err(failure) = fitting::fit_surface_site_weights_detailed(
+                &sampled,
+                &self.field.surface_biomes,
+                self.field.surface_site_spacing,
+                self.field.seed,
+            ) else {
+                continue;
+            };
+
+            let mut repairable = failure
+                .cells
+                .into_iter()
+                .filter(|cell| {
+                    state
+                        .cells
+                        .get(cell)
+                        .is_some_and(|current| current.domain.len() > 1)
+                })
+                .collect::<Vec<_>>();
+            repairable.sort_unstable_by_key(|cell| (cell.y, cell.x));
+            repairable.dedup();
+            return Some(repairable);
         }
         None
     }
 
-    fn boundary_cycle_violation(&self, state: &SolverState) -> Option<Vec<IVec2>> {
-        let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
-        cells.sort_by_key(|cell| (cell.y, cell.x));
-        if cells.len() <= 1 {
-            return None;
-        }
-
-        let sampled = cells
-            .iter()
-            .map(|cell| {
-                let current = state.cells.get(cell).expect("solver cell must exist");
-                (*cell, current.site, 0.0, Some(current.biome_index()))
-            })
-            .collect::<Vec<_>>();
-
-        let Err(failure) = fitting::fit_surface_site_weights_detailed(
-            &sampled,
-            &self.field.surface_biomes,
-            self.field.surface_site_spacing,
-            self.field.seed,
-        ) else {
-            return None;
-        };
-
-        let mut repairable = failure
-            .cells
-            .into_iter()
-            .filter(|cell| {
-                state
-                    .cells
-                    .get(cell)
-                    .is_some_and(|current| current.domain.len() > 1)
-            })
-            .collect::<Vec<_>>();
-        repairable.sort_unstable_by_key(|cell| (cell.y, cell.x));
-        repairable.dedup();
-        repairable.sort_by_key(|cell| {
-            (
-                std::cmp::Reverse(region_claim_hash(
-                    *cell,
-                    state.cells[cell].biome_index(),
-                    self.field.seed,
-                )),
-                cell.y,
-                cell.x,
-            )
-        });
-
-        // An empty witness is still a real violation: every cell participating
-        // in the failed boundary graph is already fixed, so this branch must
-        // backtrack instead of silently accepting an invalid map.
-        Some(repairable)
-    }
-
     fn repair_branches(&self, state: &SolverState, violation: Violation) -> Vec<SolverState> {
         match violation {
-            Violation::Pair { left, right } => {
-                let mut cells = vec![left, right];
-                cells.sort_by_key(|cell| {
-                    std::cmp::Reverse(region_claim_hash(
-                        *cell,
-                        state.cells[cell].biome_index(),
-                        self.field.seed,
-                    ))
-                });
-                self.drop_current_branches(state, cells)
-            }
-            Violation::Oversize { mut cells } | Violation::BoundaryCycle { mut cells } => {
-                cells.sort_by_key(|cell| {
-                    (
-                        std::cmp::Reverse(region_claim_hash(
-                            *cell,
-                            state.cells[cell].biome_index(),
-                            self.field.seed,
-                        )),
-                        cell.y,
-                        cell.x,
-                    )
-                });
-                self.drop_current_branches(state, cells)
+            Violation::Pair { left, right } => self.branch_on_mrv(state, vec![left, right]),
+            Violation::Oversize { cells } | Violation::BoundaryCycle { cells } => {
+                self.branch_on_mrv(state, cells)
             }
             Violation::RequireNear { cell } => self.require_near_branches(state, cell),
         }
     }
 
-    fn drop_current_branches(
-        &self,
-        state: &SolverState,
-        cells: Vec<IVec2>,
-    ) -> Vec<SolverState> {
-        let mut branches = Vec::new();
-        for cell in cells {
-            let Some(current) = state.cells.get(&cell) else {
-                continue;
-            };
-            if current.domain.len() <= 1 {
-                continue;
-            }
-            let mut branch = state.clone();
-            branch
-                .cells
-                .get_mut(&cell)
-                .expect("branch cell must exist")
-                .domain
-                .remove(0);
-            branches.push(branch);
-        }
-        branches
+    fn branch_on_mrv(&self, state: &SolverState, mut cells: Vec<IVec2>) -> Vec<SolverState> {
+        cells.sort_unstable_by_key(|cell| (cell.y, cell.x));
+        cells.dedup();
+        let pivot = cells
+            .into_iter()
+            .filter(|cell| state.cells.get(cell).is_some_and(|current| current.domain.len() > 1))
+            .min_by_key(|cell| {
+                let current = &state.cells[cell];
+                (
+                    current.domain.len(),
+                    std::cmp::Reverse(region_claim_hash(
+                        *cell,
+                        current.biome_index(),
+                        self.field.seed,
+                    )),
+                    cell.y,
+                    cell.x,
+                )
+            });
+        let Some(pivot) = pivot else {
+            return Vec::new();
+        };
+
+        let domain = state.cells[&pivot].domain.clone();
+        domain
+            .into_iter()
+            .map(|candidate| {
+                let mut branch = state.clone();
+                branch
+                    .cells
+                    .get_mut(&pivot)
+                    .expect("branch pivot must exist")
+                    .domain = vec![candidate];
+                branch
+            })
+            .collect()
     }
 
     fn require_near_branches(&self, state: &SolverState, cell: IVec2) -> Vec<SolverState> {
@@ -601,31 +673,19 @@ impl RecursiveSurfaceSolver<'_> {
             return Vec::new();
         };
         let biome = &self.field.surface_biomes[current.biome_index()];
-        let mut branches = self.drop_current_branches(state, vec![cell]);
+        let mut candidates = vec![cell];
 
         for (neighbor_cell, _) in self.neighbors(cell, current.site) {
             let Some(neighbor) = state.cells.get(&neighbor_cell) else {
                 continue;
             };
-            let Some(position) = neighbor.domain.iter().position(|candidate_index| {
+            if neighbor.domain.iter().any(|candidate_index| {
                 let id = &self.field.surface_biomes[*candidate_index].id;
                 biome.require_near.iter().any(|required| required == id)
-            }) else {
-                continue;
-            };
-            if position == 0 {
-                continue;
+            }) {
+                candidates.push(neighbor_cell);
             }
-
-            let mut branch = state.clone();
-            branch
-                .cells
-                .get_mut(&neighbor_cell)
-                .expect("branch neighbor must exist")
-                .domain
-                .drain(..position);
-            branches.push(branch);
         }
-        branches
+        self.branch_on_mrv(state, candidates)
     }
 }
