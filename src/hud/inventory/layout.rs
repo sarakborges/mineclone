@@ -8,6 +8,7 @@ use crate::{
     app::game_state::GameState,
     content::inventory_category::InventoryCategoryRegistry,
     gameplay::modal::GameplayModalState,
+    hud::character_info::spawn_character_info_panel,
     localization::UiLocalization,
     player::{
         game_mode::GameMode,
@@ -67,6 +68,27 @@ fn spawn_game_mode_inventory_panel(
     } else {
         spawn_player_inventory_panel(root, state, items);
     }
+}
+
+fn spawn_survival_inventory_row(
+    root: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &mut InventoryItemView<'_>,
+) {
+    root.spawn((
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexEnd,
+            column_gap: px(PANEL_GAP),
+            margin: UiRect::bottom(px(PANEL_GAP)),
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
+    .with_children(|row| {
+        spawn_player_inventory_panel(row, state, items);
+        spawn_character_info_panel(row);
+    });
 }
 
 fn spawn_inventory_switcher(
@@ -193,6 +215,8 @@ pub(super) fn spawn_inventory_root(
     state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
 ) {
+    let creative_inventory = state.game_mode.has_creative_inventory();
+
     commands
         .spawn((
             InventoryHudRoot,
@@ -203,7 +227,11 @@ pub(super) fn spawn_inventory_root(
                 width: percent(100),
                 height: percent(100),
                 flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
+                align_items: if creative_inventory {
+                    AlignItems::Center
+                } else {
+                    AlignItems::FlexEnd
+                },
                 justify_content: JustifyContent::Center,
                 column_gap: px(PANEL_GAP),
                 ..default()
@@ -214,7 +242,11 @@ pub(super) fn spawn_inventory_root(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_game_mode_inventory_panel(root, state, items);
+            if creative_inventory {
+                spawn_game_mode_inventory_panel(root, state, items);
+            } else {
+                spawn_survival_inventory_row(root, state, items);
+            }
             spawn_inventory_overlay(root, state, items);
         });
 }
