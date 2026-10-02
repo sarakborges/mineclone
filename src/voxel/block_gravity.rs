@@ -10,7 +10,7 @@ use crate::{
     world_objects::detached_object_drop_request,
 };
 
-use super::edit::VoxelTopologyRuntime;
+use super::{edit::VoxelTopologyRuntime, read::VoxelRead};
 
 pub(crate) const BLOCK_GRAVITY_TAG: &str = "gravity";
 
