@@ -7,7 +7,7 @@
   },
   "biomes": [
     {
-      "id": "asteria:overworld/plains",
+      "id": "asteria:umbral/umbral_reach",
       "weight": 1,
       "size": {
         "x": { "min": 120, "max": 420 },
@@ -16,7 +16,7 @@
       }
     },
     {
-      "id": "asteria:overworld/wasteland",
+      "id": "asteria:umbral/withered_waste",
       "weight": 1.3,
       "size": {
         "x": { "min": 120, "max": 420 },
@@ -26,17 +26,7 @@
       "exclusiveNeighborGroup": "inland_biomes"
     },
     {
-      "id": "asteria:overworld/witchwood",
-      "weight": 1.25,
-      "size": {
-        "x": { "min": 140, "max": 460 },
-        "z": { "min": 140, "max": 460 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "inland_biomes"
-    },
-    {
-      "id": "asteria:overworld/enchanted_forest",
+      "id": "asteria:umbral/wraith_grove",
       "weight": 1.25,
       "size": {
         "x": { "min": 140, "max": 460 },
