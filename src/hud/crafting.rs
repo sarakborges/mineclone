@@ -990,3 +990,28 @@ fn consume_inventory_quantity(hotbar: &mut PlayerHotbar, item_id: &str, quantity
 
     remaining == 0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ingredient_consumption_spans_inventory_slots() {
+        let mut hotbar = PlayerHotbar::default();
+        hotbar.replace_inventory_item(
+            0,
+            Some(ItemStack::new("asteria:stick").with_quantity(2)),
+        );
+        hotbar.replace_inventory_item(
+            1,
+            Some(ItemStack::new("asteria:stick").with_quantity(2)),
+        );
+
+        assert!(consume_inventory_quantity(
+            &mut hotbar,
+            "asteria:stick",
+            3
+        ));
+        assert_eq!(inventory_quantity(&hotbar, "asteria:stick"), 1);
+    }
+}
