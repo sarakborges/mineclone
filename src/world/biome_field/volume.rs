@@ -14,6 +14,12 @@ use super::{
     },
 };
 
+const FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS: usize = 32;
+const FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP: f32 = 8.0;
+const FLOATING_ISLAND_SURFACE_FIT_BINARY_STEPS: usize = 6;
+const FLOATING_ISLAND_SURFACE_FIT_PADDING: f32 =
+    VOLUME_WARP_AMPLITUDE * std::f32::consts::SQRT_2 + 1.0;
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct VolumeBiomeRegion {
     sites: Vec<ResolvedVolumeBiomeSite>,
@@ -107,18 +113,23 @@ impl BiomeField {
 
         for site in &region.sites {
             let biome = &self.volume_biomes[site.biome_index];
-            if !volume_surface_allows(
-                biome.surface_constraints.as_ref(),
-                &surface.id,
-                &surface.tags,
-            ) {
-                continue;
-            }
             if !vertical_range_contains(biome.vertical_range, position.y) {
                 continue;
             }
 
             let local_position = normalized_ellipsoid_position(warped - site.position, site.radii);
+            let surface_allowed = volume_surface_allows(
+                biome.surface_constraints.as_ref(),
+                &surface.id,
+                &surface.tags,
+            );
+            if !surface_allowed
+                && (!floating_island_uses_site_surface_fit(biome)
+                    || local_position.xz().length_squared() > 1.0)
+            {
+                continue;
+            }
+
             let site_strength = volume_site_strength(local_position.length());
             let selection_strength = site_strength * biome.weight.clamp(0.0, 1.0);
             if selection_strength <= 0.0 {
@@ -211,6 +222,10 @@ impl BiomeField {
                     };
                     let biome = &self.volume_biomes[biome_index];
                     let radii = volume_site_radii(biome, hash);
+                    let Some(radii) = self.fit_floating_island_radii_to_surface(biome, site, radii)
+                    else {
+                        continue;
+                    };
                     let expanded = radii * (1.0 + VOLUME_BORDER_MARGIN);
                     let site_minimum = site - expanded;
                     let site_maximum = site + expanded;
@@ -233,6 +248,130 @@ impl BiomeField {
 
         sites
     }
+
+    fn fit_floating_island_radii_to_surface(
+        &self,
+        biome: &BiomeFieldEntry,
+        site: Vec3,
+        radii: Vec3,
+    ) -> Option<Vec3> {
+        if !floating_island_uses_site_surface_fit(biome) {
+            return Some(radii);
+        }
+        let constraints = biome
+            .surface_constraints
+            .as_ref()
+            .expect("site-fitted floating island must define surface constraints");
+        let center = site.xz();
+        if !self.surface_constraints_allow_at(constraints, center) {
+            return None;
+        }
+
+        let fit_scale = floating_island_surface_fit_scale(radii.xz(), |direction, max_distance| {
+            self.allowed_surface_clearance(center, constraints, direction, max_distance)
+        });
+        fit_horizontal_radii(
+            radii,
+            Vec2::new(biome.size.x.min, biome.size.z.min),
+            fit_scale,
+        )
+    }
+
+    fn surface_constraints_allow_at(
+        &self,
+        constraints: &VolumeSurfaceConstraints,
+        position: Vec2,
+    ) -> bool {
+        let sample = self.sample_surface(position);
+        let surface = &self.surface_biomes[sample.identity_surface_index];
+        constraints.allows_surface(&surface.id, &surface.tags)
+    }
+
+    fn allowed_surface_clearance(
+        &self,
+        center: Vec2,
+        constraints: &VolumeSurfaceConstraints,
+        direction: Vec2,
+        max_distance: f32,
+    ) -> f32 {
+        let mut allowed_distance = 0.0;
+        let mut probe_distance = FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP.min(max_distance);
+
+        loop {
+            if !self.surface_constraints_allow_at(
+                constraints,
+                center + direction * probe_distance,
+            ) {
+                let mut low = allowed_distance;
+                let mut high = probe_distance;
+                for _ in 0..FLOATING_ISLAND_SURFACE_FIT_BINARY_STEPS {
+                    let midpoint = (low + high) * 0.5;
+                    if self.surface_constraints_allow_at(
+                        constraints,
+                        center + direction * midpoint,
+                    ) {
+                        low = midpoint;
+                    } else {
+                        high = midpoint;
+                    }
+                }
+                return low;
+            }
+
+            allowed_distance = probe_distance;
+            if probe_distance >= max_distance {
+                return max_distance;
+            }
+            probe_distance = (probe_distance + FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP)
+                .min(max_distance);
+        }
+    }
+}
+
+fn floating_island_uses_site_surface_fit(biome: &BiomeFieldEntry) -> bool {
+    biome.surface_constraints.is_some()
+        && matches!(
+            biome.density_modifier,
+            Some(BiomeDensityModifier::FloatingIsland { .. })
+        )
+}
+
+fn floating_island_surface_fit_scale(
+    radii: Vec2,
+    mut clearance_in_direction: impl FnMut(Vec2, f32) -> f32,
+) -> f32 {
+    let mut fit_scale = 1.0_f32;
+
+    for index in 0..FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS {
+        let angle = std::f32::consts::TAU * index as f32
+            / FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS as f32;
+        let direction = Vec2::new(angle.cos(), angle.sin());
+        let radius = ellipse_radius_along(radii, direction);
+        let max_distance = radius + FLOATING_ISLAND_SURFACE_FIT_PADDING;
+        let clearance = clearance_in_direction(direction, max_distance);
+        let direction_scale =
+            ((clearance - FLOATING_ISLAND_SURFACE_FIT_PADDING) / radius).clamp(0.0, 1.0);
+        fit_scale = fit_scale.min(direction_scale);
+    }
+
+    fit_scale
+}
+
+fn ellipse_radius_along(radii: Vec2, direction: Vec2) -> f32 {
+    let normalized = Vec2::new(direction.x / radii.x, direction.y / radii.y);
+    normalized.length().recip()
+}
+
+fn fit_horizontal_radii(radii: Vec3, minimum: Vec2, fit_scale: f32) -> Option<Vec3> {
+    let minimum_scale = (minimum.x / radii.x)
+        .max(minimum.y / radii.z)
+        .clamp(0.0, 1.0);
+    if fit_scale + f32::EPSILON < minimum_scale {
+        return None;
+    }
+
+    let scale = fit_scale.max(minimum_scale).min(1.0);
+    Some(Vec3::new(radii.x * scale, radii.y, radii.z * scale))
 }
 
 fn volume_surface_allows(
@@ -397,6 +536,28 @@ mod tests {
             "asteria:overworld/ocean",
             &tags(&["water"]),
         ));
+    }
+
+    #[test]
+    fn floating_island_surface_fit_uses_the_tightest_direction() {
+        let radii = Vec2::new(80.0, 60.0);
+        let scale = floating_island_surface_fit_scale(radii, |_direction, max_distance| {
+            FLOATING_ISLAND_SURFACE_FIT_PADDING
+                + (max_distance - FLOATING_ISLAND_SURFACE_FIT_PADDING) * 0.5
+        });
+
+        assert!((scale - 0.5).abs() <= 1e-5);
+    }
+
+    #[test]
+    fn floating_island_surface_fit_rejects_sizes_below_authored_minimum() {
+        let radii = Vec3::new(80.0, 32.0, 60.0);
+        let minimum = Vec2::new(48.0, 36.0);
+
+        let fitted = fit_horizontal_radii(radii, minimum, 0.75)
+            .expect("fit above authored minimum should remain valid");
+        assert_eq!(fitted, Vec3::new(60.0, 32.0, 45.0));
+        assert!(fit_horizontal_radii(radii, minimum, 0.5).is_none());
     }
 
     #[test]
