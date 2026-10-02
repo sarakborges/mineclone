@@ -6,6 +6,7 @@ use crate::{
     content::{
         block::{BlockDefinition, DEFAULT_BLOCK_BREAK_TICKS},
         builtin_ids::DYED_PROPERTY_ID,
+        fluid::{FluidDefinition, FluidRegistry},
         layer::{LayerFace, LayerRegistry},
         object::ObjectRegistry,
         secondary_property::SecondaryPropertyRegistry,
@@ -20,7 +21,7 @@ use crate::{
     },
     targeting::{
         BlockMiningState,
-        block::{BlockTargetingSet, TargetedBlock},
+        block::{BlockTargetingSet, TargetedBlock, TargetedFluid},
     },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{block_state::BlockState, cell::VoxelCell, world::VoxelWorld},
@@ -108,9 +109,20 @@ struct TargetObjectHudSnapshot {
     tint: Color,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TargetFluidHudSnapshot {
+    voxel: IVec3,
+    fluid_id: u16,
+    level: u8,
+    sky_light: u8,
+    block_light: u8,
+    language: Language,
+}
+
 #[derive(SystemParam)]
 struct TargetHudState<'w> {
     targeted: Res<'w, TargetedBlock>,
+    fluid_target: Res<'w, TargetedFluid>,
     object_target: Res<'w, TargetedWorldObject>,
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
@@ -122,6 +134,7 @@ struct TargetHudState<'w> {
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
+    fluids: Res<'w, FluidRegistry>,
     objects: Res<'w, ObjectRegistry>,
     layers: Res<'w, LayerRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
@@ -311,6 +324,7 @@ fn update_target_hud(
     mut cached: Local<Option<TargetHudSnapshot>>,
     mut cached_icon: Local<Option<TargetHudIconSnapshot>>,
     mut cached_object: Local<Option<TargetObjectHudSnapshot>>,
+    mut cached_fluid: Local<Option<TargetFluidHudSnapshot>>,
 ) {
     let TargetHudView {
         root_visibility,
@@ -325,6 +339,7 @@ fn update_target_hud(
         *cached = None;
         *cached_icon = None;
         *cached_object = None;
+        *cached_fluid = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
@@ -405,6 +420,59 @@ fn update_target_hud(
         *cached = None;
         *cached_icon = None;
         *cached_object = Some(snapshot);
+        *cached_fluid = None;
+        return;
+    }
+
+    if let Some(hit) = state.fluid_target.0 {
+        let language = state.language.get();
+        let light = state.world.light_at(hit.voxel + IVec3::Y);
+        let snapshot = TargetFluidHudSnapshot {
+            voxel: hit.voxel,
+            fluid_id: hit.fluid.fluid_id,
+            level: hit.fluid.level,
+            sky_light: light.sky(),
+            block_light: light.block(),
+            language,
+        };
+        let definitions_changed = content.fluids.is_changed() || state.language.is_changed();
+
+        if cached_fluid.as_ref() == Some(&snapshot)
+            && !definitions_changed
+            && *root_visibility == Visibility::Visible
+        {
+            return;
+        }
+        if *root_visibility != Visibility::Visible {
+            *root_visibility = Visibility::Visible;
+        }
+
+        let mut target_text = target_text.into_inner();
+        let next_text = target_fluid_hud_text(
+            &snapshot,
+            content.fluids.get(snapshot.fluid_id),
+            &state,
+        );
+        if target_text.0 != next_text {
+            target_text.0 = next_text;
+        }
+
+        let (mut model, _, mut block_visibility) = block_icon.into_inner();
+        model.set_block_id(None);
+        if *block_visibility != Visibility::Hidden {
+            *block_visibility = Visibility::Hidden;
+        }
+        let (mut image, mut object_visibility) = object_icon.into_inner();
+        image.image = Handle::default();
+        image.color = Color::WHITE;
+        if *object_visibility != Visibility::Hidden {
+            *object_visibility = Visibility::Hidden;
+        }
+
+        *cached = None;
+        *cached_icon = None;
+        *cached_object = None;
+        *cached_fluid = Some(snapshot);
         return;
     }
 
@@ -412,6 +480,7 @@ fn update_target_hud(
         *cached = None;
         *cached_icon = None;
         *cached_object = None;
+        *cached_fluid = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
@@ -434,6 +503,7 @@ fn update_target_hud(
         return;
     };
     *cached_object = None;
+    *cached_fluid = None;
 
     let language = state.language.get();
     let cell = state.world.cell_at(hit.voxel);
@@ -565,6 +635,31 @@ fn target_object_hud_text(
     );
 
     format!("{}\n{light_text}\n{coordinates}", object.name.text(language))
+}
+
+fn target_fluid_hud_text(
+    snapshot: &TargetFluidHudSnapshot,
+    fluid: Option<&FluidDefinition>,
+    state: &TargetHudState<'_>,
+) -> String {
+    let language = snapshot.language;
+    let fluid_name = fluid
+        .map(|definition| definition.name.text(language).to_owned())
+        .unwrap_or_else(|| format!("Fluid {}", snapshot.fluid_id));
+    let coordinates = state
+        .localization
+        .text(language, "hud.coordinates")
+        .replace("{x}", &snapshot.voxel.x.to_string())
+        .replace("{z}", &snapshot.voxel.z.to_string())
+        .replace("{y}", &snapshot.voxel.y.to_string());
+    let light_text = target_light_text(
+        &state.localization,
+        language,
+        snapshot.sky_light,
+        snapshot.block_light,
+    );
+
+    format!("{fluid_name}\n{light_text}\n{coordinates}")
 }
 
 fn target_hud_text(
