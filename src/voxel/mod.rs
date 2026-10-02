@@ -1,4 +1,5 @@
 pub(crate) mod block_face;
+pub(crate) mod block_gravity;
 // Block metadata/state plumbing is intentionally staged ahead of all runtime consumers.
 // Keep strict dead-code linting everywhere else while these modules are being wired in.
 #[allow(dead_code)]
