@@ -3,8 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use bevy::prelude::*;
 
 use super::{
-    SurfaceSelectionContext, authored_pair_conflicts, cell_hash, climate_weight,
-    distribution_strength, fitting, raw_surface_biome_index, region_claim_hash,
+    authored_pair_conflicts, cell_hash, climate_weight, fitting, region_claim_hash,
     surface_site_position, surface_sites_share_border,
 };
 use crate::world::biome_field::BiomeField;
@@ -53,7 +52,6 @@ impl SiteBounds {
     }
 }
 
-#[derive(Clone)]
 enum Violation {
     Pair { left: IVec2, right: IVec2 },
     Oversize { cells: Vec<IVec2> },
@@ -68,11 +66,10 @@ struct RecursiveSurfaceSolver<'a> {
 /// Resolves a canonical group of surface sites as one constraint problem.
 ///
 /// The old path selected each site independently and only attempted a bounded
-/// whole-component takeover after local fitting had already failed. That meant
-/// a valid solution could require changing A -> B -> C while the resolver gave
-/// up at A. This solver instead expands only when a constraint reaches an
-/// unresolved neighbor and recursively backtracks assignments until every
-/// reached min/max and authored-adjacency constraint is simultaneously valid.
+/// whole-component takeover after local fitting had already failed. A valid
+/// solution can instead require changing A -> B -> C. This solver expands when
+/// a constraint reaches an unresolved neighbor and recursively backtracks until
+/// every reached min/max and authored-adjacency constraint is valid together.
 /// There is deliberately no propagation-depth or component-size cutoff.
 pub(in crate::world::biome_field) fn resolve_surface_sites(
     field: &BiomeField,
@@ -106,9 +103,13 @@ impl RecursiveSurfaceSolver<'_> {
             return None;
         }
 
+        let oversize = match self.first_oversize_violation(&mut state) {
+            Ok(oversize) => oversize,
+            Err(_) => return None,
+        };
         let violation = if let Some((left, right)) = self.first_pair_violation(&state) {
             Some(Violation::Pair { left, right })
-        } else if let Ok(Some(cells)) = self.first_oversize_violation(&mut state) {
+        } else if let Some(cells) = oversize {
             Some(Violation::Oversize { cells })
         } else if let Some(cell) = self.first_require_near_violation(&state) {
             Some(Violation::RequireNear { cell })
@@ -143,7 +144,7 @@ impl RecursiveSurfaceSolver<'_> {
         let climate = self.field.climate.sample(site);
 
         // The authored ocean core remains authoritative. It is a macro mask,
-        // not a candidate that recursive fitting is allowed to erase.
+        // not a candidate recursive fitting is allowed to erase.
         if let Some(ocean_index) = self.field.ocean_surface_index
             && self.field.surface_biome_is_enabled(ocean_index)
         {
@@ -293,9 +294,9 @@ impl RecursiveSurfaceSolver<'_> {
     }
 
     /// Walks same-biome identity only until the authored maximum is proven to
-    /// be exceeded. Unlike the removed takeover flood-fill, a huge raw region
-    /// never has to be collected in full before the solver can start cutting
-    /// it: the first oversized prefix becomes a recursive repair problem.
+    /// be exceeded. A huge raw region never has to be collected in full before
+    /// the solver can begin cutting it: the first oversized prefix becomes a
+    /// recursive repair problem.
     fn first_oversize_violation(
         &self,
         state: &mut SolverState,
@@ -523,134 +524,4 @@ impl RecursiveSurfaceSolver<'_> {
         }
         branches
     }
-}
-
-/// Kept for the legacy single-site selector while callers migrate to the
-/// recursive group resolver. Conflict priority itself stays deterministic.
-pub(super) fn raw_conflict_left_wins(
-    left_cell: IVec2,
-    left_site: Vec2,
-    left_index: usize,
-    right_cell: IVec2,
-    right_site: Vec2,
-    right_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    fitting::raw_conflict_left_wins(
-        left_cell,
-        left_site,
-        left_index,
-        right_cell,
-        right_site,
-        right_index,
-        context,
-    )
-}
-
-/// Compatibility shim for the old selector. Surface sampling no longer relies
-/// on this bounded takeover path; it resolves the whole reached constraint
-/// graph through `resolve_surface_sites` before anything is cached.
-pub(super) fn component_takeover_candidate(
-    cell: IVec2,
-    site: Vec2,
-    raw_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> Option<usize> {
-    let climate = context.climate_field.sample(site);
-    let mut candidates = context
-        .biomes
-        .iter()
-        .enumerate()
-        .filter(|(candidate_index, biome)| {
-            *candidate_index != raw_index
-                && biome.weight > 0.0
-                && (context.spawn_oceans || Some(*candidate_index) != context.ocean_surface_index)
-        })
-        .filter(|(_, biome)| {
-            biome
-                .distributions
-                .iter()
-                .copied()
-                .map(|distribution| {
-                    distribution_strength(distribution, site, context.seed, biome.id.as_str())
-                })
-                .fold(0.0_f32, f32::max)
-                > 0.0
-                && climate_weight(climate, biome.climate) > 0.0
-        })
-        .map(|(candidate_index, _)| candidate_index)
-        .collect::<Vec<_>>();
-    candidates.sort_by_key(|candidate_index| {
-        region_claim_hash(cell, *candidate_index, context.seed)
-    });
-
-    candidates.into_iter().find(|candidate_index| {
-        let candidate = &context.biomes[*candidate_index];
-        let mut required_neighbor_found = candidate.require_near.is_empty();
-
-        for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-            for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-                let offset = IVec2::new(x, z);
-                if offset == IVec2::ZERO {
-                    continue;
-                }
-                let neighbor_cell = cell + offset;
-                let neighbor_site =
-                    surface_site_position(neighbor_cell, context.spacing, context.seed);
-                if !surface_sites_share_border(
-                    cell,
-                    site,
-                    neighbor_cell,
-                    neighbor_site,
-                    context.spacing,
-                    context.seed,
-                ) {
-                    continue;
-                }
-                let neighbor_index = raw_surface_biome_index(
-                    neighbor_cell,
-                    neighbor_site,
-                    context.climate_field.sample(neighbor_site),
-                    cell_hash(neighbor_cell, context.seed),
-                    context.biomes,
-                    context.seed,
-                    context.spawn_oceans,
-                );
-                let neighbor = &context.biomes[neighbor_index];
-                if neighbor_index != *candidate_index
-                    && (authored_pair_conflicts(candidate, neighbor)
-                        || fitting::boundary_fit_interval(
-                            candidate,
-                            neighbor,
-                            site,
-                            neighbor_site,
-                        )
-                        .is_none())
-                {
-                    return false;
-                }
-                if !required_neighbor_found
-                    && candidate.require_near.iter().any(|id| id == &neighbor.id)
-                {
-                    required_neighbor_found = true;
-                }
-            }
-        }
-
-        if !required_neighbor_found {
-            return false;
-        }
-
-        let fallback_context = SurfaceSelectionContext {
-            cell,
-            site,
-            spacing: context.spacing,
-            seed: context.seed,
-            biomes: context.biomes,
-            spawn_oceans: context.spawn_oceans,
-            ocean_surface_index: context.ocean_surface_index,
-            climate_field: context.climate_field,
-        };
-        fitting::surface_size_allows(*candidate_index, &fallback_context)
-    })
 }
