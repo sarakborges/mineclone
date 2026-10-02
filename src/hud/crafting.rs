@@ -230,12 +230,12 @@ fn spawn_crafting_root(
         .collect::<Vec<_>>();
     recipes.sort_by_key(|recipe| recipe.id.clone());
 
-    let selection_valid = session
+    let selection_invalid = session
         .selected_recipe
         .as_deref()
-        .is_some_and(|selected| recipes.iter().any(|recipe| recipe.id == selected));
-    if !selection_valid {
-        session.selected_recipe = recipes.first().map(|recipe| recipe.id.clone());
+        .is_some_and(|selected| !recipes.iter().any(|recipe| recipe.id == selected));
+    if selection_invalid {
+        session.selected_recipe = None;
     }
 
     let selected_recipe = session.selected_recipe.as_deref().and_then(|selected| {
@@ -255,9 +255,10 @@ fn spawn_crafting_root(
                 width: percent(100),
                 height: percent(100),
                 padding: UiRect::all(px(CRAFTING_SCREEN_PADDING)),
-                flex_direction: FlexDirection::Column,
+                flex_direction: FlexDirection::Row,
                 align_items: AlignItems::FlexStart,
                 justify_content: JustifyContent::Center,
+                column_gap: px(CRAFTING_SCREEN_PADDING),
                 ..default()
             },
             GlobalZIndex(100),
@@ -267,7 +268,7 @@ fn spawn_crafting_root(
         ))
         .with_children(|root| {
             spawn_crafting_panel(root, &recipes, selected_recipe, session, content, hotbar);
-            spawn_current_station_dock(root, content);
+            spawn_current_station_panel(root, content);
         });
 }
 
@@ -280,78 +281,52 @@ fn spawn_crafting_panel(
     hotbar: &PlayerHotbar,
 ) {
     root.spawn((
-        surface::hud_container(Node {
-            width: px(CRAFTING_PANEL_WIDTH),
-            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_PANEL_GAP),
-            ..default()
-        }),
-        Pickable::IGNORE,
-    ))
-    .with_children(|panel| {
-        panel
-            .spawn((
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ))
-            .with_children(|header| {
-                header.spawn((typography::hud_heading("Crafting"), Pickable::IGNORE));
-                header.spawn((
-                    typography::caption(format!("{} recipe(s)", recipes.len())),
-                    Pickable::IGNORE,
-                ));
-            });
-
-        panel.spawn((
-            typography::caption("AVAILABLE RECIPES"),
-            Pickable::IGNORE,
-        ));
-        spawn_recipe_list(panel, recipes, session, content);
-
-        panel.spawn((
-            Node {
-                width: percent(100),
-                height: px(CRAFTING_PANEL_BORDER),
-                margin: UiRect::vertical(px(2)),
-                ..default()
-            },
-            BackgroundColor(theme::BORDER),
-            Pickable::IGNORE,
-        ));
-
-        spawn_recipe_details(panel, selected_recipe, content, hotbar);
-    });
-}
-
-fn spawn_current_station_dock(
-    root: &mut ChildSpawnerCommands,
-    content: &CraftingContent<'_>,
-) {
-    root.spawn((
         Node {
-            position_type: PositionType::Absolute,
-            right: px(CRAFTING_SCREEN_PADDING),
-            top: px(0),
-            bottom: px(0),
-            width: px(CURRENT_STATION_PANEL_WIDTH),
-            flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Stretch,
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(CRAFTING_PANEL_GAP),
             ..default()
         },
         Pickable::IGNORE,
     ))
-    .with_children(|dock| {
-        spawn_current_station_panel(dock, content);
+    .with_children(|crafting| {
+        crafting
+            .spawn((
+                surface::hud_container(Node {
+                    width: px(CRAFTING_PANEL_WIDTH),
+                    padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+                    border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(CRAFTING_PANEL_GAP),
+                    ..default()
+                }),
+                Pickable::IGNORE,
+            ))
+            .with_children(|available| {
+                available.spawn((
+                    typography::caption("AVAILABLE RECIPES"),
+                    Pickable::IGNORE,
+                ));
+                spawn_recipe_list(available, recipes, session, content);
+            });
+
+        crafting
+            .spawn((
+                surface::hud_container(Node {
+                    width: px(CRAFTING_PANEL_WIDTH),
+                    padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+                    border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(CRAFTING_PANEL_GAP),
+                    ..default()
+                }),
+                Pickable::IGNORE,
+            ))
+            .with_children(|selected| {
+                spawn_recipe_details(selected, selected_recipe, content, hotbar);
+            });
     });
 }
 
@@ -361,116 +336,78 @@ fn spawn_current_station_panel(
 ) {
     parent
         .spawn((
-            surface::hud_container(Node {
-                width: percent(100),
-                padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+            Node {
+                width: px(CURRENT_STATION_PANEL_WIDTH),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
                 row_gap: px(CRAFTING_PANEL_GAP),
                 ..default()
-            }),
+            },
             Pickable::IGNORE,
         ))
-        .with_children(|panel| {
-            panel.spawn((typography::hud_heading("Current Station"), Pickable::IGNORE));
+        .with_children(|station| {
+            station.spawn((typography::hud_heading("Current Station"), Pickable::IGNORE));
 
-            panel
+            station
                 .spawn((
                     Node {
                         width: percent(100),
-                        padding: UiRect::all(px(14)),
-                        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-                        flex_direction: FlexDirection::Column,
-                        align_items: AlignItems::Center,
-                        row_gap: px(CRAFTING_INSET_GAP),
-                        ..default()
-                    },
-                    BackgroundColor(theme::SURFACE_INSET),
-                    BorderColor::all(theme::BORDER_STRONG),
-                    Pickable::IGNORE,
-                ))
-                .with_children(|card| {
-                    card.spawn((
-                        Node {
-                            width: px(CURRENT_STATION_ICON_FRAME_SIZE),
-                            height: px(CURRENT_STATION_ICON_FRAME_SIZE),
-                            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        BackgroundColor(theme::SURFACE_ELEVATED),
-                        BorderColor::all(theme::BORDER),
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|frame| {
-                        frame.spawn((
-                            ImageNode::new(content.asset_server.load(CURRENT_STATION_ICON)),
-                            Node {
-                                width: px(CURRENT_STATION_ICON_SIZE),
-                                height: px(CURRENT_STATION_ICON_SIZE),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ));
-                    });
-
-                    card.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
-                    card.spawn((
-                        typography::hud_subheading("Inventory"),
-                        TextLayout::justify(Justify::Center),
-                        Pickable::IGNORE,
-                    ));
-                    card.spawn((
-                        typography::muted("Personal crafting"),
-                        TextLayout::justify(Justify::Center),
-                        Pickable::IGNORE,
-                    ));
-                });
-
-            panel
-                .spawn((
-                    Node {
-                        width: percent(100),
-                        padding: UiRect::axes(px(10), px(8)),
-                        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
                         flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Center,
-                        justify_content: JustifyContent::SpaceBetween,
+                        column_gap: px(12),
                         ..default()
                     },
-                    BackgroundColor(theme::SURFACE_INSET),
-                    BorderColor::all(theme::BORDER),
                     Pickable::IGNORE,
                 ))
-                .with_children(|status| {
-                    status.spawn((typography::caption("STATUS"), Pickable::IGNORE));
-                    status
+                .with_children(|content_row| {
+                    content_row
                         .spawn((
                             Node {
-                                flex_direction: FlexDirection::Row,
+                                width: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                                height: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                                min_width: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                                min_height: px(CURRENT_STATION_ICON_FRAME_SIZE),
+                                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
                                 align_items: AlignItems::Center,
-                                column_gap: px(6),
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(theme::SURFACE_ELEVATED),
+                            BorderColor::all(theme::BORDER),
+                            Pickable::IGNORE,
+                        ))
+                        .with_children(|frame| {
+                            frame.spawn((
+                                ImageNode::new(content.asset_server.load(CURRENT_STATION_ICON)),
+                                Node {
+                                    width: px(CURRENT_STATION_ICON_SIZE),
+                                    height: px(CURRENT_STATION_ICON_SIZE),
+                                    ..default()
+                                },
+                                Pickable::IGNORE,
+                            ));
+                        });
+
+                    content_row
+                        .spawn((
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                align_items: AlignItems::FlexStart,
+                                row_gap: px(4),
                                 ..default()
                             },
                             Pickable::IGNORE,
                         ))
-                        .with_children(|ready| {
-                            ready.spawn((
-                                Node {
-                                    width: px(8),
-                                    height: px(8),
-                                    ..default()
-                                },
-                                BackgroundColor(CRAFTING_READY_COLOR),
+                        .with_children(|copy| {
+                            copy.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
+                            copy.spawn((
+                                typography::hud_subheading("Inventory"),
                                 Pickable::IGNORE,
                             ));
-                            let mut available = ready.spawn((
-                                typography::inventory_category("Available"),
+                            copy.spawn((
+                                typography::muted("Personal crafting"),
                                 Pickable::IGNORE,
                             ));
-                            available.insert(TextColor(CRAFTING_READY_COLOR));
                         });
                 });
         });
@@ -585,33 +522,22 @@ fn spawn_recipe_details(
     content: &CraftingContent<'_>,
     hotbar: &PlayerHotbar,
 ) {
+    parent.spawn((
+        typography::caption("SELECTED RECIPE"),
+        Pickable::IGNORE,
+    ));
+
     let Some(recipe) = recipe else {
-        parent.spawn((typography::hud_subheading("Recipe"), Pickable::IGNORE));
         parent.spawn((typography::muted("Select a recipe."), Pickable::IGNORE));
         return;
     };
 
-    parent.spawn((typography::caption("SELECTED RECIPE"), Pickable::IGNORE));
     spawn_result_card(parent, recipe, content);
 
-    parent
-        .spawn((
-            Node {
-                width: percent(100),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::SpaceBetween,
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_children(|header| {
-            header.spawn((typography::hud_subheading("Ingredients"), Pickable::IGNORE));
-            header.spawn((
-                typography::caption(format!("{} required", recipe.ingredients.len())),
-                Pickable::IGNORE,
-            ));
-        });
+    parent.spawn((
+        typography::hud_subheading("Ingredients"),
+        Pickable::IGNORE,
+    ));
 
     parent
         .spawn((
