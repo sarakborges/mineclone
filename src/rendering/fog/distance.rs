@@ -23,7 +23,6 @@ const MIN_FOG_END_CHUNKS: f32 = 1.0;
 #[derive(Default)]
 pub(super) struct FogDistanceState {
     missing_columns: Vec<IVec2>,
-    boundary_columns: Vec<IVec2>,
     frontier_center: Option<IVec2>,
     render_pool_revision: Option<u64>,
     render_distance_chunks: Option<i32>,
@@ -71,11 +70,6 @@ pub(super) fn update_fog_distance(
             |column| render_pool.contains_column(column),
             &mut state.missing_columns,
         );
-        collect_boundary_columns(
-            frontier_center,
-            render_distance_chunks,
-            &mut state.boundary_columns,
-        );
     }
 
     let frontier_inputs_changed = missing_columns_changed
@@ -92,21 +86,19 @@ pub(super) fn update_fog_distance(
     state.camera_entity = Some(camera_entity);
 
     let (_, target_end) = fog_distances(render_distance_chunks);
-    let boundary_end = nearest_column_distance(player_horizontal, &state.boundary_columns);
-    let guard_end = nearest_column_distance(player_horizontal, &state.missing_columns)
-        .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
+    let guard_end =
+        nearest_missing_column_distance(player_horizontal, &state.missing_columns)
+            .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = minimum_fog_end();
-    let end = target_end
-        .min(boundary_end.unwrap_or(target_end))
-        .min(guard_end.unwrap_or(target_end))
+    let end = guard_end
+        .map_or(target_end, |guard_end| guard_end.min(target_end))
         .max(minimum_end);
     let (start, end) = guarded_fog_distances(render_distance_chunks, end);
 
     for mut fog in &mut fogs {
-        // Linear fog reaches the fully opaque fog color at `end`. Clamp that
-        // point to the nearest render-boundary chunk so loaded edge geometry
-        // cannot remain visible behind fully opaque fog. Missing chunks can
-        // still pull the endpoint farther inward while streaming catches up.
+        // Linear fog reaches the fully opaque fog color at `end`. Allow the
+        // streaming guard to pull that point inward far enough to cover any
+        // not-yet-rendered chunk column instead of exposing the world void.
         fog.falloff = FogFalloff::Linear { start, end };
     }
 }
@@ -149,40 +141,11 @@ fn collect_missing_columns(
     }
 }
 
-fn collect_boundary_columns(
-    center: IVec2,
-    render_distance_chunks: i32,
-    boundary: &mut Vec<IVec2>,
-) {
-    boundary.clear();
-    let radius = render_distance_chunks.max(1);
-    let radius_squared = radius * radius;
-    let cardinal_neighbors = [
-        IVec2::new(1, 0),
-        IVec2::new(-1, 0),
-        IVec2::new(0, 1),
-        IVec2::new(0, -1),
-    ];
-
-    for z in -radius..=radius {
-        for x in -radius..=radius {
-            let offset = IVec2::new(x, z);
-            if offset.length_squared() > radius_squared {
-                continue;
-            }
-
-            let touches_outside = cardinal_neighbors
-                .iter()
-                .any(|neighbor| (offset + *neighbor).length_squared() > radius_squared);
-            if touches_outside {
-                boundary.push(center + offset);
-            }
-        }
-    }
-}
-
-fn nearest_column_distance(player: Vec2, columns: &[IVec2]) -> Option<f32> {
-    columns
+fn nearest_missing_column_distance(
+    player: Vec2,
+    missing_columns: &[IVec2],
+) -> Option<f32> {
+    missing_columns
         .iter()
         .copied()
         .map(|column| horizontal_distance_to_chunk(player, column))
@@ -228,32 +191,6 @@ mod tests {
     }
 
     #[test]
-    fn render_boundary_can_pull_full_opacity_before_loaded_edge_chunks() {
-        let render_distance_chunks = 10;
-        let player = Vec2::new(15.5, 15.5);
-        let mut boundary = Vec::new();
-        collect_boundary_columns(
-            IVec2::ZERO,
-            render_distance_chunks,
-            &mut boundary,
-        );
-
-        let boundary_end = nearest_column_distance(player, &boundary)
-            .expect("render disk must have boundary columns");
-        let (_, target_end) = fog_distances(render_distance_chunks);
-        let (_, end) = guarded_fog_distances(
-            render_distance_chunks,
-            boundary_end.min(target_end),
-        );
-
-        assert!(boundary_end < target_end);
-        assert!((end - boundary_end).abs() < 0.001);
-        assert!(boundary.iter().all(|column| {
-            horizontal_distance_to_chunk(player, *column) + 0.001 >= end
-        }));
-    }
-
-    #[test]
     fn complete_render_columns_do_not_limit_fog() {
         let radius = 4;
         let columns = filled_columns(radius);
@@ -267,7 +204,7 @@ mod tests {
         );
 
         assert_eq!(
-            nearest_column_distance(Vec2::new(8.0, 8.0), &missing),
+            nearest_missing_column_distance(Vec2::new(8.0, 8.0), &missing),
             None,
         );
     }
@@ -285,7 +222,7 @@ mod tests {
             |column| columns.contains(&column),
             &mut missing,
         );
-        let distance = nearest_column_distance(
+        let distance = nearest_missing_column_distance(
             Vec2::new(8.0, 8.0),
             &missing,
         )
