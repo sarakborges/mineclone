@@ -1,0 +1,10 @@
+{
+  "id": "asteria:tenebra_essence",
+  "name": {
+    "english": "Tenebra Essence",
+    "portuguese_brazil": "Essência Tenebra",
+    "spanish": "Esencia Tenebra"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/tenebra_essence.png"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "asteria:lumen_essence",
+  "name": {
+    "english": "Lumen Essence",
+    "portuguese_brazil": "Essência Lumen",
+    "spanish": "Esencia Lumen"
+  },
+  "category": "crafting_materials",
+  "icon": "textures/items/lumen_essence.png"
+}
