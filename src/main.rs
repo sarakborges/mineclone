@@ -55,7 +55,7 @@ use hud::HudPlugin;
 use localization::LocalizationPlugin;
 use rendering::RenderingPlugin;
 use screens::ScreensPlugin;
-use targeting::block::BlockTargetingPlugin;
+use targeting::{biome_tint::BiomeTintInteractionPlugin, block::BlockTargetingPlugin};
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
@@ -128,6 +128,7 @@ fn run_game() {
             WorldObjectsPlugin,
             WorldItemsPlugin,
             BlockTargetingPlugin,
+            BiomeTintInteractionPlugin,
             ToolsPlugin,
             HudPlugin,
         ))

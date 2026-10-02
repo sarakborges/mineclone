@@ -1,3 +1,4 @@
+pub(crate) mod biome_tint;
 pub(crate) mod block;
 mod highlight;
 mod interaction;
