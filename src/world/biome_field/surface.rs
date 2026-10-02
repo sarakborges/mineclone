@@ -39,6 +39,31 @@ impl BiomeField {
             };
         }
 
+        // Inside the authored forced-spawn core the forced biome owns 100% of
+        // the surface sample. Resolving the underlying 5x5 fitted map here is
+        // both semantically irrelevant and extremely expensive during the
+        // synchronous new-world spawn/bootstrap probes.
+        if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position)
+            && forced_weight >= 1.0 - f32::EPSILON
+        {
+            let biome = &self.surface_biomes[forced_index];
+            let terrain_strength = self.forced_surface_terrain_strength(forced_index, position);
+            let mut influences = ArrayVec::new();
+            influences.push(BiomeInfluence {
+                id: biome.id.as_str(),
+                weight: 1.0,
+                surface_index: forced_index,
+                terrain_strength,
+            });
+            return BiomeFieldSample {
+                primary_id: biome.id.as_str(),
+                primary_surface_index: forced_index,
+                surface_margin_index: None,
+                identity_surface_index: forced_index,
+                influences,
+            };
+        }
+
         let warped = warp_surface_position(position, self.seed);
         let center = IVec2::new(
             (warped.x / self.surface_site_spacing.x).round() as i32,

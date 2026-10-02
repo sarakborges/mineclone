@@ -9,6 +9,7 @@ use super::{
 use crate::world::biome_field::BiomeField;
 
 const FIT_EPSILON: f32 = 0.001;
+type SolverSignature = Vec<(i32, i32, Vec<usize>)>;
 
 #[derive(Clone)]
 struct CellState {
@@ -25,6 +26,18 @@ impl CellState {
 #[derive(Clone, Default)]
 struct SolverState {
     cells: HashMap<IVec2, CellState>,
+}
+
+impl SolverState {
+    fn signature(&self) -> SolverSignature {
+        let mut cells = self
+            .cells
+            .iter()
+            .map(|(cell, state)| (cell.x, cell.y, state.domain.clone()))
+            .collect::<Vec<_>>();
+        cells.sort_by_key(|(x, y, _)| (*y, *x));
+        cells
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -65,11 +78,10 @@ struct RecursiveSurfaceSolver<'a> {
 
 /// Resolves a group of surface sites as one recursive constraint problem.
 ///
-/// Propagation is deliberately unbounded in depth, but each individual probe is
-/// lazy: as soon as an adjacency or max-size violation is proven, the solver
-/// repairs/backtracks that violation before expanding farther. This preserves
-/// recursive A -> B -> C fitting without eagerly flood-filling an arbitrarily
-/// large raw component during world creation.
+/// Propagation remains unbounded in depth, but each step is pruned before
+/// branching. Pairwise arc consistency removes candidates that have no support
+/// in neighboring domains, and failed domain states are memoized so recursive
+/// fitting never explores the same dead branch twice.
 pub(in crate::world::biome_field) fn resolve_surface_sites(
     field: &BiomeField,
     requested_cells: &[IVec2],
@@ -80,7 +92,8 @@ pub(in crate::world::biome_field) fn resolve_surface_sites(
         solver.ensure_cell(&mut state, cell)?;
     }
 
-    let solved = solver.solve(state).ok_or_else(|| {
+    let mut failed_states = HashSet::<SolverSignature>::new();
+    let solved = solver.solve(state, &mut failed_states).ok_or_else(|| {
         let first = requested_cells.first().copied().unwrap_or(IVec2::ZERO);
         format!(
             "surface biome constraints have no globally consistent assignment near site {first:?}"
@@ -97,14 +110,32 @@ pub(in crate::world::biome_field) fn resolve_surface_sites(
 }
 
 impl RecursiveSurfaceSolver<'_> {
-    fn solve(&self, mut state: SolverState) -> Option<SolverState> {
+    fn solve(
+        &self,
+        mut state: SolverState,
+        failed_states: &mut HashSet<SolverSignature>,
+    ) -> Option<SolverState> {
+        if !self.propagate_pair_domains(&mut state) {
+            return None;
+        }
         if self.expand_first_pair_conflict(&mut state).is_err() {
+            return None;
+        }
+        if !self.propagate_pair_domains(&mut state) {
+            return None;
+        }
+
+        let signature = state.signature();
+        if failed_states.contains(&signature) {
             return None;
         }
 
         let oversize = match self.first_oversize_violation(&mut state) {
             Ok(oversize) => oversize,
-            Err(_) => return None,
+            Err(_) => {
+                failed_states.insert(signature);
+                return None;
+            }
         };
         let violation = if let Some((left, right)) = self.first_pair_violation(&state) {
             Some(Violation::Pair { left, right })
@@ -122,10 +153,11 @@ impl RecursiveSurfaceSolver<'_> {
         };
 
         for branch in self.repair_branches(&state, violation) {
-            if let Some(solved) = self.solve(branch) {
+            if let Some(solved) = self.solve(branch, failed_states) {
                 return Some(solved);
             }
         }
+        failed_states.insert(signature);
         None
     }
 
@@ -142,8 +174,6 @@ impl RecursiveSurfaceSolver<'_> {
     fn candidate_order(&self, cell: IVec2, site: Vec2) -> Result<Vec<usize>, String> {
         let climate = self.field.climate.sample(site);
 
-        // The authored ocean core remains authoritative. It is a macro mask,
-        // not a candidate recursive fitting is allowed to erase.
         if let Some(ocean_index) = self.field.ocean_surface_index
             && self.field.surface_biome_is_enabled(ocean_index)
         {
@@ -176,8 +206,7 @@ impl RecursiveSurfaceSolver<'_> {
     }
 
     fn raw_identity(&self, cell: IVec2, site: Vec2) -> Result<usize, String> {
-        self.candidate_order(cell, site)
-            .map(|domain| domain[0])
+        self.candidate_order(cell, site).map(|domain| domain[0])
     }
 
     fn identity_at(&self, state: &SolverState, cell: IVec2, site: Vec2) -> Result<usize, String> {
@@ -234,11 +263,87 @@ impl RecursiveSurfaceSolver<'_> {
             && fitting::boundary_fit_interval(left, right, left_site, right_site).is_some()
     }
 
-    /// Pull exactly one conflicting raw neighbor into the recursive problem.
-    /// The previous implementation expanded every reachable conflict before it
-    /// attempted a repair, which turned a recursive chain into an eager flood
-    /// fill. One-step expansion lets `solve` repair immediately, then recurse if
-    /// that repair exposes the next conflict.
+    fn propagate_pair_domains(&self, state: &mut SolverState) -> bool {
+        loop {
+            let mut changed = false;
+            let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+            cells.sort_by_key(|cell| (cell.y, cell.x));
+
+            for cell in cells {
+                let Some(left) = state.cells.get(&cell) else {
+                    continue;
+                };
+                let left_site = left.site;
+                for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
+                    if (neighbor_cell.y, neighbor_cell.x) <= (cell.y, cell.x) {
+                        continue;
+                    }
+                    let Some(right) = state.cells.get(&neighbor_cell) else {
+                        continue;
+                    };
+
+                    let left_domain = state.cells[&cell].domain.clone();
+                    let right_domain = right.domain.clone();
+                    let filtered_left = left_domain
+                        .iter()
+                        .copied()
+                        .filter(|left_index| {
+                            right_domain.iter().copied().any(|right_index| {
+                                self.pair_allows(
+                                    *left_index,
+                                    left_site,
+                                    right_index,
+                                    neighbor_site,
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    if filtered_left.is_empty() {
+                        return false;
+                    }
+                    let filtered_right = right_domain
+                        .iter()
+                        .copied()
+                        .filter(|right_index| {
+                            filtered_left.iter().copied().any(|left_index| {
+                                self.pair_allows(
+                                    left_index,
+                                    left_site,
+                                    *right_index,
+                                    neighbor_site,
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    if filtered_right.is_empty() {
+                        return false;
+                    }
+
+                    if filtered_left != left_domain {
+                        state
+                            .cells
+                            .get_mut(&cell)
+                            .expect("solver cell must exist")
+                            .domain = filtered_left;
+                        changed = true;
+                    }
+                    if filtered_right != right_domain {
+                        state
+                            .cells
+                            .get_mut(&neighbor_cell)
+                            .expect("solver neighbor must exist")
+                            .domain = filtered_right;
+                        changed = true;
+                    }
+                }
+            }
+
+            if !changed {
+                return true;
+            }
+        }
+    }
+
     fn expand_first_pair_conflict(&self, state: &mut SolverState) -> Result<(), String> {
         let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
         cells.sort_by_key(|cell| (cell.y, cell.x));
@@ -290,12 +395,6 @@ impl RecursiveSurfaceSolver<'_> {
         None
     }
 
-    /// Walk a same-biome component only until its authored max is already
-    /// mathematically impossible. At that instant the visited cells are a
-    /// sufficient violation witness, so collecting the remainder of a huge raw
-    /// region cannot change the fact that a cut is required. The recursive
-    /// repair may then expose another oversized continuation and propagate as
-    /// far as needed, without any arbitrary traversal-depth cutoff.
     fn first_oversize_violation(
         &self,
         state: &mut SolverState,
@@ -402,18 +501,17 @@ impl RecursiveSurfaceSolver<'_> {
             })
             .collect::<Vec<_>>();
 
-        if fitting::fit_surface_site_weights(
+        let Err(failure) = fitting::fit_surface_site_weights_detailed(
             &sampled,
             &self.field.surface_biomes,
             self.field.surface_site_spacing,
             self.field.seed,
-        )
-        .is_ok()
-        {
+        ) else {
             return None;
-        }
+        };
 
-        let mut repairable = cells
+        let mut repairable = failure
+            .cells
             .into_iter()
             .filter(|cell| {
                 state
@@ -422,6 +520,8 @@ impl RecursiveSurfaceSolver<'_> {
                     .is_some_and(|current| current.domain.len() > 1)
             })
             .collect::<Vec<_>>();
+        repairable.sort_unstable_by_key(|cell| (cell.y, cell.x));
+        repairable.dedup();
         repairable.sort_by_key(|cell| {
             (
                 std::cmp::Reverse(region_claim_hash(
@@ -433,7 +533,11 @@ impl RecursiveSurfaceSolver<'_> {
                 cell.x,
             )
         });
-        (!repairable.is_empty()).then_some(repairable)
+
+        // An empty witness is still a real violation: every cell participating
+        // in the failed boundary graph is already fixed, so this branch must
+        // backtrack instead of silently accepting an invalid map.
+        Some(repairable)
     }
 
     fn repair_branches(&self, state: &SolverState, violation: Violation) -> Vec<SolverState> {

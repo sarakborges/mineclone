@@ -11,6 +11,12 @@ pub(super) struct BoundaryFitInterval {
     pub(super) max_from_left: f32,
 }
 
+#[derive(Debug)]
+pub(super) struct SurfaceFitError {
+    pub(super) message: String,
+    pub(super) cells: Vec<IVec2>,
+}
+
 pub(super) fn boundary_fit_interval(
     left: &BiomeFieldEntry,
     right: &BiomeFieldEntry,
@@ -52,15 +58,26 @@ fn directional_radius(radius_x: f32, radius_z: f32, direction: Vec2) -> f32 {
     1.0 / ((direction.x / radius_x).powi(2) + (direction.y / radius_z).powi(2)).sqrt()
 }
 
-/// Fits a weighted Voronoi (power diagram) to every different-biome border.
-/// The constraints are exact difference constraints; convergence is derived
-/// from the graph size rather than an arbitrary fitting-pass limit.
 pub(in crate::world::biome_field) fn fit_surface_site_weights(
     sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
     biomes: &[BiomeFieldEntry],
     spacing: Vec2,
     seed: u64,
 ) -> Result<Vec<f32>, String> {
+    fit_surface_site_weights_detailed(sampled_sites, biomes, spacing, seed)
+        .map_err(|failure| failure.message)
+}
+
+/// Fits a weighted Voronoi (power diagram) and preserves the cells involved in
+/// a failed constraint. The recursive identity solver uses that witness to
+/// branch only where the boundary graph actually failed instead of exploring
+/// every site in the sampled window.
+pub(super) fn fit_surface_site_weights_detailed(
+    sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
+    biomes: &[BiomeFieldEntry],
+    spacing: Vec2,
+    seed: u64,
+) -> Result<Vec<f32>, SurfaceFitError> {
     let mut constraints = Vec::<(usize, usize, f32)>::new();
 
     for left_index in 0..sampled_sites.len() {
@@ -91,10 +108,13 @@ pub(in crate::world::biome_field) fn fit_surface_site_weights(
                 left_site,
                 right_site,
             ) else {
-                return Err(format!(
-                    "{} at {left_cell:?} and {} at {right_cell:?} have no boundary position compatible with both authored min/max ranges",
-                    biomes[left_biome].id, biomes[right_biome].id,
-                ));
+                return Err(SurfaceFitError {
+                    message: format!(
+                        "{} at {left_cell:?} and {} at {right_cell:?} have no boundary position compatible with both authored min/max ranges",
+                        biomes[left_biome].id, biomes[right_biome].id,
+                    ),
+                    cells: vec![left_cell, right_cell],
+                });
             };
 
             let distance = left_site.distance(right_site);
@@ -104,9 +124,7 @@ pub(in crate::world::biome_field) fn fit_surface_site_weights(
             let max_difference =
                 2.0 * distance * interval.max_from_left - distance_squared;
 
-            // w_left - w_right <= max_difference
             constraints.push((right_index, left_index, max_difference));
-            // w_right - w_left <= -min_difference
             constraints.push((left_index, right_index, -min_difference));
         }
     }
@@ -118,11 +136,14 @@ pub(in crate::world::biome_field) fn fit_surface_site_weights(
 
     for pass in 0..sampled_sites.len() {
         let mut changed = false;
+        let mut changed_indices = Vec::new();
         for &(from, to, maximum_delta) in &constraints {
             let maximum = weights[from] + maximum_delta;
             if weights[to] > maximum + FIT_EPSILON {
                 weights[to] = maximum;
                 changed = true;
+                changed_indices.push(from);
+                changed_indices.push(to);
             }
         }
 
@@ -135,7 +156,16 @@ pub(in crate::world::biome_field) fn fit_surface_site_weights(
         }
 
         if pass + 1 == sampled_sites.len() {
-            return Err("surface boundary fitting constraints contain a negative cycle".to_owned());
+            changed_indices.sort_unstable();
+            changed_indices.dedup();
+            let cells = changed_indices
+                .into_iter()
+                .map(|index| sampled_sites[index].0)
+                .collect::<Vec<_>>();
+            return Err(SurfaceFitError {
+                message: "surface boundary fitting constraints contain a negative cycle".to_owned(),
+                cells,
+            });
         }
     }
 
