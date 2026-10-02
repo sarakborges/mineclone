@@ -17,16 +17,23 @@ pub(crate) struct WorldInteractionState<'w> {
 }
 
 impl WorldInteractionState<'_> {
-    pub(crate) fn available(&self) -> bool {
+    fn movement_available(&self) -> bool {
         *self.game.get() == GameState::Gameplay
             && *self.pause.get() == PauseState::Running
             && *self.settings.get() == SettingsState::Closed
-            && *self.modal.get() == GameplayModalState::Closed
             && !self.chat.is_open()
             && !self.storage_consumed.is_consumed()
+    }
+
+    pub(crate) fn available(&self) -> bool {
+        self.movement_available() && *self.modal.get() == GameplayModalState::Closed
     }
 }
 
 pub(crate) fn world_interaction_available(state: WorldInteractionState) -> bool {
     state.available()
+}
+
+pub(crate) fn player_movement_available(state: WorldInteractionState) -> bool {
+    state.movement_available()
 }
