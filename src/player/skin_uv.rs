@@ -13,6 +13,28 @@ const OUTER_LAYER_DEPTH_PIXELS: f32 = 0.25;
 #[derive(Component)]
 struct PlayerSkinOuterLayer;
 
+type PlayerSkinBaseMeshQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Name,
+        &'static Mesh3d,
+        &'static MeshMaterial3d<StandardMaterial>,
+        &'static RenderLayers,
+    ),
+    Added<RenderLayers>,
+>;
+
+type PlayerSkinParentLayersQuery<'w, 's> =
+    Query<'w, 's, &'static RenderLayers, Without<PlayerSkinOuterLayer>>;
+type PlayerSkinOuterLayerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static ChildOf, &'static mut RenderLayers),
+    With<PlayerSkinOuterLayer>,
+>;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct OuterLayerSpec {
     name: &'static str,
@@ -78,16 +100,7 @@ impl Plugin for PlayerSkinUvPlugin {
 fn spawn_player_skin_outer_layers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    base_meshes: Query<
-        (
-            Entity,
-            &Name,
-            &Mesh3d,
-            &MeshMaterial3d<StandardMaterial>,
-            &RenderLayers,
-        ),
-        Added<RenderLayers>,
-    >,
+    base_meshes: PlayerSkinBaseMeshQuery,
 ) {
     for (entity, name, mesh_handle, material_handle, render_layers) in &base_meshes {
         let Some(spec) = OuterLayerSpec::for_base_mesh(name.as_str()) else {
@@ -127,8 +140,8 @@ fn spawn_player_skin_outer_layers(
 }
 
 fn sync_outer_layer_render_layers(
-    parent_layers: Query<&RenderLayers, Without<PlayerSkinOuterLayer>>,
-    mut outer_layers: Query<(&ChildOf, &mut RenderLayers), With<PlayerSkinOuterLayer>>,
+    parent_layers: PlayerSkinParentLayersQuery,
+    mut outer_layers: PlayerSkinOuterLayerQuery,
 ) {
     for (parent, mut render_layers) in &mut outer_layers {
         let Ok(expected) = parent_layers.get(parent.parent()) else {
