@@ -95,9 +95,11 @@ pub(super) fn rasterize_fluid_pass(
                     authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
                 {
                     (Some(authored), false)
-                } else if let Some(level) =
-                    sea_surface.and_then(|surface| fluid_level_for_surface(surface, world_y))
-                {
+                } else if let Some(level) = sea_fluid_level_for_column(
+                    sea_surface,
+                    column.surface_height,
+                    world_y,
+                ) {
                     (Some(FluidCell::source(sea_fluid_id, level)), true)
                 } else {
                     (None, false)
@@ -298,6 +300,18 @@ fn volcano_spill_channel(
     fractal_noise_2d(horizontal * scale, seed, 3).abs() <= width
 }
 
+fn sea_fluid_level_for_column(
+    sea_surface: Option<f32>,
+    terrain_surface_height: i32,
+    world_y: i32,
+) -> Option<u8> {
+    if world_y < terrain_surface_height {
+        return None;
+    }
+
+    sea_surface.and_then(|surface| fluid_level_for_surface(surface, world_y))
+}
+
 fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
     let coverage = water_level - world_y as f32;
     if coverage <= 0.0 {
@@ -318,5 +332,15 @@ mod tests {
         assert_eq!(fluid_level_for_surface(10.75, 10), Some(6));
         assert_eq!(fluid_level_for_surface(10.0, 9), Some(MAX_FLUID_LEVEL));
         assert_eq!(fluid_level_for_surface(10.0, 10), None);
+    }
+
+    #[test]
+    fn sea_fluid_stops_at_terrain_surface_instead_of_filling_caves() {
+        assert_eq!(sea_fluid_level_for_column(Some(64.0), 48, 47), None);
+        assert_eq!(
+            sea_fluid_level_for_column(Some(64.0), 48, 48),
+            Some(MAX_FLUID_LEVEL)
+        );
+        assert_eq!(sea_fluid_level_for_column(Some(64.0), 48, 64), None);
     }
 }
