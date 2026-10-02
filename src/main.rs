@@ -58,6 +58,7 @@ use screens::ScreensPlugin;
 use targeting::{biome_tint::BiomeTintInteractionPlugin, block::BlockTargetingPlugin};
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
+use voxel::block_gravity::BlockGravityPlugin;
 use world::WorldPlugin;
 use world_items::WorldItemsPlugin;
 use world_objects::WorldObjectsPlugin;
@@ -129,6 +130,7 @@ fn run_game() {
             RenderingPlugin,
             WorldObjectsPlugin,
             WorldItemsPlugin,
+            BlockGravityPlugin,
             BlockTargetingPlugin,
             ToolsPlugin,
             HudPlugin,
