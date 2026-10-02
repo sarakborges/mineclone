@@ -1,0 +1,38 @@
+{
+  "id": "asteria:river_channel",
+  "name": {
+    "english": "River Channel",
+    "portuguese_brazil": "Canal de Rio",
+    "spanish": "Canal de Río"
+  },
+  "locatable": false,
+  "rotation": true,
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "preserve",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 2,
+    "y": 0,
+    "z": 2
+  },
+  "clearAbove": 2,
+  "palette": {
+    "W": {
+      "fluid": "asteria:water"
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        "..W..",
+        ".WWW.",
+        "WWWWW",
+        ".WWW.",
+        "..W.."
+      ]
+    }
+  ]
+}

@@ -3,22 +3,26 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::{
+    content::structure::StructureDefinition,
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
-    world::deterministic::{hash_signed, hash_unit, mix_hash_u64},
+    world::{
+        deterministic::{hash_signed, hash_unit, mix_hash_u64},
+        new_world::WorldGenerationMode,
+    },
 };
 
 use super::{ChunkGenerationContext, generation_surface_height};
 
+const RIVER_CHANNEL_STRUCTURE: &str = "asteria:river_channel";
+const RIVER_LAKE_STRUCTURE: &str = "asteria:river_lake";
 const RIVER_BASIN_CHANCE: f32 = 0.24;
-const RIVER_RADIUS: i32 = 2;
-const LAKE_RADIUS: i32 = 9;
 const RIVER_MEANDER_FRACTION: f32 = 0.18;
-const SITE_QUERY_MARGIN: i32 = 2;
 const RIVER_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
 const EDGE_HASH_SALT: u64 = 0xbb67_ae85_84ca_a73b;
+const STAMP_HASH_SALT: u64 = 0x3c6e_f372_fe94_f82b;
 
 #[derive(Clone, Copy, Debug)]
 struct DrainageSite {
@@ -41,15 +45,28 @@ impl DrainageSink {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum RiverStampKind {
+    Channel,
+    Lake,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct RiverStamp {
+    kind: RiverStampKind,
+    center: IVec2,
+    origin_y: i32,
+}
+
 pub(super) fn rasterize_river_network(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
 ) {
-    let Some(ocean_biome) = context.dimension.ocean_biome.as_deref() else {
+    if context.world_generation.mode() != WorldGenerationMode::Normal {
         return;
-    };
-    let Some(water_id) = context.fluids.id_of(&context.dimension.sea_fluid) else {
+    }
+    let Some(ocean_biome) = context.dimension.ocean_biome.as_deref() else {
         return;
     };
 
@@ -58,21 +75,30 @@ pub(super) fn rasterize_river_network(
         return;
     }
 
+    let channel_extent = structure_reference_horizontal_extent(context, RIVER_CHANNEL_STRUCTURE);
+    let lake_extent = structure_reference_horizontal_extent(context, RIVER_LAKE_STRUCTURE);
+    let maximum_piece_extent = channel_extent.max(lake_extent) as f32;
+    let maximum_adjacent_edge = spacing.length();
+    let minimum_site_spacing = spacing.x.min(spacing.y);
+    let site_query_margin = 1
+        + ((maximum_piece_extent + maximum_adjacent_edge * RIVER_MEANDER_FRACTION)
+            / minimum_site_spacing)
+            .ceil() as i32;
+
     let chunk_min = chunk_origin.xz();
     let chunk_max = chunk_min + IVec2::splat(CHUNK_SIZE as i32 - 1);
     let minimum_cell = IVec2::new(
-        (chunk_min.x as f32 / spacing.x).floor() as i32 - SITE_QUERY_MARGIN,
-        (chunk_min.y as f32 / spacing.y).floor() as i32 - SITE_QUERY_MARGIN,
+        (chunk_min.x as f32 / spacing.x).floor() as i32 - site_query_margin,
+        (chunk_min.y as f32 / spacing.y).floor() as i32 - site_query_margin,
     );
     let maximum_cell = IVec2::new(
-        (chunk_max.x as f32 / spacing.x).ceil() as i32 + SITE_QUERY_MARGIN,
-        (chunk_max.y as f32 / spacing.y).ceil() as i32 + SITE_QUERY_MARGIN,
+        (chunk_max.x as f32 / spacing.x).ceil() as i32 + site_query_margin,
+        (chunk_max.y as f32 / spacing.y).ceil() as i32 + site_query_margin,
     );
 
     let mut site_cache = HashMap::<IVec2, DrainageSite>::new();
     let mut sink_cache = HashMap::<IVec2, DrainageSink>::new();
-    let mut water_positions = HashSet::<IVec3>::new();
-    let mut clear_positions = HashSet::<IVec3>::new();
+    let mut stamps = HashSet::<RiverStamp>::new();
 
     for cell_z in minimum_cell.y..=maximum_cell.y {
         for cell_x in minimum_cell.x..=maximum_cell.x {
@@ -96,59 +122,95 @@ pub(super) fn rasterize_river_network(
             match downstream_site(cell, ocean_biome, context, &mut site_cache) {
                 Some(next_cell) => {
                     let next = drainage_site(next_cell, ocean_biome, context, &mut site_cache);
-                    rasterize_edge_points(
+                    collect_edge_stamps(
                         cell,
                         site.position,
                         next.position,
                         ocean_biome,
                         chunk_min,
                         chunk_max,
+                        channel_extent,
                         context,
-                        &mut water_positions,
-                        &mut clear_positions,
+                        &mut stamps,
                     );
                 }
                 None if sink == DrainageSink::Lake(cell) => {
-                    rasterize_lake_points(
+                    let origin_y = generation_surface_height(site.position, context) - 1;
+                    if centered_piece_may_intersect_chunk(
                         site.position,
+                        lake_extent,
                         chunk_min,
                         chunk_max,
-                        context,
-                        &mut water_positions,
-                        &mut clear_positions,
-                    );
+                    ) {
+                        stamps.insert(RiverStamp {
+                            kind: RiverStampKind::Lake,
+                            center: site.position,
+                            origin_y,
+                        });
+                    }
                 }
                 None => {}
             }
         }
     }
 
-    if water_positions.is_empty() && clear_positions.is_empty() {
-        return;
-    }
-
-    chunk.edit_structure_content(|chunk| {
-        for position in clear_positions {
-            let local = position - chunk_origin;
-            if voxel_is_inside_chunk(local) {
-                chunk.clear_block(local.x as usize, local.y as usize, local.z as usize);
-                chunk.clear_fluid(local.x as usize, local.y as usize, local.z as usize);
-            }
-        }
-        let source = FluidCell::source(water_id, MAX_FLUID_LEVEL);
-        for position in water_positions {
-            let local = position - chunk_origin;
-            if voxel_is_inside_chunk(local) {
-                chunk.clear_block(local.x as usize, local.y as usize, local.z as usize);
-                chunk.set_fluid(
-                    local.x as usize,
-                    local.y as usize,
-                    local.z as usize,
-                    source,
-                );
-            }
-        }
+    let mut stamps = stamps.into_iter().collect::<Vec<_>>();
+    stamps.sort_unstable_by_key(|stamp| {
+        (
+            match stamp.kind {
+                RiverStampKind::Channel => 0_u8,
+                RiverStampKind::Lake => 1_u8,
+            },
+            stamp.center.y,
+            stamp.center.x,
+            stamp.origin_y,
+        )
     });
+
+    for stamp in stamps {
+        let reference = match stamp.kind {
+            RiverStampKind::Channel => RIVER_CHANNEL_STRUCTURE,
+            RiverStampKind::Lake => RIVER_LAKE_STRUCTURE,
+        };
+        let hash = cell_hash(context.biome_field.seed(), stamp.center, STAMP_HASH_SALT);
+        let structure = context
+            .structures
+            .select_for_reference(reference, hash)
+            .unwrap_or_else(|| panic!("river network references missing structure: {reference}"));
+        let rotation = structure.rotation_for_hash(hash.rotate_left(23));
+        stamp_authored_river_piece(
+            chunk,
+            chunk_origin,
+            context,
+            structure,
+            rotation,
+            IVec3::new(stamp.center.x, stamp.origin_y, stamp.center.y),
+        );
+    }
+}
+
+fn structure_reference_horizontal_extent(
+    context: &ChunkGenerationContext<'_>,
+    reference: &str,
+) -> i32 {
+    context
+        .structures
+        .reference_members(reference)
+        .unwrap_or_else(|| panic!("river network references missing structure: {reference}"))
+        .into_iter()
+        .flat_map(|structure| {
+            structure.supported_rotations().iter().map(move |&rotation| {
+                let (minimum, maximum) = structure.horizontal_bounds_for_rotation(rotation);
+                minimum
+                    .x
+                    .unsigned_abs()
+                    .max(minimum.y.unsigned_abs())
+                    .max(maximum.x.unsigned_abs())
+                    .max(maximum.y.unsigned_abs()) as i32
+            })
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 fn drainage_site(
@@ -264,16 +326,16 @@ fn river_basin_is_active(seed: u64, sink: DrainageSink) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rasterize_edge_points(
+fn collect_edge_stamps(
     cell: IVec2,
     start: IVec2,
     end: IVec2,
     ocean_biome: &str,
     chunk_min: IVec2,
     chunk_max: IVec2,
+    channel_extent: i32,
     context: &ChunkGenerationContext<'_>,
-    water: &mut HashSet<IVec3>,
-    clear: &mut HashSet<IVec3>,
+    stamps: &mut HashSet<RiverStamp>,
 ) {
     let hash = cell_hash(context.biome_field.seed(), cell, EDGE_HASH_SALT);
     let start_vec = start.as_vec2();
@@ -288,8 +350,8 @@ fn rasterize_edge_points(
     let control = (start_vec + end_vec) * 0.5
         + perpendicular * distance * RIVER_MEANDER_FRACTION * hash_signed(hash);
     let steps = distance.ceil().max(1.0) as usize;
-    let expanded_min = chunk_min - IVec2::splat(RIVER_RADIUS + 1);
-    let expanded_max = chunk_max + IVec2::splat(RIVER_RADIUS + 1);
+    let expanded_min = chunk_min - IVec2::splat(channel_extent);
+    let expanded_max = chunk_max + IVec2::splat(channel_extent);
     let mut previous = None;
 
     for step in 0..=steps {
@@ -316,69 +378,82 @@ fn rasterize_edge_points(
             continue;
         }
 
-        rasterize_water_brush(center, RIVER_RADIUS, None, chunk_min, chunk_max, context, water, clear);
+        stamps.insert(RiverStamp {
+            kind: RiverStampKind::Channel,
+            center,
+            origin_y: generation_surface_height(center, context) - 1,
+        });
     }
 }
 
-fn rasterize_lake_points(
+fn centered_piece_may_intersect_chunk(
     center: IVec2,
+    extent: i32,
     chunk_min: IVec2,
     chunk_max: IVec2,
-    context: &ChunkGenerationContext<'_>,
-    water: &mut HashSet<IVec3>,
-    clear: &mut HashSet<IVec3>,
-) {
-    let water_y = generation_surface_height(center, context) - 1;
-    rasterize_water_brush(
-        center,
-        LAKE_RADIUS,
-        Some(water_y),
-        chunk_min,
-        chunk_max,
-        context,
-        water,
-        clear,
-    );
+) -> bool {
+    center.x + extent >= chunk_min.x
+        && center.x - extent <= chunk_max.x
+        && center.y + extent >= chunk_min.y
+        && center.y - extent <= chunk_max.y
 }
 
-#[allow(clippy::too_many_arguments)]
-fn rasterize_water_brush(
-    center: IVec2,
-    radius: i32,
-    fixed_water_y: Option<i32>,
-    chunk_min: IVec2,
-    chunk_max: IVec2,
+fn stamp_authored_river_piece(
+    chunk: &mut VoxelChunk,
+    chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
-    water: &mut HashSet<IVec3>,
-    clear: &mut HashSet<IVec3>,
+    structure: &StructureDefinition,
+    rotation: crate::content::structure::StructureRotation,
+    origin: IVec3,
 ) {
-    let radius_squared = i64::from(radius) * i64::from(radius);
-    for dz in -radius..=radius {
-        for dx in -radius..=radius {
-            if i64::from(dx) * i64::from(dx) + i64::from(dz) * i64::from(dz) > radius_squared {
-                continue;
-            }
-            let horizontal = center + IVec2::new(dx, dz);
-            if horizontal.x < chunk_min.x
-                || horizontal.x > chunk_max.x
-                || horizontal.y < chunk_min.y
-                || horizontal.y > chunk_max.y
-            {
+    chunk.edit_structure_content(|chunk| {
+        for voxel in structure.voxels() {
+            let world_position = origin + rotation.rotate_offset(voxel.offset);
+            let local = world_position - chunk_origin;
+            if !voxel_is_inside_chunk(local) {
                 continue;
             }
 
-            let surface_ground = generation_surface_height(horizontal, context) - 1;
-            let water_y = fixed_water_y.unwrap_or(surface_ground);
-            if let Some(fixed) = fixed_water_y
-                && surface_ground >= fixed
-            {
-                for y in fixed..=surface_ground {
-                    clear.insert(IVec3::new(horizontal.x, y, horizontal.y));
-                }
+            assert!(
+                voxel.block_id.is_none()
+                    && structure.objects_for_voxel(voxel).is_empty()
+                    && !structure.layers_only_voxel(voxel),
+                "river network structure {} may only contain fluid or clear voxels",
+                structure.id
+            );
+
+            let x = local.x as usize;
+            let y = local.y as usize;
+            let z = local.z as usize;
+            if let Some(fluid_reference) = structure.fluid_for_voxel(voxel) {
+                let fluid_id = context.fluids.id_of(fluid_reference).unwrap_or_else(|| {
+                    panic!(
+                        "river network structure {} references missing fluid: {}",
+                        structure.id, fluid_reference
+                    )
+                });
+                chunk.clear_block(x, y, z);
+                chunk.set_fluid(x, y, z, FluidCell::source(fluid_id, MAX_FLUID_LEVEL));
+            } else if structure.clears_voxel(voxel) {
+                chunk.clear_block(x, y, z);
+                chunk.clear_fluid(x, y, z);
+            } else {
+                panic!(
+                    "river network structure {} contains unsupported empty voxel payload",
+                    structure.id
+                );
             }
-            water.insert(IVec3::new(horizontal.x, water_y, horizontal.y));
         }
-    }
+
+        for world_position in structure.clear_above_positions(rotation, origin) {
+            let local = world_position - chunk_origin;
+            if !voxel_is_inside_chunk(local) {
+                continue;
+            }
+            chunk.clear_block(local.x as usize, local.y as usize, local.z as usize);
+            chunk.clear_fluid(local.x as usize, local.y as usize, local.z as usize);
+        }
+    });
 }
 
 fn voxel_is_inside_chunk(local: IVec3) -> bool {
