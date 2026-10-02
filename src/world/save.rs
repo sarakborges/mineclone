@@ -92,6 +92,16 @@ impl InMemoryWorldSave {
         self.players.clear();
     }
 
+    pub(crate) fn prepare_dimension_warp(
+        &mut self,
+        dimension_id: &str,
+        spawn_biome: Option<&str>,
+    ) {
+        assert!(self.has_world(), "dimension warp requires an active world");
+        self.dimension_id = Some(dimension_id.to_owned());
+        self.spawn_biome = spawn_biome.map(str::to_owned);
+    }
+
     pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
         if self.has_world() {
             self.game_rules = game_rules;

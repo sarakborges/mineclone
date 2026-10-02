@@ -779,8 +779,8 @@ fn interpret_chat_submissions(
                     ));
                 }
             }
-            ParsedLine::Warp(target) => {
-                warp.request(target);
+            ParsedLine::Warp(target, dimension) => {
+                warp.request(target, dimension);
                 let position = format_position(target);
                 chat.append_text(feedback(
                     localization,

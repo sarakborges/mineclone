@@ -4,7 +4,7 @@ pub(super) enum ParsedLine<'a> {
     Spawn(&'a str, Option<&'a str>),
     Place(&'a str, Option<usize>),
     Locate(&'a str, &'a str, Option<usize>),
-    Warp(bevy::prelude::IVec3),
+    Warp(bevy::prelude::IVec3, Option<&'a str>),
     Kill,
     Modify(ModifyAction, &'a str, Option<&'a str>),
     Usage(&'static str),
@@ -68,13 +68,15 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
             ),
         },
         "/warp" => {
-            let [x, z, y] = args.as_slice() else {
-                return ParsedLine::Usage("/warp <x> <z> <y>");
+            let (x, z, y, dimension) = match args.as_slice() {
+                [x, z, y] => (*x, *z, *y, None),
+                [x, z, y, dimension] => (*x, *z, *y, Some(*dimension)),
+                _ => return ParsedLine::Usage("/warp <x> <z> <y> [dimension]"),
             };
             let (Ok(x), Ok(z), Ok(y)) = (x.parse::<i32>(), z.parse::<i32>(), y.parse::<i32>()) else {
-                return ParsedLine::Usage("/warp <x> <z> <y>");
+                return ParsedLine::Usage("/warp <x> <z> <y> [dimension]");
             };
-            ParsedLine::Warp(bevy::prelude::IVec3::new(x, y, z))
+            ParsedLine::Warp(bevy::prelude::IVec3::new(x, y, z), dimension)
         }
         "/kill" => {
             if args.is_empty() {
@@ -120,6 +122,20 @@ mod tests {
         assert_eq!(
             parse_line("/modify edit NO_AI frozen"),
             ParsedLine::Modify(ModifyAction::Edit, "NO_AI", Some("frozen"))
+        );
+    }
+
+    #[test]
+    fn parses_warp_with_optional_dimension() {
+        let target = bevy::prelude::IVec3::new(10, 30, 20);
+        assert_eq!(parse_line("/warp 10 20 30"), ParsedLine::Warp(target, None));
+        assert_eq!(
+            parse_line("/warp 10 20 30 asteria:umbral"),
+            ParsedLine::Warp(target, Some("asteria:umbral"))
+        );
+        assert_eq!(
+            parse_line("/warp 10 20"),
+            ParsedLine::Usage("/warp <x> <z> <y> [dimension]")
         );
     }
 }

@@ -4,16 +4,27 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::crash_log::{log_gameplay_event, log_gameplay_warn},
+    app::{
+        crash_log::{log_gameplay_event, log_gameplay_warn},
+        game_state::GameState,
+    },
+    content::{
+        biome::{BiomeKind, BiomeRegistry},
+        dimension::{DimensionDefinition, DimensionRegistry},
+    },
+    entity::EntityHealth,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity,
+        camera::GameplayCamera,
+        game_mode::GameMode,
         movement::{
             collision::player_bounds, flight::FlightState, gravity::GravityState,
             swimming::SwimmingState, walking::WalkingState,
         },
+        player_id::LOCAL_PLAYER_ID,
     },
     voxel::{
         chunk::CHUNK_SIZE,
@@ -21,6 +32,11 @@ use crate::{
         coordinates::chunk_coord_from_world,
         world::VoxelWorld,
     },
+};
+
+use super::{
+    InMemoryWorldSave, WorldLoadMode,
+    dimension::{CurrentDimension, DimensionId},
 };
 
 const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
@@ -119,20 +135,25 @@ pub(crate) enum WarpOutcome {
 #[derive(Resource, Default)]
 pub(crate) struct PendingWarp {
     target: Option<IVec3>,
+    dimension: Option<String>,
     search: WarpSearchState,
     outcome: Option<WarpOutcome>,
 }
 
 impl PendingWarp {
-    pub(crate) fn request(&mut self, target: IVec3) {
+    pub(crate) fn request(&mut self, target: IVec3, dimension: Option<&str>) {
         if let Some(previous) = self.target {
             log_gameplay_event(format!(
                 "warp.superseded previous_target={:?} target={:?}",
                 previous, target
             ));
         }
-        log_gameplay_event(format!("warp.request target={:?}", target));
+        log_gameplay_event(format!(
+            "warp.request target={:?} dimension={:?}",
+            target, dimension
+        ));
         self.target = Some(target);
+        self.dimension = dimension.map(str::to_owned);
         self.search.reset();
         self.outcome = None;
     }
@@ -142,6 +163,9 @@ impl PendingWarp {
     }
 
     pub(super) fn streaming_center(&self) -> Option<IVec3> {
+        if self.dimension.is_some() {
+            return None;
+        }
         self.target.map(|target| {
             let mut coord = chunk_coord_from_world(target);
             coord.y = coord.y.max(0);
@@ -150,6 +174,9 @@ impl PendingWarp {
     }
 
     pub(super) fn streaming_radii(&self) -> Option<(i32, i32)> {
+        if self.dimension.is_some() {
+            return None;
+        }
         self.target.map(|_| {
             let chunk_size = CHUNK_SIZE as i32;
             let search_radius_blocks = self.search.radius.max(0);
@@ -158,7 +185,46 @@ impl PendingWarp {
             (search_radius_chunks, search_radius_chunks)
         })
     }
+
+    fn fail(&mut self) {
+        self.target = None;
+        self.dimension = None;
+        self.search.reset();
+        self.outcome = Some(WarpOutcome::Failed);
+    }
 }
+
+#[derive(Resource)]
+pub(crate) struct PendingDimensionWarp {
+    target: IVec3,
+}
+
+#[derive(SystemParam)]
+pub(super) struct DimensionWarpContext<'w, 's> {
+    commands: Commands<'w, 's>,
+    dimensions: Res<'w, DimensionRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    current_dimension: ResMut<'w, CurrentDimension>,
+    load_mode: ResMut<'w, WorldLoadMode>,
+    save: ResMut<'w, InMemoryWorldSave>,
+    next_game_state: ResMut<'w, NextState<GameState>>,
+}
+
+type WarpPlayer<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut WalkingState,
+        &'static mut FlightState,
+        &'static mut GravityState,
+        &'static mut SwimmingState,
+        &'static GameMode,
+        &'static EntityHealth,
+        &'static GameplayCamera,
+    ),
+    With<PlayerEntity>,
+>;
 
 enum CandidateState {
     Unloaded,
@@ -175,22 +241,83 @@ enum WarpSearchResult {
 pub(super) fn resolve_pending_warp(
     mut pending: ResMut<PendingWarp>,
     world: Res<VoxelWorld>,
+    mut dimension: DimensionWarpContext,
     mut slow_search_warned: Local<bool>,
-    mut player: Single<
-        (
-            &mut Transform,
-            &mut WalkingState,
-            &mut FlightState,
-            &mut GravityState,
-            &mut SwimmingState,
-        ),
-        With<PlayerEntity>,
-    >,
+    mut player: WarpPlayer,
 ) {
     let Some(target) = pending.target else {
         *slow_search_warned = false;
         return;
     };
+
+    if let Some(requested_dimension) = pending.dimension.clone() {
+        if requested_dimension == dimension.current_dimension.id.as_str() {
+            pending.dimension = None;
+        } else {
+            let Some(definition) = dimension.dimensions.get(&requested_dimension) else {
+                log_gameplay_warn(format!(
+                    "warp.failed target={target:?} dimension={requested_dimension} reason=unknown_dimension"
+                ));
+                pending.fail();
+                *slow_search_warned = false;
+                return;
+            };
+
+            let spawn_biome = match dimension_warp_spawn_biome(
+                definition,
+                &dimension.biomes,
+                &dimension.save,
+            ) {
+                Ok(spawn_biome) => spawn_biome,
+                Err(()) => {
+                    log_gameplay_warn(format!(
+                        "warp.failed target={target:?} dimension={requested_dimension} reason=no_single_biome_candidate"
+                    ));
+                    pending.fail();
+                    *slow_search_warned = false;
+                    return;
+                }
+            };
+
+            let (_, _, flight, _, _, game_mode, health, camera) = &mut *player;
+            let requested_eye = Vec3::new(
+                target.x as f32 + 0.5,
+                target.y as f32 + PLAYER_EYE_HEIGHT,
+                target.z as f32 + 0.5,
+            );
+            dimension
+                .save
+                .prepare_dimension_warp(&requested_dimension, spawn_biome.as_deref());
+            dimension.save.save_player_state_with_health(
+                LOCAL_PLAYER_ID,
+                requested_eye,
+                **game_mode,
+                Some(health.current()),
+                Some((camera.yaw, camera.pitch)),
+                flight.is_active(),
+            );
+
+            let previous_dimension = dimension.current_dimension.id.to_string();
+            dimension.current_dimension.id = DimensionId::from(requested_dimension.clone());
+            *dimension.load_mode = WorldLoadMode::Load;
+            dimension.commands.insert_resource(VoxelWorld::default());
+            dimension
+                .commands
+                .insert_resource(PendingDimensionWarp { target });
+            dimension.next_game_state.set(GameState::Loading);
+            log_gameplay_event(format!(
+                "warp.dimension_transition from={} to={} target={:?} next_state=Loading",
+                previous_dimension, requested_dimension, target
+            ));
+
+            pending.target = None;
+            pending.dimension = None;
+            pending.search.reset();
+            pending.outcome = None;
+            *slow_search_warned = false;
+            return;
+        }
+    }
 
     let search_started = Instant::now();
     let result = advance_safe_eye_position_search(&world, target, &mut pending.search);
@@ -209,7 +336,7 @@ pub(super) fn resolve_pending_warp(
     match result {
         WarpSearchResult::Pending => {}
         WarpSearchResult::Found(destination) => {
-            let (transform, walking, flight, gravity, swimming) = &mut *player;
+            let (transform, walking, flight, gravity, swimming, _, _, _) = &mut *player;
             transform.translation = destination;
             walking.reset_motion();
             flight.reset_motion();
@@ -241,6 +368,54 @@ pub(super) fn resolve_pending_warp(
             *slow_search_warned = false;
         }
     }
+}
+
+pub(super) fn resume_dimension_warp(
+    mut commands: Commands,
+    dimension_warp: Option<Res<PendingDimensionWarp>>,
+    mut pending: ResMut<PendingWarp>,
+) {
+    let Some(dimension_warp) = dimension_warp else {
+        return;
+    };
+    let target = dimension_warp.target;
+    log_gameplay_event(format!(
+        "warp.dimension_transition loaded=true target={target:?} resume_safe_search=true"
+    ));
+    pending.request(target, None);
+    commands.remove_resource::<PendingDimensionWarp>();
+}
+
+fn dimension_warp_spawn_biome(
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    save: &InMemoryWorldSave,
+) -> Result<Option<String>, ()> {
+    if !save.world_generation().single_biome() {
+        return Ok(None);
+    }
+
+    let is_valid = |id: &str| {
+        dimension.biomes.iter().any(|entry| {
+            entry.id == id
+                && entry.weight > f32::EPSILON
+                && entry.require_near.is_empty()
+                && biomes
+                    .get(id)
+                    .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+        })
+    };
+
+    if let Some(id) = save.spawn_biome().filter(|id| is_valid(id)) {
+        return Ok(Some(id.to_owned()));
+    }
+
+    dimension
+        .biomes
+        .iter()
+        .find(|entry| is_valid(&entry.id))
+        .map(|entry| Some(entry.id.clone()))
+        .ok_or(())
 }
 
 fn advance_safe_eye_position_search(
@@ -400,7 +575,7 @@ mod tests {
     #[test]
     fn warp_streaming_radius_grows_only_when_search_crosses_a_chunk() {
         let mut pending = PendingWarp::default();
-        pending.request(IVec3::new(15, 64, 15));
+        pending.request(IVec3::new(15, 64, 15), None);
 
         assert_eq!(pending.streaming_radii(), Some((1, 1)));
 
@@ -412,9 +587,18 @@ mod tests {
     }
 
     #[test]
+    fn dimension_warp_does_not_stream_the_old_dimension() {
+        let mut pending = PendingWarp::default();
+        pending.request(IVec3::new(15, 64, 15), Some("asteria:umbral"));
+
+        assert_eq!(pending.streaming_center(), None);
+        assert_eq!(pending.streaming_radii(), None);
+    }
+
+    #[test]
     fn requesting_a_new_warp_resets_previous_search_progress() {
         let mut pending = PendingWarp::default();
-        pending.request(IVec3::new(10, 20, 30));
+        pending.request(IVec3::new(10, 20, 30), Some("asteria:umbral"));
         pending.search.ensure_started();
         let origin = pending
             .search
@@ -423,9 +607,10 @@ mod tests {
         pending.search.expand_from(origin);
         pending.search.radius = 8;
 
-        pending.request(IVec3::new(-4, 7, 9));
+        pending.request(IVec3::new(-4, 7, 9), None);
 
         assert_eq!(pending.target, Some(IVec3::new(-4, 7, 9)));
+        assert!(pending.dimension.is_none());
         assert_eq!(pending.search.radius, 0);
         assert!(pending.search.frontier.is_empty());
         assert!(pending.search.visited.is_empty());
