@@ -10,6 +10,7 @@ pub(crate) mod movement;
 pub(crate) mod model;
 pub(crate) mod player_id;
 pub(crate) mod save;
+pub(crate) mod skin_uv;
 pub(crate) mod viewmodel;
 
 use bevy::{

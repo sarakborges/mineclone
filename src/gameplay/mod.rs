@@ -10,7 +10,8 @@ use bevy::prelude::*;
 use crate::player::{
     camera::PlayerCameraPlugin, character_info::PlayerCharacterInfoPlugin,
     hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin, model::PlayerModelPlugin,
-    movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
+    movement::PlayerMovementPlugin, skin_uv::PlayerSkinUvPlugin,
+    viewmodel::PlayerViewModelPlugin,
 };
 use modal::GameplayModalPlugin;
 use pause::PausePlugin;
@@ -29,6 +30,7 @@ impl Plugin for GameplayPlugin {
             PausePlugin,
             PlayerHotbarPlugin,
             PlayerModelPlugin,
+            PlayerSkinUvPlugin,
             PlayerViewModelPlugin,
             PlayerCameraPlugin,
             PlayerMovementPlugin,
