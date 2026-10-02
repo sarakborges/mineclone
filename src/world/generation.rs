@@ -31,10 +31,7 @@ use crate::{
 };
 
 pub(crate) use self::{
-    columns::{
-        GenerationColumnSample, ocean_weight_from_surface, sample_flat_generation_columns,
-        sample_generation_columns,
-    },
+    columns::{GenerationColumnSample, ocean_weight_from_surface},
     fluids::authored_surface_fluid_id_for_position,
 };
 pub(crate) use self::structures::{

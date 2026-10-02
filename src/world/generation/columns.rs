@@ -24,17 +24,6 @@ pub(crate) struct GenerationColumnSample {
     pub(super) surface_influences: SmallVec<[(usize, f32); 4]>,
 }
 
-/// Compatibility entry point for callers that do not own the generation-stage
-/// biome map. The streaming generator uses `sample_flat_generation_columns_from_map`.
-pub(crate) fn sample_flat_generation_columns(
-    horizontal_chunk: IVec2,
-    surface_height: i32,
-    biome_field: &BiomeField,
-) -> Vec<GenerationColumnSample> {
-    let biome_map = BiomeMapTile::sample(horizontal_chunk, biome_field);
-    sample_flat_generation_columns_from_map(surface_height, &biome_map)
-}
-
 pub(super) fn sample_flat_generation_columns_from_map(
     surface_height: i32,
     biome_map: &BiomeMapTile,
@@ -63,24 +52,6 @@ pub(super) fn sample_flat_generation_columns_from_map(
     }
 
     columns
-}
-
-/// Compatibility entry point for direct terrain sampling. Runtime generation
-/// builds the biome map first and calls `sample_generation_columns_from_map`.
-pub(crate) fn sample_generation_columns(
-    horizontal_chunk: IVec2,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-) -> Vec<GenerationColumnSample> {
-    let biome_map = BiomeMapTile::sample(horizontal_chunk, biome_field);
-    sample_generation_columns_from_map(
-        horizontal_chunk,
-        dimension,
-        biomes,
-        biome_field,
-        &biome_map,
-    )
 }
 
 pub(super) fn sample_generation_columns_from_map(
