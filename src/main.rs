@@ -128,10 +128,10 @@ fn run_game() {
             WorldObjectsPlugin,
             WorldItemsPlugin,
             BlockTargetingPlugin,
-            BiomeTintInteractionPlugin,
             ToolsPlugin,
             HudPlugin,
         ))
+        .add_plugins(BiomeTintInteractionPlugin)
         .run();
 }
 
