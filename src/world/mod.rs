@@ -121,9 +121,7 @@ use save_session::{
     save_on_gameplay_window_close,
 };
 pub(crate) use seed::WorldSeed;
-pub(crate) use setup::{
-    WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingStep,
-};
+pub(crate) use setup::{WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingStep};
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
