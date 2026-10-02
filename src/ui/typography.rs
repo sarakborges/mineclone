@@ -16,7 +16,7 @@ fn ui_font(size: f32, weight: FontWeight) -> TextFont {
 
 pub fn title(label: impl Into<String>) -> impl Bundle {
     (
-        Text::new(label.into().to_uppercase()),
+        Text::new(label),
         ui_font(36.0, FontWeight::SEMIBOLD),
         LetterSpacing::Px(0.2),
         TextColor(theme::TEXT_PRIMARY),
