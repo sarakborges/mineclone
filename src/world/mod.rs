@@ -127,7 +127,7 @@ use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 pub(crate) use work_budget::WorldFrameWorkBudget;
 use work_budget::begin_world_frame_work_budget;
-use warp::{PendingWarp, resolve_pending_warp};
+use warp::{PendingWarp, resolve_pending_warp, resume_dimension_warp};
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
@@ -210,6 +210,7 @@ impl Plugin for WorldPlugin {
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
+                    resume_dimension_warp,
                 )
                     .chain(),
             )
