@@ -26,7 +26,9 @@ use super::super::{
     microblock::{
         HOLLOW_LOG_WALL_THICKNESS, MICROBLOCK_EDGE, MicroblockMask, occupied_cell,
     },
-    orientation::{orientation_rotation, source_face_for_oriented_face},
+    orientation::{
+        orientation_rotation, source_face_for_cell_visual, source_face_for_oriented_face,
+    },
     read::VoxelRead,
     texture_rotation::TextureRotation,
 };
@@ -375,7 +377,8 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
             surface.local_voxel,
         );
     }
-    let source_face = source_face_for_oriented_face(face, surface.cell.orientation);
+    let geometry_source_face = source_face_for_oriented_face(face, surface.cell.orientation);
+    let source_face = source_face_for_cell_visual(face, surface.cell, surface.block);
     let rotation = if rotates_texture(surface.block.rotate_texture, source_face) {
         surface.cell.texture_rotation
     } else {
@@ -386,7 +389,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         let local = Vec3::from_array(vertex) - surface.local_voxel.as_vec3();
         let oriented = Vec3::splat(0.5)
             + inverse_orientation * (local - Vec3::splat(0.5));
-        rotate_macro_uv(macro_uv(source_face, oriented), rotation)
+        rotate_macro_uv(macro_uv(geometry_source_face, oriented), rotation)
     });
     let material_face = block_face_material_face(
         source_face,
@@ -448,7 +451,8 @@ fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
         (origin + Vec3::from_array(vertex)).to_array()
     });
 
-    let source_face = source_face_for_oriented_face(face, surface.cell.orientation);
+    let geometry_source_face = source_face_for_oriented_face(face, surface.cell.orientation);
+    let source_face = source_face_for_cell_visual(face, surface.cell, surface.block);
     let rotation = if rotates_texture(surface.block.rotate_texture, source_face) {
         surface.cell.texture_rotation
     } else {
@@ -459,7 +463,7 @@ fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
         let local = Vec3::from_array(vertex) - surface.local_voxel.as_vec3();
         let oriented = Vec3::splat(0.5)
             + inverse_orientation * (local - Vec3::splat(0.5));
-        rotate_macro_uv(macro_uv(source_face, oriented), rotation)
+        rotate_macro_uv(macro_uv(geometry_source_face, oriented), rotation)
     });
     let material_face = block_face_material_face(source_face, surface.block);
     let material_code = surface
