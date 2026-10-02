@@ -2,12 +2,38 @@ mod bootstrap;
 mod progress;
 mod system_params;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    platform::collections::HashMap,
+    prelude::*,
+    tasks::{Task, futures_lite::future},
+};
 
 use super::fluid_updates::GeneratedFluidSettling;
 
 pub(super) use bootstrap::begin_world_loading;
 pub(super) use progress::setup_world;
+
+#[derive(Resource)]
+pub(super) struct InitialChunkSelectionTask {
+    task: Option<Task<Vec<IVec3>>>,
+}
+
+impl InitialChunkSelectionTask {
+    fn new(task: Task<Vec<IVec3>>) -> Self {
+        Self { task: Some(task) }
+    }
+
+    fn poll(&mut self) -> Option<Vec<IVec3>> {
+        let task = self.task.as_mut()?;
+        let coords = future::block_on(future::poll_once(task))?;
+        self.task = None;
+        Some(coords)
+    }
+
+    fn is_pending(&self) -> bool {
+        self.task.is_some()
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorldLoadingPhase {
@@ -121,6 +147,21 @@ impl WorldLoadingState {
     pub(crate) fn set_presentation_prewarm_frames(&mut self, frames: u8) {
         self.presentation_prewarm_frames = frames
             .min(progress::INITIAL_PRESENTATION_PREWARM_FRAMES);
+    }
+
+    fn install_initial_coords(&mut self, coords: Vec<IVec3>) {
+        assert!(
+            self.coords.is_empty() && self.generation_cursor == 0 && self.generated == 0,
+            "initial chunk selection can only be installed before generation starts"
+        );
+        self.column_top_chunks.clear();
+        for coord in &coords {
+            self.column_top_chunks
+                .entry(coord.xz())
+                .and_modify(|top| *top = (*top).max(coord.y))
+                .or_insert(coord.y);
+        }
+        self.coords = coords;
     }
 
     fn extend_column_to_structure_top(&mut self, horizontal: IVec2, structure_top_chunk: i32) {
