@@ -1,4 +1,5 @@
 pub(super) mod fitting;
+pub(super) mod resolver;
 
 use bevy::prelude::*;
 
@@ -71,6 +72,16 @@ impl BiomeField {
             .find(|candidate| surface_constraints_allow(candidate.index, &selection_context))
         {
             return candidate.index;
+        }
+
+        // If every local climate candidate is blocked, let a biome already
+        // touching this raw component continue through it. This is the fitted
+        // continuation path: it validates the replacement against the final
+        // external boundary instead of the stale raw-neighbor snapshot.
+        if let Some(candidate_index) =
+            resolver::component_takeover_candidate(cell, site, raw_index, &selection_context)
+        {
+            return candidate_index;
         }
 
         panic!(
@@ -262,11 +273,10 @@ fn authored_adjacency_allows(
                 return false;
             }
 
-            // Raw/raw conflicts have one deterministic winner. This applies to
-            // both authored adjacency and a min/max pair that physically cannot
-            // share their current edge. The losing site tries its next weighted
-            // candidate; no constraint is relaxed.
-            if !fitting::raw_conflict_left_wins(
+            // Raw/raw conflicts have one deterministic winner. A side is only
+            // considered yieldable when it has either a valid local fallback
+            // or a valid component-level continuation from its boundary.
+            if !resolver::raw_conflict_left_wins(
                 context.cell,
                 context.site,
                 candidate_index,
@@ -703,7 +713,7 @@ mod tests {
         let left_context = test_context(left_cell, spacing, &biomes, &climate);
         let right_context = test_context(right_cell, spacing, &biomes, &climate);
 
-        let left_wins = fitting::raw_conflict_left_wins(
+        let left_wins = resolver::raw_conflict_left_wins(
             left_cell,
             left_site,
             0,
@@ -712,7 +722,7 @@ mod tests {
             1,
             &left_context,
         );
-        let right_wins = fitting::raw_conflict_left_wins(
+        let right_wins = resolver::raw_conflict_left_wins(
             right_cell,
             right_site,
             1,
