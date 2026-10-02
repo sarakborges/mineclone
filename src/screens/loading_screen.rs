@@ -8,12 +8,12 @@ use crate::{
         cosmic_background::{self, STAR_FIELD},
         surface, theme, typography,
     },
-    world::{WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingState},
+    world::{WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingStep},
 };
 
-const LOADING_PANEL_WIDTH: f32 = 560.0;
-const LOADING_ROW_HEIGHT: f32 = 48.0;
-const LOADING_ROW_GAP: f32 = 4.0;
+const LOADING_PANEL_WIDTH: f32 = 600.0;
+const LOADING_ROW_HEIGHT: f32 = 32.0;
+const LOADING_ROW_GAP: f32 = 2.0;
 const LOADING_PHASE_INDEX_WIDTH: f32 = 34.0;
 
 pub struct LoadingScreenPlugin;
@@ -32,13 +32,13 @@ impl Plugin for LoadingScreenPlugin {
 struct LoadingSummaryText;
 
 #[derive(Component)]
-struct LoadingPhaseRow(WorldLoadingPhase);
+struct LoadingStepRow(WorldLoadingStep);
 
 #[derive(Component)]
-struct LoadingPhaseLabel(WorldLoadingPhase);
+struct LoadingStepLabel(WorldLoadingStep);
 
 #[derive(Component)]
-struct LoadingPhaseStatusText(WorldLoadingPhase);
+struct LoadingStepStatusText(WorldLoadingStep);
 
 #[derive(SystemParam)]
 struct LoadingProgressUi<'w, 's> {
@@ -46,20 +46,20 @@ struct LoadingProgressUi<'w, 's> {
         'w,
         's,
         &'static mut Text,
-        (With<LoadingSummaryText>, Without<LoadingPhaseStatusText>),
+        (With<LoadingSummaryText>, Without<LoadingStepStatusText>),
     >,
-    rows: Query<'w, 's, (&'static LoadingPhaseRow, &'static mut BackgroundColor)>,
+    rows: Query<'w, 's, (&'static LoadingStepRow, &'static mut BackgroundColor)>,
     labels: Query<
         'w,
         's,
-        (&'static LoadingPhaseLabel, &'static mut TextColor),
-        Without<LoadingPhaseStatusText>,
+        (&'static LoadingStepLabel, &'static mut TextColor),
+        Without<LoadingStepStatusText>,
     >,
     statuses: Query<
         'w,
         's,
         (
-            &'static LoadingPhaseStatusText,
+            &'static LoadingStepStatusText,
             &'static mut Text,
             &'static mut TextColor,
         ),
@@ -96,7 +96,7 @@ fn setup_loading_screen(
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                row_gap: px(18),
+                row_gap: px(12),
                 ..default()
             },
             BackgroundColor(theme::SCREEN_BACKGROUND),
@@ -122,41 +122,41 @@ fn setup_loading_screen(
             screen
                 .spawn(surface::hud_container(Node {
                     width: px(LOADING_PANEL_WIDTH),
-                    padding: UiRect::all(px(14)),
+                    padding: UiRect::all(px(12)),
                     border: UiRect::all(px(1)),
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
                     row_gap: px(LOADING_ROW_GAP),
                     ..default()
                 }))
-                .with_children(|phase_list| {
-                    for (index, phase) in WorldLoadingPhase::ALL.into_iter().enumerate() {
-                        spawn_loading_phase_row(
-                            phase_list,
+                .with_children(|step_list| {
+                    for (index, step) in WorldLoadingStep::ALL.into_iter().enumerate() {
+                        spawn_loading_step_row(
+                            step_list,
                             &localization,
                             language,
                             index + 1,
-                            phase,
+                            step,
                         );
                     }
                 });
         });
 }
 
-fn spawn_loading_phase_row(
+fn spawn_loading_step_row(
     parent: &mut ChildSpawnerCommands,
     localization: &UiLocalization,
     language: Language,
     index: usize,
-    phase: WorldLoadingPhase,
+    step: WorldLoadingStep,
 ) {
     parent
         .spawn((
-            LoadingPhaseRow(phase),
+            LoadingStepRow(step),
             Node {
                 width: percent(100),
                 height: px(LOADING_ROW_HEIGHT),
-                padding: UiRect::horizontal(px(12)),
+                padding: UiRect::horizontal(px(10)),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 column_gap: px(10),
@@ -177,12 +177,8 @@ fn spawn_loading_phase_row(
             ));
 
             row.spawn((
-                LoadingPhaseLabel(phase),
-                typography::hud(
-                    localization
-                        .text(language, loading_phase_key(phase))
-                        .to_owned(),
-                ),
+                LoadingStepLabel(step),
+                typography::hud(loading_step_label(&localization, language, step)),
                 Node {
                     flex_grow: 1.0,
                     min_width: px(0),
@@ -192,7 +188,7 @@ fn spawn_loading_phase_row(
             ));
 
             row.spawn((
-                LoadingPhaseStatusText(phase),
+                LoadingStepStatusText(step),
                 typography::caption(
                     localization
                         .text(language, "loading.status.pending")
@@ -200,7 +196,7 @@ fn spawn_loading_phase_row(
                 ),
                 TextLayout::justify(Justify::Right),
                 Node {
-                    min_width: px(150),
+                    min_width: px(120),
                     flex_shrink: 0.0,
                     ..default()
                 },
@@ -227,8 +223,8 @@ fn update_loading_progress(
         }
     }
 
-    for (phase_row, mut background) in &mut ui.rows {
-        let status = loading_state.phase_status(phase_row.0);
+    for (step_row, mut background) in &mut ui.rows {
+        let status = loading_state.step_status(step_row.0);
         let target = if status == WorldLoadingPhaseStatus::Active {
             theme::PURPLE_SOFT
         } else {
@@ -239,21 +235,21 @@ fn update_loading_progress(
         }
     }
 
-    for (phase_label, mut color) in &mut ui.labels {
-        let target = phase_text_color(loading_state.phase_status(phase_label.0));
+    for (step_label, mut color) in &mut ui.labels {
+        let target = phase_text_color(loading_state.step_status(step_label.0));
         if color.0 != target {
             color.0 = target;
         }
     }
 
     for (status_label, mut text, mut color) in &mut ui.statuses {
-        let phase = status_label.0;
-        let status = loading_state.phase_status(phase);
+        let step = status_label.0;
+        let status = loading_state.step_status(step);
         let next = format_loading_status(
             &localization,
             language,
             status,
-            loading_state.phase_progress(phase),
+            loading_state.step_progress(step),
         );
         if **text != next {
             **text = next;
@@ -289,23 +285,70 @@ fn format_loading_status(
         }
         WorldLoadingPhaseStatus::Active => progress
             .map(|(completed, total)| format!("{completed}/{total}"))
-            .unwrap_or_default(),
+            .unwrap_or_else(|| localization.text(language, "loading.status.active").to_owned()),
         WorldLoadingPhaseStatus::Done => {
             localization.text(language, "loading.status.done").to_owned()
         }
     }
 }
 
-fn loading_phase_key(phase: WorldLoadingPhase) -> &'static str {
-    match phase {
-        WorldLoadingPhase::Generating => "loading.phase.generating",
-        WorldLoadingPhase::SettlingFluids => "loading.phase.settlingFluids",
-        WorldLoadingPhase::Lighting => "loading.phase.lighting",
-        WorldLoadingPhase::Meshing => "loading.phase.meshing",
-        WorldLoadingPhase::Assets => "loading.phase.assets",
-        WorldLoadingPhase::Finalizing => "loading.phase.finalizing",
-        WorldLoadingPhase::Spawning => "loading.phase.presentation",
-    }
+fn loading_step_label(
+    localization: &UiLocalization,
+    language: Language,
+    step: WorldLoadingStep,
+) -> String {
+    let translated = match (language, step) {
+        (Language::English, WorldLoadingStep::BiomeMap) => "Biome map",
+        (Language::English, WorldLoadingStep::TerrainColumns) => "Terrain columns",
+        (Language::English, WorldLoadingStep::VolumeBiomes) => "Volume biomes",
+        (Language::English, WorldLoadingStep::DensityField) => "Density field",
+        (Language::English, WorldLoadingStep::Materials) => "Material rasterization",
+        (Language::English, WorldLoadingStep::InitialFluids) => "Initial fluid rasterization",
+        (Language::English, WorldLoadingStep::Structures) => "Structures",
+        (Language::English, WorldLoadingStep::SurfaceObjects) => "Surface objects",
+        (Language::English, WorldLoadingStep::ChunkIntegration) => "Chunk integration",
+        (Language::PortugueseBrazil, WorldLoadingStep::BiomeMap) => "Mapa de biomas",
+        (Language::PortugueseBrazil, WorldLoadingStep::TerrainColumns) => "Colunas de terreno",
+        (Language::PortugueseBrazil, WorldLoadingStep::VolumeBiomes) => "Biomas volumétricos",
+        (Language::PortugueseBrazil, WorldLoadingStep::DensityField) => "Campo de densidade",
+        (Language::PortugueseBrazil, WorldLoadingStep::Materials) => "Rasterização de materiais",
+        (Language::PortugueseBrazil, WorldLoadingStep::InitialFluids) => "Rasterização inicial de fluidos",
+        (Language::PortugueseBrazil, WorldLoadingStep::Structures) => "Estruturas",
+        (Language::PortugueseBrazil, WorldLoadingStep::SurfaceObjects) => "Objetos de superfície",
+        (Language::PortugueseBrazil, WorldLoadingStep::ChunkIntegration) => "Integração de chunks",
+        (Language::Spanish, WorldLoadingStep::BiomeMap) => "Mapa de biomas",
+        (Language::Spanish, WorldLoadingStep::TerrainColumns) => "Columnas de terreno",
+        (Language::Spanish, WorldLoadingStep::VolumeBiomes) => "Biomas volumétricos",
+        (Language::Spanish, WorldLoadingStep::DensityField) => "Campo de densidad",
+        (Language::Spanish, WorldLoadingStep::Materials) => "Rasterización de materiales",
+        (Language::Spanish, WorldLoadingStep::InitialFluids) => "Rasterización inicial de fluidos",
+        (Language::Spanish, WorldLoadingStep::Structures) => "Estructuras",
+        (Language::Spanish, WorldLoadingStep::SurfaceObjects) => "Objetos de superficie",
+        (Language::Spanish, WorldLoadingStep::ChunkIntegration) => "Integración de chunks",
+        (_, WorldLoadingStep::SettlingFluids) => {
+            return localization
+                .text(language, "loading.phase.settlingFluids")
+                .to_owned();
+        }
+        (_, WorldLoadingStep::Lighting) => {
+            return localization.text(language, "loading.phase.lighting").to_owned();
+        }
+        (_, WorldLoadingStep::Meshing) => {
+            return localization.text(language, "loading.phase.meshing").to_owned();
+        }
+        (_, WorldLoadingStep::Assets) => {
+            return localization.text(language, "loading.phase.assets").to_owned();
+        }
+        (_, WorldLoadingStep::Finalizing) => {
+            return localization.text(language, "loading.phase.finalizing").to_owned();
+        }
+        (_, WorldLoadingStep::Spawning) => {
+            return localization
+                .text(language, "loading.phase.presentation")
+                .to_owned();
+        }
+    };
+    translated.to_owned()
 }
 
 fn phase_text_color(status: WorldLoadingPhaseStatus) -> Color {
@@ -322,7 +365,6 @@ fn phase_status_color(status: WorldLoadingPhaseStatus) -> Color {
         WorldLoadingPhaseStatus::Done => theme::TEXT_MUTED,
     }
 }
-
 
 #[cfg(test)]
 mod tests {
