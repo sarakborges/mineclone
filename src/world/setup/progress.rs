@@ -8,11 +8,7 @@ mod spawning;
 
 use std::time::Duration;
 
-use bevy::{
-    ecs::system::{Local, SystemParam},
-    platform::collections::HashSet,
-    prelude::*,
-};
+use bevy::{ecs::system::{Local, SystemParam}, prelude::*};
 
 use crate::app::crash_log::log_gameplay_event;
 
@@ -44,108 +40,48 @@ pub(in crate::world) struct LoadingDiagnostics {
     previous_phase: Option<WorldLoadingPhase>,
 }
 
+
 #[derive(SystemParam)]
 pub(in crate::world) struct LoadingRuntime<'w, 's> {
     pub(super) time: Res<'w, Time<Real>>,
     pub(super) initial_presentation_prewarm: Local<'s, InitialPresentationPrewarm>,
     pub(super) loading_diagnostics: Local<'s, LoadingDiagnostics>,
 }
-
 fn log_loading_diagnostics(
     delta: Duration,
     state: &super::WorldLoadingState,
     diagnostics: &mut LoadingDiagnostics,
 ) {
-    let timer = diagnostics
-        .timer
-        .get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
+    let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
     timer.tick(delta);
 
     if diagnostics.previous_phase != Some(state.phase) {
         if let Some(previous) = diagnostics.previous_phase {
             log_gameplay_event(format!("world.loading.phase.complete phase={previous:?}"));
         }
-        log_gameplay_event(format!(
-            "world.loading.phase.start phase={:?} detail={}",
-            state.phase,
-            loading_phase_detail(state)
-        ));
+        log_gameplay_event(format!("world.loading.phase.start phase={:?} detail={}", state.phase, loading_phase_detail(state)));
         diagnostics.previous_phase = Some(state.phase);
         return;
     }
 
     if timer.just_finished() {
-        log_gameplay_event(format!(
-            "world.loading.phase.progress phase={:?} detail={}",
-            state.phase,
-            loading_phase_detail(state)
-        ));
+        log_gameplay_event(format!("world.loading.phase.progress phase={:?} detail={}", state.phase, loading_phase_detail(state)));
     }
 }
 
 fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
     match state.phase {
-        WorldLoadingPhase::Generating => format!(
-            "generated={}/{} cursor={}",
-            state.generated,
-            state.total(),
-            state.generation_cursor
-        ),
+        WorldLoadingPhase::Generating => format!("generated={}/{} cursor={}", state.generated, state.total(), state.generation_cursor),
         WorldLoadingPhase::SettlingFluids => {
-            let (_, generated, mutable, initialization, work, verification, verification_chunks) =
-                state.fluid_settling.diagnostic_counts();
-            format!(
-                "generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}"
-            )
+            let (_, generated, mutable, initialization, work, verification, verification_chunks) = state.fluid_settling.diagnostic_counts();
+            format!("generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}")
         }
-        WorldLoadingPhase::Lighting => format!(
-            "seeded={}/{} relaxations={}/{}",
-            state.lighting_seed_cursor,
-            state.total(),
-            state.lighting_relaxation_cursor,
-            state.lighting_relaxations.len()
-        ),
-        WorldLoadingPhase::Meshing => {
-            format!("meshed={}/{} cursor={}", state.meshed, state.total(), state.mesh_cursor)
-        }
-        WorldLoadingPhase::Assets => {
-            format!("loaded={}/{}", state.assets_loaded, state.assets_total)
-        }
-        WorldLoadingPhase::Finalizing => format!(
-            "frames={}/{}",
-            state.finalization_frames, INITIAL_FINALIZATION_FRAMES
-        ),
-        WorldLoadingPhase::Spawning => format!(
-            "presentation_prewarm={}/{}",
-            state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES
-        ),
+        WorldLoadingPhase::Lighting => format!("seeded={}/{} relaxations={}/{}", state.lighting_seed_cursor, state.total(), state.lighting_relaxation_cursor, state.lighting_relaxations.len()),
+        WorldLoadingPhase::Meshing => format!("meshed={}/{} cursor={}", state.meshed, state.total(), state.mesh_cursor),
+        WorldLoadingPhase::Assets => format!("loaded={}/{}", state.assets_loaded, state.assets_total),
+        WorldLoadingPhase::Finalizing => format!("frames={}/{}", state.finalization_frames, INITIAL_FINALIZATION_FRAMES),
+        WorldLoadingPhase::Spawning => format!("presentation_prewarm={}/{}", state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES),
     }
-}
-
-fn poll_initial_chunk_selection(
-    pipeline: &WorldSetupChunkPipeline<'_, '_>,
-    progress: &mut WorldSetupProgress<'_>,
-) -> bool {
-    if !progress.initial_selection.is_pending() {
-        return true;
-    }
-
-    let Some(coords) = progress.initial_selection.poll() else {
-        return false;
-    };
-
-    let bootstrap_chunks = coords.iter().copied().collect::<HashSet<_>>();
-    pipeline
-        .generation
-        .feature_fields
-        .retain_for_chunks(&bootstrap_chunks);
-    progress.loading_state.install_initial_coords(coords);
-    log_gameplay_event(format!(
-        "world.load.selection.complete bootstrap_chunks={} bootstrap_columns={}",
-        progress.loading_state.total(),
-        progress.loading_state.column_count()
-    ));
-    true
 }
 
 pub(in crate::world) fn setup_world(
@@ -167,15 +103,6 @@ pub(in crate::world) fn setup_world(
 
     if !progress.loading_state.screen_rendered {
         progress.loading_state.screen_rendered = true;
-        return;
-    }
-
-    if !poll_initial_chunk_selection(&pipeline, &mut progress) {
-        log_loading_diagnostics(
-            runtime.time.delta(),
-            &progress.loading_state,
-            &mut runtime.loading_diagnostics,
-        );
         return;
     }
 
