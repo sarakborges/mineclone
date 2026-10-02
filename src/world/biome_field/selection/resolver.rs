@@ -293,10 +293,12 @@ impl RecursiveSurfaceSolver<'_> {
         None
     }
 
-    /// Walks same-biome identity only until the authored maximum is proven to
-    /// be exceeded. A huge raw region never has to be collected in full before
-    /// the solver can begin cutting it: the first oversized prefix becomes a
-    /// recursive repair problem.
+    /// Collect the complete currently-connected identity component before
+    /// deciding where it must be cut. This is intentionally unbounded: stopping
+    /// at the first oversized prefix makes the chosen cut depend on which 5x5
+    /// sampling window happened to ask first. Full component collection gives
+    /// every query the same canonical repair set, then recursion/backtracking
+    /// can propagate through neighboring components as far as necessary.
     fn first_oversize_violation(
         &self,
         state: &mut SolverState,
@@ -324,18 +326,11 @@ impl RecursiveSurfaceSolver<'_> {
             let mut bounds = SiteBounds::from_site(start_state.site);
             let mut queue = VecDeque::from([(start, start_state.site)]);
             let mut seen = HashSet::from([start]);
-            let mut visited = Vec::new();
+            let mut component = Vec::new();
 
             while let Some((cell, site)) = queue.pop_front() {
-                visited.push(cell);
+                component.push(cell);
                 bounds.include(site);
-                if bounds.exceeds(center_span_limit) {
-                    for &visited_cell in &visited {
-                        self.ensure_cell(state, visited_cell)?;
-                    }
-                    visited.sort_by_key(|cell| (cell.y, cell.x));
-                    return Ok(Some(visited));
-                }
 
                 for (neighbor_cell, neighbor_site) in self.neighbors(cell, site) {
                     if seen.contains(&neighbor_cell) {
@@ -350,7 +345,15 @@ impl RecursiveSurfaceSolver<'_> {
                 }
             }
 
-            for cell in visited {
+            component.sort_by_key(|cell| (cell.y, cell.x));
+            if bounds.exceeds(center_span_limit) {
+                for &component_cell in &component {
+                    self.ensure_cell(state, component_cell)?;
+                }
+                return Ok(Some(component));
+            }
+
+            for cell in component {
                 if state.cells.contains_key(&cell) {
                     checked.insert(cell);
                 }
