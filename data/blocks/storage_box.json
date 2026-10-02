@@ -7,7 +7,8 @@
   },
   "category": "crafted_blocks",
   "tags": [
-    "fragmentable"
+    "fragmentable",
+    "horizontal_facing"
   ],
   "textures": {
     "top": "textures/objects/storage_box/top.png",
