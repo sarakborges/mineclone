@@ -123,6 +123,8 @@ fn run_game() {
             ScreensPlugin,
             WorldPlugin,
             GameplayPlugin,
+        ))
+        .add_plugins((
             CreaturesPlugin,
             RenderingPlugin,
             WorldObjectsPlugin,
