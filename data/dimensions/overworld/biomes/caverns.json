@@ -15,7 +15,7 @@
     "type": "cavern",
     "carveStrength": 4,
     "noiseScale": 0.045,
-    "openness": 0.34
+    "openness": 0.55
   },
   "visuals": {
     "skyColor": {
