@@ -8,10 +8,11 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, creature::CreatureRegistry, structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
+        biome::BiomeRegistry, creature::CreatureRegistry, dimension::DimensionRegistry,
+        structure::StructureRegistry, structure_set::StructureSetRegistry,
     },
     localization::ActiveLanguage,
+    player::{PLAYER_EYE_HEIGHT, PlayerEntity},
 };
 
 use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
@@ -27,7 +28,10 @@ enum ParameterKind {
     StructureVariation,
     LocateKind,
     LocateTargetId,
-    Coordinate,
+    CoordinateX,
+    CoordinateZ,
+    CoordinateY,
+    DimensionId,
 }
 
 struct CommandDefinition {
@@ -78,9 +82,10 @@ const COMMANDS: &[CommandDefinition] = &[
         name: "warp",
         description: "Warp near world coordinates",
         parameters: &[
-            ParameterKind::Coordinate,
-            ParameterKind::Coordinate,
-            ParameterKind::Coordinate,
+            ParameterKind::CoordinateX,
+            ParameterKind::CoordinateZ,
+            ParameterKind::CoordinateY,
+            ParameterKind::DimensionId,
         ],
     },
 ];
@@ -119,7 +124,12 @@ impl ChatAutocomplete {
         }
     }
 
-    fn refresh(&mut self, editor: &EditableText, catalog: &AutocompleteCatalog<'_>) {
+    fn refresh(
+        &mut self,
+        editor: &EditableText,
+        catalog: &AutocompleteCatalog<'_>,
+        player_position: Option<IVec3>,
+    ) {
         if editor.is_composing() {
             self.set_suggestions(0..0, Vec::new());
             return;
@@ -136,8 +146,13 @@ impl ChatAutocomplete {
             self.set_suggestions(0..0, Vec::new());
             return;
         }
-        let (range, suggestions) =
-            suggestions_for(&context.0, context.1, catalog).unwrap_or_else(|| (0..0, Vec::new()));
+        let (range, suggestions) = suggestions_for(
+            &context.0,
+            context.1,
+            catalog,
+            player_position,
+        )
+        .unwrap_or_else(|| (0..0, Vec::new()));
         self.set_suggestions(range, suggestions);
     }
 }
@@ -196,11 +211,26 @@ fn literal_suggestions(
         .collect()
 }
 
+fn coordinate_suggestions(value: Option<i32>, axis: &str, prefix: &str) -> Vec<Suggestion> {
+    let Some(value) = value else {
+        return Vec::new();
+    };
+    let value = value.to_string();
+    if !text_matches_query(&value, prefix) {
+        return Vec::new();
+    }
+    vec![Suggestion {
+        value,
+        description: format!("Current {axis} coordinate"),
+    }]
+}
+
 struct AutocompleteCatalog<'a> {
     creatures: &'a CreatureRegistry,
     biomes: &'a BiomeRegistry,
     structures: &'a StructureRegistry,
     structure_sets: &'a StructureSetRegistry,
+    dimensions: &'a DimensionRegistry,
     language: &'a ActiveLanguage,
 }
 
@@ -253,6 +283,7 @@ fn suggestions_for(
     text: &str,
     cursor: usize,
     catalog: &AutocompleteCatalog<'_>,
+    player_position: Option<IVec3>,
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let (range, word_index) = active_token(text, cursor)?;
     let prefix = text[range.start..cursor].to_ascii_lowercase();
@@ -344,7 +375,30 @@ fn suggestions_for(
                 "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
-            ParameterKind::Coordinate => Vec::new(),
+            ParameterKind::CoordinateX => coordinate_suggestions(
+                player_position.map(|position| position.x),
+                "X",
+                &prefix,
+            ),
+            ParameterKind::CoordinateZ => coordinate_suggestions(
+                player_position.map(|position| position.z),
+                "Z",
+                &prefix,
+            ),
+            ParameterKind::CoordinateY => coordinate_suggestions(
+                player_position.map(|position| position.y),
+                "Y",
+                &prefix,
+            ),
+            ParameterKind::DimensionId => catalog
+                .dimensions
+                .iter()
+                .filter(|dimension| id_matches_query(&dimension.id, &prefix))
+                .map(|dimension| Suggestion {
+                    value: dimension.id.clone(),
+                    description: dimension.name.text(catalog.language.get()).to_owned(),
+                })
+                .collect::<Vec<_>>(),
         }
     };
     suggestions.sort_by(|left, right| left.value.cmp(&right.value));
@@ -373,6 +427,7 @@ pub(super) struct AutocompleteContent<'w> {
     biomes: Res<'w, BiomeRegistry>,
     structures: Res<'w, StructureRegistry>,
     structure_sets: Res<'w, StructureSetRegistry>,
+    dimensions: Res<'w, DimensionRegistry>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -383,6 +438,7 @@ impl AutocompleteContent<'_> {
             biomes: &self.biomes,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
+            dimensions: &self.dimensions,
             language: &self.language,
         }
     }
@@ -393,6 +449,7 @@ pub(super) fn update_autocomplete(
     chat: Res<ChatState>,
     keys: Res<ButtonInput<KeyCode>>,
     content: AutocompleteContent,
+    player: Query<&Transform, With<PlayerEntity>>,
     mut autocomplete: ResMut<ChatAutocomplete>,
     mut draft: Single<&mut EditableText, With<ChatDraft>>,
 ) {
@@ -403,7 +460,12 @@ pub(super) fn update_autocomplete(
         return;
     }
     let catalog = content.catalog();
-    autocomplete.refresh(&draft, &catalog);
+    let player_position = player.single().ok().map(|transform| {
+        (transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT)
+            .floor()
+            .as_ivec3()
+    });
+    autocomplete.refresh(&draft, &catalog, player_position);
     if !autocomplete.visible() || draft.is_composing() {
         return;
     }
@@ -442,6 +504,36 @@ mod tests {
     fn command_catalog_contains_entity_commands() {
         assert!(COMMANDS.iter().any(|command| command.name == "kill"));
         assert!(COMMANDS.iter().any(|command| command.name == "modify"));
+    }
+
+    #[test]
+    fn warp_autocomplete_declares_coordinates_and_dimension() {
+        let warp = COMMANDS
+            .iter()
+            .find(|command| command.name == "warp")
+            .expect("warp command should be registered");
+        assert!(matches!(
+            warp.parameters,
+            [
+                ParameterKind::CoordinateX,
+                ParameterKind::CoordinateZ,
+                ParameterKind::CoordinateY,
+                ParameterKind::DimensionId
+            ]
+        ));
+    }
+
+    #[test]
+    fn coordinate_suggestions_offer_the_current_axis_value() {
+        assert_eq!(
+            coordinate_suggestions(Some(-42), "X", ""),
+            vec![Suggestion {
+                value: "-42".to_owned(),
+                description: "Current X coordinate".to_owned(),
+            }]
+        );
+        assert!(coordinate_suggestions(Some(-42), "X", "99").is_empty());
+        assert!(coordinate_suggestions(None, "X", "").is_empty());
     }
 
     #[test]
