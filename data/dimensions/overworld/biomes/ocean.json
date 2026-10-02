@@ -111,6 +111,16 @@
       "block": "asteria:stone"
     }
   ],
+  "structures": [
+    {
+      "id": "asteria:river_ocean_mouth",
+      "placement": {
+        "spacing": 64,
+        "chance": 0.85,
+        "jitter": 8
+      }
+    }
+  ],
   "surfaceMargin": {
     "width": 32,
     "maxSlope": 1,
