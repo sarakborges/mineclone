@@ -4,9 +4,7 @@ use crate::{
     app::game_state::GameState,
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
-        button::{
-            button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH,
-        },
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT},
         numeric_input::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
@@ -36,6 +34,7 @@ use super::{
 };
 
 const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
+const NEW_WORLD_FOOTER_BUTTON_WIDTH: f32 = 300.0;
 const SEED_INPUT_MAX_DIGITS: usize = 20;
 
 #[derive(Component)]
@@ -171,7 +170,8 @@ pub(super) type SeedInputState = NumericInputState<SeedInputKind>;
 
 #[derive(Component, Clone, Copy)]
 pub(super) enum NewWorldFooterAction {
-    Return,
+    MainMenu,
+    BackToWorlds,
     CreateWorld,
 }
 
@@ -527,9 +527,16 @@ pub(super) fn spawn_new_world_footer(
     language: Language,
 ) {
     footer.spawn(button(
-        localization.text(language, "newWorld.return").to_owned(),
-        NewWorldFooterAction::Return,
-        px(MENU_BUTTON_WIDTH),
+        new_world_footer_label(language, NewWorldFooterAction::MainMenu),
+        NewWorldFooterAction::MainMenu,
+        px(NEW_WORLD_FOOTER_BUTTON_WIDTH),
+        MENU_BUTTON_HEIGHT,
+        ButtonVariant::Normal,
+    ));
+    footer.spawn(button(
+        new_world_footer_label(language, NewWorldFooterAction::BackToWorlds),
+        NewWorldFooterAction::BackToWorlds,
+        px(NEW_WORLD_FOOTER_BUTTON_WIDTH),
         MENU_BUTTON_HEIGHT,
         ButtonVariant::Normal,
     ));
@@ -538,10 +545,22 @@ pub(super) fn spawn_new_world_footer(
             .text(language, "newWorld.createWorld")
             .to_owned(),
         NewWorldFooterAction::CreateWorld,
-        px(MENU_BUTTON_WIDTH),
+        px(NEW_WORLD_FOOTER_BUTTON_WIDTH),
         MENU_BUTTON_HEIGHT,
         ButtonVariant::Primary,
     ));
+}
+
+fn new_world_footer_label(language: Language, action: NewWorldFooterAction) -> &'static str {
+    match (language, action) {
+        (Language::English, NewWorldFooterAction::MainMenu) => "Main Menu",
+        (Language::PortugueseBrazil, NewWorldFooterAction::MainMenu) => "Menu Principal",
+        (Language::Spanish, NewWorldFooterAction::MainMenu) => "Menú Principal",
+        (Language::English, NewWorldFooterAction::BackToWorlds) => "Back to Worlds",
+        (Language::PortugueseBrazil, NewWorldFooterAction::BackToWorlds) => "Voltar aos Mundos",
+        (Language::Spanish, NewWorldFooterAction::BackToWorlds) => "Volver a Mundos",
+        (_, NewWorldFooterAction::CreateWorld) => "",
+    }
 }
 
 pub(super) fn handle_new_world_settings_control_focus(
@@ -688,10 +707,14 @@ pub(super) fn handle_new_world_footer(
         draft.focus.clear();
         return;
     }
-    if matches!(action, Some(NewWorldFooterAction::Return))
+    if matches!(action, Some(NewWorldFooterAction::MainMenu)) {
+        transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
+        return;
+    }
+    if matches!(action, Some(NewWorldFooterAction::BackToWorlds))
         || (footer.escape_pressed() && !draft.input_editing())
     {
-        transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
+        transition.request(ScreenTransitionTarget::game(GameState::WorldSelection));
         return;
     }
 
