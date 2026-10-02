@@ -7,21 +7,25 @@ use super::{
     distribution_strength, fitting, raw_surface_biome_index, region_claim_hash,
     surface_site_position, surface_sites_share_border,
 };
+use crate::world::biome_field::BiomeField;
 
 const FIT_EPSILON: f32 = 0.001;
 
-#[derive(Clone, Copy)]
-struct RawComponentNode {
-    cell: IVec2,
+#[derive(Clone)]
+struct CellState {
     site: Vec2,
+    domain: Vec<usize>,
 }
 
-#[derive(Clone, Copy)]
-struct ExternalNeighbor {
-    cell: IVec2,
-    site: Vec2,
-    inside_site: Vec2,
-    biome_index: usize,
+impl CellState {
+    fn biome_index(&self) -> usize {
+        self.domain[0]
+    }
+}
+
+#[derive(Clone, Default)]
+struct SolverState {
+    cells: HashMap<IVec2, CellState>,
 }
 
 #[derive(Clone, Copy)]
@@ -43,16 +47,486 @@ impl SiteBounds {
         self.max = self.max.max(site);
     }
 
-    fn span(self) -> Vec2 {
-        self.max - self.min
-    }
-
-    fn fits(self, limit: Vec2) -> bool {
-        let span = self.span();
-        span.x <= limit.x + FIT_EPSILON && span.y <= limit.y + FIT_EPSILON
+    fn exceeds(self, limit: Vec2) -> bool {
+        let span = self.max - self.min;
+        span.x > limit.x + FIT_EPSILON || span.y > limit.y + FIT_EPSILON
     }
 }
 
+#[derive(Clone)]
+enum Violation {
+    Pair { left: IVec2, right: IVec2 },
+    Oversize { cells: Vec<IVec2> },
+    RequireNear { cell: IVec2 },
+    BoundaryCycle { cells: Vec<IVec2> },
+}
+
+struct RecursiveSurfaceSolver<'a> {
+    field: &'a BiomeField,
+}
+
+/// Resolves a canonical group of surface sites as one constraint problem.
+///
+/// The old path selected each site independently and only attempted a bounded
+/// whole-component takeover after local fitting had already failed. That meant
+/// a valid solution could require changing A -> B -> C while the resolver gave
+/// up at A. This solver instead expands only when a constraint reaches an
+/// unresolved neighbor and recursively backtracks assignments until every
+/// reached min/max and authored-adjacency constraint is simultaneously valid.
+/// There is deliberately no propagation-depth or component-size cutoff.
+pub(in crate::world::biome_field) fn resolve_surface_sites(
+    field: &BiomeField,
+    requested_cells: &[IVec2],
+) -> Result<Vec<(IVec2, Vec2, usize)>, String> {
+    let solver = RecursiveSurfaceSolver { field };
+    let mut state = SolverState::default();
+    for &cell in requested_cells {
+        solver.ensure_cell(&mut state, cell)?;
+    }
+
+    let solved = solver.solve(state).ok_or_else(|| {
+        let first = requested_cells.first().copied().unwrap_or(IVec2::ZERO);
+        format!(
+            "surface biome constraints have no globally consistent assignment near site {first:?}"
+        )
+    })?;
+
+    let mut resolved = solved
+        .cells
+        .into_iter()
+        .map(|(cell, state)| (cell, state.site, state.biome_index()))
+        .collect::<Vec<_>>();
+    resolved.sort_by_key(|(cell, _, _)| (cell.y, cell.x));
+    Ok(resolved)
+}
+
+impl RecursiveSurfaceSolver<'_> {
+    fn solve(&self, mut state: SolverState) -> Option<SolverState> {
+        if self.expand_pair_conflicts(&mut state).is_err() {
+            return None;
+        }
+
+        let violation = if let Some((left, right)) = self.first_pair_violation(&state) {
+            Some(Violation::Pair { left, right })
+        } else if let Ok(Some(cells)) = self.first_oversize_violation(&mut state) {
+            Some(Violation::Oversize { cells })
+        } else if let Some(cell) = self.first_require_near_violation(&state) {
+            Some(Violation::RequireNear { cell })
+        } else {
+            self.boundary_cycle_violation(&state)
+                .map(|cells| Violation::BoundaryCycle { cells })
+        };
+
+        let Some(violation) = violation else {
+            return Some(state);
+        };
+
+        for branch in self.repair_branches(&state, violation) {
+            if let Some(solved) = self.solve(branch) {
+                return Some(solved);
+            }
+        }
+        None
+    }
+
+    fn ensure_cell(&self, state: &mut SolverState, cell: IVec2) -> Result<(), String> {
+        if state.cells.contains_key(&cell) {
+            return Ok(());
+        }
+        let site = surface_site_position(cell, self.field.surface_site_spacing, self.field.seed);
+        let domain = self.candidate_order(cell, site)?;
+        state.cells.insert(cell, CellState { site, domain });
+        Ok(())
+    }
+
+    fn candidate_order(&self, cell: IVec2, site: Vec2) -> Result<Vec<usize>, String> {
+        let climate = self.field.climate.sample(site);
+
+        // The authored ocean core remains authoritative. It is a macro mask,
+        // not a candidate that recursive fitting is allowed to erase.
+        if let Some(ocean_index) = self.field.ocean_surface_index
+            && self.field.surface_biome_is_enabled(ocean_index)
+        {
+            let ocean = &self.field.surface_biomes[ocean_index];
+            if ocean.weight > f32::EPSILON
+                && ocean
+                    .distributions
+                    .iter()
+                    .copied()
+                    .any(|distribution| distribution.is_regional())
+                && climate_weight(climate, ocean.climate) >= 1.0 - f32::EPSILON
+            {
+                return Ok(vec![ocean_index]);
+            }
+        }
+
+        let candidates = self
+            .field
+            .surface_weighted_candidates(cell, site, climate, cell_hash(cell, self.field.seed))
+            .into_iter()
+            .map(|candidate| candidate.index)
+            .collect::<Vec<_>>();
+
+        if candidates.is_empty() {
+            return Err(format!(
+                "surface biome site {cell:?} has no biome compatible with climate/distribution constraints"
+            ));
+        }
+        Ok(candidates)
+    }
+
+    fn raw_identity(&self, cell: IVec2, site: Vec2) -> Result<usize, String> {
+        self.candidate_order(cell, site)
+            .map(|domain| domain[0])
+    }
+
+    fn identity_at(&self, state: &SolverState, cell: IVec2, site: Vec2) -> Result<usize, String> {
+        state
+            .cells
+            .get(&cell)
+            .map(CellState::biome_index)
+            .map_or_else(|| self.raw_identity(cell, site), Ok)
+    }
+
+    fn neighbors(&self, cell: IVec2, site: Vec2) -> Vec<(IVec2, Vec2)> {
+        let mut neighbors = Vec::new();
+        for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
+            for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
+                let offset = IVec2::new(x, z);
+                if offset == IVec2::ZERO {
+                    continue;
+                }
+                let neighbor_cell = cell + offset;
+                let neighbor_site = surface_site_position(
+                    neighbor_cell,
+                    self.field.surface_site_spacing,
+                    self.field.seed,
+                );
+                if surface_sites_share_border(
+                    cell,
+                    site,
+                    neighbor_cell,
+                    neighbor_site,
+                    self.field.surface_site_spacing,
+                    self.field.seed,
+                ) {
+                    neighbors.push((neighbor_cell, neighbor_site));
+                }
+            }
+        }
+        neighbors.sort_by_key(|(cell, _)| (cell.y, cell.x));
+        neighbors
+    }
+
+    fn pair_allows(
+        &self,
+        left_index: usize,
+        left_site: Vec2,
+        right_index: usize,
+        right_site: Vec2,
+    ) -> bool {
+        if left_index == right_index {
+            return true;
+        }
+        let left = &self.field.surface_biomes[left_index];
+        let right = &self.field.surface_biomes[right_index];
+        !authored_pair_conflicts(left, right)
+            && fitting::boundary_fit_interval(left, right, left_site, right_site).is_some()
+    }
+
+    /// Any raw neighbor that conflicts with an already reached assignment must
+    /// become part of the same solve. Compatible raw neighbors remain fixed
+    /// boundary conditions, keeping ordinary world probes local.
+    fn expand_pair_conflicts(&self, state: &mut SolverState) -> Result<(), String> {
+        loop {
+            let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+            cells.sort_by_key(|cell| (cell.y, cell.x));
+            let mut expansion = None;
+
+            'scan: for cell in cells {
+                let left_state = state.cells.get(&cell).expect("solver cell must exist");
+                let left_site = left_state.site;
+                let left_index = left_state.biome_index();
+                for (neighbor_cell, neighbor_site) in self.neighbors(cell, left_site) {
+                    if state.cells.contains_key(&neighbor_cell) {
+                        continue;
+                    }
+                    let right_index = self.raw_identity(neighbor_cell, neighbor_site)?;
+                    if !self.pair_allows(left_index, left_site, right_index, neighbor_site) {
+                        expansion = Some(neighbor_cell);
+                        break 'scan;
+                    }
+                }
+            }
+
+            let Some(cell) = expansion else {
+                return Ok(());
+            };
+            self.ensure_cell(state, cell)?;
+        }
+    }
+
+    fn first_pair_violation(&self, state: &SolverState) -> Option<(IVec2, IVec2)> {
+        let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+        cells.sort_by_key(|cell| (cell.y, cell.x));
+
+        for cell in cells {
+            let left = state.cells.get(&cell).expect("solver cell must exist");
+            for (neighbor_cell, neighbor_site) in self.neighbors(cell, left.site) {
+                if (neighbor_cell.y, neighbor_cell.x) <= (cell.y, cell.x) {
+                    continue;
+                }
+                let Some(right) = state.cells.get(&neighbor_cell) else {
+                    continue;
+                };
+                if !self.pair_allows(
+                    left.biome_index(),
+                    left.site,
+                    right.biome_index(),
+                    neighbor_site,
+                ) {
+                    return Some((cell, neighbor_cell));
+                }
+            }
+        }
+        None
+    }
+
+    /// Walks same-biome identity only until the authored maximum is proven to
+    /// be exceeded. Unlike the removed takeover flood-fill, a huge raw region
+    /// never has to be collected in full before the solver can start cutting
+    /// it: the first oversized prefix becomes a recursive repair problem.
+    fn first_oversize_violation(
+        &self,
+        state: &mut SolverState,
+    ) -> Result<Option<Vec<IVec2>>, String> {
+        let mut starts = state.cells.keys().copied().collect::<Vec<_>>();
+        starts.sort_by_key(|cell| (cell.y, cell.x));
+        let mut checked = HashSet::new();
+
+        for start in starts {
+            if checked.contains(&start) {
+                continue;
+            }
+            let start_state = state.cells.get(&start).expect("solver cell must exist");
+            let biome_index = start_state.biome_index();
+            if self.field.ocean_surface_index == Some(biome_index) {
+                checked.insert(start);
+                continue;
+            }
+
+            let biome = &self.field.surface_biomes[biome_index];
+            let center_span_limit = Vec2::new(
+                ((biome.size.x.max - biome.size.x.min) * 2.0).max(0.0),
+                ((biome.size.z.max - biome.size.z.min) * 2.0).max(0.0),
+            );
+            let mut bounds = SiteBounds::from_site(start_state.site);
+            let mut queue = VecDeque::from([(start, start_state.site)]);
+            let mut seen = HashSet::from([start]);
+            let mut visited = Vec::new();
+
+            while let Some((cell, site)) = queue.pop_front() {
+                visited.push(cell);
+                bounds.include(site);
+                if bounds.exceeds(center_span_limit) {
+                    for &visited_cell in &visited {
+                        self.ensure_cell(state, visited_cell)?;
+                    }
+                    visited.sort_by_key(|cell| (cell.y, cell.x));
+                    return Ok(Some(visited));
+                }
+
+                for (neighbor_cell, neighbor_site) in self.neighbors(cell, site) {
+                    if seen.contains(&neighbor_cell) {
+                        continue;
+                    }
+                    let neighbor_index = self.identity_at(state, neighbor_cell, neighbor_site)?;
+                    if neighbor_index != biome_index {
+                        continue;
+                    }
+                    seen.insert(neighbor_cell);
+                    queue.push_back((neighbor_cell, neighbor_site));
+                }
+            }
+
+            for cell in visited {
+                if state.cells.contains_key(&cell) {
+                    checked.insert(cell);
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn first_require_near_violation(&self, state: &SolverState) -> Option<IVec2> {
+        let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+        cells.sort_by_key(|cell| (cell.y, cell.x));
+
+        for cell in cells {
+            let current = state.cells.get(&cell).expect("solver cell must exist");
+            let biome = &self.field.surface_biomes[current.biome_index()];
+            if biome.require_near.is_empty() {
+                continue;
+            }
+
+            let found = self.neighbors(cell, current.site).into_iter().any(
+                |(neighbor_cell, neighbor_site)| {
+                    self.identity_at(state, neighbor_cell, neighbor_site)
+                        .ok()
+                        .is_some_and(|neighbor_index| {
+                            let neighbor_id = &self.field.surface_biomes[neighbor_index].id;
+                            biome.require_near.iter().any(|id| id == neighbor_id)
+                        })
+                },
+            );
+            if !found {
+                return Some(cell);
+            }
+        }
+        None
+    }
+
+    fn boundary_cycle_violation(&self, state: &SolverState) -> Option<Vec<IVec2>> {
+        let mut cells = state.cells.keys().copied().collect::<Vec<_>>();
+        cells.sort_by_key(|cell| (cell.y, cell.x));
+        if cells.len() <= 1 {
+            return None;
+        }
+
+        let sampled = cells
+            .iter()
+            .map(|cell| {
+                let current = state.cells.get(cell).expect("solver cell must exist");
+                (*cell, current.site, 0.0, Some(current.biome_index()))
+            })
+            .collect::<Vec<_>>();
+
+        if fitting::fit_surface_site_weights(
+            &sampled,
+            &self.field.surface_biomes,
+            self.field.surface_site_spacing,
+            self.field.seed,
+        )
+        .is_ok()
+        {
+            return None;
+        }
+
+        let mut repairable = cells
+            .into_iter()
+            .filter(|cell| {
+                state
+                    .cells
+                    .get(cell)
+                    .is_some_and(|current| current.domain.len() > 1)
+            })
+            .collect::<Vec<_>>();
+        repairable.sort_by_key(|cell| {
+            (
+                std::cmp::Reverse(region_claim_hash(
+                    *cell,
+                    state.cells[cell].biome_index(),
+                    self.field.seed,
+                )),
+                cell.y,
+                cell.x,
+            )
+        });
+        (!repairable.is_empty()).then_some(repairable)
+    }
+
+    fn repair_branches(&self, state: &SolverState, violation: Violation) -> Vec<SolverState> {
+        match violation {
+            Violation::Pair { left, right } => {
+                let mut cells = vec![left, right];
+                cells.sort_by_key(|cell| {
+                    std::cmp::Reverse(region_claim_hash(
+                        *cell,
+                        state.cells[cell].biome_index(),
+                        self.field.seed,
+                    ))
+                });
+                self.drop_current_branches(state, cells)
+            }
+            Violation::Oversize { mut cells } | Violation::BoundaryCycle { mut cells } => {
+                cells.sort_by_key(|cell| {
+                    (
+                        std::cmp::Reverse(region_claim_hash(
+                            *cell,
+                            state.cells[cell].biome_index(),
+                            self.field.seed,
+                        )),
+                        cell.y,
+                        cell.x,
+                    )
+                });
+                self.drop_current_branches(state, cells)
+            }
+            Violation::RequireNear { cell } => self.require_near_branches(state, cell),
+        }
+    }
+
+    fn drop_current_branches(
+        &self,
+        state: &SolverState,
+        cells: Vec<IVec2>,
+    ) -> Vec<SolverState> {
+        let mut branches = Vec::new();
+        for cell in cells {
+            let Some(current) = state.cells.get(&cell) else {
+                continue;
+            };
+            if current.domain.len() <= 1 {
+                continue;
+            }
+            let mut branch = state.clone();
+            branch
+                .cells
+                .get_mut(&cell)
+                .expect("branch cell must exist")
+                .domain
+                .remove(0);
+            branches.push(branch);
+        }
+        branches
+    }
+
+    fn require_near_branches(&self, state: &SolverState, cell: IVec2) -> Vec<SolverState> {
+        let Some(current) = state.cells.get(&cell) else {
+            return Vec::new();
+        };
+        let biome = &self.field.surface_biomes[current.biome_index()];
+        let mut branches = self.drop_current_branches(state, vec![cell]);
+
+        for (neighbor_cell, _) in self.neighbors(cell, current.site) {
+            let Some(neighbor) = state.cells.get(&neighbor_cell) else {
+                continue;
+            };
+            let Some(position) = neighbor.domain.iter().position(|candidate_index| {
+                let id = &self.field.surface_biomes[*candidate_index].id;
+                biome.require_near.iter().any(|required| required == id)
+            }) else {
+                continue;
+            };
+            if position == 0 {
+                continue;
+            }
+
+            let mut branch = state.clone();
+            branch
+                .cells
+                .get_mut(&neighbor_cell)
+                .expect("branch neighbor must exist")
+                .domain
+                .drain(..position);
+            branches.push(branch);
+        }
+        branches
+    }
+}
+
+/// Kept for the legacy single-site selector while callers migrate to the
+/// recursive group resolver. Conflict priority itself stays deterministic.
 pub(super) fn raw_conflict_left_wins(
     left_cell: IVec2,
     left_site: Vec2,
@@ -62,361 +536,57 @@ pub(super) fn raw_conflict_left_wins(
     right_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> bool {
-    let left_can_yield = fitting::cell_has_alternative(left_cell, left_site, left_index, context)
-        || component_takeover_candidate(left_cell, left_site, left_index, context).is_some();
-    let right_can_yield = fitting::cell_has_alternative(right_cell, right_site, right_index, context)
-        || component_takeover_candidate(right_cell, right_site, right_index, context).is_some();
-
-    match (left_can_yield, right_can_yield) {
-        (false, true) => true,
-        (true, false) => false,
-        _ => fitting::raw_conflict_left_wins(
-            left_cell,
-            left_site,
-            left_index,
-            right_cell,
-            right_site,
-            right_index,
-            context,
-        ),
-    }
+    fitting::raw_conflict_left_wins(
+        left_cell,
+        left_site,
+        left_index,
+        right_cell,
+        right_site,
+        right_index,
+        context,
+    )
 }
 
-/// Last-resort fitted continuation for a raw component that has no legal local
-/// candidate. The previous resolver flood-filled the complete raw component,
-/// which made locate/world probes walk arbitrarily large regions. This version
-/// derives a hard traversal bound from the largest authored max-size slack of
-/// every biome that could legally take the component over.
+/// Compatibility shim for the old selector. Surface sampling no longer relies
+/// on this bounded takeover path; it resolves the whole reached constraint
+/// graph through `resolve_surface_sites` before anything is cached.
 pub(super) fn component_takeover_candidate(
     cell: IVec2,
     site: Vec2,
     raw_index: usize,
     context: &SurfaceSelectionContext<'_>,
 ) -> Option<usize> {
-    if context.ocean_surface_index == Some(raw_index) {
-        return None;
-    }
-
-    let traversal_limit = maximum_takeover_span(raw_index, context)?;
-    let component = collect_raw_component(cell, site, raw_index, traversal_limit, context)?;
-    let external = collect_external_neighbors(&component, raw_index, context);
-    if external.is_empty() {
-        return None;
-    }
-
-    let canonical_cell = component
-        .iter()
-        .map(|node| node.cell)
-        .min_by_key(|cell| (cell.y, cell.x))
-        .unwrap_or(cell);
-
-    let touching = external
-        .iter()
-        .map(|neighbor| neighbor.biome_index)
-        .collect::<HashSet<_>>();
-
+    let climate = context.climate_field.sample(site);
     let mut candidates = context
         .biomes
         .iter()
         .enumerate()
-        .filter_map(|(candidate_index, _)| {
-            if !takeover_candidate_enabled(candidate_index, raw_index, context) {
-                return None;
-            }
-
-            // A biome already touching the failed component may continue across
-            // its climate edge. Otherwise, only consider a biome whose authored
-            // climate/distribution supports this site.
-            let is_touching = touching.contains(&candidate_index);
-            if !is_touching && !candidate_supported_at_site(candidate_index, site, context) {
-                return None;
-            }
-
-            Some((candidate_index, is_touching))
+        .filter(|(candidate_index, biome)| {
+            *candidate_index != raw_index
+                && biome.weight > 0.0
+                && (context.spawn_oceans || Some(*candidate_index) != context.ocean_surface_index)
         })
+        .filter(|(_, biome)| {
+            biome
+                .distributions
+                .iter()
+                .copied()
+                .map(|distribution| {
+                    distribution_strength(distribution, site, context.seed, biome.id.as_str())
+                })
+                .fold(0.0_f32, f32::max)
+                > 0.0
+                && climate_weight(climate, biome.climate) > 0.0
+        })
+        .map(|(candidate_index, _)| candidate_index)
         .collect::<Vec<_>>();
-
-    candidates.sort_by_key(|(candidate_index, is_touching)| {
-        (
-            !*is_touching,
-            region_claim_hash(canonical_cell, *candidate_index, context.seed),
-            *candidate_index,
-        )
+    candidates.sort_by_key(|candidate_index| {
+        region_claim_hash(cell, *candidate_index, context.seed)
     });
 
-    candidates
-        .into_iter()
-        .map(|(candidate_index, _)| candidate_index)
-        .find(|candidate_index| {
-            takeover_boundary_allows(*candidate_index, &external, context)
-                && takeover_size_allows(*candidate_index, &component, &external, context)
-        })
-}
-
-fn takeover_candidate_enabled(
-    candidate_index: usize,
-    raw_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    if candidate_index == raw_index || context.biomes[candidate_index].weight <= 0.0 {
-        return false;
-    }
-    if !context.spawn_oceans && Some(candidate_index) == context.ocean_surface_index {
-        return false;
-    }
-
-    // Ocean owns its authored macro core before the resolver runs. Letting it
-    // act as an unlimited takeover fallback would remove the finite traversal
-    // bound and could leak ocean identity inland.
-    if Some(candidate_index) == context.ocean_surface_index {
-        return false;
-    }
-
-    // Exclusive biomes are raw-only. They may keep their own raw sites, but
-    // may never spread as a fallback when another raw biome has to yield.
-    context.biomes[candidate_index]
-        .exclusive_neighbor_group
-        .is_none()
-}
-
-fn candidate_supported_at_site(
-    candidate_index: usize,
-    site: Vec2,
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    let candidate = &context.biomes[candidate_index];
-    if climate_weight(context.climate_field.sample(site), candidate.climate) <= 0.0 {
-        return false;
-    }
-
-    candidate
-        .distributions
-        .iter()
-        .copied()
-        .map(|distribution| {
-            distribution_strength(distribution, site, context.seed, candidate.id.as_str())
-        })
-        .fold(0.0_f32, f32::max)
-        > 0.0
-}
-
-fn maximum_takeover_span(
-    raw_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> Option<Vec2> {
-    context
-        .biomes
-        .iter()
-        .enumerate()
-        .filter(|(candidate_index, _)| {
-            takeover_candidate_enabled(*candidate_index, raw_index, context)
-        })
-        .map(|(_, candidate)| candidate_center_span_limit(candidate))
-        .reduce(Vec2::max)
-}
-
-fn candidate_center_span_limit(candidate: &crate::world::biome_field::BiomeFieldEntry) -> Vec2 {
-    Vec2::new(
-        ((candidate.size.x.max - candidate.size.x.min) * 2.0).max(0.0),
-        ((candidate.size.z.max - candidate.size.z.min) * 2.0).max(0.0),
-    )
-}
-
-fn collect_raw_component(
-    cell: IVec2,
-    site: Vec2,
-    raw_index: usize,
-    traversal_limit: Vec2,
-    context: &SurfaceSelectionContext<'_>,
-) -> Option<Vec<RawComponentNode>> {
-    let mut nodes = Vec::new();
-    let mut queue = VecDeque::new();
-    let mut seen = HashSet::new();
-    let mut bounds = SiteBounds::from_site(site);
-
-    queue.push_back((cell, site));
-    seen.insert(cell);
-
-    while let Some((current_cell, current_site)) = queue.pop_front() {
-        nodes.push(RawComponentNode {
-            cell: current_cell,
-            site: current_site,
-        });
-
-        for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-            for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-                let offset = IVec2::new(x, z);
-                if offset == IVec2::ZERO {
-                    continue;
-                }
-                let neighbor_cell = current_cell + offset;
-                if seen.contains(&neighbor_cell) {
-                    continue;
-                }
-                let neighbor_site =
-                    surface_site_position(neighbor_cell, context.spacing, context.seed);
-                if !surface_sites_share_border(
-                    current_cell,
-                    current_site,
-                    neighbor_cell,
-                    neighbor_site,
-                    context.spacing,
-                    context.seed,
-                ) {
-                    continue;
-                }
-                if raw_index_at(neighbor_cell, neighbor_site, context) != raw_index {
-                    continue;
-                }
-
-                // Every legal whole-component takeover has a finite authored
-                // center-span budget. Once the raw component exceeds the largest
-                // possible budget, no takeover candidate can fit it, so stop
-                // immediately instead of walking the rest of the component.
-                let mut next_bounds = bounds;
-                next_bounds.include(neighbor_site);
-                if !next_bounds.fits(traversal_limit) {
-                    return None;
-                }
-                bounds = next_bounds;
-
-                seen.insert(neighbor_cell);
-                queue.push_back((neighbor_cell, neighbor_site));
-            }
-        }
-    }
-
-    Some(nodes)
-}
-
-fn collect_external_neighbors(
-    component: &[RawComponentNode],
-    raw_index: usize,
-    context: &SurfaceSelectionContext<'_>,
-) -> Vec<ExternalNeighbor> {
-    let component_cells = component
-        .iter()
-        .map(|node| node.cell)
-        .collect::<HashSet<_>>();
-    let mut external = HashMap::<IVec2, ExternalNeighbor>::new();
-
-    for node in component {
-        for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-            for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
-                let offset = IVec2::new(x, z);
-                if offset == IVec2::ZERO {
-                    continue;
-                }
-                let neighbor_cell = node.cell + offset;
-                if component_cells.contains(&neighbor_cell) {
-                    continue;
-                }
-                let neighbor_site =
-                    surface_site_position(neighbor_cell, context.spacing, context.seed);
-                if !surface_sites_share_border(
-                    node.cell,
-                    node.site,
-                    neighbor_cell,
-                    neighbor_site,
-                    context.spacing,
-                    context.seed,
-                ) {
-                    continue;
-                }
-                let biome_index = raw_index_at(neighbor_cell, neighbor_site, context);
-                if biome_index == raw_index {
-                    continue;
-                }
-                external.entry(neighbor_cell).or_insert(ExternalNeighbor {
-                    cell: neighbor_cell,
-                    site: neighbor_site,
-                    inside_site: node.site,
-                    biome_index,
-                });
-            }
-        }
-    }
-
-    external.into_values().collect()
-}
-
-fn takeover_boundary_allows(
-    candidate_index: usize,
-    external: &[ExternalNeighbor],
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    let candidate = &context.biomes[candidate_index];
-    let mut required_neighbor_found = candidate.require_near.is_empty();
-
-    for neighbor in external {
-        let neighbor_biome = &context.biomes[neighbor.biome_index];
-        if neighbor.biome_index != candidate_index
-            && (authored_pair_conflicts(candidate, neighbor_biome)
-                || fitting::boundary_fit_interval(
-                    candidate,
-                    neighbor_biome,
-                    neighbor.inside_site,
-                    neighbor.site,
-                )
-                .is_none())
-        {
-            return false;
-        }
-
-        if !required_neighbor_found
-            && candidate
-                .require_near
-                .iter()
-                .any(|id| id == &neighbor_biome.id)
-        {
-            required_neighbor_found = true;
-        }
-    }
-
-    required_neighbor_found
-}
-
-fn takeover_size_allows(
-    candidate_index: usize,
-    component: &[RawComponentNode],
-    external: &[ExternalNeighbor],
-    context: &SurfaceSelectionContext<'_>,
-) -> bool {
-    let center_span_limit = candidate_center_span_limit(&context.biomes[candidate_index]);
-    let Some(first) = component.first() else {
-        return false;
-    };
-    let mut bounds = SiteBounds::from_site(first.site);
-    for node in &component[1..] {
-        bounds.include(node.site);
-    }
-    if !bounds.fits(center_span_limit) {
-        return false;
-    }
-
-    // A takeover joins any touching raw component of the replacement biome.
-    // Include those connected sites in the max-size check. The walk is itself
-    // bounded by the candidate's authored span, so it cannot recreate the old
-    // unbounded locate regression.
-    let mut queue = VecDeque::new();
-    let mut seen = component
-        .iter()
-        .map(|node| node.cell)
-        .collect::<HashSet<_>>();
-    for neighbor in external
-        .iter()
-        .filter(|neighbor| neighbor.biome_index == candidate_index)
-    {
-        if seen.insert(neighbor.cell) {
-            queue.push_back((neighbor.cell, neighbor.site));
-        }
-    }
-
-    while let Some((cell, site)) = queue.pop_front() {
-        bounds.include(site);
-        if !bounds.fits(center_span_limit) {
-            return false;
-        }
+    candidates.into_iter().find(|candidate_index| {
+        let candidate = &context.biomes[*candidate_index];
+        let mut required_neighbor_found = candidate.require_near.is_empty();
 
         for z in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
             for x in -super::SITE_SEARCH_RADIUS..=super::SITE_SEARCH_RADIUS {
@@ -425,9 +595,6 @@ fn takeover_size_allows(
                     continue;
                 }
                 let neighbor_cell = cell + offset;
-                if seen.contains(&neighbor_cell) {
-                    continue;
-                }
                 let neighbor_site =
                     surface_site_position(neighbor_cell, context.spacing, context.seed);
                 if !surface_sites_share_border(
@@ -440,55 +607,50 @@ fn takeover_size_allows(
                 ) {
                     continue;
                 }
-                if raw_index_at(neighbor_cell, neighbor_site, context) != candidate_index {
-                    continue;
-                }
-
-                let mut next_bounds = bounds;
-                next_bounds.include(neighbor_site);
-                if !next_bounds.fits(center_span_limit) {
+                let neighbor_index = raw_surface_biome_index(
+                    neighbor_cell,
+                    neighbor_site,
+                    context.climate_field.sample(neighbor_site),
+                    cell_hash(neighbor_cell, context.seed),
+                    context.biomes,
+                    context.seed,
+                    context.spawn_oceans,
+                );
+                let neighbor = &context.biomes[neighbor_index];
+                if neighbor_index != *candidate_index
+                    && (authored_pair_conflicts(candidate, neighbor)
+                        || fitting::boundary_fit_interval(
+                            candidate,
+                            neighbor,
+                            site,
+                            neighbor_site,
+                        )
+                        .is_none())
+                {
                     return false;
                 }
-                seen.insert(neighbor_cell);
-                queue.push_back((neighbor_cell, neighbor_site));
+                if !required_neighbor_found
+                    && candidate.require_near.iter().any(|id| id == &neighbor.id)
+                {
+                    required_neighbor_found = true;
+                }
             }
         }
-    }
 
-    true
-}
+        if !required_neighbor_found {
+            return false;
+        }
 
-fn raw_index_at(
-    cell: IVec2,
-    site: Vec2,
-    context: &SurfaceSelectionContext<'_>,
-) -> usize {
-    raw_surface_biome_index(
-        cell,
-        site,
-        context.climate_field.sample(site),
-        cell_hash(cell, context.seed),
-        context.biomes,
-        context.seed,
-        context.spawn_oceans,
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn site_bounds_accept_exact_authored_span() {
-        let mut bounds = SiteBounds::from_site(Vec2::ZERO);
-        bounds.include(Vec2::new(600.0, 440.0));
-        assert!(bounds.fits(Vec2::new(600.0, 440.0)));
-    }
-
-    #[test]
-    fn site_bounds_reject_span_past_authored_maximum() {
-        let mut bounds = SiteBounds::from_site(Vec2::ZERO);
-        bounds.include(Vec2::new(600.01, 440.0));
-        assert!(!bounds.fits(Vec2::new(600.0, 440.0)));
-    }
+        let fallback_context = SurfaceSelectionContext {
+            cell,
+            site,
+            spacing: context.spacing,
+            seed: context.seed,
+            biomes: context.biomes,
+            spawn_oceans: context.spawn_oceans,
+            ocean_surface_index: context.ocean_surface_index,
+            climate_field: context.climate_field,
+        };
+        fitting::surface_size_allows(*candidate_index, &fallback_context)
+    })
 }
