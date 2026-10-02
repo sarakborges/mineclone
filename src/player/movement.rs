@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::{
     app::{crash_log::log_gameplay_event, game_state::GameState},
-    gameplay::availability::world_interaction_available,
+    gameplay::availability::player_movement_available,
     player::{
         PlayerEntity,
         game_mode::{GameMode, not_spectator},
@@ -118,7 +118,7 @@ impl Plugin for PlayerMovementPlugin {
                 log_movement_diagnostics,
             )
                 .chain()
-                .run_if(world_interaction_available),
+                .run_if(player_movement_available),
         )
         .add_systems(
             PostUpdate,
