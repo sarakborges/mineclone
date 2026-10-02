@@ -347,7 +347,6 @@ fn spawn_storage_search_field(parent: &mut ChildSpawnerCommands, view: &StorageB
             frame.spawn((
                 StorageSearchText,
                 typography::hud("Search..."),
-                TextColor(theme::TEXT_MUTED),
                 Node {
                     position_type: PositionType::Absolute,
                     left: px(text_input::INPUT_PADDING_X + 1.0),
