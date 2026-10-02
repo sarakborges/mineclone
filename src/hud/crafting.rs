@@ -32,6 +32,7 @@ use crate::{
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
 const CRAFTING_PANEL_WIDTH: f32 = 420.0;
 const CRAFTING_PANEL_GAP: f32 = 14.0;
+const CRAFTING_ROWS_GAP: f32 = 14.0;
 const CRAFTING_INSET_GAP: f32 = 8.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
 const CRAFTING_PANEL_BORDER: f32 = 2.0;
@@ -253,10 +254,15 @@ fn spawn_crafting_root(
                 left: px(0),
                 top: px(0),
                 width: percent(100),
-                height: percent(100),
-                padding: UiRect::all(px(CRAFTING_SCREEN_PADDING)),
+                height: percent(50),
+                padding: UiRect {
+                    left: px(CRAFTING_SCREEN_PADDING),
+                    right: px(CRAFTING_SCREEN_PADDING),
+                    bottom: px(CRAFTING_ROWS_GAP * 0.5),
+                    ..default()
+                },
                 flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
+                align_items: AlignItems::FlexEnd,
                 justify_content: JustifyContent::Center,
                 column_gap: px(CRAFTING_SCREEN_PADDING),
                 ..default()
@@ -305,7 +311,7 @@ fn spawn_crafting_panel(
             ))
             .with_children(|available| {
                 available.spawn((
-                    typography::caption("AVAILABLE RECIPES"),
+                    typography::hud_heading("AVAILABLE RECIPES"),
                     Pickable::IGNORE,
                 ));
                 spawn_recipe_list(available, recipes, session, content);
@@ -336,13 +342,15 @@ fn spawn_current_station_panel(
 ) {
     parent
         .spawn((
-            Node {
+            surface::hud_container(Node {
                 width: px(CURRENT_STATION_PANEL_WIDTH),
+                padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
+                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
                 row_gap: px(CRAFTING_PANEL_GAP),
                 ..default()
-            },
+            }),
             Pickable::IGNORE,
         ))
         .with_children(|station| {
@@ -523,7 +531,7 @@ fn spawn_recipe_details(
     hotbar: &PlayerHotbar,
 ) {
     parent.spawn((
-        typography::caption("SELECTED RECIPE"),
+        typography::hud_heading("SELECTED RECIPE"),
         Pickable::IGNORE,
     ));
 

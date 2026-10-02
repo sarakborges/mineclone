@@ -36,6 +36,7 @@ const INVENTORY_VIEW_TOGGLE_HEIGHT: f32 = 40.0;
 const INVENTORY_VIEW_TOGGLE_GAP: f32 = 8.0;
 const INVENTORY_VIEW_TOGGLE_TOP_MARGIN: f32 = 12.0;
 const INVENTORY_VIEW_TOGGLE_BORDER_WIDTH: f32 = 2.0;
+const SURVIVAL_ROWS_GAP: f32 = 14.0;
 
 pub(super) struct InventoryLayoutState<'a> {
     pub(super) categories: &'a InventoryCategoryRegistry,
@@ -78,16 +79,16 @@ fn spawn_survival_inventory_row(
     root.spawn((
         Node {
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexEnd,
+            align_items: AlignItems::FlexStart,
             column_gap: px(PANEL_GAP),
-            margin: UiRect::bottom(px(PANEL_GAP)),
+            margin: UiRect::top(px(SURVIVAL_ROWS_GAP * 0.5)),
             ..default()
         },
         Pickable::IGNORE,
     ))
     .with_children(|row| {
-        spawn_player_inventory_panel(row, state, items);
         spawn_character_info_panel(row);
+        spawn_player_inventory_panel(row, state, items);
     });
 }
 
@@ -223,14 +224,18 @@ pub(super) fn spawn_inventory_root(
             Node {
                 position_type: PositionType::Absolute,
                 left: px(0),
-                top: px(0),
+                top: if creative_inventory { px(0) } else { percent(50) },
                 width: percent(100),
-                height: percent(100),
+                height: if creative_inventory {
+                    percent(100)
+                } else {
+                    percent(50)
+                },
                 flex_direction: FlexDirection::Row,
                 align_items: if creative_inventory {
                     AlignItems::Center
                 } else {
-                    AlignItems::FlexEnd
+                    AlignItems::FlexStart
                 },
                 justify_content: JustifyContent::Center,
                 column_gap: px(PANEL_GAP),
