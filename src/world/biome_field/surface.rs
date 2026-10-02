@@ -4,15 +4,10 @@ use bevy::prelude::*;
 use crate::content::biome_distribution::BiomeDistribution;
 
 use super::{
-    BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
-    SurfaceBoundarySample, SurfaceSiteCacheEntry,
+    BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES, SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
-    selection::fitting::fit_surface_site_weights,
-    spatial::{
-        smoothstep, surface_site_position, varied_surface_margin_width,
-        warp_surface_position,
-    },
+    spatial::{smoothstep, varied_surface_margin_width, warp_surface_position},
 };
 
 const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
@@ -44,28 +39,25 @@ impl BiomeField {
             (warped.x / self.surface_site_spacing.x).round() as i32,
             (warped.y / self.surface_site_spacing.y).round() as i32,
         );
-        let mut sampled_sites =
-            [(IVec2::ZERO, Vec2::ZERO, 0.0_f32, None); SITE_SAMPLE_COUNT];
-        let mut sample_count = 0;
+        self.surface_map.ensure_sample_window(self, center);
 
+        let mut sampled_sites = [(Vec2::ZERO, 0.0_f32, 0_usize); SITE_SAMPLE_COUNT];
+        let mut sample_count = 0;
         {
-            let cache = self
-                .surface_site_cache
-                .read()
+            let samples = self
+                .surface_map
+                .read_samples()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                 for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                     let cell = center + IVec2::new(x, z);
-                    let cached = cache.get(&cell).copied();
-                    let site = cached.map_or_else(
-                        || surface_site_position(cell, self.surface_site_spacing, self.seed),
-                        |entry| entry.position,
-                    );
+                    let sample = samples.get(&cell).unwrap_or_else(|| {
+                        panic!("surface biome map sample missing resolved cell {cell:?}")
+                    });
                     sampled_sites[sample_count] = (
-                        cell,
-                        site,
-                        warped.distance(site),
-                        cached.map(|entry| entry.biome_index),
+                        sample.position,
+                        warped.distance(sample.position),
+                        sample.biome_index,
                     );
                     sample_count += 1;
                 }
@@ -73,99 +65,45 @@ impl BiomeField {
         }
         debug_assert_eq!(sample_count, SITE_SAMPLE_COUNT);
 
-        let mut cache_updates = [None; SITE_SAMPLE_COUNT];
-        let mut cache_update_count = 0;
-        for (cell, site, _, candidate_index) in &mut sampled_sites[..sample_count] {
-            if candidate_index.is_some() {
-                continue;
-            }
-
-            let selected = self.select_surface_biome_index(*cell, *site);
-            *candidate_index = Some(selected);
-            cache_updates[cache_update_count] = Some((*cell, *site, selected));
-            cache_update_count += 1;
-        }
-
-        if cache_update_count > 0 {
-            let mut cache = self
-                .surface_site_cache
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            for update in &cache_updates[..cache_update_count] {
-                let (cell, position, selected) =
-                    update.expect("surface biome cache update must be initialized");
-                cache.entry(cell).or_insert(SurfaceSiteCacheEntry {
-                    position,
-                    biome_index: selected,
-                });
-            }
-        }
-
-        // A center cell always resolves the same canonical 5x5 site window.
-        // Cache its power-diagram solution so terrain sampling pays the graph
-        // fitting cost once per site cell instead of once per world column.
-        let site_weights = if let Some(weights) = self.surface_site_cache.fitted_weights(center) {
-            weights
-        } else {
-            let weights = fit_surface_site_weights(
-                &sampled_sites[..sample_count],
-                &self.surface_biomes,
-                self.surface_site_spacing,
-                self.seed,
-            )
-            .unwrap_or_else(|reason| {
-                panic!("surface biome boundary fitting failed near site {center:?}: {reason}")
-            });
-            debug_assert_eq!(weights.len(), sample_count);
-            self.surface_site_cache
-                .cache_fitted_weights(center, weights)
-        };
-
         let mut nearest_score = f32::INFINITY;
         let mut nearest_site = Vec2::ZERO;
         let mut nearest_sample_index = 0;
         let mut primary_index = 0;
-        for (sample_index, (_, site, distance, candidate_index)) in
+        for (sample_index, (site, distance, candidate_index)) in
             sampled_sites[..sample_count].iter().enumerate()
         {
-            let candidate_index = candidate_index.expect("surface biome site must be resolved");
-            let score = distance * distance - site_weights[sample_index];
+            let score = distance * distance;
             if score < nearest_score {
                 nearest_score = score;
                 nearest_site = *site;
                 nearest_sample_index = sample_index;
-                primary_index = candidate_index;
+                primary_index = *candidate_index;
             }
         }
-        let fitted_primary_index = primary_index;
-        let fitted_boundary = nearest_surface_boundary(
+        let regional_primary_index = primary_index;
+        let regional_boundary = nearest_surface_boundary(
             nearest_sample_index,
             nearest_score,
             &sampled_sites[..sample_count],
-            site_weights.as_ref(),
         );
 
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
         let mut weight_count = 0;
-        for (sample_index, (_, site, distance, candidate_index)) in
-            sampled_sites[..sample_count].iter().enumerate()
-        {
-            let candidate_index = candidate_index.expect("surface biome site must be resolved");
+        for (site, distance, candidate_index) in &sampled_sites[..sample_count] {
             let pair_distance = nearest_site.distance(*site);
             let boundary_distance = if pair_distance <= f32::EPSILON {
                 0.0
             } else {
-                let candidate_score = distance * distance - site_weights[sample_index];
+                let candidate_score = distance * distance;
                 ((candidate_score - nearest_score) / (2.0 * pair_distance)).max(0.0)
             };
             let border_progress =
                 1.0 - (boundary_distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
-            let smooth_progress = smoothstep(border_progress);
             set_max_weight(
                 &mut weights,
                 &mut weight_count,
-                candidate_index,
-                smooth_progress,
+                *candidate_index,
+                smoothstep(border_progress),
             );
         }
 
@@ -217,7 +155,7 @@ impl BiomeField {
                     .clamp(0.0, 1.0);
 
                 BiomeInfluence {
-                    id: self.surface_biomes[*index].id.as_str(),
+                    id: biome.id.as_str(),
                     weight: *weight / total_weight,
                     surface_index: *index,
                     terrain_strength,
@@ -259,8 +197,8 @@ impl BiomeField {
                 .unwrap_or(forced_index);
         }
 
-        let nearest_boundary = (primary_index == fitted_primary_index)
-            .then_some(fitted_boundary)
+        let nearest_boundary = (primary_index == regional_primary_index)
+            .then_some(regional_boundary)
             .flatten();
         let surface_margin_index = nearest_boundary.and_then(|boundary| {
             let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
@@ -333,18 +271,14 @@ fn forced_distribution_strength(
 fn nearest_surface_boundary(
     primary_sample_index: usize,
     primary_score: f32,
-    sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
-    site_weights: &[f32],
+    sampled_sites: &[(Vec2, f32, usize)],
 ) -> Option<SurfaceBoundarySample> {
-    let (_, primary_site, _, primary_index) = sampled_sites[primary_sample_index];
-    let primary_index = primary_index.expect("surface biome site must be resolved");
+    let (primary_site, _, primary_index) = sampled_sites[primary_sample_index];
 
     sampled_sites
         .iter()
-        .enumerate()
-        .filter_map(|(sample_index, (_, site, distance, candidate_index))| {
-            let candidate_index = candidate_index.expect("surface biome site must be resolved");
-            if candidate_index == primary_index {
+        .filter_map(|(site, distance, candidate_index)| {
+            if *candidate_index == primary_index {
                 return None;
             }
 
@@ -353,11 +287,11 @@ fn nearest_surface_boundary(
                 return None;
             }
 
-            let candidate_score = distance * distance - site_weights[sample_index];
+            let candidate_score = distance * distance;
             let boundary_distance =
                 ((candidate_score - primary_score) / (2.0 * pair_distance)).max(0.0);
             Some(SurfaceBoundarySample {
-                neighbor_surface_index: candidate_index,
+                neighbor_surface_index: *candidate_index,
                 distance: boundary_distance,
             })
         })

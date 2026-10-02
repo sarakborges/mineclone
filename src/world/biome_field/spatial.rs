@@ -5,15 +5,21 @@ pub(super) use crate::world::deterministic::hash_unit;
 pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
-    BORDER_TRANSITION_WIDTH, BORDER_WARP_BROAD_AMPLITUDE, BORDER_WARP_BROAD_SCALE,
-    BORDER_WARP_DETAIL_AMPLITUDE, BORDER_WARP_DETAIL_SCALE, SURFACE_ROW_JITTER_FRACTION,
-    VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
+    BORDER_WARP_BROAD_AMPLITUDE, BORDER_WARP_BROAD_SCALE, BORDER_WARP_DETAIL_AMPLITUDE,
+    BORDER_WARP_DETAIL_SCALE, SURFACE_ROW_JITTER_FRACTION, VOLUME_SITE_JITTER_FRACTION,
+    VOLUME_WARP_AMPLITUDE,
 };
 
-pub(super) fn surface_minimum_spacing(minimum_radius: Vec2) -> Vec2 {
-    let total_warp = BORDER_WARP_BROAD_AMPLITUDE + BORDER_WARP_DETAIL_AMPLITUDE;
-    let border_allowance = BORDER_TRANSITION_WIDTH + total_warp * 2.0;
-    minimum_radius * 2.0 + Vec2::splat(border_allowance)
+const SURFACE_MAP_CELLS_PER_MINIMUM_RADIUS: f32 = 8.0;
+const MIN_SURFACE_MAP_SPACING: f32 = 8.0;
+const MAX_SURFACE_MAP_SPACING: f32 = 16.0;
+
+pub(super) fn surface_map_spacing(minimum_radius: Vec2) -> Vec2 {
+    let smallest_radius = minimum_radius.min_element().max(1.0);
+    Vec2::splat(
+        (smallest_radius / SURFACE_MAP_CELLS_PER_MINIMUM_RADIUS)
+            .clamp(MIN_SURFACE_MAP_SPACING, MAX_SURFACE_MAP_SPACING),
+    )
 }
 
 pub(super) fn warp_surface_position(position: Vec2, seed: u64) -> Vec2 {
@@ -97,13 +103,9 @@ pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {
 pub(super) fn surface_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
 
-    // Independent 2D jitter can move two neighboring sites toward each other
-    // by twice the authored jitter amplitude, invalidating the minimum-radius
-    // guarantee that `surface_minimum_spacing` is built around. Jitter whole
-    // rows laterally instead: sites in one row keep the full X spacing while
-    // sites in different rows keep the full Z spacing. This still breaks the
-    // lattice's four-way junctions, and the continuous domain warp owns the
-    // organic border shape, without letting a region collapse below size.min.
+    // The frontier map owns territorial decisions. Row jitter only breaks the
+    // visual sampling lattice so borders do not look axis-aligned; it never
+    // changes which map cell belongs to which biome region.
     if cell.y == 0 {
         return base;
     }
@@ -180,8 +182,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn surface_map_spacing_keeps_multiple_cells_inside_the_smallest_biome_radius() {
+        assert_eq!(surface_map_spacing(Vec2::splat(80.0)), Vec2::splat(10.0));
+        assert_eq!(surface_map_spacing(Vec2::splat(160.0)), Vec2::splat(16.0));
+        assert_eq!(surface_map_spacing(Vec2::splat(8.0)), Vec2::splat(8.0));
+    }
+
+    #[test]
     fn surface_row_jitter_preserves_lattice_axis_spacing() {
-        let spacing = Vec2::new(440.0, 440.0);
+        let spacing = Vec2::new(10.0, 10.0);
         let tolerance = spacing.max_element() * 1e-5;
         let seed = 42;
 
@@ -195,47 +204,6 @@ mod tests {
                 assert!((right.x - site.x - spacing.x).abs() <= tolerance);
                 assert!((right.y - site.y).abs() <= tolerance);
                 assert!((above.y - site.y - spacing.y).abs() <= tolerance);
-            }
-        }
-    }
-
-    #[test]
-    fn surface_site_jitter_cannot_compress_authored_minimum_radius() {
-        let minimum_radius = Vec2::new(180.0, 180.0);
-        let spacing = surface_minimum_spacing(minimum_radius);
-
-        for seed in [0, 42, u64::MAX] {
-            for y in -3..=3 {
-                for x in -3..=3 {
-                    let cell = IVec2::new(x, y);
-                    let site = surface_site_position(cell, spacing, seed);
-
-                    for neighbor_y in -1..=1 {
-                        for neighbor_x in -1..=1 {
-                            if neighbor_x == 0 && neighbor_y == 0 {
-                                continue;
-                            }
-
-                            let neighbor = surface_site_position(
-                                cell + IVec2::new(neighbor_x, neighbor_y),
-                                spacing,
-                                seed,
-                            );
-                            let half_delta = (neighbor - site) * 0.5;
-                            let normalized = Vec2::new(
-                                half_delta.x / minimum_radius.x,
-                                half_delta.y / minimum_radius.y,
-                            )
-                            .length();
-
-                            assert!(
-                                normalized >= 1.0,
-                                "surface sites {cell:?} and {:?} compress size.min for seed {seed}: normalized half-distance={normalized}",
-                                cell + IVec2::new(neighbor_x, neighbor_y),
-                            );
-                        }
-                    }
-                }
             }
         }
     }

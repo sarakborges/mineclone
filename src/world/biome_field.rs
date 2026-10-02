@@ -6,7 +6,7 @@ mod noise_band;
 mod selection;
 mod spatial;
 mod surface;
-mod surface_cache;
+mod surface_map;
 mod visuals;
 mod volume;
 
@@ -30,15 +30,12 @@ pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
     spatial::{
-        hash_unit, lerp, smoothstep, surface_minimum_spacing, surface_site_position,
+        hash_unit, lerp, smoothstep, surface_map_spacing, surface_site_position,
         warp_surface_position,
     },
-    surface_cache::SurfaceSiteCache,
+    surface_map::SurfaceBiomeMap,
 };
-use super::{
-    macro_climate::MacroClimateField,
-    new_world::biome_size_multiplier_tenths,
-};
+use super::{macro_climate::MacroClimateField, new_world::biome_size_multiplier_tenths};
 
 const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
 pub(crate) const MAX_SURFACE_INFLUENCES: usize =
@@ -88,7 +85,7 @@ pub struct BiomeField {
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
-    pub(super) surface_site_cache: SurfaceSiteCache,
+    pub(super) surface_map: SurfaceBiomeMap,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
     single_surface_biome: Option<usize>,
     ocean_surface_index: Option<usize>,
@@ -178,7 +175,7 @@ impl BiomeField {
         center_chunk: IVec2,
         radius_chunks: i32,
     ) {
-        self.surface_site_cache.retain_around(
+        self.surface_map.retain_samples_around(
             center_chunk,
             radius_chunks,
             self.surface_site_spacing,
@@ -205,7 +202,7 @@ impl BiomeField {
 
         let mut surface_biomes = Vec::new();
         let mut volume_biomes = Vec::new();
-        let mut surface_minimum_radius = Vec2::ZERO;
+        let mut surface_smallest_radius = f32::INFINITY;
         let mut volume_minimum_radius = Vec3::ZERO;
         let mut has_active_volume_biome = false;
 
@@ -254,8 +251,9 @@ impl BiomeField {
             match biome.kind {
                 BiomeKind::Surface => {
                     if entry.weight > 0.0 {
-                        surface_minimum_radius.x = surface_minimum_radius.x.max(entry.size.x.min);
-                        surface_minimum_radius.y = surface_minimum_radius.y.max(entry.size.z.min);
+                        surface_smallest_radius = surface_smallest_radius
+                            .min(entry.size.x.min)
+                            .min(entry.size.z.min);
                     }
                     surface_biomes.push(entry);
                 }
@@ -279,8 +277,9 @@ impl BiomeField {
             "dimension {} must define at least one active surface biome",
             dimension.id
         );
+        debug_assert!(surface_smallest_radius.is_finite());
 
-        let surface_site_spacing = surface_minimum_spacing(surface_minimum_radius);
+        let surface_site_spacing = surface_map_spacing(Vec2::splat(surface_smallest_radius));
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
         let ocean_surface_index = dimension
@@ -294,7 +293,7 @@ impl BiomeField {
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
             seed,
-            surface_site_cache: SurfaceSiteCache::new(),
+            surface_map: SurfaceBiomeMap::new(),
             forced_surface_biome: None,
             single_surface_biome: None,
             ocean_surface_index,
@@ -311,7 +310,7 @@ impl BiomeField {
             return;
         }
         self.spawn_oceans = spawn_oceans;
-        self.surface_site_cache.clear();
+        self.surface_map.clear();
     }
 
     pub(super) fn surface_biome_is_enabled(&self, index: usize) -> bool {
@@ -326,7 +325,7 @@ impl BiomeField {
             .unwrap_or_else(|| panic!("single biome is not a surface biome: {biome_id}"));
         self.single_surface_biome = Some(biome_index);
         self.forced_surface_biome = None;
-        self.surface_site_cache.clear();
+        self.surface_map.clear();
     }
 
     pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {
