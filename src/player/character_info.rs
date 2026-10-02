@@ -22,7 +22,7 @@ impl Plugin for PlayerCharacterInfoPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            toggle_character_info
+            toggle_inventory_screen
                 .run_if(in_state(GameState::Gameplay))
                 .run_if(in_state(PauseState::Running)),
         );
@@ -40,7 +40,7 @@ struct CharacterInfoModalInput<'w, 's> {
     next_modal: ResMut<'w, NextState<GameplayModalState>>,
 }
 
-fn toggle_character_info(
+fn toggle_inventory_screen(
     mut input: CharacterInfoModalInput,
     game_mode: Single<&GameMode>,
 ) {
@@ -63,10 +63,40 @@ fn toggle_character_info(
         return;
     }
 
-    let next = if *input.modal.get() == GameplayModalState::CharacterInfo {
+    let target = inventory_modal_for_mode(**game_mode);
+    let next = if *input.modal.get() == target {
         GameplayModalState::Closed
     } else {
-        GameplayModalState::CharacterInfo
+        target
     };
     input.next_modal.set(next);
+}
+
+const fn inventory_modal_for_mode(game_mode: GameMode) -> GameplayModalState {
+    match game_mode {
+        GameMode::Survival => GameplayModalState::Inventory,
+        GameMode::Creative => GameplayModalState::CharacterInfo,
+        GameMode::Spectator => GameplayModalState::Closed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn survival_inventory_action_opens_crafting_inventory() {
+        assert_eq!(
+            inventory_modal_for_mode(GameMode::Survival),
+            GameplayModalState::Inventory
+        );
+    }
+
+    #[test]
+    fn creative_inventory_action_keeps_character_info_inventory() {
+        assert_eq!(
+            inventory_modal_for_mode(GameMode::Creative),
+            GameplayModalState::CharacterInfo
+        );
+    }
 }
