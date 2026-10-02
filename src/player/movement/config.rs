@@ -7,7 +7,6 @@ pub const FLY_SPEED_MULTIPLIER: f32 = 5.0;
 pub const FLY_SPEED: f32 = WALK_SPEED * FLY_SPEED_MULTIPLIER;
 pub const FLY_ACCELERATION: f32 = 75.0;
 pub const FLY_DECELERATION: f32 = 90.0;
-pub const GRAVITY: f32 = -18.0;
 pub const JUMP_SPEED: f32 = 7.0;
 pub const SWIM_ASCEND_SPEED: f32 = 3.8;
 pub const SWIM_DESCEND_SPEED: f32 = 3.0;
