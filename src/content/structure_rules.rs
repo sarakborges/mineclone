@@ -64,6 +64,8 @@ pub struct StructureGenerationRules {
 pub struct StructureRestrictions {
     #[serde(default)]
     pub ground_blocks: Vec<String>,
+    #[serde(default)]
+    pub min_slope: i32,
     #[serde(default = "default_max_slope")]
     pub max_slope: i32,
     #[serde(default = "default_requires_dry_ground")]
@@ -82,6 +84,7 @@ impl Default for StructureRestrictions {
     fn default() -> Self {
         Self {
             ground_blocks: Vec::new(),
+            min_slope: 0,
             max_slope: default_max_slope(),
             requires_dry_ground: default_requires_dry_ground(),
             required_biome_coverage: 0.0,
@@ -95,8 +98,12 @@ impl Default for StructureRestrictions {
 impl StructureRestrictions {
     pub(crate) fn validate(&self, structure_id: &str) {
         assert!(
-            self.max_slope >= 0,
-            "structure {structure_id} restrictions.maxSlope cannot be negative"
+            self.min_slope >= 0,
+            "structure {structure_id} restrictions.minSlope cannot be negative"
+        );
+        assert!(
+            self.max_slope >= self.min_slope,
+            "structure {structure_id} restrictions.maxSlope must be greater than or equal to minSlope"
         );
         assert!(
             self.required_biome_coverage.is_finite()
@@ -210,15 +217,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_preserve_legacy_structure_placement_behavior() {
+    fn defaults_allow_flat_or_gently_sloped_structure_placement() {
         let restrictions = StructureRestrictions::default();
         let generation = StructureGenerationRules::default();
 
+        assert_eq!(restrictions.min_slope, 0);
         assert_eq!(restrictions.max_slope, 1);
         assert!(restrictions.requires_dry_ground);
         assert_eq!(restrictions.required_biome_coverage, 0.0);
         assert_eq!(generation.replace_policy, StructureReplacePolicy::Any);
         assert_eq!(generation.fluid_policy, StructureFluidPolicy::Displace);
         assert!(!generation.reserve_space);
+    }
+
+    #[test]
+    #[should_panic(expected = "restrictions.minSlope cannot be negative")]
+    fn rejects_negative_minimum_slope() {
+        let restrictions = StructureRestrictions {
+            min_slope: -1,
+            ..Default::default()
+        };
+        restrictions.validate("test:structure");
+    }
+
+    #[test]
+    #[should_panic(expected = "restrictions.maxSlope must be greater than or equal to minSlope")]
+    fn rejects_maximum_slope_below_minimum() {
+        let restrictions = StructureRestrictions {
+            min_slope: 3,
+            max_slope: 2,
+            ..Default::default()
+        };
+        restrictions.validate("test:structure");
     }
 }

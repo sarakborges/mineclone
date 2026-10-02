@@ -17,6 +17,7 @@ pub(crate) fn fit_structure_to_ground(
     anchor: IVec2,
     support_offsets: &[IVec2],
     minimum_offset_y: i32,
+    min_slope: i32,
     max_slope: i32,
     mut ground_at: impl FnMut(IVec2) -> Option<i32>,
 ) -> Option<i32> {
@@ -29,7 +30,12 @@ pub(crate) fn fit_structure_to_ground(
         maximum_ground_y = maximum_ground_y.max(ground_y);
     }
 
-    if minimum_ground_y == i32::MAX || maximum_ground_y - minimum_ground_y > max_slope {
+    if minimum_ground_y == i32::MAX {
+        return None;
+    }
+
+    let slope = maximum_ground_y - minimum_ground_y;
+    if slope < min_slope || slope > max_slope {
         return None;
     }
 
@@ -51,6 +57,7 @@ pub(super) fn compute_structure_origin_y(
             anchor,
             &structure.support_offsets_for_rotation(rotation),
             structure.ground_anchor_y_offset(),
+            structure.restrictions.min_slope,
             structure.restrictions.max_slope,
             |_| Some(ground_y),
         );
@@ -61,6 +68,7 @@ pub(super) fn compute_structure_origin_y(
         anchor,
         &support_offsets,
         structure.ground_anchor_y_offset(),
+        structure.restrictions.min_slope,
         structure.restrictions.max_slope,
         |position| {
             if structure.restrictions.requires_dry_ground
@@ -87,4 +95,54 @@ fn supported_surface_ground_y(
     );
 
     Some(surface_height - 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn minimum_slope_rejects_flat_ground() {
+        let supports = [IVec2::ZERO, IVec2::new(4, 0)];
+        let result = fit_structure_to_ground(
+            IVec2::ZERO,
+            &supports,
+            0,
+            3,
+            8,
+            |_| Some(12),
+        );
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn minimum_slope_accepts_required_relief() {
+        let supports = [IVec2::ZERO, IVec2::new(4, 0)];
+        let result = fit_structure_to_ground(
+            IVec2::ZERO,
+            &supports,
+            1,
+            3,
+            8,
+            |position| Some(if position.x == 0 { 12 } else { 17 }),
+        );
+
+        assert_eq!(result, Some(11));
+    }
+
+    #[test]
+    fn maximum_slope_still_rejects_excessive_relief() {
+        let supports = [IVec2::ZERO, IVec2::new(4, 0)];
+        let result = fit_structure_to_ground(
+            IVec2::ZERO,
+            &supports,
+            0,
+            4,
+            8,
+            |position| Some(if position.x == 0 { 12 } else { 21 }),
+        );
+
+        assert_eq!(result, None);
+    }
 }
