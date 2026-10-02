@@ -32,6 +32,10 @@
   },
   "surfaceLayers": [
     {
+      "block": "asteria:snow",
+      "depth": 2
+    },
+    {
       "block": "asteria:stone"
     }
   ],
