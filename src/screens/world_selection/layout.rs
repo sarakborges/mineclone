@@ -355,7 +355,7 @@ pub(super) fn spawn_world_selection(
             footer.spawn(button(
                 localization.text(language.get(), "newWorld.return").to_owned(),
                 WorldSelectionAction::Back,
-                px(360),
+                px(300),
                 COMPACT_CONTROL_HEIGHT,
                 ButtonVariant::Normal,
             ));
@@ -364,9 +364,16 @@ pub(super) fn spawn_world_selection(
                     .text(language.get(), "worldSelection.openSavesFolder")
                     .to_owned(),
                 WorldSelectionAction::OpenSavesFolder,
-                px(360),
+                px(300),
                 COMPACT_CONTROL_HEIGHT,
                 ButtonVariant::Normal,
+            ));
+            footer.spawn(button(
+                localization.text(language.get(), "starting.newWorld").to_owned(),
+                WorldSelectionAction::NewWorld,
+                px(300),
+                COMPACT_CONTROL_HEIGHT,
+                ButtonVariant::Primary,
             ));
         });
     });
