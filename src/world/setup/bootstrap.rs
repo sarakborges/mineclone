@@ -39,18 +39,19 @@ use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
+    deterministic::mix_hash_u64,
     generation::{authored_surface_fluid_id_for_position, ocean_weight_from_surface},
     render_distance::RenderDistanceSettings,
     streaming::initial_streaming_chunk_coords,
-    terrain::{surface_height, surface_height_from_sample},
-    deterministic::mix_hash_u64,
     structure_field::StructureField,
+    terrain::{surface_height, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
 };
 
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+const INITIAL_BOOTSTRAP_RENDER_DISTANCE_CHUNKS: i32 = 1;
 const RANDOM_SPAWN_BIOME_SALT: u64 = 0x8f3f_73b5_cf1c_9ade;
 
 struct BootstrapRegistries<'a> {
@@ -448,6 +449,14 @@ pub(in crate::world) fn begin_world_loading(
     .resolve(saved_player_position);
     // Saves persist only modified chunks. Untouched terrain is intentionally absent and
     // must be regenerated from the pinned worldgen identity around the restored player.
+    log_gameplay_event(format!(
+        "world.load.bootstrap_selection.begin center={initial_center:?} configured_render_distance={} bootstrap_render_distance={}",
+        config.render_distance.chunks(),
+        config
+            .render_distance
+            .chunks()
+            .min(INITIAL_BOOTSTRAP_RENDER_DISTANCE_CHUNKS)
+    ));
     let coords = bootstrap_chunk_coords(
         initial_center,
         &config.render_distance,
@@ -543,7 +552,9 @@ fn bootstrap_chunk_coords(
 ) -> Vec<IVec3> {
     initial_streaming_chunk_coords(
         center,
-        render_distance.chunks(),
+        render_distance
+            .chunks()
+            .min(INITIAL_BOOTSTRAP_RENDER_DISTANCE_CHUNKS),
         render_distance.vertical_chunks(),
         dimension,
         biomes,
@@ -758,5 +769,4 @@ mod tests {
         assert_eq!(tops.get(&IVec2::new(2, -3)), Some(&4));
         assert_eq!(tops.get(&IVec2::new(1, 7)), Some(&2));
     }
-
 }
