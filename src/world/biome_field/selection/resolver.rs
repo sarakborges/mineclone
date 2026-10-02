@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
+    sync::Mutex,
 };
 
 use bevy::prelude::*;
@@ -9,10 +10,15 @@ use super::{
     authored_pair_conflicts, cell_hash, climate_weight, fitting, region_claim_hash,
     surface_site_position, surface_sites_share_border,
 };
-use crate::world::biome_field::BiomeField;
+use crate::world::biome_field::{BiomeField, SurfaceSiteCacheEntry};
 
 const FIT_EPSILON: f32 = 0.001;
 type SolverSignature = Vec<(i32, i32, Vec<usize>)>;
+
+// Chunk generation may run several workers over overlapping columns. Only an
+// unresolved surface graph needs serialization: once one worker publishes the
+// canonical site identities, later workers return from the shared cache.
+static SURFACE_SOLVER_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone)]
 struct CellState {
@@ -92,6 +98,14 @@ pub(in crate::world::biome_field) fn resolve_surface_sites(
     field: &BiomeField,
     requested_cells: &[IVec2],
 ) -> Result<Vec<(IVec2, Vec2, usize)>, String> {
+    let _solver_guard = SURFACE_SOLVER_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    if let Some(resolved) = resolved_requested_sites_from_cache(field, requested_cells) {
+        return Ok(resolved);
+    }
+
     let solver = RecursiveSurfaceSolver {
         field,
         candidate_cache: RefCell::default(),
@@ -116,7 +130,46 @@ pub(in crate::world::biome_field) fn resolve_surface_sites(
         .map(|(cell, state)| (cell, state.site, state.biome_index()))
         .collect::<Vec<_>>();
     resolved.sort_by_key(|(cell, _, _)| (cell.y, cell.x));
+
+    {
+        let mut cache = field
+            .surface_site_cache
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for &(cell, site, selected) in &resolved {
+            cache
+                .entry(cell)
+                .and_modify(|existing| {
+                    debug_assert_eq!(
+                        existing.biome_index, selected,
+                        "recursive biome fitting must be independent of query order"
+                    );
+                })
+                .or_insert(SurfaceSiteCacheEntry {
+                    position: site,
+                    biome_index: selected,
+                });
+        }
+    }
+
     Ok(resolved)
+}
+
+fn resolved_requested_sites_from_cache(
+    field: &BiomeField,
+    requested_cells: &[IVec2],
+) -> Option<Vec<(IVec2, Vec2, usize)>> {
+    let cache = field
+        .surface_site_cache
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut resolved = Vec::with_capacity(requested_cells.len());
+    for &cell in requested_cells {
+        let entry = cache.get(&cell).copied()?;
+        resolved.push((cell, entry.position, entry.biome_index));
+    }
+    resolved.sort_by_key(|(cell, _, _)| (cell.y, cell.x));
+    Some(resolved)
 }
 
 impl RecursiveSurfaceSolver<'_> {
@@ -192,6 +245,25 @@ impl RecursiveSurfaceSolver<'_> {
         if state.cells.contains_key(&cell) {
             return Ok(());
         }
+
+        if let Some(cached) = self
+            .field
+            .surface_site_cache
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&cell)
+            .copied()
+        {
+            state.cells.insert(
+                cell,
+                CellState {
+                    site: cached.position,
+                    domain: vec![cached.biome_index],
+                },
+            );
+            return Ok(());
+        }
+
         let site = surface_site_position(cell, self.field.surface_site_spacing, self.field.seed);
         let domain = self.candidate_order(cell, site)?;
         state.cells.insert(cell, CellState { site, domain });
