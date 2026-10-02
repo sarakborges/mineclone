@@ -25,7 +25,7 @@ use crate::{
 use self::{
     activation::{PreparedWorldActivation, WorldActivationError},
     layout::{
-    SelectionError, WorldListContainer, WorldListEntry, WorldListStatus, spawn_world_entry,
+        SelectionError, WorldListContainer, WorldListEntry, WorldListStatus, spawn_world_entry,
         spawn_world_selection,
     },
     tasks::{PendingWorldLoad, PendingWorldScan},
@@ -45,6 +45,7 @@ impl Plugin for WorldSelectionPlugin {
                 OnEnter(GameState::StartingScreen),
                 release_world_thumbnail_images,
             )
+            .add_systems(OnEnter(GameState::NewWorld), release_world_thumbnail_images)
             .add_systems(OnEnter(GameState::Loading), release_world_thumbnail_images)
             .add_systems(
                 Update,
@@ -70,6 +71,7 @@ struct WorldSelectionState {
 enum WorldSelectionAction {
     Load(String),
     Delete(String),
+    NewWorld,
     OpenSavesFolder,
     Back,
 }
@@ -343,6 +345,14 @@ fn handle_world_selection(
             continue;
         }
 
+        if matches!(action, WorldSelectionAction::NewWorld) {
+            if let Some(pending) = state.loading.as_ref() {
+                pending.abandon();
+            }
+            transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
+            return;
+        }
+
         if matches!(action, WorldSelectionAction::OpenSavesFolder) {
             match open_worlds_directory() {
                 Ok(()) => state.error.clear(),
@@ -410,6 +420,9 @@ fn handle_world_selection(
                     }
                 }
                 return;
+            }
+            WorldSelectionAction::NewWorld => {
+                unreachable!("NewWorld was handled before load-state gating")
             }
             WorldSelectionAction::OpenSavesFolder => {
                 unreachable!("OpenSavesFolder was handled before load-state gating")
