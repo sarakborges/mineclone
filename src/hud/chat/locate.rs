@@ -1,4 +1,7 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    panic::{AssertUnwindSafe, catch_unwind},
+};
 
 use bevy::{
     ecs::system::SystemParam,
@@ -9,36 +12,33 @@ use bevy::{
 use crate::{
     app::crash_log::log_gameplay_event,
     content::{
-        biome::{BiomeKind, BiomeRegistry},
+        biome::{BiomeKind, BiomeRegistry, BiomeVerticalRange},
         biome_structure::BiomeStructurePlacementRules,
         block::BlockRegistry,
+        dimension::DimensionDefinition,
         fluid::FluidRegistry,
         structure::StructureRegistry,
         structure_set::StructureSetRegistry,
     },
     localization::ActiveLanguage,
-    voxel::{
-        chunk::CHUNK_SIZE,
-        coordinates::chunk_coord_from_world,
-    },
+    voxel::coordinates::chunk_coord_from_world,
     world::{
+        WorldGenerationMode, WorldGenerationSettings,
         biome_field::BiomeField,
         current_context::CurrentDimensionContext,
         generation::{
-            ChunkGenerationContext, located_structure_origins_in_chunk,
-            structure_candidate_anchor, structure_candidate_probe,
-            volume_structure_candidate_probe,
+            ChunkGenerationContext, generation_surface_height,
+            located_structure_origins_in_chunk, structure_candidate_anchor,
+            structure_candidate_probe, volume_structure_candidate_probe,
         },
-        terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
-        WorldGenerationSettings,
     },
 };
 
 use super::{ChatMessage, ChatState};
 
 const MAX_LOCATE_BLOCK_RADIUS: i32 = 32_768;
-const MAX_LOCATE_CHUNK_RADIUS: i32 = MAX_LOCATE_BLOCK_RADIUS / CHUNK_SIZE as i32;
+const VOLUME_SEARCH_TILE_SIZE: i32 = 512;
 
 #[derive(Clone, Copy)]
 enum LocateTargetKind {
@@ -47,9 +47,15 @@ enum LocateTargetKind {
     Structure,
 }
 
+enum LocateTaskOutcome {
+    Found(IVec3),
+    NotFound,
+    Failed(String),
+}
+
 struct LocateTaskResult {
     name: String,
-    position: Option<IVec3>,
+    outcome: LocateTaskOutcome,
 }
 
 #[derive(Resource, Default)]
@@ -67,7 +73,7 @@ impl PendingLocate {
 struct LocateSnapshot {
     blocks: BlockRegistry,
     fluids: FluidRegistry,
-    dimension: crate::content::dimension::DimensionDefinition,
+    dimension: DimensionDefinition,
     biomes: BiomeRegistry,
     structures: StructureRegistry,
     structure_sets: StructureSetRegistry,
@@ -105,7 +111,7 @@ pub(super) struct ChatLocateContext<'w> {
     dimension: CurrentDimensionContext<'w>,
     language: Res<'w, ActiveLanguage>,
     pending: ResMut<'w, PendingLocate>,
- }
+}
 
 impl ChatLocateContext<'_> {
     pub(super) fn start(
@@ -132,7 +138,7 @@ impl ChatLocateContext<'_> {
                 let Some(biome) = self.biomes.get(id) else {
                     return format!("Unknown biome id: {id}");
                 };
-                if !dimension.biomes.iter().any(|entry| entry.id == id && entry.weight > 0.0) {
+                if !biome_is_generated_in_dimension(id, dimension, *self.world_generation) {
                     return format!("Biome is not active in this dimension: {id}");
                 }
                 let kind = match biome.kind {
@@ -146,6 +152,12 @@ impl ChatLocateContext<'_> {
                 )
             }
             "structure" => {
+                if !self.world_generation.spawn_structures()
+                    || self.world_generation.mode() == WorldGenerationMode::Void
+                {
+                    return format!("Structure is not generated in this dimension: {id}");
+                }
+
                 if let Some(set) = self.structure_sets.get(id) {
                     if variation.is_some() {
                         return format!("Structure set {id} does not have variations.");
@@ -153,14 +165,14 @@ impl ChatLocateContext<'_> {
                     if !set.locatable {
                         return format!("Structure set cannot be located by command: {id}");
                     }
-                    let generated_here = dimension.biomes.iter().any(|dimension_biome| {
-                        self.biomes
-                            .get(&dimension_biome.id)
-                            .is_some_and(|biome| {
-                                biome.structures.iter().any(|entry| entry.id == id)
-                            })
-                    });
-                    if !generated_here {
+                    if !structure_reference_is_generated(
+                        id,
+                        dimension,
+                        &self.biomes,
+                        &self.structures,
+                        &self.structure_sets,
+                        &self.feature_fields,
+                    ) {
                         return format!("Structure set is not generated in this dimension: {id}");
                     }
                     (
@@ -200,28 +212,14 @@ impl ChatLocateContext<'_> {
                     let search_id = variation
                         .map(|_| structure.id.clone())
                         .unwrap_or_else(|| id.to_owned());
-                    let generated_here = dimension.biomes.iter().any(|dimension_biome| {
-                        self.biomes
-                            .get(&dimension_biome.id)
-                            .is_some_and(|biome| {
-                                biome.structures.iter().any(|entry| {
-                                    entry.id == search_id
-                                        || self
-                                            .structures
-                                            .references_overlap(&entry.id, &search_id)
-                                        || self
-                                            .structure_sets
-                                            .get(&entry.id)
-                                            .is_some_and(|set| {
-                                                set.references_reference(
-                                                    &search_id,
-                                                    &self.structures,
-                                                )
-                                            })
-                                })
-                            })
-                    });
-                    if !generated_here {
+                    if !structure_reference_is_generated(
+                        &search_id,
+                        dimension,
+                        &self.biomes,
+                        &self.structures,
+                        &self.structure_sets,
+                        &self.feature_fields,
+                    ) {
                         return format!("Structure is not generated in this dimension: {id}");
                     }
 
@@ -246,7 +244,9 @@ impl ChatLocateContext<'_> {
             structures: self.structures.as_ref().clone(),
             structure_sets: self.structure_sets.as_ref().clone(),
             biome_field: self.biome_field.as_ref().clone(),
-            feature_fields: self.feature_fields.as_ref().clone(),
+            // Locate may resolve a large amount of deterministic structure
+            // metadata. Keep those disposable caches out of the live world.
+            feature_fields: self.feature_fields.clone_with_fresh_caches(),
             world_generation: *self.world_generation,
         };
         log_gameplay_event(format!(
@@ -255,8 +255,14 @@ impl ChatLocateContext<'_> {
         ));
         let response = format!("Locating {name}...");
         self.pending.task = Some(AsyncComputeTaskPool::get().spawn(async move {
-            let position = locate_target(&snapshot, kind, &search_id, player_block);
-            LocateTaskResult { name, position }
+            let outcome = match catch_unwind(AssertUnwindSafe(|| {
+                locate_target(&snapshot, kind, &search_id, player_block)
+            })) {
+                Ok(Some(position)) => LocateTaskOutcome::Found(position),
+                Ok(None) => LocateTaskOutcome::NotFound,
+                Err(payload) => LocateTaskOutcome::Failed(panic_payload_message(payload)),
+            };
+            LocateTaskResult { name, outcome }
         }));
 
         response
@@ -275,27 +281,39 @@ pub(super) fn poll_locate_task(
     };
     pending.task = None;
 
-    if let Some(position) = result.position {
-        log_gameplay_event(format!(
-            "command.locate.success name={} position={:?}",
-            result.name, position
-        ));
-        chat.append(ChatMessage::Located {
-            prefix: format!(
-                "{} found at X: {} Z: {} Y: {}. ",
-                result.name, position.x, position.z, position.y
-            ),
-            target: position,
-        });
-    } else {
-        log_gameplay_event(format!(
-            "command.locate.failed name={} radius={}",
-            result.name, MAX_LOCATE_BLOCK_RADIUS
-        ));
-        chat.append(ChatMessage::Text(format!(
-            "{} could not be found within {} blocks.",
-            result.name, MAX_LOCATE_BLOCK_RADIUS
-        )));
+    match result.outcome {
+        LocateTaskOutcome::Found(position) => {
+            log_gameplay_event(format!(
+                "command.locate.success name={} position={:?}",
+                result.name, position
+            ));
+            chat.append(ChatMessage::Located {
+                prefix: format!(
+                    "{} found at X: {} Z: {} Y: {}. ",
+                    result.name, position.x, position.z, position.y
+                ),
+                target: position,
+            });
+        }
+        LocateTaskOutcome::NotFound => {
+            log_gameplay_event(format!(
+                "command.locate.failed name={} reason=not_found radius={}",
+                result.name, MAX_LOCATE_BLOCK_RADIUS
+            ));
+            chat.append(ChatMessage::Text(format!(
+                "{} could not be found within {} blocks.",
+                result.name, MAX_LOCATE_BLOCK_RADIUS
+            )));
+        }
+        LocateTaskOutcome::Failed(reason) => {
+            log_gameplay_event(format!(
+                "command.locate.failed name={} reason=world_query_error detail={:?}",
+                result.name, reason
+            ));
+            chat.append(ChatMessage::Error(
+                "Locate failed because the searched world region could not be resolved.".to_owned(),
+            ));
+        }
     }
 }
 
@@ -317,31 +335,38 @@ fn locate_surface_biome(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    // Surface biomes are authored around deterministic site cells. Sampling
-    // every block in every chunk made rare biomes (such as Volcano) scale into
-    // billions of terrain samples before the 32k-block locate radius was
-    // exhausted. Search the same site lattice used by terrain selection
-    // instead; the winning site itself is guaranteed to lie inside its region.
+    let context = snapshot.generation_context();
+    let player_column = player.xz();
+    if snapshot
+        .biome_field
+        .sample_surface(player_column.as_vec2() + Vec2::splat(0.5))
+        .primary_id
+        == id
+    {
+        return Some(IVec3::new(
+            player_column.x,
+            generation_surface_height(player_column, &context),
+            player_column.y,
+        ));
+    }
+
     let spacing = snapshot.biome_field.surface_site_spacing();
     let center = IVec2::new(
         (player.x as f32 / spacing.x).floor() as i32,
         (player.z as f32 / spacing.y).floor() as i32,
     );
-    let maximum_distance_squared =
-        i64::from(MAX_LOCATE_BLOCK_RADIUS) * i64::from(MAX_LOCATE_BLOCK_RADIUS);
-    let cell_radius = (MAX_LOCATE_BLOCK_RADIUS as f32 / spacing.min_element())
-        .ceil() as i32
-        + 2;
+    let maximum_cell_radius =
+        (MAX_LOCATE_BLOCK_RADIUS as f32 / spacing.min_element()).ceil() as i32 + 3;
     let mut best: Option<(i64, IVec3)> = None;
+    let mut seen_columns = HashSet::new();
 
-    for radius in 0..=cell_radius {
-        visit_square_cell_ring(center, radius, |cell| {
+    for radius in 0..=maximum_cell_radius {
+        visit_square_ring(center, radius, |cell| {
             let site = snapshot.biome_field.surface_site_position(cell);
-            let horizontal_dx = (site.x - player.x as f32) as f64;
-            let horizontal_dz = (site.y - player.z as f32) as f64;
-            let horizontal_distance_squared =
-                (horizontal_dx * horizontal_dx + horizontal_dz * horizontal_dz) as i64;
-            if horizontal_distance_squared > maximum_distance_squared {
+            let column = site.floor().as_ivec2();
+            if !seen_columns.insert(column)
+                || !within_horizontal_radius(player_column, column, MAX_LOCATE_BLOCK_RADIUS)
+            {
                 return;
             }
 
@@ -350,16 +375,17 @@ fn locate_surface_biome(
                 return;
             }
 
-            let column = site.floor().as_ivec2();
-            let y = surface_height(
-                column,
-                &snapshot.dimension,
-                &snapshot.biomes,
-                &snapshot.biome_field,
+            let position = IVec3::new(
+                column.x,
+                generation_surface_height(column, &context),
+                column.y,
             );
-            let position = IVec3::new(column.x, y, column.y);
             consider_nearest(&mut best, player, position);
         });
+
+        if lattice_search_is_final(best, radius, spacing.min_element().floor() as i32, 2) {
+            break;
+        }
     }
 
     best.map(|(_, position)| position)
@@ -372,37 +398,39 @@ fn locate_volume_biome(
 ) -> Option<IVec3> {
     let biome = snapshot.biomes.get(id)?;
     let range = biome.vertical_range?;
-    let center = chunk_coord_from_world(player).xz();
+    let center = IVec2::new(
+        player.x.div_euclid(VOLUME_SEARCH_TILE_SIZE),
+        player.z.div_euclid(VOLUME_SEARCH_TILE_SIZE),
+    );
+    let maximum_tile_radius = MAX_LOCATE_BLOCK_RADIUS.div_euclid(VOLUME_SEARCH_TILE_SIZE) + 2;
     let mut seen = HashSet::new();
     let mut best: Option<(i64, IVec3)> = None;
 
-    for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
-        visit_square_chunk_ring(center, radius, |chunk| {
-            let Some(origin) = chunk_block_origin(chunk) else {
+    for radius in 0..=maximum_tile_radius {
+        visit_square_ring(center, radius, |tile| {
+            let Some((minimum, maximum)) = volume_tile_bounds(tile, range) else {
                 return;
             };
-            let minimum = Vec3::new(origin.x as f32, range.min, origin.y as f32);
-            let maximum = Vec3::new(
-                (i64::from(origin.x) + CHUNK_SIZE as i64) as f32,
-                range.max,
-                (i64::from(origin.y) + CHUNK_SIZE as i64) as f32,
-            );
             let region = snapshot
                 .biome_field
                 .volume_region_in_bounds(minimum, maximum);
+
             for anchor in snapshot.biome_field.volume_anchors_in_region(&region) {
                 if anchor.id != id {
                     continue;
                 }
+                let position = anchor.position.floor().as_ivec3();
+                if !seen.insert(position)
+                    || !within_horizontal_radius(
+                        player.xz(),
+                        position.xz(),
+                        MAX_LOCATE_BLOCK_RADIUS,
+                    )
+                {
+                    continue;
+                }
 
-                // An anchor is only a candidate site. The volume may be
-                // rejected at that exact position by surface constraints or
-                // by a stronger overlapping volume biome. Locate must verify
-                // the same resolved selection used by terrain generation
-                // instead of reporting every geometric site as present.
-                let surface = snapshot
-                    .biome_field
-                    .sample_surface(anchor.position.xz());
+                let surface = snapshot.biome_field.sample_surface(anchor.position.xz());
                 let Some(selection) = snapshot
                     .biome_field
                     .volume_selection_in_region_for_surface(
@@ -417,14 +445,11 @@ fn locate_volume_biome(
                     continue;
                 }
 
-                let position = anchor.position.floor().as_ivec3();
-                if seen.insert(position) {
-                    consider_nearest(&mut best, player, position);
-                }
+                consider_nearest(&mut best, player, position);
             }
         });
 
-        if best_is_final(best, radius) {
+        if lattice_search_is_final(best, radius, VOLUME_SEARCH_TILE_SIZE, 2) {
             break;
         }
     }
@@ -437,184 +462,293 @@ fn locate_structure(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    if snapshot.structures.variation_count(id).is_none()
-        && snapshot.structure_sets.get(id).is_none()
-    {
-        return None;
-    }
     let context = snapshot.generation_context();
-    let player_horizontal = player.xz();
-    let maximum_distance_squared =
-        i64::from(MAX_LOCATE_BLOCK_RADIUS) * i64::from(MAX_LOCATE_BLOCK_RADIUS);
-    let mut seen = HashSet::new();
     let mut best: Option<(i64, IVec3)> = None;
+    let mut seen = HashSet::new();
 
-    for biome_structure in snapshot.biomes.structure_placements() {
-        let placement_matches = biome_structure.structure_id == id
-            || snapshot
-                .structures
-                .references_overlap(&biome_structure.structure_id, id)
-            || snapshot
-                .structure_sets
-                .get(&biome_structure.structure_id)
-                .is_some_and(|set| set.references_reference(id, &snapshot.structures));
-        if !placement_matches
-            || !snapshot
-                .dimension
-                .biomes
-                .iter()
-                .any(|entry| entry.id == biome_structure.biome_id && entry.weight > 0.0)
+    locate_surface_structures(snapshot, &context, id, player, &mut seen, &mut best);
+    locate_volume_structures(snapshot, &context, id, player, &mut seen, &mut best);
+
+    best.map(|(_, position)| position)
+}
+
+fn locate_surface_structures(
+    snapshot: &LocateSnapshot,
+    context: &ChunkGenerationContext<'_>,
+    id: &str,
+    player: IVec3,
+    seen: &mut HashSet<IVec3>,
+    best: &mut Option<(i64, IVec3)>,
+) {
+    let player_horizontal = player.xz();
+
+    for entry in snapshot.feature_fields.structure_metadata().surface_entries() {
+        if !dimension_has_active_biome(&snapshot.dimension, &entry.biome_id)
+            || !structure_reference_matches(
+                &entry.reference,
+                id,
+                &snapshot.structures,
+                &snapshot.structure_sets,
+            )
         {
             continue;
         }
 
-        match biome_structure.placement {
-            BiomeStructurePlacementRules::Surface(placement) => {
-                let spacing = placement.spacing;
-                let center_cell = IVec2::new(
-                    player_horizontal.x.div_euclid(spacing),
-                    player_horizontal.y.div_euclid(spacing),
-                );
-                let maximum_cell_radius =
-                    (MAX_LOCATE_BLOCK_RADIUS + spacing - 1) / spacing + 2;
+        let placement = entry.placement;
+        let spacing = placement.spacing;
+        let center = IVec2::new(
+            player_horizontal.x.div_euclid(spacing),
+            player_horizontal.y.div_euclid(spacing),
+        );
+        let maximum_cell_radius =
+            (MAX_LOCATE_BLOCK_RADIUS + spacing - 1).div_euclid(spacing) + 2;
 
-                for radius in 0..=maximum_cell_radius {
-                    visit_square_cell_ring(center_cell, radius, |cell| {
-                        let Some(anchor) = structure_candidate_anchor(
-                            snapshot.biome_field.seed(),
-                            &biome_structure.biome_id,
-                            &biome_structure.structure_id,
-                            placement,
-                            cell,
-                        ) else {
-                            return;
-                        };
+        for radius in 0..=maximum_cell_radius {
+            visit_square_ring(center, radius, |cell| {
+                let Some(anchor) = structure_candidate_anchor(
+                    snapshot.biome_field.seed(),
+                    &entry.biome_id,
+                    &entry.reference,
+                    placement,
+                    cell,
+                ) else {
+                    return;
+                };
+                if !within_horizontal_radius(
+                    player_horizontal,
+                    anchor,
+                    MAX_LOCATE_BLOCK_RADIUS,
+                ) {
+                    return;
+                }
 
-                        let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
-                        let dz = i64::from(anchor.y) - i64::from(player_horizontal.y);
-                        if dx * dx + dz * dz > maximum_distance_squared {
-                            return;
-                        }
-
-                        let Some(probe) = structure_candidate_probe(
-                            &biome_structure.biome_id,
-                            &biome_structure.structure_id,
-                            id,
-                            anchor,
-                            &context,
-                        ) else {
-                            return;
-                        };
-                        let probe_chunk =
-                            chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
-                        for position in located_structure_origins_in_chunk(
-                            probe_chunk,
-                            id,
-                            anchor,
-                            0,
-                            &context,
-                        ) {
-                            if seen.insert(position) {
-                                consider_nearest(&mut best, player, position);
-                            }
-                        }
-                    });
-
-                    if structure_search_is_final(best, radius, spacing, placement.jitter) {
-                        break;
+                let Some(probe) = structure_candidate_probe(
+                    &entry.biome_id,
+                    &entry.reference,
+                    id,
+                    anchor,
+                    context,
+                ) else {
+                    return;
+                };
+                let probe_chunk = chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                for position in
+                    located_structure_origins_in_chunk(probe_chunk, id, anchor, 0, context)
+                {
+                    if seen.insert(position)
+                        && within_horizontal_radius(
+                            player_horizontal,
+                            position.xz(),
+                            MAX_LOCATE_BLOCK_RADIUS,
+                        )
+                    {
+                        consider_nearest(best, player, position);
                     }
                 }
-            }
-            BiomeStructurePlacementRules::Volume(placement) => {
-                let Some(biome) = snapshot.biomes.get(&biome_structure.biome_id) else {
-                    continue;
-                };
-                let Some(range) = biome.vertical_range else {
-                    continue;
-                };
-                let center = chunk_coord_from_world(player).xz();
-                let mut visited_anchors = HashSet::new();
+            });
 
-                for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
-                    visit_square_chunk_ring(center, radius, |chunk| {
-                        let Some(origin) = chunk_block_origin(chunk) else {
-                            return;
-                        };
-                        let minimum =
-                            Vec3::new(origin.x as f32, range.min, origin.y as f32);
-                        let maximum = Vec3::new(
-                            (i64::from(origin.x) + CHUNK_SIZE as i64) as f32,
-                            range.max,
-                            (i64::from(origin.y) + CHUNK_SIZE as i64) as f32,
-                        );
-                        let region = snapshot
-                            .biome_field
-                            .volume_region_in_bounds(minimum, maximum);
-
-                        for volume_anchor in
-                            snapshot.biome_field.volume_anchors_in_region(&region)
-                        {
-                            if volume_anchor.id != biome_structure.biome_id {
-                                continue;
-                            }
-                            let anchor = volume_anchor.position.floor().as_ivec3();
-                            if !visited_anchors.insert(anchor) {
-                                continue;
-                            }
-
-                            let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
-                            let dz = i64::from(anchor.z) - i64::from(player_horizontal.y);
-                            if dx * dx + dz * dz > maximum_distance_squared {
-                                continue;
-                            }
-
-                            let Some(selection) = snapshot
-                                .biome_field
-                                .volume_selection_in_region(volume_anchor.position, &region)
-                            else {
-                                continue;
-                            };
-                            if snapshot.biome_field.volume_biome_id(selection)
-                                != biome_structure.biome_id
-                            {
-                                continue;
-                            }
-
-                            let Some(probe) = volume_structure_candidate_probe(
-                                &biome_structure.biome_id,
-                                &biome_structure.structure_id,
-                                id,
-                                anchor,
-                                placement,
-                                &context,
-                            ) else {
-                                continue;
-                            };
-                            let probe_chunk =
-                                chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
-                            for position in located_structure_origins_in_chunk(
-                                probe_chunk,
-                                id,
-                                anchor.xz(),
-                                anchor.y,
-                                &context,
-                            ) {
-                                if seen.insert(position) {
-                                    consider_nearest(&mut best, player, position);
-                                }
-                            }
-                        }
-                    });
-
-                    if best_is_final(best, radius) {
-                        break;
-                    }
-                }
+            if structure_search_is_final(*best, radius, spacing, placement.jitter) {
+                break;
             }
         }
     }
+}
 
-    best.map(|(_, position)| position)
+fn locate_volume_structures(
+    snapshot: &LocateSnapshot,
+    context: &ChunkGenerationContext<'_>,
+    id: &str,
+    player: IVec3,
+    seen: &mut HashSet<IVec3>,
+    best: &mut Option<(i64, IVec3)>,
+) {
+    let player_horizontal = player.xz();
+
+    for biome_structure in snapshot.biomes.structure_placements() {
+        let BiomeStructurePlacementRules::Volume(placement) = biome_structure.placement else {
+            continue;
+        };
+        if !dimension_has_active_biome(&snapshot.dimension, &biome_structure.biome_id)
+            || !structure_reference_matches(
+                &biome_structure.structure_id,
+                id,
+                &snapshot.structures,
+                &snapshot.structure_sets,
+            )
+        {
+            continue;
+        }
+        let Some(biome) = snapshot.biomes.get(&biome_structure.biome_id) else {
+            continue;
+        };
+        let Some(range) = biome.vertical_range else {
+            continue;
+        };
+
+        let center = IVec2::new(
+            player.x.div_euclid(VOLUME_SEARCH_TILE_SIZE),
+            player.z.div_euclid(VOLUME_SEARCH_TILE_SIZE),
+        );
+        let maximum_tile_radius = MAX_LOCATE_BLOCK_RADIUS.div_euclid(VOLUME_SEARCH_TILE_SIZE) + 2;
+        let mut visited_anchors = HashSet::new();
+
+        for radius in 0..=maximum_tile_radius {
+            visit_square_ring(center, radius, |tile| {
+                let Some((minimum, maximum)) = volume_tile_bounds(tile, range) else {
+                    return;
+                };
+                let region = snapshot
+                    .biome_field
+                    .volume_region_in_bounds(minimum, maximum);
+
+                for volume_anchor in snapshot.biome_field.volume_anchors_in_region(&region) {
+                    if volume_anchor.id != biome_structure.biome_id {
+                        continue;
+                    }
+                    let anchor = volume_anchor.position.floor().as_ivec3();
+                    if !visited_anchors.insert(anchor)
+                        || !within_horizontal_radius(
+                            player_horizontal,
+                            anchor.xz(),
+                            MAX_LOCATE_BLOCK_RADIUS,
+                        )
+                    {
+                        continue;
+                    }
+
+                    let Some(selection) = snapshot
+                        .biome_field
+                        .volume_selection_in_region(volume_anchor.position, &region)
+                    else {
+                        continue;
+                    };
+                    if snapshot.biome_field.volume_biome_id(selection)
+                        != biome_structure.biome_id
+                    {
+                        continue;
+                    }
+
+                    let Some(probe) = volume_structure_candidate_probe(
+                        &biome_structure.biome_id,
+                        &biome_structure.structure_id,
+                        id,
+                        anchor,
+                        placement,
+                        context,
+                    ) else {
+                        continue;
+                    };
+                    let probe_chunk =
+                        chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                    for position in located_structure_origins_in_chunk(
+                        probe_chunk,
+                        id,
+                        anchor.xz(),
+                        anchor.y,
+                        context,
+                    ) {
+                        if seen.insert(position)
+                            && within_horizontal_radius(
+                                player_horizontal,
+                                position.xz(),
+                                MAX_LOCATE_BLOCK_RADIUS,
+                            )
+                        {
+                            consider_nearest(best, player, position);
+                        }
+                    }
+                }
+            });
+
+            if lattice_search_is_final(*best, radius, VOLUME_SEARCH_TILE_SIZE, 2) {
+                break;
+            }
+        }
+    }
+}
+
+fn biome_is_generated_in_dimension(
+    id: &str,
+    dimension: &DimensionDefinition,
+    world_generation: WorldGenerationSettings,
+) -> bool {
+    if world_generation.mode() == WorldGenerationMode::Void {
+        return false;
+    }
+    if !dimension_has_active_biome(dimension, id) {
+        return false;
+    }
+    if !world_generation.spawn_oceans() && dimension.ocean_biome.as_deref() == Some(id) {
+        return false;
+    }
+    true
+}
+
+fn structure_reference_is_generated(
+    target: &str,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    structures: &StructureRegistry,
+    structure_sets: &StructureSetRegistry,
+    feature_fields: &WorldFeatureFields,
+) -> bool {
+    feature_fields
+        .structure_metadata()
+        .surface_entries()
+        .iter()
+        .any(|entry| {
+            dimension_has_active_biome(dimension, &entry.biome_id)
+                && structure_reference_matches(&entry.reference, target, structures, structure_sets)
+        })
+        || biomes.structure_placements().iter().any(|entry| {
+            matches!(entry.placement, BiomeStructurePlacementRules::Volume(_))
+                && dimension_has_active_biome(dimension, &entry.biome_id)
+                && structure_reference_matches(
+                    &entry.structure_id,
+                    target,
+                    structures,
+                    structure_sets,
+                )
+        })
+}
+
+fn structure_reference_matches(
+    placement_reference: &str,
+    target: &str,
+    structures: &StructureRegistry,
+    structure_sets: &StructureSetRegistry,
+) -> bool {
+    placement_reference == target
+        || structures.references_overlap(placement_reference, target)
+        || structure_sets
+            .get(placement_reference)
+            .is_some_and(|set| set.references_reference(target, structures))
+}
+
+fn dimension_has_active_biome(dimension: &DimensionDefinition, id: &str) -> bool {
+    dimension
+        .biomes
+        .iter()
+        .any(|entry| entry.id == id && entry.weight > 0.0)
+}
+
+fn volume_tile_bounds(tile: IVec2, range: BiomeVerticalRange) -> Option<(Vec3, Vec3)> {
+    let minimum_x = i64::from(tile.x).checked_mul(i64::from(VOLUME_SEARCH_TILE_SIZE))?;
+    let minimum_z = i64::from(tile.y).checked_mul(i64::from(VOLUME_SEARCH_TILE_SIZE))?;
+    let maximum_x = minimum_x.checked_add(i64::from(VOLUME_SEARCH_TILE_SIZE))?;
+    let maximum_z = minimum_z.checked_add(i64::from(VOLUME_SEARCH_TILE_SIZE))?;
+    if minimum_x < i64::from(i32::MIN)
+        || minimum_z < i64::from(i32::MIN)
+        || maximum_x > i64::from(i32::MAX)
+        || maximum_z > i64::from(i32::MAX)
+    {
+        return None;
+    }
+
+    Some((
+        Vec3::new(minimum_x as f32, range.min, minimum_z as f32),
+        Vec3::new(maximum_x as f32, range.max, maximum_z as f32),
+    ))
 }
 
 fn structure_search_is_final(
@@ -629,8 +763,21 @@ fn structure_search_is_final(
     let next_radius = i64::from(visited_cell_radius) + 1;
     let spacing = i64::from(spacing);
     let jitter = i64::from(jitter);
-    let minimum_future_horizontal =
-        (next_radius * spacing - spacing / 2 - jitter).max(0);
+    let minimum_future_horizontal = (next_radius * spacing - spacing / 2 - jitter).max(0);
+    minimum_future_horizontal * minimum_future_horizontal > distance_squared
+}
+
+fn lattice_search_is_final(
+    best: Option<(i64, IVec3)>,
+    visited_radius: i32,
+    step: i32,
+    padding_steps: i32,
+) -> bool {
+    let Some((distance_squared, _)) = best else {
+        return false;
+    };
+    let future_radius = visited_radius.saturating_sub(padding_steps).max(0);
+    let minimum_future_horizontal = i64::from(future_radius) * i64::from(step.max(1));
     minimum_future_horizontal * minimum_future_horizontal > distance_squared
 }
 
@@ -655,24 +802,16 @@ fn consider_nearest(best: &mut Option<(i64, IVec3)>, player: IVec3, candidate: I
     }
 }
 
-fn best_is_final(best: Option<(i64, IVec3)>, radius: i32) -> bool {
-    let Some((distance_squared, _)) = best else {
-        return false;
-    };
-    let minimum_future_horizontal =
-        i64::from(radius) * i64::from(CHUNK_SIZE as i32);
-    minimum_future_horizontal * minimum_future_horizontal > distance_squared
+fn within_horizontal_radius(origin: IVec2, candidate: IVec2, radius: i32) -> bool {
+    let dx = i64::from(candidate.x) - i64::from(origin.x);
+    let dz = i64::from(candidate.y) - i64::from(origin.y);
+    let radius = i64::from(radius);
+    dx.saturating_mul(dx)
+        .saturating_add(dz.saturating_mul(dz))
+        <= radius.saturating_mul(radius)
 }
 
-fn visit_square_cell_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
-    visit_square_ring(center, radius, &mut visit);
-}
-
-fn visit_square_chunk_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
-    visit_square_ring(center, radius, &mut visit);
-}
-
-fn visit_square_ring(center: IVec2, radius: i32, visit: &mut impl FnMut(IVec2)) {
+fn visit_square_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
     for z in -radius..=radius {
         for x in -radius..=radius {
             if radius > 0 && x.abs() != radius && z.abs() != radius {
@@ -688,12 +827,14 @@ fn visit_square_ring(center: IVec2, radius: i32, visit: &mut impl FnMut(IVec2)) 
     }
 }
 
-fn chunk_block_origin(chunk: IVec2) -> Option<IVec2> {
-    let size = CHUNK_SIZE as i32;
-    Some(IVec2::new(
-        chunk.x.checked_mul(size)?,
-        chunk.y.checked_mul(size)?,
-    ))
+fn panic_payload_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&'static str>() {
+        return (*message).to_owned();
+    }
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    "non-string panic payload".to_owned()
 }
 
 #[cfg(test)]
@@ -701,23 +842,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn structure_cell_search_stops_once_future_cells_cannot_beat_best() {
-        let best = Some((900_i64 * 900_i64, IVec3::ZERO));
-
-        assert!(!structure_search_is_final(best, 0, 1_000, 112));
-        assert!(structure_search_is_final(best, 1, 1_000, 112));
-    }
-
-    #[test]
     fn locate_radius_keeps_existing_thirty_two_kiloblock_contract() {
         assert_eq!(MAX_LOCATE_BLOCK_RADIUS, 32_768);
-        assert_eq!(MAX_LOCATE_CHUNK_RADIUS, 2_048);
     }
 
     #[test]
     fn square_ring_skips_candidates_outside_i32_domain() {
         let mut visited = Vec::new();
-        visit_square_ring(IVec2::new(i32::MAX, 0), 1, &mut |candidate| {
+        visit_square_ring(IVec2::new(i32::MAX, 0), 1, |candidate| {
             visited.push(candidate);
         });
 
@@ -726,8 +858,33 @@ mod tests {
     }
 
     #[test]
-    fn chunk_block_origin_rejects_unrepresentable_world_coordinates() {
-        assert_eq!(chunk_block_origin(IVec2::ZERO), Some(IVec2::ZERO));
-        assert!(chunk_block_origin(IVec2::new(i32::MAX, 0)).is_none());
+    fn volume_tile_bounds_reject_world_coordinate_overflow() {
+        let range = BiomeVerticalRange {
+            min: 0.0,
+            max: 128.0,
+        };
+        assert!(volume_tile_bounds(IVec2::ZERO, range).is_some());
+        assert!(volume_tile_bounds(IVec2::new(i32::MAX, 0), range).is_none());
+    }
+
+    #[test]
+    fn horizontal_radius_uses_xz_only() {
+        assert!(within_horizontal_radius(
+            IVec2::ZERO,
+            IVec2::new(3, 4),
+            5
+        ));
+        assert!(!within_horizontal_radius(
+            IVec2::ZERO,
+            IVec2::new(4, 4),
+            5
+        ));
+    }
+
+    #[test]
+    fn panic_payloads_are_reported_without_rethrowing() {
+        let result = catch_unwind(AssertUnwindSafe(|| panic!("locate test panic")));
+        let payload = result.expect_err("test panic must be caught");
+        assert_eq!(panic_payload_message(payload), "locate test panic");
     }
 }
