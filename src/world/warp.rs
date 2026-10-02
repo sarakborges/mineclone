@@ -200,7 +200,7 @@ pub(crate) struct PendingDimensionWarp {
 }
 
 #[derive(SystemParam)]
-struct DimensionWarpContext<'w, 's> {
+pub(super) struct DimensionWarpContext<'w, 's> {
     commands: Commands<'w, 's>,
     dimensions: Res<'w, DimensionRegistry>,
     biomes: Res<'w, BiomeRegistry>,
