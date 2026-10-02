@@ -25,7 +25,7 @@ use crate::{
         camera::GameplayWorldCamera,
         hotbar::PlayerHotbar,
         item_stack::ItemStack,
-        movement::config::{COLLISION_STEP, GRAVITY},
+        movement::config::COLLISION_STEP,
     },
     rendering::{
         block_model::{
@@ -43,6 +43,7 @@ use crate::{
         collision::aabb_is_clear,
         world::VoxelWorld,
     },
+    world::current_context::CurrentDimensionContext,
 };
 
 const ITEM_HALF_EXTENT: f32 = 0.18;
@@ -485,16 +486,21 @@ fn world_item_extruded_sprite_scale(size: [f32; 2]) -> f32 {
 fn move_world_items(
     time: Res<Time>,
     world: Res<VoxelWorld>,
+    dimension: CurrentDimensionContext,
     mut commands: Commands,
     mut items: Query<(Entity, &mut Transform, &WorldItem, &mut WorldItemMotion)>,
 ) {
+    let Some(dimension) = dimension.definition() else {
+        return;
+    };
+    let gravity_strength = dimension.gravity_strength;
     let dt = time.delta_secs().min(0.05);
     for (entity, mut transform, world_item, mut motion) in &mut items {
         if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
             continue;
         }
 
-        motion.velocity.y += GRAVITY * dt;
+        motion.velocity.y -= gravity_strength * dt;
         let mut collided = false;
         for axis in [0, 2, 1] {
             let distance = motion.velocity[axis] * dt;
