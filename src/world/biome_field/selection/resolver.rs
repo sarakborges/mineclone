@@ -15,7 +15,6 @@ struct RawComponentNode {
 
 #[derive(Clone, Copy)]
 struct ExternalNeighbor {
-    cell: IVec2,
     site: Vec2,
     inside_site: Vec2,
     biome_index: usize,
@@ -38,21 +37,15 @@ pub(super) fn raw_conflict_left_wins(
     match (left_can_yield, right_can_yield) {
         (false, true) => true,
         (true, false) => false,
-        _ => {
-            let left = (
-                adjacency_claim_hash(left_cell, left_index, context.seed),
-                left_cell.y,
-                left_cell.x,
-                left_index,
-            );
-            let right = (
-                adjacency_claim_hash(right_cell, right_index, context.seed),
-                right_cell.y,
-                right_cell.x,
-                right_index,
-            );
-            left <= right
-        }
+        _ => fitting::raw_conflict_left_wins(
+            left_cell,
+            left_site,
+            left_index,
+            right_cell,
+            right_site,
+            right_index,
+            context,
+        ),
     }
 }
 
@@ -199,7 +192,6 @@ fn collect_external_neighbors(
                     continue;
                 }
                 external.entry(neighbor_cell).or_insert(ExternalNeighbor {
-                    cell: neighbor_cell,
                     site: neighbor_site,
                     inside_site: node.site,
                     biome_index,
@@ -295,8 +287,4 @@ fn raw_index_at(
         context.seed,
         context.spawn_oceans,
     )
-}
-
-fn adjacency_claim_hash(cell: IVec2, biome_index: usize, seed: u64) -> u64 {
-    region_claim_hash(cell, biome_index, seed) ^ 0x6a09_e667_f3bc_c909
 }
