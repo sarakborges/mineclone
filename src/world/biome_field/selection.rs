@@ -73,6 +73,12 @@ impl BiomeField {
             return candidate.index;
         }
 
+        if let Some(candidate_index) =
+            self.continuation_fallback_index(raw_index, &selection_context)
+        {
+            return candidate_index;
+        }
+
         panic!(
             "surface biome site {cell:?} has no biome compatible with fitted size and authored adjacency constraints"
         );
@@ -131,6 +137,85 @@ impl BiomeField {
         });
         candidates
     }
+
+    fn continuation_fallback_index(
+        &self,
+        raw_index: usize,
+        context: &SurfaceSelectionContext<'_>,
+    ) -> Option<usize> {
+        let raw = &context.biomes[raw_index];
+        let raw_size_blocked = !fitting::surface_size_allows(raw_index, context);
+        let mut checked = vec![false; context.biomes.len()];
+        let mut best = None::<(u64, i32, i32, usize)>;
+
+        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+                let offset = IVec2::new(x, z);
+                if offset == IVec2::ZERO {
+                    continue;
+                }
+
+                let neighbor_cell = context.cell + offset;
+                let neighbor_site =
+                    surface_site_position(neighbor_cell, context.spacing, context.seed);
+                if !surface_sites_share_border(
+                    context.cell,
+                    context.site,
+                    neighbor_cell,
+                    neighbor_site,
+                    context.spacing,
+                    context.seed,
+                ) {
+                    continue;
+                }
+
+                let neighbor_index = raw_surface_biome_index(
+                    neighbor_cell,
+                    neighbor_site,
+                    context.climate_field.sample(neighbor_site),
+                    cell_hash(neighbor_cell, context.seed),
+                    context.biomes,
+                    context.seed,
+                    context.spawn_oceans,
+                );
+                if neighbor_index == raw_index
+                    || checked[neighbor_index]
+                    || Some(neighbor_index) == context.ocean_surface_index
+                    || context.biomes[neighbor_index].weight <= 0.0
+                    || !self.surface_biome_is_enabled(neighbor_index)
+                {
+                    continue;
+                }
+
+                let neighbor = &context.biomes[neighbor_index];
+                let boundary_size_blocked = fitting::boundary_fit_interval(
+                    raw,
+                    neighbor,
+                    context.site,
+                    neighbor_site,
+                )
+                .is_none();
+                if !raw_size_blocked && !boundary_size_blocked {
+                    continue;
+                }
+
+                checked[neighbor_index] = true;
+                if !continuation_constraints_allow(neighbor_index, context)
+                    || !fitting::surface_size_allows(neighbor_index, context)
+                {
+                    continue;
+                }
+
+                let claim = region_claim_hash(neighbor_cell, neighbor_index, context.seed);
+                let candidate = (claim, neighbor_cell.y, neighbor_cell.x, neighbor_index);
+                if best.is_none_or(|current| candidate < current) {
+                    best = Some(candidate);
+                }
+            }
+        }
+
+        best.map(|(_, _, _, index)| index)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -166,6 +251,66 @@ fn surface_constraints_allow(
 
     authored_adjacency_allows(candidate_index, context)
         && fitting::surface_size_allows(candidate_index, context)
+}
+
+fn continuation_constraints_allow(
+    candidate_index: usize,
+    context: &SurfaceSelectionContext<'_>,
+) -> bool {
+    debug_assert!(surface_minimum_size_allows(candidate_index, context));
+    let candidate = &context.biomes[candidate_index];
+    let mut required_neighbor_found = candidate.require_near.is_empty();
+
+    for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+        for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+            let offset = IVec2::new(x, z);
+            if offset == IVec2::ZERO {
+                continue;
+            }
+
+            let neighbor_cell = context.cell + offset;
+            let neighbor_site =
+                surface_site_position(neighbor_cell, context.spacing, context.seed);
+            if !surface_sites_share_border(
+                context.cell,
+                context.site,
+                neighbor_cell,
+                neighbor_site,
+                context.spacing,
+                context.seed,
+            ) {
+                continue;
+            }
+
+            let neighbor_index = raw_surface_biome_index(
+                neighbor_cell,
+                neighbor_site,
+                context.climate_field.sample(neighbor_site),
+                cell_hash(neighbor_cell, context.seed),
+                context.biomes,
+                context.seed,
+                context.spawn_oceans,
+            );
+            let neighbor = &context.biomes[neighbor_index];
+            if authored_pair_conflicts(candidate, neighbor) {
+                return false;
+            }
+            if candidate.id != neighbor.id
+                && fitting::boundary_fit_interval(candidate, neighbor, context.site, neighbor_site)
+                    .is_none()
+            {
+                return false;
+            }
+
+            if !required_neighbor_found
+                && candidate.require_near.iter().any(|id| id == &neighbor.id)
+            {
+                required_neighbor_found = true;
+            }
+        }
+    }
+
+    required_neighbor_found
 }
 
 pub(super) fn select_volume_biome_index(
