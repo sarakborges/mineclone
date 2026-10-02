@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
@@ -68,6 +68,15 @@ struct FallingBlock {
     velocity_y: f32,
 }
 
+#[derive(SystemParam)]
+struct BlockGravityContent<'w> {
+    world_ticks: Res<'w, WorldTickClock>,
+    objects: Res<'w, ObjectRegistry>,
+    block_content: BlockVisualContent<'w>,
+    block_meshes: Res<'w, BlockModelMeshes>,
+    dimension: CurrentDimensionContext<'w>,
+}
+
 pub(crate) struct BlockGravityPlugin;
 
 impl Plugin for BlockGravityPlugin {
@@ -86,23 +95,22 @@ impl Plugin for BlockGravityPlugin {
 
 fn process_block_gravity(
     mut commands: Commands,
-    world_ticks: Res<WorldTickClock>,
-    objects: Res<ObjectRegistry>,
-    content: BlockVisualContent,
-    block_meshes: Res<BlockModelMeshes>,
+    content: BlockGravityContent,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
-    dimension: CurrentDimensionContext,
     mut runtime: VoxelTopologyRuntime,
     mut item_spawns: MessageWriter<WorldItemSpawnRequest>,
 ) {
-    if world_ticks.ticks_this_frame() == 0 {
+    if content.world_ticks.ticks_this_frame() == 0 {
         return;
     }
-    let gravity_strength = dimension.definition().map_or(0.0, |definition| definition.gravity_strength);
+    let gravity_strength = content
+        .dimension
+        .definition()
+        .map_or(0.0, |definition| definition.gravity_strength);
 
     for position in runtime.take_block_gravity_batch() {
         let Some(cell) = runtime.read().cell_at(position) else { continue; };
-        let Some(definition) = content.blocks.get(cell.block_id) else { continue; };
+        let Some(definition) = content.block_content.blocks.get(cell.block_id) else { continue; };
         let below = position - IVec3::Y;
 
         if is_stackable_layer(definition) {
@@ -125,7 +133,7 @@ fn process_block_gravity(
                 position,
                 mutation.previous_cell,
                 mutation.detached_objects,
-                &objects,
+                &content.objects,
                 &mut item_spawns,
             );
             continue;
@@ -153,13 +161,13 @@ fn process_block_gravity(
             position,
             mutation.previous_cell,
             mutation.detached_objects,
-            &objects,
+            &content.objects,
             &mut item_spawns,
         );
         spawn_falling_block(
             &mut commands,
-            &content,
-            &block_meshes,
+            &content.block_content,
+            &content.block_meshes,
             &mut materials,
             position,
             cell,
