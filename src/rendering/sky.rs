@@ -26,9 +26,13 @@ fn update_sky_color(visuals: Res<EnvironmentVisualState>, mut clear_color: ResMu
         return;
     }
 
-    // The biome-authored sky palette is authoritative. The fog palette must
-    // not recolor the entire sky merely to hide a flat-background fog seam.
-    let color = visuals.sky_color.to_color();
+    // The flat background sits behind every world fragment. DistanceFog at
+    // full opacity replaces a fragment with the authored fog color, so the
+    // background must use that same terminal color or fully fogged geometry
+    // remains visible as a silhouette against the sky. A future sky-gradient
+    // renderer can preserve the authored sky palette away from the horizon
+    // while still converging to fog_color where world geometry disappears.
+    let color = visuals.fog_color.to_color();
     if clear_color.0 != color {
         clear_color.0 = color;
     }
@@ -40,7 +44,7 @@ mod tests {
     use crate::content::color::Hsi;
 
     #[test]
-    fn clear_color_follows_sky_palette_without_inheriting_fog_palette() {
+    fn clear_color_matches_terminal_fog_color() {
         let mut app = App::new();
         app.insert_resource(EnvironmentVisualState::default());
         app.insert_resource(ClearColor(Color::BLACK));
@@ -48,18 +52,20 @@ mod tests {
 
         app.update();
         let authored_sky = Hsi::new(275.0, 0.9, 0.45);
+        let authored_fog = Hsi::new(45.0, 1.0, 0.9);
         {
             let mut visuals = app.world_mut().resource_mut::<EnvironmentVisualState>();
             visuals.sky_color = authored_sky;
-            visuals.fog_color = Hsi::new(45.0, 1.0, 0.9);
+            visuals.fog_color = authored_fog;
         }
         app.update();
-        assert_eq!(app.world().resource::<ClearColor>().0, authored_sky.to_color());
+        assert_eq!(app.world().resource::<ClearColor>().0, authored_fog.to_color());
 
+        let next_fog = Hsi::new(180.0, 1.0, 0.2);
         app.world_mut()
             .resource_mut::<EnvironmentVisualState>()
-            .fog_color = Hsi::new(180.0, 1.0, 0.2);
+            .fog_color = next_fog;
         app.update();
-        assert_eq!(app.world().resource::<ClearColor>().0, authored_sky.to_color());
+        assert_eq!(app.world().resource::<ClearColor>().0, next_fog.to_color());
     }
 }
