@@ -8,7 +8,10 @@ mod spawning;
 
 use std::time::Duration;
 
-use bevy::{ecs::system::{Local, SystemParam}, prelude::*};
+use bevy::{
+    ecs::system::{Local, SystemParam},
+    prelude::*,
+};
 
 use crate::app::crash_log::log_gameplay_event;
 
@@ -22,7 +25,7 @@ use self::{
     spawning::{InitialPresentationPrewarm, spawn_loaded_world},
 };
 use super::{
-    WorldLoadingPhase,
+    WorldLoadingPhase, WorldLoadingPhaseStatus, WorldLoadingStep,
     system_params::{
         WorldSetupAssets, WorldSetupChunkPipeline, WorldSetupFinalization, WorldSetupPersistence,
         WorldSetupProgress, WorldSetupSimulation,
@@ -38,8 +41,9 @@ pub(super) const INITIAL_PRESENTATION_PREWARM_FRAMES: u8 = 12;
 pub(in crate::world) struct LoadingDiagnostics {
     timer: Option<Timer>,
     previous_phase: Option<WorldLoadingPhase>,
+    started_steps: [bool; WorldLoadingStep::ALL.len()],
+    completed_steps: [bool; WorldLoadingStep::ALL.len()],
 }
-
 
 #[derive(SystemParam)]
 pub(in crate::world) struct LoadingRuntime<'w, 's> {
@@ -47,40 +51,154 @@ pub(in crate::world) struct LoadingRuntime<'w, 's> {
     pub(super) initial_presentation_prewarm: Local<'s, InitialPresentationPrewarm>,
     pub(super) loading_diagnostics: Local<'s, LoadingDiagnostics>,
 }
+
 fn log_loading_diagnostics(
     delta: Duration,
     state: &super::WorldLoadingState,
     diagnostics: &mut LoadingDiagnostics,
 ) {
-    let timer = diagnostics.timer.get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
+    let timer = diagnostics
+        .timer
+        .get_or_insert_with(|| Timer::from_seconds(0.5, TimerMode::Repeating));
     timer.tick(delta);
+    let progress_due = timer.just_finished();
 
     if diagnostics.previous_phase != Some(state.phase) {
         if let Some(previous) = diagnostics.previous_phase {
             log_gameplay_event(format!("world.loading.phase.complete phase={previous:?}"));
         }
-        log_gameplay_event(format!("world.loading.phase.start phase={:?} detail={}", state.phase, loading_phase_detail(state)));
+        log_gameplay_event(format!(
+            "world.loading.phase.start phase={:?} detail={}",
+            state.phase,
+            loading_phase_detail(state)
+        ));
         diagnostics.previous_phase = Some(state.phase);
-        return;
+    } else if progress_due {
+        log_gameplay_event(format!(
+            "world.loading.phase.progress phase={:?} detail={}",
+            state.phase,
+            loading_phase_detail(state)
+        ));
     }
 
-    if timer.just_finished() {
-        log_gameplay_event(format!("world.loading.phase.progress phase={:?} detail={}", state.phase, loading_phase_detail(state)));
+    for step in WorldLoadingStep::ALL {
+        let index = step.ordinal();
+        let status = state.step_status(step);
+
+        if status != WorldLoadingPhaseStatus::Pending && !diagnostics.started_steps[index] {
+            log_gameplay_event(format!(
+                "world.loading.step.start step={step:?} detail={}",
+                loading_step_detail(state, step)
+            ));
+            diagnostics.started_steps[index] = true;
+        }
+
+        if progress_due && status == WorldLoadingPhaseStatus::Active {
+            log_gameplay_event(format!(
+                "world.loading.step.progress step={step:?} detail={}",
+                loading_step_detail(state, step)
+            ));
+        }
+
+        if status == WorldLoadingPhaseStatus::Done && !diagnostics.completed_steps[index] {
+            log_gameplay_event(format!(
+                "world.loading.step.complete step={step:?} detail={}",
+                loading_step_detail(state, step)
+            ));
+            diagnostics.completed_steps[index] = true;
+        }
+    }
+}
+
+fn loading_step_detail(state: &super::WorldLoadingState, step: WorldLoadingStep) -> String {
+    match step {
+        WorldLoadingStep::BiomeMap
+        | WorldLoadingStep::TerrainColumns
+        | WorldLoadingStep::VolumeBiomes
+        | WorldLoadingStep::DensityField
+        | WorldLoadingStep::Materials
+        | WorldLoadingStep::InitialFluids
+        | WorldLoadingStep::Structures
+        | WorldLoadingStep::SurfaceObjects
+        | WorldLoadingStep::ChunkIntegration => format!(
+            "generated={}/{} cursor={}",
+            state.generated,
+            state.total(),
+            state.generation_cursor
+        ),
+        WorldLoadingStep::SettlingFluids => {
+            let (_, generated, mutable, initialization, work, verification, verification_chunks) =
+                state.fluid_settling.diagnostic_counts();
+            format!(
+                "generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}"
+            )
+        }
+        WorldLoadingStep::Lighting => format!(
+            "seeded={}/{} relaxations={}/{}",
+            state.lighting_seed_cursor,
+            state.total(),
+            state.lighting_relaxation_cursor,
+            state.lighting_relaxations.len()
+        ),
+        WorldLoadingStep::Meshing => format!(
+            "meshed={}/{} cursor={}",
+            state.meshed,
+            state.total(),
+            state.mesh_cursor
+        ),
+        WorldLoadingStep::Assets => {
+            format!("loaded={}/{}", state.assets_loaded, state.assets_total)
+        }
+        WorldLoadingStep::Finalizing => format!(
+            "frames={}/{}",
+            state.finalization_frames, INITIAL_FINALIZATION_FRAMES
+        ),
+        WorldLoadingStep::Spawning => format!(
+            "presentation_prewarm={}/{}",
+            state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES
+        ),
     }
 }
 
 fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
     match state.phase {
-        WorldLoadingPhase::Generating => format!("generated={}/{} cursor={}", state.generated, state.total(), state.generation_cursor),
+        WorldLoadingPhase::Generating => format!(
+            "generated={}/{} cursor={}",
+            state.generated,
+            state.total(),
+            state.generation_cursor
+        ),
         WorldLoadingPhase::SettlingFluids => {
-            let (_, generated, mutable, initialization, work, verification, verification_chunks) = state.fluid_settling.diagnostic_counts();
-            format!("generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}")
+            let (_, generated, mutable, initialization, work, verification, verification_chunks) =
+                state.fluid_settling.diagnostic_counts();
+            format!(
+                "generated_chunks={generated} mutable_chunks={mutable} initialization={initialization} work={work} verification={verification} verification_chunks={verification_chunks}"
+            )
         }
-        WorldLoadingPhase::Lighting => format!("seeded={}/{} relaxations={}/{}", state.lighting_seed_cursor, state.total(), state.lighting_relaxation_cursor, state.lighting_relaxations.len()),
-        WorldLoadingPhase::Meshing => format!("meshed={}/{} cursor={}", state.meshed, state.total(), state.mesh_cursor),
-        WorldLoadingPhase::Assets => format!("loaded={}/{}", state.assets_loaded, state.assets_total),
-        WorldLoadingPhase::Finalizing => format!("frames={}/{}", state.finalization_frames, INITIAL_FINALIZATION_FRAMES),
-        WorldLoadingPhase::Spawning => format!("presentation_prewarm={}/{}", state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES),
+        WorldLoadingPhase::Lighting => format!(
+            "seeded={}/{} relaxations={}/{}",
+            state.lighting_seed_cursor,
+            state.total(),
+            state.lighting_relaxation_cursor,
+            state.lighting_relaxations.len()
+        ),
+        WorldLoadingPhase::Meshing => format!(
+            "meshed={}/{} cursor={}",
+            state.meshed,
+            state.total(),
+            state.mesh_cursor
+        ),
+        WorldLoadingPhase::Assets => {
+            format!("loaded={}/{}", state.assets_loaded, state.assets_total)
+        }
+        WorldLoadingPhase::Finalizing => format!(
+            "frames={}/{}",
+            state.finalization_frames, INITIAL_FINALIZATION_FRAMES
+        ),
+        WorldLoadingPhase::Spawning => format!(
+            "presentation_prewarm={}/{}",
+            state.presentation_prewarm_frames, INITIAL_PRESENTATION_PREWARM_FRAMES
+        ),
     }
 }
 
@@ -134,16 +252,14 @@ pub(in crate::world) fn setup_world(
             &mut simulation.lighting,
             &mut simulation.changed_lighting_chunks,
         ),
-        WorldLoadingPhase::Meshing => {
-            mesh_initial_chunks(
-                &pipeline.content,
-                &mut pipeline.renderer,
-                &mut progress,
-                &mut pipeline.mesh_tasks,
-                &pipeline.lighting_revisions,
-                &pipeline.async_work,
-            )
-        }
+        WorldLoadingPhase::Meshing => mesh_initial_chunks(
+            &pipeline.content,
+            &mut pipeline.renderer,
+            &mut progress,
+            &mut pipeline.mesh_tasks,
+            &pipeline.lighting_revisions,
+            &pipeline.async_work,
+        ),
         WorldLoadingPhase::Assets => wait_for_gameplay_assets(
             &assets.asset_server,
             &assets.gameplay_preloads,
