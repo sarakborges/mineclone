@@ -178,7 +178,7 @@ fn spawn_loading_step_row(
 
             row.spawn((
                 LoadingStepLabel(step),
-                typography::hud(loading_step_label(&localization, language, step)),
+                typography::hud(loading_step_label(localization, language, step)),
                 Node {
                     flex_grow: 1.0,
                     min_width: px(0),
