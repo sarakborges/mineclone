@@ -5,6 +5,11 @@
     "saturation": 0.99,
     "intensity": 0.52
   },
+  "lightColor": {
+    "hue": 34,
+    "saturation": 0.42,
+    "intensity": 0.88
+  },
   "opacity": 1,
   "roughness": 0.34,
   "metallic": 0,
