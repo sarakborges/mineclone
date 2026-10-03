@@ -4,17 +4,19 @@ use crate::world::deterministic::hash_signed;
 
 use super::{
     BiomeField, BiomeFieldEntry,
-    spatial::{cell_hash, hash_unit, surface_value_noise, warp_surface_position},
+    spatial::{cell_hash, hash_unit, lerp, surface_value_noise, warp_surface_position},
 };
 
 const LAND_SITE_JITTER_FRACTION: f32 = 0.28;
-const LAND_SITE_SEARCH_RADIUS: i32 = 2;
+const LAND_SITE_SEARCH_RADIUS: i32 = 3;
 const OCEAN_DOMAIN_SCALE_MULTIPLIER: f32 = 2.0;
 const OCEAN_DOMAIN_THRESHOLD: f32 = 0.18;
 const OCEAN_DOMAIN_DETAIL_WEIGHT: f32 = 0.28;
 const OCEAN_DOMAIN_DETAIL_SCALE_MULTIPLIER: f32 = 0.38;
 const MIN_SURFACE_REGION_SCALE: f32 = 64.0;
 const LAND_HASH_SALT: u64 = 0x9e37_79b1_85eb_ca87;
+const LAND_SCALE_X_SALT: u64 = 0xa409_3822_299f_31d0;
+const LAND_SCALE_Z_SALT: u64 = 0x082e_fa98_ec4e_6c89;
 const OCEAN_HASH_SALT: u64 = 0xd6e8_feb8_6659_fd93;
 
 #[derive(Clone, Copy, Debug)]
@@ -108,10 +110,13 @@ impl BiomeField {
             for x in -LAND_SITE_SEARCH_RADIUS..=LAND_SITE_SEARCH_RADIUS {
                 let cell = center + IVec2::new(x, z);
                 let biome_index = self.land_biome_for_cell(cell);
+                let biome = &self.surface_biomes[biome_index];
                 let site = land_site_position(cell, spacing, self.seed);
-                let distance = warped.distance_squared(site);
+                let scale = land_site_scale(cell, biome, self.seed);
+                let normalized_delta = (warped - site) / scale;
+                let score = normalized_delta.length_squared();
                 let tie_break = cell_hash(cell, self.seed ^ LAND_HASH_SALT.rotate_left(17));
-                let candidate = (distance, tie_break, biome_index);
+                let candidate = (score, tie_break, biome_index);
 
                 if best.is_none_or(|current| {
                     candidate.0 < current.0
@@ -195,6 +200,15 @@ pub(super) fn land_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 
             jitter_x * spacing.x * LAND_SITE_JITTER_FRACTION,
             jitter_z * spacing.y * LAND_SITE_JITTER_FRACTION,
         )
+}
+
+fn land_site_scale(cell: IVec2, biome: &BiomeFieldEntry, seed: u64) -> Vec2 {
+    let x = hash_unit(cell_hash(cell, seed ^ LAND_SCALE_X_SALT));
+    let z = hash_unit(cell_hash(cell, seed ^ LAND_SCALE_Z_SALT));
+    Vec2::new(
+        lerp(biome.size.x.min, biome.size.x.max, x).max(1.0),
+        lerp(biome.size.z.min, biome.size.z.max, z).max(1.0),
+    )
 }
 
 #[cfg(test)]
@@ -308,6 +322,25 @@ mod tests {
             let point = Vec2::new(i as f32 * 173.0, i as f32 * -91.0);
             a.surface_biome_index_at(point) != b.surface_biome_index_at(point)
         }));
+    }
+
+    #[test]
+    fn site_scale_stays_inside_authored_bounds() {
+        let biome = BiomeFieldEntry {
+            size: DimensionBiomeSize {
+                x: DimensionBiomeSizeAxis { min: 80.0, max: 180.0 },
+                z: DimensionBiomeSizeAxis { min: 140.0, max: 360.0 },
+                y: None,
+            },
+            ..entry("test:gorge", 1.0, size(1.0, 1.0))
+        };
+        for z in -8..=8 {
+            for x in -8..=8 {
+                let scale = land_site_scale(IVec2::new(x, z), &biome, 42);
+                assert!((80.0..=180.0).contains(&scale.x));
+                assert!((140.0..=360.0).contains(&scale.y));
+            }
+        }
     }
 
     #[test]
