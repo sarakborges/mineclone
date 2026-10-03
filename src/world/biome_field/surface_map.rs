@@ -14,6 +14,7 @@ use super::{
 const REGION_HASH_SALT: u64 = 0x94d0_49bb_1331_11eb;
 const TARGET_X_HASH_SALT: u64 = 0x517c_c1b7_2722_0a95;
 const TARGET_Z_HASH_SALT: u64 = 0x9e37_79b9_7f4a_7c15;
+const TERRITORY_FILL_RATIO: f32 = std::f32::consts::FRAC_PI_4;
 
 #[derive(Clone)]
 pub(crate) struct SurfaceBiomeMap {
@@ -42,6 +43,10 @@ struct SurfaceBiomeRegion {
     min_span: IVec2,
     target_span: IVec2,
     max_span: IVec2,
+    min_cells: i32,
+    target_cells: i32,
+    max_cells: i32,
+    cell_count: i32,
     minimum: IVec2,
     maximum: IVec2,
     frontier_radius: i32,
@@ -58,22 +63,30 @@ impl SurfaceBiomeRegion {
     ) -> Self {
         let (min_x, max_x) = axis_cell_limits(size_x, spacing.x);
         let (min_z, max_z) = axis_cell_limits(size_z, spacing.y);
-        let target_x = choose_target_span(
-            min_x,
-            max_x,
-            hash_unit(source_hash ^ TARGET_X_HASH_SALT),
-        );
-        let target_z = choose_target_span(
-            min_z,
-            max_z,
-            hash_unit(source_hash ^ TARGET_Z_HASH_SALT),
+        let min_span = IVec2::new(min_x, min_z);
+        let max_span = IVec2::new(max_x, max_z);
+        let target_span = IVec2::new(
+            choose_target_span(
+                min_x,
+                max_x,
+                hash_unit(source_hash ^ TARGET_X_HASH_SALT),
+            ),
+            choose_target_span(
+                min_z,
+                max_z,
+                hash_unit(source_hash ^ TARGET_Z_HASH_SALT),
+            ),
         );
 
         Self {
             biome_index,
-            min_span: IVec2::new(min_x, min_z),
-            target_span: IVec2::new(target_x, target_z),
-            max_span: IVec2::new(max_x, max_z),
+            min_span,
+            target_span,
+            max_span,
+            min_cells: ellipse_footprint_cells(min_span),
+            target_cells: ellipse_footprint_cells(target_span),
+            max_cells: ellipse_footprint_cells(max_span),
+            cell_count: 1,
             minimum: origin,
             maximum: origin,
             frontier_radius: cell_radius(origin),
@@ -93,31 +106,40 @@ impl SurfaceBiomeRegion {
 
     fn can_claim(&self, cell: IVec2) -> bool {
         let (_, _, span) = self.proposed_bounds(cell);
-        span.x <= self.max_span.x && span.y <= self.max_span.y
+        span.x <= self.max_span.x
+            && span.y <= self.max_span.y
+            && self.cell_count < self.max_cells
     }
 
     fn claim(&mut self, cell: IVec2) {
         self.minimum = self.minimum.min(cell);
         self.maximum = self.maximum.max(cell);
         self.frontier_radius = self.frontier_radius.max(cell_radius(cell));
+        self.cell_count += 1;
     }
 
     fn needs_minimum(&self) -> bool {
         let span = self.span();
-        span.x < self.min_span.x || span.y < self.min_span.y
+        span.x < self.min_span.x
+            || span.y < self.min_span.y
+            || self.cell_count < self.min_cells
     }
 
     fn needs_target(&self) -> bool {
         let span = self.span();
-        span.x < self.target_span.x || span.y < self.target_span.y
+        span.x < self.target_span.x
+            || span.y < self.target_span.y
+            || self.cell_count < self.target_cells
     }
 
     fn improves_minimum(&self, cell: IVec2) -> bool {
-        improves_deficient_axis(self.span(), self.proposed_bounds(cell).2, self.min_span)
+        self.cell_count < self.min_cells
+            || improves_deficient_axis(self.span(), self.proposed_bounds(cell).2, self.min_span)
     }
 
     fn improves_target(&self, cell: IVec2) -> bool {
-        improves_deficient_axis(self.span(), self.proposed_bounds(cell).2, self.target_span)
+        self.cell_count < self.target_cells
+            || improves_deficient_axis(self.span(), self.proposed_bounds(cell).2, self.target_span)
     }
 
     fn keeps_minimum_frontier_alive(&self, cell: IVec2) -> bool {
@@ -125,15 +147,16 @@ impl SurfaceBiomeRegion {
     }
 
     fn minimum_deficit(&self) -> i32 {
-        span_deficit(self.span(), self.min_span)
+        span_deficit(self.span(), self.min_span) + (self.min_cells - self.cell_count).max(0)
     }
 
     fn target_deficit(&self) -> i32 {
         span_deficit(self.span(), self.target_span)
+            + (self.target_cells - self.cell_count).max(0)
     }
 
     fn remaining_capacity(&self) -> i32 {
-        span_deficit(self.span(), self.max_span)
+        span_deficit(self.span(), self.max_span) + (self.max_cells - self.cell_count).max(0)
     }
 }
 
@@ -276,12 +299,18 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
             continue;
         }
 
+        let has_unfinished_region = state.regions.iter().any(SurfaceBiomeRegion::needs_minimum);
+
         if claim_existing(field, state, &remaining, GrowthMode::Target) {
             remaining.retain(|cell| !state.cells.contains_key(cell));
             continue;
         }
 
-        if spawn_region(field, state, &remaining) {
+        // Region births are serialized until the previous region owns a real
+        // minimum footprint. Otherwise several thin regions can grow in
+        // parallel, satisfy only their bounding spans, and produce a mosaic of
+        // tiny visible biomes despite large authored min sizes.
+        if !has_unfinished_region && spawn_region(field, state, &remaining) {
             remaining.retain(|cell| !state.cells.contains_key(cell));
             continue;
         }
@@ -292,6 +321,11 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
         }
 
         let cell = remaining[0];
+        if has_unfinished_region {
+            panic!(
+                "surface biome frontier at radius {radius} cannot preserve an unfinished minimum region while resolving cell {cell:?}"
+            );
+        }
         panic!(
             "surface biome frontier at radius {radius} cannot resolve cell {cell:?} without exceeding max size or violating authored adjacency constraints"
         );
@@ -300,6 +334,15 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
     debug_assert!(
         state.cells.keys().all(|cell| cell_radius(*cell) <= radius),
         "surface biome ring {radius} claimed speculative cells outside the resolved frontier"
+    );
+    debug_assert!(
+        state
+            .regions
+            .iter()
+            .filter(|region| region.needs_minimum())
+            .count()
+            <= 1,
+        "surface biome frontier must not grow multiple unfinished regions at once"
     );
 }
 
@@ -407,6 +450,8 @@ fn best_neighbor_region(
 }
 
 fn spawn_region(field: &BiomeField, state: &mut SurfaceBiomeMapState, remaining: &[IVec2]) -> bool {
+    debug_assert!(state.regions.iter().all(|region| !region.needs_minimum()));
+
     for &cell in remaining {
         if state.cells.contains_key(&cell) {
             continue;
@@ -542,6 +587,12 @@ fn axis_cell_limits(size: DimensionBiomeSizeAxis, spacing: f32) -> (i32, i32) {
     (minimum, maximum)
 }
 
+fn ellipse_footprint_cells(span: IVec2) -> i32 {
+    ((span.x.max(1) * span.y.max(1)) as f32 * TERRITORY_FILL_RATIO)
+        .ceil()
+        .max(1.0) as i32
+}
+
 fn choose_target_span(minimum: i32, maximum: i32, unit: f32) -> i32 {
     if minimum >= maximum {
         return minimum;
@@ -641,11 +692,40 @@ mod tests {
     }
 
     #[test]
+    fn territorial_footprint_uses_ellipse_area_inside_authored_span() {
+        assert_eq!(ellipse_footprint_cells(IVec2::new(16, 16)), 202);
+        assert_eq!(ellipse_footprint_cells(IVec2::new(16, 28)), 352);
+    }
+
+    #[test]
     fn target_span_never_leaves_authored_cell_limits() {
         for unit in [0.0, 0.1, 0.5, 0.999_999, 1.0] {
             let target = choose_target_span(8, 19, unit);
             assert!((8..=19).contains(&target));
         }
+    }
+
+    #[test]
+    fn bounding_span_alone_does_not_satisfy_minimum() {
+        let axis = DimensionBiomeSizeAxis {
+            min: 20.0,
+            max: 40.0,
+        };
+        let mut region = SurfaceBiomeRegion::new(
+            0,
+            IVec2::ZERO,
+            axis,
+            axis,
+            Vec2::splat(10.0),
+            42,
+        );
+        region.minimum = IVec2::new(-2, -2);
+        region.maximum = IVec2::new(1, 1);
+        region.cell_count = 4;
+
+        assert_eq!(region.span(), IVec2::splat(4));
+        assert!(region.cell_count < region.min_cells);
+        assert!(region.needs_minimum());
     }
 
     #[test]
@@ -660,6 +740,24 @@ mod tests {
                 ring_cells(radius)
                     .into_iter()
                     .all(|cell| state.cells.contains_key(&cell))
+            );
+        }
+    }
+
+    #[test]
+    fn only_one_unfinished_region_grows_at_a_time() {
+        let field = test_field(test_size(20.0, 40.0));
+        let mut state = SurfaceBiomeMapState::default();
+
+        for radius in 0..=12 {
+            expand_ring(&field, &mut state, radius);
+            assert!(
+                state
+                    .regions
+                    .iter()
+                    .filter(|region| region.needs_minimum())
+                    .count()
+                    <= 1
             );
         }
     }
@@ -680,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn first_region_reaches_authored_minimum_through_frontier_growth() {
+    fn first_region_reaches_authored_minimum_with_real_footprint() {
         let field = test_field(test_size(20.0, 40.0));
         let mut state = SurfaceBiomeMapState::default();
 
@@ -691,5 +789,6 @@ mod tests {
         assert!(!state.regions[0].needs_minimum());
         assert!(state.regions[0].span().x >= 4);
         assert!(state.regions[0].span().y >= 4);
+        assert!(state.regions[0].cell_count >= state.regions[0].min_cells);
     }
 }
