@@ -21,6 +21,7 @@ impl DimensionDefinition {
         for entry in &self.biomes {
             assert!(ids.insert(entry.id.as_str()), "dimension {} defines biome more than once: {}", self.id, entry.id);
             assert!(entry.weight.is_finite() && entry.weight >= 0.0, "dimension {} biome {} weight must be finite and non-negative", self.id, entry.id);
+            assert!(entry.spawn_weight.is_finite() && entry.spawn_weight >= 0.0, "dimension {} biome {} spawnWeight must be finite and non-negative", self.id, entry.id);
             let biome = biomes.get(&entry.id).unwrap_or_else(|| panic!("dimension {} references missing biome: {}", self.id, entry.id));
             let size = entry.size.unwrap_or_else(|| panic!("dimension {} {:?} biome {} must define size", self.id, biome.kind, entry.id));
             validate_size_axis(&self.id, &entry.id, "x", size.x);
