@@ -358,7 +358,10 @@ fn update_ambient_particles(
     time: Res<Time>,
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
-    mut particles: Query<(Entity, &mut AmbientParticle, &mut Transform)>,
+    mut particles: Query<
+        (Entity, &mut AmbientParticle, &mut Transform),
+        Without<GameplayCamera>,
+    >,
 ) {
     let delta_seconds = time.delta_secs().min(0.1);
     let camera_position = camera.translation;
