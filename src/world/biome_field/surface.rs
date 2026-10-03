@@ -25,17 +25,21 @@ impl BiomeField {
             .filter(|boundary| boundary.distance <= BORDER_TRANSITION_WIDTH)
             .map(|boundary| {
                 let progress = 1.0 - (boundary.distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
-                (boundary.neighbor_surface_index, smoothstep(progress))
+                (
+                    boundary.neighbor_surface_index,
+                    smoothstep(progress),
+                    boundary.neighbor_terrain_strength,
+                )
             });
-        let total_weight = 1.0 + neighbor_weight.map_or(0.0, |(_, weight)| weight);
+        let total_weight = 1.0 + neighbor_weight.map_or(0.0, |(_, weight, _)| weight);
         let primary = &self.surface_biomes[primary_index];
         influences.push(BiomeInfluence {
             id: primary.id.as_str(),
             weight: 1.0 / total_weight,
             surface_index: primary_index,
-            terrain_strength: 1.0,
+            terrain_strength: field_sample.primary_terrain_strength,
         });
-        if let Some((neighbor_index, weight)) = neighbor_weight
+        if let Some((neighbor_index, weight, terrain_strength)) = neighbor_weight
             && weight > 0.0
         {
             let neighbor = &self.surface_biomes[neighbor_index];
@@ -43,7 +47,7 @@ impl BiomeField {
                 id: neighbor.id.as_str(),
                 weight: weight / total_weight,
                 surface_index: neighbor_index,
-                terrain_strength: 1.0,
+                terrain_strength,
             });
         }
 
