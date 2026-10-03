@@ -60,7 +60,7 @@ pub(super) fn varied_surface_margin_width(
     width + noise * width_variation
 }
 
-fn surface_value_noise(position: Vec2, seed: u64) -> f32 {
+pub(super) fn surface_value_noise(position: Vec2, seed: u64) -> f32 {
     let x0 = position.x.floor() as i32;
     let z0 = position.y.floor() as i32;
     let x1 = x0 + 1;
@@ -97,8 +97,6 @@ pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {
 pub(super) fn surface_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
 
-    // Row jitter only breaks the visual sampling lattice so borders do not look
-    // axis-aligned. It never changes territorial cell ownership.
     if cell.y == 0 {
         return base;
     }
@@ -123,12 +121,6 @@ pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec
         return base;
     }
 
-    // Independent 3D jitter allowed neighboring volume sites to move toward
-    // one another on the same axis, shrinking a 60-block vertical interval to
-    // almost half of its authored spacing. Ignore the coordinate being
-    // displaced when deriving each jitter component. Axis neighbors therefore
-    // share that component and retain the full authored spacing, while the
-    // other two components still keep the 3D lattice irregular.
     let jitter_x_hash = volume_cell_hash(
         IVec3::new(0, cell.y, cell.z),
         seed ^ 0x243f_6a88_85a3_08d3,
