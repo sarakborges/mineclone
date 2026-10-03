@@ -179,9 +179,11 @@ pub(crate) fn save_world_owned(
     initial
         .worldgen_version
         .validate_matches(snapshot.worldgen_version)?;
+    // The generation-zero manifest reserves immutable world identity. The
+    // active dimension is mutable session state: dimension warps intentionally
+    // change it and each published generation records the current dimension.
     if initial.id != snapshot.id
         || initial.seed != snapshot.seed
-        || initial.dimension_id != snapshot.dimension_id
         || initial.world_generation != snapshot.world_generation
         || biome_size_multiplier_tenths(initial.biome_size_multiplier)
             != biome_size_multiplier_tenths(snapshot.biome_size_multiplier)
