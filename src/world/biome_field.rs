@@ -23,11 +23,8 @@ use crate::content::{
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
-    constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
-    spatial::{
-        hash_unit, lerp, smoothstep, surface_map_spacing, surface_site_position,
-        warp_surface_position,
-    },
+    constants::{SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
+    spatial::{surface_map_spacing, surface_site_position},
     surface_map::SurfaceBiomeMap,
 };
 use super::{macro_climate::MacroClimateField, new_world::biome_size_multiplier_tenths};
@@ -119,42 +116,6 @@ pub struct BiomeFieldSample<'a> {
 struct ForcedSurfaceBiome {
     biome_index: usize,
     center: Vec2,
-    radii: Vec2,
-    warp_seed: u64,
-}
-
-impl ForcedSurfaceBiome {
-    fn warped_delta(self, position: Vec2) -> Vec2 {
-        let warped = warp_surface_position(position, self.warp_seed);
-        let warped_center = warp_surface_position(self.center, self.warp_seed);
-        warped - warped_center
-    }
-
-    fn normalized_distance(self, position: Vec2) -> f32 {
-        let delta = self.warped_delta(position);
-        Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length()
-    }
-
-    fn core_contains(self, position: Vec2) -> bool {
-        self.normalized_distance(position) <= 1.0
-    }
-
-    fn weight(self, position: Vec2) -> f32 {
-        let delta = self.warped_delta(position);
-        let normalized = Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length();
-        if normalized <= 1.0 {
-            return 1.0;
-        }
-
-        let radial_distance = delta.length();
-        let boundary_distance = radial_distance / normalized;
-        let outside_distance = (radial_distance - boundary_distance).max(0.0);
-        if outside_distance >= BORDER_TRANSITION_WIDTH {
-            return 0.0;
-        }
-
-        smoothstep(1.0 - outside_distance / BORDER_TRANSITION_WIDTH)
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -318,37 +279,16 @@ impl BiomeField {
             .iter()
             .position(|biome| biome.id == biome_id)
             .unwrap_or_else(|| panic!("forced surface biome is not a surface biome: {biome_id}"));
-        let biome = &self.surface_biomes[biome_index];
-        let hash = biome_density_seed(self.seed ^ 0x6a09_e667_f3bc_c909, biome_id);
-        let radii = Vec2::new(
-            lerp(
-                biome.size.x.min,
-                biome.size.x.max,
-                hash_unit(hash.rotate_left(11)),
-            ),
-            lerp(
-                biome.size.z.min,
-                biome.size.z.max,
-                hash_unit(hash.rotate_left(37)),
-            ),
-        );
         self.forced_surface_biome = Some(ForcedSurfaceBiome {
             biome_index,
             center,
-            radii,
-            warp_seed: self.seed ^ hash.rotate_left(23),
         });
+        self.surface_map.clear();
     }
 
     pub(crate) fn forced_surface_core_contains(&self, position: Vec2) -> bool {
-        self.forced_surface_biome
-            .is_some_and(|forced| forced.core_contains(position))
-    }
-
-    pub(super) fn forced_surface_biome_at(&self, position: Vec2) -> Option<(usize, f32)> {
-        let forced = self.forced_surface_biome?;
-        let weight = forced.weight(position);
-        (weight > 0.0).then_some((forced.biome_index, weight))
+        self.forced_surface_biome.is_some()
+            && self.surface_map.forced_region_contains(self, position)
     }
 
     pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
