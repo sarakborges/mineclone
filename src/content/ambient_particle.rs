@@ -54,6 +54,8 @@ pub struct AmbientParticleDefinition {
     pub wander_strength: f32,
     #[serde(default)]
     pub wind_influence: f32,
+    #[serde(default)]
+    pub pop_at_end: bool,
     #[serde(default = "default_spawn_radius")]
     pub spawn_radius: f32,
     #[serde(default = "default_vertical_range")]
@@ -150,6 +152,7 @@ mod tests {
             acceleration: [0.0, -0.2, 0.0],
             wander_strength: 0.1,
             wind_influence: 0.0,
+            pop_at_end: false,
             spawn_radius: 12.0,
             vertical_range: 6.0,
         }
