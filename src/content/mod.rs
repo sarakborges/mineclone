@@ -1,4 +1,5 @@
 pub(crate) mod asset_path;
+pub(crate) mod ambient_particle;
 pub(crate) mod attack;
 pub(crate) mod biome;
 pub(crate) mod biome_density;
