@@ -15,6 +15,7 @@ impl BiomeField {
 
         let field_sample = self.surface_field_sample_at(position);
         let primary_index = field_sample.primary_index;
+        debug_assert!(self.surface_biome_is_enabled(primary_index));
         let regional_boundary = field_sample
             .boundary
             .filter(|boundary| boundary.distance <= maximum_boundary_interest_radius(self));
