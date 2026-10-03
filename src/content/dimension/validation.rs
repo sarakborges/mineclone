@@ -57,6 +57,17 @@ impl DimensionDefinition {
                 self.id,
                 entry.id
             );
+            if let Some(group) = entry.exclusive_neighbor_group.as_deref() {
+                assert!(
+                    !group.trim().is_empty(),
+                    "dimension {} biome {} exclusiveNeighborGroup cannot be empty",
+                    self.id,
+                    entry.id
+                );
+            }
+            if let Some(selector) = &entry.neighbor_deny {
+                selector.validate(&entry.id, "neighborDeny");
+            }
             let biome = biomes.get(&entry.id).unwrap_or_else(|| {
                 panic!(
                     "dimension {} references missing biome: {}",
@@ -81,6 +92,12 @@ impl DimensionDefinition {
                     }
                 }
                 BiomeKind::Volume => {
+                    assert!(
+                        entry.neighbor_deny.is_none(),
+                        "dimension {} volume biome {} cannot define neighborDeny",
+                        self.id,
+                        entry.id
+                    );
                     validate_size_axis(
                         &self.id,
                         &entry.id,
@@ -100,6 +117,35 @@ impl DimensionDefinition {
             "dimension {} must define at least one surface biome with positive weight",
             self.id
         );
+
+        for entry in &self.biomes {
+            let Some(selector) = &entry.neighbor_deny else {
+                continue;
+            };
+            for denied_id in &selector.ids {
+                let denied = biomes.get(denied_id).unwrap_or_else(|| {
+                    panic!(
+                        "dimension {} biome {} neighborDeny references missing biome: {}",
+                        self.id, entry.id, denied_id
+                    )
+                });
+                assert_eq!(
+                    denied.kind,
+                    BiomeKind::Surface,
+                    "dimension {} biome {} neighborDeny must reference a surface biome: {}",
+                    self.id,
+                    entry.id,
+                    denied_id
+                );
+                assert!(
+                    self.biomes.iter().any(|candidate| candidate.id == *denied_id),
+                    "dimension {} biome {} neighborDeny references biome not listed in the dimension: {}",
+                    self.id,
+                    entry.id,
+                    denied_id
+                );
+            }
+        }
 
         if let Some(id) = self.ocean_biome.as_deref() {
             let biome = biomes.get(id).unwrap_or_else(|| {
