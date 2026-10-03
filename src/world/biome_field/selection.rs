@@ -1,5 +1,3 @@
-use bevy::prelude::*;
-
 use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
     world::{deterministic::mix_hash_u64, macro_climate::MacroClimateSample},
@@ -38,36 +36,6 @@ pub(super) fn select_volume_biome_index(
 
     sort_weighted_candidates(&mut candidates, source_hash, biomes);
     candidates.first().map(|candidate| candidate.index)
-}
-
-pub(super) fn surface_biomes_conflict(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
-    if left.avoid_near.iter().any(|id| id == &right.id)
-        || right.avoid_near.iter().any(|id| id == &left.id)
-    {
-        return true;
-    }
-
-    left.id != right.id
-        && left.exclusive_neighbor_group.as_ref().is_some_and(|group| {
-            right
-                .exclusive_neighbor_group
-                .as_ref()
-                .is_some_and(|right_group| right_group == group)
-        })
-}
-
-pub(super) fn surface_requirement_satisfied(
-    candidate: &BiomeFieldEntry,
-    neighbor_indices: &[usize],
-    biomes: &[BiomeFieldEntry],
-) -> bool {
-    candidate.require_near.is_empty()
-        || neighbor_indices.iter().copied().any(|neighbor_index| {
-            candidate
-                .require_near
-                .iter()
-                .any(|id| id == &biomes[neighbor_index].id)
-        })
 }
 
 pub(super) fn climate_weight(sample: MacroClimateSample, climate: BiomeClimate) -> f32 {
