@@ -14,6 +14,7 @@ use crate::{
         coordinates::chunk_coord_from_world,
         fluid::FluidCell,
         lighting::PendingLightingUpdates,
+        neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
     },
 };
@@ -99,6 +100,7 @@ pub(super) fn process_fluid_updates(
     );
 
     schedule_frontier_wakes(
+        &runtime.world,
         &mut runtime.pending,
         &fluids,
         current_tick,
@@ -229,6 +231,7 @@ fn process_due_fluid_ticks(
         enqueue_remesh(position, &mut runtime.remesh_queue);
         prune_absent_remesh_halo(position, &runtime.world, &mut runtime.remesh_queue);
         schedule_changed_fluid_neighborhood(
+            &runtime.world,
             &mut runtime.pending,
             fluids,
             position,
@@ -241,6 +244,7 @@ fn process_due_fluid_ticks(
 }
 
 fn schedule_frontier_wakes(
+    world: &VoxelWorld,
     pending: &mut PendingFluidUpdates,
     fluids: &FluidRegistry,
     current_tick: u64,
@@ -252,6 +256,9 @@ fn schedule_frontier_wakes(
             break;
         };
         budget.record(1);
+        if !fluid_tick_target_can_change(world, wake.position) {
+            continue;
+        }
         schedule_fluid_tick_after_delay(
             pending,
             fluids,
@@ -264,6 +271,7 @@ fn schedule_frontier_wakes(
 }
 
 fn schedule_changed_fluid_neighborhood(
+    world: &VoxelWorld,
     pending: &mut PendingFluidUpdates,
     fluids: &FluidRegistry,
     position: IVec3,
@@ -277,6 +285,7 @@ fn schedule_changed_fluid_neighborhood(
 
     if let Some(fluid_id) = current_id {
         schedule_fluid_neighborhood_after_delay(
+            world,
             pending,
             fluids,
             fluid_id,
@@ -289,6 +298,7 @@ fn schedule_changed_fluid_neighborhood(
         && Some(fluid_id) != current_id
     {
         schedule_fluid_neighborhood_after_delay(
+            world,
             pending,
             fluids,
             fluid_id,
@@ -300,6 +310,7 @@ fn schedule_changed_fluid_neighborhood(
 }
 
 fn schedule_fluid_neighborhood_after_delay(
+    world: &VoxelWorld,
     pending: &mut PendingFluidUpdates,
     fluids: &FluidRegistry,
     fluid_id: FluidId,
@@ -310,7 +321,41 @@ fn schedule_fluid_neighborhood_after_delay(
     let Some(delay) = fluid_tick_delay_for_id(fluids, fluid_id, ticks_per_second) else {
         return;
     };
-    pending.schedule_neighborhood(fluid_id, position, current_tick.saturating_add(delay));
+    let due_tick = current_tick.saturating_add(delay);
+
+    for target in [position, position - IVec3::Y] {
+        if fluid_tick_target_can_change(world, target) {
+            pending.schedule_at(
+                FluidTickKey {
+                    fluid_id,
+                    position: target,
+                },
+                due_tick,
+            );
+        }
+    }
+    for offset in HORIZONTAL_NEIGHBORS {
+        let target = position + offset;
+        if fluid_tick_target_can_change(world, target) {
+            pending.schedule_at(
+                FluidTickKey {
+                    fluid_id,
+                    position: target,
+                },
+                due_tick,
+            );
+        }
+    }
+}
+
+fn fluid_tick_target_can_change(world: &VoxelWorld, position: IVec3) -> bool {
+    if position.y < 0 {
+        return false;
+    }
+
+    world.sample_at(position).is_none_or(|(cell, fluid, _)| {
+        cell.is_none() && !fluid.is_some_and(FluidCell::is_source)
+    })
 }
 
 fn schedule_fluid_tick_after_delay(
@@ -364,6 +409,7 @@ fn transition_fluid_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::{cell::VoxelCell, chunk::VoxelChunk};
 
     #[test]
     fn spread_speed_quantizes_to_world_tick_delay() {
@@ -381,5 +427,32 @@ mod tests {
         assert_eq!(transition_fluid_id(Some(water), Some(lava)), Some(1));
         assert_eq!(transition_fluid_id(Some(water), None), Some(0));
         assert_eq!(transition_fluid_id(None, Some(lava)), Some(1));
+    }
+
+    #[test]
+    fn fluid_tick_pruning_keeps_only_targets_that_can_change() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+
+        let empty = IVec3::new(1, 2, 1);
+        let source = IVec3::new(2, 2, 1);
+        let solid = IVec3::new(3, 2, 1);
+        world.set_fluid_at(source, Some(FluidCell::source(0, 8)));
+        world.set_block_at(
+            solid,
+            Some(VoxelCell::new("stone", Default::default())),
+        );
+
+        assert!(fluid_tick_target_can_change(&world, empty));
+        assert!(!fluid_tick_target_can_change(&world, source));
+        assert!(!fluid_tick_target_can_change(&world, solid));
+        assert!(!fluid_tick_target_can_change(&world, IVec3::new(0, -1, 0)));
+
+        // Keep unloaded targets schedulable so existing dormant-tick semantics
+        // still carry edge propagation across streaming boundaries.
+        assert!(fluid_tick_target_can_change(
+            &world,
+            IVec3::new(32, 2, 0),
+        ));
     }
 }
