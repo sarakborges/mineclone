@@ -3,7 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy::prelude::{IVec2, IVec3};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::{IVec2, IVec3},
+};
 
 use crate::voxel::{
     coordinates::ChunkCoord,
@@ -32,6 +35,7 @@ struct ReadyPriorityCache {
 #[derive(Default)]
 pub(super) struct ReadyChunkQueue {
     queue: DeduplicatedQueue<ChunkCoord>,
+    columns: HashMap<IVec2, HashSet<ChunkCoord>>,
     priority_cache: ReadyPriorityCache,
 }
 
@@ -45,15 +49,23 @@ impl ReadyChunkQueue {
     }
 
     pub(super) fn enqueue(&mut self, coord: IVec3) {
-        self.queue.enqueue(ChunkCoord::from_ivec3(coord));
+        let coord = ChunkCoord::from_ivec3(coord);
+        if self.queue.enqueue(coord) {
+            self.index_insert(coord);
+        }
     }
 
     pub(super) fn enqueue_front(&mut self, coord: IVec3) {
-        self.queue.enqueue_front(ChunkCoord::from_ivec3(coord));
+        let coord = ChunkCoord::from_ivec3(coord);
+        let was_present = self.queue.contains(coord);
+        self.queue.enqueue_front(coord);
+        if !was_present {
+            self.index_insert(coord);
+        }
     }
 
     pub(super) fn remove(&mut self, coord: IVec3) -> bool {
-        self.queue.remove(ChunkCoord::from_ivec3(coord))
+        self.remove_chunk_coord(ChunkCoord::from_ivec3(coord))
     }
 
     pub(super) fn retain(&mut self, mut predicate: impl FnMut(IVec3) -> bool) -> usize {
@@ -64,7 +76,7 @@ impl ReadyChunkQueue {
             .collect::<Vec<_>>();
         let removed_count = removed.len();
         for coord in removed {
-            let did_remove = self.queue.remove(coord);
+            let did_remove = self.remove_chunk_coord(coord);
             debug_assert!(did_remove, "ready retention selected an active queue entry");
         }
         removed_count
@@ -93,11 +105,7 @@ impl ReadyChunkQueue {
         if self.priority_cache.key != Some(scan_key) {
             let queue_len = self.queue.len();
             let started = Instant::now();
-            let mut ordered = self
-                .queue
-                .values()
-                .filter(|coord| predicate(coord.as_ivec3()))
-                .collect::<Vec<_>>();
+            let mut ordered = self.visible_candidates(center, radius_squared, &mut predicate);
             ordered.sort_unstable_by_key(|coord| key(coord.as_ivec3()));
             scan = Some((started.elapsed(), queue_len));
             self.priority_cache.pending = ordered.into();
@@ -109,7 +117,7 @@ impl ReadyChunkQueue {
                 continue;
             }
 
-            let removed = self.queue.remove(coord);
+            let removed = self.remove_chunk_coord(coord);
             debug_assert!(removed, "ready priority cache must reference an active chunk");
             if let Some(cache_key) = self.priority_cache.key.as_mut() {
                 cache_key.queue_revision = self.queue.revision();
@@ -118,6 +126,67 @@ impl ReadyChunkQueue {
         }
 
         (None, scan)
+    }
+
+    fn visible_candidates(
+        &self,
+        center: IVec2,
+        radius_squared: i64,
+        predicate: &mut impl FnMut(IVec3) -> bool,
+    ) -> Vec<ChunkCoord> {
+        let radius_squared = radius_squared.max(0);
+        let radius = (radius_squared as f64).sqrt().floor() as i32;
+        let mut candidates = Vec::new();
+
+        for z in center.y.saturating_sub(radius)..=center.y.saturating_add(radius) {
+            let dz = i64::from(z) - i64::from(center.y);
+            let remaining = radius_squared - dz * dz;
+            if remaining < 0 {
+                continue;
+            }
+            let x_span = (remaining as f64).sqrt().floor() as i32;
+            for x in center.x.saturating_sub(x_span)..=center.x.saturating_add(x_span) {
+                let horizontal = IVec2::new(x, z);
+                let Some(column) = self.columns.get(&horizontal) else {
+                    continue;
+                };
+                candidates.extend(
+                    column
+                        .iter()
+                        .copied()
+                        .filter(|coord| predicate(coord.as_ivec3())),
+                );
+            }
+        }
+
+        candidates
+    }
+
+    fn index_insert(&mut self, coord: ChunkCoord) {
+        self.columns
+            .entry(coord.as_ivec3().xz())
+            .or_default()
+            .insert(coord);
+    }
+
+    fn remove_chunk_coord(&mut self, coord: ChunkCoord) -> bool {
+        if !self.queue.remove(coord) {
+            return false;
+        }
+
+        let horizontal = coord.as_ivec3().xz();
+        let remove_column = if let Some(column) = self.columns.get_mut(&horizontal) {
+            let indexed = column.remove(&coord);
+            debug_assert!(indexed, "ready column index must contain queued chunk");
+            column.is_empty()
+        } else {
+            debug_assert!(false, "ready column index must contain queued column");
+            false
+        };
+        if remove_column {
+            self.columns.remove(&horizontal);
+        }
+        true
     }
 }
 
@@ -212,5 +281,53 @@ mod tests {
         );
         assert_eq!(selected, Some(newly_visible));
         assert!(scan.is_some());
+    }
+
+    #[test]
+    fn visible_scan_ignores_ready_columns_outside_radius() {
+        let visible = IVec3::new(2, 3, 1);
+        let outside = IVec3::new(20, 0, 20);
+        let mut queue = ReadyChunkQueue::default();
+        queue.enqueue(outside);
+        queue.enqueue(visible);
+
+        let mut predicate_calls = 0;
+        let (selected, scan) = queue.pop_min_where_by_key(
+            1,
+            IVec2::ZERO,
+            9,
+            |_| {
+                predicate_calls += 1;
+                true
+            },
+            |coord| coord.length_squared(),
+        );
+
+        assert_eq!(selected, Some(visible));
+        assert!(scan.is_some());
+        assert_eq!(predicate_calls, 1);
+        assert!(queue.contains(outside));
+    }
+
+    #[test]
+    fn column_index_stays_coherent_after_retain_and_front_requeue() {
+        let retained = IVec3::new(1, 2, 1);
+        let removed = IVec3::new(2, 2, 2);
+        let mut queue = ReadyChunkQueue::default();
+        queue.enqueue(retained);
+        queue.enqueue(removed);
+        queue.enqueue_front(retained);
+
+        assert_eq!(queue.retain(|coord| coord == retained), 1);
+        let (selected, _) = queue.pop_min_where_by_key(
+            1,
+            IVec2::ZERO,
+            9,
+            |_| true,
+            |coord| coord.length_squared(),
+        );
+        assert_eq!(selected, Some(retained));
+        assert_eq!(queue.len(), 0);
+        assert!(queue.columns.is_empty());
     }
 }
