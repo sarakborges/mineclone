@@ -60,7 +60,7 @@ pub(super) struct SurfaceMarginField {
 pub struct BiomeField {
     pub(super) surface_biomes: Arc<Vec<BiomeFieldEntry>>,
     pub(super) volume_biomes: Arc<Vec<BiomeFieldEntry>>,
-    pub(super) surface_field_config: SurfaceFieldConfig,
+    surface_field_config: SurfaceFieldConfig,
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
@@ -240,10 +240,6 @@ impl BiomeField {
     pub(crate) fn spawn_target_contains(&self, position: Vec2) -> bool {
         self.spawn_target_surface_biome
             .is_some_and(|target| self.surface_biome_index_at(position) == target)
-    }
-
-    pub(crate) fn surface_biome_at(&self, position: Vec2) -> &str {
-        self.surface_biome_id(self.surface_biome_index_at(position))
     }
 
     pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
