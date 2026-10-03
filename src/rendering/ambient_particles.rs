@@ -130,12 +130,7 @@ fn spawn_ambient_particles(
             break;
         }
 
-        let Some(source) = active_source(
-            rule,
-            &dimension,
-            &current_biome,
-            &fluids,
-        ) else {
+        let Some(source) = active_source(rule, &dimension, &current_biome, &fluids) else {
             continue;
         };
         let requested = runtime.take_emissions(
@@ -227,12 +222,12 @@ fn active_source(
                 weight: influence.weight,
                 fluid_id: None,
             }),
-        AmbientParticleSource::FluidSurface { id } => fluids.id_of(id).map(|fluid_id| {
-            ActiveParticleSource {
+        AmbientParticleSource::FluidSurface { id } => {
+            fluids.id_of(id).map(|fluid_id| ActiveParticleSource {
                 weight: 1.0,
                 fluid_id: Some(fluid_id),
-            }
-        }),
+            })
+        }
     }
 }
 
@@ -358,7 +353,8 @@ fn update_ambient_particles(
             (particle.phase.y + particle.age * 1.3).sin(),
             (particle.phase.z + particle.age * 1.9).sin(),
         ) * particle.wander_strength;
-        particle.velocity += (particle.acceleration + wander) * delta_seconds;
+        let acceleration = particle.acceleration;
+        particle.velocity += (acceleration + wander) * delta_seconds;
         transform.translation += particle.velocity * delta_seconds;
 
         let voxel = transform.translation.floor().as_ivec3();
