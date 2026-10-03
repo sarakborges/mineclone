@@ -270,6 +270,7 @@ fn schedule_frontier_wakes(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn schedule_changed_fluid_neighborhood(
     world: &VoxelWorld,
     pending: &mut PendingFluidUpdates,
@@ -322,21 +323,23 @@ fn schedule_fluid_neighborhood_after_delay(
         return;
     };
     let due_tick = current_tick.saturating_add(delay);
+    let targets = [
+        position,
+        position - IVec3::Y,
+        position + HORIZONTAL_NEIGHBORS[0],
+        position + HORIZONTAL_NEIGHBORS[1],
+        position + HORIZONTAL_NEIGHBORS[2],
+        position + HORIZONTAL_NEIGHBORS[3],
+    ];
+    let eligible = targets.map(|target| fluid_tick_target_can_change(world, target));
 
-    for target in [position, position - IVec3::Y] {
-        if fluid_tick_target_can_change(world, target) {
-            pending.schedule_at(
-                FluidTickKey {
-                    fluid_id,
-                    position: target,
-                },
-                due_tick,
-            );
-        }
+    if eligible.into_iter().all(|can_change| can_change) {
+        pending.schedule_neighborhood(fluid_id, position, due_tick);
+        return;
     }
-    for offset in HORIZONTAL_NEIGHBORS {
-        let target = position + offset;
-        if fluid_tick_target_can_change(world, target) {
+
+    for (target, can_change) in targets.into_iter().zip(eligible) {
+        if can_change {
             pending.schedule_at(
                 FluidTickKey {
                     fluid_id,
