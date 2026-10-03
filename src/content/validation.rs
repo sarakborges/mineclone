@@ -190,4 +190,8 @@ pub(super) fn validate_content(content: &LoadedContent) {
         );
         dimension.validate_fluid_references(&content.fluids);
     }
+
+    for particle in content.ambient_particles.iter() {
+        particle.validate_references(&content.biomes, &content.dimensions, &content.fluids);
+    }
 }
