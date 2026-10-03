@@ -1,0 +1,129 @@
+{
+  "id": "asteria:overworld/desert",
+  "name": null,
+  "tags": [
+    "arid"
+  ],
+  "terrain": {
+    "type": "dunes",
+    "baseHeight": 3,
+    "amplitude": 11,
+    "scale": 0.018,
+    "sharpness": 1.7,
+    "warpScale": 0.0045,
+    "warpStrength": 13,
+    "detailAmplitude": 1.5,
+    "detailScale": 0.05
+  },
+  "surfaceLayers": [
+    {
+      "block": "asteria:sand",
+      "depth": 8
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
+  "structures": [],
+  "visuals": {
+    "skyColor": {
+      "dawn": {
+        "hue": 26.0,
+        "saturation": 0.39,
+        "intensity": 0.69
+      },
+      "day": {
+        "hue": 207.0,
+        "saturation": 0.55,
+        "intensity": 0.72
+      },
+      "dusk": {
+        "hue": 18.0,
+        "saturation": 0.53,
+        "intensity": 0.58
+      },
+      "night": {
+        "hue": 228.0,
+        "saturation": 0.52,
+        "intensity": 0.07
+      }
+    },
+    "fogColor": {
+      "dawn": {
+        "hue": 32.0,
+        "saturation": 0.27,
+        "intensity": 0.66
+      },
+      "day": {
+        "hue": 38.0,
+        "saturation": 0.19,
+        "intensity": 0.78
+      },
+      "dusk": {
+        "hue": 24.0,
+        "saturation": 0.34,
+        "intensity": 0.58
+      },
+      "night": {
+        "hue": 225.0,
+        "saturation": 0.23,
+        "intensity": 0.09
+      }
+    },
+    "grassColor": {
+      "hue": 54.0,
+      "saturation": 0.36,
+      "intensity": 0.39
+    },
+    "leafColor": {
+      "hue": 68.0,
+      "saturation": 0.35,
+      "intensity": 0.34
+    },
+    "foliageColor": {
+      "hue": 62.0,
+      "saturation": 0.31,
+      "intensity": 0.37
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 194.0,
+        "saturation": 0.42,
+        "intensity": 0.31
+      },
+      "opacity": 0.2
+    },
+    "stars": {
+      "density": 0.72,
+      "color": {
+        "hue": 42.0,
+        "saturation": 0.08,
+        "intensity": 0.94
+      }
+    },
+    "clouds": {
+      "density": 0.12,
+      "color": {
+        "hue": 38.0,
+        "saturation": 0.08,
+        "intensity": 0.92
+      }
+    },
+    "terrainRoughness": 0.99,
+    "terrainMetallic": 0
+  },
+  "climate": {
+    "temperature": {
+      "min": 0.62,
+      "max": 1
+    },
+    "humidity": {
+      "min": 0,
+      "max": 0.42
+    },
+    "continentalness": {
+      "min": 0.36,
+      "max": 1
+    }
+  }
+}
