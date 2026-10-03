@@ -3,20 +3,46 @@ use std::f32::consts::PI;
 use bevy::{
     asset::{AssetId, RenderAssetUsages},
     mesh::Indices,
+    pbr::{ExtendedMaterial, MaterialExtension},
     platform::collections::HashMap,
     prelude::*,
-    render::render_resource::PrimitiveTopology,
+    reflect::TypePath,
+    render::{render_resource::{AsBindGroup, PrimitiveTopology}, storage::ShaderBuffer},
+    shader::ShaderRef,
 };
 
 use crate::content::object::ObjectCuboidPartDefinition;
 
-use super::color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba};
+use super::{
+    color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba},
+    terrain_material::TerrainLightingBuffer,
+};
+
+const OBJECT_PRIMITIVE_VERTEX_SHADER_PATH: &str = "shaders/object_primitive_vertex.wgsl";
+
+pub(crate) type ObjectPrimitiveMaterial =
+    ExtendedMaterial<StandardMaterial, ObjectPrimitiveMaterialExtension>;
+
+#[derive(Asset, AsBindGroup, TypePath, Debug, Clone)]
+pub(crate) struct ObjectPrimitiveMaterialExtension {
+    #[storage(100, read_only)]
+    lighting: Handle<ShaderBuffer>,
+    #[uniform(101)]
+    wind_sway: f32,
+}
+
+impl MaterialExtension for ObjectPrimitiveMaterialExtension {
+    fn vertex_shader() -> ShaderRef {
+        OBJECT_PRIMITIVE_VERTEX_SHADER_PATH.into()
+    }
+}
 
 pub(crate) struct ObjectPrimitivesPlugin;
 
 impl Plugin for ObjectPrimitivesPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ObjectPrimitiveMaterialCache>();
+        app.add_plugins(MaterialPlugin::<ObjectPrimitiveMaterial>::default())
+            .init_resource::<ObjectPrimitiveMaterialCache>();
     }
 }
 
@@ -27,11 +53,12 @@ struct ObjectPrimitiveMaterialKey {
     unlit: bool,
     alpha_cutoff: u32,
     double_sided: bool,
+    wind_sway: bool,
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct ObjectPrimitiveMaterialCache(
-    HashMap<ObjectPrimitiveMaterialKey, Handle<StandardMaterial>>,
+    HashMap<ObjectPrimitiveMaterialKey, Handle<ObjectPrimitiveMaterial>>,
 );
 
 pub(crate) struct ObjectPrimitiveMaterialRequest {
@@ -40,17 +67,19 @@ pub(crate) struct ObjectPrimitiveMaterialRequest {
     pub(crate) unlit: bool,
     pub(crate) alpha_cutoff: f32,
     pub(crate) double_sided: bool,
+    pub(crate) wind_sway: bool,
 }
 
 pub(crate) struct ObjectPrimitiveMaterialContext<'a> {
-    pub(crate) materials: &'a mut Assets<StandardMaterial>,
+    pub(crate) materials: &'a mut Assets<ObjectPrimitiveMaterial>,
     pub(crate) cache: &'a mut ObjectPrimitiveMaterialCache,
+    pub(crate) lighting: &'a TerrainLightingBuffer,
 }
 
 pub(crate) fn resolve_object_primitive_material(
     request: ObjectPrimitiveMaterialRequest,
     context: ObjectPrimitiveMaterialContext<'_>,
-) -> Handle<StandardMaterial> {
+) -> Handle<ObjectPrimitiveMaterial> {
     let (tint, tint_key) = quantize_srgba(request.tint, MATERIAL_TINT_RGB_LEVELS);
     let key = ObjectPrimitiveMaterialKey {
         texture: request.texture.id(),
@@ -58,12 +87,13 @@ pub(crate) fn resolve_object_primitive_material(
         unlit: request.unlit,
         alpha_cutoff: request.alpha_cutoff.to_bits(),
         double_sided: request.double_sided,
+        wind_sway: request.wind_sway,
     };
     if let Some(existing) = context.cache.0.get(&key) {
         return existing.clone();
     }
 
-    let mut material = StandardMaterial {
+    let mut base = StandardMaterial {
         base_color: tint,
         base_color_texture: Some(request.texture),
         alpha_mode: AlphaMode::Mask(request.alpha_cutoff),
@@ -73,9 +103,15 @@ pub(crate) fn resolve_object_primitive_material(
         ..default()
     };
     if request.double_sided {
-        material.cull_mode = None;
+        base.cull_mode = None;
     }
-    let material = context.materials.add(material);
+    let material = context.materials.add(ExtendedMaterial {
+        base,
+        extension: ObjectPrimitiveMaterialExtension {
+            lighting: context.lighting.handle(),
+            wind_sway: request.wind_sway as u8 as f32,
+        },
+    });
     context.cache.0.insert(key, material.clone());
     material
 }
