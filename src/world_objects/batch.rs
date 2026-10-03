@@ -18,10 +18,11 @@ use crate::{
             ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache, resolve_extruded_sprite_assets,
         },
         object_primitives::{
-            ObjectPrimitiveMaterialCache, ObjectPrimitiveMaterialContext,
+            ObjectPrimitiveMaterial, ObjectPrimitiveMaterialCache, ObjectPrimitiveMaterialContext,
             ObjectPrimitiveMaterialRequest, crossed_sprite_mesh, cuboid_set_mesh,
             resolve_object_primitive_material,
         },
+        terrain_material::TerrainLightingBuffer,
     },
     voxel::chunk::VoxelChunk,
 };
@@ -37,6 +38,8 @@ pub(super) struct WorldObjectBatchAssets<'w> {
     images: Res<'w, Assets<Image>>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
+    primitive_materials: ResMut<'w, Assets<ObjectPrimitiveMaterial>>,
+    terrain_lighting: Res<'w, TerrainLightingBuffer>,
     extruded_mesh_cache: ResMut<'w, ExtrudedSpriteMeshCache>,
     extruded_material_cache: ResMut<'w, ExtrudedSpriteMaterialCache>,
     primitive_material_cache: ResMut<'w, ObjectPrimitiveMaterialCache>,
@@ -50,23 +53,44 @@ enum ObjectBatchGeometryKey {
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
+enum ObjectBatchMaterialKey {
+    Standard(AssetId<StandardMaterial>),
+    Primitive(AssetId<ObjectPrimitiveMaterial>),
+}
+
+#[derive(Clone)]
+enum ObjectBatchMaterial {
+    Standard(Handle<StandardMaterial>),
+    Primitive(Handle<ObjectPrimitiveMaterial>),
+}
+
+impl ObjectBatchMaterial {
+    fn key(&self) -> ObjectBatchMaterialKey {
+        match self {
+            Self::Standard(material) => ObjectBatchMaterialKey::Standard(material.id()),
+            Self::Primitive(material) => ObjectBatchMaterialKey::Primitive(material.id()),
+        }
+    }
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct ObjectBatchKey {
     geometry: ObjectBatchGeometryKey,
-    material: AssetId<StandardMaterial>,
+    material: ObjectBatchMaterialKey,
     casts_shadow: bool,
     receives_shadow: bool,
 }
 
 struct ObjectBatchAccumulator {
     mesh: Mesh,
-    material: Handle<StandardMaterial>,
+    material: ObjectBatchMaterial,
     instances: usize,
 }
 
 struct ResolvedObjectRender {
     geometry: ObjectBatchGeometryKey,
     mesh: Mesh,
-    material: Handle<StandardMaterial>,
+    material: ObjectBatchMaterial,
 }
 
 pub(super) struct BuiltWorldObjectChunk {
@@ -129,7 +153,7 @@ pub(super) fn build_world_object_chunk(
         let instance_mesh = resolved.mesh.transformed_by(transform);
         let key = ObjectBatchKey {
             geometry: resolved.geometry,
-            material: resolved.material.id(),
+            material: resolved.material.key(),
             casts_shadow: definition.casts_shadow,
             receives_shadow: definition.receives_shadow,
         };
@@ -177,11 +201,18 @@ pub(super) fn build_world_object_chunk(
                     segment.instances
                 )),
                 Mesh3d(mesh),
-                MeshMaterial3d(segment.material),
                 Transform::from_translation(chunk_origin_vec),
                 Visibility::Visible,
                 DespawnOnExit(GameState::Gameplay),
             ));
+            match segment.material {
+                ObjectBatchMaterial::Standard(material) => {
+                    entity.insert(MeshMaterial3d(material));
+                }
+                ObjectBatchMaterial::Primitive(material) => {
+                    entity.insert(MeshMaterial3d(material));
+                }
+            }
             if !key.casts_shadow {
                 entity.insert(NotShadowCaster);
             }
@@ -229,7 +260,7 @@ fn resolve_object_render_assets(
             Some(ResolvedObjectRender {
                 geometry: ObjectBatchGeometryKey::Asset(mesh.id()),
                 mesh: base_mesh,
-                material,
+                material: ObjectBatchMaterial::Standard(material),
             })
         }
         ObjectVisualDefinition::ExtrudedSprite {
@@ -261,7 +292,7 @@ fn resolve_object_render_assets(
                 Ok(Some((mesh, material))) => Some(ResolvedObjectRender {
                     geometry: ObjectBatchGeometryKey::Asset(mesh.id()),
                     mesh: assets.meshes.get(&mesh)?.clone(),
-                    material,
+                    material: ObjectBatchMaterial::Standard(material),
                 }),
                 Ok(None) => None,
                 Err(error) => {
@@ -292,16 +323,18 @@ fn resolve_object_render_assets(
                     unlit: definition.unlit,
                     alpha_cutoff: *alpha_cutoff,
                     double_sided: true,
+                    wind_sway: definition.wind_sway,
                 },
                 ObjectPrimitiveMaterialContext {
-                    materials: &mut assets.materials,
+                    materials: &mut assets.primitive_materials,
                     cache: &mut assets.primitive_material_cache,
+                    lighting: &assets.terrain_lighting,
                 },
             );
             Some(ResolvedObjectRender {
                 geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),
                 mesh,
-                material,
+                material: ObjectBatchMaterial::Primitive(material),
             })
         }
         ObjectVisualDefinition::CuboidSet {
@@ -320,16 +353,18 @@ fn resolve_object_render_assets(
                     unlit: definition.unlit,
                     alpha_cutoff: *alpha_cutoff,
                     double_sided: false,
+                    wind_sway: definition.wind_sway,
                 },
                 ObjectPrimitiveMaterialContext {
-                    materials: &mut assets.materials,
+                    materials: &mut assets.primitive_materials,
                     cache: &mut assets.primitive_material_cache,
+                    lighting: &assets.terrain_lighting,
                 },
             );
             Some(ResolvedObjectRender {
                 geometry: ObjectBatchGeometryKey::Definition(definition.id.clone()),
                 mesh,
-                material,
+                material: ObjectBatchMaterial::Primitive(material),
             })
         }
     }
