@@ -10,26 +10,18 @@ use crate::{
 
 use super::{
     inventory::{
-        CharacterInfoInventoryRoot, CharacterInfoInventorySpawn, INVENTORY_PANEL_BORDER_WIDTH,
-        INVENTORY_SLOT_GAP, INVENTORY_SLOT_SIZE,
+        CharacterInfoInventoryRoot, CharacterInfoInventorySpawn, INVENTORY_HEADER_GAP,
+        INVENTORY_PANEL_BORDER_WIDTH, INVENTORY_PANEL_GAP, INVENTORY_PANEL_PADDING,
+        INVENTORY_SECTION_GAP, INVENTORY_SLOT_GAP, INVENTORY_SLOT_SIZE,
     },
     player::portrait::{CharacterInfoPreviewViewport, CharacterPreviewOrbit},
 };
 
-const CHARACTER_INFO_PANEL_WIDTH: f32 = 480.0;
-const CHARACTER_INFO_DETAILS_WIDTH: f32 = 202.0;
-const CHARACTER_INFO_PANEL_GAP: f32 = 24.0;
-const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
-const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
-const CHARACTER_PREVIEW_IMAGE_WIDTH: f32 = 216.0;
-const CHARACTER_PREVIEW_IMAGE_HEIGHT: f32 = 288.0;
+const CHARACTER_INFO_PANEL_WIDTH: f32 = 320.0;
+const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 260.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
-const CHARACTER_NAME_HEALTH_GAP: f32 = 14.0;
-const CHARACTER_SECTION_LABEL_GAP: f32 = 8.0;
-const CHARACTER_HEALTH_EQUIPMENT_GAP: f32 = 18.0;
 const CHARACTER_HEALTH_BAR_HEIGHT: f32 = 22.0;
 const CHARACTER_HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
-const EQUIPMENT_LABEL_GAP: f32 = 10.0;
 
 #[derive(Resource, Default)]
 struct CharacterPreviewInteraction {
@@ -72,9 +64,7 @@ impl Plugin for CharacterInfoHudPlugin {
     }
 }
 
-fn character_info_panel_visible(
-    panels: Query<(), With<CharacterInfoHealthFill>>,
-) -> bool {
+fn character_info_panel_visible(panels: Query<(), With<CharacterInfoHealthFill>>) -> bool {
     panels.iter().next().is_some()
 }
 
@@ -95,7 +85,7 @@ fn spawn_character_info(
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                column_gap: px(CHARACTER_INFO_PANEL_GAP),
+                column_gap: px(INVENTORY_PANEL_GAP),
                 ..default()
             },
             GlobalZIndex(100),
@@ -113,11 +103,11 @@ pub(super) fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
     root.spawn((
         surface::hud_container(Node {
             width: px(CHARACTER_INFO_PANEL_WIDTH),
-            padding: UiRect::all(px(18)),
+            padding: UiRect::all(px(INVENTORY_PANEL_PADDING)),
             border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
-            column_gap: px(18),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(INVENTORY_SECTION_GAP),
             ..default()
         }),
         Pickable::IGNORE,
@@ -126,9 +116,10 @@ pub(super) fn spawn_character_info_panel(root: &mut ChildSpawnerCommands) {
         spawn_character_preview_viewport(card);
         card.spawn((
             Node {
-                width: px(CHARACTER_INFO_DETAILS_WIDTH),
+                width: percent(100),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
+                row_gap: px(INVENTORY_SECTION_GAP),
                 ..default()
             },
             Pickable::IGNORE,
@@ -148,11 +139,11 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
     parent
         .spawn((
             Node {
-                width: px(CHARACTER_PREVIEW_CARD_WIDTH),
+                width: percent(100),
                 height: px(CHARACTER_PREVIEW_CARD_HEIGHT),
                 flex_shrink: 0.0,
-                padding: UiRect::all(px(2)),
-                border: UiRect::all(px(2)),
+                padding: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 overflow: Overflow::clip(),
@@ -166,8 +157,8 @@ fn spawn_character_preview_viewport(parent: &mut ChildSpawnerCommands) {
                 Button,
                 CharacterInfoPreviewViewport,
                 Node {
-                    width: px(CHARACTER_PREVIEW_IMAGE_WIDTH),
-                    height: px(CHARACTER_PREVIEW_IMAGE_HEIGHT),
+                    width: percent(100),
+                    height: percent(100),
                     ..default()
                 },
             ));
@@ -179,9 +170,8 @@ fn spawn_character_health_bar(parent: &mut ChildSpawnerCommands) {
         .spawn((
             Node {
                 width: percent(100),
-                margin: UiRect::top(px(CHARACTER_NAME_HEALTH_GAP)),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(CHARACTER_SECTION_LABEL_GAP),
+                row_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             Pickable::IGNORE,
@@ -250,9 +240,8 @@ fn spawn_equipment_table(parent: &mut ChildSpawnerCommands) {
         .spawn((
             Node {
                 width: percent(100),
-                margin: UiRect::top(px(CHARACTER_HEALTH_EQUIPMENT_GAP)),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(CHARACTER_SECTION_LABEL_GAP),
+                row_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             Pickable::IGNORE,
@@ -294,7 +283,7 @@ fn spawn_equipment_row(parent: &mut ChildSpawnerCommands, label: &'static str) {
                 height: px(INVENTORY_SLOT_SIZE),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
-                column_gap: px(EQUIPMENT_LABEL_GAP),
+                column_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             Pickable::IGNORE,
@@ -306,7 +295,7 @@ fn spawn_equipment_row(parent: &mut ChildSpawnerCommands, label: &'static str) {
                     height: px(INVENTORY_SLOT_SIZE),
                     min_width: px(INVENTORY_SLOT_SIZE),
                     min_height: px(INVENTORY_SLOT_SIZE),
-                    border: UiRect::all(px(2)),
+                    border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                     ..default()
                 },
                 BackgroundColor(background),
@@ -315,8 +304,9 @@ fn spawn_equipment_row(parent: &mut ChildSpawnerCommands, label: &'static str) {
             ));
             row.spawn((
                 Node {
+                    min_width: px(0),
                     flex_direction: FlexDirection::Column,
-                    row_gap: px(2),
+                    row_gap: px(INVENTORY_SLOT_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
