@@ -30,7 +30,12 @@
         },
         "y": null
       },
-      "spawnWeight": 0.5
+      "spawnWeight": 0.5,
+      "neighborDeny": {
+        "tags": [
+          "mountain"
+        ]
+      }
     },
     {
       "id": "asteria:overworld/arctic",
@@ -46,7 +51,14 @@
         },
         "y": null
       },
-      "spawnWeight": 0.5
+      "spawnWeight": 0.5,
+      "neighborDeny": {
+        "ids": [
+          "asteria:overworld/volcano",
+          "asteria:overworld/desert",
+          "asteria:overworld/swamp"
+        ]
+      }
     },
     {
       "id": "asteria:overworld/desert",
@@ -108,7 +120,8 @@
         },
         "y": null
       },
-      "spawnWeight": 0.5
+      "spawnWeight": 0.5,
+      "exclusiveNeighborGroup": "asteria:overworld/mountains"
     },
     {
       "id": "asteria:overworld/gorge",
@@ -124,7 +137,8 @@
         },
         "y": null
       },
-      "spawnWeight": 0.5
+      "spawnWeight": 0.5,
+      "exclusiveNeighborGroup": "asteria:overworld/mountains"
     },
     {
       "id": "asteria:overworld/alps",
@@ -141,7 +155,7 @@
         "y": null
       },
       "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/extreme_peaks"
+      "exclusiveNeighborGroup": "asteria:overworld/mountains"
     },
     {
       "id": "asteria:overworld/mountain_belt",
@@ -157,7 +171,8 @@
         },
         "y": null
       },
-      "spawnWeight": 0.5
+      "spawnWeight": 0.5,
+      "exclusiveNeighborGroup": "asteria:overworld/mountains"
     },
     {
       "id": "asteria:overworld/volcano",
@@ -174,7 +189,7 @@
         "y": null
       },
       "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/extreme_peaks"
+      "exclusiveNeighborGroup": "asteria:overworld/mountains"
     },
     {
       "id": "asteria:overworld/caverns",
