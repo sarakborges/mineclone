@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::app::{crash_log::log_system_event, runtime_paths::data_root};
 
 use super::{
+    ambient_particle_registry::{AmbientParticleRegistry, AmbientParticleRule},
     attack::{AttackDefinition, AttackRegistry},
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
@@ -31,6 +32,7 @@ use super::{
 
 #[derive(Default)]
 pub(crate) struct LoadedContent {
+    pub ambient_particles: AmbientParticleRegistry,
     pub attacks: AttackRegistry,
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
@@ -55,6 +57,7 @@ pub(crate) struct LoadedContent {
 
 impl LoadedContent {
     pub fn insert(self, commands: &mut Commands) {
+        commands.insert_resource(self.ambient_particles);
         commands.insert_resource(self.attacks);
         commands.insert_resource(self.biomes);
         commands.insert_resource(self.blocks);
@@ -132,6 +135,10 @@ fn load_definition(
         content.player = read_localized_json_definition::<PlayerDefinition>(path, localizations);
         content.player.validate();
         *player_loaded = true;
+    } else if path_has_component(path, "ambient_particles") {
+        content.ambient_particles.insert(
+            read_localized_json_definition::<AmbientParticleRule>(path, localizations),
+        );
     } else if path_has_component(path, "attacks") {
         content
             .attacks
