@@ -5,6 +5,9 @@
   "asteria:overworld/alps": {
     "/name": "Alps"
   },
+  "asteria:overworld/arctic": {
+    "/name": "Arctic"
+  },
   "asteria:overworld/caverns": {
     "/name": "Caverns"
   },
@@ -31,6 +34,9 @@
   },
   "asteria:overworld/plains": {
     "/name": "Plains"
+  },
+  "asteria:overworld/swamp": {
+    "/name": "Swamp"
   },
   "asteria:overworld/volcano": {
     "/name": "Volcano"

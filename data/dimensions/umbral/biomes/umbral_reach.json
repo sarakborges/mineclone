@@ -1,6 +1,5 @@
 {
   "id": "asteria:umbral/umbral_reach",
-  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

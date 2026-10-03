@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/enchanted_forest",
-  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

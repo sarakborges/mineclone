@@ -15,6 +15,39 @@ pub(super) struct DataLocalization {
     languages: HashMap<Language, HashMap<String, Catalog>>,
 }
 
+fn localization_target_mut<'a>(
+    definition: &'a mut Value,
+    pointer: &str,
+    domain: &str,
+    id: &str,
+) -> &'a mut Value {
+    if definition.pointer(pointer).is_some() {
+        return definition
+            .pointer_mut(pointer)
+            .expect("localization pointer disappeared");
+    }
+
+    let (parent_pointer, token) = pointer.rsplit_once('/').unwrap_or_else(|| {
+        panic!("invalid localization pointer {domain}.{id}{pointer}")
+    });
+    assert!(
+        !token.is_empty(),
+        "invalid localization pointer {domain}.{id}{pointer}"
+    );
+    let key = token.replace("~1", "/").replace("~0", "~");
+    let parent = if parent_pointer.is_empty() {
+        definition
+    } else {
+        definition.pointer_mut(parent_pointer).unwrap_or_else(|| {
+            panic!("missing localization parent {domain}.{id}{parent_pointer}")
+        })
+    };
+    let Value::Object(object) = parent else {
+        panic!("localization parent {domain}.{id}{parent_pointer} must be an object")
+    };
+    object.entry(key).or_insert(Value::Null)
+}
+
 impl DataLocalization {
     pub(super) fn load() -> Self {
         let mut languages = HashMap::new();
@@ -85,9 +118,7 @@ impl DataLocalization {
         };
 
         for pointer in fields.keys() {
-            let target = definition.pointer_mut(pointer).unwrap_or_else(|| {
-                panic!("missing localization target {domain}.{id}{pointer}")
-            });
+            let target = localization_target_mut(definition, pointer, domain, &id);
             let mut translations = Map::new();
             for language in Language::ALL {
                 let text = self

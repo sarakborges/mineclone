@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/caverns",
-  "name": null,
   "kind": "volume",
   "verticalRange": {
     "min": 8,

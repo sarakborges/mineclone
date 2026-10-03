@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/ocean",
-  "name": null,
   "kind": "surface",
   "visuals": {
     "skyColor": {

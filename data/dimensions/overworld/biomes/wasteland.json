@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/wasteland",
-  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/swamp",
-  "name": null,
   "terrain": {
     "type": "swamp",
     "baseHeight": 1.5,

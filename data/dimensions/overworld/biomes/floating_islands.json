@@ -1,6 +1,5 @@
 {
   "id": "asteria:overworld/floating_islands",
-  "name": null,
   "kind": "volume",
   "verticalRange": {
     "min": 200,

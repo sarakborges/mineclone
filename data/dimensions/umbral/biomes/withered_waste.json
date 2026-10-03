@@ -1,6 +1,5 @@
 {
   "id": "asteria:umbral/withered_waste",
-  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

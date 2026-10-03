@@ -1,6 +1,5 @@
 {
   "id": "asteria:umbral/wraith_grove",
-  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,
