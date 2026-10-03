@@ -11,7 +11,7 @@ use super::{
     BiomeField, SurfaceSiteCacheEntry,
     constants::SITE_SEARCH_RADIUS,
     selection::{surface_biomes_conflict, surface_requirement_satisfied},
-    spatial::{cell_hash, hash_unit, surface_site_position},
+    spatial::{cell_hash, hash_unit, surface_site_position, warp_surface_position},
 };
 
 const BASE_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
@@ -55,6 +55,7 @@ struct SurfaceBiomeMapState {
     planned_anchor_radius: i32,
     base_biome_index: Option<usize>,
     cells: HashMap<IVec2, SurfaceBiomeCell>,
+    forced_cells: HashSet<IVec2>,
     placed_counts: Vec<u32>,
     attempted_anchors: u64,
     painted_minimum: Option<IVec2>,
@@ -67,6 +68,7 @@ impl Default for SurfaceBiomeMapState {
             planned_anchor_radius: -1,
             base_biome_index: None,
             cells: HashMap::new(),
+            forced_cells: HashSet::new(),
             placed_counts: Vec::new(),
             attempted_anchors: 0,
             painted_minimum: None,
@@ -148,6 +150,47 @@ impl SurfaceBiomeMap {
         self.samples.read()
     }
 
+    pub(super) fn forced_region_contains(&self, field: &BiomeField, position: Vec2) -> bool {
+        if field.forced_surface_biome.is_none() {
+            return false;
+        }
+
+        let warped = warp_surface_position(position, field.seed);
+        let center = IVec2::new(
+            (warped.x / field.surface_site_spacing.x).round() as i32,
+            (warped.y / field.surface_site_spacing.y).round() as i32,
+        );
+        let required_radius = center
+            .x
+            .abs()
+            .max(center.y.abs())
+            .saturating_add(SITE_SEARCH_RADIUS);
+        self.ensure_planned_through(field, required_radius);
+
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let nearest_cell = (-SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS)
+            .flat_map(|z| {
+                (-SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS)
+                    .map(move |x| center + IVec2::new(x, z))
+            })
+            .min_by(|left, right| {
+                let left_position =
+                    surface_site_position(*left, field.surface_site_spacing, field.seed);
+                let right_position =
+                    surface_site_position(*right, field.surface_site_spacing, field.seed);
+                warped
+                    .distance_squared(left_position)
+                    .total_cmp(&warped.distance_squared(right_position))
+                    .then_with(|| left.y.cmp(&right.y))
+                    .then_with(|| left.x.cmp(&right.x))
+            });
+
+        nearest_cell.is_some_and(|cell| state.forced_cells.contains(&cell))
+    }
+
     pub(super) fn clear(&self) {
         *self
             .state
@@ -222,25 +265,57 @@ fn ensure_initialized(field: &BiomeField, state: &mut SurfaceBiomeMapState) {
     let base_index = choose_base_biome(field);
     state.base_biome_index = Some(base_index);
     state.placed_counts.resize(field.surface_biomes.len(), 0);
+    place_forced_region(field, state);
+}
 
-    let source_hash = cell_hash(IVec2::ZERO, field.seed ^ BASE_HASH_SALT);
+fn place_forced_region(field: &BiomeField, state: &mut SurfaceBiomeMapState) {
+    let Some(forced) = field.forced_surface_biome else {
+        return;
+    };
+
+    let warped_center = warp_surface_position(forced.center, field.seed);
+    let center = IVec2::new(
+        (warped_center.x / field.surface_site_spacing.x).round() as i32,
+        (warped_center.y / field.surface_site_spacing.y).round() as i32,
+    );
+    let source_hash = cell_hash(
+        center,
+        field.seed
+            ^ BASE_HASH_SALT
+            ^ (forced.biome_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87),
+    );
+
     for (level_index, irregularity) in SHAPE_IRREGULARITY_LEVELS.into_iter().enumerate() {
         for variant in 0..SHAPE_VARIANTS_PER_LEVEL {
             let shape_seed = source_hash
                 ^ (level_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87)
                 ^ variant.wrapping_mul(0xd6e8_feb8_6659_fd93);
-            if let Some(shape) = generate_stamp_shape(
+            let Some(shape) = generate_stamp_shape(
                 field,
-                base_index,
-                IVec2::ZERO,
+                forced.biome_index,
+                center,
                 shape_seed,
                 irregularity,
-            ) {
-                apply_region(state, base_index, &shape);
-                return;
+            ) else {
+                continue;
+            };
+
+            let valid = Some(forced.biome_index) == state.base_biome_index
+                || stamp_placement_is_valid(field, state, forced.biome_index, &shape);
+            if !valid {
+                continue;
             }
+
+            apply_region(state, forced.biome_index, &shape);
+            state.forced_cells.extend(shape.cells.iter().copied());
+            return;
         }
     }
+
+    panic!(
+        "forced surface biome {} cannot be stamped at {:?} without violating authored size or adjacency constraints",
+        field.surface_biomes[forced.biome_index].id, forced.center
+    );
 }
 
 fn choose_base_biome(field: &BiomeField) -> usize {
@@ -976,6 +1051,8 @@ mod tests {
         let field = test_field();
         let mut state = SurfaceBiomeMapState::default();
         ensure_initialized(&field, &mut state);
+        plan_anchor_ring(&field, &mut state, 0);
+        assert!(!state.cells.is_empty());
         let initial = state.cells.clone();
 
         plan_anchor_ring(&field, &mut state, 1);
@@ -985,6 +1062,32 @@ mod tests {
                 .cells
                 .get(cell)
                 .is_some_and(|current| current.biome_index == previous.biome_index)
+        }));
+    }
+
+    #[test]
+    fn forced_surface_region_is_a_protected_stamp() {
+        let mut field = test_field();
+        field.force_surface_biome("test:base_b", Vec2::splat(0.5));
+        let mut state = SurfaceBiomeMapState::default();
+        ensure_initialized(&field, &mut state);
+        assert!(!state.forced_cells.is_empty());
+        let forced_cells = state.forced_cells.clone();
+        assert!(forced_cells.iter().all(|cell| {
+            state
+                .cells
+                .get(cell)
+                .is_some_and(|resolved| resolved.biome_index == 1)
+        }));
+
+        plan_anchor_ring(&field, &mut state, 0);
+        plan_anchor_ring(&field, &mut state, 1);
+
+        assert!(forced_cells.iter().all(|cell| {
+            state
+                .cells
+                .get(cell)
+                .is_some_and(|resolved| resolved.biome_index == 1)
         }));
     }
 }
