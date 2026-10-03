@@ -1,6 +1,6 @@
 {
-  "asteria:bassalt": {
-    "/name": "Bassalt"
+  "asteria:basalt": {
+    "/name": "Basalt"
   },
   "asteria:bricks": {
     "/name": "Bricks"
@@ -103,5 +103,4 @@
   },
   "asteria:storage_box": {
     "/name": "Storage Box"
-  }
-}
+  }\}
