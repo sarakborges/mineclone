@@ -249,12 +249,13 @@ fn biome_surface_height(
             let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
             let broad = fractal_noise(position * scale, seed);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
-            let channel_broad = fractal_noise(position * (scale * 0.72), seed.rotate_left(7));
-            let channel_detail =
-                fractal_noise(position * (detail_scale * 0.55), seed.rotate_left(47));
-            let channel_distance = (channel_broad + channel_detail * 0.35).abs();
-            let channel_strength = smoothstep(((0.28 - channel_distance) / 0.28).clamp(0.0, 1.0));
-            sea_level + base_height - depth * strength * channel_strength
+            let pond_broad =
+                fractal_noise(position * (scale * 1.15), seed.rotate_left(7));
+            let pond_detail =
+                fractal_noise(position * (detail_scale * 0.42), seed.rotate_left(47));
+            let pond_signal = pond_broad * 0.78 + pond_detail * 0.22;
+            let pond_strength = smoothstep(((pond_signal - 0.10) / 0.35).clamp(0.0, 1.0));
+            sea_level + base_height - depth * strength * pond_strength
                 + broad * amplitude
                 + detail * detail_amplitude
         }
@@ -528,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn swamp_terrain_contains_both_channels_and_dry_ground() {
+    fn swamp_terrain_contains_both_pools_and_dry_ground() {
         let terrain = BiomeTerrain::Swamp {
             base_height: 1.4,
             depth: 3.2,
@@ -555,10 +556,7 @@ mod tests {
             }
         }
 
-        assert!(wet, "swamp terrain should carve channels below sea level");
-        assert!(
-            dry,
-            "swamp terrain should retain dry ground between channels"
-        );
+        assert!(wet, "swamp terrain should carve pools below sea level");
+        assert!(dry, "swamp terrain should retain dry ground between pools");
     }
 }
