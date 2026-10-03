@@ -2,6 +2,7 @@
   "id": "asteria:grass",
   "category": "foliage",
   "tint": "leaf",
+  "windSway": true,
   "icon": "textures/objects/grass.png",
   "placementFaces": [
     "top"
