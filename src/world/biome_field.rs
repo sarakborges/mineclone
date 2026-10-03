@@ -24,8 +24,7 @@ use crate::content::{
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
     constants::VOLUME_SITE_GAP,
-    spatial::{surface_map_spacing, surface_site_position},
-    surface_field::SurfaceFieldConfig,
+    surface_field::{SurfaceFieldConfig, land_site_position},
 };
 use super::{macro_climate::MacroClimateField, new_world::biome_size_multiplier_tenths};
 
@@ -61,7 +60,6 @@ pub(super) struct SurfaceMarginField {
 pub struct BiomeField {
     pub(super) surface_biomes: Arc<Vec<BiomeFieldEntry>>,
     pub(super) volume_biomes: Arc<Vec<BiomeFieldEntry>>,
-    pub(super) surface_site_spacing: Vec2,
     pub(super) surface_field_config: SurfaceFieldConfig,
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
@@ -185,7 +183,6 @@ impl BiomeField {
             dimension.id
         );
 
-        let surface_site_spacing = surface_map_spacing();
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
         let ocean_surface_index = dimension
@@ -198,7 +195,6 @@ impl BiomeField {
         Self {
             surface_biomes: Arc::new(surface_biomes),
             volume_biomes: Arc::new(volume_biomes),
-            surface_site_spacing,
             surface_field_config,
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
@@ -255,11 +251,11 @@ impl BiomeField {
     }
 
     pub(crate) fn surface_site_spacing(&self) -> Vec2 {
-        self.surface_site_spacing
+        self.surface_field_config.land_spacing
     }
 
     pub(crate) fn surface_site_position(&self, cell: IVec2) -> Vec2 {
-        surface_site_position(cell, self.surface_site_spacing, self.seed)
+        land_site_position(cell, self.surface_field_config.land_spacing, self.seed)
     }
 
     pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
