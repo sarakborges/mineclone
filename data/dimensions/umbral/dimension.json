@@ -43,7 +43,8 @@
         "z": { "min": 90, "max": 260 },
         "y": null
       },
-      "exclusiveNeighborGroup": "mountain_terrain"
+      "exclusiveNeighborGroup": "mountain_terrain",
+      "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/gorge",
@@ -53,7 +54,8 @@
         "z": { "min": 140, "max": 360 },
         "y": null
       },
-      "exclusiveNeighborGroup": "mountain_terrain"
+      "exclusiveNeighborGroup": "mountain_terrain",
+      "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/alps",
@@ -63,7 +65,8 @@
         "z": { "min": 140, "max": 320 },
         "y": null
       },
-      "exclusiveNeighborGroup": "mountain_terrain"
+      "exclusiveNeighborGroup": "mountain_terrain",
+      "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/mountain_belt",
@@ -73,7 +76,8 @@
         "z": { "min": 160, "max": 380 },
         "y": null
       },
-      "exclusiveNeighborGroup": "mountain_terrain"
+      "exclusiveNeighborGroup": "mountain_terrain",
+      "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/volcano",
@@ -83,7 +87,8 @@
         "z": { "min": 120, "max": 260 },
         "y": null
       },
-      "exclusiveNeighborGroup": "mountain_terrain"
+      "exclusiveNeighborGroup": "mountain_terrain",
+      "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/caverns",
