@@ -1,0 +1,109 @@
+name: Cleanup null names
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup-null-names.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove null name properties
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+          import sys
+
+          with_comma = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*,[ \t]*(?:\r?\n)?$')
+          without_comma = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*(?:\r?\n)?$')
+          any_null_name = re.compile(r'"name"[ \t]*:[ \t]*null')
+
+          changed = []
+          removed = 0
+
+          for path in sorted(Path('.').rglob('*.json')):
+              if '.git' in path.parts:
+                  continue
+              original = path.read_text(encoding='utf-8')
+              lines = original.splitlines(keepends=True)
+              output = []
+              file_removed = 0
+
+              for line in lines:
+                  if with_comma.fullmatch(line):
+                      file_removed += 1
+                      continue
+                  if without_comma.fullmatch(line):
+                      for index in range(len(output) - 1, -1, -1):
+                          if output[index].strip():
+                              output[index] = re.sub(r',[ \t]*(\r?\n)?$', lambda m: (m.group(1) or ''), output[index])
+                              break
+                      file_removed += 1
+                      continue
+                  output.append(line)
+
+              if not file_removed:
+                  continue
+
+              updated = ''.join(output)
+              json.loads(updated)
+              path.write_text(updated, encoding='utf-8')
+              changed.append(path.as_posix())
+              removed += file_removed
+
+          invalid = []
+          remaining = []
+          for path in sorted(Path('.').rglob('*.json')):
+              if '.git' in path.parts:
+                  continue
+              text = path.read_text(encoding='utf-8')
+              try:
+                  json.loads(text)
+              except Exception as error:
+                  invalid.append(f'{path}: {error}')
+              if any_null_name.search(text):
+                  remaining.append(path.as_posix())
+
+          print(f'Removed {removed} null name properties from {len(changed)} files')
+          for path in changed:
+              print(f'CHANGED {path}')
+
+          if invalid:
+              print('Invalid JSON after cleanup:', file=sys.stderr)
+              print('\n'.join(invalid), file=sys.stderr)
+              sys.exit(1)
+          if remaining:
+              print('Remaining null names:', file=sys.stderr)
+              print('\n'.join(remaining), file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          if git diff --quiet -- '*.json'; then
+            echo "No null name properties found"
+            exit 0
+          fi
+          git config user.name "Sara Borges"
+          git config user.email "sarakborges@outlook.com"
+          git add -- '*.json'
+          git commit -m "Remove null name placeholders"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
