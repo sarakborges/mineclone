@@ -1,5 +1,14 @@
 # HANDOFF — Asteria / Mineclone
 
+## 2026-10-03 — Mushroom attached objects and swamp spawn
+
+- Adicionados sete Attached Objects localizados: cogumelos azul, marrom, verde, rosa, roxo, vermelho e amarelo.
+- Todos reutilizam a geometria `crossedSprite` do `grass` (`0.72 x 0.62`, três planos), com suas próprias texturas, e dropam a si mesmos ao serem quebrados.
+- O cogumelo marrom agora gera naturalmente no Overworld Swamp via `objectSpawns`, em pequenos clusters sobre `asteria:mud`.
+- Nomes adicionados simultaneamente em inglês, português brasileiro e espanhol.
+- Commit funcional: `ebfd5c4f8f2077d4e1b5554c00b940b7ac65862d`.
+- Rust validation #11662 foi disparado para o commit funcional; não assumir sucesso até conclusão do workflow.
+
 ## 2026-10-01 — Attached Objects: chunk-batched presentation
 
 - O storage/targeting de Attached Objects continua autoritativo no `VoxelWorld`; objetos individuais não precisam mais existir como Bevy Entity para interação, loot ou remoção.
