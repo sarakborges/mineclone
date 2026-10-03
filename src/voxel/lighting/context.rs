@@ -1,8 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
-    block::BlockRegistry, fluid::FluidRegistry,
-    secondary_property::SecondaryPropertyRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{
     chunk::{CHUNK_SIZE, VoxelChunk},
@@ -205,7 +204,6 @@ impl LightingContext {
     }
 }
 
-
 fn vertical_dampening_by_column(
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
@@ -221,9 +219,8 @@ fn vertical_dampening_by_column(
         chunk.visit_content_voxels(|local_x, _, local_z, cell, fluid| {
             let column = &mut dampening[local_x + local_z * CHUNK_SIZE];
             if *column < VoxelLight::MAX_LEVEL {
-                *column = column.saturating_add(medium_dampening_for_cells(
-                    cell, fluid, blocks, fluids,
-                ));
+                *column =
+                    column.saturating_add(medium_dampening_for_cells(cell, fluid, blocks, fluids));
             }
         });
         return dampening;
@@ -239,15 +236,13 @@ fn vertical_dampening_by_column(
                 let (cell, fluid, _) = chunk
                     .sample_local(local_x as i32, local_y as i32, local_z as i32)
                     .expect("vertical dampening coordinates must stay inside the chunk");
-                *column = column.saturating_add(medium_dampening_for_cells(
-                    cell, fluid, blocks, fluids,
-                ));
+                *column =
+                    column.saturating_add(medium_dampening_for_cells(cell, fluid, blocks, fluids));
             }
         }
     }
     dampening
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -273,10 +268,7 @@ mod tests {
             &FluidRegistry::default(),
         );
 
-        assert_eq!(
-            dampening[3 + 5 * CHUNK_SIZE],
-            VoxelLight::MAX_LEVEL,
-        );
+        assert_eq!(dampening[3 + 5 * CHUNK_SIZE], VoxelLight::MAX_LEVEL,);
         assert_eq!(dampening[4 + 5 * CHUNK_SIZE], 0);
     }
 }

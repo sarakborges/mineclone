@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use super::{
-    ambient_particle::AmbientParticleDefinition, biome::BiomeRegistry, dimension::DimensionRegistry,
-    fluid::FluidRegistry, registry::DefinitionMap,
+    ambient_particle::AmbientParticleDefinition, biome::BiomeRegistry,
+    dimension::DimensionRegistry, fluid::FluidRegistry, registry::DefinitionMap,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -60,13 +60,17 @@ pub struct AmbientParticleRegistry {
 
 impl AmbientParticleRegistry {
     pub fn insert(&mut self, rule: AmbientParticleRule) {
-        assert!(!rule.id.trim().is_empty(), "ambient particle id cannot be empty");
+        assert!(
+            !rule.id.trim().is_empty(),
+            "ambient particle id cannot be empty"
+        );
         assert!(
             !rule.source.id().trim().is_empty(),
             "ambient particle {} source id cannot be empty",
             rule.id
         );
-        rule.particle.validate(&format!("ambient particle {}", rule.id));
+        rule.particle
+            .validate(&format!("ambient particle {}", rule.id));
         self.definitions.insert(rule.id.clone(), rule);
     }
 

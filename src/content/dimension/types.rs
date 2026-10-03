@@ -3,10 +3,7 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use crate::content::{
-    builtin_ids::WATER_FLUID_ID,
-    registry::DefinitionMap,
-};
+use crate::content::{builtin_ids::WATER_FLUID_ID, registry::DefinitionMap};
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +31,8 @@ pub struct DimensionBiome {
     pub spawn_weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
+    #[serde(default)]
+    pub exclusive_neighbor_group: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -54,10 +53,18 @@ pub struct DimensionDefinition {
     pub max_entities: usize,
 }
 
-fn default_max_entities() -> usize { 128 }
-fn default_spawn_biome_weight() -> f32 { 1.0 }
-fn default_biome_weight() -> f32 { 1.0 }
-fn default_sea_fluid() -> String { WATER_FLUID_ID.to_owned() }
+fn default_max_entities() -> usize {
+    128
+}
+fn default_spawn_biome_weight() -> f32 {
+    1.0
+}
+fn default_biome_weight() -> f32 {
+    1.0
+}
+fn default_sea_fluid() -> String {
+    WATER_FLUID_ID.to_owned()
+}
 
 #[derive(Resource, Default)]
 pub struct DimensionRegistry {
@@ -66,7 +73,9 @@ pub struct DimensionRegistry {
 
 impl DimensionRegistry {
     pub fn insert(&mut self, definition: DimensionDefinition) {
-        definition.name.validate(&format!("dimension {} name", definition.id));
+        definition
+            .name
+            .validate(&format!("dimension {} name", definition.id));
         self.definitions.insert(definition.id.clone(), definition);
     }
 

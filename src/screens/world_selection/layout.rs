@@ -6,7 +6,7 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         cosmic_background::{self, STAR_FIELD},
         screen, scrollbar, surface, theme, typography,
     },
@@ -134,7 +134,9 @@ pub(super) fn spawn_world_entry(
             .with_children(|actions| {
                 if world.compatible {
                     actions.spawn(button(
-                        localization.text(language, "worldSelection.load").to_owned(),
+                        localization
+                            .text(language, "worldSelection.load")
+                            .to_owned(),
                         WorldSelectionAction::Load(id.clone()),
                         percent(100),
                         COMPACT_CONTROL_HEIGHT,
@@ -142,7 +144,9 @@ pub(super) fn spawn_world_entry(
                     ));
                 }
                 actions.spawn(button(
-                    localization.text(language, "worldSelection.delete").to_owned(),
+                    localization
+                        .text(language, "worldSelection.delete")
+                        .to_owned(),
                     WorldSelectionAction::Delete(id),
                     percent(100),
                     COMPACT_CONTROL_HEIGHT,
@@ -153,10 +157,7 @@ pub(super) fn spawn_world_entry(
     });
 }
 
-fn spawn_world_thumbnail(
-    parent: &mut ChildSpawnerCommands,
-    thumbnail: Option<Handle<Image>>,
-) {
+fn spawn_world_thumbnail(parent: &mut ChildSpawnerCommands, thumbnail: Option<Handle<Image>>) {
     parent
         .spawn((
             Node {
@@ -207,11 +208,7 @@ fn metadata_row() -> Node {
     }
 }
 
-fn spawn_metadata(
-    parent: &mut ChildSpawnerCommands,
-    label: &str,
-    value: impl Into<String>,
-) {
+fn spawn_metadata(parent: &mut ChildSpawnerCommands, label: &str, value: impl Into<String>) {
     parent
         .spawn(Node {
             min_width: px(0),
@@ -353,7 +350,9 @@ pub(super) fn spawn_world_selection(
 
         root.spawn(screen::footer()).with_children(|footer| {
             footer.spawn(button(
-                localization.text(language.get(), "newWorld.return").to_owned(),
+                localization
+                    .text(language.get(), "newWorld.return")
+                    .to_owned(),
                 WorldSelectionAction::Back,
                 px(300),
                 COMPACT_CONTROL_HEIGHT,
@@ -369,7 +368,9 @@ pub(super) fn spawn_world_selection(
                 ButtonVariant::Normal,
             ));
             footer.spawn(button(
-                localization.text(language.get(), "starting.newWorld").to_owned(),
+                localization
+                    .text(language.get(), "starting.newWorld")
+                    .to_owned(),
                 WorldSelectionAction::NewWorld,
                 px(300),
                 COMPACT_CONTROL_HEIGHT,
@@ -383,7 +384,12 @@ fn format_coordinates(position: Option<[f32; 3]>) -> String {
     let Some([x, y, z]) = position else {
         return "—".to_owned();
     };
-    format!("X: {:.0} · Z: {:.0} · Y: {:.0}", x.floor(), z.floor(), y.floor())
+    format!(
+        "X: {:.0} · Z: {:.0} · Y: {:.0}",
+        x.floor(),
+        z.floor(),
+        y.floor()
+    )
 }
 
 // Portable UTC rendering without relying on local timezone configuration.
@@ -400,8 +406,7 @@ fn format_save_time(unix_ms: u64, language: Language) -> String {
     match language {
         Language::English => {
             let month_name = [
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
             ]
             .get(local.month0() as usize)
             .copied()

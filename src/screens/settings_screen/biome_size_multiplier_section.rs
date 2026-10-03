@@ -16,15 +16,11 @@ use crate::{
     },
     world::{
         MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
-        is_valid_biome_size_multiplier,
-        snap_biome_size_multiplier,
+        is_valid_biome_size_multiplier, snap_biome_size_multiplier,
     },
 };
 
-use super::{
-    new_world_section::SeedInputState,
-    spawn_biome_section::SpawnBiomeDropdownState,
-};
+use super::{new_world_section::SeedInputState, spawn_biome_section::SpawnBiomeDropdownState};
 
 const INPUT_MAX_CHARACTERS: usize = 3;
 
@@ -44,8 +40,7 @@ pub(super) struct BiomeSizeMultiplierInput;
 pub(super) struct BiomeSizeMultiplierInputText;
 
 pub(super) struct BiomeSizeMultiplierInputKind;
-pub(super) type BiomeSizeMultiplierInputState =
-    NumericInputState<BiomeSizeMultiplierInputKind>;
+pub(super) type BiomeSizeMultiplierInputState = NumericInputState<BiomeSizeMultiplierInputKind>;
 
 pub(super) fn biome_size_multiplier_setting(
     config: &NewWorldConfig,
@@ -124,10 +119,7 @@ fn apply_biome_size_multiplier(
 }
 
 pub(super) fn handle_biome_size_multiplier_input(
-    interactions: Query<
-        &Interaction,
-        (Changed<Interaction>, With<BiomeSizeMultiplierInput>),
-    >,
+    interactions: Query<&Interaction, (Changed<Interaction>, With<BiomeSizeMultiplierInput>)>,
     config: Res<NewWorldConfig>,
     mut input_state: ResMut<BiomeSizeMultiplierInputState>,
     mut seed_input: ResMut<SeedInputState>,
@@ -208,10 +200,7 @@ pub(super) fn sync_biome_size_multiplier_input(
     config: Res<NewWorldConfig>,
     input_state: Res<BiomeSizeMultiplierInputState>,
     mut labels: Query<&mut EditableText, With<BiomeSizeMultiplierInputText>>,
-    mut inputs: Query<
-        &mut BorderColor,
-        With<NumericInputFrame<BiomeSizeMultiplierInput>>,
-    >,
+    mut inputs: Query<&mut BorderColor, With<NumericInputFrame<BiomeSizeMultiplierInput>>>,
 ) {
     if !config.is_changed() && !input_state.is_changed() {
         return;
@@ -226,10 +215,7 @@ pub(super) fn sync_biome_size_multiplier_input(
 }
 
 pub(super) fn sync_biome_size_multiplier_slider_thumb(
-    sliders: Query<
-        &SliderValue,
-        (With<BiomeSizeMultiplierSlider>, Changed<SliderValue>),
-    >,
+    sliders: Query<&SliderValue, (With<BiomeSizeMultiplierSlider>, Changed<SliderValue>)>,
     mut thumbs: Query<&mut Node, With<BiomeSizeMultiplierSliderThumb>>,
 ) {
     let Ok(mut thumb) = thumbs.single_mut() else {

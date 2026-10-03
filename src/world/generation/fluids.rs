@@ -2,8 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry, biome_surface_fluid::BiomeSurfaceFluid,
-        biome_terrain::BiomeTerrain, dimension::DimensionDefinition,
+        biome::BiomeRegistry,
+        biome_surface_fluid::BiomeSurfaceFluid,
+        biome_terrain::BiomeTerrain,
+        dimension::DimensionDefinition,
         fluid::{FluidId, FluidRegistry},
     },
     voxel::{
@@ -12,8 +14,10 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
-        noise::fractal_noise_2d, terrain::surface_height_from_sample,
+        deterministic::{hash_string, mix_seed},
+        generation::GenerationColumnSample,
+        noise::fractal_noise_2d,
+        terrain::surface_height_from_sample,
     },
 };
 
@@ -61,7 +65,7 @@ fn column_uses_static_sea_surface(
     column: &GenerationColumnSample,
     pass: &FluidPassContext<'_>,
 ) -> bool {
-    if column.ocean_weight > f32::EPSILON {
+    if pass.biome_field.ocean_surface_index() == Some(column.identity_surface_index) {
         return true;
     }
 
@@ -114,11 +118,9 @@ pub(super) fn rasterize_fluid_pass(
                     authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
                 {
                     (Some(authored), false)
-                } else if let Some(level) = sea_fluid_level_for_column(
-                    sea_surface,
-                    column.surface_height,
-                    world_y,
-                ) {
+                } else if let Some(level) =
+                    sea_fluid_level_for_column(sea_surface, column.surface_height, world_y)
+                {
                     (Some(FluidCell::source(sea_fluid_id, level)), true)
                 } else {
                     (None, false)
@@ -177,8 +179,7 @@ pub(crate) fn authored_surface_fluid_id_for_position<'a>(
         .get(biome_id)
         .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
     let rule = biome.surface_fluid.as_ref()?;
-    let surface_height =
-        surface_height_from_sample(position, dimension, biome_field, &surface);
+    let surface_height = surface_height_from_sample(position, dimension, biome_field, &surface);
     let primary_terrain_strength = surface
         .influences
         .iter()
@@ -207,24 +208,19 @@ pub(crate) fn authored_surface_fluid_id_for_position<'a>(
             else {
                 unreachable!("validated volcano crater surface fluid requires volcano terrain");
             };
-            let crater_level = dimension.sea_level as f32
-                + base_height
-                + height
-                - crater_depth
-                + level_offset;
-            let crater_present =
-                primary_terrain_strength >= *minimum_strength
-                    && crater_level > surface_height as f32;
-            let spill_present =
-                primary_terrain_strength >= *spill_minimum_strength
-                    && primary_terrain_strength <= *spill_maximum_strength
-                    && volcano_spill_channel(
-                        horizontal,
-                        *spill_scale,
-                        *spill_width,
-                        biome_field.seed(),
-                        biome_id,
-                    );
+            let crater_level =
+                dimension.sea_level as f32 + base_height + height - crater_depth + level_offset;
+            let crater_present = primary_terrain_strength >= *minimum_strength
+                && crater_level > surface_height as f32;
+            let spill_present = primary_terrain_strength >= *spill_minimum_strength
+                && primary_terrain_strength <= *spill_maximum_strength
+                && volcano_spill_channel(
+                    horizontal,
+                    *spill_scale,
+                    *spill_width,
+                    biome_field.seed(),
+                    biome_id,
+                );
 
             (crater_present || spill_present).then_some(fluid.as_str())
         }
@@ -298,14 +294,10 @@ fn authored_surface_fluid_column(
     }
 }
 
-fn resolve_authored_fluid_id(
-    fluids: &FluidRegistry,
-    fluid: &str,
-    biome_id: &str,
-) -> FluidId {
-    fluids.id_of(fluid).unwrap_or_else(|| {
-        panic!("biome {biome_id} surfaceFluid references missing fluid {fluid}")
-    })
+fn resolve_authored_fluid_id(fluids: &FluidRegistry, fluid: &str, biome_id: &str) -> FluidId {
+    fluids
+        .id_of(fluid)
+        .unwrap_or_else(|| panic!("biome {biome_id} surfaceFluid references missing fluid {fluid}"))
 }
 
 fn volcano_spill_channel(

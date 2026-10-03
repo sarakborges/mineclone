@@ -4,12 +4,9 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path,
-    block::BlockTint,
-    inventory_category::InventoryCategoryRegistry,
-    loot::LootTableDefinition,
-    object_id::intern_object_id,
-    registry::DefinitionMap,
+    asset_path::is_safe_relative_asset_path, block::BlockTint,
+    inventory_category::InventoryCategoryRegistry, loot::LootTableDefinition,
+    object_id::intern_object_id, registry::DefinitionMap,
 };
 
 const MAX_OBJECT_VISUAL_SIZE: f32 = 4.0;
@@ -313,7 +310,9 @@ impl Default for ObjectTargetDefinition {
 impl ObjectTargetDefinition {
     fn validate(self, object_id: &str) {
         assert!(
-            self.size.iter().all(|value| value.is_finite() && *value > 0.0),
+            self.size
+                .iter()
+                .all(|value| value.is_finite() && *value > 0.0),
             "object {object_id} target size must be positive and finite"
         );
         assert!(
@@ -407,9 +406,10 @@ impl ObjectRegistry {
             );
         }
         assert!(
-            definition.position_jitter.iter().all(|value| {
-                value.is_finite() && (0.0..=0.45).contains(value)
-            }),
+            definition
+                .position_jitter
+                .iter()
+                .all(|value| { value.is_finite() && (0.0..=0.45).contains(value) }),
             "object {} positionJitter values must be finite and between 0 and 0.45",
             definition.id
         );

@@ -10,13 +10,11 @@ use bevy::{
 
 use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
-use super::CachedStructureForest;
 use super::super::{
-    biome_field::VolumeBiomeRegion,
-    generation::GenerationColumnSample,
-    generation_region::GenerationRegionCoord,
-    structure_metadata::ResolvedStructurePlacement,
+    biome_field::VolumeBiomeRegion, generation::GenerationColumnSample,
+    generation_region::GenerationRegionCoord, structure_metadata::ResolvedStructurePlacement,
 };
+use super::CachedStructureForest;
 
 const CACHE_REGION_MARGIN: i32 = 1;
 
@@ -184,10 +182,8 @@ pub(super) struct FeatureCaches {
     structure_placements: ConcurrentCache<IVec2, Arc<Vec<ResolvedStructurePlacement>>>,
     surface_structure_placements:
         ConcurrentCache<(String, String, IVec2), Arc<Option<CachedStructureForest>>>,
-    connected_structure_forests: ConcurrentCache<
-        (String, String, StructureRotation, IVec3),
-        Arc<CachedStructureForest>,
-    >,
+    connected_structure_forests:
+        ConcurrentCache<(String, String, StructureRotation, IVec3), Arc<CachedStructureForest>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -199,12 +195,8 @@ impl FeatureCaches {
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
             structure_placements: ConcurrentCache::new("resolved structure placement cache"),
-            surface_structure_placements: ConcurrentCache::new(
-                "surface structure placement cache",
-            ),
-            connected_structure_forests: ConcurrentCache::new(
-                "connected structure forest cache",
-            ),
+            surface_structure_placements: ConcurrentCache::new("surface structure placement cache"),
+            connected_structure_forests: ConcurrentCache::new("connected structure forest cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -229,17 +221,13 @@ impl FeatureCaches {
         coord: IVec3,
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
-        self.volume_biomes.get_or_insert_with(
-            GenerationRegionCoord::from_region_coord(coord),
-            || Arc::new(factory()),
-        )
+        self.volume_biomes
+            .get_or_insert_with(GenerationRegionCoord::from_region_coord(coord), || {
+                Arc::new(factory())
+            })
     }
 
-    pub(super) fn structure_top_y(
-        &self,
-        coord: IVec2,
-        factory: impl FnOnce() -> i32,
-    ) -> i32 {
+    pub(super) fn structure_top_y(&self, coord: IVec2, factory: impl FnOnce() -> i32) -> i32 {
         self.structure_top_ys.get_or_insert_with(coord, factory)
     }
 
@@ -299,10 +287,7 @@ impl FeatureCaches {
             .get_or_insert_with(structure_id, rotation, anchor, factory)
     }
 
-    pub(super) fn retain_for_chunks<'a>(
-        &self,
-        desired: impl IntoIterator<Item = &'a IVec3>,
-    ) {
+    pub(super) fn retain_for_chunks<'a>(&self, desired: impl IntoIterator<Item = &'a IVec3>) {
         let mut scratch = self
             .retention_scratch
             .lock()

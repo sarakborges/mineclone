@@ -6,12 +6,12 @@ use crate::{
 };
 
 use super::{
-    InventoryItemView,
     super::state::{
-        InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipHint,
+        ITEM_ICON_SIZE, InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipHint,
         InventoryItemTooltipId, InventoryItemTooltipStats, InventoryItemTooltipStatsTitle,
-        InventoryItemTooltipText, ITEM_ICON_SIZE,
+        InventoryItemTooltipText,
     },
+    InventoryItemView,
 };
 
 pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerCommands) {

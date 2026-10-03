@@ -7,7 +7,9 @@ use bevy::prelude::IVec3;
 use serde::{Deserialize, Serialize};
 
 use crate::content::{
-    block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
+    block::BlockRegistry,
+    block_id::intern_block_id,
+    block_orientation::BlockOrientation,
     fluid::FluidRegistry,
     layer::{LayerFace, LayerRegistry},
     layer_id::intern_layer_id,
@@ -91,7 +93,10 @@ struct DiskObjectState {
     rotation: u8,
     #[serde(default, skip_serializing_if = "object_offset_is_default")]
     offset: [i16; 3],
-    #[serde(default = "default_object_scale", skip_serializing_if = "object_scale_is_default")]
+    #[serde(
+        default = "default_object_scale",
+        skip_serializing_if = "object_scale_is_default"
+    )]
     scale: [u16; 3],
 }
 
@@ -187,8 +192,7 @@ impl DiskChunkBuilder {
         self.layers.push(DiskLayerState {
             voxel: u16::try_from(index)
                 .map_err(|_| invalid_data("chunk layer voxel index overflow"))?,
-            order: u8::try_from(order)
-                .map_err(|_| invalid_data("chunk layer order overflow"))?,
+            order: u8::try_from(order).map_err(|_| invalid_data("chunk layer order overflow"))?,
             face: attached.face.index(),
             id: attached.cell.layer_id.to_owned(),
             rotation: rotation_index(attached.cell.texture_rotation),
@@ -430,13 +434,11 @@ fn decode_archived_compact(
 
     let block_entries = block_runs.iter().flat_map(|run| {
         let cell = block_states[run.state as usize];
-        (run.start as usize..run.start as usize + run.len as usize)
-            .map(move |index| (index, cell))
+        (run.start as usize..run.start as usize + run.len as usize).map(move |index| (index, cell))
     });
     let fluid_entries = fluid_runs.iter().flat_map(|run| {
         let cell = fluid_states[run.state as usize];
-        (run.start as usize..run.start as usize + run.len as usize)
-            .map(move |index| (index, cell))
+        (run.start as usize..run.start as usize + run.len as usize).map(move |index| (index, cell))
     });
 
     Ok((
@@ -471,16 +473,22 @@ fn decode_layer_entries(
 
         match previous_voxel {
             Some(previous) if state.voxel < previous => {
-                return Err(invalid_data("saved layers must be ordered by voxel and layer order"));
+                return Err(invalid_data(
+                    "saved layers must be ordered by voxel and layer order",
+                ));
             }
             Some(previous) if state.voxel == previous => {
                 if state.order != expected_order {
-                    return Err(invalid_data("saved layer order must be contiguous per voxel"));
+                    return Err(invalid_data(
+                        "saved layer order must be contiguous per voxel",
+                    ));
                 }
             }
             _ => {
                 if state.order != 0 {
-                    return Err(invalid_data("first saved layer in a voxel must have order zero"));
+                    return Err(invalid_data(
+                        "first saved layer in a voxel must have order zero",
+                    ));
                 }
                 current_layers.clear();
             }
@@ -547,7 +555,9 @@ fn decode_object_entries(
             return Err(invalid_data("invalid saved object voxel or rotation"));
         }
         if previous_voxel.is_some_and(|previous| state.voxel <= previous) {
-            return Err(invalid_data("saved objects must be strictly ordered by voxel"));
+            return Err(invalid_data(
+                "saved objects must be strictly ordered by voxel",
+            ));
         }
 
         let face = ObjectPlacementFace::from_index(state.face)
@@ -597,13 +607,17 @@ fn decode_metadata_entries(
             return Err(invalid_data("saved block metadata voxel is out of range"));
         }
         if previous_voxel.is_some_and(|previous| state.voxel <= previous) {
-            return Err(invalid_data("saved block metadata must be strictly ordered by voxel"));
+            return Err(invalid_data(
+                "saved block metadata must be strictly ordered by voxel",
+            ));
         }
         if state.metadata.is_empty() {
             return Err(invalid_data("saved block metadata cannot be empty"));
         }
         if !run_contains_index(block_runs, voxel) {
-            return Err(invalid_data("saved block metadata is missing its supporting block"));
+            return Err(invalid_data(
+                "saved block metadata is missing its supporting block",
+            ));
         }
 
         entries.push((voxel, state.metadata));
@@ -631,7 +645,9 @@ fn validate_runs(runs: &[DiskRun], palette_len: usize) -> io::Result<()> {
             .checked_add(run.len as usize)
             .ok_or_else(|| invalid_data("chunk run endpoint overflow"))?;
         if end > CHUNK_VOLUME || (run_index > 0 && start < previous_end) {
-            return Err(invalid_data("chunk runs must be ordered, non-overlapping and in range"));
+            return Err(invalid_data(
+                "chunk runs must be ordered, non-overlapping and in range",
+            ));
         }
         previous_end = end;
     }
@@ -639,10 +655,7 @@ fn validate_runs(runs: &[DiskRun], palette_len: usize) -> io::Result<()> {
 }
 
 fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Result<VoxelCell> {
-    if state.rotation > 3
-        || state.orientation > 2
-        || state.state.len() > MAX_BLOCK_STATE_ENTRIES
-    {
+    if state.rotation > 3 || state.orientation > 2 || state.state.len() > MAX_BLOCK_STATE_ENTRIES {
         return Err(invalid_data(
             "invalid block rotation, orientation or state entry count",
         ));
@@ -672,7 +685,9 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
             .ok_or_else(|| invalid_data("invalid Artisan's Kit mask"))?;
     }
     if is_hollow_log_id(cell.block_id) && MicroblockMask::is_modified(cell) {
-        return Err(invalid_data("hollow logs cannot contain Artisan's Kit geometry"));
+        return Err(invalid_data(
+            "hollow logs cannot contain Artisan's Kit geometry",
+        ));
     }
     Ok(cell)
 }
@@ -705,7 +720,9 @@ fn validate_block_state(state: &[(String, String)], can_fragment: bool) -> io::R
         if key == ARTISANS_KIT_MASK_PROPERTY
             && (!can_fragment || !MicroblockMask::valid_saved(value))
         {
-            return Err(invalid_data("invalid Artisan's Kit mask or ineligible block"));
+            return Err(invalid_data(
+                "invalid Artisan's Kit mask or ineligible block",
+            ));
         }
     }
     Ok(())
@@ -737,8 +754,7 @@ mod tests {
 
     use super::*;
     use crate::voxel::{
-        block_metadata::BlockMetadata,
-        chunk_archive::ArchivedChunk,
+        block_metadata::BlockMetadata, chunk_archive::ArchivedChunk,
         texture_rotation::TextureRotation,
     };
 
@@ -768,8 +784,7 @@ mod tests {
 
         let archived = ArchivedChunk::from_chunk(&chunk);
         let resident_disk = DiskChunk::from_chunk(coord, &chunk, &fluids).unwrap();
-        let archived_disk =
-            DiskChunk::from_archived_chunk(coord, &archived, &fluids).unwrap();
+        let archived_disk = DiskChunk::from_archived_chunk(coord, &archived, &fluids).unwrap();
 
         assert_eq!(
             serde_json::to_string(&resident_disk).unwrap(),
@@ -785,10 +800,9 @@ mod tests {
 
     #[test]
     fn legacy_object_state_defaults_to_identity_transform() {
-        let state: DiskObjectState = serde_json::from_str(
-            r#"{"voxel":1,"face":2,"id":"grass","rotation":0}"#,
-        )
-        .expect("legacy object state should remain readable");
+        let state: DiskObjectState =
+            serde_json::from_str(r#"{"voxel":1,"face":2,"id":"grass","rotation":0}"#)
+                .expect("legacy object state should remain readable");
 
         assert_eq!(state.offset, [0; 3]);
         assert_eq!(state.scale, ObjectTransform::default().encoded_scale());

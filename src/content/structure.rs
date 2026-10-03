@@ -16,7 +16,9 @@ use crate::{
 };
 
 use super::{
-    block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
+    block::BlockRegistry,
+    block_id::intern_block_id,
+    block_orientation::BlockOrientation,
     fluid::FluidRegistry,
     layer::{LayerFace, LayerRegistry},
     object::{ObjectPlacementFace, ObjectRegistry},
@@ -551,10 +553,7 @@ impl StructureDefinition {
         self.ground_anchor_y.is_some() || !self.restrictions.ground_blocks.is_empty()
     }
 
-    pub(crate) fn support_offsets_for_rotation(
-        &self,
-        rotation: StructureRotation,
-    ) -> Vec<IVec2> {
+    pub(crate) fn support_offsets_for_rotation(&self, rotation: StructureRotation) -> Vec<IVec2> {
         self.runtime
             .support_offsets
             .iter()
@@ -776,11 +775,13 @@ impl StructureDefinition {
 
         let mut column_spans = spans
             .into_iter()
-            .map(|((x, z), (min_y_offset, max_y_offset))| StructureColumnSpan {
-                offset: IVec2::new(x, z),
-                min_y_offset,
-                max_y_offset,
-            })
+            .map(
+                |((x, z), (min_y_offset, max_y_offset))| StructureColumnSpan {
+                    offset: IVec2::new(x, z),
+                    min_y_offset,
+                    max_y_offset,
+                },
+            )
             .collect::<Vec<_>>();
         column_spans.sort_by_key(|span| (span.offset.y, span.offset.x));
 
@@ -1019,7 +1020,10 @@ impl StructureDefinition {
                 for previous in &entry.surface_layers[..surface_index] {
                     assert!(
                         previous.layer != surface.layer
-                            || !previous.faces.iter().any(|face| surface.faces.contains(face)),
+                            || !previous
+                                .faces
+                                .iter()
+                                .any(|face| surface.faces.contains(face)),
                         "structure {} palette symbol {symbol} cannot define the same surface layer on the same face more than once",
                         self.id
                     );
@@ -1073,7 +1077,10 @@ impl StructureDefinition {
 
                 for symbol in row.chars().filter(|symbol| *symbol != '.') {
                     let entry = self.palette_entry(symbol).unwrap_or_else(|| {
-                        panic!("structure {} uses undefined palette symbol: {symbol}", self.id)
+                        panic!(
+                            "structure {} uses undefined palette symbol: {symbol}",
+                            self.id
+                        )
                     });
                     if entry.block.is_some()
                         || entry.fluid.is_some()
@@ -1143,10 +1150,7 @@ impl StructureRegistry {
         self.get(reference).is_some() || self.groups.contains_key(reference)
     }
 
-    pub(crate) fn reference_members(
-        &self,
-        reference: &str,
-    ) -> Option<Vec<&StructureDefinition>> {
+    pub(crate) fn reference_members(&self, reference: &str) -> Option<Vec<&StructureDefinition>> {
         if let Some(structure) = self.get(reference) {
             return Some(vec![structure]);
         }
@@ -1163,12 +1167,9 @@ impl StructureRegistry {
         )
     }
 
-    pub(crate) fn reference_contains_structure(
-        &self,
-        reference: &str,
-        structure_id: &str,
-    ) -> bool {
-        self.get(reference).is_some_and(|structure| structure.id == structure_id)
+    pub(crate) fn reference_contains_structure(&self, reference: &str, structure_id: &str) -> bool {
+        self.get(reference)
+            .is_some_and(|structure| structure.id == structure_id)
             || self
                 .groups
                 .get(reference)

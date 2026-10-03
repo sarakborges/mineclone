@@ -3,12 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy::{
-    asset::AssetId,
-    ecs::system::SystemParam,
-    platform::collections::HashMap,
-    prelude::*,
-};
+use bevy::{asset::AssetId, ecs::system::SystemParam, platform::collections::HashMap, prelude::*};
 
 use crate::{
     app::{
@@ -35,27 +30,23 @@ use crate::{
         item_stack::{ItemStack, MAX_STACK_SIZE},
     },
     voxel::{
-        cell::VoxelCell,
-        coordinates::chunk_coord_from_position,
-        log_variant::is_hollow_log_id,
-        microblock::HOLLOW_LOG_WALL_THICKNESS,
-        object::ObjectCell,
-        texture_rotation::TextureRotation,
-        world::VoxelWorld,
+        cell::VoxelCell, coordinates::chunk_coord_from_position, log_variant::is_hollow_log_id,
+        microblock::HOLLOW_LOG_WALL_THICKNESS, object::ObjectCell,
+        texture_rotation::TextureRotation, world::VoxelWorld,
     },
     world::{
+        WorldFrameWorkBudget,
         chunk_rendering::ChunkRenderPool,
         deterministic::{hash_signed, hash_string, mix_u32_components},
-        render_distance::{chunk_visibility_radii, RenderDistanceSettings},
+        render_distance::{RenderDistanceSettings, chunk_visibility_radii},
         tick::WorldTickClock,
-        WorldFrameWorkBudget,
     },
     world_items::WorldItemSpawnRequest,
 };
 
 mod batch;
 
-use batch::{build_world_object_chunk, BuiltWorldObjectChunk, WorldObjectBatchAssets};
+use batch::{BuiltWorldObjectChunk, WorldObjectBatchAssets, build_world_object_chunk};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct WorldObjectKey {
@@ -265,9 +256,7 @@ fn apply_object_placement_requests(
         } else {
             log_gameplay_warn(format!(
                 "object.place failed object={} support={:?} face={:?} reason=world_mutation_rejected",
-                request.object.object_id,
-                request.support,
-                request.object.face
+                request.object.object_id, request.support, request.object.face
             ));
         }
     }
@@ -295,9 +284,11 @@ fn apply_object_removal_requests(
             continue;
         };
         let support_cell = runtime.world.cell_at(key.support);
-        let loot_position = world_object_position(key.support, support_cell, key.object, definition)
-            + Vec3::Y * 0.25;
-        let Some((_chunk, removed)) = runtime.world.remove_object_at(key.support, key.object) else {
+        let loot_position =
+            world_object_position(key.support, support_cell, key.object, definition)
+                + Vec3::Y * 0.25;
+        let Some((_chunk, removed)) = runtime.world.remove_object_at(key.support, key.object)
+        else {
             log_gameplay_warn(format!(
                 "object.remove rejected object={} support={:?} reason=world_mutation_rejected",
                 key.object.object_id, key.support
@@ -317,9 +308,7 @@ fn apply_object_removal_requests(
         }
         log_gameplay_event(format!(
             "object.remove applied object={} support={:?} drop_loot={}",
-            removed.object_id,
-            key.support,
-            request.drop_loot
+            removed.object_id, key.support, request.drop_loot
         ));
         debug_assert_eq!(removed, key.object);
     }
@@ -435,13 +424,9 @@ fn sync_world_objects(
                 continue;
             }
 
-            let Some(built) = build_world_object_chunk(
-                &mut commands,
-                coord,
-                chunk,
-                &content,
-                &mut batch_assets,
-            ) else {
+            let Some(built) =
+                build_world_object_chunk(&mut commands, coord, chunk, &content, &mut batch_assets)
+            else {
                 deferred = true;
                 break;
             };
@@ -495,8 +480,7 @@ fn world_object_sync_budget_exhausted(
 ) -> bool {
     processed_chunks >= MAX_WORLD_OBJECT_CHUNK_UPDATES_PER_FRAME
         || (processed_chunks > 0
-            && (started.elapsed() >= WORLD_OBJECT_SYNC_BUDGET
-                || Instant::now() >= global_deadline))
+            && (started.elapsed() >= WORLD_OBJECT_SYNC_BUDGET || Instant::now() >= global_deadline))
 }
 
 fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool {
@@ -507,11 +491,7 @@ fn chunk_inside_object_radius(coord: IVec3, center: IVec2, radius: i32) -> bool 
     delta.length_squared() <= radius * radius
 }
 
-fn despawn_chunk_objects(
-    commands: &mut Commands,
-    coord: IVec3,
-    store: &mut WorldObjectStore,
-) {
+fn despawn_chunk_objects(commands: &mut Commands, coord: IVec3, store: &mut WorldObjectStore) {
     for entity in store.take_chunk_entities(coord) {
         commands.entity(entity).despawn();
     }
@@ -524,13 +504,8 @@ pub(crate) fn world_object_transform(
     definition: &ObjectDefinition,
 ) -> Transform {
     let rotation = world_object_rotation(object);
-    let position = world_object_position_with_rotation(
-        support,
-        support_cell,
-        object,
-        definition,
-        rotation,
-    );
+    let position =
+        world_object_position_with_rotation(support, support_cell, object, definition, rotation);
     Transform::from_translation(position)
         .with_rotation(rotation)
         .with_scale(object.transform.scale())
@@ -558,15 +533,17 @@ fn world_object_position_with_rotation(
         .filter(|_| object.face == ObjectPlacementFace::Top)
         .map(|cell| cell.orientation);
     let base_position = if hollow_orientation.is_some() {
-        support.as_vec3()
-            + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
+        support.as_vec3() + Vec3::new(0.5, HOLLOW_LOG_WALL_THICKNESS + 0.001, 0.5)
     } else {
-        support.as_vec3()
-            + Vec3::splat(0.5)
-            + object.face.normal().as_vec3() * 0.5
+        support.as_vec3() + Vec3::splat(0.5) + object.face.normal().as_vec3() * 0.5
     };
     let local_offset = object.transform.offset()
-        + object_position_jitter(definition, support, hollow_orientation, object.transform.scale());
+        + object_position_jitter(
+            definition,
+            support,
+            hollow_orientation,
+            object.transform.scale(),
+        );
     base_position + rotation * local_offset
 }
 
@@ -691,10 +668,7 @@ pub(crate) fn emit_object_loot(
     }
 }
 
-fn resolve_object_loot_item_id(
-    item_id: &str,
-    content: &ObjectLootRegistries<'_>,
-) -> &'static str {
+fn resolve_object_loot_item_id(item_id: &str, content: &ObjectLootRegistries<'_>) -> &'static str {
     if content.items.get(item_id).is_some() {
         intern_item_id(item_id)
     } else if content.blocks.get(item_id).is_some() {

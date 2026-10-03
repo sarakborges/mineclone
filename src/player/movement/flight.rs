@@ -13,9 +13,7 @@ use crate::{
 
 use super::{
     collision::{Axis, MoveAxisResult, move_axis},
-    config::{
-        DOUBLE_TAP_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED,
-    },
+    config::{DOUBLE_TAP_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED},
     gravity::GravityState,
     smoothing::approach_velocity,
 };

@@ -102,7 +102,10 @@ pub struct StructureSetDefinition {
 
 impl StructureSetDefinition {
     fn validate(&self) {
-        assert!(!self.id.trim().is_empty(), "structure set id cannot be empty");
+        assert!(
+            !self.id.trim().is_empty(),
+            "structure set id cannot be empty"
+        );
         self.name
             .validate(&format!("structure set {} name", self.id));
         assert!(
@@ -196,11 +199,9 @@ impl StructureSetDefinition {
                     relative_to
                 );
                 assert_ne!(
-                    relative_to,
-                    element.id,
+                    relative_to, element.id,
                     "structure set {} element {} cannot be relative to itself",
-                    self.id,
-                    element.id
+                    self.id, element.id
                 );
             }
         }
@@ -232,18 +233,16 @@ impl StructureSetDefinition {
                 "any" => maximum_prior_radius,
                 reference => *element_radii.get(reference)?,
             };
-            let radius = base_radius
-                .checked_add(i32::try_from(element.placement.max_distance).ok()?)?;
-            let (structure_minimum, structure_maximum) =
-                bounds_for_reference(&element.structure)?;
+            let radius =
+                base_radius.checked_add(i32::try_from(element.placement.max_distance).ok()?)?;
+            let (structure_minimum, structure_maximum) = bounds_for_reference(&element.structure)?;
             let minimum = IVec2::splat(-radius) + structure_minimum;
             let maximum = IVec2::splat(radius) + structure_maximum;
 
             bounds = Some(match bounds {
-                Some((current_minimum, current_maximum)) => (
-                    current_minimum.min(minimum),
-                    current_maximum.max(maximum),
-                ),
+                Some((current_minimum, current_maximum)) => {
+                    (current_minimum.min(minimum), current_maximum.max(maximum))
+                }
                 None => (minimum, maximum),
             });
             element_radii.insert(element.id.as_str(), radius);
@@ -282,5 +281,4 @@ impl StructureSetRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &StructureSetDefinition> {
         self.definitions.values()
     }
-
 }

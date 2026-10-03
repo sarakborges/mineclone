@@ -21,13 +21,14 @@ pub(crate) fn apply_player_skin_material(
 }
 
 pub(super) fn player_skin_texture_path() -> &'static str {
-    select_player_skin_texture_path(|path| Path::new("assets").join(path).is_file())
-        .unwrap_or_else(|| {
+    select_player_skin_texture_path(|path| Path::new("assets").join(path).is_file()).unwrap_or_else(
+        || {
             panic!(
                 "player skin texture not found; expected one of: {}",
                 PLAYER_SKIN_TEXTURE_PATHS.join(", ")
             )
-        })
+        },
+    )
 }
 
 fn select_player_skin_texture_path(mut exists: impl FnMut(&str) -> bool) -> Option<&'static str> {

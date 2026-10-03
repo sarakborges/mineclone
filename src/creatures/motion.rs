@@ -17,8 +17,14 @@ use super::{CreatureInstance, EntityMetaTags, visual::CreatureAnimationState};
 
 const GROUND_PROBE: f32 = 0.06;
 const DIRECTIONS: [(i32, i32); 8] = [
-    (0, -1), (1, -1), (1, 0), (1, 1),
-    (0, 1), (-1, 1), (-1, 0), (-1, -1),
+    (0, -1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+    (0, 1),
+    (-1, 1),
+    (-1, 0),
+    (-1, -1),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -57,7 +63,9 @@ impl Default for CreatureMotion {
 }
 
 impl CreatureMotion {
-    pub(super) fn facing_yaw(&self) -> f32 { self.facing_yaw }
+    pub(super) fn facing_yaw(&self) -> f32 {
+        self.facing_yaw
+    }
 
     pub(crate) fn apply_knockback(&mut self, direction: Vec3, strength: f32) {
         let horizontal = Vec2::new(direction.x, direction.z);
@@ -84,7 +92,9 @@ impl CreatureMotion {
                 ^ position.y.to_bits().rotate_left(11)
                 ^ position.z.to_bits().rotate_left(23)
                 ^ 0xA341_316C;
-            if self.random_state == 0 { self.random_state = 0x9E37_79B9; }
+            if self.random_state == 0 {
+                self.random_state = 0x9E37_79B9;
+            }
         }
         let random = next_u32(&mut self.random_state);
         let (x, z) = DIRECTIONS[random as usize % DIRECTIONS.len()];
@@ -108,10 +118,14 @@ pub(super) fn move_creatures(
         &EntityMetaTags,
     )>,
 ) {
-    let Some(dimension) = dimension.definition() else { return; };
+    let Some(dimension) = dimension.definition() else {
+        return;
+    };
     let gravity_strength = dimension.gravity_strength;
     let dt = time.delta_secs().min(0.05);
-    for (instance, collider, mut transform, mut motion, mut animation, health, meta_tags) in &mut creatures {
+    for (instance, collider, mut transform, mut motion, mut animation, health, meta_tags) in
+        &mut creatures
+    {
         if meta_tags.is_no_ai() {
             motion.stop();
             set_animation(&mut animation, "idle");
@@ -121,11 +135,20 @@ pub(super) fn move_creatures(
             set_animation(&mut animation, "death");
             continue;
         }
-        let Some(definition) = definitions.get(&instance.definition_id) else { continue; };
-        if !world.is_loaded_at(transform.translation.floor().as_ivec3()) { continue; }
+        let Some(definition) = definitions.get(&instance.definition_id) else {
+            continue;
+        };
+        if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
+            continue;
+        }
         if motion.knockback_time > 0.0 {
             let travel = motion.knockback * dt;
-            if advance(&world, *collider, &mut transform.translation, Vec3::new(travel.x, 0.0, travel.z)) {
+            if advance(
+                &world,
+                *collider,
+                &mut transform.translation,
+                Vec3::new(travel.x, 0.0, travel.z),
+            ) {
                 motion.knockback = Vec3::ZERO;
                 motion.knockback_time = 0.0;
             } else {
@@ -137,17 +160,23 @@ pub(super) fn move_creatures(
                 }
             }
         }
-        if motion.phase != HopPhase::Airborne && !on_ground(&world, *collider, transform.translation) {
+        if motion.phase != HopPhase::Airborne
+            && !on_ground(&world, *collider, transform.translation)
+        {
             motion.phase = HopPhase::Airborne;
             motion.velocity_y = 0.0;
             set_animation(&mut animation, "airborne");
         }
         match motion.phase {
             HopPhase::Idle => {
-                if definition.jump_speed <= 0.0 { continue; }
+                if definition.jump_speed <= 0.0 {
+                    continue;
+                }
                 motion.timer -= dt;
                 if motion.timer <= 0.0 {
-                    if definition.move_speed > 0.0 { motion.choose_heading(transform.translation); }
+                    if definition.move_speed > 0.0 {
+                        motion.choose_heading(transform.translation);
+                    }
                     motion.phase = HopPhase::Anticipate;
                     motion.timer = definition.anticipation_seconds;
                     set_animation(&mut animation, "anticipate");
@@ -164,13 +193,27 @@ pub(super) fn move_creatures(
             HopPhase::Airborne => {
                 let horizontal = motion.direction * definition.move_speed * dt;
                 if horizontal != Vec2::ZERO
-                    && advance(&world, *collider, &mut transform.translation, Vec3::new(horizontal.x, 0.0, horizontal.y))
+                    && advance(
+                        &world,
+                        *collider,
+                        &mut transform.translation,
+                        Vec3::new(horizontal.x, 0.0, horizontal.y),
+                    )
                 {
                     motion.direction = Vec2::ZERO;
                 }
-                let gravity_scale = if motion.velocity_y <= 0.0 { definition.fall_gravity_scale } else { 1.0 };
+                let gravity_scale = if motion.velocity_y <= 0.0 {
+                    definition.fall_gravity_scale
+                } else {
+                    1.0
+                };
                 motion.velocity_y -= gravity_strength * gravity_scale * dt;
-                let hit = advance(&world, *collider, &mut transform.translation, Vec3::Y * motion.velocity_y * dt);
+                let hit = advance(
+                    &world,
+                    *collider,
+                    &mut transform.translation,
+                    Vec3::Y * motion.velocity_y * dt,
+                );
                 if hit && motion.velocity_y <= 0.0 {
                     motion.phase = HopPhase::Land;
                     motion.timer = definition.landing_seconds;
@@ -194,7 +237,9 @@ pub(super) fn move_creatures(
 }
 
 fn set_animation(state: &mut CreatureAnimationState, next: &str) {
-    if state.name != next { state.name = next.to_owned(); }
+    if state.name != next {
+        state.name = next.to_owned();
+    }
 }
 
 fn on_ground(world: &VoxelWorld, collider: CreatureCollider, feet: Vec3) -> bool {
@@ -207,7 +252,9 @@ fn advance(world: &VoxelWorld, collider: CreatureCollider, feet: &mut Vec3, delt
     let step = delta / steps as f32;
     for _ in 0..steps {
         let next = *feet + step;
-        if !aabb_is_clear(world, collider.bounds(next)) { return true; }
+        if !aabb_is_clear(world, collider.bounds(next)) {
+            return true;
+        }
         *feet = next;
     }
     false
@@ -223,6 +270,9 @@ mod tests {
         motion.choose_heading(Vec3::new(2.5, 12.0, -4.5));
         assert!((motion.direction.length() - 1.0).abs() < 0.0001);
         let direction = motion.direction;
-        assert!((Vec2::new(-motion.facing_yaw.sin(), -motion.facing_yaw.cos()) - direction).length() < 0.0001);
+        assert!(
+            (Vec2::new(-motion.facing_yaw.sin(), -motion.facing_yaw.cos()) - direction).length()
+                < 0.0001
+        );
     }
 }

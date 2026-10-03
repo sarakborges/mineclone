@@ -12,11 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
-        coordinates::chunk_coord_from_world,
-        deduplicated_queue::DeduplicatedQueue,
-        neighbors::HORIZONTAL_NEIGHBORS,
-        update_queue::VoxelUpdateQueue,
-        world::VoxelWorld,
+        coordinates::chunk_coord_from_world, deduplicated_queue::DeduplicatedQueue,
+        neighbors::HORIZONTAL_NEIGHBORS, update_queue::VoxelUpdateQueue, world::VoxelWorld,
     },
 };
 
@@ -177,7 +174,6 @@ struct SavedScheduledFluidTick {
     remaining_ticks: u64,
 }
 
-
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
     // Runtime block edits are topology wake-ups. They are resolved against the
@@ -257,9 +253,8 @@ impl PendingFluidUpdates {
                 .then_with(|| left.fluid.cmp(&right.fluid))
                 .then_with(|| left.remaining_ticks.cmp(&right.remaining_ticks))
         });
-        scheduled.dedup_by(|left, right| {
-            left.position == right.position && left.fluid == right.fluid
-        });
+        scheduled
+            .dedup_by(|left, right| left.position == right.position && left.fluid == right.fluid);
 
         Ok(SavedFluidUpdates {
             topology,
@@ -289,10 +284,7 @@ impl PendingFluidUpdates {
             let position = IVec3::from_array(tick.position);
             validate_saved_position(position)?;
             let fluid_id = saved_fluid_id(fluids, &tick.fluid)?;
-            pending.schedule_at(
-                FluidTickKey { fluid_id, position },
-                tick.remaining_ticks,
-            );
+            pending.schedule_at(FluidTickKey { fluid_id, position }, tick.remaining_ticks);
         }
 
         Ok(pending)
@@ -387,7 +379,12 @@ impl PendingFluidUpdates {
         }
     }
 
-    pub(super) fn schedule_neighborhood(&mut self, fluid_id: FluidId, position: IVec3, due_tick: u64) {
+    pub(super) fn schedule_neighborhood(
+        &mut self,
+        fluid_id: FluidId,
+        position: IVec3,
+        due_tick: u64,
+    ) {
         self.schedule_at(FluidTickKey { fluid_id, position }, due_tick);
         self.schedule_at(
             FluidTickKey {
@@ -429,15 +426,16 @@ impl PendingFluidUpdates {
     }
 }
 
-
 fn fluid_name(fluids: &FluidRegistry, fluid_id: FluidId) -> io::Result<&str> {
     fluids
         .get(fluid_id)
         .map(|definition| definition.id.as_str())
-        .ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("missing fluid definition for saved runtime id {fluid_id}"),
-        ))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("missing fluid definition for saved runtime id {fluid_id}"),
+            )
+        })
 }
 
 fn saved_fluid_id(fluids: &FluidRegistry, fluid: &str) -> io::Result<FluidId> {
@@ -459,8 +457,6 @@ fn validate_saved_position(position: IVec3) -> io::Result<()> {
     Ok(())
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,9 +464,18 @@ mod tests {
     #[test]
     fn wake_queue_round_robins_chunks_and_keeps_local_priority() {
         let mut queue = ChunkFairFluidQueue::default();
-        let a1 = FluidTickKey { fluid_id: 0, position: IVec3::new(1, 2, 3) };
-        let a2 = FluidTickKey { fluid_id: 0, position: IVec3::new(2, 2, 3) };
-        let b1 = FluidTickKey { fluid_id: 0, position: IVec3::new(17, 2, 3) };
+        let a1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
+        let a2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 2, 3),
+        };
+        let b1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(17, 2, 3),
+        };
 
         queue.enqueue(a1);
         queue.enqueue(a2);
@@ -486,10 +491,22 @@ mod tests {
     #[test]
     fn equal_due_fluid_ticks_round_robin_between_chunks() {
         let mut pending = PendingFluidUpdates::default();
-        let a1 = FluidTickKey { fluid_id: 0, position: IVec3::new(1, 2, 3) };
-        let a2 = FluidTickKey { fluid_id: 0, position: IVec3::new(2, 2, 3) };
-        let b1 = FluidTickKey { fluid_id: 0, position: IVec3::new(17, 2, 3) };
-        let b2 = FluidTickKey { fluid_id: 0, position: IVec3::new(18, 2, 3) };
+        let a1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
+        let a2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 2, 3),
+        };
+        let b1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(17, 2, 3),
+        };
+        let b2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(18, 2, 3),
+        };
 
         for key in [a1, a2, b1, b2] {
             pending.schedule_at(key, 10);
@@ -504,7 +521,10 @@ mod tests {
     #[test]
     fn scheduled_fluid_tick_keeps_the_earliest_due_time() {
         let mut pending = PendingFluidUpdates::default();
-        let key = FluidTickKey { fluid_id: 0, position: IVec3::new(4, 5, 6) };
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(4, 5, 6),
+        };
 
         pending.schedule_at(key, 10);
         pending.schedule_at(key, 12);
@@ -518,7 +538,10 @@ mod tests {
     #[test]
     fn future_fluid_tick_is_never_popped_early() {
         let mut pending = PendingFluidUpdates::default();
-        let key = FluidTickKey { fluid_id: 0, position: IVec3::new(2, 3, 4) };
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 3, 4),
+        };
         pending.schedule_at(key, 25);
 
         assert_eq!(pending.pop_due(24), None);
@@ -528,7 +551,10 @@ mod tests {
     #[test]
     fn unloaded_due_tick_is_reactivated_by_chunk_residency() {
         let mut pending = PendingFluidUpdates::default();
-        let key = FluidTickKey { fluid_id: 0, position: IVec3::new(1, 2, 3) };
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
         pending.defer_unloaded(key);
 
         assert_eq!(pending.pop_due(9), None);

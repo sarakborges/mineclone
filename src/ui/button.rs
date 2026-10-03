@@ -21,10 +21,17 @@ const BUTTON_DANGER_PRESSED: Color = theme::DANGER_PRESSED;
 const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
 #[derive(Component, Default)]
-pub struct AsteriaButtonVisual { level: f32 }
+pub struct AsteriaButtonVisual {
+    level: f32,
+}
 
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq)]
-pub enum ButtonVariant { #[default] Normal, Primary, Danger }
+pub enum ButtonVariant {
+    #[default]
+    Normal,
+    Primary,
+    Danger,
+}
 
 impl ButtonVariant {
     pub(crate) fn from_active(active: bool) -> Self {
@@ -46,11 +53,7 @@ type ButtonAnimationQuery<'w, 's> = Query<
     With<Button>,
 >;
 
-pub fn icon_button<A: Component>(
-    action: A,
-    size: f32,
-    variant: ButtonVariant,
-) -> impl Bundle {
+pub fn icon_button<A: Component>(action: A, size: f32, variant: ButtonVariant) -> impl Bundle {
     let (background, border) = button_static_colors(variant);
 
     (
@@ -80,7 +83,11 @@ pub fn button<A: Component>(
     height: f32,
     variant: ButtonVariant,
 ) -> impl Bundle {
-    let flex_grow = if matches!(&width, Val::Auto) { 1.0 } else { 0.0 };
+    let flex_grow = if matches!(&width, Val::Auto) {
+        1.0
+    } else {
+        0.0
+    };
     let (background, border) = button_static_colors(variant);
     let label = button_title_case(label.into());
 
@@ -134,36 +141,77 @@ fn button_static_colors(variant: ButtonVariant) -> (Color, Color) {
     }
 }
 
-pub fn animate_buttons(
-    time: Res<Time<Real>>,
-    mut buttons: ButtonAnimationQuery,
-) {
+pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: ButtonAnimationQuery) {
     let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
     for (interaction, variant, mut visual, mut background, mut border, shadow) in &mut buttons {
-        let target = match interaction { Interaction::None => 0.0, Interaction::Hovered => 1.0, Interaction::Pressed => 2.0 };
+        let target = match interaction {
+            Interaction::None => 0.0,
+            Interaction::Hovered => 1.0,
+            Interaction::Pressed => 2.0,
+        };
         let delta = target - visual.level;
-        if delta.abs() > BUTTON_VISUAL_SETTLE_EPSILON { visual.level += delta * smoothing; } else { visual.level = target; }
+        if delta.abs() > BUTTON_VISUAL_SETTLE_EPSILON {
+            visual.level += delta * smoothing;
+        } else {
+            visual.level = target;
+        }
         let level = visual.level.clamp(0.0, 2.0);
         let (next_background, next_border) = button_colors(level, *variant);
-        if background.0 != next_background { background.0 = next_background; }
+        if background.0 != next_background {
+            background.0 = next_background;
+        }
         let next_border = BorderColor::all(next_border);
-        if *border != next_border { *border = next_border; }
+        if *border != next_border {
+            *border = next_border;
+        }
         if let Some(mut shadow) = shadow {
             let next_shadow = button_shadow(level);
-            if *shadow != next_shadow { *shadow = next_shadow; }
+            if *shadow != next_shadow {
+                *shadow = next_shadow;
+            }
         }
     }
 }
 
 fn button_colors(level: f32, variant: ButtonVariant) -> (Color, Color) {
     match variant {
-        ButtonVariant::Normal => if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_PRIMARY, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) },
-        ButtonVariant::Primary => if level >= 1.5 { (BUTTON_PRIMARY_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_PRIMARY_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_PRIMARY, BUTTON_BORDER_STRONG) },
-        ButtonVariant::Danger => if level >= 1.5 { (BUTTON_DANGER_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_DANGER_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_DANGER, BUTTON_BORDER_STRONG) },
+        ButtonVariant::Normal => {
+            if level >= 1.5 {
+                (BUTTON_PRESSED, BUTTON_BORDER_STRONG)
+            } else if level >= 0.25 {
+                (BUTTON_PRIMARY, BUTTON_BORDER_STRONG)
+            } else {
+                (BUTTON_NORMAL, BUTTON_BORDER)
+            }
+        }
+        ButtonVariant::Primary => {
+            if level >= 1.5 {
+                (BUTTON_PRIMARY_PRESSED, BUTTON_BORDER_STRONG)
+            } else if level >= 0.25 {
+                (BUTTON_PRIMARY_HOVER, BUTTON_BORDER_STRONG)
+            } else {
+                (BUTTON_PRIMARY, BUTTON_BORDER_STRONG)
+            }
+        }
+        ButtonVariant::Danger => {
+            if level >= 1.5 {
+                (BUTTON_DANGER_PRESSED, BUTTON_BORDER_STRONG)
+            } else if level >= 0.25 {
+                (BUTTON_DANGER_HOVER, BUTTON_BORDER_STRONG)
+            } else {
+                (BUTTON_DANGER, BUTTON_BORDER_STRONG)
+            }
+        }
     }
 }
 
 fn button_shadow(level: f32) -> BoxShadow {
     let lift = level.clamp(0.0, 1.0);
-    BoxShadow(vec![ShadowStyle { color: BUTTON_SHADOW, x_offset: px(0), y_offset: px(3.0 - lift), spread_radius: px(0), blur_radius: px(0) }])
+    BoxShadow(vec![ShadowStyle {
+        color: BUTTON_SHADOW,
+        x_offset: px(0),
+        y_offset: px(3.0 - lift),
+        spread_radius: px(0),
+        blur_radius: px(0),
+    }])
 }

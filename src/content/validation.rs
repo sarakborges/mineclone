@@ -24,16 +24,15 @@ pub(super) fn validate_content(content: &LoadedContent) {
             &content.tool_categories,
             &content.tools,
         );
-        block.loot_table.validate_references(
-            &format!("block {}", block.id),
-            |item_id| {
+        block
+            .loot_table
+            .validate_references(&format!("block {}", block.id), |item_id| {
                 content.blocks.get(item_id).is_some()
                     || content.items.get(item_id).is_some()
                     || content.layers.get(item_id).is_some()
                     || content.objects.get(item_id).is_some()
                     || content.tools.get(item_id).is_some()
-            },
-        );
+            });
     }
 
     for object in content.objects.iter() {
@@ -58,16 +57,15 @@ pub(super) fn validate_content(content: &LoadedContent) {
             object.id
         );
         object.validate_references(&content.inventory_categories);
-        object.loot_table.validate_references(
-            &format!("object {}", object.id),
-            |item_id| {
+        object
+            .loot_table
+            .validate_references(&format!("object {}", object.id), |item_id| {
                 content.blocks.get(item_id).is_some()
                     || content.items.get(item_id).is_some()
                     || content.layers.get(item_id).is_some()
                     || content.objects.get(item_id).is_some()
                     || content.tools.get(item_id).is_some()
-            },
-        );
+            });
     }
 
     for layer in content.layers.iter() {
@@ -177,7 +175,10 @@ pub(super) fn validate_content(content: &LoadedContent) {
     for dimension in content.dimensions.iter() {
         dimension.validate_biomes(&content.biomes);
         assert!(
-            content.day_night_cycles.get(&dimension.day_night_cycle).is_some(),
+            content
+                .day_night_cycles
+                .get(&dimension.day_night_cycle)
+                .is_some(),
             "dimension {} references missing day-night cycle {}",
             dimension.id,
             dimension.day_night_cycle

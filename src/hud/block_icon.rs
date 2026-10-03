@@ -4,22 +4,17 @@ use bevy::{
 
 use crate::{
     content::{
-        block::BlockDefinition,
-        block_orientation::BlockOrientation,
+        block::BlockDefinition, block_orientation::BlockOrientation,
         block_shape::block_model_height,
     },
     rendering::{
         block_display::{
-            block_display_face_basis, block_display_face_basis_for_height,
-            block_display_face_shade,
+            block_display_face_basis, block_display_face_basis_for_height, block_display_face_shade,
         },
         block_texture::{block_face_texture_layers, load_block_texture_layer},
         color::color_to_linear_vec4,
     },
-    voxel::{
-        block_face::BlockFace,
-        orientation::source_face_for_oriented_face,
-    },
+    voxel::{block_face::BlockFace, orientation::source_face_for_oriented_face},
 };
 
 const BLOCK_ICON_SHADER_PATH: &str = "shaders/block_icon_material.wgsl";
@@ -139,7 +134,8 @@ impl BlockIconMaterial {
         self.top_overlay_texture = top.overlay;
         self.front_overlay_texture = front.overlay;
         self.right_overlay_texture = right.overlay;
-        self.base_tint_flags = Vec4::new(top.base_dyable, front.base_dyable, right.base_dyable, 0.0);
+        self.base_tint_flags =
+            Vec4::new(top.base_dyable, front.base_dyable, right.base_dyable, 0.0);
         self.overlay_tint_flags = Vec4::new(
             top.overlay_dyable,
             front.overlay_dyable,

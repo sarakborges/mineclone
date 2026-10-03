@@ -1,11 +1,7 @@
 use bevy::{input_focus::InputFocus, prelude::*};
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        state_systems::reset_next_state,
-    },
+    app::{game_state::GameState, pause_state::PauseState, state_systems::reset_next_state},
     player::game_mode::GameMode,
 };
 
@@ -29,7 +25,10 @@ impl GameplayModalState {
     }
 
     const fn unavailable_to_spectator(self) -> bool {
-        matches!(self, Self::Inventory | Self::CharacterInfo | Self::StorageBox)
+        matches!(
+            self,
+            Self::Inventory | Self::CharacterInfo | Self::StorageBox
+        )
     }
 }
 

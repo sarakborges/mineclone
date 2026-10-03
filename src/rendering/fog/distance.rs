@@ -4,14 +4,10 @@ use bevy::prelude::*;
 use bevy::platform::collections::HashSet;
 
 use crate::{
-    player::{
-        PlayerEntity,
-        camera::GameplayWorldCamera,
-    },
+    player::{PlayerEntity, camera::GameplayWorldCamera},
     voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position},
     world::{
-        biome::CurrentBiome,
-        chunk_rendering::ChunkRenderPool,
+        biome::CurrentBiome, chunk_rendering::ChunkRenderPool,
         render_distance::RenderDistanceSettings,
     },
 };
@@ -101,10 +97,9 @@ pub(super) fn update_fog_distance(
     let frontier_center = chunk_coord_from_position(player.translation).xz();
     let player_horizontal = player.translation.xz();
     let biome_fog_distance_multiplier = current_biome_fog_distance_multiplier(&current_biome);
-    let missing_columns_changed =
-        state.render_pool_revision != Some(render_pool_revision)
-            || state.render_distance_chunks != Some(render_distance_chunks)
-            || state.frontier_center != Some(frontier_center);
+    let missing_columns_changed = state.render_pool_revision != Some(render_pool_revision)
+        || state.render_distance_chunks != Some(render_distance_chunks)
+        || state.frontier_center != Some(frontier_center);
 
     if missing_columns_changed {
         collect_missing_columns(
@@ -131,9 +126,8 @@ pub(super) fn update_fog_distance(
     state.biome_fog_distance_multiplier = Some(biome_fog_distance_multiplier);
 
     let (_, target_end) = fog_distances(render_distance_chunks);
-    let guard_end =
-        nearest_missing_column_distance(player_horizontal, &state.missing_columns)
-            .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
+    let guard_end = nearest_missing_column_distance(player_horizontal, &state.missing_columns)
+        .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = minimum_fog_end();
     let end = guard_end
         .map_or(target_end, |guard_end| guard_end.min(target_end))
@@ -189,10 +183,7 @@ fn collect_missing_columns(
     }
 }
 
-fn nearest_missing_column_distance(
-    player: Vec2,
-    missing_columns: &[IVec2],
-) -> Option<f32> {
+fn nearest_missing_column_distance(player: Vec2, missing_columns: &[IVec2]) -> Option<f32> {
     missing_columns
         .iter()
         .copied()
@@ -243,7 +234,10 @@ mod tests {
         assert!(authored_biome_fog_distance_multiplier("asteria:umbral/umbral_reach") < 1.0);
         assert!(authored_biome_fog_distance_multiplier("asteria:umbral/withered_waste") < 1.0);
         assert!(authored_biome_fog_distance_multiplier("asteria:umbral/wraith_grove") < 1.0);
-        assert_eq!(authored_biome_fog_distance_multiplier("asteria:overworld/plains"), 1.0);
+        assert_eq!(
+            authored_biome_fog_distance_multiplier("asteria:overworld/plains"),
+            1.0
+        );
     }
 
     #[test]
@@ -278,11 +272,8 @@ mod tests {
             |column| columns.contains(&column),
             &mut missing,
         );
-        let distance = nearest_missing_column_distance(
-            Vec2::new(8.0, 8.0),
-            &missing,
-        )
-        .expect("missing column should constrain the fog frontier");
+        let distance = nearest_missing_column_distance(Vec2::new(8.0, 8.0), &missing)
+            .expect("missing column should constrain the fog frontier");
 
         assert_eq!(distance, 40.0);
     }

@@ -10,7 +10,7 @@ use bevy::{
 
 use crate::content::object::ObjectCuboidPartDefinition;
 
-use super::color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS};
+use super::color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba};
 
 pub(crate) struct ObjectPrimitivesPlugin;
 
@@ -80,12 +80,7 @@ pub(crate) fn resolve_object_primitive_material(
     material
 }
 
-pub(crate) fn crossed_sprite_mesh(
-    width: f32,
-    height: f32,
-    base_offset: f32,
-    planes: u8,
-) -> Mesh {
+pub(crate) fn crossed_sprite_mesh(width: f32, height: f32, base_offset: f32, planes: u8) -> Mesh {
     let mut buffers = PrimitiveMeshBuffers::with_quad_capacity(usize::from(planes) * 2);
     let half_width = width * 0.5;
     let top = base_offset + height;

@@ -6,8 +6,7 @@ mod storage;
 mod validation;
 
 use std::{
-    fs,
-    io,
+    fs, io,
     path::Path,
     process::Command,
     thread,
@@ -20,16 +19,13 @@ use crate::{content::fluid::FluidRegistry, voxel::world::VoxelWorld};
 
 use self::{
     dimensions::{
-        generation_world_storage_slot_exists, publish_generation_worlds,
-        remove_generation_worlds,
+        generation_world_storage_slot_exists, publish_generation_worlds, remove_generation_worlds,
     },
     generations::{
         RETAINED_GENERATIONS, latest_complete_manifest, newest_restorable_summary,
         prune_old_generations,
     },
-    locking::{
-        acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
-    },
+    locking::{acquire_world_directory_lock, remove_world_directory_lock_file, world_lock},
     snapshot::{SAVE_FORMAT_VERSION, WorldManifest},
     storage::{highest_generation, manifest_name, publish_json, read_json, snapshot_name},
 };
@@ -309,11 +305,7 @@ pub(crate) fn save_world_owned(
     Ok(saved_at)
 }
 
-fn cleanup_unpublished_generation(
-    directory: &Path,
-    generation: u64,
-    snapshot_file: Option<&str>,
-) {
+fn cleanup_unpublished_generation(directory: &Path, generation: u64, snapshot_file: Option<&str>) {
     if let Some(snapshot_file) = snapshot_file
         && let Err(error) = fs::remove_file(directory.join(snapshot_file))
         && error.kind() != io::ErrorKind::NotFound
@@ -411,9 +403,7 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
     Ok(worlds)
 }
 
-pub(crate) fn list_verified_worlds(
-    registries: &PruneRegistries,
-) -> io::Result<Vec<WorldSummary>> {
+pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<Vec<WorldSummary>> {
     let candidates = list_worlds()?;
     let mut verified = Vec::with_capacity(candidates.len());
     for candidate in candidates {

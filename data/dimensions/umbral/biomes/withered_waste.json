@@ -10,7 +10,7 @@
   },
   "surfaceLayers": [
     {
-      "block": "asteria:clay",
+      "block": "asteria:dirt",
       "depth": 2
     },
     {

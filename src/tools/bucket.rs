@@ -7,11 +7,8 @@ use crate::{
         tool_behavior::BUCKET_USE_BEHAVIOR_ID,
     },
     gameplay::availability::world_interaction_available,
-    player::{
-        camera::GameplayWorldCamera, hotbar::PlayerHotbar,
-        viewmodel::ViewModelAnimation,
-    },
-    targeting::{block::BlockTargetingSet, ToolUse},
+    player::{camera::GameplayWorldCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
+    targeting::{ToolUse, block::BlockTargetingSet},
     voxel::{
         edit::VoxelTopologyRuntime,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
@@ -152,7 +149,10 @@ fn handle_bucket_use(
         }
         if !transition_selected_bucket(&mut hotbar, Some(&fluid_definition_id)) {
             let restored = runtime.set_fluid(voxel, Some(collected));
-            debug_assert!(restored.is_some(), "bucket collection rollback must succeed");
+            debug_assert!(
+                restored.is_some(),
+                "bucket collection rollback must succeed"
+            );
             log_gameplay_event(format!(
                 "bucket.reject action=collect fluid={} voxel={:?} reason=inventory_full rollback={}",
                 fluid_definition_id,

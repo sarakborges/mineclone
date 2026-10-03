@@ -55,10 +55,8 @@ fn spawn_held_dynamic_light(
 ) {
     let block_id = hotbar.item_at(hotbar.selected_slot());
     let (intensity, visibility) = held_light_state(block_id, &blocks);
-    terrain_lighting.set_dynamic_light_enabled(
-        &mut shader_buffers,
-        visibility == Visibility::Visible,
-    );
+    terrain_lighting
+        .set_dynamic_light_enabled(&mut shader_buffers, visibility == Visibility::Visible);
 
     for camera in &cameras {
         commands.entity(camera).with_children(|camera| {
@@ -87,10 +85,8 @@ fn sync_held_dynamic_light(
 
     let block_id = hotbar.item_at(hotbar.selected_slot());
     let (intensity, next_visibility) = held_light_state(block_id, &blocks);
-    terrain_lighting.set_dynamic_light_enabled(
-        &mut shader_buffers,
-        next_visibility == Visibility::Visible,
-    );
+    terrain_lighting
+        .set_dynamic_light_enabled(&mut shader_buffers, next_visibility == Visibility::Visible);
 
     for (mut held, mut light, mut visibility) in &mut lights {
         if held.block_id != block_id {
@@ -105,10 +101,7 @@ fn sync_held_dynamic_light(
     }
 }
 
-fn held_light_state(
-    block_id: Option<&'static str>,
-    blocks: &BlockRegistry,
-) -> (f32, Visibility) {
+fn held_light_state(block_id: Option<&'static str>, blocks: &BlockRegistry) -> (f32, Visibility) {
     let emission = block_id
         .and_then(|block_id| blocks.get(block_id))
         .map_or(0, |block| block.light_emission)

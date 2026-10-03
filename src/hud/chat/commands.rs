@@ -59,13 +59,11 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
             ["structure", id] => ParsedLine::Locate("structure", id, None),
             ["structure", id, variation] => match parse_optional_variation(Some(variation)) {
                 Ok(variation) => ParsedLine::Locate("structure", id, variation),
-                Err(()) => ParsedLine::Usage(
-                    "/locate biome <id> | /locate structure <id> [variation]",
-                ),
+                Err(()) => {
+                    ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]")
+                }
             },
-            _ => ParsedLine::Usage(
-                "/locate biome <id> | /locate structure <id> [variation]",
-            ),
+            _ => ParsedLine::Usage("/locate biome <id> | /locate structure <id> [variation]"),
         },
         "/warp" => {
             let (x, z, y, dimension) = match args.as_slice() {
@@ -73,7 +71,8 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
                 [x, z, y, dimension] => (*x, *z, *y, Some(*dimension)),
                 _ => return ParsedLine::Usage("/warp <x> <z> <y> [dimension]"),
             };
-            let (Ok(x), Ok(z), Ok(y)) = (x.parse::<i32>(), z.parse::<i32>(), y.parse::<i32>()) else {
+            let (Ok(x), Ok(z), Ok(y)) = (x.parse::<i32>(), z.parse::<i32>(), y.parse::<i32>())
+            else {
                 return ParsedLine::Usage("/warp <x> <z> <y> [dimension]");
             };
             ParsedLine::Warp(bevy::prelude::IVec3::new(x, y, z), dimension)

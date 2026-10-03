@@ -45,8 +45,8 @@ use commands::{ModifyAction, ParsedLine, parse_line};
 use locate::{ChatLocateContext, PendingLocate, poll_locate_task};
 use placement::ChatPlacementContext;
 use visual::{
-    advance_chat_timeout, rebuild_chat_history, handle_chat_open_structure_file,
-    handle_chat_warp_links, render_autocomplete, scroll_chat_history, scroll_chat_to_bottom,
+    advance_chat_timeout, handle_chat_open_structure_file, handle_chat_warp_links,
+    rebuild_chat_history, render_autocomplete, scroll_chat_history, scroll_chat_to_bottom,
     spawn_chat_ui, sync_chat_visibility,
 };
 
@@ -412,7 +412,8 @@ fn localize_internal_error(
             &[("id", id)],
         );
     }
-    if let Some(id) = message.strip_prefix("Unknown structure, structure group, or structure set: ") {
+    if let Some(id) = message.strip_prefix("Unknown structure, structure group, or structure set: ")
+    {
         return feedback(
             localization,
             language,
@@ -672,11 +673,7 @@ fn interpret_chat_submissions(
                 if let Some(meta_tag) = meta_tag {
                     let mut meta_tags = EntityMetaTags::default();
                     if let Err(error) = meta_tags.add(meta_tag, None) {
-                        chat.append_error(localize_internal_error(
-                            &error,
-                            localization,
-                            language,
-                        ));
+                        chat.append_error(localize_internal_error(&error, localization, language));
                         continue;
                     }
                     let feet = Vec3::new(
@@ -729,11 +726,7 @@ fn interpret_chat_submissions(
                         &[("name", &name), ("position", &position_text)],
                     ));
                 } else {
-                    chat.append_error(localize_internal_error(
-                        &response,
-                        localization,
-                        language,
-                    ));
+                    chat.append_error(localize_internal_error(&response, localization, language));
                 }
             }
             ParsedLine::Place(id, variation) => {
@@ -743,16 +736,13 @@ fn interpret_chat_submissions(
                         "command.place success reference={} variation={:?} response={:?}",
                         id, variation, response
                     ));
-                    chat.append_text(localize_place_success(&response, localization, language)
-                        .unwrap_or_else(|| {
-                            feedback(localization, language, "chat.command.failed", &[])
-                        }));
+                    chat.append_text(
+                        localize_place_success(&response, localization, language).unwrap_or_else(
+                            || feedback(localization, language, "chat.command.failed", &[]),
+                        ),
+                    );
                 } else {
-                    chat.append_error(localize_internal_error(
-                        &response,
-                        localization,
-                        language,
-                    ));
+                    chat.append_error(localize_internal_error(&response, localization, language));
                 }
             }
             ParsedLine::Locate(kind, id, variation) => {
@@ -767,16 +757,13 @@ fn interpret_chat_submissions(
                 };
                 let response = locate.start(kind, id, variation, player_block);
                 if response.starts_with("Locating ") {
-                    chat.append_text(localize_locate_start(&response, localization, language)
-                        .unwrap_or_else(|| {
-                            feedback(localization, language, "chat.command.failed", &[])
-                        }));
+                    chat.append_text(
+                        localize_locate_start(&response, localization, language).unwrap_or_else(
+                            || feedback(localization, language, "chat.command.failed", &[]),
+                        ),
+                    );
                 } else {
-                    chat.append_error(localize_internal_error(
-                        &response,
-                        localization,
-                        language,
-                    ));
+                    chat.append_error(localize_internal_error(&response, localization, language));
                 }
             }
             ParsedLine::Warp(target, dimension) => {
@@ -799,7 +786,8 @@ fn interpret_chat_submissions(
                     ));
                     continue;
                 };
-                let Ok((name, transform, mut health, _, animation)) = content.targets.get_mut(entity)
+                let Ok((name, transform, mut health, _, animation)) =
+                    content.targets.get_mut(entity)
                 else {
                     chat.append_error(feedback(
                         localization,
@@ -815,11 +803,7 @@ fn interpret_chat_submissions(
                 health.damage(current);
                 log_gameplay_event(format!(
                     "entity.damage entity={:?} type=creature id={} source=command_kill amount={:.3} health_before={:.3} health_after=0 position={:?}",
-                    entity,
-                    name,
-                    current,
-                    current,
-                    transform.translation
+                    entity, name, current, current, transform.translation
                 ));
                 log_gameplay_event(format!(
                     "entity.death entity={:?} type=creature id={} source=command_kill position={:?}",
@@ -828,10 +812,12 @@ fn interpret_chat_submissions(
                 if let Some(mut animation) = animation {
                     animation.trigger("death");
                 }
-                commands.entity(entity).insert(CreatureDeathTimer(Timer::from_seconds(
-                    0.75,
-                    TimerMode::Once,
-                )));
+                commands
+                    .entity(entity)
+                    .insert(CreatureDeathTimer(Timer::from_seconds(
+                        0.75,
+                        TimerMode::Once,
+                    )));
                 chat.append_text(feedback(
                     localization,
                     language,
@@ -866,22 +852,12 @@ fn interpret_chat_submissions(
                     ModifyAction::Edit => meta_tags.edit(tag, value.map(str::to_owned)),
                 };
                 if let Err(error) = result {
-                    chat.append_error(localize_internal_error(
-                        &error,
-                        localization,
-                        language,
-                    ));
+                    chat.append_error(localize_internal_error(&error, localization, language));
                     continue;
                 }
                 log_gameplay_event(format!(
                     "entity.modify entity={:?} name={} action={:?} tag={} value={:?} before={:?} after={:?}",
-                    entity,
-                    name,
-                    action,
-                    tag,
-                    value,
-                    before_tags,
-                    meta_tags
+                    entity, name, action, tag, value, before_tags, meta_tags
                 ));
                 let key = match action {
                     ModifyAction::Add => "chat.command.modify.addSuccess",

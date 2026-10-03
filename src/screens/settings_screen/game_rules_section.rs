@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         numeric_input::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
@@ -111,9 +111,9 @@ impl TicksPerSecondEditor<'_> {
         if *self.game_state.get() == GameState::NewWorld {
             let current = self.new_world.game_rules();
             match rule {
-                BooleanGameRuleToggle::SpawnCreatures => {
-                    self.new_world.set_spawn_creatures(!current.spawn_creatures())
-                }
+                BooleanGameRuleToggle::SpawnCreatures => self
+                    .new_world
+                    .set_spawn_creatures(!current.spawn_creatures()),
             }
             return;
         }
@@ -163,7 +163,9 @@ pub(super) fn game_rules_section(
                         },
                         children![
                             typography::setting_title(
-                                localization.text(language, "settings.ticksBySecond").to_owned(),
+                                localization
+                                    .text(language, "settings.ticksBySecond")
+                                    .to_owned(),
                             ),
                             typography::caption(
                                 localization
@@ -245,9 +247,7 @@ fn boolean_rule_setting(
                 },
                 children![
                     typography::setting_title(localization.text(language, title_key).to_owned()),
-                    typography::caption(
-                        localization.text(language, description_key).to_owned(),
-                    ),
+                    typography::caption(localization.text(language, description_key).to_owned(),),
                 ],
             ),
             (

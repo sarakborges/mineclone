@@ -220,10 +220,7 @@ impl Plugin for StorageBoxHudPlugin {
                 OnEnter(GameplayModalState::StorageBox),
                 spawn_storage_box_hud.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(
-                OnExit(GameplayModalState::StorageBox),
-                close_storage_box,
-            )
+            .add_systems(OnExit(GameplayModalState::StorageBox), close_storage_box)
             .add_systems(
                 Update,
                 (
@@ -262,7 +259,8 @@ fn rebuild_storage_box_when_changed(
     roots: Query<Entity, With<StorageBoxHudRoot>>,
     mut context: StorageSpawnContext,
 ) {
-    if !context.storage.is_changed() && !context.hotbar.is_changed() && !context.cursor.is_changed() {
+    if !context.storage.is_changed() && !context.hotbar.is_changed() && !context.cursor.is_changed()
+    {
         return;
     }
 
@@ -644,7 +642,12 @@ fn spawn_player_inventory(
                         for column in 0..HOTBAR_SLOT_COUNT {
                             let index = row * HOTBAR_SLOT_COUNT + column;
                             debug_assert!(index < BACKPACK_SLOT_COUNT);
-                            spawn_player_slot(row_node, index, hotbar.inventory_stack_at(index), items);
+                            spawn_player_slot(
+                                row_node,
+                                index,
+                                hotbar.inventory_stack_at(index),
+                                items,
+                            );
                         }
                     });
             }
@@ -662,7 +665,12 @@ fn spawn_player_inventory(
                 .with_children(|hotbar_row| {
                     for column in 0..HOTBAR_SLOT_COUNT {
                         let index = HOTBAR_INVENTORY_OFFSET + column;
-                        spawn_player_slot(hotbar_row, index, hotbar.inventory_stack_at(index), items);
+                        spawn_player_slot(
+                            hotbar_row,
+                            index,
+                            hotbar.inventory_stack_at(index),
+                            items,
+                        );
                     }
                 });
         });
@@ -994,14 +1002,8 @@ fn style_storage_search_field(
 
 fn style_inventory_search_field(
     view: Res<StorageBoxView>,
-    mut frames: Query<
-        (&mut BackgroundColor, &mut BorderColor),
-        With<StorageInventorySearchFrame>,
-    >,
-    mut placeholders: Query<
-        (&mut Visibility, &mut TextColor),
-        With<StorageInventorySearchText>,
-    >,
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<StorageInventorySearchFrame>>,
+    mut placeholders: Query<(&mut Visibility, &mut TextColor), With<StorageInventorySearchText>>,
 ) {
     let fill = BackgroundColor(text_input::INPUT_FILL);
     let border = BorderColor::all(text_input::input_border(view.inventory_search_focused()));
@@ -1104,10 +1106,7 @@ fn style_player_slots(
 
 fn sync_storage_sort_tooltip(
     buttons: Query<&Interaction, (With<StorageSortButton>, Changed<Interaction>)>,
-    mut tooltip: Single<
-        &mut Visibility,
-        (With<StorageSortTooltip>, Without<StorageSortButton>),
-    >,
+    mut tooltip: Single<&mut Visibility, (With<StorageSortTooltip>, Without<StorageSortButton>)>,
 ) {
     for interaction in &buttons {
         let next = if *interaction == Interaction::None {

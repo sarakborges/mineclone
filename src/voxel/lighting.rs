@@ -17,16 +17,14 @@ use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 
+#[cfg(test)]
+use self::propagation::relax;
 use self::{
     context::LightingContext,
-    medium::{
-        block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells,
-    },
+    medium::{block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells},
     propagation::{LightingChangeSets, LightingRegistries, relax_budgeted},
     queue::LightingQueue,
 };
-#[cfg(test)]
-use self::propagation::relax;
 use super::{
     cell::VoxelCell,
     chunk::CHUNK_SIZE,
@@ -519,13 +517,7 @@ fn initialize_chunk_lighting(
         queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
-    relax(
-        world,
-        blocks,
-        fluids,
-        &secondary_properties,
-        &mut queue,
-    )
+    relax(world, blocks, fluids, &secondary_properties, &mut queue)
 }
 
 #[cfg(test)]

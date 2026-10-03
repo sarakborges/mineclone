@@ -1,8 +1,8 @@
 mod assets;
+mod finalization;
 mod fluids;
 mod generation;
 mod lighting;
-mod finalization;
 mod meshing;
 mod spawning;
 

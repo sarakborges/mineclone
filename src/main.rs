@@ -30,23 +30,23 @@ mod world_objects;
 use bevy_dylib;
 
 use app::{
-    crash_log::{install_crash_logger, log_system_event, mark_clean_shutdown, write_caught_panic},
     controls_state::ControlsState,
+    crash_log::{install_crash_logger, log_system_event, mark_clean_shutdown, write_caught_panic},
     game_config::GameConfigPlugin,
     game_state::GameState,
     pause_state::PauseState,
     runtime_paths::prepare_runtime_directory,
     window_icon::WindowIconPlugin,
 };
-use bevy::{
-    app::{TaskPoolOptions, TaskPoolPlugin},
-    prelude::*,
-    window::PresentMode,
-};
 #[cfg(target_os = "windows")]
 use bevy::render::{
     RenderPlugin,
     settings::{Backends, WgpuSettings},
+};
+use bevy::{
+    app::{TaskPoolOptions, TaskPoolPlugin},
+    prelude::*,
+    window::PresentMode,
 };
 use content::ContentPlugin;
 use creatures::CreaturesPlugin;

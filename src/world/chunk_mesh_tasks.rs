@@ -6,9 +6,7 @@ use std::{
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::voxel::{
-    coordinates::ChunkCoord,
-    mesh_snapshot::ChunkMeshSnapshot,
-    meshlet::ChunkMeshletMask,
+    coordinates::ChunkCoord, mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask,
 };
 
 use super::{
@@ -124,8 +122,7 @@ impl PresentationScheduler {
             .clone();
         let revision = self.revision;
         let content_source = ChunkPresentationSource::capture(coord, &world);
-        let lighting_source =
-            lighting_revisions.capture(coord.as_ivec3(), ChunkMeshletMask::ALL);
+        let lighting_source = lighting_revisions.capture(coord.as_ivec3(), ChunkMeshletMask::ALL);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
             // The meshers now read central voxels directly and build a compact
@@ -142,10 +139,7 @@ impl PresentationScheduler {
         self.pending.insert(coord, revision, task)
     }
 
-    pub(crate) fn cancel_where(
-        &mut self,
-        mut predicate: impl FnMut(IVec3) -> bool,
-    ) -> Vec<IVec3> {
+    pub(crate) fn cancel_where(&mut self, mut predicate: impl FnMut(IVec3) -> bool) -> Vec<IVec3> {
         let started = Instant::now();
         let cancelled = self
             .pending
@@ -199,6 +193,8 @@ impl PresentationScheduler {
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
-        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
+        self.pending
+            .poll_ready()
+            .map(CompletedChunkTask::into_runtime)
     }
 }

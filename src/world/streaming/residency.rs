@@ -1,9 +1,6 @@
 use bevy::{platform::collections::HashSet, prelude::*};
 
-use crate::voxel::{
-    coordinates::ChunkCoord,
-    deduplicated_queue::DeduplicatedQueue,
-};
+use crate::voxel::{coordinates::ChunkCoord, deduplicated_queue::DeduplicatedQueue};
 
 const MAX_RETIRED_SCAN_STEPS_PER_POLL: usize = 64;
 const MAX_RETIRED_RESULTS_BEFORE_YIELD: usize = 16;
@@ -84,10 +81,7 @@ impl RetiredChunkQueue {
             self.scan.remaining = self.queue.len();
         }
 
-        let scan_steps = self
-            .scan
-            .remaining
-            .min(MAX_RETIRED_SCAN_STEPS_PER_POLL);
+        let scan_steps = self.scan.remaining.min(MAX_RETIRED_SCAN_STEPS_PER_POLL);
         for _ in 0..scan_steps {
             let Some(coord) = self.queue.pop() else {
                 self.scan.remaining = 0;
@@ -118,7 +112,10 @@ impl RetiredChunkQueue {
             }
 
             let enqueued = self.queue.enqueue(coord);
-            debug_assert!(enqueued, "scanned retired chunk must re-enter the queue once");
+            debug_assert!(
+                enqueued,
+                "scanned retired chunk must re-enter the queue once"
+            );
             self.scan.queue_revision = self.queue.revision();
         }
 
@@ -243,35 +240,17 @@ mod tests {
         for _ in 0..MAX_RETIRED_RESULTS_BEFORE_YIELD {
             assert!(
                 queue
-                    .pop_outside_horizontal_radius(
-                        revision,
-                        IVec2::ZERO,
-                        0,
-                        &desired,
-                        &retained,
-                    )
+                    .pop_outside_horizontal_radius(revision, IVec2::ZERO, 0, &desired, &retained,)
                     .is_some()
             );
         }
         assert_eq!(
-            queue.pop_outside_horizontal_radius(
-                revision,
-                IVec2::ZERO,
-                0,
-                &desired,
-                &retained,
-            ),
+            queue.pop_outside_horizontal_radius(revision, IVec2::ZERO, 0, &desired, &retained,),
             None,
         );
         assert!(
             queue
-                .pop_outside_horizontal_radius(
-                    revision,
-                    IVec2::ZERO,
-                    0,
-                    &desired,
-                    &retained,
-                )
+                .pop_outside_horizontal_radius(revision, IVec2::ZERO, 0, &desired, &retained,)
                 .is_some()
         );
     }
@@ -311,13 +290,7 @@ mod tests {
         let revision = ResidencySelectionRevision::default();
 
         assert_eq!(
-            queue.pop_outside_horizontal_radius(
-                revision,
-                IVec2::ZERO,
-                0,
-                &desired,
-                &retained,
-            ),
+            queue.pop_outside_horizontal_radius(revision, IVec2::ZERO, 0, &desired, &retained,),
             None,
         );
         assert_eq!(queue.len(), 0);
@@ -346,24 +319,12 @@ mod tests {
         let revision = ResidencySelectionRevision::default();
 
         assert_eq!(
-            queue.pop_outside_horizontal_radius(
-                revision,
-                IVec2::ZERO,
-                4,
-                &desired,
-                &retained,
-            ),
+            queue.pop_outside_horizontal_radius(revision, IVec2::ZERO, 4, &desired, &retained,),
             None,
         );
         queue.enqueue(far);
         assert_eq!(
-            queue.pop_outside_horizontal_radius(
-                revision,
-                IVec2::ZERO,
-                4,
-                &desired,
-                &retained,
-            ),
+            queue.pop_outside_horizontal_radius(revision, IVec2::ZERO, 4, &desired, &retained,),
             Some(far),
         );
     }

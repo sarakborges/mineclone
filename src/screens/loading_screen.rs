@@ -1,9 +1,6 @@
 use bevy::{
-    camera::CameraOutputMode,
-    ecs::system::SystemParam,
-    prelude::*,
-    render::render_resource::BlendState,
-    ui::IsDefaultUiCamera,
+    camera::CameraOutputMode, ecs::system::SystemParam, prelude::*,
+    render::render_resource::BlendState, ui::IsDefaultUiCamera,
 };
 
 use crate::{
@@ -145,13 +142,7 @@ fn setup_loading_screen(
                 }))
                 .with_children(|step_list| {
                     for (index, step) in WorldLoadingStep::ALL.into_iter().enumerate() {
-                        spawn_loading_step_row(
-                            step_list,
-                            &localization,
-                            language,
-                            index + 1,
-                            step,
-                        );
+                        spawn_loading_step_row(step_list, &localization, language, index + 1, step);
                     }
                 });
         });
@@ -294,15 +285,19 @@ fn format_loading_status(
     progress: Option<(usize, usize)>,
 ) -> String {
     match status {
-        WorldLoadingPhaseStatus::Pending => {
-            localization.text(language, "loading.status.pending").to_owned()
-        }
+        WorldLoadingPhaseStatus::Pending => localization
+            .text(language, "loading.status.pending")
+            .to_owned(),
         WorldLoadingPhaseStatus::Active => progress
             .map(|(completed, total)| format!("{completed}/{total}"))
-            .unwrap_or_else(|| localization.text(language, "loading.status.active").to_owned()),
-        WorldLoadingPhaseStatus::Done => {
-            localization.text(language, "loading.status.done").to_owned()
-        }
+            .unwrap_or_else(|| {
+                localization
+                    .text(language, "loading.status.active")
+                    .to_owned()
+            }),
+        WorldLoadingPhaseStatus::Done => localization
+            .text(language, "loading.status.done")
+            .to_owned(),
     }
 }
 
@@ -326,7 +321,9 @@ fn loading_step_label(
         (Language::PortugueseBrazil, WorldLoadingStep::VolumeBiomes) => "Biomas volumétricos",
         (Language::PortugueseBrazil, WorldLoadingStep::DensityField) => "Campo de densidade",
         (Language::PortugueseBrazil, WorldLoadingStep::Materials) => "Rasterização de materiais",
-        (Language::PortugueseBrazil, WorldLoadingStep::InitialFluids) => "Rasterização inicial de fluidos",
+        (Language::PortugueseBrazil, WorldLoadingStep::InitialFluids) => {
+            "Rasterização inicial de fluidos"
+        }
         (Language::PortugueseBrazil, WorldLoadingStep::Structures) => "Estruturas",
         (Language::PortugueseBrazil, WorldLoadingStep::SurfaceObjects) => "Objetos de superfície",
         (Language::PortugueseBrazil, WorldLoadingStep::ChunkIntegration) => "Integração de chunks",
@@ -345,16 +342,24 @@ fn loading_step_label(
                 .to_owned();
         }
         (_, WorldLoadingStep::Lighting) => {
-            return localization.text(language, "loading.phase.lighting").to_owned();
+            return localization
+                .text(language, "loading.phase.lighting")
+                .to_owned();
         }
         (_, WorldLoadingStep::Meshing) => {
-            return localization.text(language, "loading.phase.meshing").to_owned();
+            return localization
+                .text(language, "loading.phase.meshing")
+                .to_owned();
         }
         (_, WorldLoadingStep::Assets) => {
-            return localization.text(language, "loading.phase.assets").to_owned();
+            return localization
+                .text(language, "loading.phase.assets")
+                .to_owned();
         }
         (_, WorldLoadingStep::Finalizing) => {
-            return localization.text(language, "loading.phase.finalizing").to_owned();
+            return localization
+                .text(language, "loading.phase.finalizing")
+                .to_owned();
         }
         (_, WorldLoadingStep::Spawning) => {
             return localization

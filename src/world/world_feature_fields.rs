@@ -95,11 +95,7 @@ impl WorldFeatureFields {
         self.caches.volume_biome_region(coord, factory)
     }
 
-    pub(crate) fn structure_top_y(
-        &self,
-        coord: IVec2,
-        factory: impl FnOnce() -> i32,
-    ) -> i32 {
+    pub(crate) fn structure_top_y(&self, coord: IVec2, factory: impl FnOnce() -> i32) -> i32 {
         self.caches.structure_top_y(coord, factory)
     }
 
@@ -155,19 +151,11 @@ impl WorldFeatureFields {
         origin: IVec3,
         factory: impl FnOnce() -> CachedStructureForest,
     ) -> Arc<CachedStructureForest> {
-        self.caches.connected_structure_forest(
-            biome_id,
-            structure_id,
-            rotation,
-            origin,
-            factory,
-        )
+        self.caches
+            .connected_structure_forest(biome_id, structure_id, rotation, origin, factory)
     }
 
-    pub(crate) fn retain_for_chunks<'a>(
-        &self,
-        desired: impl IntoIterator<Item = &'a IVec3>,
-    ) {
+    pub(crate) fn retain_for_chunks<'a>(&self, desired: impl IntoIterator<Item = &'a IVec3>) {
         let desired = desired.into_iter().copied().collect::<Vec<_>>();
         self.biome_maps.retain_for_chunks(&desired);
         self.caches.retain_for_chunks(&desired);
@@ -192,10 +180,7 @@ impl WorldFeatureFields {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        voxel::chunk::CHUNK_SIZE,
-        world::generation_region::generation_region_coord,
-    };
+    use crate::{voxel::chunk::CHUNK_SIZE, world::generation_region::generation_region_coord};
 
     fn test_fields() -> WorldFeatureFields {
         WorldFeatureFields::new(42)
@@ -301,12 +286,9 @@ mod tests {
         fields.generation_columns(far_chunk.xz(), Vec::new);
         fields.volume_biome_region(near_region, VolumeBiomeRegion::default);
         fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
-        fields.structure_origin_y(
-            "test",
-            StructureRotation::Degrees0,
-            IVec2::ZERO,
-            || Some(64),
-        );
+        fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || {
+            Some(64)
+        });
         fields.structure_origin_y(
             "test",
             StructureRotation::Degrees0,

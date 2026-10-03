@@ -18,7 +18,10 @@ impl ItemMetadata {
         let key = key.into();
         let value = value.into();
         assert!(!key.trim().is_empty(), "item metadata key cannot be empty");
-        assert!(!value.trim().is_empty(), "item metadata value cannot be empty");
+        assert!(
+            !value.trim().is_empty(),
+            "item metadata value cannot be empty"
+        );
         self.values.insert(key, value);
     }
 
@@ -89,7 +92,11 @@ impl ItemStack {
         self
     }
 
-    pub(crate) fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    pub(crate) fn with_metadata(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
         self.metadata.set(key, value);
         self
     }
@@ -252,7 +259,9 @@ mod tests {
         let mut target = ItemStack::new("asteria:pebble").with_quantity(60);
         let incoming = ItemStack::new("asteria:pebble").with_quantity(10);
 
-        let remainder = target.merge_from(incoming).expect("six items should remain");
+        let remainder = target
+            .merge_from(incoming)
+            .expect("six items should remain");
         assert_eq!(target.quantity(), MAX_STACK_SIZE);
         assert_eq!(remainder.quantity(), 6);
     }
@@ -268,9 +277,8 @@ mod tests {
 
     #[test]
     fn quantity_save_uses_detailed_shape() {
-        let value =
-            serde_json::to_value(ItemStack::new("asteria:pebble").with_quantity(4).saved())
-                .unwrap();
+        let value = serde_json::to_value(ItemStack::new("asteria:pebble").with_quantity(4).saved())
+            .unwrap();
 
         assert_eq!(value["id"], "asteria:pebble");
         assert_eq!(value["quantity"], 4);

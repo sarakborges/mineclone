@@ -12,11 +12,7 @@ use crate::{
     world::deterministic::{hash_string, hash_unit, mix_u32_components},
 };
 
-use super::{
-    ChunkGenerationContext,
-    columns::GenerationColumnSample,
-    index::column_index,
-};
+use super::{ChunkGenerationContext, columns::GenerationColumnSample, index::column_index};
 
 pub(super) fn rasterize_surface_objects(
     chunk: &mut VoxelChunk,
@@ -84,8 +80,7 @@ pub(super) fn rasterize_surface_objects(
                             return;
                         }
 
-                        let support_world =
-                            IVec3::new(position.x, support_world_y, position.y);
+                        let support_world = IVec3::new(position.x, support_world_y, position.y);
                         let object = ObjectCell::new(
                             &spawn.object,
                             crate::content::object::ObjectPlacementFace::Top,
@@ -126,14 +121,13 @@ fn visit_spawn_clusters(
                 + IVec2::new(jitter_x, jitter_z);
 
             let count_range = u64::from(spawn.cluster_max - spawn.cluster_min) + 1;
-            let count = spawn.cluster_min
-                + (hash.rotate_left(7) % count_range) as u8;
+            let count = spawn.cluster_min + (hash.rotate_left(7) % count_range) as u8;
 
             for member in 0..count {
                 let member_hash = mix_u32_components(hash.rotate_left(23), [u32::from(member)]);
                 let angle = hash_unit(member_hash.rotate_left(11)) * std::f32::consts::TAU;
-                let radius = hash_unit(member_hash.rotate_left(37)).sqrt()
-                    * spawn.cluster_radius as f32;
+                let radius =
+                    hash_unit(member_hash.rotate_left(37)).sqrt() * spawn.cluster_radius as f32;
                 let offset = Vec2::new(angle.cos(), angle.sin()) * radius;
                 visit(center + offset.round().as_ivec2());
             }

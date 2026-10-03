@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::resource_systems::reset_resource,
-    gameplay::modal::GameplayModalState,
-};
+use crate::{app::resource_systems::reset_resource, gameplay::modal::GameplayModalState};
 
 use super::{
     hotbar::PlayerHotbar,

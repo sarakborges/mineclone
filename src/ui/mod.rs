@@ -2,8 +2,8 @@ pub(crate) mod button;
 pub(crate) mod cosmic_background;
 pub(crate) mod dropdown;
 pub(crate) mod numeric_input;
-pub(crate) mod scrollbar;
 pub(crate) mod screen;
+pub(crate) mod scrollbar;
 pub(crate) mod selectable;
 pub(crate) mod settings;
 pub(crate) mod slider;
@@ -97,7 +97,9 @@ fn pin_ui_font_handles(
         let family = font_context
             .collection
             .family_by_name(&ui_fonts.family)
-            .unwrap_or_else(|| panic!("resolved system UI family disappeared: {}", ui_fonts.family));
+            .unwrap_or_else(|| {
+                panic!("resolved system UI family disappeared: {}", ui_fonts.family)
+            });
         let face = family
             .match_font(
                 text_font.width.into(),
@@ -113,7 +115,12 @@ fn pin_ui_font_handles(
             });
         let data = face
             .load(Some(&mut font_context.context.source_cache))
-            .unwrap_or_else(|| panic!("failed to load system UI font face from {}", ui_fonts.family));
+            .unwrap_or_else(|| {
+                panic!(
+                    "failed to load system UI font face from {}",
+                    ui_fonts.family
+                )
+            });
         let handle = font_assets.add(Font {
             data,
             alias: String::new(),

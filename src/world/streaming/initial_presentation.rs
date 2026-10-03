@@ -4,9 +4,7 @@ use bevy::{
 };
 
 use crate::voxel::{
-    coordinates::ChunkCoord,
-    lighting::DirectLightingSeedResult,
-    meshlet::ChunkMeshletMask,
+    coordinates::ChunkCoord, lighting::DirectLightingSeedResult, meshlet::ChunkMeshletMask,
 };
 
 /// Owns one-time presentation activation state for resident chunks. This is

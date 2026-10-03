@@ -5,8 +5,8 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
     voxel::{
@@ -18,8 +18,7 @@ use crate::{
 };
 
 use super::{
-    biome_field::BiomeField,
-    chunk_rendering::ChunkMeshBuildContext,
+    biome_field::BiomeField, chunk_rendering::ChunkMeshBuildContext,
     chunk_system_params::ChunkContent,
 };
 
@@ -43,10 +42,7 @@ impl ChunkPresentationSource {
         }
     }
 
-    pub(crate) fn capture_center(
-        coord: IVec3,
-        source: &impl ChunkSnapshotSource,
-    ) -> Option<Self> {
+    pub(crate) fn capture_center(coord: IVec3, source: &impl ChunkSnapshotSource) -> Option<Self> {
         let coord = ChunkCoord::from_ivec3(coord);
         Some(Self {
             coord,
@@ -75,10 +71,10 @@ impl ChunkPresentationSource {
         source: &impl ChunkSnapshotSource,
         neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> ChunkMeshletMask {
-        self.mesh_revisions.map_or_else(
-            ChunkMeshletMask::default,
-            |revisions| revisions.initial_catchup_meshlets_with(source, neighbor_is_visible),
-        )
+        self.mesh_revisions
+            .map_or_else(ChunkMeshletMask::default, |revisions| {
+                revisions.initial_catchup_meshlets_with(source, neighbor_is_visible)
+            })
     }
 }
 

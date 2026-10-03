@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::crash_log::log_gameplay_event,
-    player::camera::GameplayCamera,
-};
+use crate::{app::crash_log::log_gameplay_event, player::camera::GameplayCamera};
 
 use super::{CreatureInstance, EntityMetaTags};
 

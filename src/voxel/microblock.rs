@@ -12,11 +12,7 @@ use std::{
 
 use bevy::prelude::*;
 
-use super::{
-    cell::VoxelCell,
-    log_variant::is_hollow_log_id,
-    read::VoxelRead,
-};
+use super::{cell::VoxelCell, log_variant::is_hollow_log_id, read::VoxelRead};
 
 pub(crate) const MICROBLOCK_EDGE: i32 = 8;
 pub(crate) const HOLLOW_LOG_EDGE: i32 = MICROBLOCK_EDGE * 2;
@@ -61,7 +57,9 @@ pub(crate) struct MicroblockMask {
 }
 
 impl MicroblockMask {
-    pub(crate) const EMPTY: Self = Self { layers: [0; LAYERS] };
+    pub(crate) const EMPTY: Self = Self {
+        layers: [0; LAYERS],
+    };
     pub(crate) const FULL: Self = Self {
         layers: [u64::MAX; LAYERS],
     };
@@ -260,7 +258,8 @@ impl MicroblockMask {
     fn decode_saved(encoded: &str) -> Option<(Self, bool)> {
         let transient = encoded.starts_with(TRANSIENT_PREFIX);
         let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
-        if encoded.len() != ENCODED_LENGTH || !encoded.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if encoded.len() != ENCODED_LENGTH || !encoded.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
             return None;
         }
         let mut layers = [0; LAYERS];

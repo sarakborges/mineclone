@@ -26,11 +26,9 @@ pub(crate) fn terrain_array_alpha_signature(
 }
 
 pub(crate) const TERRAIN_TEXTURE_INDEX_BITS: u32 = 8;
-pub(crate) const TERRAIN_TEXTURE_INDEX_MASK: u32 =
-    (1 << TERRAIN_TEXTURE_INDEX_BITS) - 1;
+pub(crate) const TERRAIN_TEXTURE_INDEX_MASK: u32 = (1 << TERRAIN_TEXTURE_INDEX_BITS) - 1;
 const TERRAIN_TEXTURE_NONE_INDEX: u32 = TERRAIN_TEXTURE_INDEX_MASK;
-pub(crate) const TERRAIN_TEXTURE_FLAG_SHIFT: u32 =
-    TERRAIN_TEXTURE_INDEX_BITS * 2;
+pub(crate) const TERRAIN_TEXTURE_FLAG_SHIFT: u32 = TERRAIN_TEXTURE_INDEX_BITS * 2;
 const TERRAIN_TEXTURE_BASE_DYABLE: u32 = 1;
 const TERRAIN_TEXTURE_OVERLAY_DYABLE: u32 = 2;
 const TERRAIN_TEXTURE_WIND_SWAY: u32 = 4;
@@ -73,17 +71,17 @@ impl TerrainTextureTable {
             .iter()
             .enumerate()
             .map(|(index, path)| {
-                let array_index = u16::try_from(index + 1)
-                    .expect("terrain texture array index must fit in u16");
+                let array_index =
+                    u16::try_from(index + 1).expect("terrain texture array index must fit in u16");
                 (path.clone(), array_index)
             })
             .collect();
         let wind_sway_indices = wind_sway_paths
             .iter()
             .map(|path| {
-                *indices.get(path).unwrap_or_else(|| {
-                    panic!("missing terrain wind-sway texture index for {path}")
-                })
+                *indices
+                    .get(path)
+                    .unwrap_or_else(|| panic!("missing terrain wind-sway texture index for {path}"))
             })
             .collect();
 
@@ -108,16 +106,18 @@ impl TerrainTextureTable {
             return None;
         }
 
-        let base = layers.first().map_or(0_u32, |layer| {
-            u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
-                panic!("missing terrain texture index for {}", layer.texture)
-            }))
-        });
-        let overlay = layers.get(1).map_or(TERRAIN_TEXTURE_NONE_INDEX, |layer| {
-            u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
-                panic!("missing terrain texture index for {}", layer.texture)
-            }))
-        });
+        let base =
+            layers.first().map_or(0_u32, |layer| {
+                u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
+                    panic!("missing terrain texture index for {}", layer.texture)
+                }))
+            });
+        let overlay =
+            layers.get(1).map_or(TERRAIN_TEXTURE_NONE_INDEX, |layer| {
+                u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
+                    panic!("missing terrain texture index for {}", layer.texture)
+                }))
+            });
         let mut flags = 0_u32;
         if layers.first().is_some_and(|layer| layer.dyable) {
             flags |= TERRAIN_TEXTURE_BASE_DYABLE;
@@ -133,9 +133,8 @@ impl TerrainTextureTable {
             flags |= TERRAIN_TEXTURE_WIND_SWAY;
         }
 
-        let encoded = base
-            | (overlay << TERRAIN_TEXTURE_INDEX_BITS)
-            | (flags << TERRAIN_TEXTURE_FLAG_SHIFT);
+        let encoded =
+            base | (overlay << TERRAIN_TEXTURE_INDEX_BITS) | (flags << TERRAIN_TEXTURE_FLAG_SHIFT);
         debug_assert!(encoded <= 0x00ff_ffff);
         Some(encoded as f32)
     }

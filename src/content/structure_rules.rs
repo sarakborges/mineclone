@@ -129,9 +129,8 @@ impl StructureRestrictions {
         }
 
         for (index, proximity) in self.proximity.iter().enumerate() {
-            let target_count =
-                usize::from(proximity.target.block.is_some())
-                    + usize::from(proximity.target.fluid.is_some());
+            let target_count = usize::from(proximity.target.block.is_some())
+                + usize::from(proximity.target.fluid.is_some());
             assert_eq!(
                 target_count, 1,
                 "structure {structure_id} restrictions.proximity[{index}].target must define exactly one of block or fluid"

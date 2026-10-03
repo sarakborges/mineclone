@@ -7,10 +7,8 @@ use bevy::prelude::*;
 
 use crate::content::structure::{StructureDefinition, StructureRotation};
 
+use super::super::{ResolvedStructurePlacement, ResolvedStructurePlan, ResolvedStructurePlanPiece};
 use super::geometry::rectangles_overlap;
-use super::super::{
-    ResolvedStructurePlacement, ResolvedStructurePlan, ResolvedStructurePlanPiece,
-};
 
 #[derive(Clone, Copy)]
 pub(crate) struct StructureCandidate<'a> {
@@ -69,8 +67,7 @@ pub(crate) fn resolve_structure_placements<'a>(
         let mut overlapping = Vec::new();
         collect_candidates(direct.minimum, direct.maximum, &mut overlapping);
         for candidate in overlapping {
-            if candidate.priority < direct.priority
-                || !candidates_may_conflict(&candidate, &direct)
+            if candidate.priority < direct.priority || !candidates_may_conflict(&candidate, &direct)
             {
                 continue;
             }
@@ -179,10 +176,7 @@ fn candidates_may_conflict(
         })
 }
 
-fn candidate_order(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> Ordering {
+fn candidate_order(left: &StructureCandidate<'_>, right: &StructureCandidate<'_>) -> Ordering {
     right
         .priority
         .cmp(&left.priority)
@@ -193,33 +187,20 @@ fn candidate_order(
         .then_with(|| left.placement_y.cmp(&right.placement_y))
 }
 
-fn candidate_outranks(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> bool {
+fn candidate_outranks(left: &StructureCandidate<'_>, right: &StructureCandidate<'_>) -> bool {
     candidate_order(left, right) == Ordering::Less
 }
 
-fn same_candidate(
-    left: &StructureCandidate<'_>,
-    right: &StructureCandidate<'_>,
-) -> bool {
+fn same_candidate(left: &StructureCandidate<'_>, right: &StructureCandidate<'_>) -> bool {
     left.placement_id == right.placement_id
         && left.biome_id == right.biome_id
         && left.placement_anchor == right.placement_anchor
         && left.placement_y == right.placement_y
 }
 
-fn candidates_conflict(
-    higher: &StructureCandidate<'_>,
-    lower: &StructureCandidate<'_>,
-) -> bool {
-    rectangles_overlap(
-        higher.minimum,
-        higher.maximum,
-        lower.minimum,
-        lower.maximum,
-    ) && higher.maximum_y >= lower.minimum_y
+fn candidates_conflict(higher: &StructureCandidate<'_>, lower: &StructureCandidate<'_>) -> bool {
+    rectangles_overlap(higher.minimum, higher.maximum, lower.minimum, lower.maximum)
+        && higher.maximum_y >= lower.minimum_y
         && higher.minimum_y <= lower.maximum_y
         && candidates_may_conflict(higher, lower)
 }
@@ -282,20 +263,11 @@ mod tests {
         target_maximum: IVec2,
         candidates: &[StructureCandidate<'a>],
     ) -> Vec<ResolvedStructurePlacement> {
-        resolve_structure_placements(
-            target_minimum,
-            target_maximum,
-            |minimum, maximum, found| {
-                found.extend(candidates.iter().copied().filter(|candidate| {
-                    rectangles_overlap(
-                        candidate.minimum,
-                        candidate.maximum,
-                        minimum,
-                        maximum,
-                    )
-                }));
-            },
-        )
+        resolve_structure_placements(target_minimum, target_maximum, |minimum, maximum, found| {
+            found.extend(candidates.iter().copied().filter(|candidate| {
+                rectangles_overlap(candidate.minimum, candidate.maximum, minimum, maximum)
+            }));
+        })
     }
 
     #[test]
@@ -321,11 +293,7 @@ mod tests {
             ),
         ];
 
-        let resolved = resolve_from_candidates(
-            IVec2::ZERO,
-            IVec2::new(15, 15),
-            &candidates,
-        );
+        let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert!(resolved.is_empty());
     }
@@ -354,11 +322,7 @@ mod tests {
             ),
         ];
 
-        let resolved = resolve_from_candidates(
-            IVec2::ZERO,
-            IVec2::new(15, 15),
-            &candidates,
-        );
+        let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert!(resolved.is_empty());
     }
@@ -388,11 +352,7 @@ mod tests {
             ),
         ];
 
-        let resolved = resolve_from_candidates(
-            IVec2::ZERO,
-            IVec2::new(15, 15),
-            &candidates,
-        );
+        let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].placement_id, "test:lower-placement");
@@ -421,11 +381,7 @@ mod tests {
             ),
         ];
 
-        let resolved = resolve_from_candidates(
-            IVec2::ZERO,
-            IVec2::new(15, 15),
-            &candidates,
-        );
+        let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].placement_id, "test:higher-placement");
@@ -454,11 +410,7 @@ mod tests {
             ),
         ];
 
-        let resolved = resolve_from_candidates(
-            IVec2::ZERO,
-            IVec2::new(15, 15),
-            &candidates,
-        );
+        let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert!(resolved.is_empty());
     }

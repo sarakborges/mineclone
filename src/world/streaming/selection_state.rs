@@ -84,10 +84,7 @@ impl StreamingSelectionState {
         let Some(previous_center) = self.center.map(ChunkCoord::as_ivec3) else {
             return;
         };
-        let delta = IVec2::new(
-            center.x - previous_center.x,
-            center.z - previous_center.z,
-        );
+        let delta = IVec2::new(center.x - previous_center.x, center.z - previous_center.z);
         if delta == IVec2::ZERO {
             return;
         }
@@ -135,12 +132,8 @@ mod tests {
 
     #[test]
     fn forward_preload_direction_tracks_horizontal_chunk_motion() {
-        let mut state = StreamingSelectionState::configured(
-            Some(IVec3::new(4, 2, -3)),
-            IVec2::NEG_Y,
-            12,
-            4,
-        );
+        let mut state =
+            StreamingSelectionState::configured(Some(IVec3::new(4, 2, -3)), IVec2::NEG_Y, 12, 4);
 
         let previous = state.prepare_rebuild(IVec3::new(5, 2, -2), true);
 
@@ -151,12 +144,7 @@ mod tests {
 
     #[test]
     fn warp_selection_disables_forward_preload_direction() {
-        let mut state = StreamingSelectionState::configured(
-            Some(IVec3::ZERO),
-            IVec2::X,
-            12,
-            4,
-        );
+        let mut state = StreamingSelectionState::configured(Some(IVec3::ZERO), IVec2::X, 12, 4);
 
         state.prepare_rebuild(IVec3::new(8, 0, 0), false);
 

@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        block_shape::{is_stackable_layer, STACKABLE_LAYER_HEIGHT},
+        block_shape::{STACKABLE_LAYER_HEIGHT, is_stackable_layer},
     },
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
@@ -26,10 +26,8 @@ use crate::{
 };
 
 use super::{
-    BlockTargetingScene, BlockTargetingVisualSnapshot,
-    block::BlockTargetingSet,
-    placement::placement_voxel,
-    placement_orientation::PlacementOrientation,
+    BlockTargetingScene, BlockTargetingVisualSnapshot, block::BlockTargetingSet,
+    placement::placement_voxel, placement_orientation::PlacementOrientation,
 };
 
 const PREVIEW_OPACITY: f32 = 0.82;
@@ -98,12 +96,7 @@ fn spawn_placement_preview(
     let selected = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .and_then(|block_id| {
-            content
-                .blocks
-                .get(block_id)
-                .map(|block| (block_id, block))
-        });
+        .and_then(|block_id| content.blocks.get(block_id).map(|block| (block_id, block)));
     let block_model = selected
         .map(|(block_id, _)| BlockModel::world(block_id, PREVIEW_OPACITY))
         .unwrap_or_else(|| BlockModel::empty_world(PREVIEW_OPACITY));
@@ -133,8 +126,7 @@ fn spawn_placement_preview(
                             block,
                             &content.asset_server,
                             block_model.opacity(),
-                        )
-                    {
+                        ) {
                         if let Some(mut material_asset) = materials.get_mut(&material) {
                             *material_asset = face_material;
                         }
@@ -145,15 +137,15 @@ fn spawn_placement_preview(
 
                     preview.spawn((
                         PlacementPreviewFace { face, layer_index },
-                        Mesh3d(if selected
-                            .is_some_and(|(block_id, _)| is_hollow_log_id(block_id))
-                        {
-                            content.block_meshes.hollow_world_face(face)
-                        } else if let Some((_, block)) = selected {
-                            content.block_meshes.world_face_for_block(face, block)
-                        } else {
-                            content.block_meshes.world_face(face)
-                        }),
+                        Mesh3d(
+                            if selected.is_some_and(|(block_id, _)| is_hollow_log_id(block_id)) {
+                                content.block_meshes.hollow_world_face(face)
+                            } else if let Some((_, block)) = selected {
+                                content.block_meshes.world_face_for_block(face, block)
+                            } else {
+                                content.block_meshes.world_face(face)
+                            },
+                        ),
                         MeshMaterial3d(material),
                         visibility,
                         NotShadowCaster,
@@ -219,12 +211,10 @@ fn update_placement_preview(
         mut faces,
     } = view;
     let selected_slot = selection.scene.selected_slot();
-    let selected = selection.scene.selected_item().and_then(|block_id| {
-        content
-            .blocks
-            .get(block_id)
-            .map(|block| (block_id, block))
-    });
+    let selected = selection
+        .scene
+        .selected_item()
+        .and_then(|block_id| content.blocks.get(block_id).map(|block| (block_id, block)));
     let Some((block_id, block)) = selected else {
         let block_changed = if root.0.block_id().is_some() {
             root.0.set_block_id(None)
@@ -323,20 +313,20 @@ fn update_placement_preview(
         (voxel, 0.0)
     };
 
-    let facing = block_uses_horizontal_facing(block).then(|| {
-        horizontal_facing_toward_player(voxel, selection.scene.player_translation())
-    });
+    let facing = block_uses_horizontal_facing(block)
+        .then(|| horizontal_facing_toward_player(voxel, selection.scene.player_translation()));
     let rotation = block_rotation(orientation, facing);
     if root.1.rotation != rotation {
         root.1.rotation = rotation;
     }
 
     let horizontal = IVec2::new(voxel.x, voxel.z);
-    let tint_target_changed = tint_target
-        .as_ref()
-        .is_none_or(|(cached_block_id, cached_horizontal)| {
-            *cached_block_id != block_id || *cached_horizontal != horizontal
-        });
+    let tint_target_changed =
+        tint_target
+            .as_ref()
+            .is_none_or(|(cached_block_id, cached_horizontal)| {
+                *cached_block_id != block_id || *cached_horizontal != horizontal
+            });
     if block_changed || stack_changed || content_changed || tint_target_changed {
         let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let tint = content

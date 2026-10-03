@@ -69,7 +69,10 @@ impl ArchivedChunk {
         let mut fluid_cells = Vec::new();
 
         for (index, cell) in block_entries {
-            assert!(index < CHUNK_VOLUME, "archived block index must stay inside the chunk");
+            assert!(
+                index < CHUNK_VOLUME,
+                "archived block index must stay inside the chunk"
+            );
             let palette_index = palette
                 .iter()
                 .position(|candidate| *candidate == cell)
@@ -87,7 +90,10 @@ impl ArchivedChunk {
         }
 
         for (index, order, attached) in layer_entries {
-            assert!(index < CHUNK_VOLUME, "archived layer index must stay inside the chunk");
+            assert!(
+                index < CHUNK_VOLUME,
+                "archived layer index must stay inside the chunk"
+            );
             layers.push(ArchivedLayerCell {
                 voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
                 order: u8::try_from(order).expect("layer order must fit in u8"),
@@ -99,7 +105,10 @@ impl ArchivedChunk {
         layers.sort_unstable_by_key(|layer| (layer.voxel_index, layer.order));
 
         for (index, object) in object_entries {
-            assert!(index < CHUNK_VOLUME, "archived object index must stay inside the chunk");
+            assert!(
+                index < CHUNK_VOLUME,
+                "archived object index must stay inside the chunk"
+            );
             objects.push(ArchivedObjectCell {
                 voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
                 face: object.face.index(),
@@ -112,10 +121,14 @@ impl ArchivedChunk {
         objects.sort_unstable_by_key(|object| object.voxel_index);
 
         for (index, entry) in metadata_entries {
-            assert!(index < CHUNK_VOLUME, "archived metadata index must stay inside the chunk");
+            assert!(
+                index < CHUNK_VOLUME,
+                "archived metadata index must stay inside the chunk"
+            );
             assert!(!entry.is_empty(), "archived block metadata cannot be empty");
             assert!(
-                occupancy[index / u64::BITS as usize] & (1_u64 << (index % u64::BITS as usize)) != 0,
+                occupancy[index / u64::BITS as usize] & (1_u64 << (index % u64::BITS as usize))
+                    != 0,
                 "archived block metadata must have a supporting block"
             );
             metadata.push(ArchivedBlockMetadata {
@@ -132,9 +145,11 @@ impl ArchivedChunk {
         }
 
         for (index, fluid) in fluid_entries {
-            assert!(index < CHUNK_VOLUME, "archived fluid index must stay inside the chunk");
-            fluid_occupancy[index / u64::BITS as usize] |=
-                1_u64 << (index % u64::BITS as usize);
+            assert!(
+                index < CHUNK_VOLUME,
+                "archived fluid index must stay inside the chunk"
+            );
+            fluid_occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
             let palette_index = fluid_palette
                 .iter()
                 .position(|candidate| *candidate == fluid)
@@ -221,10 +236,8 @@ impl ArchivedChunk {
         for (index, attached_layers) in chunk.layer_groups() {
             for (order, attached) in attached_layers.iter().copied().enumerate() {
                 layers.push(ArchivedLayerCell {
-                    voxel_index: u16::try_from(index)
-                        .expect("chunk voxel index must fit in u16"),
-                    order: u8::try_from(order)
-                        .expect("layer order must fit in u8"),
+                    voxel_index: u16::try_from(index).expect("chunk voxel index must fit in u16"),
+                    order: u8::try_from(order).expect("layer order must fit in u8"),
                     face: attached.face.index(),
                     layer_id: attached.cell.layer_id,
                     rotation: rotation_index(attached.cell.texture_rotation),
@@ -269,12 +282,10 @@ impl ArchivedChunk {
             .map(|(index, palette_index)| (index, self.palette[palette_index as usize]))
     }
 
-    pub(crate) fn layer_entries(
-        &self,
-    ) -> impl Iterator<Item = (usize, usize, AttachedLayer)> + '_ {
+    pub(crate) fn layer_entries(&self) -> impl Iterator<Item = (usize, usize, AttachedLayer)> + '_ {
         self.layers.iter().map(|archived| {
-            let face = LayerFace::from_index(archived.face)
-                .expect("archived layer face must be valid");
+            let face =
+                LayerFace::from_index(archived.face).expect("archived layer face must be valid");
             (
                 archived.voxel_index as usize,
                 archived.order as usize,
@@ -362,20 +373,21 @@ impl ArchivedChunk {
     }
 }
 
-fn occupied_indices(
-    occupancy: &[u64; OCCUPANCY_WORDS],
-) -> impl Iterator<Item = usize> + '_ {
-    occupancy.iter().enumerate().flat_map(|(word_index, &word)| {
-        let mut remaining = word;
-        std::iter::from_fn(move || {
-            if remaining == 0 {
-                return None;
-            }
-            let bit = remaining.trailing_zeros() as usize;
-            remaining &= remaining - 1;
-            Some(word_index * u64::BITS as usize + bit)
+fn occupied_indices(occupancy: &[u64; OCCUPANCY_WORDS]) -> impl Iterator<Item = usize> + '_ {
+    occupancy
+        .iter()
+        .enumerate()
+        .flat_map(|(word_index, &word)| {
+            let mut remaining = word;
+            std::iter::from_fn(move || {
+                if remaining == 0 {
+                    return None;
+                }
+                let bit = remaining.trailing_zeros() as usize;
+                remaining &= remaining - 1;
+                Some(word_index * u64::BITS as usize + bit)
+            })
         })
-    })
 }
 
 fn coordinates(index: usize) -> (usize, usize, usize) {

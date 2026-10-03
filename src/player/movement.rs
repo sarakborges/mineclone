@@ -1,8 +1,5 @@
 use bevy::{
-    app::AnimationSystems,
-    ecs::system::SystemParam,
-    prelude::*,
-    transform::TransformSystems,
+    app::AnimationSystems, ecs::system::SystemParam, prelude::*, transform::TransformSystems,
 };
 
 use crate::{

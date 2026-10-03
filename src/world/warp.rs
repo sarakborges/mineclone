@@ -27,9 +27,7 @@ use crate::{
         player_id::LOCAL_PLAYER_ID,
     },
     voxel::{
-        chunk::CHUNK_SIZE,
-        collision::collides_aabb,
-        coordinates::chunk_coord_from_world,
+        chunk::CHUNK_SIZE, collision::collides_aabb, coordinates::chunk_coord_from_world,
         world::VoxelWorld,
     },
 };
@@ -107,12 +105,7 @@ impl WarpSearchState {
 }
 
 fn warp_queue_entry(offset: IVec3) -> Reverse<(i32, i32, i32, i32)> {
-    Reverse((
-        offset.length_squared(),
-        offset.x,
-        offset.y,
-        offset.z,
-    ))
+    Reverse((offset.length_squared(), offset.x, offset.y, offset.z))
 }
 
 fn warp_offset_index(offset: IVec3) -> Option<usize> {
@@ -344,7 +337,8 @@ pub(super) fn resolve_pending_warp(
     }
 
     let search_started = Instant::now();
-    let result = advance_safe_eye_position_search(dimension.runtime.world(), target, &mut pending.search);
+    let result =
+        advance_safe_eye_position_search(dimension.runtime.world(), target, &mut pending.search);
     let search_elapsed = search_started.elapsed();
     if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
         log_gameplay_warn(format!(
@@ -352,7 +346,12 @@ pub(super) fn resolve_pending_warp(
             target,
             pending.search.radius,
             pending.search.frontier.len(),
-            pending.search.visited.iter().filter(|visited| **visited).count(),
+            pending
+                .search
+                .visited
+                .iter()
+                .filter(|visited| **visited)
+                .count(),
             search_elapsed.as_secs_f64() * 1_000.0
         ));
         *slow_search_warned = true;
@@ -367,7 +366,9 @@ pub(super) fn resolve_pending_warp(
             flight.reset_motion();
             gravity.reset_motion();
             swimming.reset_motion();
-            let feet = (destination - Vec3::Y * PLAYER_EYE_HEIGHT).floor().as_ivec3();
+            let feet = (destination - Vec3::Y * PLAYER_EYE_HEIGHT)
+                .floor()
+                .as_ivec3();
             pending.target = None;
             pending.search.reset();
             log_gameplay_event(format!(
@@ -497,12 +498,8 @@ fn candidate_state(world: &VoxelWorld, feet: IVec3) -> CandidateState {
         feet.z as f32 + 0.5,
     );
     let bounds = player_bounds(eye);
-    let minimum = (bounds.0 + Vec3::splat(BOUNDS_EPSILON))
-        .floor()
-        .as_ivec3();
-    let maximum = (bounds.1 - Vec3::splat(BOUNDS_EPSILON))
-        .floor()
-        .as_ivec3();
+    let minimum = (bounds.0 + Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
+    let maximum = (bounds.1 - Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
 
     for y in minimum.y..=maximum.y {
         for z in minimum.z..=maximum.z {

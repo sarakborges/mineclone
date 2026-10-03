@@ -30,11 +30,7 @@
   },
   "surfaceLayers": [
     {
-      "block": "asteria:basalt",
-      "depth": 6
-    },
-    {
-      "block": "asteria:stone"
+      "block": "asteria:basalt"
     }
   ],
   "structures": [],

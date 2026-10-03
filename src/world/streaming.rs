@@ -13,11 +13,7 @@ mod surface_cache;
 
 use std::time::{Duration, Instant};
 
-use bevy::{
-    ecs::system::SystemParam,
-    platform::collections::HashSet,
-    prelude::*,
-};
+use bevy::{ecs::system::SystemParam, platform::collections::HashSet, prelude::*};
 
 use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
@@ -31,6 +27,9 @@ use crate::{
     },
 };
 
+pub(in crate::world) use self::{
+    generation::refill_generation_workers, selection::initial_streaming_chunk_coords,
+};
 use self::{
     generation::{collect_generated_chunks, dispatch_generation_tasks},
     generation_wave::GenerationWaveState,
@@ -45,10 +44,6 @@ use self::{
     selection_state::StreamingSelectionState,
     surface_cache::StreamingSelectionCache,
 };
-pub(in crate::world) use self::{
-    generation::refill_generation_workers,
-    selection::initial_streaming_chunk_coords,
-};
 use super::{
     biome_field::BiomeField,
     chunk_async_work::ChunkAsyncWorkLimiter,
@@ -62,8 +57,8 @@ use super::{
     presentation_snapshot::PresentationLightingRevisions,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
-    work_budget::WorldFrameWorkBudget,
     warp::PendingWarp,
+    work_budget::WorldFrameWorkBudget,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -117,7 +112,8 @@ impl ChunkStreamingState {
     }
 
     fn requeue(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
+        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord)
+        {
             self.pending.enqueue_front(coord);
         }
     }
@@ -159,16 +155,11 @@ impl ChunkStreamingState {
         let movement_direction = self.selection_state.movement_direction();
         let visible_radius = self.selection_state.horizontal_radius();
         let structure_top_chunks = self.selection_cache.structure_top_chunks();
-        let center_structure_top_chunk = structure_top_chunks
-            .get(&center.xz())
-            .copied()
-            .unwrap_or(0);
+        let center_structure_top_chunk =
+            structure_top_chunks.get(&center.xz()).copied().unwrap_or(0);
         let surface_ranges = self.selection_cache.surface_ranges();
-        let prioritize_surface = selection::player_is_above_surface(
-            center,
-            center_structure_top_chunk,
-            surface_ranges,
-        );
+        let prioritize_surface =
+            selection::player_is_above_surface(center, center_structure_top_chunk, surface_ranges);
 
         let (selected, scan) = self.pending.pop_by_priority(selection_revision, |coord| {
             (
@@ -176,10 +167,7 @@ impl ChunkStreamingState {
                     coord,
                     center,
                     visible_radius,
-                    structure_top_chunks
-                        .get(&coord.xz())
-                        .copied()
-                        .unwrap_or(0),
+                    structure_top_chunks.get(&coord.xz()).copied().unwrap_or(0),
                     movement_direction,
                     prioritize_surface,
                     surface_ranges,
@@ -194,7 +182,8 @@ impl ChunkStreamingState {
     }
 
     fn generation_dispatch_work_exists(&self) -> bool {
-        self.generation_wave.dispatch_work_exists(self.pending.len())
+        self.generation_wave
+            .dispatch_work_exists(self.pending.len())
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
@@ -288,8 +277,7 @@ impl ChunkStreamingState {
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.selection_state.center()?;
         let movement_direction = self.selection_state.movement_direction();
-        let (show_radius, _) =
-            chunk_visibility_radii(self.selection_state.horizontal_radius());
+        let (show_radius, _) = chunk_visibility_radii(self.selection_state.horizontal_radius());
         let radius = i64::from(show_radius.max(0));
         let radius_squared = radius * radius;
         let selection_revision = self.residency.revision();
@@ -369,11 +357,9 @@ impl ChunkStreamingState {
         let Some(center) = self.selection_state.center() else {
             return false;
         };
-        let (show_radius, _) =
-            chunk_visibility_radii(self.selection_state.horizontal_radius());
+        let (show_radius, _) = chunk_visibility_radii(self.selection_state.horizontal_radius());
         let renderable = |coord: IVec3| {
-            self.keeps_loaded(coord)
-                && chunk_is_inside_render_radius(center, coord, show_radius)
+            self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, show_radius)
         };
 
         self.ready.values().any(renderable)
@@ -408,16 +394,20 @@ impl ChunkStreamingState {
         let Some(center) = self.selection_state.center() else {
             return (0, 0, 0);
         };
-        let (show_radius, _) =
-            chunk_visibility_radii(self.selection_state.horizontal_radius());
+        let (show_radius, _) = chunk_visibility_radii(self.selection_state.horizontal_radius());
         let renderable = |coord: IVec3| {
-            self.keeps_loaded(coord)
-                && chunk_is_inside_render_radius(center, coord, show_radius)
+            self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, show_radius)
         };
 
         (
-            self.pending.values().filter(|coord| renderable(*coord)).count(),
-            self.ready.values().filter(|coord| renderable(*coord)).count(),
+            self.pending
+                .values()
+                .filter(|coord| renderable(*coord))
+                .count(),
+            self.ready
+                .values()
+                .filter(|coord| renderable(*coord))
+                .count(),
             self.generation_wave
                 .targets()
                 .filter(|coord| renderable(*coord))
@@ -442,8 +432,7 @@ pub(super) fn chunk_load_priority(
     let dz = i64::from(coord.z) - i64::from(center.z);
     let horizontal_distance = dx * dx + dz * dz;
     let total_distance = horizontal_distance + dy * dy;
-    let forward = dx * i64::from(movement_direction.x)
-        + dz * i64::from(movement_direction.y);
+    let forward = dx * i64::from(movement_direction.x) + dz * i64::from(movement_direction.y);
     let directional_band = if movement_direction == IVec2::ZERO || forward == 0 {
         1
     } else if forward > 0 {
@@ -526,13 +515,10 @@ pub(super) fn stream_chunks(
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let warp_center = selection.pending_warp.streaming_center();
-    let player_chunk =
-        warp_center.unwrap_or_else(|| chunk_coord_from_position(feet_position));
+    let player_chunk = warp_center.unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let (horizontal_radius, vertical_radius) = selection
-        .pending_warp
-        .streaming_radii()
-        .unwrap_or_else(|| {
+    let (horizontal_radius, vertical_radius) =
+        selection.pending_warp.streaming_radii().unwrap_or_else(|| {
             (
                 selection.render_distance.chunks(),
                 selection.render_distance.vertical_chunks(),
@@ -687,7 +673,9 @@ pub(super) fn activate_published_chunk_runtime(
         .is_empty();
 
     queues.fluid.reactivate_loaded_chunk(coord, current_tick);
-    queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
+    queues
+        .fluid
+        .enqueue_loaded_fluid_frontier(&work.world, coord);
 
     if chunk_is_empty {
         queues.lighting.enqueue_empty_chunk_relaxation(coord);
@@ -747,7 +735,10 @@ mod tests {
         let forward = IVec3::new(5, 0, 0);
         let critical = IVec3::new(1, 0, 0);
         let mut state = state_with_selection(Some(IVec3::ZERO), IVec2::X, 12);
-        state.residency.desired.extend([background, forward, critical]);
+        state
+            .residency
+            .desired
+            .extend([background, forward, critical]);
         state.ready.enqueue(background);
         state.ready.enqueue(forward);
         state.ready.enqueue(critical);
@@ -855,7 +846,9 @@ mod tests {
         assert_eq!(state.pop_ready(), Some(visible));
 
         assert_eq!(state.pop_ready(), None);
-        state.selection_state.commit_rebuild(IVec3::new(7, 0, 0), 12, 0);
+        state
+            .selection_state
+            .commit_rebuild(IVec3::new(7, 0, 0), 12, 0);
         state.mark_selection_rebuilt();
         assert_eq!(state.pop_ready(), Some(preload_only));
     }
@@ -891,7 +884,9 @@ mod tests {
 
         state.pending.remove(IVec3::X);
         assert!(!state.has_critical_pending());
-        state.selection_state.commit_rebuild(IVec3::new(9, 0, 0), 0, 0);
+        state
+            .selection_state
+            .commit_rebuild(IVec3::new(9, 0, 0), 0, 0);
         assert!(state.has_critical_pending());
     }
 

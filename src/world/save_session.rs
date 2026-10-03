@@ -1,23 +1,16 @@
 use std::{io, time::Instant};
 
-use bevy::{
-    ecs::system::SystemParam,
-    prelude::*,
-    window::WindowCloseRequested,
-};
+use bevy::{ecs::system::SystemParam, prelude::*, window::WindowCloseRequested};
 
 use crate::{
     app::{
-        crash_log::{
-            log_gameplay_error, log_gameplay_event, log_system_error, log_system_event,
-        },
+        crash_log::{log_gameplay_error, log_gameplay_event, log_system_error, log_system_event},
         game_state::GameState,
     },
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
-        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
-        object::ObjectRegistry, tool::ToolRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, fluid::FluidRegistry,
+        item::ItemRegistry, layer::LayerRegistry, object::ObjectRegistry, tool::ToolRegistry,
     },
     creatures::{
         CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature,
@@ -203,13 +196,12 @@ impl WorldSaveEntities<'_, '_> {
     }
 
     fn saved_creatures(&self) -> Vec<SavedCreature> {
-        self.pending_creatures.snapshot(
-            self.creatures
-                .iter()
-                .filter_map(|(instance, transform, health, meta_tags)| {
+        self.pending_creatures
+            .snapshot(self.creatures.iter().filter_map(
+                |(instance, transform, health, meta_tags)| {
                     SavedCreature::from_runtime(instance, transform, health, meta_tags)
-                }),
-        )
+                },
+            ))
     }
 }
 
@@ -269,7 +261,8 @@ impl WorldSaveContext<'_, '_> {
                 }
             })
             .collect::<Vec<_>>();
-        inactive_dimensions.sort_unstable_by(|left, right| left.dimension_id.cmp(&right.dimension_id));
+        inactive_dimensions
+            .sort_unstable_by(|left, right| left.dimension_id.cmp(&right.dimension_id));
 
         WorldSnapshot::capture(SnapshotSource {
             id,
@@ -370,6 +363,9 @@ pub(crate) fn exit_on_window_close_without_gameplay(
         return;
     }
 
-    log_system_event(format!("app.close requested state={:?} save_required=false", state.get()));
+    log_system_event(format!(
+        "app.close requested state={:?} save_required=false",
+        state.get()
+    ));
     app_exit.write(AppExit::Success);
 }

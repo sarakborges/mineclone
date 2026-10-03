@@ -16,14 +16,10 @@ use crate::{
 };
 
 use super::{
-    chunk_async_work::ChunkAsyncWorkLimiter,
-    chunk_generation_tasks::GenerationScheduler,
-    chunk_mesh_tasks::PresentationScheduler,
-    chunk_remesh::ChunkRemeshQueue,
-    chunk_remesh_tasks::ChunkRemeshTasks,
-    chunk_rendering::ChunkRenderPool,
-    streaming::ChunkStreamingState,
-    warp::PendingWarp,
+    chunk_async_work::ChunkAsyncWorkLimiter, chunk_generation_tasks::GenerationScheduler,
+    chunk_mesh_tasks::PresentationScheduler, chunk_remesh::ChunkRemeshQueue,
+    chunk_remesh_tasks::ChunkRemeshTasks, chunk_rendering::ChunkRenderPool,
+    streaming::ChunkStreamingState, warp::PendingWarp,
 };
 
 const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
@@ -170,15 +166,12 @@ fn percentile_micros(sorted: &[u64], percentile: usize) -> u64 {
     if sorted.is_empty() {
         return 0;
     }
-    let rank = (sorted.len().saturating_mul(percentile).saturating_add(99) / 100)
-        .clamp(1, sorted.len());
+    let rank =
+        (sorted.len().saturating_mul(percentile).saturating_add(99) / 100).clamp(1, sorted.len());
     sorted[rank - 1]
 }
 
-pub(super) fn record_frame_time(
-    time: Res<Time<Real>>,
-    mut samples: ResMut<FrameTimeSamples>,
-) {
+pub(super) fn record_frame_time(time: Res<Time<Real>>, mut samples: ResMut<FrameTimeSamples>) {
     let elapsed_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
     samples.record(elapsed_micros);
 }
@@ -191,10 +184,7 @@ pub(super) fn record_main_frame_work(mut samples: ResMut<MainFrameWorkSamples>) 
     let Some(started_at) = samples.started_at.take() else {
         return;
     };
-    let elapsed_micros = started_at
-        .elapsed()
-        .as_micros()
-        .min(u128::from(u64::MAX)) as u64;
+    let elapsed_micros = started_at.elapsed().as_micros().min(u128::from(u64::MAX)) as u64;
     if samples.micros.len() >= FRAME_TIME_SAMPLE_CAPACITY {
         samples.micros.pop_front();
     }
@@ -217,10 +207,7 @@ pub(super) struct SlowFrameContextAssets<'w> {
     samples: ResMut<'w, FrameTimeSamples>,
 }
 
-pub(super) fn record_slow_frame_context(
-    time: Res<Time<Real>>,
-    mut assets: SlowFrameContextAssets,
-) {
+pub(super) fn record_slow_frame_context(time: Res<Time<Real>>, mut assets: SlowFrameContextAssets) {
     let frame_micros = time.delta().as_micros().min(u128::from(u64::MAX)) as u64;
     let (
         stream_pending,
@@ -231,8 +218,7 @@ pub(super) fn record_slow_frame_context(
         _,
     ) = assets.streaming.diagnostic_counts();
     let stream_retired = assets.streaming.diagnostic_retired_count();
-    let (remesh_geometry, remesh_lighting, remesh_fluid) =
-        assets.remesh_queue.diagnostic_counts();
+    let (remesh_geometry, remesh_lighting, remesh_fluid) = assets.remesh_queue.diagnostic_counts();
 
     assets.samples.record_slow_frame(SlowFrameContext {
         frame_micros,
@@ -282,12 +268,7 @@ fn font_atlas_key_diagnostic(font_atlases: &FontAtlasSet) -> FontAtlasKeyDiagnos
         .iter()
         .map(|(&bits, &count)| (bits, count))
         .collect::<Vec<_>>();
-    sizes.sort_unstable_by(|left, right| {
-        right
-            .1
-            .cmp(&left.1)
-            .then_with(|| left.0.cmp(&right.0))
-    });
+    sizes.sort_unstable_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
     let top_sizes = sizes
         .iter()
         .take(FONT_ATLAS_SIZE_SAMPLE_LIMIT)
@@ -413,8 +394,7 @@ pub(super) fn log_render_asset_pressure(
     let async_timings = assets.async_work.take_diagnostics();
     let mesh_tasks = assets.mesh_tasks.pending_count();
     let remesh_tasks = assets.remesh_tasks.pending_count();
-    let (remesh_geometry, remesh_lighting, remesh_fluid) =
-        assets.remesh_queue.diagnostic_counts();
+    let (remesh_geometry, remesh_lighting, remesh_fluid) = assets.remesh_queue.diagnostic_counts();
     let mesh_assets = assets.meshes.len();
     let mesh_overhead = mesh_assets.saturating_sub(pooled_meshes);
     let mut file_images = 0;
@@ -435,12 +415,8 @@ pub(super) fn log_render_asset_pressure(
     let image_assets = assets.images.len();
     let runtime_images = image_assets.saturating_sub(file_images);
     let mut runtime_top_shapes = runtime_image_shapes.into_iter().collect::<Vec<_>>();
-    runtime_top_shapes.sort_by(|left, right| {
-        right
-            .1
-            .cmp(&left.1)
-            .then_with(|| left.0.cmp(&right.0))
-    });
+    runtime_top_shapes
+        .sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
     runtime_top_shapes.truncate(RUNTIME_IMAGE_SHAPE_LIMIT);
     let font_atlas_keys = assets.font_atlases.len();
     let font_atlas_key_diagnostic = font_atlas_key_diagnostic(&assets.font_atlases);

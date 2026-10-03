@@ -106,10 +106,7 @@ pub(crate) fn raycast_micro_voxels(
     }
 }
 
-fn occupied_raycast_cell(
-    world: &impl VoxelRead,
-    fine: IVec3,
-) -> Option<(VoxelCell, IVec3, IVec3)> {
+fn occupied_raycast_cell(world: &impl VoxelRead, fine: IVec3) -> Option<(VoxelCell, IVec3, IVec3)> {
     let voxel = IVec3::new(
         fine.x.div_euclid(HOLLOW_LOG_EDGE),
         fine.y.div_euclid(HOLLOW_LOG_EDGE),

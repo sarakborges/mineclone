@@ -8,8 +8,7 @@ pub const THUMB_SIZE: f32 = 20.0;
 
 const BORDER_WIDTH: f32 = 2.0;
 const THUMB_INSET: f32 = 3.0;
-const THUMB_ENABLED_LEFT: f32 =
-    WIDTH - THUMB_SIZE - (BORDER_WIDTH * 2.0) - THUMB_INSET;
+const THUMB_ENABLED_LEFT: f32 = WIDTH - THUMB_SIZE - (BORDER_WIDTH * 2.0) - THUMB_INSET;
 
 pub fn control(enabled: bool) -> impl Bundle {
     (

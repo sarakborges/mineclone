@@ -81,8 +81,7 @@ impl TimingMetrics {
 
     fn record(&self, elapsed_nanos: u64) {
         self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.total_nanos.fetch_add(elapsed_nanos, Ordering::Relaxed);
         self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
     }
 
@@ -445,7 +444,7 @@ fn percentile_micros(sorted: &[u64], percentile: usize) -> u64 {
     if sorted.is_empty() {
         return 0;
     }
-    let rank = (sorted.len().saturating_mul(percentile).saturating_add(99) / 100)
-        .clamp(1, sorted.len());
+    let rank =
+        (sorted.len().saturating_mul(percentile).saturating_add(99) / 100).clamp(1, sorted.len());
     sorted[rank - 1]
 }

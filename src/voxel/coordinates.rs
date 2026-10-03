@@ -175,16 +175,12 @@ mod tests {
     fn voxel_halo_visits_only_chunks_whose_one_voxel_shell_contains_position() {
         let interior = IVec3::new(4, 20, 6);
         let mut interior_chunks = Vec::new();
-        visit_chunk_coords_whose_voxel_halo_contains(interior, |coord| {
-            interior_chunks.push(coord)
-        });
+        visit_chunk_coords_whose_voxel_halo_contains(interior, |coord| interior_chunks.push(coord));
         assert_eq!(interior_chunks, vec![IVec3::new(0, 1, 0)]);
 
         let corner = IVec3::new(15, 31, 15);
         let mut corner_chunks = Vec::new();
-        visit_chunk_coords_whose_voxel_halo_contains(corner, |coord| {
-            corner_chunks.push(coord)
-        });
+        visit_chunk_coords_whose_voxel_halo_contains(corner, |coord| corner_chunks.push(coord));
         corner_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
 
         let mut expected = Vec::new();

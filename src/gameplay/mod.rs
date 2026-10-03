@@ -1,8 +1,8 @@
 pub(crate) mod availability;
 pub(crate) mod modal;
+mod pause;
 pub(crate) mod random;
 pub(crate) mod storage_box;
-mod pause;
 mod world_crafting;
 
 use bevy::prelude::*;
@@ -10,8 +10,7 @@ use bevy::prelude::*;
 use crate::player::{
     camera::PlayerCameraPlugin, character_info::PlayerCharacterInfoPlugin,
     hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin, model::PlayerModelPlugin,
-    movement::PlayerMovementPlugin, skin_uv::PlayerSkinUvPlugin,
-    viewmodel::PlayerViewModelPlugin,
+    movement::PlayerMovementPlugin, skin_uv::PlayerSkinUvPlugin, viewmodel::PlayerViewModelPlugin,
 };
 use modal::GameplayModalPlugin;
 use pause::PausePlugin;

@@ -90,7 +90,8 @@ fn quantize_layered_surface(height: f32) -> (i32, Option<u8>) {
 
     (
         surface_height,
-        (1..SURFACE_LAYER_STEPS as u8).contains(&layer_count)
+        (1..SURFACE_LAYER_STEPS as u8)
+            .contains(&layer_count)
             .then_some(layer_count),
     )
 }
@@ -213,10 +214,7 @@ fn biome_surface_height(
             let warp_position = position * warp_scale;
             let warp = Vec2::new(
                 fractal_noise(warp_position, seed.rotate_left(7)),
-                fractal_noise(
-                    warp_position + Vec2::new(31.7, -17.9),
-                    seed.rotate_left(43),
-                ),
+                fractal_noise(warp_position + Vec2::new(31.7, -17.9), seed.rotate_left(43)),
             ) * warp_strength;
             let warped = position + warp;
             let phase = (warped.x + warped.y * 0.35) * scale * std::f32::consts::TAU;
@@ -224,9 +222,7 @@ fn biome_surface_height(
             let broad = ((fractal_noise(warped * (scale * 0.55), seed.rotate_left(19)) + 1.0)
                 * 0.5)
                 .clamp(0.0, 1.0);
-            let dune = (wave * 0.72 + broad * 0.28)
-                .clamp(0.0, 1.0)
-                .powf(sharpness);
+            let dune = (wave * 0.72 + broad * 0.28).clamp(0.0, 1.0).powf(sharpness);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(29));
 
             sea_level + base_height + dune * amplitude + detail * detail_amplitude
@@ -253,9 +249,12 @@ fn biome_surface_height(
             let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
             let broad = fractal_noise(position * scale, seed);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
-            sea_level
-                + base_height
-                - depth * strength
+            let channel_broad = fractal_noise(position * (scale * 0.72), seed.rotate_left(7));
+            let channel_detail =
+                fractal_noise(position * (detail_scale * 0.55), seed.rotate_left(47));
+            let channel_distance = (channel_broad + channel_detail * 0.35).abs();
+            let channel_strength = smoothstep(((0.28 - channel_distance) / 0.28).clamp(0.0, 1.0));
+            sea_level + base_height - depth * strength * channel_strength
                 + broad * amplitude
                 + detail * detail_amplitude
         }
@@ -332,27 +331,19 @@ fn biome_surface_height(
             let broad = fractal_noise(position * irregularity_scale, seed.rotate_left(11));
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(37));
             let slope_band = 4.0 * strength * (1.0 - strength);
-            let distorted_strength = (
-                strength
-                    + (broad * irregularity + detail * detail_irregularity) * slope_band
-            )
+            let distorted_strength = (strength
+                + (broad * irregularity + detail * detail_irregularity) * slope_band)
                 .clamp(0.0, 1.0);
 
-            let crater_noise = fractal_noise(
-                position * (irregularity_scale * 1.7),
-                seed.rotate_left(53),
-            );
+            let crater_noise =
+                fractal_noise(position * (irregularity_scale * 1.7), seed.rotate_left(53));
             let crater_start =
                 (1.0 - crater_radius + crater_noise * crater_irregularity).clamp(0.0, 0.99);
             let crater_width = (1.0 - crater_start).max(0.01);
-            let crater_strength = smoothstep(
-                ((distorted_strength - crater_start) / crater_width).clamp(0.0, 1.0),
-            );
+            let crater_strength =
+                smoothstep(((distorted_strength - crater_start) / crater_width).clamp(0.0, 1.0));
 
-            sea_level
-                + base_height
-                + height * distorted_strength
-                - crater_depth * crater_strength
+            sea_level + base_height + height * distorted_strength - crater_depth * crater_strength
         }
     };
 
@@ -389,8 +380,8 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
                     seed ^ 0xc2b2_ae3d_27d4_eb4f,
                 ),
             ) * warp_strength;
-            let value = ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5)
-                .clamp(0.0, 1.0);
+            let value =
+                ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5).clamp(0.0, 1.0);
             let half_edge = edge_width * 0.5;
             let lower = (threshold - half_edge).clamp(0.0, 1.0);
             let upper = (threshold + half_edge).clamp(0.0, 1.0);
@@ -522,8 +513,52 @@ mod tests {
             sharpness: 2.0,
         };
 
-        assert_eq!(height_influence_policy(ocean), HeightInfluencePolicy::LowerOnly);
-        assert_eq!(height_influence_policy(swamp), HeightInfluencePolicy::LowerOnly);
-        assert_eq!(height_influence_policy(mountains), HeightInfluencePolicy::Blend);
+        assert_eq!(
+            height_influence_policy(ocean),
+            HeightInfluencePolicy::LowerOnly
+        );
+        assert_eq!(
+            height_influence_policy(swamp),
+            HeightInfluencePolicy::LowerOnly
+        );
+        assert_eq!(
+            height_influence_policy(mountains),
+            HeightInfluencePolicy::Blend
+        );
+    }
+
+    #[test]
+    fn swamp_terrain_contains_both_channels_and_dry_ground() {
+        let terrain = BiomeTerrain::Swamp {
+            base_height: 1.4,
+            depth: 3.2,
+            amplitude: 0.85,
+            scale: 0.0065,
+            detail_amplitude: 0.45,
+            detail_scale: 0.045,
+        };
+        let mut wet = false;
+        let mut dry = false;
+
+        for z in 0..64 {
+            for x in 0..64 {
+                let height = biome_surface_height(
+                    Vec2::new(x as f32 * 7.0, z as f32 * 7.0),
+                    90,
+                    42,
+                    terrain,
+                    &[],
+                    1.0,
+                );
+                wet |= height < 90.0;
+                dry |= height > 90.5;
+            }
+        }
+
+        assert!(wet, "swamp terrain should carve channels below sea level");
+        assert!(
+            dry,
+            "swamp terrain should retain dry ground between channels"
+        );
     }
 }

@@ -4,8 +4,7 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField, terrain::surface_height,
-        world_feature_fields::WorldFeatureFields,
+        biome_field::BiomeField, terrain::surface_height, world_feature_fields::WorldFeatureFields,
     },
 };
 
@@ -59,12 +58,10 @@ impl StreamingSelectionCache {
     pub(super) fn prune(&mut self, center: IVec2, retention_radius: i32) {
         prune_surface_cache(&mut self.surface_ranges, center, retention_radius);
         let retention_radius_squared = retention_radius * retention_radius;
-        self.surface_support_minimums.retain(|coord, _| {
-            (*coord - center).length_squared() <= retention_radius_squared
-        });
-        self.structure_top_chunks.retain(|coord, _| {
-            (*coord - center).length_squared() <= retention_radius_squared
-        });
+        self.surface_support_minimums
+            .retain(|coord, _| (*coord - center).length_squared() <= retention_radius_squared);
+        self.structure_top_chunks
+            .retain(|coord, _| (*coord - center).length_squared() <= retention_radius_squared);
     }
 
     pub(super) fn adopt_structure_top_chunk(
@@ -95,16 +92,12 @@ pub(super) fn cached_surface_range(
     biome_field: &BiomeField,
     _feature_fields: &WorldFeatureFields,
 ) -> (i32, i32) {
-    *cache.entry(horizontal_chunk).or_insert_with(|| {
-        chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field)
-    })
+    *cache
+        .entry(horizontal_chunk)
+        .or_insert_with(|| chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field))
 }
 
-fn prune_surface_cache(
-    cache: &mut HashMap<IVec2, (i32, i32)>,
-    center: IVec2,
-    preload_radius: i32,
-) {
+fn prune_surface_cache(cache: &mut HashMap<IVec2, (i32, i32)>, center: IVec2, preload_radius: i32) {
     let retention_radius = preload_radius + SURFACE_CACHE_MARGIN_CHUNKS;
     let retention_radius_squared = retention_radius * retention_radius;
     cache.retain(|coord, _| (*coord - center).length_squared() <= retention_radius_squared);
@@ -124,8 +117,7 @@ fn chunk_surface_range(
 
     for z in offsets {
         for x in offsets {
-            let height =
-                surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
+            let height = surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
             minimum = minimum.min(height);
             maximum = maximum.max(height);
         }
@@ -162,7 +154,10 @@ mod tests {
         let mut cache = StreamingSelectionCache::default();
         cache.surface_ranges.insert(horizontal, (80, 95));
 
-        assert_eq!(cache.adopt_structure_top_chunk(horizontal, 8), Some((-1, 5)));
+        assert_eq!(
+            cache.adopt_structure_top_chunk(horizontal, 8),
+            Some((-1, 5))
+        );
         assert_eq!(cache.structure_top_chunk(horizontal), 8);
         assert_eq!(cache.adopt_structure_top_chunk(horizontal, 7), None);
         assert_eq!(cache.structure_top_chunk(horizontal), 8);

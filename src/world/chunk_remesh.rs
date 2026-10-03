@@ -5,10 +5,8 @@ use std::time::{Duration, Instant};
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::voxel::{
-    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
-    mesh_snapshot::ChunkMeshSnapshot,
-    meshlet::ChunkMeshletMask,
-    world::VoxelWorld,
+    coordinates::visit_chunk_coords_whose_voxel_halo_contains, mesh_snapshot::ChunkMeshSnapshot,
+    meshlet::ChunkMeshletMask, world::VoxelWorld,
 };
 
 pub(crate) use self::queue::ChunkRemeshQueue;
@@ -31,8 +29,7 @@ use super::{
         ChunkRemeshPublication, ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
     },
     chunk_rendering::{
-        ChunkRenderPool, apply_built_chunk_fluid_meshlets,
-        apply_built_chunk_geometry_meshlets,
+        ChunkRenderPool, apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
     chunk_visibility::ChunkPresentationSelection,
@@ -91,20 +88,17 @@ pub(super) fn process_chunk_remesh_queue(
     // travel cost scale with backlog outside the frame budget. Keep the full
     // reconciliation only for a revision reset, which indicates a world/
     // streaming lifecycle restart while this system-local state survived.
-    if last_reconciled_selection
-        .is_some_and(|previous| selection_revision < previous)
+    if last_reconciled_selection.is_some_and(|previous| selection_revision < previous)
         && queue.has_background_work()
     {
         queue.retain_resident(&world);
     }
     if *last_reconciled_selection != Some(selection_revision) {
-        for request in tasks.cancel_where(|coord| !presentation_selection.retains_render_mesh(coord)) {
+        for request in
+            tasks.cancel_where(|coord| !presentation_selection.retains_render_mesh(coord))
+        {
             if renderer.pool.contains(request.coord) && world.chunk(request.coord).is_some() {
-                queue.enqueue_task_meshlets_priority(
-                    request.coord,
-                    request.kind,
-                    request.meshlets,
-                );
+                queue.enqueue_task_meshlets_priority(request.coord, request.kind, request.meshlets);
             }
         }
         *last_reconciled_selection = Some(selection_revision);
@@ -220,28 +214,24 @@ fn collect_completed_remesh_tasks(
             &renderer.fluid_materials,
         );
         let applied = match output.meshes {
-            ChunkRemeshTaskMeshes::Geometry(meshes) => {
-                apply_built_chunk_geometry_meshlets(
-                    &mut renderer.commands,
-                    &mut renderer.meshes,
-                    &mut renderer.pool,
-                    coord,
-                    meshes,
-                    meshlets,
-                    &render_context,
-                )
-            }
-            ChunkRemeshTaskMeshes::Fluid(meshes) => {
-                apply_built_chunk_fluid_meshlets(
-                    &mut renderer.commands,
-                    &mut renderer.meshes,
-                    &mut renderer.pool,
-                    coord,
-                    meshes,
-                    meshlets,
-                    &render_context,
-                )
-            }
+            ChunkRemeshTaskMeshes::Geometry(meshes) => apply_built_chunk_geometry_meshlets(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                meshes,
+                meshlets,
+                &render_context,
+            ),
+            ChunkRemeshTaskMeshes::Fluid(meshes) => apply_built_chunk_fluid_meshlets(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                meshes,
+                meshlets,
+                &render_context,
+            ),
         };
         if !applied {
             queue.enqueue_task_priority(coord, kind);

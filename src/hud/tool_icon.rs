@@ -2,10 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        builtin_ids::DYED_PROPERTY_ID,
-        secondary_property::SecondaryPropertyRegistry,
-        tool::ToolDefinition,
-        tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
+        builtin_ids::DYED_PROPERTY_ID, secondary_property::SecondaryPropertyRegistry,
+        tool::ToolDefinition, tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
     localization::Language,
     tools::BrushMode,

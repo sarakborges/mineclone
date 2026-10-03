@@ -17,13 +17,13 @@ use crate::{
 };
 
 use super::{
-    InventoryItemView, InventoryLayoutState,
     super::state::{
         ITEM_ICON_SIZE, InventorySearchBar, InventorySearchFrame, InventorySearchText,
         InventorySlot, InventorySortButton, InventorySortTooltip, InventoryTrashButton,
         PANEL_BORDER_WIDTH, PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT,
         SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
     },
+    InventoryItemView, InventoryLayoutState,
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";

@@ -2,12 +2,12 @@ mod volume;
 
 use bevy::prelude::*;
 
+use self::volume::volume_biome_density_delta;
+pub(crate) use self::volume::volume_biome_surface_depth;
 use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     math::smoothstep,
 };
-use self::volume::volume_biome_density_delta;
-pub(crate) use self::volume::volume_biome_surface_depth;
 
 const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
 const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
@@ -50,15 +50,16 @@ pub(crate) fn sample_density(
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
     );
 
-    base_density + volume_biome_density_delta(
-        base_density,
-        position,
-        volume,
-        context.biome_field,
-        cavern_depth_strength,
-        context.allow_caverns,
-        context.allow_solid_volume,
-    )
+    base_density
+        + volume_biome_density_delta(
+            base_density,
+            position,
+            volume,
+            context.biome_field,
+            cavern_depth_strength,
+            context.allow_caverns,
+            context.allow_solid_volume,
+        )
 }
 
 fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
@@ -88,12 +89,19 @@ mod tests {
     #[test]
     fn cavern_carving_stays_suppressed_close_to_the_surface() {
         assert_eq!(
-            depth_strength(0.0, CAVERN_MINIMUM_SURFACE_DEPTH, CAVERN_FULL_STRENGTH_SURFACE_DEPTH),
+            depth_strength(
+                0.0,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH
+            ),
             0.0
         );
         assert!(
-            depth_strength(16.0, CAVERN_MINIMUM_SURFACE_DEPTH, CAVERN_FULL_STRENGTH_SURFACE_DEPTH)
-                > 0.0
+            depth_strength(
+                16.0,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH
+            ) > 0.0
         );
         assert_eq!(
             depth_strength(

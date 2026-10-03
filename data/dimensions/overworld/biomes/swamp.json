@@ -2,21 +2,21 @@
   "id": "asteria:overworld/swamp",
   "terrain": {
     "type": "swamp",
-    "baseHeight": 0.75,
-    "depth": 1.35,
-    "amplitude": 1.1,
+    "baseHeight": 1.4,
+    "depth": 3.2,
+    "amplitude": 0.85,
     "scale": 0.0065,
-    "detailAmplitude": 0.75,
+    "detailAmplitude": 0.45,
     "detailScale": 0.045
   },
   "surfaceLayers": [
     {
-      "block": "asteria:mud",
+      "block": "asteria:dirt",
       "depth": 2
     },
     {
-      "block": "asteria:dirt",
-      "depth": 3
+      "block": "asteria:mud",
+      "depth": 2
     },
     {
       "block": "asteria:stone"
@@ -157,6 +157,7 @@
       "clusterMax": 5,
       "clusterRadius": 4,
       "groundBlocks": [
+        "asteria:dirt",
         "asteria:mud"
       ]
     }

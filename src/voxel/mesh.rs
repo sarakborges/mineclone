@@ -73,13 +73,10 @@ where
     let mut buffers = MicroMeshBuffers::default();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
-    let active_capacity = chunk
-        .block_count()
-        .min(meshlets.selected_voxel_count());
+    let active_capacity = chunk.block_count().min(meshlets.selected_voxel_count());
     let mut active_sources = Vec::<VoxelMeshSource>::with_capacity(active_capacity);
     let mut active_visuals = Vec::<Option<CellVisual>>::with_capacity(active_capacity);
-    let mut block_visual_indices =
-        SmallVec::<[((usize, usize), usize); 16]>::new();
+    let mut block_visual_indices = SmallVec::<[((usize, usize), usize); 16]>::new();
     let mut block_visuals = Vec::<BlockMeshVisual>::new();
 
     // Resolve selected chunk cells and definitions once. Sparse chunks iterate
@@ -95,11 +92,7 @@ where
             *index
         } else {
             let index = block_visuals.len();
-            block_visuals.push(BlockMeshVisual::new(
-                cell.block_id,
-                block,
-                texture_table,
-            ));
+            block_visuals.push(BlockMeshVisual::new(cell.block_id, block, texture_table));
             block_visual_indices.push((block_key, index));
             index
         };
@@ -182,12 +175,10 @@ where
                 let source = active_sources[source_index];
                 let (u, v) = face_uv(face, x, y, z);
                 let cell = source.cell;
-                let block_visual =
-                    &block_visuals[usize::from(source.block_visual_index)];
+                let block_visual = &block_visuals[usize::from(source.block_visual_index)];
                 let block = block_visual.block;
                 let block_is_transparent = block_visual.is_transparent;
-                let local_voxel =
-                    IVec3::new(x as i32, y as i32, z as i32);
+                let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local_voxel;
                 let geometry_source_face = if cell.orientation == BlockOrientation::Y {
                     face
@@ -195,23 +186,13 @@ where
                     source_face_for_oriented_face(face, cell.orientation)
                 };
                 let source_face = source_face_for_cell_visual(face, cell, block);
-                let neighbor_cell = face_neighbor_cell(
-                    world,
-                    chunk,
-                    local_voxel,
-                    world_voxel,
-                    face,
-                );
+                let neighbor_cell =
+                    face_neighbor_cell(world, chunk, local_voxel, world_voxel, face);
                 let partial_occluder = neighbor_cell
                     .filter(|neighbor| MicroblockMask::has_partial_geometry(*neighbor))
                     .filter(|neighbor| {
                         let definition = block_lookup.get(neighbor.block_id);
-                        occludes(
-                            cell.block_id,
-                            block,
-                            neighbor.block_id,
-                            definition,
-                        )
+                        occludes(cell.block_id, block, neighbor.block_id, definition)
                     });
 
                 if partial_occluder.is_none()
@@ -253,12 +234,7 @@ where
                         block_srgb: source_block_srgb,
                         texture_table,
                     };
-                    emit_neighbor_openings(
-                        &surface,
-                        &mut buffers,
-                        face,
-                        neighbor,
-                    );
+                    emit_neighbor_openings(&surface, &mut buffers, face, neighbor);
                     continue;
                 }
 
@@ -278,19 +254,15 @@ where
                 let material_face = face_visual.material_face;
                 let material_code = face_visual.material_code;
 
-                let uv_rotation = oriented_face_uv_rotation(
-                    face,
-                    cell.orientation,
-                    texture_rotation,
-                );
+                let uv_rotation =
+                    oriented_face_uv_rotation(face, cell.orientation, texture_rotation);
                 // Alpha-cutout is order-independent and safe to merge.
                 // Only true alpha blending must keep independent quads. Greedy
                 // lighting is accepted only when all four quantized vertices
                 // are identical, so the large FaceLighting payload can be
                 // represented by one compact packed value in the plane mask.
                 if !block_visual.alpha_blend
-                    && let Some(packed_lighting) =
-                        pack_uniform_greedy_lighting(lighting)
+                    && let Some(packed_lighting) = pack_uniform_greedy_lighting(lighting)
                 {
                     greedy[u + v * CHUNK_SIZE] = Some(GreedyFace {
                         block_visual_index: source.block_visual_index,
@@ -304,25 +276,14 @@ where
                 }
 
                 let geometry = orient_face_geometry(
-                    face_geometry(
-                        geometry_source_face,
-                        x,
-                        y,
-                        z,
-                        texture_rotation,
-                    ),
+                    face_geometry(geometry_source_face, x, y, z, texture_rotation),
                     cell.orientation,
                     x,
                     y,
                     z,
                 );
                 push_lit_quad(
-                    material_buffer(
-                        &mut buffers,
-                        cell.block_id,
-                        block,
-                        material_face,
-                    ),
+                    material_buffer(&mut buffers, cell.block_id, block, material_face),
                     geometry.vertices,
                     geometry.normal,
                     geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
@@ -332,13 +293,7 @@ where
                 );
             }
 
-            emit_greedy_plane(
-                face,
-                depth,
-                &mut greedy,
-                &block_visuals,
-                &mut buffers,
-            );
+            emit_greedy_plane(face, depth, &mut greedy, &block_visuals, &mut buffers);
         }
     }
 
@@ -428,10 +383,7 @@ impl<'a> BlockMeshVisual<'a> {
                     material_code: texture_table
                         .encoded_layers(block_face_texture_layers(material_face, block))
                         .unwrap_or(0.0),
-                    uses_texture_rotation: face_uses_texture_rotation(
-                        block.rotate_texture,
-                        face,
-                    ),
+                    uses_texture_rotation: face_uses_texture_rotation(block.rotate_texture, face),
                 }
             }),
             is_transparent: block.alpha_blend || block.alpha_cutoff.is_some(),
@@ -531,15 +483,10 @@ fn unpack_greedy_tint(packed: u32) -> [f32; 3] {
 fn pack_uniform_greedy_lighting(lighting: FaceLighting) -> Option<u64> {
     let packed = std::array::from_fn::<u64, 4, _>(|index| {
         let sky = quantize_to_u64(lighting.channels[index][0], 15);
-        let block = lighting.block_srgb[index]
-            .map(|channel| quantize_to_u64(channel, 255));
+        let block = lighting.block_srgb[index].map(|channel| quantize_to_u64(channel, 255));
         let ao = quantize_to_u64(lighting.ambient_occlusion[index], 255);
 
-        sky
-            | (block[0] << 4)
-            | (block[1] << 12)
-            | (block[2] << 20)
-            | (ao << 28)
+        sky | (block[0] << 4) | (block[1] << 12) | (block[2] << 20) | (ao << 28)
     });
 
     packed[1..]
@@ -642,17 +589,14 @@ fn emit_greedy_plane<'a>(
             let v_limit = ((v / CHUNK_MESHLET_EDGE) + 1) * CHUNK_MESHLET_EDGE;
 
             let mut width = 1;
-            while u + width < u_limit
-                && mask[u + width + v * CHUNK_SIZE] == Some(candidate)
-            {
+            while u + width < u_limit && mask[u + width + v * CHUNK_SIZE] == Some(candidate) {
                 width += 1;
             }
 
             let mut height = 1;
             while v + height < v_limit
-                && (u..u + width).all(|column| {
-                    mask[column + (v + height) * CHUNK_SIZE] == Some(candidate)
-                })
+                && (u..u + width)
+                    .all(|column| mask[column + (v + height) * CHUNK_SIZE] == Some(candidate))
             {
                 height += 1;
             }
@@ -663,8 +607,7 @@ fn emit_greedy_plane<'a>(
                 }
             }
 
-            let block_visual =
-                &block_visuals[usize::from(candidate.block_visual_index)];
+            let block_visual = &block_visuals[usize::from(candidate.block_visual_index)];
             push_lit_quad(
                 material_buffer(
                     buffers,
@@ -704,51 +647,28 @@ fn greedy_vertices(
             [d + 1.0, v1, u0],
             [d + 1.0, v1, u1],
         ],
-        BlockFace::Left => [
-            [d, v0, u0],
-            [d, v0, u1],
-            [d, v1, u1],
-            [d, v1, u0],
-        ],
+        BlockFace::Left => [[d, v0, u0], [d, v0, u1], [d, v1, u1], [d, v1, u0]],
         BlockFace::Top => [
             [u0, d + 1.0, v1],
             [u1, d + 1.0, v1],
             [u1, d + 1.0, v0],
             [u0, d + 1.0, v0],
         ],
-        BlockFace::Bottom => [
-            [u0, d, v0],
-            [u1, d, v0],
-            [u1, d, v1],
-            [u0, d, v1],
-        ],
+        BlockFace::Bottom => [[u0, d, v0], [u1, d, v0], [u1, d, v1], [u0, d, v1]],
         BlockFace::Front => [
             [u0, v0, d + 1.0],
             [u1, v0, d + 1.0],
             [u1, v1, d + 1.0],
             [u0, v1, d + 1.0],
         ],
-        BlockFace::Back => [
-            [u1, v0, d],
-            [u0, v0, d],
-            [u0, v1, d],
-            [u1, v1, d],
-        ],
+        BlockFace::Back => [[u1, v0, d], [u0, v0, d], [u0, v1, d], [u1, v1, d]],
     }
 }
 
-fn tiled_uvs(
-    width: usize,
-    height: usize,
-    rotation: TextureRotation,
-) -> [[f32; 2]; 4] {
+fn tiled_uvs(width: usize, height: usize, rotation: TextureRotation) -> [[f32; 2]; 4] {
     let (u_extent, v_extent) = match rotation {
-        TextureRotation::Degrees0 | TextureRotation::Degrees180 => {
-            (width as f32, height as f32)
-        }
-        TextureRotation::Degrees90 | TextureRotation::Degrees270 => {
-            (height as f32, width as f32)
-        }
+        TextureRotation::Degrees0 | TextureRotation::Degrees180 => (width as f32, height as f32),
+        TextureRotation::Degrees90 | TextureRotation::Degrees270 => (height as f32, width as f32),
     };
     rotation.rotate_uvs([
         [0.0, v_extent],
@@ -781,14 +701,10 @@ fn oriented_face_uv_rotation(
         },
     };
 
-    TextureRotation::from_quarter_turn(
-        orientation_turn + texture_rotation as u8,
-    )
+    TextureRotation::from_quarter_turn(orientation_turn + texture_rotation as u8)
 }
 
-fn terrain_batch_sort_key(
-    batch: ChunkTerrainBatch,
-) -> (u8, u8, u32, bool, &'static str, u8, bool) {
+fn terrain_batch_sort_key(batch: ChunkTerrainBatch) -> (u8, u8, u32, bool, &'static str, u8, bool) {
     match batch {
         ChunkTerrainBatch::Array {
             alpha_cutoff,
@@ -807,15 +723,7 @@ fn terrain_batch_sort_key(
             block_id,
             face,
             casts_shadow,
-        } => (
-            1,
-            0,
-            0,
-            false,
-            block_id,
-            face_sort_key(face),
-            casts_shadow,
-        ),
+        } => (1, 0, 0, false, block_id, face_sort_key(face), casts_shadow),
     }
 }
 
@@ -840,7 +748,6 @@ fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace)
         BlockFace::Back => rotations.back,
     }
 }
-
 
 #[cfg(test)]
 mod tests {

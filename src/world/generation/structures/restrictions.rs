@@ -9,8 +9,7 @@ use crate::{
         },
     },
     world::{
-        biome_field::BiomeFieldSample,
-        new_world::WorldGenerationMode,
+        biome_field::BiomeFieldSample, new_world::WorldGenerationMode,
         terrain::surface_height_from_sample,
     },
 };
@@ -181,13 +180,9 @@ fn proximity_rule_satisfied(
                     distance_squared >= i64::from(minimum) * i64::from(minimum)
                 })
         }
-        StructureProximityMode::Forbidden => !target_exists_in_annulus(
-            anchor,
-            minimum,
-            rule.max_distance,
-            &rule.target,
-            context,
-        ),
+        StructureProximityMode::Forbidden => {
+            !target_exists_in_annulus(anchor, minimum, rule.max_distance, &rule.target, context)
+        }
     }
 }
 
@@ -258,10 +253,7 @@ fn proximity_target_matches(
     unreachable!("validated proximity target must define block or fluid")
 }
 
-pub(super) fn surface_has_fluid(
-    position: IVec2,
-    context: &ChunkGenerationContext<'_>,
-) -> bool {
+pub(super) fn surface_has_fluid(position: IVec2, context: &ChunkGenerationContext<'_>) -> bool {
     if context.world_generation.mode() != WorldGenerationMode::Normal {
         return false;
     }

@@ -70,12 +70,18 @@ pub(crate) struct DimensionEntityCounts {
 }
 
 impl DimensionEntityCounts {
-    pub(crate) fn rebuild<'a>(&mut self, creatures: impl Iterator<Item = &'a crate::creatures::CreatureInstance>) {
+    pub(crate) fn rebuild<'a>(
+        &mut self,
+        creatures: impl Iterator<Item = &'a crate::creatures::CreatureInstance>,
+    ) {
         self.total = 0;
         self.entities.clear();
         for creature in creatures {
             self.total += 1;
-            *self.entities.entry(creature.definition_id.clone()).or_default() += 1;
+            *self
+                .entities
+                .entry(creature.definition_id.clone())
+                .or_default() += 1;
         }
     }
 

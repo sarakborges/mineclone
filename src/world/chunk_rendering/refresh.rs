@@ -2,16 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     voxel::{fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask},
-    world::render_work_diagnostics::{
-        PresentationPublicationStage, PresentationPublicationTimer,
-    },
+    world::render_work_diagnostics::{PresentationPublicationStage, PresentationPublicationTimer},
 };
 
 use super::{
     ChunkRenderContext,
-    pool::{
-        ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts,
-    },
+    pool::{ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts},
     spawn::{
         BuiltChunkMesh, mesh_asset_bytes, spawn_chunk_mesh,
         spawn_fluid_meshes_into_existing_allocation, spawn_terrain_meshes_into_existing_allocation,
@@ -86,12 +82,8 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
         .map(|built| mesh_asset_bytes(built.mesh()))
         .sum();
 
-    if render_pool.replace_terrain_mesh_assets(
-        coord,
-        meshes,
-        &mut built_meshes,
-        terrain_mesh_bytes,
-    ) {
+    if render_pool.replace_terrain_mesh_assets(coord, meshes, &mut built_meshes, terrain_mesh_bytes)
+    {
         return;
     }
 
@@ -133,14 +125,7 @@ pub(crate) fn apply_built_chunk_fluid_meshlets(
     let _publication_timer =
         PresentationPublicationTimer::start(PresentationPublicationStage::RemeshApply);
     if meshlets.is_all() {
-        apply_built_chunk_fluid_meshes(
-            commands,
-            meshes,
-            render_pool,
-            coord,
-            fluid_meshes,
-            context,
-        );
+        apply_built_chunk_fluid_meshes(commands, meshes, render_pool, coord, fluid_meshes, context);
         return true;
     }
 
@@ -168,12 +153,7 @@ pub(crate) fn apply_built_chunk_fluid_meshes(
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
         .sum();
 
-    if render_pool.replace_fluid_mesh_assets(
-        coord,
-        meshes,
-        &mut fluid_meshes,
-        fluid_mesh_bytes,
-    ) {
+    if render_pool.replace_fluid_mesh_assets(coord, meshes, &mut fluid_meshes, fluid_mesh_bytes) {
         return;
     }
 

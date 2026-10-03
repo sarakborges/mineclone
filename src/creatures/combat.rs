@@ -8,9 +8,7 @@ use crate::{
 };
 
 use super::{
-    CreatureInstance, EntityMetaTags,
-    lifecycle::CreatureDeathTimer,
-    motion::CreatureMotion,
+    CreatureInstance, EntityMetaTags, lifecycle::CreatureDeathTimer, motion::CreatureMotion,
     visual::CreatureAnimationState,
 };
 

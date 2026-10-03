@@ -6,10 +6,8 @@ use crate::{
 };
 
 use super::{
+    super::{InitialLightingRelaxation, WorldLoadingPhase, system_params::WorldSetupProgress},
     INITIAL_LOADING_BUDGET,
-    super::{
-        InitialLightingRelaxation, WorldLoadingPhase, system_params::WorldSetupProgress,
-    },
 };
 
 const INITIAL_LIGHTING_RELAXATION_BATCH: usize = 8;
@@ -27,13 +25,7 @@ pub(super) fn light_initial_chunks(
         return;
     }
 
-    settle_initial_lighting(
-        content,
-        progress,
-        lighting,
-        changed_chunks,
-        &mut budget,
-    );
+    settle_initial_lighting(content, progress, lighting, changed_chunks, &mut budget);
 }
 
 fn seed_initial_direct_lighting(

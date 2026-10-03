@@ -9,7 +9,7 @@ use crate::{
     },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -111,14 +111,18 @@ fn spawn_pause_menu(
                     },
                     children![
                         button(
-                            localization.text(language, "settings.section.worldSettings").to_owned(),
+                            localization
+                                .text(language, "settings.section.worldSettings")
+                                .to_owned(),
                             PauseMenuAction::WorldSettings,
                             px(174),
                             COMPACT_CONTROL_HEIGHT,
                             ButtonVariant::Normal,
                         ),
                         button(
-                            localization.text(language, "common.gameSettings").to_owned(),
+                            localization
+                                .text(language, "common.gameSettings")
+                                .to_owned(),
                             PauseMenuAction::GameSettings,
                             px(174),
                             COMPACT_CONTROL_HEIGHT,
@@ -178,15 +182,21 @@ fn handle_pause_menu_buttons(
         }
         match action {
             PauseMenuAction::Resume => {
-                context.transition.request(ScreenTransitionTarget::pause(PauseState::Running));
+                context
+                    .transition
+                    .request(ScreenTransitionTarget::pause(PauseState::Running));
             }
             PauseMenuAction::WorldSettings => {
                 *context.settings_mode = SettingsScreenMode::World;
-                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+                context
+                    .transition
+                    .request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::GameSettings => {
                 *context.settings_mode = SettingsScreenMode::Game;
-                context.transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+                context
+                    .transition
+                    .request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::Controls => {
                 context

@@ -5,11 +5,7 @@ use bevy::prelude::*;
 use crate::{
     creatures::PendingCreatureRestores,
     gameplay::storage_box::StorageBoxStorage,
-    player::{
-        game_mode::GameMode,
-        hotbar::PlayerHotbar,
-        player_id::LOCAL_PLAYER_ID,
-    },
+    player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     voxel::world::VoxelWorld,
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,

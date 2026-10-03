@@ -4,16 +4,10 @@ use serde::Deserialize;
 use crate::localization::{Language, LocalizedText, UiLocalization};
 
 use super::{
-    asset_path::is_safe_relative_asset_path,
-    block::BlockRegistry,
-    builtin_ids::BUCKET_FLUID_METADATA_KEY,
-    fluid::FluidRegistry,
-    inventory_category::InventoryCategoryRegistry,
-    item_id::intern_item_id,
-    layer::LayerRegistry,
-    object::ObjectRegistry,
-    registry::DefinitionMap,
-    tool::ToolRegistry,
+    asset_path::is_safe_relative_asset_path, block::BlockRegistry,
+    builtin_ids::BUCKET_FLUID_METADATA_KEY, fluid::FluidRegistry,
+    inventory_category::InventoryCategoryRegistry, item_id::intern_item_id, layer::LayerRegistry,
+    object::ObjectRegistry, registry::DefinitionMap, tool::ToolRegistry,
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";

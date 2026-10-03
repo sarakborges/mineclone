@@ -10,11 +10,7 @@ use bevy::{
 
 use crate::{
     content::{block::BlockDefinition, player::PlayerDefinition},
-    player::{
-        apply_player_skin_material,
-        camera::GameplayCamera,
-        hotbar::PlayerHotbar,
-    },
+    player::{apply_player_skin_material, camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
             BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
@@ -143,8 +139,8 @@ pub(super) fn spawn_viewmodel(
     for (camera, camera_transform) in &cameras {
         let selected_slot = selection.hotbar.selected_slot();
         let selected_item_id = selection.hotbar.item_at(selected_slot);
-        let selected_block_id = selected_item_id
-            .filter(|block_id| definitions.blocks.get(block_id).is_some());
+        let selected_block_id =
+            selected_item_id.filter(|block_id| definitions.blocks.get(block_id).is_some());
         item_switch.initialize(selected_item_id);
 
         let item_visibility = item_visibility(selected_block_id);
@@ -290,15 +286,12 @@ fn configure_viewmodel_arm_scene(
         return;
     };
 
-    let Some(arm_root) = descendants
-        .iter_descendants(ready.entity)
-        .find(|entity| {
-            assets
-                .names
-                .get(*entity)
-                .is_ok_and(|name| name.as_str() == "RightArmPivot")
-        })
-    else {
+    let Some(arm_root) = descendants.iter_descendants(ready.entity).find(|entity| {
+        assets
+            .names
+            .get(*entity)
+            .is_ok_and(|name| name.as_str() == "RightArmPivot")
+    }) else {
         warn!("player model is missing RightArmPivot for the first-person arm");
         return;
     };
@@ -328,9 +321,7 @@ fn configure_viewmodel_arm_scene(
         {
             apply_player_skin_material(&mut material, &assets.asset_server);
             let material = assets.materials.add(material);
-            commands
-                .entity(descendant)
-                .insert(MeshMaterial3d(material));
+            commands.entity(descendant).insert(MeshMaterial3d(material));
         }
     }
 
@@ -450,8 +441,7 @@ fn held_block_face_material(
     layer_index: usize,
     opacity: f32,
 ) -> Option<BlockModelMaterial> {
-    let mut material =
-        block_face_material_data(face, layer_index, block, asset_server, opacity)?;
+    let mut material = block_face_material_data(face, layer_index, block, asset_server, opacity)?;
     apply_block_display_shading(&mut material, face, opacity);
     Some(material)
 }

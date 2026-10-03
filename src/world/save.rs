@@ -5,8 +5,7 @@ use bevy::prelude::*;
 use crate::player::{game_mode::GameMode, player_id::PlayerId, save::PlayerSaveData};
 
 use super::{
-    DEFAULT_BIOME_SIZE_MULTIPLIER, WorldGenerationSettings, game_rules::GameRules,
-    seed::WorldSeed,
+    DEFAULT_BIOME_SIZE_MULTIPLIER, WorldGenerationSettings, game_rules::GameRules, seed::WorldSeed,
 };
 
 #[derive(Debug, Resource, Clone, Copy, Default, PartialEq, Eq)]
@@ -50,7 +49,9 @@ impl InMemoryWorldSave {
     }
 
     pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
-        self.players.get(&player_id).and_then(PlayerSaveData::position)
+        self.players
+            .get(&player_id)
+            .and_then(PlayerSaveData::position)
     }
 
     pub fn player_game_mode(&self, player_id: PlayerId) -> GameMode {
@@ -61,7 +62,9 @@ impl InMemoryWorldSave {
     }
 
     pub(crate) fn player_health(&self, player_id: PlayerId) -> Option<f32> {
-        self.players.get(&player_id).and_then(PlayerSaveData::health)
+        self.players
+            .get(&player_id)
+            .and_then(PlayerSaveData::health)
     }
 
     pub(crate) fn player_look(&self, player_id: PlayerId) -> Option<(f32, f32)> {
@@ -92,11 +95,7 @@ impl InMemoryWorldSave {
         self.players.clear();
     }
 
-    pub(crate) fn prepare_dimension_warp(
-        &mut self,
-        dimension_id: &str,
-        spawn_biome: Option<&str>,
-    ) {
+    pub(crate) fn prepare_dimension_warp(&mut self, dimension_id: &str, spawn_biome: Option<&str>) {
         assert!(self.has_world(), "dimension warp requires an active world");
         self.dimension_id = Some(dimension_id.to_owned());
         self.spawn_biome = spawn_biome.map(str::to_owned);

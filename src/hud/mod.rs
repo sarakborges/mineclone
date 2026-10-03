@@ -1,10 +1,11 @@
 mod block_icon;
-pub(crate) mod chat;
 mod character_info;
+pub(crate) mod chat;
 mod crafting;
 mod crosshair;
 mod entity_card;
 mod entity_targeting;
+mod fluid_immersion;
 mod fps;
 mod hotbar;
 mod inventory;
@@ -15,31 +16,28 @@ mod storage_box;
 mod targeting;
 mod time;
 mod tool_icon;
-mod fluid_immersion;
 mod world;
 
 use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
-use chat::ChatHudPlugin;
 use character_info::CharacterInfoHudPlugin;
+use chat::ChatHudPlugin;
 use crafting::CraftingHudPlugin;
 use crosshair::CrosshairPlugin;
 use entity_targeting::EntityHudPlugin;
+use fluid_immersion::FluidImmersionTintPlugin;
 use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
 use inventory::InventoryHudPlugin;
 use player::PlayerHudPlugin;
+use serde::{Deserialize, Serialize};
 use storage_box::StorageBoxHudPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
-use fluid_immersion::FluidImmersionTintPlugin;
 use world::WorldHudPlugin;
 
 use crate::{
-    app::game_state::GameState,
-    player::game_mode::GameMode,
-    targeting::block::BlockTargetingSet,
+    app::game_state::GameState, player::game_mode::GameMode, targeting::block::BlockTargetingSet,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -247,9 +245,6 @@ impl Plugin for HudPlugin {
     }
 }
 
-fn sync_spectator_hud_override(
-    game_mode: Single<&GameMode>,
-    mut settings: ResMut<HudSettings>,
-) {
+fn sync_spectator_hud_override(game_mode: Single<&GameMode>, mut settings: ResMut<HudSettings>) {
     settings.set_spectator_override(game_mode.is_spectator());
 }

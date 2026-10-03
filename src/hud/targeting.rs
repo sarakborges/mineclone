@@ -40,7 +40,10 @@ pub struct TargetHudPlugin;
 impl Plugin for TargetHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_target_hud)
-            .add_systems(OnEnter(PauseState::Paused), set_visibility::<TargetHudRoot, false>.run_if(in_state(GameState::Gameplay)))
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<TargetHudRoot, false>.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 Update,
                 sync_target_hud_layout.run_if(in_state(GameState::Gameplay)),
@@ -448,11 +451,8 @@ fn update_target_hud(
         }
 
         let mut target_text = target_text.into_inner();
-        let next_text = target_fluid_hud_text(
-            &snapshot,
-            content.fluids.get(snapshot.fluid_id),
-            &state,
-        );
+        let next_text =
+            target_fluid_hud_text(&snapshot, content.fluids.get(snapshot.fluid_id), &state);
         if target_text.0 != next_text {
             target_text.0 = next_text;
         }
@@ -507,9 +507,7 @@ fn update_target_hud(
 
     let language = state.language.get();
     let cell = state.world.cell_at(hit.voxel);
-    let properties = cell
-        .map(|cell| cell.block_state())
-        .unwrap_or_default();
+    let properties = cell.map(|cell| cell.block_state()).unwrap_or_default();
     let light_position = if hit.normal == IVec3::ZERO {
         hit.voxel + IVec3::Y
     } else {
@@ -634,7 +632,10 @@ fn target_object_hud_text(
         snapshot.block_light,
     );
 
-    format!("{}\n{light_text}\n{coordinates}", object.name.text(language))
+    format!(
+        "{}\n{light_text}\n{coordinates}",
+        object.name.text(language)
+    )
 }
 
 fn target_fluid_hud_text(
@@ -800,19 +801,15 @@ fn target_hud_icon_snapshot(
     block: Option<&BlockDefinition>,
     content: &TargetHudContent<'_>,
 ) -> TargetHudIconSnapshot {
-    let tint_position =
-        Vec2::new(snapshot.voxel.x as f32 + 0.5, snapshot.voxel.z as f32 + 0.5);
+    let tint_position = Vec2::new(snapshot.voxel.x as f32 + 0.5, snapshot.voxel.z as f32 + 0.5);
     let base_tint = content
         .visual
         .tint_at(snapshot.block_id, tint_position)
         .unwrap_or(Color::WHITE);
     let tint = match (block, cell) {
-        (Some(block), Some(cell)) => apply_secondary_property_tint(
-            base_tint,
-            block,
-            cell,
-            &content.secondary_properties,
-        ),
+        (Some(block), Some(cell)) => {
+            apply_secondary_property_tint(base_tint, block, cell, &content.secondary_properties)
+        }
         _ => base_tint,
     };
 
@@ -832,17 +829,15 @@ fn tool_category_names(
         .map(|category_id| {
             categories
                 .get(category_id)
-                .map_or(category_id.as_str(), |category| category.name.text(language))
+                .map_or(category_id.as_str(), |category| {
+                    category.name.text(language)
+                })
         })
         .collect::<Vec<_>>()
         .join(", ")
 }
 
-fn layer_face_name(
-    localization: &UiLocalization,
-    language: Language,
-    face: LayerFace,
-) -> &str {
+fn layer_face_name(localization: &UiLocalization, language: Language, face: LayerFace) -> &str {
     let key = match face {
         LayerFace::Right => "hud.layerFace.right",
         LayerFace::Left => "hud.layerFace.left",

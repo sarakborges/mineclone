@@ -1,7 +1,4 @@
-pub(crate) fn mix_u32_components(
-    mut hash: u64,
-    components: impl IntoIterator<Item = u32>,
-) -> u64 {
+pub(crate) fn mix_u32_components(mut hash: u64, components: impl IntoIterator<Item = u32>) -> u64 {
     for component in components {
         hash ^= component as u64;
         hash = hash.wrapping_mul(0x9e37_79b1_85eb_ca87);

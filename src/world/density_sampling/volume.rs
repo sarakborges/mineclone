@@ -94,10 +94,7 @@ struct DensityModifierContext {
     allow_solids: bool,
 }
 
-fn density_modifier_delta(
-    modifier: BiomeDensityModifier,
-    context: DensityModifierContext,
-) -> f32 {
+fn density_modifier_delta(modifier: BiomeDensityModifier, context: DensityModifierContext) -> f32 {
     let DensityModifierContext {
         current_density,
         position,
@@ -198,10 +195,8 @@ fn floating_island_sample(
         ),
         seed.rotate_left(43),
     );
-    let edge_scale = (1.0
-        + planar_noise * edge_irregularity
-        + detail_noise * edge_irregularity * 0.3)
-        .max(0.62);
+    let edge_scale =
+        (1.0 + planar_noise * edge_irregularity + detail_noise * edge_irregularity * 0.3).max(0.62);
     let shared_top = 0.24 + planar_noise * top_roughness + detail_noise * top_roughness * 0.22;
 
     let mut union_mask = 0.0_f32;
@@ -240,11 +235,9 @@ fn floating_island_sample(
             ((footprint_scale + layer_edge_blend - radial) / (layer_edge_blend * 2.0))
                 .clamp(0.0, 1.0),
         );
-        let top_mask =
-            smoothstep(((top - local_position.y) / ISLAND_TOP_BLEND).clamp(0.0, 1.0));
-        let bottom_mask = smoothstep(
-            ((local_position.y - bottom) / ISLAND_BOTTOM_BLEND).clamp(0.0, 1.0),
-        );
+        let top_mask = smoothstep(((top - local_position.y) / ISLAND_TOP_BLEND).clamp(0.0, 1.0));
+        let bottom_mask =
+            smoothstep(((local_position.y - bottom) / ISLAND_BOTTOM_BLEND).clamp(0.0, 1.0));
         let lobe_mask = edge_mask * top_mask * bottom_mask;
 
         if lobe_mask > 0.0 {
@@ -291,15 +284,11 @@ fn floating_island_lobe(seed: u64, index: usize) -> FloatingIslandLobe {
 
     let salt = index as u64;
     let angle = std::f32::consts::TAU * hash_unit(seed, 0x9e37_79b9_7f4a_7c15 ^ salt);
-    let offset =
-        0.28 + 0.16 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
+    let offset = 0.28 + 0.16 * hash_unit(seed, 0xc2b2_ae3d_27d4_eb4f ^ salt.rotate_left(7));
     let center = Vec2::new(angle.cos(), angle.sin()) * offset;
-    let radius_x =
-        0.34 + 0.18 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
-    let radius_z =
-        0.34 + 0.18 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
-    let top_offset =
-        (hash_unit(seed, 0x27d4_eb2f_1656_67c5 ^ salt.rotate_left(29)) - 0.5) * 0.10;
+    let radius_x = 0.34 + 0.18 * hash_unit(seed, 0x1656_67b1_9e37_79f9 ^ salt.rotate_left(13));
+    let radius_z = 0.34 + 0.18 * hash_unit(seed, 0x85eb_ca77_c2b2_ae63 ^ salt.rotate_left(19));
+    let top_offset = (hash_unit(seed, 0x27d4_eb2f_1656_67c5 ^ salt.rotate_left(29)) - 0.5) * 0.10;
     let underside_depth =
         0.90 + 0.30 * hash_unit(seed, 0x94d0_49bb_1331_11eb ^ salt.rotate_left(37));
 
@@ -467,22 +456,10 @@ mod tests {
     #[test]
     fn floating_island_builds_upward_from_the_volume_floor() {
         let seed = 7;
-        let below_floor = floating_island_sample(
-            Vec3::ZERO,
-            Vec3::new(0.0, -1.01, 0.0),
-            seed,
-            0.03,
-            0.0,
-            0.0,
-        );
-        let above_floor = floating_island_sample(
-            Vec3::ZERO,
-            Vec3::new(0.0, -0.90, 0.0),
-            seed,
-            0.03,
-            0.0,
-            0.0,
-        );
+        let below_floor =
+            floating_island_sample(Vec3::ZERO, Vec3::new(0.0, -1.01, 0.0), seed, 0.03, 0.0, 0.0);
+        let above_floor =
+            floating_island_sample(Vec3::ZERO, Vec3::new(0.0, -0.90, 0.0), seed, 0.03, 0.0, 0.0);
 
         assert_eq!(below_floor.mask, 0.0);
         assert!(above_floor.mask > 0.0);
@@ -515,22 +492,10 @@ mod tests {
     #[test]
     fn floating_island_edge_tapers_before_the_outer_boundary() {
         let seed = 7;
-        let inner = floating_island_sample(
-            Vec3::ZERO,
-            Vec3::new(0.84, 0.0, 0.0),
-            seed,
-            0.03,
-            0.0,
-            0.0,
-        );
-        let boundary = floating_island_sample(
-            Vec3::ZERO,
-            Vec3::new(1.0, 0.0, 0.0),
-            seed,
-            0.03,
-            0.0,
-            0.0,
-        );
+        let inner =
+            floating_island_sample(Vec3::ZERO, Vec3::new(0.84, 0.0, 0.0), seed, 0.03, 0.0, 0.0);
+        let boundary =
+            floating_island_sample(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0), seed, 0.03, 0.0, 0.0);
 
         assert!(inner.mask > boundary.mask);
         assert_eq!(boundary.mask, 0.0);

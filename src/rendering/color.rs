@@ -11,8 +11,7 @@ pub(crate) fn quantize_srgba(color: Color, rgb_levels: u8) -> (Color, [u8; 4]) {
     debug_assert!(rgb_levels > 0);
     let rgba = color.to_srgba();
     let levels = f32::from(rgb_levels);
-    let quantize_rgb =
-        |value: f32| (value.clamp(0.0, 1.0) * levels).round() as u8;
+    let quantize_rgb = |value: f32| (value.clamp(0.0, 1.0) * levels).round() as u8;
     let red = quantize_rgb(rgba.red);
     let green = quantize_rgb(rgba.green);
     let blue = quantize_rgb(rgba.blue);

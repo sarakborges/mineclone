@@ -20,7 +20,11 @@ impl GenerationRegionCoord {
     }
 
     pub(crate) fn from_region_coord(coord: IVec3) -> Self {
-        debug_assert!(coord.y >= 0, "generation region Y cannot be negative: {}", coord.y);
+        debug_assert!(
+            coord.y >= 0,
+            "generation region Y cannot be negative: {}",
+            coord.y
+        );
         Self(IVec3::new(coord.x, coord.y.max(0), coord.z))
     }
 

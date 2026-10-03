@@ -21,11 +21,8 @@ use crate::{
     },
     gameplay::availability::world_interaction_available,
     player::{
-        PLAYER_EYE_HEIGHT,
-        camera::GameplayWorldCamera,
-        hotbar::PlayerHotbar,
-        item_stack::ItemStack,
-        movement::config::COLLISION_STEP,
+        PLAYER_EYE_HEIGHT, camera::GameplayWorldCamera, hotbar::PlayerHotbar,
+        item_stack::ItemStack, movement::config::COLLISION_STEP,
     },
     rendering::{
         block_model::{
@@ -38,11 +35,7 @@ use crate::{
         extruded_sprite::{ExtrudedSpriteGeometry, PendingExtrudedSprite},
     },
     targeting::block::BlockTargetingSet,
-    voxel::{
-        block_face::BlockFace,
-        collision::aabb_is_clear,
-        world::VoxelWorld,
-    },
+    voxel::{block_face::BlockFace, collision::aabb_is_clear, world::VoxelWorld},
     world::current_context::CurrentDimensionContext,
 };
 
@@ -160,7 +153,12 @@ impl Plugin for WorldItemsPlugin {
             )
             .add_systems(
                 Update,
-                (move_world_items, pickup_proximity_items, animate_world_item_visuals).chain()
+                (
+                    move_world_items,
+                    pickup_proximity_items,
+                    animate_world_item_visuals,
+                )
+                    .chain()
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             )
@@ -180,10 +178,7 @@ impl Plugin for WorldItemsPlugin {
     }
 }
 
-fn setup_world_item_visual_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
+fn setup_world_item_visual_assets(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(WorldItemVisualAssets {
         sprite_mesh: meshes.add(Rectangle::new(ITEM_SPRITE_SIZE, ITEM_SPRITE_SIZE)),
         fallback_mesh: meshes.add(Cuboid::new(
@@ -330,7 +325,8 @@ fn spawn_world_item_visual(
     let item_id = request.stack.id();
     if let Some(block) = content.block_content.blocks.get(item_id) {
         let horizontal = Vec2::new(request.position.x, request.position.z);
-        let tint = content.block_content
+        let tint = content
+            .block_content
             .tint_at_with_override(
                 item_id,
                 horizontal,
@@ -372,22 +368,31 @@ fn spawn_world_item_visual(
         return;
     }
 
-    let icon = content.items
+    let icon = content
+        .items
         .get(item_id)
         .map(|definition| definition.icon.as_str())
-        .or_else(|| content.layers.get(item_id).map(|definition| definition.texture.as_str()))
-        .or_else(|| content.objects.get(item_id).map(|definition| definition.icon.as_str()))
         .or_else(|| {
-            content.tools
+            content
+                .layers
                 .get(item_id)
-                .and_then(|definition| (!definition.icon.is_empty()).then_some(definition.icon.as_str()))
+                .map(|definition| definition.texture.as_str())
+        })
+        .or_else(|| {
+            content
+                .objects
+                .get(item_id)
+                .map(|definition| definition.icon.as_str())
+        })
+        .or_else(|| {
+            content.tools.get(item_id).and_then(|definition| {
+                (!definition.icon.is_empty()).then_some(definition.icon.as_str())
+            })
         });
 
     if let Some(icon) = icon {
         let material = assets.standard.add(StandardMaterial {
-            base_color_texture: Some(
-                content.block_content.asset_server.load(icon.to_owned()),
-            ),
+            base_color_texture: Some(content.block_content.asset_server.load(icon.to_owned())),
             alpha_mode: AlphaMode::Mask(0.5),
             perceptual_roughness: 1.0,
             unlit: true,
@@ -449,16 +454,12 @@ fn spawn_extruded_object_item(
         &content.block_content.biomes,
     );
     let scale = world_item_extruded_sprite_scale(*size);
-    let translation =
-        Vec3::Y * (-ITEM_HALF_EXTENT - *base_offset * scale);
+    let translation = Vec3::Y * (-ITEM_HALF_EXTENT - *base_offset * scale);
 
     let mut visual = root.spawn((
         WorldItemVisual,
         PendingExtrudedSprite::new(
-            content
-                .block_content
-                .asset_server
-                .load(texture.clone()),
+            content.block_content.asset_server.load(texture.clone()),
             ExtrudedSpriteGeometry {
                 size: *size,
                 height: *height,
@@ -525,12 +526,7 @@ fn move_world_items(
     }
 }
 
-fn advance_item_axis(
-    world: &VoxelWorld,
-    center: &mut Vec3,
-    axis: usize,
-    distance: f32,
-) -> bool {
+fn advance_item_axis(world: &VoxelWorld, center: &mut Vec3, axis: usize, distance: f32) -> bool {
     let steps = (distance.abs() / COLLISION_STEP).ceil().max(1.0) as usize;
     let step = distance / steps as f32;
 
@@ -637,7 +633,10 @@ mod tests {
 
     #[test]
     fn natural_world_items_default_to_interact_pickup() {
-        assert!(matches!(WorldItemPickup::default(), WorldItemPickup::Interact));
+        assert!(matches!(
+            WorldItemPickup::default(),
+            WorldItemPickup::Interact
+        ));
     }
 
     #[test]
@@ -655,6 +654,11 @@ mod tests {
         let center = Vec3::new(3.0, 4.0, 5.0);
         let (min, max) = target_bounds(center);
         assert_eq!((min + max) * 0.5, center);
-        assert!((max - min - Vec3::splat(ITEM_HALF_EXTENT * 2.0)).abs().max_element() < 1.0e-5);
+        assert!(
+            (max - min - Vec3::splat(ITEM_HALF_EXTENT * 2.0))
+                .abs()
+                .max_element()
+                < 1.0e-5
+        );
     }
 }

@@ -43,8 +43,7 @@ impl TimingMetrics {
 
     fn record(&self, elapsed_nanos: u64) {
         self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.total_nanos.fetch_add(elapsed_nanos, Ordering::Relaxed);
         self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
     }
 

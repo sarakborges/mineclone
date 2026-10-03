@@ -1,39 +1,24 @@
 use bevy::prelude::*;
 
-use crate::{
-    voxel::{
-        chunk::CHUNK_SIZE,
-        neighbors::CARDINAL_NEIGHBORS,
-        world::VoxelWorld,
-    },
-};
+use crate::voxel::{chunk::CHUNK_SIZE, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld};
 
 use super::{PendingFluidUpdates, solver::can_spread_horizontally_from};
 
-const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
-    IVec3::NEG_Y,
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
+const FLUID_SPREAD_TARGETS: [IVec3; 5] =
+    [IVec3::NEG_Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
 
 pub(super) fn enqueue_loaded_fluid_frontier(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    visit_loaded_fluid_frontier_targets(
-        world,
-        coord,
-        &mut |fluid_id, target, priority| {
-            if priority {
-                pending.enqueue_fluid_priority(fluid_id, target);
-            } else {
-                pending.enqueue_fluid(fluid_id, target);
-            }
-        },
-    );
+    visit_loaded_fluid_frontier_targets(world, coord, &mut |fluid_id, target, priority| {
+        if priority {
+            pending.enqueue_fluid_priority(fluid_id, target);
+        } else {
+            pending.enqueue_fluid(fluid_id, target);
+        }
+    });
 }
 
 pub(super) fn visit_loaded_fluid_frontier_targets(
@@ -71,12 +56,7 @@ fn visit_chunk_fluid_spread_targets(
 
     let origin = coord * CHUNK_SIZE as i32;
     chunk.visit_potential_fluid_frontier_sources(|local_position, fluid| {
-        visit_spread_targets_from_fluid(
-            world,
-            origin + local_position,
-            fluid,
-            visit,
-        );
+        visit_spread_targets_from_fluid(world, origin + local_position, fluid, visit);
     });
 }
 
@@ -101,18 +81,12 @@ fn visit_neighbor_boundary_spread_targets(
 
     if chunk.fluid_count() <= CHUNK_SIZE * CHUNK_SIZE {
         chunk.visit_fluid_voxels(|local_x, local_y, local_z, fluid| {
-            let local_position =
-                IVec3::new(local_x as i32, local_y as i32, local_z as i32);
+            let local_position = IVec3::new(local_x as i32, local_y as i32, local_z as i32);
             if !fluid_voxel_touches_boundary(local_position, direction) {
                 return;
             }
 
-            visit_spread_targets_from_fluid(
-                world,
-                origin + local_position,
-                fluid,
-                visit,
-            );
+            visit_spread_targets_from_fluid(world, origin + local_position, fluid, visit);
         });
         return;
     }
@@ -206,9 +180,8 @@ fn visit_spread_targets_from_fluid(
         }
 
         if offset != IVec3::NEG_Y {
-            let eligible = *can_spread_horizontally.get_or_insert_with(|| {
-                can_spread_horizontally_from(world, position, source_fluid)
-            });
+            let eligible = *can_spread_horizontally
+                .get_or_insert_with(|| can_spread_horizontally_from(world, position, source_fluid));
             if !eligible {
                 continue;
             }
@@ -217,7 +190,6 @@ fn visit_spread_targets_from_fluid(
         visit(source_fluid.fluid_id, target, offset == IVec3::NEG_Y);
     }
 }
-
 
 #[cfg(test)]
 mod tests {

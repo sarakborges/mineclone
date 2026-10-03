@@ -134,9 +134,7 @@ pub(crate) fn orientation_rotation(orientation: BlockOrientation) -> Quat {
 }
 
 pub(crate) fn horizontal_facing_rotation(facing: HorizontalFacing) -> Quat {
-    Quat::from_rotation_y(
-        facing.quarter_turns_from_south() as f32 * std::f32::consts::FRAC_PI_2,
-    )
+    Quat::from_rotation_y(facing.quarter_turns_from_south() as f32 * std::f32::consts::FRAC_PI_2)
 }
 
 pub(crate) fn block_rotation(
@@ -174,9 +172,18 @@ mod tests {
 
     #[test]
     fn orientation_maps_top_face_to_selected_axis() {
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Y), BlockFace::Top);
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Z), BlockFace::Front);
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::X), BlockFace::Right);
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::Y),
+            BlockFace::Top
+        );
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::Z),
+            BlockFace::Front
+        );
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::X),
+            BlockFace::Right
+        );
     }
 
     #[test]

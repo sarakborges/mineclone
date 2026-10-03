@@ -36,11 +36,7 @@ impl LootTableDefinition {
         }
     }
 
-    pub(crate) fn validate_references(
-        &self,
-        owner: &str,
-        item_exists: impl Fn(&str) -> bool,
-    ) {
+    pub(crate) fn validate_references(&self, owner: &str, item_exists: impl Fn(&str) -> bool) {
         for (index, entry) in self.0.iter().enumerate() {
             assert!(
                 item_exists(&entry.item),

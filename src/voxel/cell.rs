@@ -86,8 +86,8 @@ mod tests {
 
     #[test]
     fn block_state_api_preserves_compact_state() {
-        let cell = VoxelCell::new("stone", TextureRotation::Degrees0)
-            .with_state("variant", "mossy");
+        let cell =
+            VoxelCell::new("stone", TextureRotation::Degrees0).with_state("variant", "mossy");
 
         assert_eq!(cell.state("variant"), Some("mossy"));
     }

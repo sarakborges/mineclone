@@ -7,7 +7,9 @@ static LAYER_ID_INTERNER: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new
 
 pub(crate) fn intern_layer_id(id: &str) -> &'static str {
     let interner = LAYER_ID_INTERNER.get_or_init(|| Mutex::new(HashSet::new()));
-    let mut ids = interner.lock().expect("layer ID interner lock was poisoned");
+    let mut ids = interner
+        .lock()
+        .expect("layer ID interner lock was poisoned");
     if let Some(&interned) = ids.get(id) {
         return interned;
     }

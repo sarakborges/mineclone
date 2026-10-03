@@ -1,15 +1,12 @@
 use bevy::{
-    camera::visibility::RenderLayers,
-    ecs::system::SystemParam,
-    gltf::GltfMaterialName,
-    prelude::*,
+    camera::visibility::RenderLayers, ecs::system::SystemParam, gltf::GltfMaterialName, prelude::*,
     world_serialization::WorldInstanceReady,
 };
 
 use crate::{
     app::game_state::GameState,
     content::creature::CreatureRegistry,
-    creatures::{apply_creature_material_overrides, CreatureInstance},
+    creatures::{CreatureInstance, apply_creature_material_overrides},
     hud::entity_card::{EntityCard, EntityCardSource},
 };
 
@@ -110,7 +107,10 @@ pub(super) fn prepare_portrait(
             continue;
         };
         let Some(scene) = gltf.default_scene.clone() else {
-            warn!("portrait for {} has no default glTF scene", portrait.definition_id);
+            warn!(
+                "portrait for {} has no default glTF scene",
+                portrait.definition_id
+            );
             portrait.scene_attached = true;
             continue;
         };
@@ -120,12 +120,13 @@ pub(super) fn prepare_portrait(
         let appearance = PortraitAppearance(portrait.definition_id.clone());
         let center_y = definition.collider.center_offset[1];
         commands.entity(entity).with_children(|parent| {
-            parent.spawn((
-                WorldAssetRoot(scene),
-                Transform::from_xyz(0.0, -center_y, 0.0),
-                appearance,
-            ))
-            .observe(configure_portrait_scene);
+            parent
+                .spawn((
+                    WorldAssetRoot(scene),
+                    Transform::from_xyz(0.0, -center_y, 0.0),
+                    appearance,
+                ))
+                .observe(configure_portrait_scene);
         });
         portrait.scene_attached = true;
     }
@@ -157,7 +158,9 @@ fn configure_portrait_scene(
     };
     for entity in descendants.iter_descendants(ready.entity) {
         if meshes.contains(entity) {
-            commands.entity(entity).insert(RenderLayers::layer(PORTRAIT_RENDER_LAYER));
+            commands
+                .entity(entity)
+                .insert(RenderLayers::layer(PORTRAIT_RENDER_LAYER));
         }
         let Ok((original, material_name)) = named_materials.get(entity) else {
             continue;

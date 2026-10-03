@@ -61,14 +61,13 @@ mod tests {
             DEFAULT_BIOME_SIZE_MULTIPLIER,
         );
         biome_field.set_spawn_oceans(world_generation.spawn_oceans());
-        let feature_fields = WorldFeatureFields::new(TEST_SEED).with_structure_field(
-            StructureField::from_content(
+        let feature_fields =
+            WorldFeatureFields::new(TEST_SEED).with_structure_field(StructureField::from_content(
                 TEST_SEED,
                 &content.biomes,
                 &content.structures,
                 &content.structure_sets,
-            ),
-        );
+            ));
         let context = ChunkGenerationContext {
             blocks: &content.blocks,
             fluids: &content.fluids,

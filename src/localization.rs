@@ -1,4 +1,7 @@
-use std::{collections::{BTreeMap, HashMap}, fs};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -48,20 +51,23 @@ impl LocalizedText {
     }
 
     pub(crate) fn validate(&self, context: &str) {
-        let english = self.0.get(&Language::English).unwrap_or_else(|| {
-            panic!("{context} is missing english localization")
-        });
+        let english = self
+            .0
+            .get(&Language::English)
+            .unwrap_or_else(|| panic!("{context} is missing english localization"));
         for language in Language::ALL {
-            let translated = self.0.get(&language).unwrap_or_else(|| {
-                panic!("{context} is missing {} localization", language.key())
-            });
+            let translated = self
+                .0
+                .get(&language)
+                .unwrap_or_else(|| panic!("{context} is missing {} localization", language.key()));
             assert!(
                 !translated.trim().is_empty(),
                 "{context} {} localization cannot be empty",
                 language.key()
             );
             assert_eq!(
-                placeholders(translated), placeholders(english),
+                placeholders(translated),
+                placeholders(english),
                 "{context} {} localization has mismatched placeholders",
                 language.key()
             );
@@ -109,11 +115,17 @@ impl UiLocalization {
                 .join(language.key())
                 .join("ui.json");
             let source = fs::read_to_string(&path).unwrap_or_else(|error| {
-                panic!("failed to read localization file {}: {error}", path.display())
+                panic!(
+                    "failed to read localization file {}: {error}",
+                    path.display()
+                )
             });
-            let strings = serde_json::from_str::<HashMap<String, String>>(&source)
-                .unwrap_or_else(|error| {
-                    panic!("failed to parse localization file {}: {error}", path.display())
+            let strings =
+                serde_json::from_str::<HashMap<String, String>>(&source).unwrap_or_else(|error| {
+                    panic!(
+                        "failed to parse localization file {}: {error}",
+                        path.display()
+                    )
                 });
             languages.insert(language, strings);
         }
@@ -126,7 +138,8 @@ impl UiLocalization {
                 .get(&language)
                 .expect("all configured UI localizations must exist");
             assert_eq!(
-                strings.len(), english.len(),
+                strings.len(),
+                english.len(),
                 "{} UI localization must have exactly the English keys",
                 language.key()
             );
@@ -140,7 +153,8 @@ impl UiLocalization {
                     language.key()
                 );
                 assert_eq!(
-                    placeholders(translated), placeholders(original),
+                    placeholders(translated),
+                    placeholders(original),
                     "{} UI localization has mismatched placeholders for {key}",
                     language.key()
                 );
@@ -191,9 +205,6 @@ mod tests {
             placeholders("{value} / {value}"),
             placeholders("{value} / {value}")
         );
-        assert_ne!(
-            placeholders("{value} / {value}"),
-            placeholders("{value}")
-        );
+        assert_ne!(placeholders("{value} / {value}"), placeholders("{value}"));
     }
 }

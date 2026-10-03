@@ -7,8 +7,7 @@ use crate::voxel::{
     update_queue::VoxelUpdateQueue,
 };
 
-const CHUNK_INTERIOR_VOLUME: usize =
-    (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
+const CHUNK_INTERIOR_VOLUME: usize = (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
 const CHUNK_BOUNDARY_VOXEL_COUNT: usize = CHUNK_VOLUME - CHUNK_INTERIOR_VOLUME;
 const CHUNK_BOUNDARY_NEIGHBOR_COUNT: usize = 6 * CHUNK_SIZE * CHUNK_SIZE;
 
@@ -36,9 +35,7 @@ impl DeferredBackgroundScanRequest {
     fn position(self, index: usize) -> IVec3 {
         match self {
             Self::ChunkVoxels(origin) => chunk_voxel_position(origin, index),
-            Self::ChunkBoundaryNeighbors(origin) => {
-                chunk_boundary_neighbor_position(origin, index)
-            }
+            Self::ChunkBoundaryNeighbors(origin) => chunk_boundary_neighbor_position(origin, index),
         }
     }
 }
@@ -188,11 +185,7 @@ impl LightingQueue {
         self.enqueue_interactive_priority(position);
     }
 
-    pub(super) fn enqueue_with_neighbors_in_lane(
-        &mut self,
-        position: IVec3,
-        lane: LightingLane,
-    ) {
+    pub(super) fn enqueue_with_neighbors_in_lane(&mut self, position: IVec3, lane: LightingLane) {
         match lane {
             LightingLane::Interactive => {
                 self.enqueue_interactive(position);
@@ -373,10 +366,7 @@ mod tests {
 
         assert_eq!(count, CHUNK_VOLUME);
         assert_eq!(first, Some(origin));
-        assert_eq!(
-            last,
-            Some(origin + IVec3::splat(CHUNK_SIZE as i32 - 1)),
-        );
+        assert_eq!(last, Some(origin + IVec3::splat(CHUNK_SIZE as i32 - 1)),);
     }
 
     #[test]

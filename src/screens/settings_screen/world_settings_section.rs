@@ -1,14 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{
-        crash_log::log_gameplay_event,
-        game_state::GameState,
-    },
+    app::{crash_log::log_gameplay_event, game_state::GameState},
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         settings as settings_layout, typography,
     },
     world::NewWorldConfig,
@@ -19,12 +16,8 @@ const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 #[derive(Component, Clone, Copy)]
 pub(crate) struct GameModeButton(pub(crate) GameMode);
 
-pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Interaction, &'static GameModeButton),
-    Changed<Interaction>,
->;
+pub(crate) type GameModeButtonInteractions<'w, 's> =
+    Query<'w, 's, (&'static Interaction, &'static GameModeButton), Changed<Interaction>>;
 
 type GameModeButtonSyncQuery<'w, 's> = Query<
     'w,
@@ -109,7 +102,8 @@ pub(crate) fn handle_game_mode_buttons(
             if new_world.game_mode() != button.0 {
                 log_gameplay_event(format!(
                     "world_settings.game_mode change=world_creation from={:?} to={:?}",
-                    new_world.game_mode(), button.0
+                    new_world.game_mode(),
+                    button.0
                 ));
                 new_world.set_game_mode(button.0);
             }

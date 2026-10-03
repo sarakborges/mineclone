@@ -62,8 +62,7 @@ fn apply_biome_tint_item(
         return;
     };
 
-    let BiomeTintCellUpdate::Applied(cell) =
-        biome_tint_override_cell(cell, block.tint, biome_id)
+    let BiomeTintCellUpdate::Applied(cell) = biome_tint_override_cell(cell, block.tint, biome_id)
     else {
         return;
     };
@@ -131,11 +130,9 @@ mod tests {
 
     #[test]
     fn biome_tint_override_is_applied_to_tintable_blocks() {
-        let BiomeTintCellUpdate::Applied(cell) = biome_tint_override_cell(
-            test_cell(),
-            BlockTint::Grass,
-            ENCHANTED_FOREST_BIOME_ID,
-        ) else {
+        let BiomeTintCellUpdate::Applied(cell) =
+            biome_tint_override_cell(test_cell(), BlockTint::Grass, ENCHANTED_FOREST_BIOME_ID)
+        else {
             panic!("tintable block should accept biome tint override");
         };
 
@@ -148,11 +145,7 @@ mod tests {
     #[test]
     fn biome_tint_override_rejects_untinted_blocks() {
         assert_eq!(
-            biome_tint_override_cell(
-                test_cell(),
-                BlockTint::None,
-                ENCHANTED_FOREST_BIOME_ID,
-            ),
+            biome_tint_override_cell(test_cell(), BlockTint::None, ENCHANTED_FOREST_BIOME_ID,),
             BiomeTintCellUpdate::UnsupportedBlock
         );
     }

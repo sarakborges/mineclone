@@ -7,10 +7,8 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField,
-        generation_region::generation_region_coord,
-        render_distance::chunk_is_in_volume,
-        world_feature_fields::WorldFeatureFields,
+        biome_field::BiomeField, generation_region::generation_region_coord,
+        render_distance::chunk_is_in_volume, world_feature_fields::WorldFeatureFields,
     },
 };
 
@@ -73,8 +71,17 @@ pub(in crate::world) fn initial_streaming_chunk_coords(
     feature_fields: &WorldFeatureFields,
 ) -> Vec<IVec3> {
     let horizontal_radius = render_distance_chunks + HORIZONTAL_PRELOAD_CHUNKS;
-    let selection = DesiredChunkSelection { center, horizontal_radius, vertical_radius };
-    let context = SurfaceSelectionContext { dimension, biomes, biome_field, feature_fields };
+    let selection = DesiredChunkSelection {
+        center,
+        horizontal_radius,
+        vertical_radius,
+    };
+    let context = SurfaceSelectionContext {
+        dimension,
+        biomes,
+        biome_field,
+        feature_fields,
+    };
     let mut horizontal_offsets = Vec::new();
     rebuild_horizontal_selection_offsets(&mut horizontal_offsets, horizontal_radius, IVec2::ZERO);
 
@@ -135,11 +142,7 @@ pub(super) fn rebuild_queue(
             .prune(center.xz(), retention_radius);
     }
 
-    sync_horizontal_selection_offsets(
-        scratch,
-        preload_radius,
-        movement_direction,
-    );
+    sync_horizontal_selection_offsets(scratch, preload_radius, movement_direction);
     let desired_selection = DesiredChunkSelection {
         center,
         horizontal_radius: preload_radius,
@@ -216,17 +219,13 @@ pub(super) fn rebuild_queue(
         );
     } else {
         scratch.pending.clear();
-        scratch.pending.extend(
-            scratch
-                .desired
-                .iter()
-                .copied()
-                .filter(|coord| {
-                    !context.render_pool.contains(*coord)
-                        && !streaming.generated_chunk_is_unpublished(*coord)
-                        && !streaming.mesh_is_pressure_evicted(*coord)
-                }),
-        );
+        scratch
+            .pending
+            .extend(scratch.desired.iter().copied().filter(|coord| {
+                !context.render_pool.contains(*coord)
+                    && !streaming.generated_chunk_is_unpublished(*coord)
+                    && !streaming.mesh_is_pressure_evicted(*coord)
+            }));
     }
 
     scratch.retained.clear();
@@ -324,8 +323,9 @@ pub(super) fn player_is_above_surface(
     let Some((_, maximum_surface)) = surface_ranges.get(&center.xz()).copied() else {
         return false;
     };
-    let maximum_structure_chunk =
-        maximum_surface.div_euclid(CHUNK_SIZE as i32).max(structure_top_chunk);
+    let maximum_structure_chunk = maximum_surface
+        .div_euclid(CHUNK_SIZE as i32)
+        .max(structure_top_chunk);
     center.y > maximum_structure_chunk
 }
 
@@ -345,8 +345,9 @@ pub(super) fn pending_priority(
         .copied()
         .unwrap_or((coord.y * chunk_size, coord.y * chunk_size));
     let minimum_surface_chunk = minimum_surface.div_euclid(chunk_size);
-    let maximum_structure_chunk =
-        maximum_surface.div_euclid(chunk_size).max(structure_top_chunk);
+    let maximum_structure_chunk = maximum_surface
+        .div_euclid(chunk_size)
+        .max(structure_top_chunk);
     let surface_distance = if coord.y < minimum_surface_chunk {
         minimum_surface_chunk - coord.y
     } else if coord.y > maximum_structure_chunk {
@@ -411,11 +412,7 @@ fn forward_preload_chunks(horizontal_radius: i32) -> i32 {
     (horizontal_radius / 2).clamp(2, MAX_FORWARD_PRELOAD_CHUNKS)
 }
 
-fn inside_forward_preload(
-    offset: IVec2,
-    horizontal_radius: i32,
-    forward_direction: Vec2,
-) -> bool {
+fn inside_forward_preload(offset: IVec2, horizontal_radius: i32, forward_direction: Vec2) -> bool {
     let offset = offset.as_vec2();
     let forward = offset.dot(forward_direction);
     let base = horizontal_radius as f32;
@@ -426,8 +423,7 @@ fn inside_forward_preload(
     }
 
     let extra = forward - base;
-    let lateral_width =
-        FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + (preload - extra) * 0.5;
+    let lateral_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + (preload - extra) * 0.5;
     let lateral_squared = (offset.length_squared() - forward * forward).max(0.0);
     lateral_squared <= lateral_width * lateral_width
 }
@@ -732,10 +728,7 @@ fn insert_surface_column(
             }
             minimum
         });
-    let structure_top_chunk = structure_top_chunks
-        .get(&horizontal)
-        .copied()
-        .unwrap_or(-1);
+    let structure_top_chunk = structure_top_chunks.get(&horizontal).copied().unwrap_or(-1);
     let (minimum_y, maximum_y) = surface_chunk_range(
         own_maximum,
         surrounding_minimum,
@@ -768,11 +761,7 @@ fn coord_remains_selected(
 
     let horizontal = coord.xz();
     let offset = horizontal - selection.center.xz();
-    if !horizontal_offset_is_selected(
-        offset,
-        selection.horizontal_radius,
-        movement_direction,
-    ) {
+    if !horizontal_offset_is_selected(offset, selection.horizontal_radius, movement_direction) {
         return false;
     }
 
@@ -782,10 +771,7 @@ fn coord_remains_selected(
     let Some(surrounding_minimum) = surface_support_minimums.get(&horizontal).copied() else {
         return false;
     };
-    let structure_top_chunk = structure_top_chunks
-        .get(&horizontal)
-        .copied()
-        .unwrap_or(-1);
+    let structure_top_chunk = structure_top_chunks.get(&horizontal).copied().unwrap_or(-1);
     let (minimum_y, maximum_y) = surface_chunk_range(
         own_maximum,
         surrounding_minimum,
@@ -823,8 +809,8 @@ mod tests {
         horizontal_radius: i32,
         movement_direction: IVec2,
     ) -> HashSet<IVec2> {
-        let forward_direction = (movement_direction != IVec2::ZERO)
-            .then(|| movement_direction.as_vec2().normalize());
+        let forward_direction =
+            (movement_direction != IVec2::ZERO).then(|| movement_direction.as_vec2().normalize());
         let search_radius = horizontal_radius
             + if forward_direction.is_some() {
                 forward_preload_chunks(horizontal_radius)
@@ -975,12 +961,7 @@ mod tests {
         streaming.pending.enqueue(removed);
         streaming.pending.enqueue(retained);
 
-        apply_incremental_pending_delta(
-            &mut streaming,
-            &render_pool,
-            &[added],
-            &[removed],
-        );
+        apply_incremental_pending_delta(&mut streaming, &render_pool, &[added], &[removed]);
 
         assert_eq!(
             streaming.pending.values_in_order().collect::<Vec<_>>(),
@@ -994,8 +975,7 @@ mod tests {
         let nearer = IVec3::new(3, 0, 0);
         let reentered_desired = IVec3::new(2, 0, 0);
         let renewed_retention = IVec3::new(1, 0, 0);
-        let previous_retained =
-            HashSet::from([far, nearer, reentered_desired, renewed_retention]);
+        let previous_retained = HashSet::from([far, nearer, reentered_desired, renewed_retention]);
         let desired = HashSet::from([reentered_desired]);
         let retained = HashSet::from([renewed_retention]);
         let mut retired = Vec::new();
@@ -1091,10 +1071,8 @@ mod tests {
 
     #[test]
     fn movement_direction_prefers_forward_chunks() {
-        let surface_ranges = HashMap::from([
-            (IVec2::new(3, 0), (0, 0)),
-            (IVec2::new(-3, 0), (0, 0)),
-        ]);
+        let surface_ranges =
+            HashMap::from([(IVec2::new(3, 0), (0, 0)), (IVec2::new(-3, 0), (0, 0))]);
         let forward = pending_priority(
             IVec3::new(3, 0, 0),
             IVec3::ZERO,
@@ -1122,29 +1100,12 @@ mod tests {
         let center = IVec3::ZERO;
         let visible = IVec3::new(0, 0, 12);
         let preload = IVec3::new(18, 0, 0);
-        let surface_ranges = HashMap::from([
-            (visible.xz(), (0, 0)),
-            (preload.xz(), (0, 0)),
-        ]);
+        let surface_ranges = HashMap::from([(visible.xz(), (0, 0)), (preload.xz(), (0, 0))]);
 
-        let visible_priority = pending_priority(
-            visible,
-            center,
-            12,
-            0,
-            IVec2::X,
-            false,
-            &surface_ranges,
-        );
-        let preload_priority = pending_priority(
-            preload,
-            center,
-            12,
-            0,
-            IVec2::X,
-            false,
-            &surface_ranges,
-        );
+        let visible_priority =
+            pending_priority(visible, center, 12, 0, IVec2::X, false, &surface_ranges);
+        let preload_priority =
+            pending_priority(preload, center, 12, 0, IVec2::X, false, &surface_ranges);
 
         assert!(visible_priority < preload_priority);
     }
@@ -1184,8 +1145,7 @@ mod tests {
 
         let surface_priority =
             pending_priority(surface, center, 12, 0, IVec2::X, true, &surface_ranges);
-        let air_priority =
-            pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
+        let air_priority = pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
 
         assert!(air_priority < surface_priority);
     }

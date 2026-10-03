@@ -1,12 +1,7 @@
-use bevy::{
-    ecs::system::SystemParam,
-    light::NotShadowCaster,
-    prelude::*,
-};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use super::{
-    BlockTargetingScene, BlockTargetingVisualSnapshot,
-    block::BlockTargetingSet,
+    BlockTargetingScene, BlockTargetingVisualSnapshot, block::BlockTargetingSet,
     placement::placement_voxel,
 };
 use crate::{
@@ -24,14 +19,14 @@ use crate::{
     },
     player::{camera::GameplayCamera, game_mode::GameMode},
     tools::BrushMode,
-    world_objects::{TargetedWorldObject, world_object_position},
     voxel::{
         log_variant::is_hollow_log_id,
         microblock::{
-            MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
+            ArtisansKitResolution, MICROBLOCK_EDGE, MicroblockMask, local_cell, parent_voxel,
         },
         raycast::raycast_micro_voxels,
     },
+    world_objects::{TargetedWorldObject, world_object_position},
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.02;
@@ -276,8 +271,15 @@ fn update_highlight(
         );
         let Some(precise) = precise.filter(|precise| {
             precise.voxel == hit.voxel
-                && content.blocks.get(precise.block_id).is_some_and(|block| block.can_fragment())
-                && input.scene.world().cell_at(precise.voxel).is_some_and(|cell| !is_hollow_log_id(cell.block_id))
+                && content
+                    .blocks
+                    .get(precise.block_id)
+                    .is_some_and(|block| block.can_fragment())
+                && input
+                    .scene
+                    .world()
+                    .cell_at(precise.voxel)
+                    .is_some_and(|cell| !is_hollow_log_id(cell.block_id))
         }) else {
             hide_if_visible(&mut view.highlight.1);
             hide_if_visible(&mut view.artisans_kit_placement.1);
@@ -286,7 +288,8 @@ fn update_highlight(
         let width = input.artisans_kit_resolution.cell_width() as i32;
         let (translation, edge) = snapped_preview(precise.fine, width);
         if view.highlight.0.translation != translation {
-            view.highlight.0.translation = translation + precise.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
+            view.highlight.0.translation =
+                translation + precise.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
         }
         if view.highlight.0.scale != Vec3::splat(edge) {
             view.highlight.0.scale = Vec3::splat(edge);
@@ -297,14 +300,25 @@ fn update_highlight(
         let placement_voxel = parent_voxel(placement_cell);
         let can_place = precise.normal != IVec3::ZERO
             && placement_voxel == precise.voxel
-            && input.scene.world().cell_at(placement_voxel).is_some_and(|cell| {
-                content.blocks.get(cell.block_id).is_some_and(|block| block.can_fragment())
-                    && MicroblockMask::can_restore(cell)
-                    && {
-                        let mut mask = MicroblockMask::from_cell(cell);
-                        mask.edit(local_cell(placement_cell), *input.artisans_kit_resolution, true)
-                    }
-            });
+            && input
+                .scene
+                .world()
+                .cell_at(placement_voxel)
+                .is_some_and(|cell| {
+                    content
+                        .blocks
+                        .get(cell.block_id)
+                        .is_some_and(|block| block.can_fragment())
+                        && MicroblockMask::can_restore(cell)
+                        && {
+                            let mut mask = MicroblockMask::from_cell(cell);
+                            mask.edit(
+                                local_cell(placement_cell),
+                                *input.artisans_kit_resolution,
+                                true,
+                            )
+                        }
+                });
         if can_place {
             let (translation, edge) = snapped_preview(placement_cell, width);
             if view.artisans_kit_placement.0.translation != translation {
@@ -403,7 +417,8 @@ fn update_highlight(
         return;
     }
 
-    let translation = hit.voxel.as_vec3() + Vec3::splat(0.5) + hit.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
+    let translation =
+        hit.voxel.as_vec3() + Vec3::splat(0.5) + hit.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
     if view.highlight.0.translation != translation {
         view.highlight.0.translation = translation;
     }
@@ -434,4 +449,3 @@ fn show_if_hidden(visibility: &mut Visibility) {
         *visibility = Visibility::Visible;
     }
 }
-

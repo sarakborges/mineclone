@@ -117,7 +117,8 @@ pub(super) fn sample_density_field(
                 });
                 let index = voxel_index(local_x, local_y, local_z);
 
-                field.values[index] = sample_density(base_density, sample_position, volume, &context);
+                field.values[index] =
+                    sample_density(base_density, sample_position, volume, &context);
                 field.volume[index] =
                     PackedVolumeBiomeSelection::from_selection(volume, volume_surface_depth);
             }

@@ -23,8 +23,7 @@ impl StreamingPriorityScanMetrics {
     fn record(&self, elapsed: Duration, queue_len: usize) {
         let elapsed_nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
         self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.total_nanos.fetch_add(elapsed_nanos, Ordering::Relaxed);
         self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
         self.max_queue_len.fetch_max(queue_len, Ordering::Relaxed);
     }

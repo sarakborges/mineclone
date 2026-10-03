@@ -2,18 +2,15 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::creature::CreatureRegistry,
-    entity::EntityHealth,
     creatures::CreatureInstance,
+    entity::EntityHealth,
     localization::ActiveLanguage,
     player::camera::GameplayCamera,
     targeting::block::TargetedCreature,
     ui::{selectable, theme, typography},
 };
 
-use super::{
-    HudSettings, TargetBlockPosition,
-    player::portrait::PlayerHudPreviewViewport,
-};
+use super::{HudSettings, TargetBlockPosition, player::portrait::PlayerHudPreviewViewport};
 
 const AVATAR_SIZE: f32 = 64.0;
 const AVATAR_IMAGE_SIZE: f32 = 54.0;
@@ -88,7 +85,9 @@ pub(super) fn spawn_entity_card(
                 .id();
 
             if source == EntityCardSource::LocalPlayer {
-                row.commands().entity(avatar).insert(PlayerHudPreviewViewport);
+                row.commands()
+                    .entity(avatar)
+                    .insert(PlayerHudPreviewViewport);
             } else {
                 row.commands().entity(avatar).with_children(|avatar| {
                     if let Some(image) = portrait {
@@ -161,28 +160,29 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
             BackgroundColor(HEALTH_FILL_COLOR),
             Pickable::IGNORE,
         ));
-        health.spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(0),
-                top: px(0),
-                width: percent(100),
-                height: percent(100),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_children(|label| {
-            label.spawn((
-                EntityCardHealthLabel(source),
-                typography::inventory_category(""),
-                typography::tooltip_shadow(),
-                TextLayout::justify(Justify::Center),
+        health
+            .spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(0),
+                    width: percent(100),
+                    height: percent(100),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
                 Pickable::IGNORE,
-            ));
-        });
+            ))
+            .with_children(|label| {
+                label.spawn((
+                    EntityCardHealthLabel(source),
+                    typography::inventory_category(""),
+                    typography::tooltip_shadow(),
+                    TextLayout::justify(Justify::Center),
+                    Pickable::IGNORE,
+                ));
+            });
     });
 }
 
@@ -211,7 +211,8 @@ pub(super) fn sync_entity_cards(
     )>,
 ) {
     let player_entity = subjects.player.iter().next();
-    let target_entity = if subjects.settings.target_block_position() == TargetBlockPosition::Hidden {
+    let target_entity = if subjects.settings.target_block_position() == TargetBlockPosition::Hidden
+    {
         None
     } else {
         subjects

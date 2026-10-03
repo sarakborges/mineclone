@@ -3,11 +3,7 @@ use crate::{
     world::{deterministic::mix_hash_u64, macro_climate::MacroClimateSample},
 };
 
-use super::{
-    BiomeFieldEntry,
-    constants::CLIMATE_BLEND_MARGIN,
-    spatial::hash_unit,
-};
+use super::{BiomeFieldEntry, constants::CLIMATE_BLEND_MARGIN, spatial::hash_unit};
 
 #[derive(Clone, Copy)]
 struct WeightedBiomeCandidate {

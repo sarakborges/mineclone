@@ -83,6 +83,5 @@ impl BiomeDefinition {
                 self.id
             );
         }
-
     }
 }

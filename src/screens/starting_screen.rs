@@ -7,7 +7,7 @@ use crate::{
     },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH},
+        button::{ButtonVariant, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH, button},
         cosmic_background::{self, STAR_FIELD},
         theme,
         transition::{ScreenTransition, ScreenTransitionTarget},

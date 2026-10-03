@@ -28,7 +28,6 @@ pub(crate) struct BiomeMapInfluence {
 pub(crate) struct BiomeMapSample {
     pub(crate) primary_surface_index: usize,
     pub(crate) surface_margin_index: Option<usize>,
-    pub(crate) ocean_weight: f32,
     pub(crate) influences: SmallVec<[BiomeMapInfluence; 4]>,
 }
 
@@ -40,10 +39,7 @@ impl BiomeMapSample {
             .map_or(1.0, |influence| influence.terrain_strength)
     }
 
-    pub(crate) fn as_field_sample<'a>(
-        &self,
-        biome_field: &'a BiomeField,
-    ) -> BiomeFieldSample<'a> {
+    pub(crate) fn as_field_sample<'a>(&self, biome_field: &'a BiomeField) -> BiomeFieldSample<'a> {
         let identity_surface_index = self
             .surface_margin_index
             .unwrap_or(self.primary_surface_index);
@@ -84,9 +80,8 @@ impl BiomeMapTile {
         for local_z in -BIOME_MAP_HALO..CHUNK_SIZE as i32 + BIOME_MAP_HALO {
             for local_x in -BIOME_MAP_HALO..CHUNK_SIZE as i32 + BIOME_MAP_HALO {
                 let world_position = chunk_origin + IVec2::new(local_x, local_z);
-                let surface = biome_field
-                    .sample_surface(world_position.as_vec2() + Vec2::splat(0.5));
-                let ocean_weight = ocean_weight_from_surface(&surface, biome_field);
+                let surface =
+                    biome_field.sample_surface(world_position.as_vec2() + Vec2::splat(0.5));
                 let influences = surface
                     .influences
                     .iter()
@@ -100,7 +95,6 @@ impl BiomeMapTile {
                 samples.push(BiomeMapSample {
                     primary_surface_index: surface.primary_surface_index,
                     surface_margin_index: surface.surface_margin_index,
-                    ocean_weight,
                     influences,
                 });
             }
@@ -166,10 +160,7 @@ impl BiomeMapCache {
         entry.get_or_init(|| Arc::new(factory())).clone()
     }
 
-    pub(crate) fn retain_for_chunks<'a>(
-        &self,
-        desired: impl IntoIterator<Item = &'a IVec3>,
-    ) {
+    pub(crate) fn retain_for_chunks<'a>(&self, desired: impl IntoIterator<Item = &'a IVec3>) {
         let horizontal = desired
             .into_iter()
             .map(|coord| coord.xz())
@@ -179,18 +170,4 @@ impl BiomeMapCache {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .retain(|coord, _| horizontal.contains(coord));
     }
-}
-
-fn ocean_weight_from_surface(surface: &BiomeFieldSample<'_>, biome_field: &BiomeField) -> f32 {
-    let Some(ocean_index) = biome_field.ocean_surface_index() else {
-        return 0.0;
-    };
-
-    surface
-        .influences
-        .iter()
-        .filter(|influence| influence.surface_index == ocean_index)
-        .map(|influence| influence.weight)
-        .sum::<f32>()
-        .clamp(0.0, 1.0)
 }

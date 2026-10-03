@@ -39,6 +39,7 @@ pub(super) fn drain_or_apply_mouse_look(
     }
 
     camera.1.yaw -= delta.x * MOUSE_SENSITIVITY;
-    camera.1.pitch = (camera.1.pitch - delta.y * MOUSE_SENSITIVITY).clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH);
+    camera.1.pitch =
+        (camera.1.pitch - delta.y * MOUSE_SENSITIVITY).clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH);
     camera.0.rotation = camera.1.rotation();
 }

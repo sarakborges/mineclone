@@ -13,15 +13,9 @@ use crate::{
 };
 
 use super::{
-    block_gravity::PendingBlockGravityUpdates,
-    cell::VoxelCell,
-    chunk::ObjectCells,
-    coordinates::ChunkCoord,
-    fluid::FluidCell,
-    layer::LayerCell,
-    lighting::PendingLightingUpdates,
-    read::VoxelTopologyReader,
-    world::VoxelWorld,
+    block_gravity::PendingBlockGravityUpdates, cell::VoxelCell, chunk::ObjectCells,
+    coordinates::ChunkCoord, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
+    read::VoxelTopologyReader, world::VoxelWorld,
 };
 
 #[derive(Clone, Debug)]
@@ -92,10 +86,7 @@ impl VoxelMutationRuntime<'_> {
             self.blocks
                 .get(cell.block_id)
                 .is_some_and(is_stackable_layer)
-                && self
-                    .world
-                    .cell_at(world_position + IVec3::NEG_Y)
-                    .is_none()
+                && self.world.cell_at(world_position + IVec3::NEG_Y).is_none()
         }) {
             return None;
         }

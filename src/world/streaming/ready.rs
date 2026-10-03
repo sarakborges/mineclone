@@ -8,10 +8,7 @@ use bevy::{
     prelude::{IVec2, IVec3},
 };
 
-use crate::voxel::{
-    coordinates::ChunkCoord,
-    deduplicated_queue::DeduplicatedQueue,
-};
+use crate::voxel::{coordinates::ChunkCoord, deduplicated_queue::DeduplicatedQueue};
 
 use super::residency::ResidencySelectionRevision;
 
@@ -118,7 +115,10 @@ impl ReadyChunkQueue {
             }
 
             let removed = self.remove_chunk_coord(coord);
-            debug_assert!(removed, "ready priority cache must reference an active chunk");
+            debug_assert!(
+                removed,
+                "ready priority cache must reference an active chunk"
+            );
             if let Some(cache_key) = self.priority_cache.key.as_mut() {
                 cache_key.queue_revision = self.queue.revision();
             }
@@ -318,13 +318,8 @@ mod tests {
         queue.enqueue_front(retained);
 
         assert_eq!(queue.retain(|coord| coord == retained), 1);
-        let (selected, _) = queue.pop_min_where_by_key(
-            1,
-            IVec2::ZERO,
-            9,
-            |_| true,
-            |coord| coord.length_squared(),
-        );
+        let (selected, _) =
+            queue.pop_min_where_by_key(1, IVec2::ZERO, 9, |_| true, |coord| coord.length_squared());
         assert_eq!(selected, Some(retained));
         assert_eq!(queue.len(), 0);
         assert!(queue.columns.is_empty());

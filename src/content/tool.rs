@@ -4,12 +4,9 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path,
-    inventory_category::InventoryCategoryRegistry,
-    registry::DefinitionMap,
-    tool_behavior::is_known_tool_behavior,
-    tool_category::ToolCategoryRegistry,
-    tool_id::intern_tool_id,
+    asset_path::is_safe_relative_asset_path, inventory_category::InventoryCategoryRegistry,
+    registry::DefinitionMap, tool_behavior::is_known_tool_behavior,
+    tool_category::ToolCategoryRegistry, tool_id::intern_tool_id,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -178,7 +175,6 @@ impl ToolRegistry {
         self.definitions.values()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

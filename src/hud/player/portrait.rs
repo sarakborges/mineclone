@@ -7,17 +7,12 @@ use bevy::{
 };
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        settings_state::SettingsState,
-    },
+    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     gameplay::modal::GameplayModalState,
     player::{
         game_mode::GameMode,
         model::{
-            PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER,
-            PLAYER_MODEL_HUD_RENDER_LAYER,
+            PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER, PLAYER_MODEL_HUD_RENDER_LAYER,
             PlayerModelRoot,
         },
     },
@@ -229,9 +224,7 @@ fn sync_camera<F: QueryFilter>(
     }
 }
 
-fn deactivate_cameras<F: QueryFilter>(
-    cameras: &mut Query<(&mut Camera, &mut Transform), F>,
-) {
+fn deactivate_cameras<F: QueryFilter>(cameras: &mut Query<(&mut Camera, &mut Transform), F>) {
     for (mut camera, _) in cameras.iter_mut() {
         camera.is_active = false;
         camera.viewport = None;

@@ -2,10 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::structure::{StructureDefinition, StructureRotation},
-    world::{
-        new_world::WorldGenerationMode,
-        terrain::surface_height_from_sample,
-    },
+    world::{new_world::WorldGenerationMode, terrain::surface_height_from_sample},
 };
 
 use super::super::{ChunkGenerationContext, flat_surface_height};
@@ -121,12 +118,8 @@ fn supported_surface_ground_y(
 ) -> Option<i32> {
     let horizontal = position.as_vec2() + Vec2::splat(0.5);
     let surface = context.biome_field.sample_surface(horizontal);
-    let surface_height = surface_height_from_sample(
-        position,
-        context.dimension,
-        context.biome_field,
-        &surface,
-    );
+    let surface_height =
+        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
 
     Some(surface_height - 1)
 }
@@ -138,14 +131,8 @@ mod tests {
     #[test]
     fn minimum_slope_rejects_flat_ground() {
         let supports = [IVec2::ZERO, IVec2::new(4, 0)];
-        let result = fit_structure_to_ground_with_slope_range(
-            IVec2::ZERO,
-            &supports,
-            0,
-            3,
-            8,
-            |_| Some(12),
-        );
+        let result =
+            fit_structure_to_ground_with_slope_range(IVec2::ZERO, &supports, 0, 3, 8, |_| Some(12));
 
         assert_eq!(result, None);
     }
@@ -153,14 +140,10 @@ mod tests {
     #[test]
     fn minimum_slope_accepts_required_relief() {
         let supports = [IVec2::ZERO, IVec2::new(4, 0)];
-        let result = fit_structure_to_ground_with_slope_range(
-            IVec2::ZERO,
-            &supports,
-            1,
-            3,
-            8,
-            |position| Some(if position.x == 0 { 12 } else { 17 }),
-        );
+        let result =
+            fit_structure_to_ground_with_slope_range(IVec2::ZERO, &supports, 1, 3, 8, |position| {
+                Some(if position.x == 0 { 12 } else { 17 })
+            });
 
         assert_eq!(result, Some(11));
     }
@@ -168,13 +151,9 @@ mod tests {
     #[test]
     fn maximum_slope_still_rejects_excessive_relief() {
         let supports = [IVec2::ZERO, IVec2::new(4, 0)];
-        let result = fit_structure_to_ground(
-            IVec2::ZERO,
-            &supports,
-            0,
-            4,
-            |position| Some(if position.x == 0 { 12 } else { 21 }),
-        );
+        let result = fit_structure_to_ground(IVec2::ZERO, &supports, 0, 4, |position| {
+            Some(if position.x == 0 { 12 } else { 21 })
+        });
 
         assert_eq!(result, None);
     }

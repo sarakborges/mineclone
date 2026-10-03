@@ -24,9 +24,7 @@ use crate::{
             TerrainTextureTable, block_face_texture_layers, load_block_texture_layer,
             terrain_array_alpha_signature,
         },
-        terrain_material::{
-            TerrainLightingBuffer, TerrainMaterial, TerrainMaterialExtension,
-        },
+        terrain_material::{TerrainLightingBuffer, TerrainMaterial, TerrainMaterialExtension},
     },
     voxel::block_face::{BlockFace, BlockFaces},
 };
@@ -72,7 +70,6 @@ struct TerrainMaterialKey {
     alpha: TerrainAlphaKey,
     layer_index: usize,
 }
-
 
 struct TerrainMaterialBuilder<'a> {
     asset_server: &'a AssetServer,
@@ -142,9 +139,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
         layers
             .iter()
             .enumerate()
-            .map(|(layer_index, layer)| {
-                self.material_for(definition, Some(layer), layer_index)
-            })
+            .map(|(layer_index, layer)| self.material_for(definition, Some(layer), layer_index))
             .collect()
     }
 
@@ -171,7 +166,8 @@ impl<'a> TerrainMaterialBuilder<'a> {
         let material = self.materials.add(TerrainMaterial {
             base: StandardMaterial {
                 base_color: Color::WHITE,
-                base_color_texture: base.map(|layer| load_block_texture_layer(self.asset_server, layer)),
+                base_color_texture: base
+                    .map(|layer| load_block_texture_layer(self.asset_server, layer)),
                 perceptual_roughness: self.roughness,
                 metallic: self.metallic,
                 alpha_mode: alpha.alpha_mode(),
@@ -187,7 +183,8 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 overlay_enabled: overlay.is_some() as u8 as f32,
                 overlay_tint_enabled: key.overlay_tint_enabled as u8 as f32,
                 texture_array_enabled: 0.0,
-                overlay_texture: overlay.map(|layer| load_block_texture_layer(self.asset_server, layer)),
+                overlay_texture: overlay
+                    .map(|layer| load_block_texture_layer(self.asset_server, layer)),
                 terrain_texture_array: self.texture_array.clone(),
             },
         });
@@ -195,10 +192,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
         material
     }
 
-    fn material_for_layer(
-        &mut self,
-        definition: &LayerDefinition,
-    ) -> Handle<TerrainMaterial> {
+    fn material_for_layer(&mut self, definition: &LayerDefinition) -> Handle<TerrainMaterial> {
         let alpha = if definition.alpha_blend {
             TerrainAlphaKey::Blend
         } else if let Some(cutoff) = definition.alpha_cutoff {
@@ -325,8 +319,7 @@ impl TerrainMaterials {
             .iter()
             .map(|path| asset_server.load(path.clone()))
             .collect::<Vec<_>>();
-        let texture_array =
-            create_terrain_texture_array(texture_table.layer_count(), images);
+        let texture_array = create_terrain_texture_array(texture_table.layer_count(), images);
 
         let mut builder = TerrainMaterialBuilder::new(
             asset_server,
@@ -343,8 +336,7 @@ impl TerrainMaterials {
                 if block_face_texture_layers(face, definition).len() > 2 {
                     continue;
                 }
-                let Some((alpha_blend, alpha_cutoff)) =
-                    terrain_array_alpha_signature(definition)
+                let Some((alpha_blend, alpha_cutoff)) = terrain_array_alpha_signature(definition)
                 else {
                     continue;
                 };
@@ -494,11 +486,7 @@ impl TerrainMaterials {
             .unwrap_or_else(|| panic!("missing shared terrain array material for {alpha:?}"))
     }
 
-    pub(super) fn for_face(
-        &self,
-        block_id: &str,
-        face: BlockFace,
-    ) -> &[Handle<TerrainMaterial>] {
+    pub(super) fn for_face(&self, block_id: &str, face: BlockFace) -> &[Handle<TerrainMaterial>] {
         self.blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
@@ -513,10 +501,7 @@ impl TerrainMaterials {
     }
 }
 
-fn create_terrain_texture_array(
-    layer_count: u32,
-    images: &mut Assets<Image>,
-) -> Handle<Image> {
+fn create_terrain_texture_array(layer_count: u32, images: &mut Assets<Image>) -> Handle<Image> {
     let stacked_height = TERRAIN_TEXTURE_SIZE
         .checked_mul(layer_count)
         .expect("terrain texture array height cannot overflow u32");
@@ -566,7 +551,7 @@ impl FluidMaterials {
                         cull_mode: None,
                         fog_enabled: true,
                         unlit: true,
-                opaque_render_method: OpaqueRendererMethod::Forward,
+                        opaque_render_method: OpaqueRendererMethod::Forward,
                         ..default()
                     },
                     extension: TerrainMaterialExtension {

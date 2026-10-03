@@ -129,8 +129,7 @@ impl Plugin for HotbarHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(
                 Update,
-                (sync_hotbar_visibility, sync_hotbar)
-                    .run_if(in_state(GameState::Gameplay)),
+                (sync_hotbar_visibility, sync_hotbar).run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,

@@ -177,9 +177,7 @@ impl GeneratedFluidSettling {
         false
     }
 
-    pub(in crate::world) fn take_completion(
-        &mut self,
-    ) -> Option<GeneratedFluidSettlingCompletion> {
+    pub(in crate::world) fn take_completion(&mut self) -> Option<GeneratedFluidSettlingCompletion> {
         if !self.active || !self.converged {
             return None;
         }
@@ -199,7 +197,9 @@ impl GeneratedFluidSettling {
             self.changed_existing_positions.drain().collect::<Vec<_>>();
         changed_existing_positions.sort_unstable_by_key(|position| {
             let coord = chunk_coord_from_world(*position);
-            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
+            (
+                coord.y, coord.z, coord.x, position.y, position.z, position.x,
+            )
         });
 
         self.reset();
@@ -245,10 +245,16 @@ impl GeneratedFluidSettling {
             }
         }
 
-        let mut dependencies = self.dependency_positions.iter().copied().collect::<Vec<_>>();
+        let mut dependencies = self
+            .dependency_positions
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
         dependencies.sort_unstable_by_key(|position| {
             let coord = chunk_coord_from_world(*position);
-            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
+            (
+                coord.y, coord.z, coord.x, position.y, position.z, position.x,
+            )
         });
         for position in dependencies {
             let coord = chunk_coord_from_world(position);
@@ -264,9 +270,9 @@ impl GeneratedFluidSettling {
     }
 
     fn verification_inputs_changed(&self, world: &VoxelWorld) -> bool {
-        self.verification_revisions.iter().any(|(coord, revision)| {
-            world.chunk_content_revision(*coord) != Some(*revision)
-        })
+        self.verification_revisions
+            .iter()
+            .any(|(coord, revision)| world.chunk_content_revision(*coord) != Some(*revision))
     }
 
     fn evaluate_position(
@@ -281,14 +287,8 @@ impl GeneratedFluidSettling {
         let Some((cell, current, _)) = world.sample_at(position) else {
             return;
         };
-        let desired = desired_fluid_with_scratch(
-            world,
-            position,
-            cell,
-            current,
-            fluids,
-            &mut self.scratch,
-        );
+        let desired =
+            desired_fluid_with_scratch(world, position, cell, current, fluids, &mut self.scratch);
         if current == desired {
             return;
         }
@@ -315,12 +315,7 @@ impl GeneratedFluidSettling {
         self.enqueue_changed_neighborhood(world, position);
     }
 
-    fn include_mutable_chunk(
-        &mut self,
-        world: &VoxelWorld,
-        coord: IVec3,
-        generated: bool,
-    ) -> bool {
+    fn include_mutable_chunk(&mut self, world: &VoxelWorld, coord: IVec3, generated: bool) -> bool {
         if self.mutable_chunks.contains(&coord) {
             return true;
         }
@@ -440,11 +435,9 @@ impl GeneratedFluidSettling {
 
     fn seed_frontier_into_work(&mut self, world: &VoxelWorld, coord: IVec3) {
         let mut targets = Vec::new();
-        visit_loaded_fluid_frontier_targets(
-            world,
-            coord,
-            &mut |_fluid_id, target, priority| targets.push((target, priority)),
-        );
+        visit_loaded_fluid_frontier_targets(world, coord, &mut |_fluid_id, target, priority| {
+            targets.push((target, priority))
+        });
         for (target, priority) in targets {
             self.enqueue_work_target(world, target, priority);
         }
@@ -463,11 +456,9 @@ impl GeneratedFluidSettling {
         }
 
         let mut targets = Vec::new();
-        visit_loaded_fluid_frontier_targets(
-            world,
-            coord,
-            &mut |_fluid_id, target, priority| targets.push((target, priority)),
-        );
+        visit_loaded_fluid_frontier_targets(world, coord, &mut |_fluid_id, target, priority| {
+            targets.push((target, priority))
+        });
 
         for (target, priority) in targets {
             if target.y < 0 || world.sample_at(target).is_none() {
@@ -481,7 +472,7 @@ impl GeneratedFluidSettling {
         }
     }
 }
- 
+
 fn fluid_dependency_reaches_chunk(
     position: IVec3,
     max_spread: u16,
@@ -518,4 +509,3 @@ fn horizontal_distance_to_chunk(position: IVec3, minimum: IVec3, maximum: IVec3)
     };
     x.saturating_add(z)
 }
-

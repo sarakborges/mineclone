@@ -347,13 +347,11 @@ pub(super) fn rebuild_chat_history(
                             },
                             BackgroundColor(Color::NONE),
                             BorderColor::all(Color::NONE),
-                            children![
-                                (
-                                    typography::hud_link("[Warp to]"),
-                                    typography::tooltip_shadow(),
-                                    Pickable::IGNORE,
-                                )
-                            ],
+                            children![(
+                                typography::hud_link("[Warp to]"),
+                                typography::tooltip_shadow(),
+                                Pickable::IGNORE,
+                            )],
                         ));
                     });
                 }
@@ -371,13 +369,11 @@ pub(super) fn rebuild_chat_history(
                         },
                         BackgroundColor(Color::NONE),
                         BorderColor::all(Color::NONE),
-                        children![
-                            (
-                                typography::hud_link("[Open structure file]"),
-                                typography::tooltip_shadow(),
-                                Pickable::IGNORE,
-                            )
-                        ],
+                        children![(
+                            typography::hud_link("[Open structure file]"),
+                            typography::tooltip_shadow(),
+                            Pickable::IGNORE,
+                        )],
                     ));
                 }
             }

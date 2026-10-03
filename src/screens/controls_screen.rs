@@ -7,7 +7,7 @@ use crate::{
     },
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         cosmic_background::{self, STAR_FIELD},
         screen, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
@@ -179,45 +179,41 @@ fn spawn_controls_screen(
                 content.overflow = Overflow::scroll_y();
                 content.padding = UiRect::right(px(12));
 
-                body.spawn((
-                    content,
-                    ScrollPosition(Vec2::ZERO),
-                    ScrollArea,
-                ))
-                .with_children(|sections| {
-                    spawn_control_section(
-                        sections,
-                        "controls.category.movement",
-                        MOVEMENT_CONTROLS,
-                        &keybinds,
-                        &localization,
-                        language,
-                    );
-                    spawn_control_section(
-                        sections,
-                        "controls.category.interface",
-                        INTERFACE_CONTROLS,
-                        &keybinds,
-                        &localization,
-                        language,
-                    );
-                    spawn_control_section(
-                        sections,
-                        "controls.category.actions",
-                        ACTION_CONTROLS,
-                        &keybinds,
-                        &localization,
-                        language,
-                    );
-                    spawn_control_section(
-                        sections,
-                        "controls.category.chat",
-                        CHAT_CONTROLS,
-                        &keybinds,
-                        &localization,
-                        language,
-                    );
-                });
+                body.spawn((content, ScrollPosition(Vec2::ZERO), ScrollArea))
+                    .with_children(|sections| {
+                        spawn_control_section(
+                            sections,
+                            "controls.category.movement",
+                            MOVEMENT_CONTROLS,
+                            &keybinds,
+                            &localization,
+                            language,
+                        );
+                        spawn_control_section(
+                            sections,
+                            "controls.category.interface",
+                            INTERFACE_CONTROLS,
+                            &keybinds,
+                            &localization,
+                            language,
+                        );
+                        spawn_control_section(
+                            sections,
+                            "controls.category.actions",
+                            ACTION_CONTROLS,
+                            &keybinds,
+                            &localization,
+                            language,
+                        );
+                        spawn_control_section(
+                            sections,
+                            "controls.category.chat",
+                            CHAT_CONTROLS,
+                            &keybinds,
+                            &localization,
+                            language,
+                        );
+                    });
             });
 
             root.spawn(screen::footer()).with_children(|footer| {

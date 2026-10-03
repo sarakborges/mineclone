@@ -46,8 +46,7 @@ impl ColumnTintCache {
             BlockTint::Leaf => &mut self.leaf,
             BlockTint::Foliage => &mut self.foliage,
         };
-        let cache = cache
-            .get_or_insert_with(|| vec![None; CHUNK_SIZE * CHUNK_SIZE]);
+        let cache = cache.get_or_insert_with(|| vec![None; CHUNK_SIZE * CHUNK_SIZE]);
         *cache[index].get_or_insert_with(make)
     }
 }
@@ -115,11 +114,8 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
         return Vec::new();
     }
 
-    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
-        context.world,
-        coord * CHUNK_SIZE as i32,
-        chunk,
-    );
+    let lighting_cache =
+        ChunkLightingCache::capture_if_worthwhile(context.world, coord * CHUNK_SIZE as i32, chunk);
     let terrain_meshes = if chunk.has_terrain_content() {
         build_chunk_terrain_render_meshlets_with_lighting(
             coord,
@@ -170,13 +166,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
         );
     }
 
-    build_chunk_terrain_render_meshlets_with_lighting(
-        coord,
-        chunk,
-        context,
-        meshlets,
-        None,
-    )
+    build_chunk_terrain_render_meshlets_with_lighting(coord, chunk, context, meshlets, None)
 }
 
 fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
@@ -209,14 +199,8 @@ fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
                 tint
             } else {
                 column_tints.get_or_insert_with(voxel, block.tint, || {
-                    let position =
-                        Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-                    block_tint_at(
-                        block.tint,
-                        position,
-                        context.biome_field,
-                        context.biomes,
-                    )
+                    let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                    block_tint_at(block.tint, position, context.biome_field, context.biomes)
                 })
             };
 
@@ -240,20 +224,15 @@ fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
                 let color = if definition.tint == BlockTint::None {
                     Color::WHITE
                 } else {
-                    column_tints.get_or_insert_with(
-                        voxel,
-                        definition.tint,
-                        || {
-                            let position =
-                                Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-                            block_tint_at(
-                                definition.tint,
-                                position,
-                                context.biome_field,
-                                context.biomes,
-                            )
-                        },
-                    )
+                    column_tints.get_or_insert_with(voxel, definition.tint, || {
+                        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                        block_tint_at(
+                            definition.tint,
+                            position,
+                            context.biome_field,
+                            context.biomes,
+                        )
+                    })
                 };
                 let tint = color.to_srgba();
                 [tint.red, tint.green, tint.blue]
@@ -287,13 +266,7 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
         );
     }
 
-    build_chunk_fluid_render_meshlets_with_lighting(
-        coord,
-        chunk,
-        context,
-        meshlets,
-        None,
-    )
+    build_chunk_fluid_render_meshlets_with_lighting(coord, chunk, context, meshlets, None)
 }
 
 fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
@@ -307,8 +280,7 @@ fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
         return Vec::new();
     }
 
-    let mut column_tints =
-        vec![None::<Vec<Option<[f32; 3]>>>; context.fluids.iter().count()];
+    let mut column_tints = vec![None::<Vec<Option<[f32; 3]>>>; context.fluids.iter().count()];
     build_fluid_meshlets(
         context.world,
         coord,
@@ -331,10 +303,14 @@ fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
                     .get(fluid_id)
                     .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
 
-                context
-                    .biome_field
-                    .water_color(position, context.biomes, fluid.color)
-                    .to_srgb()
+                if fluid.biome_tint {
+                    context
+                        .biome_field
+                        .water_color(position, context.biomes, fluid.color)
+                        .to_srgb()
+                } else {
+                    fluid.color.to_srgb()
+                }
             })
         },
     )

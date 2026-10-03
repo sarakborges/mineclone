@@ -103,12 +103,7 @@ fn spawn_creature_with_state(
         .id();
     log_gameplay_event(format!(
         "entity.spawn entity={:?} type=creature id={} name={} position={:?} health={:.3} meta_tags={:?}",
-        entity,
-        definition.id,
-        name,
-        feet,
-        health_for_log,
-        meta_tags_for_log
+        entity, definition.id, name, feet, health_for_log, meta_tags_for_log
     ));
     Ok(name)
 }

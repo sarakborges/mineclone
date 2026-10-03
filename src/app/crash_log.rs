@@ -14,7 +14,9 @@ use std::{
 };
 
 use self::{
-    session::{append_runtime_line, append_session_line, initialize_session_log, with_session_file},
+    session::{
+        append_runtime_line, append_session_line, initialize_session_log, with_session_file,
+    },
     timestamp::format_timestamp,
 };
 

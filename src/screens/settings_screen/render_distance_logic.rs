@@ -18,8 +18,8 @@ use crate::{
 };
 
 use super::render_distance_section::{
-    RenderDistanceInput, RenderDistanceInputState, RenderDistanceInputText,
-    RenderDistanceSlider, RenderDistanceSliderThumb, RenderDistanceValueText,
+    RenderDistanceInput, RenderDistanceInputState, RenderDistanceInputText, RenderDistanceSlider,
+    RenderDistanceSliderThumb, RenderDistanceValueText,
 };
 
 pub(super) fn apply_render_distance(

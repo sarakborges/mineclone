@@ -21,13 +21,8 @@ pub(crate) const MAX_OBJECTS_PER_VOXEL: usize = 8;
 pub(crate) type ObjectCells = SmallVec<[ObjectCell; 2]>;
 const BOUNDARY_FACE_COUNT: usize = 6;
 const FLUID_FRONTIER_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
-const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
-    IVec3::NEG_Y,
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
+const FLUID_SPREAD_TARGETS: [IVec3; 5] =
+    [IVec3::NEG_Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
 const NEGATIVE_X_FACE: usize = 0;
 const POSITIVE_X_FACE: usize = 1;
 const NEGATIVE_Y_FACE: usize = 2;
@@ -128,20 +123,22 @@ impl<T: Copy + Eq> PaletteStorage<T> {
         let mut word_index = 0_usize;
         let mut remaining = self.occupied[0];
 
-        std::iter::from_fn(move || loop {
-            while remaining == 0 {
-                word_index += 1;
-                if word_index >= self.occupied.len() {
-                    return None;
+        std::iter::from_fn(move || {
+            loop {
+                while remaining == 0 {
+                    word_index += 1;
+                    if word_index >= self.occupied.len() {
+                        return None;
+                    }
+                    remaining = self.occupied[word_index];
                 }
-                remaining = self.occupied[word_index];
-            }
 
-            let bit = remaining.trailing_zeros() as usize;
-            remaining &= remaining - 1;
-            let voxel_index = word_index * u64::BITS as usize + bit;
-            if voxel_index < CHUNK_VOLUME {
-                return Some(voxel_index);
+                let bit = remaining.trailing_zeros() as usize;
+                remaining &= remaining - 1;
+                let voxel_index = word_index * u64::BITS as usize + bit;
+                if voxel_index < CHUNK_VOLUME {
+                    return Some(voxel_index);
+                }
             }
         })
     }
@@ -278,13 +275,7 @@ impl VoxelChunkStructureMut<'_> {
         self.fluids.get(index(x, y, z))
     }
 
-    pub(crate) fn set_block(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        block: VoxelCell,
-    ) {
+    pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: VoxelCell) {
         let voxel_index = index(x, y, z);
         let previous = self.blocks.get(voxel_index);
         if previous == Some(block) {
@@ -311,8 +302,7 @@ impl VoxelChunkStructureMut<'_> {
             let reusable = self.blocks.usage.iter().position(|&usage| usage == 0);
             let palette_index = if let Some(index) = reusable {
                 self.blocks.palette[index] = block;
-                u16::try_from(index + 1)
-                    .expect("structure block palette index must fit u16")
+                u16::try_from(index + 1).expect("structure block palette index must fit u16")
             } else {
                 self.blocks.palette.push(block);
                 self.blocks.usage.push(0);
@@ -370,9 +360,7 @@ impl VoxelChunkStructureMut<'_> {
             .block_count
             .checked_sub(1)
             .expect("chunk block count cannot underflow");
-        if became_unused
-            && let Some(previous) = previous
-        {
+        if became_unused && let Some(previous) = previous {
             self.block_palette_indices.remove(&previous);
         }
         if let Some(removed) = self.layers.remove(&(voxel_index as u16)) {
@@ -408,13 +396,7 @@ impl VoxelChunkStructureMut<'_> {
         )
     }
 
-    pub(crate) fn set_object(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        object: ObjectCell,
-    ) -> bool {
+    pub(crate) fn set_object(&mut self, x: usize, y: usize, z: usize, object: ObjectCell) -> bool {
         set_object_in_storage(self.blocks, self.objects, x, y, z, object)
     }
 
@@ -441,13 +423,7 @@ impl VoxelChunkStructureMut<'_> {
         set_voxel_bit(self.dynamic_fluid_cells, voxel_index, false);
     }
 
-    pub(crate) fn set_fluid(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        fluid: FluidCell,
-    ) {
+    pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: FluidCell) {
         let voxel_index = index(x, y, z);
         let previous = self.fluids.get(voxel_index);
         if previous == Some(fluid) {
@@ -464,11 +440,7 @@ impl VoxelChunkStructureMut<'_> {
                 adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
             }
         }
-        set_voxel_bit(
-            self.dynamic_fluid_cells,
-            voxel_index,
-            !fluid.is_source(),
-        );
+        set_voxel_bit(self.dynamic_fluid_cells, voxel_index, !fluid.is_source());
     }
 }
 
@@ -483,13 +455,7 @@ pub(crate) struct VoxelChunkInitialFluidsMut<'a> {
 }
 
 impl VoxelChunkInitialFluidsMut<'_> {
-    pub(crate) fn set_fluid(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        fluid: FluidCell,
-    ) {
+    pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: FluidCell) {
         let voxel_index = index(x, y, z);
         debug_assert!(
             self.fluids.get(voxel_index).is_none(),
@@ -517,11 +483,7 @@ impl VoxelChunkInitialFluidsMut<'_> {
         if self.blocks.get(voxel_index).is_none() {
             adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
         }
-        set_voxel_bit(
-            self.dynamic_fluid_cells,
-            voxel_index,
-            !fluid.is_source(),
-        );
+        set_voxel_bit(self.dynamic_fluid_cells, voxel_index, !fluid.is_source());
     }
 }
 
@@ -536,13 +498,7 @@ pub(crate) struct VoxelChunkFluidsMut<'a> {
 }
 
 impl VoxelChunkFluidsMut<'_> {
-    pub(crate) fn set_fluid(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        fluid: Option<FluidCell>,
-    ) {
+    pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
         set_fluid_in_storage(
             self.blocks,
             &mut *self.fluids,
@@ -638,7 +594,9 @@ impl VoxelChunk {
                 if voxel_index >= CHUNK_VOLUME {
                     break;
                 }
-                let fluid = self.fluids.get(voxel_index)
+                let fluid = self
+                    .fluids
+                    .get(voxel_index)
                     .expect("fluid frontier source metadata must point to a fluid voxel");
                 let (x, y, z) = coordinates(voxel_index);
                 visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
@@ -647,10 +605,7 @@ impl VoxelChunk {
         }
     }
 
-    pub(crate) fn visit_dynamic_fluid_cells(
-        &self,
-        mut visit: impl FnMut(IVec3, FluidCell),
-    ) {
+    pub(crate) fn visit_dynamic_fluid_cells(&self, mut visit: impl FnMut(IVec3, FluidCell)) {
         for (word_index, &word) in self.dynamic_fluid_cells.iter().enumerate() {
             let mut remaining = word;
             while remaining != 0 {
@@ -659,7 +614,9 @@ impl VoxelChunk {
                 if voxel_index >= CHUNK_VOLUME {
                     break;
                 }
-                let fluid = self.fluids.get(voxel_index)
+                let fluid = self
+                    .fluids
+                    .get(voxel_index)
                     .expect("dynamic fluid metadata must point to a fluid voxel");
                 debug_assert!(!fluid.is_source());
                 let (x, y, z) = coordinates(voxel_index);
@@ -670,13 +627,11 @@ impl VoxelChunk {
     }
 
     pub(crate) fn boundary_has_content(&self, outward: IVec3) -> bool {
-        boundary_face_index(outward)
-            .is_some_and(|face| self.boundary_content_counts[face] > 0)
+        boundary_face_index(outward).is_some_and(|face| self.boundary_content_counts[face] > 0)
     }
 
     pub(crate) fn boundary_has_fluid(&self, outward: IVec3) -> bool {
-        boundary_face_index(outward)
-            .is_some_and(|face| self.boundary_fluid_counts[face] > 0)
+        boundary_face_index(outward).is_some_and(|face| self.boundary_fluid_counts[face] > 0)
     }
 
     pub(crate) fn dependency_boundary_has_content(&self, outward: IVec3) -> bool {
@@ -695,9 +650,7 @@ impl VoxelChunk {
             return self.boundary_has_fluid(outward);
         }
 
-        dependency_boundary_region_has(outward, |x, y, z| {
-            self.fluids.get(index(x, y, z)).is_some()
-        })
+        dependency_boundary_region_has(outward, |x, y, z| self.fluids.get(index(x, y, z)).is_some())
     }
 
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
@@ -718,16 +671,12 @@ impl VoxelChunk {
             .get_ref(index(x as usize, y as usize, z as usize))
     }
 
-    pub(crate) fn block_metadata_at(
-        &self,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) -> Option<&BlockMetadata> {
+    pub(crate) fn block_metadata_at(&self, x: i32, y: i32, z: i32) -> Option<&BlockMetadata> {
         if !in_bounds(x, y, z) {
             return None;
         }
-        self.metadata.get(index(x as usize, y as usize, z as usize) as u16)
+        self.metadata
+            .get(index(x as usize, y as usize, z as usize) as u16)
     }
 
     pub(crate) fn block_metadata_entries(
@@ -795,9 +744,7 @@ impl VoxelChunk {
         self.layers.get(&index).map_or(&[], Vec::as_slice)
     }
 
-    pub(crate) fn layer_groups(
-        &self,
-    ) -> impl Iterator<Item = (usize, &[AttachedLayer])> + '_ {
+    pub(crate) fn layer_groups(&self) -> impl Iterator<Item = (usize, &[AttachedLayer])> + '_ {
         self.layers
             .iter()
             .map(|(&index, layers)| (index as usize, layers.as_slice()))
@@ -808,7 +755,9 @@ impl VoxelChunk {
             return &[];
         }
         let key = index(x as usize, y as usize, z as usize) as u16;
-        self.objects.get(&key).map_or(&[], |objects| objects.as_slice())
+        self.objects
+            .get(&key)
+            .map_or(&[], |objects| objects.as_slice())
     }
 
     pub(crate) fn object_at(&self, x: i32, y: i32, z: i32) -> Option<ObjectCell> {
@@ -859,13 +808,7 @@ impl VoxelChunk {
 
     pub(crate) fn visit_content_voxels(
         &self,
-        mut visit: impl FnMut(
-            usize,
-            usize,
-            usize,
-            Option<VoxelCell>,
-            Option<FluidCell>,
-        ),
+        mut visit: impl FnMut(usize, usize, usize, Option<VoxelCell>, Option<FluidCell>),
     ) {
         for (word_index, (&block_word, &fluid_word)) in self
             .blocks
@@ -895,10 +838,7 @@ impl VoxelChunk {
         }
     }
 
-    pub(crate) fn visit_fluid_voxels(
-        &self,
-        mut visit: impl FnMut(usize, usize, usize, FluidCell),
-    ) {
+    pub(crate) fn visit_fluid_voxels(&self, mut visit: impl FnMut(usize, usize, usize, FluidCell)) {
         self.fluids.visit_occupied_indices(|voxel_index| {
             let fluid = self
                 .fluids
@@ -987,8 +927,7 @@ impl VoxelChunk {
             .filter_map(|(index, (cell, usage))| {
                 (usage > 0).then_some((
                     cell,
-                    u16::try_from(index + 1)
-                        .expect("active block palette index must fit u16"),
+                    u16::try_from(index + 1).expect("active block palette index must fit u16"),
                 ))
             })
             .collect();
@@ -1014,11 +953,7 @@ impl VoxelChunk {
         let sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         sources.fill(0);
         if self.fluid_count > 0 {
-            rebuild_fluid_frontier_sources(
-                self.blocks.as_ref(),
-                self.fluids.as_ref(),
-                sources,
-            );
+            rebuild_fluid_frontier_sources(self.blocks.as_ref(), self.fluids.as_ref(), sources);
         }
         result
     }
@@ -1140,13 +1075,7 @@ impl VoxelChunk {
         remove_layer_in_storage(layers, &mut self.layer_count, x, y, z, face, layer_id)
     }
 
-    pub(crate) fn set_object(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        object: ObjectCell,
-    ) -> bool {
+    pub(crate) fn set_object(&mut self, x: usize, y: usize, z: usize, object: ObjectCell) -> bool {
         let objects = Arc::make_mut(&mut self.objects);
         set_object_in_storage(self.blocks.as_ref(), objects, x, y, z, object)
     }
@@ -1225,7 +1154,10 @@ impl VoxelChunk {
     }
 
     pub(crate) fn rebuild_empty_light_columns(&mut self, sky_by_column: &[u8; CHUNK_AREA]) {
-        debug_assert!(self.is_empty(), "empty light rebuild requires an empty chunk");
+        debug_assert!(
+            self.is_empty(),
+            "empty light rebuild requires an empty chunk"
+        );
 
         if let Some(&sky) = sky_by_column.first()
             && sky_by_column.iter().all(|&candidate| candidate == sky)
@@ -1677,20 +1609,10 @@ mod tests {
             Some(&json!("Storage"))
         );
 
-        chunk.set_block(
-            2,
-            3,
-            4,
-            Some(stone.with_state("variant", "mossy")),
-        );
+        chunk.set_block(2, 3, 4, Some(stone.with_state("variant", "mossy")));
         assert!(chunk.block_metadata_at(2, 3, 4).is_some());
 
-        chunk.set_block(
-            2,
-            3,
-            4,
-            Some(VoxelCell::new("dirt", Default::default())),
-        );
+        chunk.set_block(2, 3, 4, Some(VoxelCell::new("dirt", Default::default())));
         assert!(chunk.block_metadata_at(2, 3, 4).is_none());
     }
 
@@ -1741,12 +1663,7 @@ mod tests {
         assert!(chunk.add_layer(2, 3, 4, LayerFace::Top, lichen));
         assert_eq!(chunk.layers_at(2, 3, 4).len(), 2);
 
-        chunk.set_block(
-            2,
-            3,
-            4,
-            Some(VoxelCell::new("dirt", Default::default())),
-        );
+        chunk.set_block(2, 3, 4, Some(VoxelCell::new("dirt", Default::default())));
         assert!(chunk.layers_at(2, 3, 4).is_empty());
     }
 
@@ -1770,12 +1687,7 @@ mod tests {
         assert!(!chunk.set_object(2, 3, 4, pebble));
         assert_eq!(chunk.objects_at(2, 3, 4), &[pebble, stick]);
 
-        chunk.set_block(
-            2,
-            3,
-            4,
-            Some(VoxelCell::new("dirt", Default::default())),
-        );
+        chunk.set_block(2, 3, 4, Some(VoxelCell::new("dirt", Default::default())));
         assert!(chunk.objects_at(2, 3, 4).is_empty());
     }
 
@@ -1817,10 +1729,7 @@ mod tests {
 
         assert_eq!(chunk.cell_at_local(3, 5, 7), chunk.cell_at(3, 5, 7));
         assert_eq!(chunk.fluid_at_local(3, 5, 7), chunk.fluid_at(3, 5, 7));
-        assert_eq!(
-            chunk.content_at_local(3, 5, 7),
-            (Some(block), Some(fluid)),
-        );
+        assert_eq!(chunk.content_at_local(3, 5, 7), (Some(block), Some(fluid)),);
     }
 
     #[test]
@@ -1857,7 +1766,12 @@ mod tests {
         let mut chunk = VoxelChunk::empty();
         let fluid = FluidCell::source(0, 8);
         let source = IVec3::new(5, 5, 5);
-        chunk.set_fluid(source.x as usize, source.y as usize, source.z as usize, Some(fluid));
+        chunk.set_fluid(
+            source.x as usize,
+            source.y as usize,
+            source.z as usize,
+            Some(fluid),
+        );
 
         let mut sources = Vec::new();
         chunk.visit_potential_fluid_frontier_sources(|position, _| sources.push(position));
@@ -1893,7 +1807,12 @@ mod tests {
         let mut chunk = VoxelChunk::empty();
         let fluid = FluidCell::source(0, 8);
         let source = IVec3::new(0, 5, 5);
-        chunk.set_fluid(source.x as usize, source.y as usize, source.z as usize, Some(fluid));
+        chunk.set_fluid(
+            source.x as usize,
+            source.y as usize,
+            source.z as usize,
+            Some(fluid),
+        );
 
         for offset in [IVec3::NEG_Y, IVec3::X, IVec3::Z, IVec3::NEG_Z] {
             let target = source + offset;

@@ -8,9 +8,7 @@ use bevy::{
 use crate::{
     voxel::{
         chunk::VoxelChunk,
-        coordinates::{
-            chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
-        },
+        coordinates::{chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains},
         world::VoxelWorld,
     },
     world::{
@@ -153,16 +151,16 @@ pub(super) fn collect_generated_chunks(
         );
         work.world.insert_chunk(completed.coord, completed.output);
         if requires_fluid_settling {
-            work.state.generation_wave.stage_generated_chunk(completed.coord);
+            work.state
+                .generation_wave
+                .stage_generated_chunk(completed.coord);
         } else {
             work.state.mark_ready(completed.coord);
             work.state.generation_wave.complete_target(completed.coord);
         }
     }
 
-    if work.generation_tasks.pending_count() > 0
-        || work.state.generation_wave.pending_len() > 0
-    {
+    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave.pending_len() > 0 {
         return;
     }
 
@@ -218,15 +216,13 @@ fn begin_settled_wave_publication(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
-    reconcile_existing_fluid_changes(
-        &completion.changed_existing_positions,
-        work,
-        queues,
-    );
+    reconcile_existing_fluid_changes(&completion.changed_existing_positions, work, queues);
 
     for &coord in &completion.owned_existing_chunks {
         queues.fluid.reactivate_loaded_chunk(coord, current_tick);
-        queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
+        queues
+            .fluid
+            .enqueue_loaded_fluid_frontier(&work.world, coord);
     }
 
     work.state
@@ -297,7 +293,9 @@ fn reconcile_existing_fluid_changes(
     let mut changed_chunks = changed_chunks.into_iter().collect::<Vec<_>>();
     changed_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
     for coord in changed_chunks {
-        queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
+        queues
+            .fluid
+            .enqueue_loaded_fluid_frontier(&work.world, coord);
     }
 }
 
@@ -381,12 +379,7 @@ pub(in crate::world) fn refill_generation_workers(
     async_work: Res<ChunkAsyncWorkLimiter>,
 ) {
     if state.generation_wave.settling_or_publishing() {
-        prefetch_next_generation_wave(
-            &mut world,
-            &mut state,
-            &mut generation_tasks,
-            &async_work,
-        );
+        prefetch_next_generation_wave(&mut world, &mut state, &mut generation_tasks, &async_work);
         return;
     }
 
@@ -398,12 +391,7 @@ pub(in crate::world) fn refill_generation_workers(
     // late in the frame lets workers consume already-selected wave targets
     // instead of idling until the next Update after their permits are released.
     // This does no priority scanning and never grows the active wave.
-    schedule_generation_wave_pending(
-        &mut state,
-        &mut generation_tasks,
-        &async_work,
-        None,
-    );
+    schedule_generation_wave_pending(&mut state, &mut generation_tasks, &async_work, None);
 }
 
 fn prefetch_next_generation_wave(
@@ -571,12 +559,14 @@ mod tests {
         );
 
         let world_position = coord * crate::voxel::chunk::CHUNK_SIZE as i32 + IVec3::ONE;
-        assert!(world
-            .set_block_at(
-                world_position,
-                Some(VoxelCell::new("stone", Default::default())),
-            )
-            .is_some());
+        assert!(
+            world
+                .set_block_at(
+                    world_position,
+                    Some(VoxelCell::new("stone", Default::default())),
+                )
+                .is_some()
+        );
         world.archive_chunk(coord);
         assert_eq!(
             chunk_availability(&world, coord),
@@ -609,7 +599,9 @@ mod tests {
         let dry = VoxelChunk::empty();
         let mut world = VoxelWorld::default();
 
-        assert!(!generated_chunk_requires_fluid_settling(&world, coord, &dry));
+        assert!(!generated_chunk_requires_fluid_settling(
+            &world, coord, &dry
+        ));
 
         let mut static_water = VoxelChunk::empty();
         static_water.edit_initial_fluids(|fluids| {
@@ -624,7 +616,9 @@ mod tests {
 
         let mut flowing = VoxelChunk::empty();
         flowing.set_fluid(4, 5, 6, Some(FluidCell::spreading(0, 7, 1)));
-        assert!(generated_chunk_requires_fluid_settling(&world, coord, &flowing));
+        assert!(generated_chunk_requires_fluid_settling(
+            &world, coord, &flowing
+        ));
 
         world.insert_chunk(coord + IVec3::X, flowing);
         assert!(generated_chunk_requires_fluid_settling(&world, coord, &dry));

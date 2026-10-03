@@ -3,8 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use super::{
     highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
     mining::BlockMiningPlugin, mining_visual::BlockMiningVisualPlugin,
-    placement_orientation::PlacementOrientationPlugin,
-    placement_preview::PlacementPreviewPlugin,
+    placement_orientation::PlacementOrientationPlugin, placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
     app::{crash_log::log_gameplay_event, game_state::GameState},
@@ -97,8 +96,7 @@ type TargetedCreatureQuery<'w, 's> = Query<
     With<CreatureInstance>,
 >;
 
-type InteractWorldItemQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static Transform), With<WorldItem>>;
+type InteractWorldItemQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), With<WorldItem>>;
 
 #[derive(SystemParam)]
 struct TargetCandidates<'w, 's> {
@@ -162,28 +160,40 @@ fn update_targets(
         .unwrap_or(0.0)
     });
     let fluid_hit = raycast_fluid_source(&*world, origin, direction, TARGET_RANGE);
-    let fluid_distance = fluid_hit.as_ref().map_or(TARGET_RANGE, |(_, distance)| *distance);
+    let fluid_distance = fluid_hit
+        .as_ref()
+        .map_or(TARGET_RANGE, |(_, distance)| *distance);
     let world_distance = block_distance.min(fluid_distance);
 
-    let creature_hits = candidates.creatures.iter().filter_map(
-        |(entity, transform, collider, health)| {
-            if health.is_dead() {
-                return None;
-            }
-            let (min, max) = collider.0.bounds(transform.translation);
+    let creature_hits =
+        candidates
+            .creatures
+            .iter()
+            .filter_map(|(entity, transform, collider, health)| {
+                if health.is_dead() {
+                    return None;
+                }
+                let (min, max) = collider.0.bounds(transform.translation);
+                ray_box_distance(origin, direction, min, max)
+                    .filter(|distance| *distance <= TARGET_RANGE && *distance <= world_distance)
+                    .map(|distance| (TargetKind::Creature(entity), distance))
+            });
+    let world_item_hits = candidates
+        .world_items
+        .iter()
+        .filter_map(|(entity, transform)| {
+            let (min, max) = target_bounds(transform.translation);
             ray_box_distance(origin, direction, min, max)
                 .filter(|distance| *distance <= TARGET_RANGE && *distance <= world_distance)
-                .map(|distance| (TargetKind::Creature(entity), distance))
-        },
+                .map(|distance| (TargetKind::WorldItem(entity), distance))
+        });
+    let object_hit = closest_world_object_hit(
+        &world,
+        &candidates.objects,
+        origin,
+        direction,
+        world_distance,
     );
-    let world_item_hits = candidates.world_items.iter().filter_map(|(entity, transform)| {
-        let (min, max) = target_bounds(transform.translation);
-        ray_box_distance(origin, direction, min, max)
-            .filter(|distance| *distance <= TARGET_RANGE && *distance <= world_distance)
-            .map(|distance| (TargetKind::WorldItem(entity), distance))
-    });
-    let object_hit =
-        closest_world_object_hit(&world, &candidates.objects, origin, direction, world_distance);
     let closest = creature_hits
         .chain(world_item_hits)
         .chain(object_hit)
@@ -223,10 +233,7 @@ fn update_targets(
     if targets.fluid.0 != next_fluid {
         log_gameplay_event(format!(
             "target.fluid from={:?} to={:?}",
-            targets
-                .fluid
-                .0
-                .map(|hit| (hit.voxel, hit.fluid.fluid_id)),
+            targets.fluid.0.map(|hit| (hit.voxel, hit.fluid.fluid_id)),
             next_fluid.map(|hit| (hit.voxel, hit.fluid.fluid_id))
         ));
         targets.fluid.0 = next_fluid;
@@ -342,8 +349,8 @@ fn closest_world_object_hit(
                 };
                 let chunk_origin = coord * crate::voxel::chunk::CHUNK_SIZE as i32;
                 for (local_x, local_y, local_z, object) in chunk.object_voxels() {
-                    let support = chunk_origin
-                        + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
+                    let support =
+                        chunk_origin + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
                     let Some(definition) = objects.get(object.object_id) else {
                         continue;
                     };
@@ -376,10 +383,7 @@ fn closest_world_object_hit(
     closest
 }
 
-fn object_target_bounds(
-    transform: &Transform,
-    definition: &ObjectDefinition,
-) -> (Vec3, Vec3) {
+fn object_target_bounds(transform: &Transform, definition: &ObjectDefinition) -> (Vec3, Vec3) {
     let center = Vec3::from_array(definition.target.center_offset);
     let half = Vec3::from_array(definition.target.size) * 0.5;
     let mut minimum = Vec3::splat(f32::INFINITY);

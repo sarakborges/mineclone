@@ -85,11 +85,7 @@ fn horizontal_contact_cell(position: Vec3) -> IVec2 {
 fn player_bounds(eye: Vec3) -> Bounds {
     let feet = eye.y - PLAYER_EYE_HEIGHT;
     (
-        Vec3::new(
-            eye.x - PLAYER_HALF_WIDTH,
-            feet,
-            eye.z - PLAYER_HALF_WIDTH,
-        ),
+        Vec3::new(eye.x - PLAYER_HALF_WIDTH, feet, eye.z - PLAYER_HALF_WIDTH),
         Vec3::new(
             eye.x + PLAYER_HALF_WIDTH,
             feet + PLAYER_HEIGHT,
@@ -274,10 +270,12 @@ pub(super) fn resolve_creature_creature_contacts(
 
         for pair_index in 0..broadphase.pairs.len() {
             let (first_entity, second_entity) = broadphase.pairs[pair_index];
-            let Ok([
-                (_, mut first, first_collider, first_meta),
-                (_, mut second, second_collider, second_meta),
-            ]) = creatures.get_many_mut([first_entity, second_entity])
+            let Ok(
+                [
+                    (_, mut first, first_collider, first_meta),
+                    (_, mut second, second_collider, second_meta),
+                ],
+            ) = creatures.get_many_mut([first_entity, second_entity])
             else {
                 continue;
             };

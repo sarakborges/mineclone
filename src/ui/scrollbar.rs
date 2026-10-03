@@ -59,7 +59,11 @@ fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
         AutoScrollbar { target },
         Interaction::default(),
         Node {
-            display: if initially_hidden { Display::None } else { Display::Flex },
+            display: if initially_hidden {
+                Display::None
+            } else {
+                Display::Flex
+            },
             min_width: px(8),
             margin: UiRect::left(px(6)),
             grid_column: GridPlacement::start(2),
@@ -89,7 +93,11 @@ where
     (
         AutoScrollbar { target },
         Node {
-            display: if initially_hidden { Display::None } else { Display::Flex },
+            display: if initially_hidden {
+                Display::None
+            } else {
+                Display::Flex
+            },
             min_width: px(8),
             margin: UiRect::left(px(6)),
             grid_column: GridPlacement::start(2),

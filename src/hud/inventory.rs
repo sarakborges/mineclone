@@ -43,9 +43,10 @@ use state::{
 };
 use sync::{
     InventoryItemContent, InventoryPanelState, rebuild_inventory_when_changed, spawn_inventory,
-    style_category_buttons, style_creative_slots, style_inventory_slots, style_inventory_trash_button,
-    style_search_bar, sync_inventory_cursor_icon, sync_inventory_item_tooltip,
-    sync_inventory_slot_contents, sync_inventory_sort_tooltip, update_cursor_icon_position,
+    style_category_buttons, style_creative_slots, style_inventory_slots,
+    style_inventory_trash_button, style_search_bar, sync_inventory_cursor_icon,
+    sync_inventory_item_tooltip, sync_inventory_slot_contents, sync_inventory_sort_tooltip,
+    update_cursor_icon_position,
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
@@ -315,18 +316,10 @@ fn localized_inventory_crafting_text(
         return Some(localization.format(language, "crafting.creates", &[("count", count)]));
     }
     if let Some(count) = source.strip_suffix(" required") {
-        return Some(localization.format(
-            language,
-            "crafting.requiredCount",
-            &[("count", count)],
-        ));
+        return Some(localization.format(language, "crafting.requiredCount", &[("count", count)]));
     }
     if let Some(count) = source.strip_prefix("Output ×") {
-        return Some(localization.format(
-            language,
-            "crafting.outputCount",
-            &[("count", count)],
-        ));
+        return Some(localization.format(language, "crafting.outputCount", &[("count", count)]));
     }
     if let Some(item) = source
         .strip_prefix("Crafted ")

@@ -5,10 +5,7 @@ use std::{
 
 use bevy::prelude::IVec3;
 
-use crate::voxel::{
-    coordinates::ChunkCoord,
-    deduplicated_queue::DeduplicatedQueue,
-};
+use crate::voxel::{coordinates::ChunkCoord, deduplicated_queue::DeduplicatedQueue};
 
 use super::residency::ResidencySelectionRevision;
 
@@ -132,7 +129,10 @@ impl PendingChunkQueue {
             }
 
             let removed = self.queue.remove(coord);
-            debug_assert!(removed, "pending priority cache must reference an active chunk");
+            debug_assert!(
+                removed,
+                "pending priority cache must reference an active chunk"
+            );
             self.priority_cache.queue_revision = self.queue.revision();
             return (Some(coord.as_ivec3()), scan);
         }

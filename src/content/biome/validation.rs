@@ -92,10 +92,8 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         definition.id
     );
     if let Some(surface_fluid) = &definition.surface_fluid {
-        let Some(crate::content::biome_terrain::BiomeTerrain::Volcano {
-            crater_depth,
-            ..
-        }) = definition.terrain
+        let Some(crate::content::biome_terrain::BiomeTerrain::Volcano { crater_depth, .. }) =
+            definition.terrain
         else {
             panic!(
                 "surface biome {} surfaceFluid currently requires volcano terrain",
@@ -247,14 +245,12 @@ fn validate_visuals(definition: &BiomeDefinition) {
         );
     }
     assert!(
-        visuals.terrain_roughness.is_finite()
-            && (0.0..=1.0).contains(&visuals.terrain_roughness),
+        visuals.terrain_roughness.is_finite() && (0.0..=1.0).contains(&visuals.terrain_roughness),
         "biome {} terrainRoughness must be between 0 and 1",
         definition.id
     );
     assert!(
-        visuals.terrain_metallic.is_finite()
-            && (0.0..=1.0).contains(&visuals.terrain_metallic),
+        visuals.terrain_metallic.is_finite() && (0.0..=1.0).contains(&visuals.terrain_metallic),
         "biome {} terrainMetallic must be between 0 and 1",
         definition.id
     );
@@ -288,9 +284,28 @@ fn validate_climate_range(biome_id: &str, field: &str, range: Option<BiomeClimat
 
 fn validate_creature_spawns(definition: &BiomeDefinition) {
     for spawn in &definition.creature_spawns {
-        assert!(!spawn.creature.trim().is_empty(), "biome {} has an empty creature spawn id", definition.id);
-        assert!(spawn.weight.is_finite() && spawn.weight >= 0.0, "biome {} creature {} weight must be finite and non-negative", definition.id, spawn.creature);
-        assert!(spawn.light_min <= 15 && spawn.light_max <= 15 && spawn.light_max >= spawn.light_min, "biome {} creature {} light range is invalid", definition.id, spawn.creature);
-        assert!(spawn.spacing.is_finite() && spawn.spacing > 0.0, "biome {} creature {} spacing must be positive and finite", definition.id, spawn.creature);
+        assert!(
+            !spawn.creature.trim().is_empty(),
+            "biome {} has an empty creature spawn id",
+            definition.id
+        );
+        assert!(
+            spawn.weight.is_finite() && spawn.weight >= 0.0,
+            "biome {} creature {} weight must be finite and non-negative",
+            definition.id,
+            spawn.creature
+        );
+        assert!(
+            spawn.light_min <= 15 && spawn.light_max <= 15 && spawn.light_max >= spawn.light_min,
+            "biome {} creature {} light range is invalid",
+            definition.id,
+            spawn.creature
+        );
+        assert!(
+            spawn.spacing.is_finite() && spawn.spacing > 0.0,
+            "biome {} creature {} spacing must be positive and finite",
+            definition.id,
+            spawn.creature
+        );
     }
 }

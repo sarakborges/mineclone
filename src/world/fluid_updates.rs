@@ -1,8 +1,8 @@
 mod diagnostics;
 mod frontier;
+mod settling;
 mod solver;
 mod state;
-mod settling;
 
 use std::time::Duration;
 
@@ -11,23 +11,20 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
-        coordinates::chunk_coord_from_world,
-        fluid::FluidCell,
-        lighting::PendingLightingUpdates,
-        neighbors::HORIZONTAL_NEIGHBORS,
-        world::VoxelWorld,
+        coordinates::chunk_coord_from_world, fluid::FluidCell, lighting::PendingLightingUpdates,
+        neighbors::HORIZONTAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
+pub(in crate::world) use self::settling::{
+    GeneratedFluidSettling, GeneratedFluidSettlingCompletion,
+};
+pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use self::{
     diagnostics::FluidPerformanceDiagnostics,
     solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh},
     state::FluidTickKey,
 };
-pub(in crate::world) use self::settling::{
-    GeneratedFluidSettling, GeneratedFluidSettlingCompletion,
-};
-pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
     chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
     game_rules::GameRules,
@@ -66,19 +63,13 @@ pub(super) fn process_fluid_updates(
 
     let catch_up = runtime.pending.should_catch_up();
     let mut budget = if catch_up {
-        FrameWorkBudget::new(
-            FLUID_CATCHUP_BUDGET,
-            MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
-        )
-        .with_global_deadline(runtime.frame_budget.deadline())
-        .with_maximum_items(MAX_FLUID_CATCHUP_UPDATES_PER_FRAME)
+        FrameWorkBudget::new(FLUID_CATCHUP_BUDGET, MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK)
+            .with_global_deadline(runtime.frame_budget.deadline())
+            .with_maximum_items(MAX_FLUID_CATCHUP_UPDATES_PER_FRAME)
     } else {
-        FrameWorkBudget::new(
-            FLUID_UPDATE_BUDGET,
-            MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
-        )
-        .with_global_deadline(runtime.frame_budget.deadline())
-        .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME)
+        FrameWorkBudget::new(FLUID_UPDATE_BUDGET, MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK)
+            .with_global_deadline(runtime.frame_budget.deadline())
+            .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME)
     };
 
     classify_topology_updates(
@@ -356,9 +347,9 @@ fn fluid_tick_target_can_change(world: &VoxelWorld, position: IVec3) -> bool {
         return false;
     }
 
-    world.sample_at(position).is_none_or(|(cell, fluid, _)| {
-        cell.is_none() && !fluid.is_some_and(FluidCell::is_source)
-    })
+    world
+        .sample_at(position)
+        .is_none_or(|(cell, fluid, _)| cell.is_none() && !fluid.is_some_and(FluidCell::is_source))
 }
 
 fn schedule_fluid_tick_after_delay(
@@ -400,10 +391,7 @@ fn fluid_tick_delay_ticks(spread_speed: f32, ticks_per_second: u32) -> Option<u6
     Some(ticks as u64)
 }
 
-fn transition_fluid_id(
-    current: Option<FluidCell>,
-    desired: Option<FluidCell>,
-) -> Option<FluidId> {
+fn transition_fluid_id(current: Option<FluidCell>, desired: Option<FluidCell>) -> Option<FluidId> {
     desired
         .map(|fluid| fluid.fluid_id)
         .or_else(|| current.map(|fluid| fluid.fluid_id))
@@ -441,10 +429,7 @@ mod tests {
         let source = IVec3::new(2, 2, 1);
         let solid = IVec3::new(3, 2, 1);
         world.set_fluid_at(source, Some(FluidCell::source(0, 8)));
-        world.set_block_at(
-            solid,
-            Some(VoxelCell::new("stone", Default::default())),
-        );
+        world.set_block_at(solid, Some(VoxelCell::new("stone", Default::default())));
 
         assert!(fluid_tick_target_can_change(&world, empty));
         assert!(!fluid_tick_target_can_change(&world, source));
@@ -453,9 +438,6 @@ mod tests {
 
         // Keep unloaded targets schedulable so existing dormant-tick semantics
         // still carry edge propagation across streaming boundaries.
-        assert!(fluid_tick_target_can_change(
-            &world,
-            IVec3::new(32, 2, 0),
-        ));
+        assert!(fluid_tick_target_can_change(&world, IVec3::new(32, 2, 0),));
     }
 }

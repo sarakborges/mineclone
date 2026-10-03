@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     app::keybinds::{KeybindAction, Keybinds},
-    player::{PLAYER_HEIGHT, PlayerEntity, camera::{CameraPerspective, GameplayCamera}},
+    player::{
+        PLAYER_HEIGHT, PlayerEntity,
+        camera::{CameraPerspective, GameplayCamera},
+    },
     voxel::{collision::ENTITY_STEP_HEIGHT, world::VoxelWorld},
 };
 
@@ -238,8 +241,7 @@ fn update_crouch_state(
         return;
     }
 
-    if walking.crouching
-        && player_collides_with_height(transform.translation, world, PLAYER_HEIGHT)
+    if walking.crouching && player_collides_with_height(transform.translation, world, PLAYER_HEIGHT)
     {
         return;
     }
@@ -247,11 +249,7 @@ fn update_crouch_state(
     walking.crouching = false;
 }
 
-fn update_run_state(
-    keys: &ButtonInput<KeyCode>,
-    current_tick: u64,
-    walking: &mut WalkingState,
-) {
+fn update_run_state(keys: &ButtonInput<KeyCode>, current_tick: u64, walking: &mut WalkingState) {
     if walking.crouching {
         walking.running = false;
         walking.run_deadline_tick = None;
@@ -280,8 +278,7 @@ fn update_run_state(
         walking.running = true;
         walking.run_deadline_tick = None;
     } else {
-        walking.run_deadline_tick =
-            Some(current_tick.saturating_add(DOUBLE_TAP_WINDOW_TICKS));
+        walking.run_deadline_tick = Some(current_tick.saturating_add(DOUBLE_TAP_WINDOW_TICKS));
     }
 }
 

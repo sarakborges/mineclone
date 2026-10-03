@@ -10,22 +10,23 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         cosmic_background::{self, STAR_FIELD},
-        screen, scrollbar::vertical_scrollbar, surface, theme, typography,
+        screen,
+        scrollbar::vertical_scrollbar,
+        surface, theme, typography,
     },
-    world::{game_rules::GameRules, render_distance::RenderDistanceSettings, NewWorldConfig},
+    world::{NewWorldConfig, game_rules::GameRules, render_distance::RenderDistanceSettings},
 };
 
 use super::{
     game_rules_section::game_rules_section,
-    keybinds_section::keybinds_section,
     hud_section::hud_section,
+    keybinds_section::keybinds_section,
     languages_section::languages_section,
     navigation::{
-        section_button, SettingsBackButton, SettingsContentScrollArea,
-        SettingsPendingSectionScroll, SettingsSection, SettingsSectionPanel,
-        SettingsSectionSelection,
+        SettingsBackButton, SettingsContentScrollArea, SettingsPendingSectionScroll,
+        SettingsSection, SettingsSectionPanel, SettingsSectionSelection, section_button,
     },
     new_world_section::{
         new_world_generation_section, new_world_settings_section, spawn_new_world_footer,
@@ -46,10 +47,8 @@ const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Keybinds,
     SettingsSection::Languages,
 ];
-const WORLD_SECTIONS: &[SettingsSection] = &[
-    SettingsSection::WorldSettings,
-    SettingsSection::GameRules,
-];
+const WORLD_SECTIONS: &[SettingsSection] =
+    &[SettingsSection::WorldSettings, SettingsSection::GameRules];
 const CREATE_WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
     SettingsSection::WorldGeneration,

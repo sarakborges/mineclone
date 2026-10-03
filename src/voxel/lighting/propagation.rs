@@ -15,9 +15,7 @@ use crate::voxel::{
 
 use super::{
     context::LightingContext,
-    medium::{
-        block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells,
-    },
+    medium::{block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells},
     queue::{LightingLane, LightingQueue},
 };
 
@@ -202,7 +200,9 @@ pub(super) fn relax_budgeted(
         // dirtiness until the entire lane drains leaves visible meshes stale
         // under repeated edits; the next batch will enqueue another deduplicated
         // remesh if convergence changes these voxels again.
-        changes.interactive.retain(|coord| world.chunk(*coord).is_some());
+        changes
+            .interactive
+            .retain(|coord| world.chunk(*coord).is_some());
         changes
             .interactive_positions
             .retain(|position| world.sample_at(*position).is_some());
@@ -214,7 +214,9 @@ pub(super) fn relax_budgeted(
         // Generated-fluid settling is a batch. Keep its presentation changes
         // private until the entire derived-light propagation converges so async
         // remesh cannot repeatedly capture intermediate lighting states.
-        changes.settling.retain(|coord| world.chunk(*coord).is_some());
+        changes
+            .settling
+            .retain(|coord| world.chunk(*coord).is_some());
         changes
             .settling_positions
             .retain(|position| world.sample_at(*position).is_some());

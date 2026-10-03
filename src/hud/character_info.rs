@@ -68,10 +68,7 @@ fn character_info_panel_visible(panels: Query<(), With<CharacterInfoHealthFill>>
     panels.iter().next().is_some()
 }
 
-fn spawn_character_info(
-    mut commands: Commands,
-    mut inventory: CharacterInfoInventorySpawn,
-) {
+fn spawn_character_info(mut commands: Commands, mut inventory: CharacterInfoInventorySpawn) {
     commands
         .spawn((
             CharacterInfoRoot,
@@ -177,10 +174,7 @@ fn spawn_character_health_bar(parent: &mut ChildSpawnerCommands) {
             Pickable::IGNORE,
         ))
         .with_children(|section| {
-            section.spawn((
-                typography::hud_subheading("Health"),
-                Pickable::IGNORE,
-            ));
+            section.spawn((typography::hud_subheading("Health"), Pickable::IGNORE));
             section
                 .spawn((
                     Node {
@@ -247,10 +241,7 @@ fn spawn_equipment_table(parent: &mut ChildSpawnerCommands) {
             Pickable::IGNORE,
         ))
         .with_children(|section| {
-            section.spawn((
-                typography::hud_subheading("Armor"),
-                Pickable::IGNORE,
-            ));
+            section.spawn((typography::hud_subheading("Armor"), Pickable::IGNORE));
             section
                 .spawn((
                     Node {

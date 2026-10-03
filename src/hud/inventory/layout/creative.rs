@@ -23,8 +23,6 @@ use crate::{
 };
 
 use super::{
-    InventoryItemView, InventoryLayoutState,
-    item::spawn_inventory_item,
     super::state::{
         CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
         CREATIVE_CATEGORY_HEIGHT, CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT,
@@ -34,6 +32,8 @@ use super::{
         PANEL_BORDER_WIDTH, PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH,
         SCROLLBAR_TOTAL_WIDTH, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
     },
+    InventoryItemView, InventoryLayoutState,
+    item::spawn_inventory_item,
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
@@ -425,10 +425,9 @@ fn spawn_category_button(
             BorderColor::all(border),
         ))
         .with_children(|button| {
-            let icon = category.map_or(
-                "textures/creative_categories/everything.png",
-                |category| category.icon.as_str(),
-            );
+            let icon = category.map_or("textures/creative_categories/everything.png", |category| {
+                category.icon.as_str()
+            });
             button.spawn((
                 ImageNode::new(items.asset_server.load(icon.to_owned())),
                 Node {
@@ -574,11 +573,7 @@ fn filtered_creative_catalog<'a>(
             _ => true,
         })
         .filter(|item| {
-            query.is_empty()
-                || item
-                    .name(sources.language)
-                    .to_lowercase()
-                    .contains(&query)
+            query.is_empty() || item.name(sources.language).to_lowercase().contains(&query)
         })
         .collect::<Vec<_>>();
 

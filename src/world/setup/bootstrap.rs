@@ -1,8 +1,4 @@
-use bevy::{
-    platform::collections::HashMap,
-    prelude::*,
-    render::storage::ShaderBuffer,
-};
+use bevy::{platform::collections::HashMap, prelude::*, render::storage::ShaderBuffer};
 
 use crate::{
     app::crash_log::log_gameplay_event,
@@ -10,8 +6,8 @@ use crate::{
         LoadedContent,
         biome::{BiomeKind, BiomeRegistry},
         block::BlockRegistry,
-        dimension::{DimensionDefinition, DimensionRegistry},
         creature::CreatureRegistry,
+        dimension::{DimensionDefinition, DimensionRegistry},
         fluid::FluidRegistry,
         layer::LayerRegistry,
         object::ObjectRegistry,
@@ -39,12 +35,12 @@ use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
+    deterministic::mix_hash_u64,
     generation::{authored_surface_fluid_id_for_position, ocean_weight_from_surface},
     render_distance::RenderDistanceSettings,
     streaming::initial_streaming_chunk_coords,
-    terrain::{surface_height, surface_height_from_sample},
-    deterministic::mix_hash_u64,
     structure_field::StructureField,
+    terrain::{surface_height, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -64,10 +60,7 @@ struct BootstrapRegistries<'a> {
 }
 
 impl<'a> BootstrapRegistries<'a> {
-    fn resolve(
-        loaded: &'a WorldBootstrapContent<'_>,
-        fresh: Option<&'a LoadedContent>,
-    ) -> Self {
+    fn resolve(loaded: &'a WorldBootstrapContent<'_>, fresh: Option<&'a LoadedContent>) -> Self {
         match fresh {
             Some(fresh) => Self {
                 dimensions: &fresh.dimensions,
@@ -98,10 +91,7 @@ struct BootstrapVisualContent<'a> {
 }
 
 impl<'a> BootstrapVisualContent<'a> {
-    fn resolve(
-        loaded: &'a WorldBootstrapContent<'_>,
-        fresh: Option<&'a LoadedContent>,
-    ) -> Self {
+    fn resolve(loaded: &'a WorldBootstrapContent<'_>, fresh: Option<&'a LoadedContent>) -> Self {
         match fresh {
             Some(fresh) => Self {
                 player: &fresh.player,
@@ -135,14 +125,15 @@ impl BootstrapGenerationSettings {
         match load_mode {
             WorldLoadMode::New => {
                 let world_generation = new_world_config.world_generation();
-                let forced_spawn_biome = new_world_config
-                    .spawn_biome()
-                    .map(str::to_owned)
-                    .or_else(|| {
-                        world_generation
-                            .single_biome()
-                            .then(|| random_spawn_biome_id(dimension, biomes, seed).to_owned())
-                    });
+                let forced_spawn_biome =
+                    new_world_config
+                        .spawn_biome()
+                        .map(str::to_owned)
+                        .or_else(|| {
+                            world_generation
+                                .single_biome()
+                                .then(|| random_spawn_biome_id(dimension, biomes, seed).to_owned())
+                        });
 
                 Self {
                     forced_spawn_biome,
@@ -285,12 +276,7 @@ impl BootstrapSpawnContext<'_> {
                 .unwrap_or_else(|| {
                     spawn_surface_chunk(
                         column,
-                        surface_height(
-                            column,
-                            self.dimension,
-                            self.biomes,
-                            self.biome_field,
-                        ),
+                        surface_height(column, self.dimension, self.biomes, self.biome_field),
                     )
                 })
         } else {
@@ -595,9 +581,8 @@ fn random_spawn_biome_id<'a>(
         dimension.id
     );
 
-    let roll = (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) as f64
-        / u64::MAX as f64)
-        * total_weight;
+    let roll =
+        (mix_hash_u64(seed ^ RANDOM_SPAWN_BIOME_SALT) as f64 / u64::MAX as f64) * total_weight;
 
     let mut cumulative = 0.0;
     for entry in candidates {
@@ -658,12 +643,7 @@ fn find_initial_spawn_column(
                     return None;
                 }
 
-                (!spawn_column_has_surface_fluid(
-                    candidate,
-                    dimension,
-                    biomes,
-                    biome_field,
-                ))
+                (!spawn_column_has_surface_fluid(candidate, dimension, biomes, biome_field))
                     .then_some(candidate)
             },
         )
@@ -672,9 +652,7 @@ fn find_initial_spawn_column(
     if let Some(column) = find_column(restrict_to_spawn_target) {
         return column;
     }
-    if restrict_to_spawn_target
-        && let Some(column) = find_column(false)
-    {
+    if restrict_to_spawn_target && let Some(column) = find_column(false) {
         return column;
     }
 
@@ -693,7 +671,8 @@ fn spawn_column_has_surface_fluid(
 
     let position = column.as_vec2() + Vec2::splat(0.5);
     let surface = biome_field.sample_surface(position);
-    let surface_height = surface_height_from_sample(column, dimension, biome_field, &surface) as f32;
+    let surface_height =
+        surface_height_from_sample(column, dimension, biome_field, &surface) as f32;
     if ocean_weight_from_surface(&surface, biome_field) > f32::EPSILON
         && surface_height < dimension.sea_level as f32
     {

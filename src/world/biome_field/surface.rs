@@ -24,8 +24,7 @@ impl BiomeField {
         let neighbor_weight = regional_boundary
             .filter(|boundary| boundary.distance <= BORDER_TRANSITION_WIDTH)
             .map(|boundary| {
-                let progress =
-                    1.0 - (boundary.distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+                let progress = 1.0 - (boundary.distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
                 (boundary.neighbor_surface_index, smoothstep(progress))
             });
         let total_weight = 1.0 + neighbor_weight.map_or(0.0, |(_, weight)| weight);

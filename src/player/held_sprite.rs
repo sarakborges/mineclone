@@ -176,7 +176,10 @@ pub(crate) struct HeldSpriteAssets<'w> {
 type HeldSpriteBaseQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static MeshMaterial3d<StandardMaterial>, &'static mut Transform),
+    (
+        &'static MeshMaterial3d<StandardMaterial>,
+        &'static mut Transform,
+    ),
     (With<HeldSpriteBase>, Without<HeldSpriteTint>),
 >;
 
@@ -193,12 +196,7 @@ type HeldSpriteTintQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub(crate) struct HeldSpriteSyncView<'w, 's> {
-    roots: Query<
-        'w,
-        's,
-        &'static mut Visibility,
-        (With<HeldSpriteRoot>, Without<HeldSpriteTint>),
-    >,
+    roots: Query<'w, 's, &'static mut Visibility, (With<HeldSpriteRoot>, Without<HeldSpriteTint>)>,
     bases: HeldSpriteBaseQuery<'w, 's>,
     tints: HeldSpriteTintQuery<'w, 's>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -222,18 +220,10 @@ pub(crate) struct HeldObjectModelSyncView<'w, 's> {
 
 #[derive(SystemParam)]
 pub(crate) struct HeldObjectDynamicRenderView<'w, 's> {
-    renderables: Query<
-        'w,
-        's,
-        &'static mut RenderLayers,
-        With<HeldObjectDynamicRenderLayer>,
-    >,
+    renderables: Query<'w, 's, &'static mut RenderLayers, With<HeldObjectDynamicRenderLayer>>,
 }
 
-pub(crate) fn setup_held_sprite_mesh(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
+pub(crate) fn setup_held_sprite_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(HeldSpriteMesh(
         meshes.add(Rectangle::new(HELD_SPRITE_SIZE, HELD_SPRITE_SIZE)),
     ));
@@ -265,7 +255,9 @@ fn tint_material(
     asset_server: &AssetServer,
 ) -> StandardMaterial {
     StandardMaterial {
-        base_color: visual.and_then(|visual| visual.tint).unwrap_or(Color::WHITE),
+        base_color: visual
+            .and_then(|visual| visual.tint)
+            .unwrap_or(Color::WHITE),
         base_color_texture: visual
             .and_then(|visual| visual.tint_icon)
             .map(|path| asset_server.load(path.to_owned())),
@@ -301,14 +293,12 @@ pub(crate) fn spawn_held_sprite(
     } else {
         Visibility::Hidden
     };
-    let base_material = assets.materials.add(base_material(
-        visual.as_ref(),
-        &content.asset_server,
-    ));
-    let tint_material = assets.materials.add(tint_material(
-        visual.as_ref(),
-        &content.asset_server,
-    ));
+    let base_material = assets
+        .materials
+        .add(base_material(visual.as_ref(), &content.asset_server));
+    let tint_material = assets
+        .materials
+        .add(tint_material(visual.as_ref(), &content.asset_server));
 
     let mut renderables = [Entity::PLACEHOLDER; 2];
     spawn_held_object_models(
@@ -362,11 +352,7 @@ fn spawn_held_object_models(
     let selected_item = content.hotbar.item_at(content.hotbar.selected_slot());
 
     parent
-        .spawn((
-            HeldObjectModelAnchor,
-            root_transform,
-            Visibility::Inherited,
-        ))
+        .spawn((HeldObjectModelAnchor, root_transform, Visibility::Inherited))
         .with_children(|anchor| {
             for object in content.objects.iter() {
                 let ObjectVisualDefinition::Model { path } = &object.visual else {
@@ -422,10 +408,9 @@ fn configure_loaded_held_object_scene(
 
     for descendant in children.iter_descendants(ready.entity) {
         if appearance.dynamic_third_person_layers {
-            commands.entity(descendant).insert((
-                HeldObjectDynamicRenderLayer,
-                RenderLayers::from_layers(&[]),
-            ));
+            commands
+                .entity(descendant)
+                .insert((HeldObjectDynamicRenderLayer, RenderLayers::from_layers(&[])));
         } else {
             commands
                 .entity(descendant)
@@ -528,10 +513,7 @@ pub(crate) fn sync_held_object_dynamic_render_layers(
     }
 }
 
-pub(crate) fn sync_held_sprites(
-    content: HeldSpriteContent,
-    mut view: HeldSpriteSyncView,
-) {
+pub(crate) fn sync_held_sprites(content: HeldSpriteContent, mut view: HeldSpriteSyncView) {
     if !content.inputs_changed() {
         return;
     }
@@ -564,8 +546,7 @@ pub(crate) fn sync_held_sprites(
         }
         if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = Color::WHITE;
-            material.base_color_texture =
-                Some(content.asset_server.load(visual.icon.to_owned()));
+            material.base_color_texture = Some(content.asset_server.load(visual.icon.to_owned()));
         }
     }
 

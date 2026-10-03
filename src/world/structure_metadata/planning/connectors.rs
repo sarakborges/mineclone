@@ -105,8 +105,7 @@ fn connected_horizontal_bounds_for_piece<'a>(
         let world_face = rotation.rotate_face(output.face);
         let connector_position = rotation.rotate_offset(output.offset);
         let required_input_face = opposite_connector_face(world_face);
-        let next_strength =
-            (effective_strength - output.strength_loss_on_each_loop).max(0.0);
+        let next_strength = (effective_strength - output.strength_loss_on_each_loop).max(0.0);
 
         for distance in connector_bound_distances(output.min_distance, output.max_distance) {
             let attachment_position =
@@ -139,15 +138,9 @@ fn connected_horizontal_bounds_for_piece<'a>(
     bounds
 }
 
-fn extend_bounds(
-    bounds: &mut Option<(IVec2, IVec2)>,
-    candidate: (IVec2, IVec2),
-) {
+fn extend_bounds(bounds: &mut Option<(IVec2, IVec2)>, candidate: (IVec2, IVec2)) {
     *bounds = Some(match *bounds {
-        Some((minimum, maximum)) => (
-            minimum.min(candidate.0),
-            maximum.max(candidate.1),
-        ),
+        Some((minimum, maximum)) => (minimum.min(candidate.0), maximum.max(candidate.1)),
         None => candidate,
     });
 }
@@ -176,11 +169,7 @@ pub(crate) fn resolve_connected_piece_forest_with_ground_fit<'a>(
     world_seed: u64,
     roots: impl IntoIterator<Item = ResolvedConnectedPiece<'a>>,
     structures: &'a StructureRegistry,
-    mut fit_ground_y: impl FnMut(
-        &StructureDefinition,
-        StructureRotation,
-        IVec3,
-    ) -> Option<i32>,
+    mut fit_ground_y: impl FnMut(&StructureDefinition, StructureRotation, IVec3) -> Option<i32>,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
     let roots = roots.into_iter().collect::<Vec<_>>();
     if roots.is_empty() {
@@ -219,11 +208,7 @@ fn resolve_connected_branch<'a>(
     root: ResolvedConnectedPiece<'a>,
     structures: &'a StructureRegistry,
     occupied: &mut HashSet<IVec3>,
-    fit_ground_y: &mut impl FnMut(
-        &StructureDefinition,
-        StructureRotation,
-        IVec3,
-    ) -> Option<i32>,
+    fit_ground_y: &mut impl FnMut(&StructureDefinition, StructureRotation, IVec3) -> Option<i32>,
 ) -> Vec<ResolvedConnectedPiece<'a>> {
     let mut pieces = vec![root];
     let mut pending = VecDeque::from([PendingPiece {
@@ -248,12 +233,7 @@ fn resolve_connected_branch<'a>(
                 continue;
             }
 
-            let hash = connector_hash(
-                world_seed,
-                parent,
-                connector_index,
-                state.depth,
-            );
+            let hash = connector_hash(world_seed, parent, connector_index, state.depth);
             let target = output
                 .target
                 .as_deref()
@@ -268,26 +248,19 @@ fn resolve_connected_branch<'a>(
                 + parent.rotation.rotate_offset(output.offset)
                 + connector_face_offset(world_face) * distance as i32;
             let required_input_face = opposite_connector_face(world_face);
-            let Some((child_rotation, geometric_child_origin)) =
-                child.resolve_input_attachment(
-                    world_position,
-                    required_input_face,
-                    hash.rotate_left(23),
-                )
-            else {
+            let Some((child_rotation, geometric_child_origin)) = child.resolve_input_attachment(
+                world_position,
+                required_input_face,
+                hash.rotate_left(23),
+            ) else {
                 continue;
             };
             let child_origin = if child.requires_ground_fit_when_connected() {
-                let Some(origin_y) =
-                    fit_ground_y(child, child_rotation, geometric_child_origin)
+                let Some(origin_y) = fit_ground_y(child, child_rotation, geometric_child_origin)
                 else {
                     continue;
                 };
-                IVec3::new(
-                    geometric_child_origin.x,
-                    origin_y,
-                    geometric_child_origin.z,
-                )
+                IVec3::new(geometric_child_origin.x, origin_y, geometric_child_origin.z)
             } else {
                 geometric_child_origin
             };
@@ -309,8 +282,7 @@ fn resolve_connected_branch<'a>(
             let child_index = pieces.len();
             pieces.push(child_piece);
 
-            let next_strength =
-                effective_strength - output.strength_loss_on_each_loop;
+            let next_strength = effective_strength - output.strength_loss_on_each_loop;
             if next_strength > 0.0 {
                 pending.push_back(PendingPiece {
                     index: child_index,
@@ -550,7 +522,10 @@ mod tests {
         let registry = registry(vec![definition, child]);
         let structure = registry.get("test:no_decay").expect("structure must exist");
 
-        assert_eq!(structure.connector_points()[0].strength_loss_on_each_loop, 0.0);
+        assert_eq!(
+            structure.connector_points()[0].strength_loss_on_each_loop,
+            0.0
+        );
     }
 
     #[test]
@@ -623,10 +598,7 @@ mod tests {
             "maxSlope": 0,
             "requiresDryGround": true
         });
-        let registry = registry(vec![
-            root_definition("test:grounded", 1.0),
-            child,
-        ]);
+        let registry = registry(vec![root_definition("test:grounded", 1.0), child]);
         let root = registry.get("test:root").expect("root must exist");
 
         let pieces = resolve_connected_pieces_with_ground_fit(
@@ -666,7 +638,10 @@ mod tests {
 
         assert_eq!(pieces.len(), 5);
         assert_eq!(
-            pieces.iter().map(|piece| piece.origin.x).collect::<Vec<_>>(),
+            pieces
+                .iter()
+                .map(|piece| piece.origin.x)
+                .collect::<Vec<_>>(),
             vec![0, 2, 4, 6, 8]
         );
     }
@@ -680,10 +655,7 @@ mod tests {
             "maxSlope": 0,
             "requiresDryGround": true
         });
-        let registry = registry(vec![
-            root_definition("test:segment", 0.0),
-            segment,
-        ]);
+        let registry = registry(vec![root_definition("test:segment", 0.0), segment]);
         let root = registry.get("test:root").expect("root must exist");
 
         let pieces = resolve_connected_pieces_with_ground_fit(
@@ -762,18 +734,21 @@ mod tests {
                 |_, _, geometric_origin| Some(geometric_origin.y),
             );
             assert_eq!(
-                first.iter().map(|piece| piece.structure.id.as_str()).collect::<Vec<_>>(),
-                second.iter().map(|piece| piece.structure.id.as_str()).collect::<Vec<_>>()
+                first
+                    .iter()
+                    .map(|piece| piece.structure.id.as_str())
+                    .collect::<Vec<_>>(),
+                second
+                    .iter()
+                    .map(|piece| piece.structure.id.as_str())
+                    .collect::<Vec<_>>()
             );
             selected.insert(first[1].structure.id.clone());
         }
 
         assert_eq!(
             selected,
-            HashSet::from([
-                "test:segment_a".to_owned(),
-                "test:segment_b".to_owned()
-            ])
+            HashSet::from(["test:segment_a".to_owned(), "test:segment_b".to_owned()])
         );
     }
 

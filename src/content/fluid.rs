@@ -22,6 +22,10 @@ pub struct FluidDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub color: Hsi,
+    #[serde(default)]
+    pub biome_tint: bool,
+    #[serde(default)]
+    pub biome_immersion_tint: bool,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]
@@ -48,7 +52,11 @@ impl FluidRegistry {
         definition
             .name
             .validate(&format!("fluid {} name", definition.id));
-        assert!(definition.color.is_valid(), "fluid {} HSI color is invalid", definition.id);
+        assert!(
+            definition.color.is_valid(),
+            "fluid {} HSI color is invalid",
+            definition.id
+        );
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",

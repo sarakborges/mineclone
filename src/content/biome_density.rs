@@ -79,8 +79,7 @@ impl BiomeDensityModifier {
                     "biome {biome_id} floating island noiseScale must be positive and finite"
                 );
                 assert!(
-                    edge_irregularity.is_finite()
-                        && (0.0..=0.4).contains(&edge_irregularity),
+                    edge_irregularity.is_finite() && (0.0..=0.4).contains(&edge_irregularity),
                     "biome {biome_id} floating island edgeIrregularity must be between 0 and 0.4"
                 );
                 assert!(

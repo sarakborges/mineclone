@@ -71,4 +71,3 @@ impl FluidPerformanceDiagnostics {
         self.active_frames = 0;
     }
 }
-

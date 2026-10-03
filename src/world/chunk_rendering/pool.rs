@@ -291,11 +291,7 @@ impl ChunkRenderPool {
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         let slot = self.active.remove(&coord)?;
         self.published_sources.remove(&coord);
-        replace_aggregated_mesh_bytes(
-            &mut self.total_mesh_bytes,
-            slot.mesh_bytes,
-            0,
-        );
+        replace_aggregated_mesh_bytes(&mut self.total_mesh_bytes, slot.mesh_bytes, 0);
         self.remove_active_column(coord.xz());
         self.bump_membership_revision();
         Some((slot.entities, slot.meshes))
@@ -548,9 +544,7 @@ impl ChunkRenderPool {
 
         let entities = slot.entities.drain(..terrain_entity_count).collect();
         let meshes = slot.meshes.drain(..terrain_mesh_count).collect();
-        slot.mesh_keys
-            .drain(..terrain_mesh_count)
-            .for_each(drop);
+        slot.mesh_keys.drain(..terrain_mesh_count).for_each(drop);
         slot.mesh_bytes = slot.fluid_mesh_bytes;
         replace_aggregated_mesh_bytes(
             &mut self.total_mesh_bytes,
@@ -570,16 +564,12 @@ impl ChunkRenderPool {
         terrain_mesh_bytes: usize,
     ) {
         debug_assert_eq!(mesh_handles.len(), mesh_keys.len());
-        debug_assert!(
-            mesh_keys
-                .iter()
-                .all(|key| matches!(
-                    key,
-                    ChunkMeshKey::TerrainArray { .. }
-                        | ChunkMeshKey::TerrainLegacy { .. }
-                        | ChunkMeshKey::Layer { .. }
-                ))
-        );
+        debug_assert!(mesh_keys.iter().all(|key| matches!(
+            key,
+            ChunkMeshKey::TerrainArray { .. }
+                | ChunkMeshKey::TerrainLegacy { .. }
+                | ChunkMeshKey::Layer { .. }
+        )));
 
         let slot = self
             .active

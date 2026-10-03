@@ -16,10 +16,7 @@ use crate::{
         tool_behavior::MINE_TOOL_BEHAVIOR_ID,
         tool_id::intern_tool_id,
     },
-    gameplay::{
-        availability::world_interaction_available,
-        random::next_unit_f32,
-    },
+    gameplay::{availability::world_interaction_available, random::next_unit_f32},
     player::{
         camera::GameplayCamera,
         game_mode::GameMode,
@@ -320,11 +317,7 @@ fn loot_random_seed(voxel: IVec3, current_tick: u64) -> u32 {
     seed ^= (voxel.x as u32).wrapping_mul(0x9E37_79B9);
     seed ^= (voxel.y as u32).wrapping_mul(0x85EB_CA6B);
     seed ^= (voxel.z as u32).wrapping_mul(0xC2B2_AE35);
-    if seed == 0 {
-        0xA341_316C
-    } else {
-        seed
-    }
+    if seed == 0 { 0xA341_316C } else { seed }
 }
 
 fn effective_mining_speed(

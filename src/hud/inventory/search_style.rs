@@ -55,7 +55,9 @@ pub(super) fn frame_inventory_search_field(
                 text_input::frame_surface(false),
             ))
             .id();
-        commands.entity(parent_entity).insert_children(index, &[frame]);
+        commands
+            .entity(parent_entity)
+            .insert_children(index, &[frame]);
         commands.entity(frame).add_child(editor);
         if let Some(hint) = hint {
             commands.entity(frame).add_child(hint);
@@ -71,7 +73,9 @@ pub(super) fn frame_inventory_search_field(
             editor_node.align_items = AlignItems::Center;
             editor_node.overflow = Overflow::clip();
         }
-        commands.entity(editor).remove::<(BackgroundColor, BorderColor)>();
+        commands
+            .entity(editor)
+            .remove::<(BackgroundColor, BorderColor)>();
     }
 }
 
@@ -83,7 +87,9 @@ pub(super) fn focus_inventory_search_frame(
     mut focus: ResMut<InputFocus>,
     mut view: ResMut<CreativeInventoryView>,
 ) {
-    if frames.iter().any(|interaction| *interaction == Interaction::Pressed)
+    if frames
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
         && let Ok(entity) = editor.single()
     {
         view.focus_search();
@@ -96,10 +102,7 @@ pub(super) fn focus_inventory_search_frame(
 pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
     mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<CreativeSearchFrame>>,
-    mut placeholders: Query<
-        (&mut Node, &mut Visibility, &mut TextColor),
-        With<CreativeSearchText>,
-    >,
+    mut placeholders: Query<(&mut Node, &mut Visibility, &mut TextColor), With<CreativeSearchText>>,
 ) {
     let fill = BackgroundColor(text_input::INPUT_FILL);
     let border = BorderColor::all(text_input::input_border(view.search_focused()));
@@ -137,13 +140,9 @@ pub(super) fn style_inventory_search_field(
     }
 }
 
-
 pub(super) fn style_player_inventory_search_field(
     view: Res<PlayerInventoryView>,
-    mut frames: Query<
-        (&mut BackgroundColor, &mut BorderColor),
-        With<InventorySearchFrame>,
-    >,
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<InventorySearchFrame>>,
     mut placeholders: Query<(&mut Visibility, &mut TextColor), With<InventorySearchText>>,
 ) {
     let fill = BackgroundColor(text_input::INPUT_FILL);

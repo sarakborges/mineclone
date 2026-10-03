@@ -6,8 +6,8 @@ use std::{
 use crate::{
     content::{
         biome::{BiomeKind, BiomeRegistry},
-        builtin_ids::BIOME_TINT_METADATA_KEY,
         block::BlockRegistry,
+        builtin_ids::BIOME_TINT_METADATA_KEY,
         creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
@@ -25,10 +25,7 @@ use crate::{
 };
 
 use super::{invalid_data, snapshot::WorldSnapshot};
-use crate::world::{
-    fluid_updates::PendingFluidUpdates,
-    new_world::is_valid_biome_size_multiplier,
-};
+use crate::world::{fluid_updates::PendingFluidUpdates, new_world::is_valid_biome_size_multiplier};
 
 #[derive(Clone, Copy)]
 pub(crate) struct SaveRegistries<'a> {
@@ -282,7 +279,9 @@ fn validate_playable(
         return Err(invalid_data("saved dimension or world clock is invalid"));
     }
     if !spawn_biome_valid {
-        return Err(invalid_data("saved spawn biome is invalid for this dimension"));
+        return Err(invalid_data(
+            "saved spawn biome is invalid for this dimension",
+        ));
     }
     if !current_biome_valid {
         return Err(invalid_data("saved current biome is missing from content"));
@@ -326,7 +325,9 @@ fn validate_storage_boxes(
         }
         let position = storage_box.position();
         if position[1] < 0 {
-            return Err(invalid_data("storage box position cannot be below the world"));
+            return Err(invalid_data(
+                "storage box position cannot be below the world",
+            ));
         }
         if !storage_positions.insert(position) {
             return Err(invalid_data("duplicate storage box position"));

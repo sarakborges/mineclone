@@ -29,9 +29,7 @@ impl MeshPressureState {
     }
 
     pub(super) fn bytes(&self, coord: IVec3) -> Option<usize> {
-        self.evicted
-            .get(&ChunkCoord::from_ivec3(coord))
-            .copied()
+        self.evicted.get(&ChunkCoord::from_ivec3(coord)).copied()
     }
 
     pub(super) fn contains(&self, coord: IVec3) -> bool {

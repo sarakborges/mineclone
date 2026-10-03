@@ -6,10 +6,7 @@ use crate::{
         keybinds::{KeybindAction, Keybinds},
         pause_state::PauseState,
     },
-    gameplay::{
-        availability::world_interaction_available,
-        modal::GameplayModalState,
-    },
+    gameplay::{availability::world_interaction_available, modal::GameplayModalState},
     player::movement::walking::{CROUCH_CAMERA_DROP, WalkingState},
     voxel::world::VoxelWorld,
 };
@@ -19,14 +16,24 @@ use look::{MouseLookInputState, drain_or_apply_mouse_look};
 type PlayerCameraAnchor<'w, 's> = Single<
     'w,
     's,
-    (&'static Transform, &'static GameplayCamera, &'static WalkingState),
-    (With<crate::player::PlayerEntity>, Without<GameplayWorldCamera>),
+    (
+        &'static Transform,
+        &'static GameplayCamera,
+        &'static WalkingState,
+    ),
+    (
+        With<crate::player::PlayerEntity>,
+        Without<GameplayWorldCamera>,
+    ),
 >;
 type WorldCameraTransform<'w, 's> = Single<
     'w,
     's,
     &'static mut Transform,
-    (With<GameplayWorldCamera>, Without<crate::player::PlayerEntity>),
+    (
+        With<GameplayWorldCamera>,
+        Without<crate::player::PlayerEntity>,
+    ),
 >;
 
 mod cursor;

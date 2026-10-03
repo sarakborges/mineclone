@@ -6,15 +6,15 @@ use crate::app::{
     settings_state::{SettingsScreenMode, SettingsState},
 };
 use crate::localization::ActiveLanguage;
-use game_rules_section::{
-    TicksPerSecondInputState, handle_boolean_game_rule_toggles, handle_ticks_input,
-    handle_ticks_keyboard, handle_ticks_step_buttons, sync_boolean_game_rule_toggles,
-    sync_ticks_per_second_text,
-};
 use biome_size_multiplier_section::{
     BiomeSizeMultiplierInputState, handle_biome_size_multiplier_input,
     handle_biome_size_multiplier_keyboard, sync_biome_size_multiplier_input,
     sync_biome_size_multiplier_slider_thumb, sync_biome_size_multiplier_visibility,
+};
+use game_rules_section::{
+    TicksPerSecondInputState, handle_boolean_game_rule_toggles, handle_ticks_input,
+    handle_ticks_keyboard, handle_ticks_step_buttons, sync_boolean_game_rule_toggles,
+    sync_ticks_per_second_text,
 };
 use hud_section::{
     TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside,
@@ -22,45 +22,43 @@ use hud_section::{
     handle_target_block_position_options, sync_hide_hints_toggle, sync_hint_toggles,
     sync_target_block_position_dropdown, sync_target_block_position_options,
 };
+use keybinds_section::{
+    KeybindCaptureState, handle_keybind_buttons, handle_keybind_capture, sync_keybinds_section,
+};
 use languages_section::{
     LanguageDropdownState, close_language_dropdown_outside, handle_language_dropdown_button,
     handle_language_options, sync_language_dropdown,
 };
 use layout::spawn_settings_screen;
-use keybinds_section::{
-    KeybindCaptureState, handle_keybind_buttons, handle_keybind_capture, sync_keybinds_section,
-};
 use navigation::{
     SettingsSectionSelection, apply_pending_section_scroll, handle_close_requests,
     handle_section_buttons, sync_section_ui,
 };
 use new_world_section::{
     SeedInputState, handle_new_world_footer, handle_new_world_settings_control_focus,
-    handle_random_seed, handle_seed_focus, handle_seed_keyboard,
-    handle_single_biome_toggle, handle_spawn_structures_toggle,
-    handle_world_generation_feature_toggles, handle_world_generation_mode_buttons,
-    reset_new_world_settings, sync_seed_text, sync_world_generation_feature_toggles,
-    sync_world_generation_mode_buttons, sync_world_generation_toggles,
+    handle_random_seed, handle_seed_focus, handle_seed_keyboard, handle_single_biome_toggle,
+    handle_spawn_structures_toggle, handle_world_generation_feature_toggles,
+    handle_world_generation_mode_buttons, reset_new_world_settings, sync_seed_text,
+    sync_world_generation_feature_toggles, sync_world_generation_mode_buttons,
+    sync_world_generation_toggles,
 };
 use render_distance_logic::{
-    handle_render_distance_input, handle_render_distance_keyboard,
-    sync_render_distance_input, sync_render_distance_slider_thumb, sync_render_distance_text,
+    handle_render_distance_input, handle_render_distance_keyboard, sync_render_distance_input,
+    sync_render_distance_slider_thumb, sync_render_distance_text,
 };
 use render_distance_section::{RenderDistanceInput, RenderDistanceInputState};
 use spawn_biome_section::{
-    SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside,
-    focus_spawn_biome_search_frame, handle_spawn_biome_dropdown_button,
-    handle_spawn_biome_option_buttons, handle_spawn_biome_search_focus,
-    handle_spawn_biome_search_keyboard, populate_spawn_biome_options,
-    sync_spawn_biome_dropdown_state, sync_spawn_biome_option_labels,
-    sync_spawn_biome_options, sync_spawn_biome_search_frame,
-    sync_spawn_biome_selected_label,
+    SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside, focus_spawn_biome_search_frame,
+    handle_spawn_biome_dropdown_button, handle_spawn_biome_option_buttons,
+    handle_spawn_biome_search_focus, handle_spawn_biome_search_keyboard,
+    populate_spawn_biome_options, sync_spawn_biome_dropdown_state, sync_spawn_biome_option_labels,
+    sync_spawn_biome_options, sync_spawn_biome_search_frame, sync_spawn_biome_selected_label,
 };
 use world_name_section::{WorldNameFeedback, handle_world_name_focus, sync_world_name_view};
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
-pub(crate) mod game_rules_section;
 mod biome_size_multiplier_section;
+pub(crate) mod game_rules_section;
 mod hud_section;
 mod keybinds_section;
 mod languages_section;

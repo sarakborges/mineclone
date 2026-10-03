@@ -12,8 +12,8 @@ use crate::{
 };
 
 use super::{
-    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
     super::{WorldLoadingPhase, system_params::WorldSetupProgress},
+    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
 };
 
 pub(super) fn mesh_initial_chunks(
@@ -152,7 +152,9 @@ fn dispatch_mesh_tasks(
 
         if chunk_is_empty {
             let content_source = ChunkPresentationSource::capture_center(coord, &*progress.world)
-                .unwrap_or_else(|| panic!("empty bootstrap chunk source should exist at {coord:?}"));
+                .unwrap_or_else(|| {
+                    panic!("empty bootstrap chunk source should exist at {coord:?}")
+                });
             let lighting_source = lighting_revisions.capture(coord, ChunkMeshletMask::ALL);
             let render_context = content.render_context(
                 &progress.world,
@@ -160,8 +162,9 @@ fn dispatch_mesh_tasks(
                 &renderer.fluid_materials,
             );
             {
-                let _publication_timer =
-                    PresentationPublicationTimer::start(PresentationPublicationStage::InitialPublish);
+                let _publication_timer = PresentationPublicationTimer::start(
+                    PresentationPublicationStage::InitialPublish,
+                );
                 spawn_built_chunk_meshes(
                     &mut renderer.commands,
                     &mut renderer.meshes,

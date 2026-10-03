@@ -11,5 +11,15 @@
   "lightDampening": 15,
   "lightEmission": 15,
   "spreadSpeed": 4,
-  "maxSpread": 3
+  "maxSpread": 3,
+  "biomeTint": false,
+  "biomeImmersionTint": false,
+  "immersionTint": {
+    "color": {
+      "hue": 16,
+      "saturation": 0.98,
+      "intensity": 0.3
+    },
+    "opacity": 0.72
+  }
 }

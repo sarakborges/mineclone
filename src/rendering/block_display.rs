@@ -2,11 +2,8 @@ use bevy::prelude::*;
 
 use crate::voxel::block_face::BlockFace;
 
-pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] = [
-    BlockFace::Top,
-    BlockFace::Front,
-    BlockFace::Right,
-];
+pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] =
+    [BlockFace::Top, BlockFace::Front, BlockFace::Right];
 
 const DISPLAY_LEFT: f32 = 0.10;
 const DISPLAY_CENTER_X: f32 = 0.50;
@@ -37,10 +34,7 @@ pub(crate) fn block_display_face_points(face: BlockFace) -> [Vec2; 4] {
     block_display_face_points_for_height(face, 1.0)
 }
 
-pub(crate) fn block_display_face_points_for_height(
-    face: BlockFace,
-    height: f32,
-) -> [Vec2; 4] {
+pub(crate) fn block_display_face_points_for_height(face: BlockFace, height: f32) -> [Vec2; 4] {
     block_display_face_geometry(face, height).points()
 }
 
@@ -48,10 +42,7 @@ pub(crate) fn block_display_face_basis(face: BlockFace) -> (Vec4, Vec4) {
     block_display_face_basis_for_height(face, 1.0)
 }
 
-pub(crate) fn block_display_face_basis_for_height(
-    face: BlockFace,
-    height: f32,
-) -> (Vec4, Vec4) {
+pub(crate) fn block_display_face_basis_for_height(face: BlockFace, height: f32) -> (Vec4, Vec4) {
     let geometry = block_display_face_geometry(face, height);
     (
         Vec4::new(

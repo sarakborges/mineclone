@@ -52,8 +52,8 @@ impl ObjectTransform {
     pub(crate) fn from_encoded(offset: [i16; 3], scale: [u16; 3]) -> Option<Self> {
         let offset = Vec3::new(offset[0] as f32, offset[1] as f32, offset[2] as f32)
             / OBJECT_TRANSFORM_UNITS;
-        let scale = Vec3::new(scale[0] as f32, scale[1] as f32, scale[2] as f32)
-            / OBJECT_TRANSFORM_UNITS;
+        let scale =
+            Vec3::new(scale[0] as f32, scale[1] as f32, scale[2] as f32) / OBJECT_TRANSFORM_UNITS;
         Self::from_parts(offset, scale)
     }
 
@@ -131,11 +131,9 @@ mod tests {
 
     #[test]
     fn object_transform_round_trips_quantized_values() {
-        let transform = ObjectTransform::from_parts(
-            Vec3::new(0.125, -0.25, 0.375),
-            Vec3::new(1.0, 0.5, 2.0),
-        )
-        .expect("valid attached object transform");
+        let transform =
+            ObjectTransform::from_parts(Vec3::new(0.125, -0.25, 0.375), Vec3::new(1.0, 0.5, 2.0))
+                .expect("valid attached object transform");
 
         assert_eq!(transform.offset(), Vec3::new(0.125, -0.25, 0.375));
         assert_eq!(transform.scale(), Vec3::new(1.0, 0.5, 2.0));

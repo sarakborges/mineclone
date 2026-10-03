@@ -1,18 +1,14 @@
 use bevy::prelude::*;
-use smallvec::SmallVec;
 use serde::{Deserialize, Deserializer};
+use smallvec::SmallVec;
 
 use crate::localization::LocalizedText;
 
 use super::{
-    asset_path::is_safe_relative_asset_path,
-    block_id::intern_block_id,
-    block_orientation::BlockOrientation,
-    inventory_category::InventoryCategoryRegistry,
-    loot::LootTableDefinition,
-    registry::DefinitionMap,
-    secondary_property::SecondaryPropertyRegistry,
-    tool::ToolRegistry,
+    asset_path::is_safe_relative_asset_path, block_id::intern_block_id,
+    block_orientation::BlockOrientation, inventory_category::InventoryCategoryRegistry,
+    loot::LootTableDefinition, registry::DefinitionMap,
+    secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     tool_category::ToolCategoryRegistry,
 };
 
@@ -307,7 +303,9 @@ impl BlockRegistry {
             "block {} category cannot be empty",
             definition.id
         );
-        definition.name.validate(&format!("block {} name", definition.id));
+        definition
+            .name
+            .validate(&format!("block {} name", definition.id));
         definition.mining.validate(&definition.id);
         definition
             .loot_table
@@ -441,10 +439,8 @@ mod tests {
     use super::*;
 
     fn localized_name() -> LocalizedText {
-        serde_json::from_str(
-            r#"{"english":"Test","portuguese_brazil":"Teste","spanish":"Prueba"}"#,
-        )
-        .expect("test localization must parse")
+        serde_json::from_str(r#"{"english":"Test","portuguese_brazil":"Teste","spanish":"Prueba"}"#)
+            .expect("test localization must parse")
     }
 
     #[test]
@@ -469,7 +465,9 @@ mod tests {
             casts_shadow: default_casts_shadow(),
         });
 
-        let block = registry.get("asteria:test").expect("block must be registered");
+        let block = registry
+            .get("asteria:test")
+            .expect("block must be registered");
         assert_eq!(block.default_orientation(), BlockOrientation::Y);
         assert!(!block.is_rotatable());
         assert_eq!(

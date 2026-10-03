@@ -86,10 +86,7 @@ impl GameplayAssetPreloads {
         self.assets.len()
     }
 
-    pub(crate) fn load_progress(
-        &self,
-        asset_server: &AssetServer,
-    ) -> GameplayAssetLoadProgress {
+    pub(crate) fn load_progress(&self, asset_server: &AssetServer) -> GameplayAssetLoadProgress {
         let mut loaded = 0;
 
         for asset in &self.assets {

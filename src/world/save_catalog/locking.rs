@@ -20,9 +20,7 @@ pub(crate) struct WorldDirectoryLock {
     _file: fs::File,
 }
 
-pub(super) fn acquire_world_directory_lock(
-    directory: &Path,
-) -> io::Result<WorldDirectoryLock> {
+pub(super) fn acquire_world_directory_lock(directory: &Path) -> io::Result<WorldDirectoryLock> {
     let path = directory.join(SESSION_LOCK_FILE);
     if let Ok(metadata) = fs::symlink_metadata(&path)
         && (!metadata.file_type().is_file() || metadata.file_type().is_symlink())

@@ -3,18 +3,14 @@ use std::{collections::HashSet, io};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    content::fluid::FluidRegistry,
-    creatures::SavedCreature,
-    gameplay::storage_box::SavedStorageBox,
-    player::item_stack::SavedItemStack,
+    content::fluid::FluidRegistry, creatures::SavedCreature,
+    gameplay::storage_box::SavedStorageBox, player::item_stack::SavedItemStack,
 };
 
 use super::invalid_data;
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
-    new_world::{
-        WorldGenerationSettings, WorldgenVersion, is_valid_biome_size_multiplier,
-    },
+    new_world::{WorldGenerationSettings, WorldgenVersion, is_valid_biome_size_multiplier},
     world_names::validate_world_name,
 };
 

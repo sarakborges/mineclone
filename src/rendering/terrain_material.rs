@@ -9,8 +9,7 @@ use bevy::{
 const TERRAIN_SHADER_PATH: &str = "shaders/terrain_material.wgsl";
 const TERRAIN_VERTEX_SHADER_PATH: &str = "shaders/terrain_vertex.wgsl";
 const TERRAIN_PREPASS_SHADER_PATH: &str = "shaders/terrain_prepass.wgsl";
-const TERRAIN_PREPASS_VERTEX_SHADER_PATH: &str =
-    "shaders/terrain_prepass_vertex.wgsl";
+const TERRAIN_PREPASS_VERTEX_SHADER_PATH: &str = "shaders/terrain_prepass_vertex.wgsl";
 
 pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterialExtension>;
 
@@ -69,11 +68,7 @@ impl TerrainLightingBuffer {
         self.write(buffers);
     }
 
-    pub(crate) fn set_wind_velocity(
-        &mut self,
-        buffers: &mut Assets<ShaderBuffer>,
-        velocity: Vec3,
-    ) {
+    pub(crate) fn set_wind_velocity(&mut self, buffers: &mut Assets<ShaderBuffer>, velocity: Vec3) {
         if self.wind_x == velocity.x && self.wind_z == velocity.z {
             return;
         }

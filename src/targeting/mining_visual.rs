@@ -1,8 +1,5 @@
 use bevy::{
-    asset::RenderAssetUsages,
-    light::NotShadowCaster,
-    mesh::Indices,
-    prelude::*,
+    asset::RenderAssetUsages, light::NotShadowCaster, mesh::Indices, prelude::*,
     render::render_resource::PrimitiveTopology,
 };
 
@@ -167,11 +164,7 @@ fn update_breaking_overlay(
     }
 }
 
-fn breaking_surface_mesh(
-    world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    voxel: IVec3,
-) -> Option<Mesh> {
+fn breaking_surface_mesh(world: &VoxelWorld, blocks: &BlockRegistry, voxel: IVec3) -> Option<Mesh> {
     let cell = world.cell_at(voxel)?;
     let mask = MicroblockMask::from_cell(cell);
     let edge = MICROBLOCK_EDGE as usize;
@@ -229,8 +222,8 @@ fn surface_face_visible(
     local: [usize; 3],
     face: BlockFace,
 ) -> bool {
-    let fine = voxel * MICROBLOCK_EDGE
-        + IVec3::new(local[0] as i32, local[1] as i32, local[2] as i32);
+    let fine =
+        voxel * MICROBLOCK_EDGE + IVec3::new(local[0] as i32, local[1] as i32, local[2] as i32);
     let neighbor_fine = fine + face.offset();
     let neighbor_voxel = parent_voxel(neighbor_fine);
     let Some(neighbor) = occupied_cell(world, neighbor_fine) else {

@@ -3,10 +3,7 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::{
-    asset_path::is_safe_relative_asset_path,
-    registry::DefinitionMap,
-};
+use super::{asset_path::is_safe_relative_asset_path, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,9 +1,4 @@
-use bevy::{
-    ecs::system::SystemParam,
-    input_focus::InputFocus,
-    prelude::*,
-    text::EditableText,
-};
+use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*, text::EditableText};
 
 use crate::{
     app::{
@@ -40,10 +35,7 @@ struct CharacterInfoModalInput<'w, 's> {
     next_modal: ResMut<'w, NextState<GameplayModalState>>,
 }
 
-fn toggle_inventory_screen(
-    mut input: CharacterInfoModalInput,
-    game_mode: Single<&GameMode>,
-) {
+fn toggle_inventory_screen(mut input: CharacterInfoModalInput, game_mode: Single<&GameMode>) {
     if game_mode.is_spectator() {
         return;
     }

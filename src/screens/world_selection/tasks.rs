@@ -10,9 +10,8 @@ use crate::{
     app::crash_log::{log_system_error, log_system_event, log_system_warn},
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
-        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
-        object::ObjectRegistry, tool::ToolRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, fluid::FluidRegistry,
+        item::ItemRegistry, layer::LayerRegistry, object::ObjectRegistry, tool::ToolRegistry,
     },
     voxel::world::VoxelWorld,
     world::save_catalog::{
@@ -75,7 +74,9 @@ impl PendingWorldScan {
                 if let Ok(mut slot) = worker_result.lock() {
                     *slot = Some(verified);
                 } else {
-                    log_system_error("world_catalog.scan result_publish_failed reason=poisoned_mutex");
+                    log_system_error(
+                        "world_catalog.scan result_publish_failed reason=poisoned_mutex",
+                    );
                 }
             })?;
 
@@ -83,10 +84,7 @@ impl PendingWorldScan {
     }
 
     pub(super) fn poll(&self) -> Option<io::Result<Vec<WorldSummary>>> {
-        self.result
-            .try_lock()
-            .ok()
-            .and_then(|mut slot| slot.take())
+        self.result.try_lock().ok().and_then(|mut slot| slot.take())
     }
 }
 

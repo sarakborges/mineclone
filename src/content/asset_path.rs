@@ -1,11 +1,7 @@
 use std::path::{Component, Path};
 
 pub(crate) fn is_safe_relative_asset_path(path: &str) -> bool {
-    if path.trim().is_empty()
-        || path.contains('\\')
-        || path.contains(':')
-        || path.contains('\0')
-    {
+    if path.trim().is_empty() || path.contains('\\') || path.contains(':') || path.contains('\0') {
         return false;
     }
 

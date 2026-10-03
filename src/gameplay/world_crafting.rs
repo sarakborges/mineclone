@@ -63,9 +63,7 @@ fn apply_world_recipe(
 ) {
     let game_mode = player.into_inner();
     let interaction_override = keys.pressed(keybinds.key_code(KeybindAction::Descend));
-    if !buttons.just_pressed(MouseButton::Right)
-        || game_mode.is_spectator()
-        || interaction_override
+    if !buttons.just_pressed(MouseButton::Right) || game_mode.is_spectator() || interaction_override
     {
         return;
     }
@@ -121,11 +119,7 @@ fn apply_world_recipe(
         return;
     }
 
-    let replacement = ObjectCell::new(
-        &object_id,
-        placement_face,
-        TextureRotation::default(),
-    );
+    let replacement = ObjectCell::new(&object_id, placement_face, TextureRotation::default());
     let Some(mutation) = context.runtime.set_block_detailed(hit.voxel, None) else {
         log_gameplay_warn(format!(
             "world_recipe.reject recipe={} target_block={} voxel={:?} reason=block_mutation_rejected",

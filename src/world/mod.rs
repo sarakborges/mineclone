@@ -6,9 +6,9 @@ mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
+mod chunk_storage;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
-mod chunk_storage;
 mod chunk_unloading;
 mod chunk_visibility;
 pub(crate) mod current_context;
@@ -20,8 +20,8 @@ pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 pub(crate) mod generation;
-pub(crate) mod generation_region;
 mod generation_job;
+pub(crate) mod generation_region;
 mod generation_snapshot;
 mod lighting_updates;
 mod macro_climate;
@@ -32,9 +32,9 @@ pub(crate) mod new_world;
 mod noise;
 mod presentation_snapshot;
 mod render_diagnostics;
+pub(crate) mod render_distance;
 mod render_prepare_diagnostics;
 mod render_work_diagnostics;
-pub(crate) mod render_distance;
 mod revision;
 mod save;
 pub(crate) mod save_catalog;
@@ -46,10 +46,10 @@ mod streaming;
 mod structure_field;
 mod structure_metadata;
 pub(crate) mod terrain;
-pub(crate) mod tick;
 pub(crate) mod thumbnail;
-mod work_budget;
+pub(crate) mod tick;
 pub(crate) mod warp;
+mod work_budget;
 pub(crate) mod world_feature_fields;
 pub(crate) mod world_names;
 
@@ -89,19 +89,18 @@ use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 use main_world_diagnostics::{
     MainWorldWorkSamples, begin_deferred_mesh_retirement_work, begin_fluid_work,
-    begin_generation_refill_work, begin_lighting_work, begin_remesh_work,
-    begin_residency_work, begin_retirement_work, begin_streaming_work, begin_visibility_work,
+    begin_generation_refill_work, begin_lighting_work, begin_remesh_work, begin_residency_work,
+    begin_retirement_work, begin_streaming_work, begin_visibility_work,
     finish_deferred_mesh_retirement_work, finish_fluid_work, finish_generation_refill_work,
     finish_lighting_work, finish_remesh_work, finish_residency_work, finish_retirement_work,
     finish_streaming_work, finish_visibility_work, log_main_world_work,
 };
-use presentation_snapshot::PresentationLightingRevisions;
 pub(crate) use new_world::{
-    DEFAULT_BIOME_SIZE_MULTIPLIER,
-    MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
-    WorldGenerationMode, WorldGenerationSettings, is_valid_biome_size_multiplier,
+    DEFAULT_BIOME_SIZE_MULTIPLIER, MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER,
+    NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, is_valid_biome_size_multiplier,
     snap_biome_size_multiplier,
 };
+use presentation_snapshot::PresentationLightingRevisions;
 use render_diagnostics::{
     FrameTimeSamples, MainFrameWorkSamples, begin_main_frame_work, log_render_asset_pressure,
     record_frame_time, record_main_frame_work, record_slow_frame_context, render_diagnostics_due,
@@ -109,8 +108,7 @@ use render_diagnostics::{
 };
 use render_distance::RenderDistanceSettings;
 use render_prepare_diagnostics::{
-    install_render_prepare_diagnostics, log_render_prepare_work,
-    reset_render_prepare_diagnostics,
+    install_render_prepare_diagnostics, log_render_prepare_work, reset_render_prepare_diagnostics,
 };
 use render_work_diagnostics::{
     collect_render_frame_work, install_render_work_diagnostics, log_render_frame_work,
@@ -127,9 +125,9 @@ pub(crate) use setup::{WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingS
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
+use warp::{PendingWarp, resolve_pending_warp, resume_dimension_warp};
 pub(crate) use work_budget::WorldFrameWorkBudget;
 use work_budget::begin_world_frame_work_budget;
-use warp::{PendingWarp, resolve_pending_warp, resume_dimension_warp};
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
@@ -325,7 +323,10 @@ impl Plugin for WorldPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(Last, collect_render_frame_work.before(record_main_frame_work))
+            .add_systems(
+                Last,
+                collect_render_frame_work.before(record_main_frame_work),
+            )
             .add_systems(
                 Last,
                 record_main_frame_work
@@ -334,7 +335,10 @@ impl Plugin for WorldPlugin {
                     .before(log_main_world_work)
                     .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
+            .add_systems(
+                Last,
+                log_render_asset_pressure.run_if(render_diagnostics_due),
+            )
             .add_systems(Last, log_render_frame_work.run_if(render_diagnostics_due))
             .add_systems(Last, log_render_prepare_work.run_if(render_diagnostics_due))
             .add_systems(Last, log_main_world_work.run_if(render_diagnostics_due))

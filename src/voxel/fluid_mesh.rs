@@ -105,15 +105,10 @@ impl FluidHeightPlaneCache {
 
         for cache_z in 0..FLUID_HEIGHT_PLANE_SIDE {
             for cache_x in 0..FLUID_HEIGHT_PLANE_SIDE {
-                let local = IVec3::new(
-                    cache_x as i32 - 1,
-                    y as i32,
-                    cache_z as i32 - 1,
-                );
+                let local = IVec3::new(cache_x as i32 - 1, y as i32, cache_z as i32 - 1);
                 let world_position = chunk_origin + local;
                 let index = cache_x + cache_z * FLUID_HEIGHT_PLANE_SIDE;
-                current[index] =
-                    fluid_at_local_or_world(world, chunk, local, world_position);
+                current[index] = fluid_at_local_or_world(world, chunk, local, world_position);
                 above[index] = fluid_at_local_or_world(
                     world,
                     chunk,
@@ -173,9 +168,7 @@ struct FluidTopPlanes {
 
 impl FluidTopPlanes {
     fn collect(chunk: &VoxelChunk, meshlets: ChunkMeshletMask) -> Self {
-        let active_capacity = chunk
-            .fluid_count()
-            .min(meshlets.selected_voxel_count());
+        let active_capacity = chunk.fluid_count().min(meshlets.selected_voxel_count());
         let mut sources = Vec::with_capacity(active_capacity);
         let mut counts = [0_usize; CHUNK_SIZE];
 
@@ -241,13 +234,7 @@ where
             if greedy_top && face == BlockFace::Top {
                 None
             } else {
-                fluid_neighbor_content(
-                    world,
-                    chunk,
-                    local_voxel,
-                    world_voxel,
-                    face,
-                )
+                fluid_neighbor_content(world, chunk, local_voxel, world_voxel, face)
             }
         });
         let exposed: [bool; 6] = std::array::from_fn(|index| {
@@ -257,11 +244,7 @@ where
             {
                 return false;
             }
-            fluid_face_is_exposed(
-                neighbor_samples[index],
-                cell.fluid_id,
-                face,
-            )
+            fluid_face_is_exposed(neighbor_samples[index], cell.fluid_id, face)
         });
         if !exposed.iter().any(|value| *value) {
             return;
@@ -270,41 +253,28 @@ where
         let tint = tint_at(world_voxel, cell.fluid_id);
         let mut heights = None::<FluidFaceHeights>;
         let (source_block, _, source_light) = chunk.sample_local_at(x, y, z);
-        let source_block_srgb = surface_block_srgb_with_cache(
-            lighting_cache,
-            world_voxel,
-            source_light,
-            false,
-        );
+        let source_block_srgb =
+            surface_block_srgb_with_cache(lighting_cache, world_voxel, source_light, false);
         let source_mask = source_block
             .filter(|block| MicroblockMask::has_partial_geometry(*block))
             .map(MicroblockMask::geometry_for_cell);
         let fluid = fluid_buffer(&mut buffers, cell.fluid_id);
 
-        for (index, (face, is_exposed)) in
-            BlockFace::ALL.into_iter().zip(exposed).enumerate()
-        {
+        for (index, (face, is_exposed)) in BlockFace::ALL.into_iter().zip(exposed).enumerate() {
             if !is_exposed {
                 continue;
             }
 
-            let lighting =
-                face_lighting_with_cache(
-                    lighting_cache,
-                    world,
-                    world_voxel,
-                    face,
-                    source_block_srgb,
-                );
+            let lighting = face_lighting_with_cache(
+                lighting_cache,
+                world,
+                world_voxel,
+                face,
+                source_block_srgb,
+            );
             let face_heights = if fluid_face_needs_heights(face) {
                 *heights.get_or_insert_with(|| {
-                    fluid_face_heights(
-                        world,
-                        chunk,
-                        local_voxel,
-                        world_voxel,
-                        cell.fluid_id,
-                    )
+                    fluid_face_heights(world, chunk, local_voxel, world_voxel, cell.fluid_id)
                 })
             } else {
                 FluidFaceHeights::default()
@@ -330,13 +300,7 @@ where
             } else {
                 push_lit_quad(
                     fluid,
-                    fluid_face_vertices(
-                        face,
-                        x as f32,
-                        y as f32,
-                        z as f32,
-                        face_heights,
-                    ),
+                    fluid_face_vertices(face, x as f32, y as f32, z as f32, face_heights),
                     face.normal(),
                     VOXEL_FACE_UVS,
                     tint,
@@ -345,7 +309,6 @@ where
                 );
             }
         }
-    
     };
 
     let selected_voxels = meshlets.selected_voxel_count();
@@ -403,13 +366,8 @@ fn emit_greedy_fluid_top_faces<W, F>(
             let z = usize::from(source.z);
             let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
             let world_voxel = chunk_origin + local_voxel;
-            let top_sample = fluid_neighbor_content(
-                world,
-                chunk,
-                local_voxel,
-                world_voxel,
-                BlockFace::Top,
-            );
+            let top_sample =
+                fluid_neighbor_content(world, chunk, local_voxel, world_voxel, BlockFace::Top);
             if fluid_face_is_exposed(top_sample, source.cell.fluid_id, BlockFace::Top) {
                 exposed_tops.push(ExposedFluidTop { source, top_sample });
             }
@@ -418,9 +376,8 @@ fn emit_greedy_fluid_top_faces<W, F>(
             continue;
         }
 
-        let height_cache =
-            (exposed_tops.len() >= MIN_EXPOSED_FLUID_TOPS_FOR_HEIGHT_CACHE)
-                .then(|| FluidHeightPlaneCache::capture(world, chunk, chunk_origin, y));
+        let height_cache = (exposed_tops.len() >= MIN_EXPOSED_FLUID_TOPS_FOR_HEIGHT_CACHE)
+            .then(|| FluidHeightPlaneCache::capture(world, chunk, chunk_origin, y));
 
         for exposed in &exposed_tops {
             let source = exposed.source;
@@ -431,24 +388,12 @@ fn emit_greedy_fluid_top_faces<W, F>(
             let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
             let world_voxel = chunk_origin + local_voxel;
             let heights = height_cache.as_ref().map_or_else(
-                || {
-                    fluid_face_heights(
-                        world,
-                        chunk,
-                        local_voxel,
-                        world_voxel,
-                        cell.fluid_id,
-                    )
-                },
+                || fluid_face_heights(world, chunk, local_voxel, world_voxel, cell.fluid_id),
                 |cache| cache.heights_at(x, z, cell.fluid_id),
             );
             let (source_block, _, source_light) = chunk.sample_local_at(x, y, z);
-            let source_block_srgb = surface_block_srgb_with_cache(
-                lighting_cache,
-                world_voxel,
-                source_light,
-                false,
-            );
+            let source_block_srgb =
+                surface_block_srgb_with_cache(lighting_cache, world_voxel, source_light, false);
             let lighting = face_lighting_with_cache(
                 lighting_cache,
                 world,
@@ -484,13 +429,7 @@ fn emit_greedy_fluid_top_faces<W, F>(
             let Some(height) = flat_fluid_height(heights) else {
                 push_lit_quad(
                     fluid_buffer(buffers, cell.fluid_id),
-                    fluid_face_vertices(
-                        BlockFace::Top,
-                        x as f32,
-                        y as f32,
-                        z as f32,
-                        heights,
-                    ),
+                    fluid_face_vertices(BlockFace::Top, x as f32, y as f32, z as f32, heights),
                     BlockFace::Top.normal(),
                     VOXEL_FACE_UVS,
                     tint,
@@ -503,13 +442,7 @@ fn emit_greedy_fluid_top_faces<W, F>(
             let Some(greedy_lighting) = FluidGreedyLighting::from_uniform(lighting) else {
                 push_lit_quad(
                     fluid_buffer(buffers, cell.fluid_id),
-                    fluid_face_vertices(
-                        BlockFace::Top,
-                        x as f32,
-                        y as f32,
-                        z as f32,
-                        heights,
-                    ),
+                    fluid_face_vertices(BlockFace::Top, x as f32, y as f32, z as f32, heights),
                     BlockFace::Top.normal(),
                     VOXEL_FACE_UVS,
                     tint,
@@ -544,25 +477,20 @@ fn emit_greedy_fluid_top_plane(
                 continue;
             };
 
-            let x_limit =
-                ((x / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
-                    * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
-            let z_limit =
-                ((z / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
-                    * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
+            let x_limit = ((x / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
+                * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
+            let z_limit = ((z / crate::voxel::meshlet::CHUNK_MESHLET_EDGE) + 1)
+                * crate::voxel::meshlet::CHUNK_MESHLET_EDGE;
 
             let mut width = 1;
-            while x + width < x_limit
-                && mask[x + width + z * CHUNK_SIZE] == Some(candidate)
-            {
+            while x + width < x_limit && mask[x + width + z * CHUNK_SIZE] == Some(candidate) {
                 width += 1;
             }
 
             let mut depth = 1;
             while z + depth < z_limit
-                && (x..x + width).all(|column| {
-                    mask[column + (z + depth) * CHUNK_SIZE] == Some(candidate)
-                })
+                && (x..x + width)
+                    .all(|column| mask[column + (z + depth) * CHUNK_SIZE] == Some(candidate))
             {
                 depth += 1;
             }
@@ -605,7 +533,7 @@ fn flat_fluid_height(heights: FluidFaceHeights) -> Option<f32> {
     (heights.h00.to_bits() == heights.h10.to_bits()
         && heights.h00.to_bits() == heights.h11.to_bits()
         && heights.h00.to_bits() == heights.h01.to_bits())
-        .then_some(heights.h00)
+    .then_some(heights.h00)
 }
 
 fn fluid_buffer(
@@ -671,9 +599,9 @@ fn emit_fluid_openings(
             let max_u = (u + 1) as f32 / EDGE as f32;
             let min_v = v as f32 / EDGE as f32;
             let max_v = (v + 1) as f32 / EDGE as f32;
-            let Some(vertices) = fluid_micro_face_vertices(
-                face, x0, y0, z0, heights, min_u, max_u, min_v, max_v,
-            ) else {
+            let Some(vertices) =
+                fluid_micro_face_vertices(face, x0, y0, z0, heights, min_u, max_u, min_v, max_v)
+            else {
                 continue;
             };
             let uvs = vertices.map(|vertex| {
@@ -756,10 +684,26 @@ fn fluid_micro_face_vertices(
 
     Some(match face {
         BlockFace::Top => [
-            [x0 + min_u, y0 + bilinear_height(heights, min_u, max_v), z0 + max_v],
-            [x0 + max_u, y0 + bilinear_height(heights, max_u, max_v), z0 + max_v],
-            [x0 + max_u, y0 + bilinear_height(heights, max_u, min_v), z0 + min_v],
-            [x0 + min_u, y0 + bilinear_height(heights, min_u, min_v), z0 + min_v],
+            [
+                x0 + min_u,
+                y0 + bilinear_height(heights, min_u, max_v),
+                z0 + max_v,
+            ],
+            [
+                x0 + max_u,
+                y0 + bilinear_height(heights, max_u, max_v),
+                z0 + max_v,
+            ],
+            [
+                x0 + max_u,
+                y0 + bilinear_height(heights, max_u, min_v),
+                z0 + min_v,
+            ],
+            [
+                x0 + min_u,
+                y0 + bilinear_height(heights, min_u, min_v),
+                z0 + min_v,
+            ],
         ],
         BlockFace::Bottom => [
             [x0 + min_u, y0, z0 + min_v],
@@ -907,9 +851,10 @@ fn fluid_corner_height(
 ) -> f32 {
     let positions = [(1, 1), (x_index, 1), (1, z_index), (x_index, z_index)];
 
-    if positions.iter().any(|&(x, z)| {
-        above[z][x].is_some_and(|cell| cell.fluid_id == fluid_id)
-    }) {
+    if positions
+        .iter()
+        .any(|&(x, z)| above[z][x].is_some_and(|cell| cell.fluid_id == fluid_id))
+    {
         return 1.0;
     }
 
@@ -942,11 +887,7 @@ fn fluid_neighbor_content<W: VoxelRead + ?Sized>(
         && local.y < CHUNK_SIZE as i32
         && local.z < CHUNK_SIZE as i32
     {
-        Some(chunk.content_at_local(
-            local.x as usize,
-            local.y as usize,
-            local.z as usize,
-        ))
+        Some(chunk.content_at_local(local.x as usize, local.y as usize, local.z as usize))
     } else {
         world
             .sample_at(world_voxel + face.offset())
@@ -954,11 +895,7 @@ fn fluid_neighbor_content<W: VoxelRead + ?Sized>(
     }
 }
 
-fn fluid_face_is_exposed(
-    sample: FluidNeighborContent,
-    fluid_id: FluidId,
-    face: BlockFace,
-) -> bool {
+fn fluid_face_is_exposed(sample: FluidNeighborContent, fluid_id: FluidId, face: BlockFace) -> bool {
     let Some((block, fluid)) = sample else {
         return face == BlockFace::Top;
     };
@@ -1000,23 +937,17 @@ fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
         }
     }
     false
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{
-        cell::VoxelCell, microblock::ArtisansKitResolution, world::VoxelWorld,
-    };
+    use crate::voxel::{cell::VoxelCell, microblock::ArtisansKitResolution, world::VoxelWorld};
 
     #[test]
     fn only_bottom_fluid_face_skips_height_sampling() {
         for face in BlockFace::ALL {
-            assert_eq!(
-                fluid_face_needs_heights(face),
-                face != BlockFace::Bottom,
-            );
+            assert_eq!(fluid_face_needs_heights(face), face != BlockFace::Bottom,);
         }
 
         let default = FluidFaceHeights::default();
@@ -1064,13 +995,14 @@ mod tests {
 
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, chunk);
-        let chunk = world.chunk(IVec3::ZERO).expect("test chunk should be loaded");
+        let chunk = world
+            .chunk(IVec3::ZERO)
+            .expect("test chunk should be loaded");
         let cache = FluidHeightPlaneCache::capture(&world, chunk, IVec3::ZERO, 3);
 
         for (x, z) in [(0, 0), (1, 0), (0, 1), (15, 15)] {
             let local = IVec3::new(x as i32, 3, z as i32);
-            let direct =
-                fluid_face_heights(&world, chunk, local, local, 0);
+            let direct = fluid_face_heights(&world, chunk, local, local, 0);
             let cached = cache.heights_at(x, z, 0);
 
             assert_eq!(cached.h00.to_bits(), direct.h00.to_bits());
@@ -1137,18 +1069,20 @@ mod tests {
             0.5,
         )
         .is_some());
-        assert!(fluid_micro_face_vertices(
-            BlockFace::Front,
-            0.0,
-            0.0,
-            0.0,
-            heights,
-            0.0,
-            1.0,
-            0.5,
-            0.625,
-        )
-        .is_none());
+        assert!(
+            fluid_micro_face_vertices(
+                BlockFace::Front,
+                0.0,
+                0.0,
+                0.0,
+                heights,
+                0.0,
+                1.0,
+                0.5,
+                0.625,
+            )
+            .is_none()
+        );
     }
 
     #[test]

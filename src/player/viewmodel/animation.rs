@@ -2,10 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 
-use crate::{
-    player::hotbar::PlayerHotbar,
-    world::tick::WorldTickClock,
-};
+use crate::{player::hotbar::PlayerHotbar, world::tick::WorldTickClock};
 
 const BREAK_ANIMATION_DURATION_TICKS: u64 = 22;
 const FAST_BREAK_ANIMATION_DURATION_TICKS: u64 = 8;
@@ -212,12 +209,8 @@ pub(super) fn animate_viewmodel(
 
         if switch_wave > 0.0 {
             animated.translation += Vec3::new(0.10, -0.54, 0.14) * switch_wave;
-            animated.rotation *= Quat::from_euler(
-                EulerRot::XYZ,
-                0.34 * switch_wave,
-                0.0,
-                0.16 * switch_wave,
-            );
+            animated.rotation *=
+                Quat::from_euler(EulerRot::XYZ, 0.34 * switch_wave, 0.0, 0.16 * switch_wave);
         }
 
         if *transform != animated {

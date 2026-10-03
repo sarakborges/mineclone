@@ -17,8 +17,8 @@ use crate::{
     creatures::CreatureAttackRuntime,
     gameplay::availability::world_interaction_available,
     player::{
-        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
-        item_stack::ItemStack, viewmodel::ViewModelAnimation,
+        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, item_stack::ItemStack,
+        viewmodel::ViewModelAnimation,
     },
     voxel::{
         cell::VoxelCell,
@@ -273,8 +273,8 @@ fn edit_targeted_block(
     };
 
     if right_pressed
-        && let Some(object_id) = selected_item
-            .filter(|item_id| definitions.objects.get(item_id).is_some())
+        && let Some(object_id) =
+            selected_item.filter(|item_id| definitions.objects.get(item_id).is_some())
     {
         let definition = definitions
             .objects
@@ -470,10 +470,7 @@ fn edit_targeted_voxel(
             return VoxelEditOutcome::Rejected("invalid_layer_face");
         };
         let layer = LayerCell::new(layer_id, TextureRotation::default());
-        return if runtime
-            .add_layer(request.hit.voxel, face, layer)
-            .is_some()
-        {
+        return if runtime.add_layer(request.hit.voxel, face, layer).is_some() {
             VoxelEditOutcome::LayerPlaced
         } else {
             VoxelEditOutcome::Rejected("layer_mutation_rejected")
@@ -522,10 +519,7 @@ fn edit_targeted_voxel(
         } else {
             mask.apply_to_cell(existing, false)
         };
-        return if runtime
-            .set_block(request.hit.voxel, Some(cell))
-            .is_some()
-        {
+        return if runtime.set_block(request.hit.voxel, Some(cell)).is_some() {
             VoxelEditOutcome::BlockPlaced(request.hit.voxel)
         } else {
             VoxelEditOutcome::Rejected("stackable_layer_mutation_rejected")
@@ -583,7 +577,7 @@ fn object_placement_attachment(
         && world.is_loaded_at(object_space)
         && world.cell_at(object_space).is_none()
         && world.objects_at(hit.voxel).len() < MAX_OBJECTS_PER_VOXEL)
-    .then_some((hit.voxel, face))
+        .then_some((hit.voxel, face))
 }
 
 fn hollow_log_accepts_object(

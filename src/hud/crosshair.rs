@@ -14,14 +14,10 @@ use crate::{
         tool::ToolRegistry,
         tool_behavior::{
             ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
-            BRUSH_PAINT_BEHAVIOR_ID, LAYER_REMOVE_BEHAVIOR_ID,
-            STRUCTURE_SELECT_BEHAVIOR_ID,
+            BRUSH_PAINT_BEHAVIOR_ID, LAYER_REMOVE_BEHAVIOR_ID, STRUCTURE_SELECT_BEHAVIOR_ID,
         },
     },
-    gameplay::{
-        availability::world_interaction_available,
-        modal::GameplayModalState,
-    },
+    gameplay::{availability::world_interaction_available, modal::GameplayModalState},
     localization::{ActiveLanguage, UiLocalization},
     player::hotbar::{PlayerHotbar, PlayerHotbarSet},
     targeting::block::{TargetedBlock, TargetedCreature},
@@ -192,12 +188,11 @@ fn update_action_hint(
         tool.uses_behavior(ARTISANS_KIT_REMOVE_BEHAVIOR_ID)
             || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
     });
-    let uses_shears = selected_tool
-        .is_some_and(|tool| tool.uses_behavior(LAYER_REMOVE_BEHAVIOR_ID));
-    let uses_structure_tool = selected_tool
-        .is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID));
-    let uses_brush = selected_tool
-        .is_some_and(|tool| tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID));
+    let uses_shears =
+        selected_tool.is_some_and(|tool| tool.uses_behavior(LAYER_REMOVE_BEHAVIOR_ID));
+    let uses_structure_tool =
+        selected_tool.is_some_and(|tool| tool.uses_behavior(STRUCTURE_SELECT_BEHAVIOR_ID));
+    let uses_brush = selected_tool.is_some_and(|tool| tool.uses_behavior(BRUSH_PAINT_BEHAVIOR_ID));
     let tool_action = runtime.keybinds.label(KeybindAction::ToolAction);
 
     let next_text = if runtime.targeted_creature.0.is_some() {
@@ -231,7 +226,12 @@ fn update_action_hint(
         runtime
             .settings
             .hint_enabled(HintKind::StructureTool)
-            .then(|| content.localization.text(language, "hud.structureTool").to_owned())
+            .then(|| {
+                content
+                    .localization
+                    .text(language, "hud.structureTool")
+                    .to_owned()
+            })
     } else if let Some(hit) = runtime.targeted.0 {
         if uses_brush {
             let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
@@ -247,7 +247,12 @@ fn update_action_hint(
                     None => runtime
                         .settings
                         .hint_enabled(HintKind::BrushClear)
-                        .then(|| content.localization.text(language, "hud.brushClear").to_owned()),
+                        .then(|| {
+                            content
+                                .localization
+                                .text(language, "hud.brushClear")
+                                .to_owned()
+                        }),
                     Some(dye_id) => {
                         if !runtime.settings.hint_enabled(HintKind::BrushPaint) {
                             None
@@ -280,7 +285,12 @@ fn update_action_hint(
             runtime
                 .settings
                 .hint_enabled(HintKind::BreakBlock)
-                .then(|| content.localization.text(language, "hud.breakBlock").to_owned())
+                .then(|| {
+                    content
+                        .localization
+                        .text(language, "hud.breakBlock")
+                        .to_owned()
+                })
         }
     } else if uses_brush {
         None

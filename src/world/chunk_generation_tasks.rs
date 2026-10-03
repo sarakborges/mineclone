@@ -79,11 +79,7 @@ impl GenerationScheduler {
         self.pending.contains(ChunkCoord::from_ivec3(coord))
     }
 
-    pub(crate) fn schedule(
-        &mut self,
-        coord: IVec3,
-        limiter: &ChunkAsyncWorkLimiter,
-    ) -> bool {
+    pub(crate) fn schedule(&mut self, coord: IVec3, limiter: &ChunkAsyncWorkLimiter) -> bool {
         self.schedule_with_permit(
             ChunkCoord::from_ivec3(coord),
             MAX_GENERATION_TASKS_IN_FLIGHT,
@@ -119,7 +115,9 @@ impl GenerationScheduler {
         let snapshot = self
             .snapshot
             .as_ref()
-            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"))
+            .unwrap_or_else(|| {
+                panic!("chunk generation snapshot must be prepared before scheduling")
+            })
             .clone();
         let revision = self.revision;
         let job = ChunkGenerationJob::new(coord, snapshot);
@@ -131,10 +129,7 @@ impl GenerationScheduler {
         self.pending.insert(coord, revision, task)
     }
 
-    pub(crate) fn cancel_where(
-        &mut self,
-        mut predicate: impl FnMut(IVec3) -> bool,
-    ) -> Vec<IVec3> {
+    pub(crate) fn cancel_where(&mut self, mut predicate: impl FnMut(IVec3) -> bool) -> Vec<IVec3> {
         let started = Instant::now();
         let cancelled = self
             .pending
@@ -155,6 +150,8 @@ impl GenerationScheduler {
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
-        self.pending.poll_ready().map(CompletedChunkTask::into_runtime)
+        self.pending
+            .poll_ready()
+            .map(CompletedChunkTask::into_runtime)
     }
 }

@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::world::chunk_rendering::{ChunkRenderCoord, ChunkRenderPool};
 
-use super::INITIAL_FINALIZATION_FRAMES;
 use super::super::{WorldLoadingPhase, system_params::WorldSetupProgress};
+use super::INITIAL_FINALIZATION_FRAMES;
 
 pub(super) fn finalize_initial_world(
     render_pool: &ChunkRenderPool,

@@ -10,5 +10,7 @@
   "metallic": 0.0,
   "lightDampening": 2,
   "spreadSpeed": 16.0,
-  "maxSpread": 7
+  "maxSpread": 7,
+  "biomeTint": true,
+  "biomeImmersionTint": true
 }

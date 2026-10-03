@@ -1,4 +1,7 @@
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     content::{
@@ -35,7 +38,9 @@ pub(super) fn dimension_directory(world_directory: &Path, dimension_id: &str) ->
 
 fn ensure_real_directory(path: &Path, label: &str) -> io::Result<()> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(()),
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {
+            Ok(())
+        }
         Ok(_) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("{label} must be a real directory: {}", path.display()),
@@ -115,7 +120,8 @@ pub(super) fn generation_worlds_published(
     for dimension_id in dimension_ids {
         let directory = dimension_directory(world_directory, dimension_id);
         match fs::symlink_metadata(&directory) {
-            Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {}
+            Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {
+            }
             Ok(_) => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -178,10 +184,7 @@ pub(super) fn load_dimension_world(
     load_generation_world(&directory, generation, blocks, layers, objects, fluids)
 }
 
-pub(super) fn remove_generation_worlds(
-    world_directory: &Path,
-    generation: u64,
-) -> io::Result<()> {
+pub(super) fn remove_generation_worlds(world_directory: &Path, generation: u64) -> io::Result<()> {
     let root = dimensions_root(world_directory);
     let entries = match fs::read_dir(&root) {
         Ok(entries) => entries,
@@ -214,6 +217,9 @@ mod tests {
             encoded_dimension_id("asteria:overworld"),
             "617374657269613a6f766572776f726c64"
         );
-        assert_eq!(encoded_dimension_id("asteria:umbral"), "617374657269613a756d6272616c");
+        assert_eq!(
+            encoded_dimension_id("asteria:umbral"),
+            "617374657269613a756d6272616c"
+        );
     }
 }

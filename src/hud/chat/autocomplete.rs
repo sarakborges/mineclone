@@ -146,20 +146,20 @@ impl ChatAutocomplete {
             self.set_suggestions(0..0, Vec::new());
             return;
         }
-        let (range, suggestions) = suggestions_for(
-            &context.0,
-            context.1,
-            catalog,
-            player_position,
-        )
-        .unwrap_or_else(|| (0..0, Vec::new()));
+        let (range, suggestions) = suggestions_for(&context.0, context.1, catalog, player_position)
+            .unwrap_or_else(|| (0..0, Vec::new()));
         self.set_suggestions(range, suggestions);
     }
 }
 
 fn editor_context(editor: &EditableText) -> (String, usize) {
     let text = editor.value().to_string();
-    let position = editor.editor().raw_selection().focus().index().min(text.len());
+    let position = editor
+        .editor()
+        .raw_selection()
+        .focus()
+        .index()
+        .min(text.len());
     let cursor = if text.is_char_boundary(position) {
         position
     } else {
@@ -197,10 +197,7 @@ fn id_matches_query(id: &str, query: &str) -> bool {
     text_matches_query(id, query)
 }
 
-fn literal_suggestions(
-    values: &[(&str, &str)],
-    prefix: &str,
-) -> Vec<Suggestion> {
+fn literal_suggestions(values: &[(&str, &str)], prefix: &str) -> Vec<Suggestion> {
     values
         .iter()
         .filter(|(value, _)| text_matches_query(value, prefix))
@@ -268,10 +265,7 @@ impl AutocompleteCatalog<'_> {
                 .filter(|set| id_matches_query(&set.id, prefix))
                 .map(|set| Suggestion {
                     value: set.id.clone(),
-                    description: format!(
-                        "{} (structure set)",
-                        set.name.text(self.language.get())
-                    ),
+                    description: format!("{} (structure set)", set.name.text(self.language.get())),
                 }),
         );
 
@@ -307,10 +301,9 @@ fn suggestions_for(
             .iter()
             .find(|item| command.strip_prefix('/') == Some(item.name))?;
         match definition.parameters.get(word_index - 1)? {
-            ParameterKind::StructureLiteral => literal_suggestions(
-                &[("structure", "Structure")],
-                &prefix,
-            ),
+            ParameterKind::StructureLiteral => {
+                literal_suggestions(&[("structure", "Structure")], &prefix)
+            }
             ParameterKind::CreatureId => catalog
                 .creatures
                 .iter()
@@ -375,21 +368,15 @@ fn suggestions_for(
                 "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
-            ParameterKind::CoordinateX => coordinate_suggestions(
-                player_position.map(|position| position.x),
-                "X",
-                &prefix,
-            ),
-            ParameterKind::CoordinateZ => coordinate_suggestions(
-                player_position.map(|position| position.z),
-                "Z",
-                &prefix,
-            ),
-            ParameterKind::CoordinateY => coordinate_suggestions(
-                player_position.map(|position| position.y),
-                "Y",
-                &prefix,
-            ),
+            ParameterKind::CoordinateX => {
+                coordinate_suggestions(player_position.map(|position| position.x), "X", &prefix)
+            }
+            ParameterKind::CoordinateZ => {
+                coordinate_suggestions(player_position.map(|position| position.z), "Z", &prefix)
+            }
+            ParameterKind::CoordinateY => {
+                coordinate_suggestions(player_position.map(|position| position.y), "Y", &prefix)
+            }
             ParameterKind::DimensionId => catalog
                 .dimensions
                 .iter()
@@ -407,7 +394,10 @@ fn suggestions_for(
 
 fn completed_line(text: &str, range: Range<usize>, value: &str) -> (String, usize) {
     let suffix = &text[range.end..];
-    let append_space = suffix.chars().next().is_none_or(|character| !character.is_whitespace());
+    let append_space = suffix
+        .chars()
+        .next()
+        .is_none_or(|character| !character.is_whitespace());
     let replacement = if append_space {
         format!("{value} ")
     } else {
@@ -473,11 +463,15 @@ pub(super) fn update_autocomplete(
         autocomplete.selected = (autocomplete.selected + autocomplete.suggestions.len() - 1)
             % autocomplete.suggestions.len();
         autocomplete.revision = autocomplete.revision.wrapping_add(1);
-        draft.pending_edits.retain(|edit| !matches!(edit, TextEdit::Up(_)));
+        draft
+            .pending_edits
+            .retain(|edit| !matches!(edit, TextEdit::Up(_)));
     } else if keys.just_pressed(KeyCode::ArrowDown) {
         autocomplete.selected = (autocomplete.selected + 1) % autocomplete.suggestions.len();
         autocomplete.revision = autocomplete.revision.wrapping_add(1);
-        draft.pending_edits.retain(|edit| !matches!(edit, TextEdit::Down(_)));
+        draft
+            .pending_edits
+            .retain(|edit| !matches!(edit, TextEdit::Down(_)));
     } else if keys.just_pressed(KeyCode::Tab) {
         let (text, _) = editor_context(&draft);
         let selected = &autocomplete.suggestions[autocomplete.selected].value;

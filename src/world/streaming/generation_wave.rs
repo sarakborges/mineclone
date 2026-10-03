@@ -1,10 +1,7 @@
 use bevy::{platform::collections::HashSet, prelude::IVec3};
 
 use super::DeduplicatedQueue;
-use crate::{
-    voxel::coordinates::ChunkCoord,
-    world::fluid_updates::GeneratedFluidSettling,
-};
+use crate::{voxel::coordinates::ChunkCoord, world::fluid_updates::GeneratedFluidSettling};
 
 /// Owns the lifecycle of one generation publication wave independently from
 /// chunk selection and presentation queues. `GeneratedFluidSettling` remains
@@ -44,8 +41,7 @@ impl GenerationWaveState {
     pub(super) fn dispatch_work_exists(&self, pending_request_count: usize) -> bool {
         !self.fluid_settling.is_active()
             && self.settled_publication_chunks.is_empty()
-            && (self.pending.len() > 0
-                || (pending_request_count > 0 && self.accepts_new_targets()))
+            && (self.pending.len() > 0 || (pending_request_count > 0 && self.accepts_new_targets()))
     }
 
     pub(super) fn stage_generated_chunk(&mut self, coord: IVec3) {
@@ -257,7 +253,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "generation target cannot be abandoned after world truth enters staged/settling/publication ownership")]
+    #[should_panic(
+        expected = "generation target cannot be abandoned after world truth enters staged/settling/publication ownership"
+    )]
     fn staged_world_truth_cannot_be_abandoned_as_async_work() {
         let coord = IVec3::new(3, 1, -2);
         let mut wave = GenerationWaveState::default();

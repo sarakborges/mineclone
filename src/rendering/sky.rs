@@ -59,7 +59,10 @@ mod tests {
             visuals.fog_color = authored_fog;
         }
         app.update();
-        assert_eq!(app.world().resource::<ClearColor>().0, authored_fog.to_color());
+        assert_eq!(
+            app.world().resource::<ClearColor>().0,
+            authored_fog.to_color()
+        );
 
         let next_fog = Hsi::new(180.0, 1.0, 0.2);
         app.world_mut()

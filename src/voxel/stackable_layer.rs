@@ -1,6 +1,6 @@
 use super::{
     cell::VoxelCell,
-    microblock::{ArtisansKitResolution, MicroblockMask, MICROBLOCK_EDGE},
+    microblock::{ArtisansKitResolution, MICROBLOCK_EDGE, MicroblockMask},
 };
 
 pub(crate) fn stackable_layer_mask(layer_count: usize) -> MicroblockMask {
@@ -9,11 +9,7 @@ pub(crate) fn stackable_layer_mask(layer_count: usize) -> MicroblockMask {
     for y in 0..layer_count.min(edge) {
         for z in 0..edge {
             for x in 0..edge {
-                mask.edit(
-                    [x, y, z],
-                    ArtisansKitResolution::ExtraThin,
-                    true,
-                );
+                mask.edit([x, y, z], ArtisansKitResolution::ExtraThin, true);
             }
         }
     }
@@ -55,8 +51,7 @@ pub(crate) fn stackable_layer_count(cell: VoxelCell) -> Option<usize> {
 mod tests {
     use super::*;
     use crate::{
-        content::block_orientation::BlockOrientation,
-        voxel::texture_rotation::TextureRotation,
+        content::block_orientation::BlockOrientation, voxel::texture_rotation::TextureRotation,
     };
 
     #[test]

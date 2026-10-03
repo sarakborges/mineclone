@@ -161,9 +161,7 @@ fn rollback_published_file(
         Ok(()) => publish_error,
         Err(rollback_error) => io::Error::new(
             publish_error.kind(),
-            format!(
-                "{publish_error}; rollback of published file failed: {rollback_error}"
-            ),
+            format!("{publish_error}; rollback of published file failed: {rollback_error}"),
         ),
     }
 }

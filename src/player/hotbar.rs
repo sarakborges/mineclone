@@ -6,8 +6,8 @@ use crate::{
     content::{
         block::BlockRegistry, block_id::intern_block_id, item::ItemRegistry,
         item_id::intern_item_id, layer::LayerRegistry, layer_id::intern_layer_id,
-        object::ObjectRegistry, object_id::intern_object_id,
-        tool::ToolRegistry, tool_id::intern_tool_id,
+        object::ObjectRegistry, object_id::intern_object_id, tool::ToolRegistry,
+        tool_id::intern_tool_id,
     },
     gameplay::availability::world_interaction_available,
 };
@@ -282,7 +282,10 @@ mod tests {
         hotbar.set_selected_stack(Some(ItemStack::new("asteria:stone").with_quantity(2)));
 
         assert!(hotbar.consume_selected_item());
-        assert_eq!(hotbar.stack_at(hotbar.selected_slot()).unwrap().quantity(), 1);
+        assert_eq!(
+            hotbar.stack_at(hotbar.selected_slot()).unwrap().quantity(),
+            1
+        );
 
         assert!(hotbar.consume_selected_item());
         assert!(hotbar.stack_at(hotbar.selected_slot()).is_none());

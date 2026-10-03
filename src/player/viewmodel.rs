@@ -9,8 +9,7 @@ use crate::{
         camera::CameraPerspective,
         held_sprite::{
             HeldSpriteAssets, HeldSpriteContent, setup_held_sprite_mesh, spawn_held_sprite,
-            sync_held_object_dynamic_render_layers, sync_held_object_models,
-            sync_held_sprites,
+            sync_held_object_dynamic_render_layers, sync_held_object_models, sync_held_sprites,
         },
     },
     targeting::block::BlockTargetingSet,
@@ -66,18 +65,16 @@ impl Plugin for PlayerViewModelPlugin {
     }
 }
 
-
 fn sync_viewmodel_visibility(
     perspective: Res<CameraPerspective>,
     pause: Res<State<PauseState>>,
     mut viewmodels: Query<&mut Visibility, With<PlayerViewModel>>,
 ) {
-    let next_visibility =
-        if !perspective.is_third_person() && *pause.get() == PauseState::Running {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+    let next_visibility = if !perspective.is_third_person() && *pause.get() == PauseState::Running {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
 
     for mut visibility in &mut viewmodels {
         if *visibility != next_visibility {
@@ -85,7 +82,6 @@ fn sync_viewmodel_visibility(
         }
     }
 }
-
 
 fn spawn_first_person_held_sprite(
     mut commands: Commands,

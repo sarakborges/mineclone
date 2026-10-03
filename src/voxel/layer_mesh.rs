@@ -13,8 +13,7 @@ use super::{
     mesh::geometry::is_face_exposed,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{
-        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
-        surface_block_srgb_with_cache,
+        ChunkLightingCache, face_lighting_with_cache, push_lit_quad, surface_block_srgb_with_cache,
     },
     meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
@@ -89,9 +88,9 @@ where
         let mut exposure_by_face = [None; 6];
 
         for (order, attached) in attached_layers.iter().copied().enumerate() {
-            let definition = layers.get(attached.cell.layer_id).unwrap_or_else(|| {
-                panic!("missing layer definition: {}", attached.cell.layer_id)
-            });
+            let definition = layers
+                .get(attached.cell.layer_id)
+                .unwrap_or_else(|| panic!("missing layer definition: {}", attached.cell.layer_id));
             if !definition.supports_face(attached.face) {
                 continue;
             }
@@ -101,14 +100,12 @@ where
                 .iter()
                 .filter(|earlier| earlier.face == attached.face)
                 .count();
-            let outward_offset =
-                definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
+            let outward_offset = definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
             let face_index = block_face_index(face);
             let lighting = if let Some(lighting) = lighting_by_face[face_index] {
                 lighting
             } else {
-                let lighting =
-                    face_lighting_with_cache(
+                let lighting = face_lighting_with_cache(
                     lighting_cache,
                     world,
                     world_voxel,
@@ -168,10 +165,7 @@ where
                 layer_buffer(&mut buffers, attached.cell.layer_id, definition),
                 vertices,
                 face.normal(),
-                attached
-                    .cell
-                    .texture_rotation
-                    .rotate_uvs(VOXEL_FACE_UVS),
+                attached.cell.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
                 tint,
                 lighting,
                 0.0,
@@ -232,22 +226,18 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
                 // Match the host micro-mesh floor rule: only the actual
                 // world-bottom microface is suppressed, not recessed surfaces
                 // higher inside the same macroblock.
-                if face == BlockFace::Bottom
-                    && world_voxel.y == 0
-                    && position[1] == 0
-                {
+                if face == BlockFace::Bottom && world_voxel.y == 0 && position[1] == 0 {
                     continue;
                 }
 
                 let fine = world_voxel * MICROBLOCK_EDGE
                     + IVec3::new(position[0] as i32, position[1] as i32, position[2] as i32);
-                let occluded =
-                    occupied_cell(world, fine + face.offset()).is_some_and(|neighbor| {
-                        let neighbor_definition = block_lookup.get(neighbor.block_id);
-                        (support_cell.block_id == neighbor.block_id && support_is_transparent)
-                            || (!neighbor_definition.alpha_blend
-                                && neighbor_definition.alpha_cutoff.is_none())
-                    });
+                let occluded = occupied_cell(world, fine + face.offset()).is_some_and(|neighbor| {
+                    let neighbor_definition = block_lookup.get(neighbor.block_id);
+                    (support_cell.block_id == neighbor.block_id && support_is_transparent)
+                        || (!neighbor_definition.alpha_blend
+                            && neighbor_definition.alpha_cutoff.is_none())
+                });
                 visible[u + v * MICRO_EDGE] = !occluded;
             }
         }
@@ -263,8 +253,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
                 }
                 let mut height = 1;
                 while v + height < MICRO_EDGE
-                    && (u..u + width)
-                        .all(|column| visible[column + (v + height) * MICRO_EDGE])
+                    && (u..u + width).all(|column| visible[column + (v + height) * MICRO_EDGE])
                 {
                     height += 1;
                 }
@@ -353,15 +342,12 @@ fn emit_sculpted_layer_rectangle(
             } else {
                 upper[axis]
             };
-            point[axis] =
-                local_voxel[axis] as f32 + coordinate as f32 / MICROBLOCK_EDGE as f32;
+            point[axis] = local_voxel[axis] as f32 + coordinate as f32 / MICROBLOCK_EDGE as f32;
         }
         (Vec3::from_array(point) + normal * outward_offset).to_array()
     });
     let uvs = vertices.map(|vertex| {
-        let local = Vec3::from_array(vertex)
-            - local_voxel.as_vec3()
-            - normal * outward_offset;
+        let local = Vec3::from_array(vertex) - local_voxel.as_vec3() - normal * outward_offset;
         rotate_macro_uv(macro_uv(face, local), texture_rotation)
     });
 
@@ -382,10 +368,7 @@ fn layer_buffer<'a>(
     definition: &LayerDefinition,
 ) -> &'a mut VoxelMeshBuffer {
     let key = (layer_id, definition.casts_shadow);
-    if let Some(index) = buffers
-        .iter()
-        .position(|(candidate, _)| *candidate == key)
-    {
+    if let Some(index) = buffers.iter().position(|(candidate, _)| *candidate == key) {
         return &mut buffers[index].1;
     }
 
@@ -431,4 +414,3 @@ fn coordinates(index: usize) -> (usize, usize, usize) {
     let x = layer_index % CHUNK_SIZE;
     (x, y, z)
 }
-

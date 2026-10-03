@@ -20,8 +20,7 @@ const LIGHTING_CACHE_SIDE: usize = CHUNK_SIZE + 2;
 const LIGHTING_CACHE_VOLUME: usize =
     LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE;
 
-const MICROBLOCK_VOLUME: u16 =
-    (MICROBLOCK_EDGE * MICROBLOCK_EDGE * MICROBLOCK_EDGE) as u16;
+const MICROBLOCK_VOLUME: u16 = (MICROBLOCK_EDGE * MICROBLOCK_EDGE * MICROBLOCK_EDGE) as u16;
 const UNLOADED_OCCUPANCY: u16 = u16::MAX;
 
 #[derive(Clone, Copy)]
@@ -103,12 +102,10 @@ impl ChunkLightingCache {
                     {
                         Some(chunk.sample_local_at(x - 1, y - 1, z - 1))
                     } else {
-                        let world_position =
-                            origin + IVec3::new(x as i32, y as i32, z as i32);
+                        let world_position = origin + IVec3::new(x as i32, y as i32, z as i32);
                         world.sample_at(world_position)
                     };
-                    samples[lighting_cache_index(x, y, z)] =
-                        cached_lighting_sample(sample);
+                    samples[lighting_cache_index(x, y, z)] = cached_lighting_sample(sample);
                 }
             }
         }
@@ -131,18 +128,14 @@ impl ChunkLightingCache {
             return None;
         }
 
-        let sample = self.samples[lighting_cache_index(
-            local.x as usize,
-            local.y as usize,
-            local.z as usize,
-        )];
+        let sample = self.samples
+            [lighting_cache_index(local.x as usize, local.y as usize, local.z as usize)];
         sample.is_loaded().then_some(sample)
     }
 }
 
 fn lighting_cache_index(x: usize, y: usize, z: usize) -> usize {
-    x + z * LIGHTING_CACHE_SIDE
-        + y * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE
+    x + z * LIGHTING_CACHE_SIDE + y * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE
 }
 
 fn cached_lighting_sample(sample: VoxelSample) -> CachedLightingSample {
@@ -198,12 +191,9 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     face: BlockFace,
     surface_block_srgb: [f32; 3],
 ) -> FaceLighting {
-    face_lighting_from_samples(
-        voxel,
-        face,
-        surface_block_srgb,
-        |position| cached_lighting_sample(world.sample_at(position)),
-    )
+    face_lighting_from_samples(voxel, face, surface_block_srgb, |position| {
+        cached_lighting_sample(world.sample_at(position))
+    })
 }
 
 pub(super) fn face_lighting_with_cache<W: VoxelRead + ?Sized>(
@@ -214,14 +204,9 @@ pub(super) fn face_lighting_with_cache<W: VoxelRead + ?Sized>(
     surface_block_srgb: [f32; 3],
 ) -> FaceLighting {
     if let Some(cache) = cache {
-        face_lighting_from_samples(
-            voxel,
-            face,
-            surface_block_srgb,
-            |position| {
-                cache.sample(position).unwrap_or_default()
-            },
-        )
+        face_lighting_from_samples(voxel, face, surface_block_srgb, |position| {
+            cache.sample(position).unwrap_or_default()
+        })
     } else {
         face_lighting(world, voxel, face, surface_block_srgb)
     }
@@ -236,14 +221,8 @@ fn face_lighting_from_samples(
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let base_sample = provisional_top_sky_sample_cached(face, sample_at(base));
-    let side_a_samples = [
-        sample_at(base - tangent_a),
-        sample_at(base + tangent_a),
-    ];
-    let side_b_samples = [
-        sample_at(base - tangent_b),
-        sample_at(base + tangent_b),
-    ];
+    let side_a_samples = [sample_at(base - tangent_a), sample_at(base + tangent_a)];
+    let side_b_samples = [sample_at(base - tangent_b), sample_at(base + tangent_b)];
     let corner_samples = [
         [
             sample_at(base - tangent_a - tangent_b),
@@ -272,9 +251,8 @@ fn face_lighting_from_samples(
         {
             3.0
         } else {
-            (u32::from(side_a_occupied)
-                + u32::from(side_b_occupied)
-                + u32::from(corner_occupied)) as f32
+            (u32::from(side_a_occupied) + u32::from(side_b_occupied) + u32::from(corner_occupied))
+                as f32
                 / MICROBLOCK_VOLUME as f32
         };
         let (sky_level, sampled_block_srgb) = average_cached_shader_light_levels([
@@ -315,9 +293,7 @@ fn provisional_top_sky_sample_cached(
     }
 }
 
-fn average_cached_shader_light_levels(
-    samples: [CachedLightingSample; 4],
-) -> (f32, [f32; 3]) {
+fn average_cached_shader_light_levels(samples: [CachedLightingSample; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut weight_total = 0.0;
@@ -561,8 +537,13 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
-    use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
+    use super::{
+        ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion,
+        sample_open_fraction, should_flip_diagonal,
+    };
+    use crate::voxel::{
+        block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask,
+    };
 
     const DARK: [f32; 3] = [0.0; 3];
 
@@ -571,9 +552,19 @@ mod tests {
         assert_eq!(ao_brightness(0.0), 1.0);
         assert_eq!(ao_brightness(3.0), 0.58);
         assert!(ao_brightness(1.5) > 0.72);
-        assert!(sample_occlusion(Some((Some(VoxelCell::new("stone", Default::default())), None, VoxelLight::DARK))) > 0.0);
-        let empty = MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), true);
-        assert_eq!(sample_occlusion(Some((Some(empty), None, VoxelLight::DARK))), 0.0);
+        assert!(
+            sample_occlusion(Some((
+                Some(VoxelCell::new("stone", Default::default())),
+                None,
+                VoxelLight::DARK
+            ))) > 0.0
+        );
+        let empty =
+            MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), true);
+        assert_eq!(
+            sample_occlusion(Some((Some(empty), None, VoxelLight::DARK))),
+            0.0
+        );
     }
 
     #[test]
@@ -586,7 +577,11 @@ mod tests {
         for layer in 0..4 {
             for y in 0..8 {
                 for x in 0..8 {
-                    half_mask.edit([x, y, layer], crate::voxel::microblock::ArtisansKitResolution::ExtraThin, true);
+                    half_mask.edit(
+                        [x, y, layer],
+                        crate::voxel::microblock::ArtisansKitResolution::ExtraThin,
+                        true,
+                    );
                 }
             }
         }
@@ -602,12 +597,19 @@ mod tests {
         for layer in 0..4 {
             for y in 0..8 {
                 for x in 0..8 {
-                    half_mask.edit([x, y, layer], crate::voxel::microblock::ArtisansKitResolution::ExtraThin, true);
+                    half_mask.edit(
+                        [x, y, layer],
+                        crate::voxel::microblock::ArtisansKitResolution::ExtraThin,
+                        true,
+                    );
                 }
             }
         }
         let half = half_mask.apply_to_cell(full, true);
-        let bright = VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, crate::voxel::light::BlockLight::new(0, 0, 15));
+        let bright = VoxelLight::new_hsi(
+            VoxelLight::MAX_LEVEL,
+            crate::voxel::light::BlockLight::new(0, 0, 15),
+        );
         let dark = VoxelLight::DARK;
 
         let (sky, block) = average_shader_light_levels([

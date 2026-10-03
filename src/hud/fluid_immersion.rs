@@ -1,11 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
-    content::fluid::FluidRegistry,
-    player::camera::GameplayCamera,
-    rendering::biome_visuals::CurrentBiomeVisuals,
-    voxel::world::VoxelWorld,
+    app::game_state::GameState, content::fluid::FluidRegistry, player::camera::GameplayCamera,
+    rendering::biome_visuals::CurrentBiomeVisuals, voxel::world::VoxelWorld,
 };
 
 #[derive(Component)]
@@ -76,18 +73,19 @@ fn update_fluid_immersion_tint(
     let entering_fluid = *visibility != Visibility::Visible;
     let fluid_changed = *active_fluid != Some(cell.fluid_id);
 
-    let resolved_tint = if let Some(tint) = definition.immersion_tint {
-        Some((tint.color, tint.opacity))
-    } else if definition.id == "asteria:water" {
-        Some((
-            biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color),
-            biome_visuals
-                .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
-                .clamp(0.0, 1.0),
-        ))
-    } else {
-        None
-    };
+    let resolved_tint = definition
+        .immersion_tint
+        .map(|tint| (tint.color, tint.opacity))
+        .or_else(|| {
+            definition.biome_immersion_tint.then(|| {
+                (
+                    biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color),
+                    biome_visuals
+                        .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
+                        .clamp(0.0, 1.0),
+                )
+            })
+        });
 
     let Some((color, opacity)) = resolved_tint else {
         *active_fluid = Some(cell.fluid_id);

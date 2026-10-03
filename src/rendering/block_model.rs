@@ -3,10 +3,7 @@ mod materials;
 
 use bevy::prelude::*;
 
-use super::{
-    block_display::BLOCK_DISPLAY_FACES,
-    block_model_material::BlockModelMaterial,
-};
+use super::{block_display::BLOCK_DISPLAY_FACES, block_model_material::BlockModelMaterial};
 use crate::{
     content::block::BlockRegistry,
     voxel::{block_face::BlockFace, log_variant::is_hollow_log_id},

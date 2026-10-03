@@ -3,7 +3,10 @@ use bevy::{
 };
 
 use crate::{
-    content::{block::BlockDefinition, block_shape::{STACKABLE_LAYER_HEIGHT, is_stackable_layer}},
+    content::{
+        block::BlockDefinition,
+        block_shape::{STACKABLE_LAYER_HEIGHT, is_stackable_layer},
+    },
     rendering::block_display::{block_display_face_points, block_display_face_points_for_height},
     voxel::{
         block_face::{BlockFace, BlockFaces},
@@ -71,7 +74,12 @@ impl BlockModelMeshes {
     }
 
     pub(crate) fn display_face(&self, face: BlockFace) -> Handle<Mesh> {
-        display_face_handle(face, &self.display_top, &self.display_front, &self.display_right)
+        display_face_handle(
+            face,
+            &self.display_top,
+            &self.display_front,
+            &self.display_right,
+        )
     }
 
     pub(crate) fn display_face_for_block(
@@ -196,7 +204,14 @@ fn hollow_log_face_mesh(face: BlockFace) -> Mesh {
             let outer = face
                 .unit_vertices()
                 .map(|vertex| (Vec3::from_array(vertex) - Vec3::splat(0.5)).to_array());
-            push_preview_quad(&mut positions, &mut normals, &mut uvs, &mut indices, outer, face.normal());
+            push_preview_quad(
+                &mut positions,
+                &mut normals,
+                &mut uvs,
+                &mut indices,
+                outer,
+                face.normal(),
+            );
 
             let mut inner_quad = outer;
             let (normal_axis, radial_axis) = match face {
@@ -208,7 +223,14 @@ fn hollow_log_face_mesh(face: BlockFace) -> Mesh {
                 vertex[normal_axis] = vertex[normal_axis].signum() * inner;
                 vertex[radial_axis] = vertex[radial_axis].signum() * inner;
             }
-            push_preview_quad(&mut positions, &mut normals, &mut uvs, &mut indices, inner_quad, face.normal());
+            push_preview_quad(
+                &mut positions,
+                &mut normals,
+                &mut uvs,
+                &mut indices,
+                inner_quad,
+                face.normal(),
+            );
         }
         BlockFace::Top | BlockFace::Bottom => {
             let y = if face == BlockFace::Top { 0.5 } else { -0.5 };
@@ -219,7 +241,10 @@ fn hollow_log_face_mesh(face: BlockFace) -> Mesh {
                 (inner, 0.5, -inner, inner),
             ] {
                 push_preview_quad(
-                    &mut positions, &mut normals, &mut uvs, &mut indices,
+                    &mut positions,
+                    &mut normals,
+                    &mut uvs,
+                    &mut indices,
                     [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]],
                     face.normal(),
                 );
@@ -227,11 +252,14 @@ fn hollow_log_face_mesh(face: BlockFace) -> Mesh {
         }
     }
 
-    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_inserted_indices(Indices::U32(indices))
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(indices))
 }
 
 fn push_preview_quad(

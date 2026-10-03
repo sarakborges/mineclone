@@ -137,7 +137,12 @@ impl BiomeField {
             }
 
             if selected.is_none_or(|(current, _, current_selection_strength, _)| {
-                site_is_better(*site, selection_strength, current, current_selection_strength)
+                site_is_better(
+                    *site,
+                    selection_strength,
+                    current,
+                    current_selection_strength,
+                )
             }) {
                 selected = Some((*site, site_strength, selection_strength, local_position));
             }
@@ -298,18 +303,14 @@ impl BiomeField {
         let mut probe_distance = FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP.min(max_distance);
 
         loop {
-            if !self.surface_constraints_allow_at(
-                constraints,
-                center + direction * probe_distance,
-            ) {
+            if !self.surface_constraints_allow_at(constraints, center + direction * probe_distance)
+            {
                 let mut low = allowed_distance;
                 let mut high = probe_distance;
                 for _ in 0..FLOATING_ISLAND_SURFACE_FIT_BINARY_STEPS {
                     let midpoint = (low + high) * 0.5;
-                    if self.surface_constraints_allow_at(
-                        constraints,
-                        center + direction * midpoint,
-                    ) {
+                    if self.surface_constraints_allow_at(constraints, center + direction * midpoint)
+                    {
                         low = midpoint;
                     } else {
                         high = midpoint;
@@ -322,8 +323,8 @@ impl BiomeField {
             if probe_distance >= max_distance {
                 return max_distance;
             }
-            probe_distance = (probe_distance + FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP)
-                .min(max_distance);
+            probe_distance =
+                (probe_distance + FLOATING_ISLAND_SURFACE_FIT_PROBE_STEP).min(max_distance);
         }
     }
 }
@@ -343,8 +344,8 @@ fn floating_island_surface_fit_scale(
     let mut fit_scale = 1.0_f32;
 
     for index in 0..FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS {
-        let angle = std::f32::consts::TAU * index as f32
-            / FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS as f32;
+        let angle =
+            std::f32::consts::TAU * index as f32 / FLOATING_ISLAND_SURFACE_FIT_DIRECTIONS as f32;
         let direction = Vec2::new(angle.cos(), angle.sin());
         let radius = ellipse_radius_along(radii, direction);
         let max_distance = radius + FLOATING_ISLAND_SURFACE_FIT_PADDING;

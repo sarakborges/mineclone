@@ -80,10 +80,8 @@ const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
 
-pub(crate) const MIN_BIOME_SIZE_MULTIPLIER: f32 =
-    MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
-pub(crate) const MAX_BIOME_SIZE_MULTIPLIER: f32 =
-    MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
+pub(crate) const MIN_BIOME_SIZE_MULTIPLIER: f32 = MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
+pub(crate) const MAX_BIOME_SIZE_MULTIPLIER: f32 = MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
 pub(crate) const DEFAULT_BIOME_SIZE_MULTIPLIER: f32 =
     DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
 
@@ -141,7 +139,6 @@ impl WorldGenerationSettings {
         self.spawn_caves
     }
 
-
     pub(crate) const fn spawn_oceans(self) -> bool {
         self.spawn_oceans
     }
@@ -161,7 +158,6 @@ impl WorldGenerationSettings {
     pub(crate) fn set_spawn_caves(&mut self, spawn_caves: bool) {
         self.spawn_caves = spawn_caves;
     }
-
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
         self.spawn_oceans = spawn_oceans;
@@ -245,7 +241,6 @@ impl NewWorldConfig {
         self.world_generation.set_spawn_caves(spawn_caves);
     }
 
-
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
         self.world_generation.set_spawn_oceans(spawn_oceans);
     }
@@ -297,12 +292,10 @@ pub(crate) fn snap_biome_size_multiplier(value: f32) -> f32 {
         return DEFAULT_BIOME_SIZE_MULTIPLIER;
     }
 
-    let tenths = (value * 10.0)
-        .round()
-        .clamp(
-            MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
-            MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
-        ) as u8;
+    let tenths = (value * 10.0).round().clamp(
+        MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
+        MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
+    ) as u8;
     tenths as f32 / 10.0
 }
 
@@ -318,8 +311,7 @@ pub(crate) fn biome_size_multiplier_tenths(value: f32) -> Option<u8> {
     }
 
     let tenths = rounded as i32;
-    (i32::from(MIN_BIOME_SIZE_MULTIPLIER_TENTHS)
-        ..=i32::from(MAX_BIOME_SIZE_MULTIPLIER_TENTHS))
+    (i32::from(MIN_BIOME_SIZE_MULTIPLIER_TENTHS)..=i32::from(MAX_BIOME_SIZE_MULTIPLIER_TENTHS))
         .contains(&tenths)
         .then_some(tenths as u8)
 }
@@ -371,9 +363,11 @@ mod tests {
     #[test]
     fn persisted_worldgen_identities_must_match_each_other_and_this_build() {
         assert!(validate_matching_worldgen_versions(WORLDGEN_VERSION, WORLDGEN_VERSION).is_ok());
-        assert!(WorldgenVersion::current()
-            .validate_matches(WorldgenVersion::current())
-            .is_ok());
+        assert!(
+            WorldgenVersion::current()
+                .validate_matches(WorldgenVersion::current())
+                .is_ok()
+        );
 
         let mismatched = validate_matching_worldgen_versions(
             WORLDGEN_VERSION,

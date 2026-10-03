@@ -9,7 +9,7 @@ use bevy::{
 
 use crate::app::game_state::GameState;
 
-use super::color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS};
+use super::color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba};
 
 const MAX_EXTRUDED_SPRITE_PIXELS: u64 = 65_536;
 const MAX_EXTRUDED_SPRITE_QUADS: usize = 131_072;
@@ -325,12 +325,7 @@ impl MeshBuffers {
         }
     }
 
-    fn push_quad(
-        &mut self,
-        positions: [[f32; 3]; 4],
-        normal: [f32; 3],
-        uvs: [[f32; 2]; 4],
-    ) {
+    fn push_quad(&mut self, positions: [[f32; 3]; 4], normal: [f32; 3], uvs: [[f32; 2]; 4]) {
         let base = u32::try_from(self.positions.len())
             .expect("bounded extruded sprite mesh must fit u32 indices");
         self.positions.extend_from_slice(&positions);
@@ -392,10 +387,7 @@ impl SpriteExtrusion<'_> {
     }
 }
 
-fn extruded_sprite_mesh(
-    image: &Image,
-    geometry: ExtrudedSpriteGeometry,
-) -> Result<Mesh, String> {
+fn extruded_sprite_mesh(image: &Image, geometry: ExtrudedSpriteGeometry) -> Result<Mesh, String> {
     let mask = OpaqueMask::from_image(image, geometry.alpha_cutoff)?;
     let quad_count = 2 + mask.exposed_edge_count();
     if quad_count > MAX_EXTRUDED_SPRITE_QUADS {
@@ -459,11 +451,7 @@ mod tests {
     #[test]
     fn contour_edges_ignore_internal_pixel_boundaries() {
         let mask = OpaqueMask {
-            pixels: vec![
-                true, true, false,
-                true, true, false,
-                false, false, false,
-            ],
+            pixels: vec![true, true, false, true, true, false, false, false, false],
             width: 3,
             height: 3,
         };

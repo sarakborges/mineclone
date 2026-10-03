@@ -7,7 +7,10 @@ use crate::content::{
     structure_set::StructureSetDefinition,
 };
 
-use super::{geometry::rectangles_overlap, hash::{avalanche, string_hash, unit_interval}};
+use super::{
+    geometry::rectangles_overlap,
+    hash::{avalanche, string_hash, unit_interval},
+};
 
 const ELEMENT_HASH_SALT: u64 = 0x9e37_79b1_85eb_ca87;
 const INSTANCE_HASH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
@@ -28,11 +31,7 @@ pub(crate) fn resolve_set_pieces<'a>(
     set: &StructureSetDefinition,
     set_anchor: IVec2,
     structures: &'a StructureRegistry,
-    mut resolve_origin_y: impl FnMut(
-        &StructureDefinition,
-        StructureRotation,
-        IVec2,
-    ) -> Option<i32>,
+    mut resolve_origin_y: impl FnMut(&StructureDefinition, StructureRotation, IVec2) -> Option<i32>,
 ) -> Option<Vec<ResolvedSetPiece<'a>>> {
     let occurrence_hash = set_occurrence_hash(world_seed, &set.id, set_anchor);
     let mut resolved: Vec<ResolvedSetPiece<'a>> = Vec::new();
@@ -58,10 +57,8 @@ pub(crate) fn resolve_set_pieces<'a>(
         let mut placed_for_element = Vec::new();
 
         for instance in 0..target_count {
-            let instance_hash = avalanche(
-                element_hash
-                    ^ u64::from(instance + 1).wrapping_mul(INSTANCE_HASH_SALT),
-            );
+            let instance_hash =
+                avalanche(element_hash ^ u64::from(instance + 1).wrapping_mul(INSTANCE_HASH_SALT));
             let structure = structures
                 .select_for_reference(&element.structure, instance_hash)
                 .expect("validated structure set element reference must resolve");
@@ -72,8 +69,7 @@ pub(crate) fn resolve_set_pieces<'a>(
             let mut placed = None;
             for attempt in 0..element.placement.attempts {
                 let attempt_hash = avalanche(
-                    instance_hash
-                        ^ u64::from(attempt + 1).wrapping_mul(ATTEMPT_HASH_SALT),
+                    instance_hash ^ u64::from(attempt + 1).wrapping_mul(ATTEMPT_HASH_SALT),
                 );
                 let Some(reference_anchor) = reference_anchor(
                     &element.placement.relative_to,
@@ -95,11 +91,7 @@ pub(crate) fn resolve_set_pieces<'a>(
                     continue;
                 };
 
-                if !separation_satisfied(
-                    anchor,
-                    &all_anchors,
-                    element.placement.min_separation,
-                ) {
+                if !separation_satisfied(anchor, &all_anchors, element.placement.min_separation) {
                     continue;
                 }
 
@@ -229,9 +221,8 @@ mod tests {
     fn annulus_offset_respects_requested_distance() {
         for hash in 0..128 {
             if let Some(offset) = annulus_offset(hash, 3, 7) {
-                let distance_squared =
-                    i64::from(offset.x) * i64::from(offset.x)
-                        + i64::from(offset.y) * i64::from(offset.y);
+                let distance_squared = i64::from(offset.x) * i64::from(offset.x)
+                    + i64::from(offset.y) * i64::from(offset.y);
                 assert!((9..=49).contains(&distance_squared));
             }
         }

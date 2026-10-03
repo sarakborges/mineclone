@@ -3,11 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::builtin_ids::BIOME_TINT_METADATA_KEY,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    voxel::{
-        raycast::VoxelHit,
-        revision::BlockTopologyRevision,
-        world::VoxelWorld,
-    },
+    voxel::{raycast::VoxelHit, revision::BlockTopologyRevision, world::VoxelWorld},
 };
 
 use super::block::TargetedBlock;

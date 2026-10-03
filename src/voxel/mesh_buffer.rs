@@ -9,11 +9,7 @@ use crate::rendering::block_texture::{
     TERRAIN_TEXTURE_FLAG_SHIFT, TERRAIN_TEXTURE_INDEX_BITS, TERRAIN_TEXTURE_INDEX_MASK,
 };
 
-use super::{
-    chunk::CHUNK_SIZE,
-    meshlet::CHUNK_MESHLET_EDGE,
-    quad::quad_triangle_indices,
-};
+use super::{chunk::CHUNK_SIZE, meshlet::CHUNK_MESHLET_EDGE, quad::quad_triangle_indices};
 
 /// Keep Bevy's built-in color attribute ID so the standard material pipeline
 /// still defines VERTEX_COLORS, but store voxel lighting in normalized bytes.
@@ -64,11 +60,7 @@ impl VoxelMeshBuffer {
             encode_material_uv(quad.uvs[index], quad.light_uvs[index][1])
         });
         let payloads: [u32; 4] = std::array::from_fn(|index| {
-            encode_vertex_payload(
-                packed_tint_normal,
-                quad.light_uvs[index][0],
-                meshlet_index,
-            )
+            encode_vertex_payload(packed_tint_normal, quad.light_uvs[index][0], meshlet_index)
         });
         self.uvs.extend(encoded_uvs);
         self.payloads.extend(payloads);
@@ -112,8 +104,7 @@ const _: () = assert!(CHUNK_MESHLET_EDGE < MATERIAL_UV_STRIDE as usize);
 fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
     let material_code = material_code.round().max(0.0) as u32;
     let base_index = material_code & TERRAIN_TEXTURE_INDEX_MASK;
-    let overlay_index =
-        (material_code >> TERRAIN_TEXTURE_INDEX_BITS) & TERRAIN_TEXTURE_INDEX_MASK;
+    let overlay_index = (material_code >> TERRAIN_TEXTURE_INDEX_BITS) & TERRAIN_TEXTURE_INDEX_MASK;
     let flags = (material_code >> TERRAIN_TEXTURE_FLAG_SHIFT) & 7;
     let base_and_flags = base_index | (flags << TERRAIN_TEXTURE_INDEX_BITS);
 
@@ -127,27 +118,18 @@ fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
 }
 
 fn encode_voxel_light(color: [f32; 4]) -> [u8; 4] {
-    color.map(|channel| {
-        (channel.clamp(0.0, 1.0) * 255.0).round() as u8
-    })
+    color.map(|channel| (channel.clamp(0.0, 1.0) * 255.0).round() as u8)
 }
 
 fn encode_tint_and_normal(tint: [f32; 3], normal: [f32; 3]) -> u32 {
-    let tint = tint.map(|channel| {
-        (channel.clamp(0.0, 1.0) * 127.0).round() as u32
-    });
+    let tint = tint.map(|channel| (channel.clamp(0.0, 1.0) * 127.0).round() as u32);
     let normal_code = axis_normal_code(normal);
-    let packed =
-        tint[0] | (tint[1] << 7) | (tint[2] << 14) | (normal_code << 21);
+    let packed = tint[0] | (tint[1] << 7) | (tint[2] << 14) | (normal_code << 21);
     debug_assert!(packed <= 0x00ff_ffff);
     packed
 }
 
-fn encode_vertex_payload(
-    packed_tint_normal: u32,
-    sky_light: f32,
-    meshlet_index: u32,
-) -> u32 {
+fn encode_vertex_payload(packed_tint_normal: u32, sky_light: f32, meshlet_index: u32) -> u32 {
     let sky = (sky_light.clamp(0.0, 1.0) * 15.0).round() as u32;
     debug_assert!(meshlet_index < 8);
     packed_tint_normal | (sky << 24) | (meshlet_index << 28)

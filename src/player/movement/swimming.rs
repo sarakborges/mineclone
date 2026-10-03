@@ -58,7 +58,10 @@ pub(super) fn swim_vertical(
         gravity.grounded = false;
     }
 
-    let target_velocity = if context.keys.pressed(context.keybinds.key_code(KeybindAction::Jump)) {
+    let target_velocity = if context
+        .keys
+        .pressed(context.keybinds.key_code(KeybindAction::Jump))
+    {
         if player_near_fluid_surface(transform.translation, &context.world) {
             JUMP_SPEED
         } else {

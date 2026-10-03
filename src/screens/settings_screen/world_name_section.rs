@@ -32,12 +32,8 @@ impl WorldNameFeedback {
     }
 }
 
-type WorldNameInteractions<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Interaction),
-    (With<WorldNameInput>, Changed<Interaction>),
->;
+type WorldNameInteractions<'w, 's> =
+    Query<'w, 's, (Entity, &'static Interaction), (With<WorldNameInput>, Changed<Interaction>)>;
 
 pub(super) fn world_name_setting(
     config: &NewWorldConfig,
@@ -48,7 +44,11 @@ pub(super) fn world_name_setting(
         settings_layout::setting_column(),
         children![
             typography::setting_title(localization.text(language, "newWorld.name").to_owned()),
-            typography::caption(localization.text(language, "newWorld.name.description").to_owned()),
+            typography::caption(
+                localization
+                    .text(language, "newWorld.name.description")
+                    .to_owned()
+            ),
             (
                 WorldNameFrame,
                 Node {

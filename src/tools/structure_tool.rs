@@ -7,14 +7,17 @@ use serde::Serialize;
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
-        block_orientation::BlockOrientation,
-        tool::ToolRegistry,
+        block_orientation::BlockOrientation, tool::ToolRegistry,
         tool_behavior::STRUCTURE_SELECT_BEHAVIOR_ID,
     },
     gameplay::availability::world_interaction_available,
     hud::chat::ChatState,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    targeting::{ToolUse, block::{BlockTargetingSet, TargetedBlock}, placement_voxel},
+    targeting::{
+        ToolUse,
+        block::{BlockTargetingSet, TargetedBlock},
+        placement_voxel,
+    },
     voxel::world::VoxelWorld,
 };
 
@@ -89,10 +92,7 @@ impl Plugin for StructureToolPlugin {
             )
             .add_systems(
                 Update,
-                (
-                    clear_selection_on_hotbar_change,
-                    handle_structure_tool_use,
-                )
+                (clear_selection_on_hotbar_change, handle_structure_tool_use)
                     .chain()
                     .after(BlockTargetingSet::Interaction)
                     .run_if(world_interaction_available),

@@ -15,7 +15,7 @@ use crate::{
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
 
-use super::world_names::{validate_world_name, WORLDS_DIRECTORY};
+use super::world_names::{WORLDS_DIRECTORY, validate_world_name};
 
 const THUMBNAIL_FILE_NAME: &str = "thumbnail.png";
 const THUMBNAIL_WIDTH: u32 = 320;
@@ -27,11 +27,8 @@ pub(crate) enum WorldThumbnailCompletion {
     ExitGame,
 }
 
-pub(crate) type WorldThumbnailCameraQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Camera, Option<&'static GameplayWorldCamera>),
->;
+pub(crate) type WorldThumbnailCameraQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Camera, Option<&'static GameplayWorldCamera>)>;
 
 #[derive(Component)]
 pub(crate) struct WorldThumbnailCapture {
@@ -122,10 +119,7 @@ pub(crate) fn load_world_thumbnail(world_id: &str) -> io::Result<Option<Image>> 
 }
 
 fn write_world_thumbnail(world_id: &str, image: &Image) -> io::Result<()> {
-    let dynamic = image
-        .clone()
-        .try_into_dynamic()
-        .map_err(io::Error::other)?;
+    let dynamic = image.clone().try_into_dynamic().map_err(io::Error::other)?;
     let thumbnail = dynamic.resize_to_fill(
         THUMBNAIL_WIDTH,
         THUMBNAIL_HEIGHT,
@@ -142,7 +136,6 @@ fn world_thumbnail_path(world_id: &str) -> io::Result<PathBuf> {
         .join(world_id)
         .join(THUMBNAIL_FILE_NAME))
 }
-
 
 pub(crate) fn enforce_world_thumbnail_camera_isolation(
     captures: Query<(), With<WorldThumbnailCapture>>,

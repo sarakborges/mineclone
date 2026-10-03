@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{
-        crash_log::log_gameplay_event,
-        game_state::GameState,
-    },
+    app::{crash_log::log_gameplay_event, game_state::GameState},
     player::{
         find_safe_spawn_position, player_id::LOCAL_PLAYER_ID, player_position_is_clear,
         safe_spawn_position, spawn_player_entity,
@@ -67,9 +64,7 @@ pub(super) fn spawn_loaded_world(
             .flatten();
         let saved_flying = *persistence.load_mode == WorldLoadMode::Load
             && persistence.save.player_flying(LOCAL_PLAYER_ID);
-        progress
-            .loading_state
-            .set_presentation_prewarm_frames(0);
+        progress.loading_state.set_presentation_prewarm_frames(0);
 
         spawn_player_entity(
             &mut renderer.commands,

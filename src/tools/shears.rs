@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        layer::LayerFace,
-        tool_behavior::LAYER_REMOVE_BEHAVIOR_ID,
-    },
+    content::{layer::LayerFace, tool_behavior::LAYER_REMOVE_BEHAVIOR_ID},
     gameplay::availability::world_interaction_available,
     player::viewmodel::ViewModelAnimation,
     targeting::{ToolUse, block::BlockTargetingSet},

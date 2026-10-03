@@ -27,13 +27,21 @@ pub struct AttackEffectDefinition {
     pub strength: f32,
 }
 
-fn default_effect_chance() -> f32 { 1.0 }
+fn default_effect_chance() -> f32 {
+    1.0
+}
 
 impl AttackEffectDefinition {
     fn validate(&self, attack_id: &str) {
         let effect = self.effect.as_str();
-        assert!(self.chance.is_finite() && (0.0..=1.0).contains(&self.chance), "attack {attack_id} effect {effect} chance must be between 0 and 1");
-        assert!(self.strength.is_finite() && self.strength >= 0.0, "attack {attack_id} effect {effect} strength must be non-negative");
+        assert!(
+            self.chance.is_finite() && (0.0..=1.0).contains(&self.chance),
+            "attack {attack_id} effect {effect} chance must be between 0 and 1"
+        );
+        assert!(
+            self.strength.is_finite() && self.strength >= 0.0,
+            "attack {attack_id} effect {effect} strength must be non-negative"
+        );
     }
 }
 
@@ -50,7 +58,11 @@ pub struct AttackDefinition {
 impl AttackDefinition {
     pub fn validate(&self) {
         assert!(!self.id.trim().is_empty(), "attack id must not be empty");
-        assert!(self.damage.is_finite() && self.damage >= 0.0, "attack {} damage must be non-negative", self.id);
+        assert!(
+            self.damage.is_finite() && self.damage >= 0.0,
+            "attack {} damage must be non-negative",
+            self.id
+        );
         for effect in &self.effects {
             effect.validate(&self.id);
         }

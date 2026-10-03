@@ -7,8 +7,8 @@ use crate::world::{
 };
 
 use super::{
-    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
     super::{WorldLoadingPhase, system_params::WorldSetupProgress},
+    INITIAL_LOADING_BUDGET, INITIAL_LOADING_DISPATCH_BUDGET,
 };
 
 pub(super) fn generate_initial_chunks(
@@ -76,8 +76,7 @@ fn integrate_generated_chunks(
         budget.record(1);
 
         let horizontal = bevy::prelude::IVec2::new(completed.coord.x, completed.coord.z);
-        if let Some(structure_top_chunk) =
-            generation_tasks.structure_top_chunk_if_ready(horizontal)
+        if let Some(structure_top_chunk) = generation_tasks.structure_top_chunk_if_ready(horizontal)
         {
             progress
                 .loading_state

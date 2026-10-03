@@ -13,10 +13,8 @@ use crate::content::{
 };
 
 use self::{
-    block_revision::BlockRevisionState,
-    content_revision::ContentRevisionState,
-    object_revision::ObjectRevisionState,
-    persistence::ChunkPersistenceState,
+    block_revision::BlockRevisionState, content_revision::ContentRevisionState,
+    object_revision::ObjectRevisionState, persistence::ChunkPersistenceState,
     resident::ResidentChunkStore,
 };
 use super::{
@@ -62,9 +60,9 @@ impl VoxelWorld {
     pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<ChunkContentRevision> {
         self.chunk(coord)?;
         Some(
-            self.content_revisions
-                .revision(coord)
-                .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
+            self.content_revisions.revision(coord).unwrap_or_else(|| {
+                panic!("loaded chunk content revision should exist at {coord:?}")
+            }),
         )
     }
 
@@ -81,7 +79,9 @@ impl VoxelWorld {
         Some(
             self.object_revisions
                 .chunk_revision(coord)
-                .unwrap_or_else(|| panic!("loaded chunk object revision should exist at {coord:?}")),
+                .unwrap_or_else(|| {
+                    panic!("loaded chunk object revision should exist at {coord:?}")
+                }),
         )
     }
 
@@ -137,9 +137,11 @@ impl VoxelWorld {
             return None;
         }
         let (chunk_coord, local_position) = split_world_position(world_position);
-        self.resident
-            .get(chunk_coord)?
-            .cell_at(local_position.x, local_position.y, local_position.z)
+        self.resident.get(chunk_coord)?.cell_at(
+            local_position.x,
+            local_position.y,
+            local_position.z,
+        )
     }
 
     pub(crate) fn objects_at(&self, world_position: IVec3) -> &[ObjectCell] {
@@ -164,10 +166,7 @@ impl VoxelWorld {
         )
     }
 
-    pub(crate) fn layers_at(
-        &self,
-        world_position: IVec3,
-    ) -> &[super::layer::AttachedLayer] {
+    pub(crate) fn layers_at(&self, world_position: IVec3) -> &[super::layer::AttachedLayer] {
         if world_position.y < 0 {
             return &[];
         }
@@ -197,9 +196,11 @@ impl VoxelWorld {
             return None;
         }
         let (chunk_coord, local_position) = split_world_position(world_position);
-        self.resident
-            .get(chunk_coord)?
-            .sample_local(local_position.x, local_position.y, local_position.z)
+        self.resident.get(chunk_coord)?.sample_local(
+            local_position.x,
+            local_position.y,
+            local_position.z,
+        )
     }
 
     pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {
@@ -488,9 +489,7 @@ impl VoxelWorld {
     }
 
     pub(crate) fn derived_fluid_chunk_is_mutable(&self, coord: IVec3) -> bool {
-        coord.y >= 0
-            && self.resident.contains(coord)
-            && !self.persistence.is_persistent(coord)
+        coord.y >= 0 && self.resident.contains(coord) && !self.persistence.is_persistent(coord)
     }
 
     fn set_fluid_at_internal(

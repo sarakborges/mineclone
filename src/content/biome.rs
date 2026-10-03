@@ -7,15 +7,22 @@ use crate::localization::LocalizedText;
 
 use self::validation::validate_biome_definition;
 use super::{
-    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
+    biome_density::BiomeDensityModifier,
+    biome_distribution::BiomeDistribution,
     biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, BiomeStructurePlacementRules},
     biome_surface_fluid::BiomeSurfaceFluid,
-    biome_surface_margin::BiomeSurfaceMargin, biome_terrain::BiomeTerrain,
-    biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, creature::CreatureRegistry,
-    day_night_phase::DayNightPhases, fluid::FluidRegistry, object::ObjectRegistry,
-    block::BlockRegistry, registry::DefinitionMap,
+    biome_surface_margin::BiomeSurfaceMargin,
+    biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier,
+    block::BlockRegistry,
+    color::Hsi,
+    creature::CreatureRegistry,
+    day_night_phase::DayNightPhases,
+    fluid::FluidRegistry,
+    object::ObjectRegistry,
+    registry::DefinitionMap,
 };
 
 mod validation;
@@ -116,12 +123,20 @@ pub struct BiomeObjectSpawnRule {
     pub ground_blocks: Vec<String>,
 }
 
-fn default_object_cluster_min() -> u8 { 1 }
-fn default_object_cluster_max() -> u8 { 1 }
+fn default_object_cluster_min() -> u8 {
+    1
+}
+fn default_object_cluster_max() -> u8 {
+    1
+}
 
 impl BiomeObjectSpawnRule {
     fn validate(&self, biome_id: &str) {
-        assert!(self.spacing > 0, "biome {biome_id} object spawn {} spacing must be positive", self.object);
+        assert!(
+            self.spacing > 0,
+            "biome {biome_id} object spawn {} spacing must be positive",
+            self.object
+        );
         assert!(
             self.chance.is_finite() && (0.0..=1.0).contains(&self.chance),
             "biome {biome_id} object spawn {} chance must be between 0 and 1",
@@ -145,9 +160,15 @@ impl BiomeObjectSpawnRule {
     }
 }
 
-fn default_spawn_weight() -> f32 { 1.0 }
-fn default_spawn_light_max() -> u8 { 15 }
-fn default_spawn_spacing() -> f32 { 16.0 }
+fn default_spawn_weight() -> f32 {
+    1.0
+}
+fn default_spawn_light_max() -> u8 {
+    15
+}
+fn default_spawn_spacing() -> f32 {
+    16.0
+}
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -437,14 +458,8 @@ mod tests {
             }),
         };
 
-        assert!(constrained.allows_surface(
-            "asteria:overworld/alps",
-            &tags(&["mountain"]),
-        ));
-        assert!(!constrained.allows_surface(
-            "asteria:overworld/volcano",
-            &tags(&["mountain"]),
-        ));
+        assert!(constrained.allows_surface("asteria:overworld/alps", &tags(&["mountain"]),));
+        assert!(!constrained.allows_surface("asteria:overworld/volcano", &tags(&["mountain"]),));
         assert!(!constrained.allows_surface("asteria:overworld/plains", &[]));
     }
 }

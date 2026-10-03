@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::world::deterministic::{hash_signed, mix_hash_u64};
 pub(super) use crate::world::deterministic::hash_unit;
+use crate::world::deterministic::{hash_signed, mix_hash_u64};
 pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
@@ -98,18 +98,12 @@ pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec
         return base;
     }
 
-    let jitter_x_hash = volume_cell_hash(
-        IVec3::new(0, cell.y, cell.z),
-        seed ^ 0x243f_6a88_85a3_08d3,
-    );
-    let jitter_y_hash = volume_cell_hash(
-        IVec3::new(cell.x, 0, cell.z),
-        seed ^ 0x1319_8a2e_0370_7344,
-    );
-    let jitter_z_hash = volume_cell_hash(
-        IVec3::new(cell.x, cell.y, 0),
-        seed ^ 0xa409_3822_299f_31d0,
-    );
+    let jitter_x_hash =
+        volume_cell_hash(IVec3::new(0, cell.y, cell.z), seed ^ 0x243f_6a88_85a3_08d3);
+    let jitter_y_hash =
+        volume_cell_hash(IVec3::new(cell.x, 0, cell.z), seed ^ 0x1319_8a2e_0370_7344);
+    let jitter_z_hash =
+        volume_cell_hash(IVec3::new(cell.x, cell.y, 0), seed ^ 0xa409_3822_299f_31d0);
     let jitter = Vec3::new(
         hash_signed(jitter_x_hash) * spacing.x * VOLUME_SITE_JITTER_FRACTION,
         hash_signed(jitter_y_hash) * spacing.y * VOLUME_SITE_JITTER_FRACTION,

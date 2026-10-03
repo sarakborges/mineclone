@@ -35,9 +35,9 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
         || name == ".."
         || name.ends_with([' ', '.'])
         || name.encode_utf16().count() > MAX_NAME_UTF16_UNITS
-        || name.chars().any(|character| {
-            character.is_control() || "<>:\"/\\|?*".contains(character)
-        });
+        || name
+            .chars()
+            .any(|character| character.is_control() || "<>:\"/\\|?*".contains(character));
     let stem = name.split('.').next().unwrap_or(name).trim_end();
     let reserved = matches!(
         stem.to_ascii_uppercase().as_str(),
@@ -75,8 +75,8 @@ fn unique_name(requested: &str, occupied: &HashSet<String>) -> io::Result<String
                 .checked_add(1)
                 .ok_or_else(|| io::Error::other("world copy numbering exhausted"))?;
             let suffix = format!(" ({numbered_copy})");
-            let budget = MAX_NAME_UTF16_UNITS
-                .saturating_sub(prefix_units + suffix.encode_utf16().count());
+            let budget =
+                MAX_NAME_UTF16_UNITS.saturating_sub(prefix_units + suffix.encode_utf16().count());
             let mut original_prefix = String::new();
             let mut used_units = 0;
             for character in requested.chars() {
@@ -126,8 +126,17 @@ mod tests {
     #[test]
     fn rejects_windows_device_names_and_path_traversal() {
         for name in [
-            "CON", "nul.txt", "COM¹", "lpt².txt", "CONIN$", "conout$.txt",
-            "../world", "foo/bar", "foo\\bar", "test.", " ",
+            "CON",
+            "nul.txt",
+            "COM¹",
+            "lpt².txt",
+            "CONIN$",
+            "conout$.txt",
+            "../world",
+            "foo/bar",
+            "foo\\bar",
+            "test.",
+            " ",
         ] {
             assert!(validate_world_name(name).is_err(), "{name}");
         }

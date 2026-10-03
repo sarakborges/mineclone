@@ -12,18 +12,20 @@ use crate::{
     localization::ActiveLanguage,
     player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::{
-        cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
-        fluid::{FluidCell, MAX_FLUID_LEVEL}, read::VoxelRead,
+        cell::VoxelCell,
+        collision::collides_aabb,
+        edit::VoxelTopologyRuntime,
+        fluid::{FluidCell, MAX_FLUID_LEVEL},
+        read::VoxelRead,
         texture_rotation::TextureRotation,
     },
     world::{
+        WorldSeed,
         generation::{
             ResolvedConnectedPiece, fit_structure_to_ground,
             resolve_connected_piece_forest_with_ground_fit,
-            resolve_connected_pieces_with_ground_fit, resolve_set_pieces,
-            surface_layer_placements,
+            resolve_connected_pieces_with_ground_fit, resolve_set_pieces, surface_layer_placements,
         },
-        WorldSeed,
     },
 };
 
@@ -51,21 +53,29 @@ pub(super) struct ChatPlacementContext<'w, 's> {
     assets: Res<'w, AssetServer>,
     language: Res<'w, ActiveLanguage>,
     runtime: VoxelTopologyRuntime<'w>,
-    player: Query<'w, 's, &'static mut Transform, (With<GameplayCamera>, Without<CreatureInstance>)>,
+    player:
+        Query<'w, 's, &'static mut Transform, (With<GameplayCamera>, Without<CreatureInstance>)>,
     existing: ExistingCreatures<'w, 's>,
 }
 
 fn overlaps(left: (Vec3, Vec3), right: (Vec3, Vec3)) -> bool {
-    left.0.x < right.1.x && left.1.x > right.0.x
-        && left.0.y < right.1.y && left.1.y > right.0.y
-        && left.0.z < right.1.z && left.1.z > right.0.z
+    left.0.x < right.1.x
+        && left.1.x > right.0.x
+        && left.0.y < right.1.y
+        && left.1.y > right.0.y
+        && left.0.z < right.1.z
+        && left.1.z > right.0.z
 }
 
 fn player_bounds(eye: Vec3) -> (Vec3, Vec3) {
     let feet_y = eye.y - PLAYER_EYE_HEIGHT;
     (
         Vec3::new(eye.x - PLAYER_HALF_WIDTH, feet_y, eye.z - PLAYER_HALF_WIDTH),
-        Vec3::new(eye.x + PLAYER_HALF_WIDTH, feet_y + PLAYER_HEIGHT, eye.z + PLAYER_HALF_WIDTH),
+        Vec3::new(
+            eye.x + PLAYER_HALF_WIDTH,
+            feet_y + PLAYER_HEIGHT,
+            eye.z + PLAYER_HALF_WIDTH,
+        ),
     )
 }
 
@@ -152,9 +162,9 @@ fn displaced_eye(
         a.distance_squared(initial_eye)
             .total_cmp(&b.distance_squared(initial_eye))
     });
-    candidates.into_iter().find(|eye| {
-        clear_destination(world, *eye, blocked, existing, reserved, require_support)
-    })
+    candidates
+        .into_iter()
+        .find(|eye| clear_destination(world, *eye, blocked, existing, reserved, require_support))
 }
 
 /// Inspect the *loaded* world instead of procedural terrain. Manual /place
@@ -234,8 +244,9 @@ fn displaced_eye_for_set(
 }
 
 fn connected_piece_bounds(piece: &ResolvedConnectedPiece<'_>) -> (Vec3, Vec3) {
-    let (minimum_offset, maximum_offset) =
-        piece.structure.horizontal_bounds_for_rotation(piece.rotation);
+    let (minimum_offset, maximum_offset) = piece
+        .structure
+        .horizontal_bounds_for_rotation(piece.rotation);
     let minimum = IVec3::new(
         piece.origin.x + minimum_offset.x,
         piece.origin.y + piece.structure.min_y_offset(),
@@ -250,9 +261,10 @@ fn connected_piece_bounds(piece: &ResolvedConnectedPiece<'_>) -> (Vec3, Vec3) {
 }
 
 fn combined_bounds(bounds: &[(Vec3, Vec3)]) -> Option<(Vec3, Vec3)> {
-    bounds.iter().copied().reduce(|left, right| {
-        (left.0.min(right.0), left.1.max(right.1))
-    })
+    bounds
+        .iter()
+        .copied()
+        .reduce(|left, right| (left.0.min(right.0), left.1.max(right.1)))
 }
 
 fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64 {
@@ -284,8 +296,7 @@ fn connected_ground_fit_y(
         structure.ground_anchor_y_offset(),
         structure.restrictions.max_slope,
         |position| {
-            loaded_surface_level_at(world, position, search_top)
-                .map(|surface_y| surface_y - 1)
+            loaded_surface_level_at(world, position, search_top).map(|surface_y| surface_y - 1)
         },
     )
 }
@@ -346,10 +357,7 @@ fn apply_structure(
                 .id_of(fluid_reference)
                 .expect("validated structure fluid");
             let _ = runtime.set_block(position, None);
-            let _ = runtime.set_fluid(
-                position,
-                Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
-            );
+            let _ = runtime.set_fluid(position, Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)));
         } else {
             debug_assert!(
                 structure.clears_voxel(voxel),
@@ -392,17 +400,23 @@ impl ChatPlacementContext<'_, '_> {
         let blocked = definition.collider.bounds(feet);
         let world = self.runtime.read();
         let occupied = !clear_volume(&world, blocked, false)
-            || self.existing.iter().any(|(other, collider)| {
-                overlaps(blocked, collider.bounds(other.translation))
-            })
-            || reserved.iter().any(|(other, collider)| {
-                overlaps(blocked, collider.bounds(*other))
-            });
+            || self
+                .existing
+                .iter()
+                .any(|(other, collider)| overlaps(blocked, collider.bounds(other.translation)))
+            || reserved
+                .iter()
+                .any(|(other, collider)| overlaps(blocked, collider.bounds(*other)));
         if occupied {
             return format!("not enough space to spawn {id}");
         }
         let Some(destination) = displaced_eye(
-            &world, player.translation, blocked, &self.existing, reserved, false,
+            &world,
+            player.translation,
+            blocked,
+            &self.existing,
+            reserved,
+            false,
         ) else {
             return format!("not enough space to spawn {id}");
         };
@@ -477,12 +491,7 @@ impl ChatPlacementContext<'_, '_> {
             origin,
             &self.structures,
             |child, child_rotation, geometric_origin| {
-                connected_ground_fit_y(
-                    &world,
-                    child,
-                    child_rotation,
-                    geometric_origin,
-                )
+                connected_ground_fit_y(&world, child, child_rotation, geometric_origin)
             },
         );
         let blocked = pieces
@@ -572,12 +581,14 @@ impl ChatPlacementContext<'_, '_> {
             placement_anchor,
             &self.structures,
             |structure, _rotation, anchor| {
-                let surface_y =
-                    loaded_surface_level_at(&world, anchor, search_top)?;
+                let surface_y = loaded_surface_level_at(&world, anchor, search_top)?;
                 Some(surface_y - structure.ground_anchor_y_offset())
             },
         ) else {
-            return format!("could not resolve structure set {} in loaded terrain", set.id);
+            return format!(
+                "could not resolve structure set {} in loaded terrain",
+                set.id
+            );
         };
 
         let connected_pieces = resolve_connected_piece_forest_with_ground_fit(
@@ -589,12 +600,7 @@ impl ChatPlacementContext<'_, '_> {
             }),
             &self.structures,
             |child, child_rotation, geometric_origin| {
-                connected_ground_fit_y(
-                    &world,
-                    child,
-                    child_rotation,
-                    geometric_origin,
-                )
+                connected_ground_fit_y(&world, child, child_rotation, geometric_origin)
             },
         );
         let blocked = connected_pieces
@@ -662,8 +668,14 @@ mod tests {
 
     #[test]
     fn bounds_overlap_requires_positive_intersection() {
-        assert!(!overlaps((Vec3::ZERO, Vec3::ONE), (Vec3::X, Vec3::X + Vec3::ONE)));
-        assert!(overlaps((Vec3::ZERO, Vec3::ONE), (Vec3::splat(0.5), Vec3::splat(1.5))));
+        assert!(!overlaps(
+            (Vec3::ZERO, Vec3::ONE),
+            (Vec3::X, Vec3::X + Vec3::ONE)
+        ));
+        assert!(overlaps(
+            (Vec3::ZERO, Vec3::ONE),
+            (Vec3::splat(0.5), Vec3::splat(1.5))
+        ));
     }
 
     #[test]

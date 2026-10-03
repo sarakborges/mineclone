@@ -152,8 +152,7 @@ impl ChunkAsyncWorkLimiter {
 impl ChunkAsyncStageMetrics {
     fn record(&self, elapsed_nanos: u64) {
         self.count.fetch_add(1, Ordering::Relaxed);
-        self.total_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+        self.total_nanos.fetch_add(elapsed_nanos, Ordering::Relaxed);
         self.max_nanos.fetch_max(elapsed_nanos, Ordering::Relaxed);
     }
 
@@ -179,7 +178,9 @@ const ASYNC_SLOW_FRAMES: u16 = 8;
 const ASYNC_RECOVERY_FRAMES: u16 = 30;
 
 fn loading_queue_limit_for_workers(workers: usize) -> usize {
-    workers.max(1).saturating_mul(LOADING_QUEUE_DEPTH_PER_WORKER)
+    workers
+        .max(1)
+        .saturating_mul(LOADING_QUEUE_DEPTH_PER_WORKER)
 }
 
 fn base_async_limit_for_workers(workers: usize) -> usize {
@@ -204,18 +205,11 @@ pub(crate) struct ChunkAsyncAdaptationState {
 }
 
 impl ChunkAsyncAdaptationState {
-    fn observe(
-        &mut self,
-        frame_seconds: f32,
-        current: usize,
-        base: usize,
-    ) -> Option<usize> {
+    fn observe(&mut self, frame_seconds: f32, current: usize, base: usize) -> Option<usize> {
         if frame_seconds > ASYNC_SLOW_FRAME_SECONDS {
             self.recovery_frames = 0;
             self.slow_frames = self.slow_frames.saturating_add(1);
-            if self.slow_frames >= ASYNC_SLOW_FRAMES
-                && current > adaptive_limit_floor(base)
-            {
+            if self.slow_frames >= ASYNC_SLOW_FRAMES && current > adaptive_limit_floor(base) {
                 self.slow_frames = 0;
                 return Some(current - 1);
             }
@@ -237,9 +231,7 @@ impl ChunkAsyncAdaptationState {
     }
 }
 
-pub(crate) fn reset_chunk_async_work_limit(
-    limiter: Res<ChunkAsyncWorkLimiter>,
-) {
+pub(crate) fn reset_chunk_async_work_limit(limiter: Res<ChunkAsyncWorkLimiter>) {
     limiter.reset_adaptive_limit();
 }
 
@@ -266,11 +258,7 @@ pub(crate) struct ChunkAsyncWorkPermit {
 
 impl Drop for ChunkAsyncWorkPermit {
     fn drop(&mut self) {
-        let elapsed_nanos = self
-            .started
-            .elapsed()
-            .as_nanos()
-            .min(u128::from(u64::MAX)) as u64;
+        let elapsed_nanos = self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
         match self.stage {
             ChunkAsyncStage::Generation => self.metrics.generation.record(elapsed_nanos),
             ChunkAsyncStage::InitialMesh => self.metrics.initial_mesh.record(elapsed_nanos),
@@ -285,8 +273,8 @@ impl Drop for ChunkAsyncWorkPermit {
 #[cfg(test)]
 mod tests {
     use super::{
-        ASYNC_RECOVERY_FRAMES, ASYNC_SLOW_FRAMES, ChunkAsyncAdaptationState,
-        adaptive_limit_floor, base_async_limit_for_workers, loading_queue_limit_for_workers,
+        ASYNC_RECOVERY_FRAMES, ASYNC_SLOW_FRAMES, ChunkAsyncAdaptationState, adaptive_limit_floor,
+        base_async_limit_for_workers, loading_queue_limit_for_workers,
     };
 
     #[test]

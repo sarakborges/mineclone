@@ -221,10 +221,7 @@ impl BiomeTerrain {
                     amplitude >= 0.0,
                     "biome {biome_id} ocean amplitude cannot be negative"
                 );
-                assert!(
-                    scale > 0.0,
-                    "biome {biome_id} ocean scale must be positive"
-                );
+                assert!(scale > 0.0, "biome {biome_id} ocean scale must be positive");
                 assert!(
                     detail_amplitude >= 0.0,
                     "biome {biome_id} ocean detailAmplitude cannot be negative"
@@ -247,10 +244,7 @@ impl BiomeTerrain {
                     amplitude >= 0.0,
                     "biome {biome_id} swamp amplitude cannot be negative"
                 );
-                assert!(
-                    scale > 0.0,
-                    "biome {biome_id} swamp scale must be positive"
-                );
+                assert!(scale > 0.0, "biome {biome_id} swamp scale must be positive");
                 assert!(
                     detail_amplitude >= 0.0,
                     "biome {biome_id} swamp detailAmplitude cannot be negative"
@@ -288,7 +282,10 @@ impl BiomeTerrain {
                 floor_scale,
                 ..
             } => {
-                assert!(depth >= 0.0, "biome {biome_id} gorge depth cannot be negative");
+                assert!(
+                    depth >= 0.0,
+                    "biome {biome_id} gorge depth cannot be negative"
+                );
                 assert!(
                     wall_height >= 0.0,
                     "biome {biome_id} gorge wallHeight cannot be negative"
@@ -318,9 +315,15 @@ impl BiomeTerrain {
                 detail_scale,
                 ..
             } => {
-                assert!(amplitude >= 0.0, "biome {biome_id} alps amplitude cannot be negative");
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} alps amplitude cannot be negative"
+                );
                 assert!(scale > 0.0, "biome {biome_id} alps scale must be positive");
-                assert!(sharpness > 0.0, "biome {biome_id} alps sharpness must be positive");
+                assert!(
+                    sharpness > 0.0,
+                    "biome {biome_id} alps sharpness must be positive"
+                );
                 assert!(
                     detail_amplitude >= 0.0,
                     "biome {biome_id} alps detailAmplitude cannot be negative"
@@ -370,7 +373,10 @@ impl BiomeTerrain {
                 crater_irregularity,
                 ..
             } => {
-                assert!(height > 0.0, "biome {biome_id} volcano height must be positive");
+                assert!(
+                    height > 0.0,
+                    "biome {biome_id} volcano height must be positive"
+                );
                 assert!(
                     crater_depth >= 0.0,
                     "biome {biome_id} volcano craterDepth cannot be negative"

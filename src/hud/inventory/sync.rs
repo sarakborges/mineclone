@@ -7,15 +7,13 @@ use crate::{
         item::{ItemRegistry, display_name},
         layer::LayerRegistry,
         object::ObjectRegistry,
-        secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
+        secondary_property::SecondaryPropertyRegistry,
+        tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
     player::{
-        camera::GameplayCamera,
-        game_mode::GameMode,
-        hotbar::PlayerHotbar,
-        inventory::InventoryCursor,
-        item_stack::ItemStack,
+        camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
+        inventory::InventoryCursor, item_stack::ItemStack,
     },
     rendering::block_visual_content::BlockVisualContent,
     tools::BrushMode,
@@ -33,11 +31,10 @@ use super::{
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-        ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
-        InventoryItemTooltip, InventoryItemTooltipHint, InventoryItemTooltipId,
-        InventoryItemTooltipStats, InventoryItemTooltipStatsTitle, InventoryItemTooltipText,
-        InventorySlot, InventorySortButton, InventorySortTooltip, InventoryTrashButton,
-        PlayerInventoryView,
+        ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot, InventoryItemTooltip,
+        InventoryItemTooltipHint, InventoryItemTooltipId, InventoryItemTooltipStats,
+        InventoryItemTooltipStatsTitle, InventoryItemTooltipText, InventorySlot,
+        InventorySortButton, InventorySortTooltip, InventoryTrashButton, PlayerInventoryView,
     },
 };
 
@@ -162,10 +159,7 @@ pub(super) struct InventoryPanelState<'w, 's> {
 
 impl InventoryPanelState<'_, '_> {
     pub(super) fn player_position(&self) -> Vec2 {
-        Vec2::new(
-            self.player.0.translation.x,
-            self.player.0.translation.z,
-        )
+        Vec2::new(self.player.0.translation.x, self.player.0.translation.z)
     }
 
     pub(super) fn layout<'a>(
@@ -188,12 +182,8 @@ impl InventoryPanelState<'_, '_> {
     }
 }
 
-type InventoryRootQuery<'w, 's> = Query<
-    'w,
-    's,
-    Entity,
-    Or<(With<InventoryHudRoot>, With<CharacterInfoInventoryRoot>)>,
->;
+type InventoryRootQuery<'w, 's> =
+    Query<'w, 's, Entity, Or<(With<InventoryHudRoot>, With<CharacterInfoInventoryRoot>)>>;
 
 #[derive(SystemParam)]
 pub(super) struct InventoryCursorSyncContext<'w, 's> {
@@ -526,9 +516,7 @@ pub(super) fn rebuild_inventory_when_changed(
         .panel
         .layout(&inputs.categories, &inputs.localization, None);
 
-    if language_changed
-        && let Some(root_entity) = view.roots.iter().next()
-    {
+    if language_changed && let Some(root_entity) = view.roots.iter().next() {
         commands.entity(root_entity).despawn();
         spawn_inventory_root(&mut commands, &layout, &mut items);
         return;
@@ -695,13 +683,11 @@ pub(super) fn sync_inventory_item_tooltip(
     let mut content_height = text_size.y + ITEM_TOOLTIP_ROW_GAP + id_size.y;
     if hint_visible {
         content_width = content_width.max(hint_size.x);
-        content_height +=
-            ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_HINT_MARGIN_TOP + hint_size.y;
+        content_height += ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_HINT_MARGIN_TOP + hint_size.y;
     }
     if stats_title_visible {
         content_width = content_width.max(stats_title_size.x);
-        content_height +=
-            ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_STATS_MARGIN_TOP + stats_title_size.y;
+        content_height += ITEM_TOOLTIP_ROW_GAP + ITEM_TOOLTIP_STATS_MARGIN_TOP + stats_title_size.y;
     }
     if stats_visible {
         content_width = content_width.max(stats_size.x);
@@ -869,11 +855,7 @@ pub(super) fn sync_inventory_sort_tooltip(
 
 pub(super) fn style_inventory_trash_button(mut buttons: InventoryTrashButtonQuery) {
     for (interaction, background, border) in &mut buttons {
-        selectable::apply_colors(
-            selectable::danger_colors(*interaction),
-            background,
-            border,
-        );
+        selectable::apply_colors(selectable::danger_colors(*interaction), background, border);
     }
 }
 

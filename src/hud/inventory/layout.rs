@@ -16,11 +16,7 @@ use crate::{
         },
     },
     localization::UiLocalization,
-    player::{
-        game_mode::GameMode,
-        hotbar::PlayerHotbar,
-        inventory::InventoryCursor,
-    },
+    player::{game_mode::GameMode, hotbar::PlayerHotbar, inventory::InventoryCursor},
     ui::button::{self, ButtonVariant},
 };
 
@@ -28,14 +24,10 @@ pub(super) use crate::hud::item_icon::HudItemIconView as InventoryItemView;
 
 pub(super) use self::{
     creative::spawn_creative_catalog_rows,
-    item::{
-        spawn_cursor_icon, spawn_cursor_stack_count, spawn_inventory_item, spawn_item_tooltip,
-    },
+    item::{spawn_cursor_icon, spawn_cursor_stack_count, spawn_inventory_item, spawn_item_tooltip},
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
-use super::state::{
-    InventoryHudRoot, InventoryViewPane, InventoryViewToggleButton, PANEL_GAP,
-};
+use super::state::{InventoryHudRoot, InventoryViewPane, InventoryViewToggleButton, PANEL_GAP};
 
 const INVENTORY_VIEW_TOGGLE_WIDTH: f32 = 96.0;
 const INVENTORY_VIEW_TOGGLE_HEIGHT: f32 = 40.0;

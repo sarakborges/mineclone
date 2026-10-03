@@ -50,7 +50,6 @@ pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) 
     (show_radius, hide_radius)
 }
 
-
 pub(crate) fn chunk_is_in_volume(
     center: IVec3,
     coord: IVec3,

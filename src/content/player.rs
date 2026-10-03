@@ -19,13 +19,23 @@ pub struct PlayerDefinition {
     pub animations: HashMap<String, String>,
 }
 
-fn default_player_health() -> f32 { 20.0 }
-fn default_player_attack() -> String { "asteria:punch".to_owned() }
+fn default_player_health() -> f32 {
+    20.0
+}
+fn default_player_attack() -> String {
+    "asteria:punch".to_owned()
+}
 
 impl PlayerDefinition {
     pub fn validate(&self) {
-        assert!(self.health.is_finite() && self.health > 0.0, "player health must be positive and finite");
-        assert!(!self.attack.trim().is_empty(), "player attack must not be empty");
+        assert!(
+            self.health.is_finite() && self.health > 0.0,
+            "player health must be positive and finite"
+        );
+        assert!(
+            !self.attack.trim().is_empty(),
+            "player attack must not be empty"
+        );
         if let Some(model) = &self.model {
             assert!(
                 is_safe_relative_asset_path(model),

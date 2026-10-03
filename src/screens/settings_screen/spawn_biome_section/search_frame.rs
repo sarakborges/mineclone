@@ -13,7 +13,10 @@ pub(in crate::screens::settings_screen) fn focus_spawn_biome_search_frame(
     editor: Single<Entity, With<SpawnBiomeSearchBar>>,
     mut focus: ResMut<InputFocus>,
 ) {
-    if frames.iter().any(|interaction| *interaction == Interaction::Pressed) {
+    if frames
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+    {
         focus.set(*editor, FocusCause::Pressed);
     }
 }

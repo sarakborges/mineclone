@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::keybinds::KeybindAction,
-    player::PlayerEntity,
+    app::keybinds::KeybindAction, player::PlayerEntity,
     world::current_context::CurrentDimensionContext,
 };
 
@@ -67,7 +66,10 @@ pub(super) fn apply_gravity(
     if gravity.grounded {
         if !player_has_ground_support(transform.translation, &context.world, player_height) {
             gravity.grounded = false;
-        } else if context.keys.just_pressed(context.keybinds.key_code(KeybindAction::Jump)) {
+        } else if context
+            .keys
+            .just_pressed(context.keybinds.key_code(KeybindAction::Jump))
+        {
             gravity.vertical_velocity = JUMP_SPEED;
             gravity.grounded = false;
         } else {
@@ -92,7 +94,10 @@ pub(super) fn apply_gravity(
         player_height,
     );
 
-    if matches!(hit_vertical_surface, MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)) {
+    if matches!(
+        hit_vertical_surface,
+        MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
+    ) {
         if gravity.vertical_velocity < 0.0 {
             gravity.grounded = true;
         }

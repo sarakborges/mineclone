@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::settings_state::SettingsState,
     ui::{
-        button::{button, ButtonVariant, MENU_BUTTON_HEIGHT},
+        button::{ButtonVariant, MENU_BUTTON_HEIGHT, button},
         transition::{ScreenTransition, ScreenTransitionTarget},
     },
 };
@@ -89,7 +89,9 @@ pub(super) fn apply_pending_section_scroll(
         return;
     };
     if scroll_to_section(pending.0, &mut scroll, computed, transform, &panels) {
-        commands.entity(entity).remove::<SettingsPendingSectionScroll>();
+        commands
+            .entity(entity)
+            .remove::<SettingsPendingSectionScroll>();
     }
 }
 

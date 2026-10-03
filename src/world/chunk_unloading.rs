@@ -1,10 +1,6 @@
 use std::{cmp::Reverse, time::Duration};
 
-use bevy::{
-    ecs::system::SystemParam,
-    platform::collections::HashSet,
-    prelude::*,
-};
+use bevy::{ecs::system::SystemParam, platform::collections::HashSet, prelude::*};
 
 use crate::{
     app::crash_log::log_gameplay_event,
@@ -18,12 +14,12 @@ use crate::{
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
-    chunk_visibility::ChunkPresentationSelection,
     chunk_rendering::{
         ChunkRenderPool, chunk_mesh_residency_high_bytes, chunk_mesh_residency_recovery_bytes,
         chunk_mesh_residency_target_bytes, retire_chunk_render_allocation,
     },
     chunk_system_params::ChunkRenderer,
+    chunk_visibility::ChunkPresentationSelection,
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
@@ -59,7 +55,10 @@ impl RenderRetirementState {
     fn pop(&mut self) -> Option<IVec3> {
         let coord = self.pending.pop()?;
         let removed = self.queued.remove(&coord);
-        debug_assert!(removed, "render retirement queue membership must stay synchronized");
+        debug_assert!(
+            removed,
+            "render retirement queue membership must stay synchronized"
+        );
         Some(coord)
     }
 }
@@ -170,11 +169,7 @@ pub(super) fn retire_distant_chunk_meshes(
             continue;
         }
 
-        retire_chunk_render_allocation(
-            &mut runtime.commands,
-            &mut runtime.render_pool,
-            coord,
-        );
+        retire_chunk_render_allocation(&mut runtime.commands, &mut runtime.render_pool, coord);
         runtime.remesh_queue.remove(coord);
         runtime.remesh_tasks.cancel_coord(coord);
         runtime.remesh_tasks.remove_lighting_revision(coord);
@@ -290,8 +285,8 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         let dz = i64::from(coord.z) - i64::from(center.z);
         let horizontal_distance_squared =
             dx.saturating_mul(dx).saturating_add(dz.saturating_mul(dz));
-        let total_distance_squared = horizontal_distance_squared
-            .saturating_add(dy.saturating_mul(dy));
+        let total_distance_squared =
+            horizontal_distance_squared.saturating_add(dy.saturating_mul(dy));
 
         let movement_alignment =
             dx * i64::from(movement_direction.x) + dz * i64::from(movement_direction.y);
@@ -354,17 +349,15 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         // Mesh retirement must stay deferred with the entity despawn. Removing
         // the mesh asset immediately leaves a still-live Mesh3d component
         // referencing a freed render-slab allocation until Commands flush.
-        retire_chunk_render_allocation(
-            &mut renderer.commands,
-            &mut renderer.pool,
-            candidate.coord,
-        );
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, candidate.coord);
         runtime
             .streaming
             .suppress_mesh_for_pressure(candidate.coord, candidate.bytes);
         runtime.remesh_queue.remove(candidate.coord);
         runtime.remesh_tasks.cancel_coord(candidate.coord);
-        runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
+        runtime
+            .remesh_tasks
+            .remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
             candidate.coord,
             &runtime.world,
@@ -407,11 +400,9 @@ pub(super) fn evict_distant_chunks(
         .state
         .bootstrap(&mut streaming, &eviction.world, center);
 
-    let mut budget = FrameWorkBudget::new(
-        CHUNK_UNLOAD_BUDGET,
-        MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
-    )
-    .with_global_deadline(eviction.frame_budget.deadline());
+    let mut budget =
+        FrameWorkBudget::new(CHUNK_UNLOAD_BUDGET, MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK)
+            .with_global_deadline(eviction.frame_budget.deadline());
 
     loop {
         if budget.exhausted() {
@@ -544,9 +535,7 @@ mod tests {
         assert!(state.pop().is_none());
         assert!(state.queued.is_empty());
     }
-    use crate::voxel::{
-        cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
-    };
+    use crate::voxel::{cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation};
 
     #[test]
     fn empty_chunk_cannot_change_direct_skylight_when_unloaded() {
@@ -603,14 +592,8 @@ mod tests {
         chunk.set_fluid(0, 0, 7, Some(FluidCell::source(0, 8)));
 
         // The generic content boundary counts include fluid occupancy too.
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)),
-            (true, true)
-        );
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)),
-            (true, true)
-        );
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (true, true));
         assert_eq!(
             halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)),
             (false, false)

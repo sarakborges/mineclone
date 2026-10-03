@@ -143,8 +143,7 @@ impl LayerRegistry {
             definition.texture
         );
         assert!(
-            definition.offset.is_finite()
-                && (0.0..=MAX_LAYER_OFFSET).contains(&definition.offset),
+            definition.offset.is_finite() && (0.0..=MAX_LAYER_OFFSET).contains(&definition.offset),
             "layer {} offset must be finite and between 0 and {MAX_LAYER_OFFSET}",
             definition.id
         );

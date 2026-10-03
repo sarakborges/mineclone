@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::game_state::GameState,
-    content::day_night_cycle::DayNightCycleRegistry,
-};
+use crate::{app::game_state::GameState, content::day_night_cycle::DayNightCycleRegistry};
 
 use super::{
     WorldLoadMode,
@@ -79,8 +76,7 @@ fn initialize_clock(
     clock.day = 1;
     clock.tick_in_day =
         (cycle.initial_time.rem_euclid(1.0) * cycle.day_duration_ticks as f32).floor() as u64;
-    clock.normalized_time =
-        clock.tick_in_day as f32 / cycle.day_duration_ticks.max(1) as f32;
+    clock.normalized_time = clock.tick_in_day as f32 / cycle.day_duration_ticks.max(1) as f32;
 }
 
 fn advance_clock(
@@ -107,8 +103,7 @@ fn advance_clock(
     }
 
     let midnight_tick = world_midnight_tick(cycle.world_time_start_hour, day_duration_ticks);
-    let shifted_tick = (clock.tick_in_day as u128
-        + day_duration_ticks as u128
+    let shifted_tick = (clock.tick_in_day as u128 + day_duration_ticks as u128
         - midnight_tick as u128)
         % day_duration_ticks as u128;
     let elapsed = elapsed_ticks as u128;
@@ -116,11 +111,9 @@ fn advance_clock(
     let crossed_midnights = u64::try_from(crossed_midnights).unwrap_or(u64::MAX);
 
     clock.day = clock.day.saturating_add(crossed_midnights);
-    clock.tick_in_day =
-        ((clock.tick_in_day as u128 + elapsed) % day_duration_ticks as u128) as u64;
+    clock.tick_in_day = ((clock.tick_in_day as u128 + elapsed) % day_duration_ticks as u128) as u64;
     clock.normalized_time = clock.tick_in_day as f32 / day_duration_ticks as f32;
 }
-
 
 fn world_midnight_tick(world_time_start_hour: f32, day_duration_ticks: u64) -> u64 {
     debug_assert!(day_duration_ticks > 0);

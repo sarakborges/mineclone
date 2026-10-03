@@ -1,23 +1,13 @@
 use std::{collections::HashMap, time::Duration};
 
 use bevy::{
-    animation::RepeatAnimation,
-    camera::visibility::RenderLayers,
-    ecs::system::SystemParam,
-    light::NotShadowCaster,
-    prelude::*,
-    world_serialization::WorldInstanceReady,
+    animation::RepeatAnimation, camera::visibility::RenderLayers, ecs::system::SystemParam,
+    light::NotShadowCaster, prelude::*, world_serialization::WorldInstanceReady,
 };
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        settings_state::SettingsState,
-    },
-    content::{
-        player::PlayerDefinition,
-    },
+    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    content::player::PlayerDefinition,
     entity::EntityHealth,
     gameplay::modal::GameplayModalState,
     player::{
@@ -54,16 +44,11 @@ enum PlayerModelRenderScope {
     CharacterInfoPreview,
 }
 
-fn player_model_render_layers(
-    scope: PlayerModelRenderScope,
-    third_person: bool,
-) -> RenderLayers {
+fn player_model_render_layers(scope: PlayerModelRenderScope, third_person: bool) -> RenderLayers {
     match scope {
         PlayerModelRenderScope::Gameplay if third_person => RenderLayers::layer(0),
         PlayerModelRenderScope::Gameplay => RenderLayers::from_layers(&[]),
-        PlayerModelRenderScope::HudPreview => {
-            RenderLayers::layer(PLAYER_MODEL_HUD_RENDER_LAYER)
-        }
+        PlayerModelRenderScope::HudPreview => RenderLayers::layer(PLAYER_MODEL_HUD_RENDER_LAYER),
         PlayerModelRenderScope::CharacterInfoPreview => {
             RenderLayers::layer(PLAYER_MODEL_CHARACTER_INFO_RENDER_LAYER)
         }
@@ -154,7 +139,10 @@ type ThirdPersonHeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
     (&'static mut BlockModel, &'static mut Visibility),
-    (With<ThirdPersonHeldBlockRoot>, Without<ThirdPersonHeldBlockFace>),
+    (
+        With<ThirdPersonHeldBlockRoot>,
+        Without<ThirdPersonHeldBlockFace>,
+    ),
 >;
 
 #[derive(SystemParam)]
@@ -364,12 +352,7 @@ fn configure_loaded_player_scene(
         }
         configure_player_material(&mut commands, &mut visuals, descendant);
         tag_player_model_part(&mut commands, &scene.names, descendant, scope);
-        configure_player_animation(
-            &mut commands,
-            &mut scene.players,
-            descendant,
-            appearance,
-        );
+        configure_player_animation(&mut commands, &mut scene.players, descendant, appearance);
     }
 }
 
@@ -456,7 +439,9 @@ fn configure_player_animation(
 
     let mut transitions = AnimationTransitions::new();
     if let Some(index) = appearance.nodes.get("idle").copied() {
-        transitions.play(&mut player, index, Duration::ZERO).repeat();
+        transitions
+            .play(&mut player, index, Duration::ZERO)
+            .repeat();
     }
     commands.entity(player_entity).insert((
         AnimationGraphHandle(graph.clone()),
@@ -479,9 +464,7 @@ fn sync_player_preview_model_visibility(
         let next = match scene_scope.0 {
             PlayerModelRenderScope::Gameplay => Visibility::Inherited,
             PlayerModelRenderScope::HudPreview => {
-                if *pause.get() == PauseState::Running
-                    && *settings.get() == SettingsState::Closed
-                {
+                if *pause.get() == PauseState::Running && *settings.get() == SettingsState::Closed {
                     Visibility::Inherited
                 } else {
                     Visibility::Hidden
@@ -522,8 +505,7 @@ fn sync_player_model(
     let (player_transform, camera, walking, gravity, health) = *player;
 
     for (mut model_transform, mut state) in &mut models {
-        model_transform.translation =
-            player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+        model_transform.translation = player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         model_transform.rotation = Quat::from_rotation_y(camera.yaw + std::f32::consts::PI);
 
         state.hold_seconds = (state.hold_seconds - time.delta_secs()).max(0.0);
@@ -583,8 +565,7 @@ fn sync_player_model(
     }
 
     for (renderable, mut render_layers) in &mut renderables {
-        let layers =
-            player_model_render_layers(renderable.0, perspective.is_third_person());
+        let layers = player_model_render_layers(renderable.0, perspective.is_third_person());
         if *render_layers != layers {
             *render_layers = layers;
         }
@@ -621,10 +602,7 @@ fn sync_player_model_animations(
         };
         let animation = transitions.play(&mut player, index, transition);
         animation.set_speed(state.playback_speed);
-        if matches!(
-            state.name.as_str(),
-            "idle" | "walk" | "run" | "fall"
-        ) {
+        if matches!(state.name.as_str(), "idle" | "walk" | "run" | "fall") {
             animation.repeat();
         } else {
             animation.set_repeat(RepeatAnimation::Count(1));
@@ -698,10 +676,7 @@ fn spawn_third_person_held_block(
                                 face,
                                 block_model.opacity(),
                             );
-                            set_block_model_tint(
-                                &mut material_asset,
-                                tint.unwrap_or(Color::WHITE),
-                            );
+                            set_block_model_tint(&mut material_asset, tint.unwrap_or(Color::WHITE));
                             visibility = Visibility::Inherited;
                         }
 

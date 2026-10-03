@@ -1,9 +1,7 @@
 use std::path::Path;
 
 use bevy::{
-    camera::visibility::RenderLayers,
-    light::NotShadowCaster,
-    mesh::VertexAttributeValues,
+    camera::visibility::RenderLayers, light::NotShadowCaster, mesh::VertexAttributeValues,
     prelude::*,
 };
 use image::RgbaImage;
@@ -84,12 +82,8 @@ type PlayerSkinBaseMeshQuery<'w, 's> = Query<
 
 type PlayerSkinParentLayersQuery<'w, 's> =
     Query<'w, 's, &'static RenderLayers, Without<PlayerSkinOuterLayer>>;
-type PlayerSkinOuterLayerQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static ChildOf, &'static mut RenderLayers),
-    With<PlayerSkinOuterLayer>,
->;
+type PlayerSkinOuterLayerQuery<'w, 's> =
+    Query<'w, 's, (&'static ChildOf, &'static mut RenderLayers), With<PlayerSkinOuterLayer>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayerSkinPart {
@@ -229,12 +223,7 @@ impl SkinBoxUv {
                 self.width,
                 self.height,
             ),
-            SkinFace::Top => PixelRect::new(
-                self.x + self.depth,
-                self.y,
-                self.width,
-                self.depth,
-            ),
+            SkinFace::Top => PixelRect::new(self.x + self.depth, self.y, self.width, self.depth),
             SkinFace::Bottom => PixelRect::new(
                 self.x + self.depth + self.width,
                 self.y,
@@ -624,8 +613,7 @@ mod tests {
             [0.0, 8.0],
         );
         assert_uv(
-            head.uv([0.5, 0.5, 0.5], [1.0, 0.0, 0.0])
-                .expect("left uv"),
+            head.uv([0.5, 0.5, 0.5], [1.0, 0.0, 0.0]).expect("left uv"),
             [16.0, 8.0],
         );
     }

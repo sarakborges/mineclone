@@ -160,8 +160,7 @@ pub fn clicked_outside<M: Send + Sync + 'static>(
     mouse: &ButtonInput<MouseButton>,
     inside: &Query<&Interaction, With<DropdownInside<M>>>,
 ) -> bool {
-    open
-        && mouse.just_pressed(MouseButton::Left)
+    open && mouse.just_pressed(MouseButton::Left)
         && !inside
             .iter()
             .any(|interaction| *interaction != Interaction::None)

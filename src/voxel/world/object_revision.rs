@@ -39,7 +39,10 @@ impl ObjectRevisionState {
     }
 
     pub(super) fn chunk_revision(&self, coord: IVec3) -> Option<u64> {
-        self.chunk_revisions.get(&coord).copied().map(ChunkObjectRevision::raw)
+        self.chunk_revisions
+            .get(&coord)
+            .copied()
+            .map(ChunkObjectRevision::raw)
     }
 
     pub(super) fn mark_chunk_changed(&mut self, coord: IVec3) {

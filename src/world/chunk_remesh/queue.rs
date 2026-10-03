@@ -8,13 +8,10 @@ use crate::voxel::neighbors::CARDINAL_NEIGHBORS;
 use crate::{
     voxel::{
         coordinates::visit_chunk_coords_whose_voxel_halo_contains,
-        deduplicated_queue::DeduplicatedQueue,
-        meshlet::ChunkMeshletMask,
-        world::VoxelWorld,
+        deduplicated_queue::DeduplicatedQueue, meshlet::ChunkMeshletMask, world::VoxelWorld,
     },
     world::{
-        chunk_remesh_tasks::ChunkRemeshTaskKind,
-        chunk_rendering::ChunkRenderPool,
+        chunk_remesh_tasks::ChunkRemeshTaskKind, chunk_rendering::ChunkRenderPool,
         streaming::chunk_load_priority,
     },
 };
@@ -58,7 +55,10 @@ impl RenderablePriorityCache {
             }
 
             let removed = queue.remove(coord);
-            debug_assert!(removed, "remesh priority cache must reference an active chunk");
+            debug_assert!(
+                removed,
+                "remesh priority cache must reference an active chunk"
+            );
             self.queue_revision = queue.revision();
             return Some(coord);
         }
@@ -114,12 +114,7 @@ impl ChunkRemeshQueue {
         }
     }
 
-    fn enqueue_fluid_meshlets(
-        &mut self,
-        coord: IVec3,
-        meshlets: ChunkMeshletMask,
-        priority: bool,
-    ) {
+    fn enqueue_fluid_meshlets(&mut self, coord: IVec3, meshlets: ChunkMeshletMask, priority: bool) {
         if coord.y < 0 || meshlets.is_empty() {
             return;
         }
@@ -222,15 +217,9 @@ impl ChunkRemeshQueue {
         meshlets: ChunkMeshletMask,
     ) {
         match kind {
-            ChunkRemeshTaskKind::Geometry => {
-                self.enqueue_geometry_meshlets(coord, meshlets, true)
-            }
-            ChunkRemeshTaskKind::Lighting => {
-                self.enqueue_lighting_meshlets(coord, meshlets, true)
-            }
-            ChunkRemeshTaskKind::Fluid => {
-                self.enqueue_fluid_meshlets(coord, meshlets, true)
-            }
+            ChunkRemeshTaskKind::Geometry => self.enqueue_geometry_meshlets(coord, meshlets, true),
+            ChunkRemeshTaskKind::Lighting => self.enqueue_lighting_meshlets(coord, meshlets, true),
+            ChunkRemeshTaskKind::Fluid => self.enqueue_fluid_meshlets(coord, meshlets, true),
         }
     }
 
@@ -353,11 +342,7 @@ impl ChunkRemeshQueue {
             self.geometry_priority
                 .pop_nearest(&mut self.queue, render_pool, center)
         } else {
-            pop_renderable_from(
-                &mut self.queue,
-                &mut self.geometry_scan_miss,
-                render_pool,
-            )
+            pop_renderable_from(&mut self.queue, &mut self.geometry_scan_miss, render_pool)
         }?;
         let meshlets = self
             .geometry_meshlets
@@ -419,19 +404,12 @@ impl ChunkRemeshQueue {
                 } else {
                     ChunkMeshletMask::default()
                 };
-                (
-                    ChunkRemeshTaskKind::Geometry,
-                    meshlets.union(lighting),
-                )
+                (ChunkRemeshTaskKind::Geometry, meshlets.union(lighting))
             }
             ChunkRemeshTaskKind::Lighting => {
                 if self.queue.remove(coord) {
-                    let geometry =
-                        self.geometry_meshlets.remove(&coord).unwrap_or_default();
-                    (
-                        ChunkRemeshTaskKind::Geometry,
-                        meshlets.union(geometry),
-                    )
+                    let geometry = self.geometry_meshlets.remove(&coord).unwrap_or_default();
+                    (ChunkRemeshTaskKind::Geometry, meshlets.union(geometry))
                 } else {
                     (ChunkRemeshTaskKind::Lighting, meshlets)
                 }
@@ -496,14 +474,9 @@ impl ChunkRemeshQueue {
     }
 }
 
-fn remesh_priority_order(
-    queue: &DeduplicatedQueue<IVec3>,
-    center: IVec3,
-) -> Vec<IVec3> {
+fn remesh_priority_order(queue: &DeduplicatedQueue<IVec3>, center: IVec3) -> Vec<IVec3> {
     let mut ordered = queue.values_in_order().collect::<Vec<_>>();
-    ordered.sort_unstable_by_key(|coord| {
-        chunk_load_priority(*coord, center, IVec2::ZERO)
-    });
+    ordered.sort_unstable_by_key(|coord| chunk_load_priority(*coord, center, IVec2::ZERO));
     ordered
 }
 

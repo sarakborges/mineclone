@@ -1,17 +1,10 @@
 use std::sync::Arc;
 
-use bevy::{
-    platform::collections::HashMap,
-    prelude::*,
-    tasks::AsyncComputeTaskPool,
-};
+use bevy::{platform::collections::HashMap, prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::voxel::{
-    coordinates::ChunkCoord,
-    fluid_mesh::ChunkFluidMesh,
-    mesh_snapshot::ChunkMeshSnapshot,
-    meshlet::ChunkMeshletMask,
-    world::VoxelWorld,
+    coordinates::ChunkCoord, fluid_mesh::ChunkFluidMesh, mesh_snapshot::ChunkMeshSnapshot,
+    meshlet::ChunkMeshletMask, world::VoxelWorld,
 };
 
 #[cfg(test)]
@@ -20,8 +13,7 @@ use crate::voxel::coordinates::visit_chunk_coords_whose_voxel_halo_contains;
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_rendering::{
-        BuiltChunkMesh, build_chunk_fluid_meshlet_remeshes,
-        build_chunk_terrain_meshlet_remeshes,
+        BuiltChunkMesh, build_chunk_fluid_meshlet_remeshes, build_chunk_terrain_meshlet_remeshes,
     },
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
@@ -64,7 +56,10 @@ impl ChunkRemeshTaskRequests {
             }
             ChunkRemeshTaskKind::Fluid => self.fluid.insert(coord, request),
         };
-        debug_assert!(previous.is_none(), "remesh task request must be unique per queue");
+        debug_assert!(
+            previous.is_none(),
+            "remesh task request must be unique per queue"
+        );
     }
 
     fn remove(
@@ -306,12 +301,7 @@ impl ChunkRemeshTasks {
                     ))
                 }
                 ChunkRemeshTaskKind::Fluid => ChunkRemeshTaskMeshes::Fluid(
-                    build_chunk_fluid_meshlet_remeshes(
-                        coord,
-                        world.chunk(),
-                        &context,
-                        meshlets,
-                    ),
+                    build_chunk_fluid_meshlet_remeshes(coord, world.chunk(), &context, meshlets),
                 ),
             };
 
@@ -373,7 +363,10 @@ impl ChunkRemeshTasks {
         };
         if let Some(completed) = ready.as_ref() {
             let removed = self.requests.remove(completed.coord, completed.output.kind);
-            debug_assert!(removed.is_some(), "completed remesh task must retain request metadata");
+            debug_assert!(
+                removed.is_some(),
+                "completed remesh task must retain request metadata"
+            );
             self.poll_fluid_first = !fluid_first;
         }
         ready.map(CompletedChunkTask::into_runtime)
@@ -520,11 +513,7 @@ mod tests {
         for _ in 0..3 {
             bump_lighting_revisions_for_positions(&mut lighting_revisions, &world, [position]);
             assert_eq!(
-                dependencies.publication(
-                    ChunkRemeshTaskKind::Fluid,
-                    &world,
-                    &lighting_revisions,
-                ),
+                dependencies.publication(ChunkRemeshTaskKind::Fluid, &world, &lighting_revisions,),
                 ChunkRemeshPublication::FluidWithLightingCatchup,
             );
             for kind in [ChunkRemeshTaskKind::Geometry, ChunkRemeshTaskKind::Lighting] {

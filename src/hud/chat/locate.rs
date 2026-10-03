@@ -27,9 +27,9 @@ use crate::{
         biome_field::BiomeField,
         current_context::CurrentDimensionContext,
         generation::{
-            ChunkGenerationContext, generation_surface_height,
-            located_structure_origins_in_chunk, structure_candidate_anchor,
-            structure_candidate_probe, volume_structure_candidate_probe,
+            ChunkGenerationContext, generation_surface_height, located_structure_origins_in_chunk,
+            structure_candidate_anchor, structure_candidate_probe,
+            volume_structure_candidate_probe,
         },
         world_feature_fields::WorldFeatureFields,
     },
@@ -231,8 +231,7 @@ impl ChatLocateContext<'_> {
                 }
             }
             _ => {
-                return "Usage: /locate biome <id> | /locate structure <id> [variation]"
-                    .to_owned();
+                return "Usage: /locate biome <id> | /locate structure <id> [variation]".to_owned();
             }
         };
 
@@ -269,10 +268,7 @@ impl ChatLocateContext<'_> {
     }
 }
 
-pub(super) fn poll_locate_task(
-    mut pending: ResMut<PendingLocate>,
-    mut chat: ResMut<ChatState>,
-) {
+pub(super) fn poll_locate_task(mut pending: ResMut<PendingLocate>, mut chat: ResMut<ChatState>) {
     let Some(task) = pending.task.as_mut() else {
         return;
     };
@@ -330,11 +326,7 @@ fn locate_target(
     }
 }
 
-fn locate_surface_biome(
-    snapshot: &LocateSnapshot,
-    id: &str,
-    player: IVec3,
-) -> Option<IVec3> {
+fn locate_surface_biome(snapshot: &LocateSnapshot, id: &str, player: IVec3) -> Option<IVec3> {
     let context = snapshot.generation_context();
     let player_column = player.xz();
     if snapshot
@@ -391,11 +383,7 @@ fn locate_surface_biome(
     best.map(|(_, position)| position)
 }
 
-fn locate_volume_biome(
-    snapshot: &LocateSnapshot,
-    id: &str,
-    player: IVec3,
-) -> Option<IVec3> {
+fn locate_volume_biome(snapshot: &LocateSnapshot, id: &str, player: IVec3) -> Option<IVec3> {
     let biome = snapshot.biomes.get(id)?;
     let range = biome.vertical_range?;
     let center = IVec2::new(
@@ -431,14 +419,11 @@ fn locate_volume_biome(
                 }
 
                 let surface = snapshot.biome_field.sample_surface(anchor.position.xz());
-                let Some(selection) = snapshot
-                    .biome_field
-                    .volume_selection_in_region_for_surface(
-                        anchor.position,
-                        &region,
-                        surface.identity_surface_index,
-                    )
-                else {
+                let Some(selection) = snapshot.biome_field.volume_selection_in_region_for_surface(
+                    anchor.position,
+                    &region,
+                    surface.identity_surface_index,
+                ) else {
                     continue;
                 };
                 if snapshot.biome_field.volume_biome_id(selection) != id {
@@ -457,11 +442,7 @@ fn locate_volume_biome(
     best.map(|(_, position)| position)
 }
 
-fn locate_structure(
-    snapshot: &LocateSnapshot,
-    id: &str,
-    player: IVec3,
-) -> Option<IVec3> {
+fn locate_structure(snapshot: &LocateSnapshot, id: &str, player: IVec3) -> Option<IVec3> {
     let context = snapshot.generation_context();
     let mut best: Option<(i64, IVec3)> = None;
     let mut seen = HashSet::new();
@@ -482,7 +463,11 @@ fn locate_surface_structures(
 ) {
     let player_horizontal = player.xz();
 
-    for entry in snapshot.feature_fields.structure_metadata().surface_entries() {
+    for entry in snapshot
+        .feature_fields
+        .structure_metadata()
+        .surface_entries()
+    {
         if !dimension_has_active_biome(&snapshot.dimension, &entry.biome_id)
             || !structure_reference_matches(
                 &entry.reference,
@@ -500,8 +485,7 @@ fn locate_surface_structures(
             player_horizontal.x.div_euclid(spacing),
             player_horizontal.y.div_euclid(spacing),
         );
-        let maximum_cell_radius =
-            (MAX_LOCATE_BLOCK_RADIUS + spacing - 1).div_euclid(spacing) + 2;
+        let maximum_cell_radius = (MAX_LOCATE_BLOCK_RADIUS + spacing - 1).div_euclid(spacing) + 2;
 
         for radius in 0..=maximum_cell_radius {
             visit_square_ring(center, radius, |cell| {
@@ -514,11 +498,7 @@ fn locate_surface_structures(
                 ) else {
                     return;
                 };
-                if !within_horizontal_radius(
-                    player_horizontal,
-                    anchor,
-                    MAX_LOCATE_BLOCK_RADIUS,
-                ) {
+                if !within_horizontal_radius(player_horizontal, anchor, MAX_LOCATE_BLOCK_RADIUS) {
                     return;
                 }
 
@@ -622,9 +602,7 @@ fn locate_volume_structures(
                     else {
                         continue;
                     };
-                    if snapshot.biome_field.volume_biome_id(selection)
-                        != biome_structure.biome_id
-                    {
+                    if snapshot.biome_field.volume_biome_id(selection) != biome_structure.biome_id {
                         continue;
                     }
 
@@ -638,8 +616,7 @@ fn locate_volume_structures(
                     ) else {
                         continue;
                     };
-                    let probe_chunk =
-                        chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                    let probe_chunk = chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
                     for position in located_structure_origins_in_chunk(
                         probe_chunk,
                         id,
@@ -789,15 +766,12 @@ fn consider_nearest(best: &mut Option<(i64, IVec3)>, player: IVec3, candidate: I
         .saturating_mul(dx)
         .saturating_add(dy.saturating_mul(dy))
         .saturating_add(dz.saturating_mul(dz));
-    if best
-        .as_ref()
-        .is_none_or(|(best_distance, best_position)| {
-            distance_squared < *best_distance
-                || (distance_squared == *best_distance
-                    && (candidate.z, candidate.x, candidate.y)
-                        < (best_position.z, best_position.x, best_position.y))
-        })
-    {
+    if best.as_ref().is_none_or(|(best_distance, best_position)| {
+        distance_squared < *best_distance
+            || (distance_squared == *best_distance
+                && (candidate.z, candidate.x, candidate.y)
+                    < (best_position.z, best_position.x, best_position.y))
+    }) {
         *best = Some((distance_squared, candidate));
     }
 }
@@ -806,9 +780,7 @@ fn within_horizontal_radius(origin: IVec2, candidate: IVec2, radius: i32) -> boo
     let dx = i64::from(candidate.x) - i64::from(origin.x);
     let dz = i64::from(candidate.y) - i64::from(origin.y);
     let radius = i64::from(radius);
-    dx.saturating_mul(dx)
-        .saturating_add(dz.saturating_mul(dz))
-        <= radius.saturating_mul(radius)
+    dx.saturating_mul(dx).saturating_add(dz.saturating_mul(dz)) <= radius.saturating_mul(radius)
 }
 
 fn visit_square_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
@@ -869,16 +841,8 @@ mod tests {
 
     #[test]
     fn horizontal_radius_uses_xz_only() {
-        assert!(within_horizontal_radius(
-            IVec2::ZERO,
-            IVec2::new(3, 4),
-            5
-        ));
-        assert!(!within_horizontal_radius(
-            IVec2::ZERO,
-            IVec2::new(4, 4),
-            5
-        ));
+        assert!(within_horizontal_radius(IVec2::ZERO, IVec2::new(3, 4), 5));
+        assert!(!within_horizontal_radius(IVec2::ZERO, IVec2::new(4, 4), 5));
     }
 
     #[test]

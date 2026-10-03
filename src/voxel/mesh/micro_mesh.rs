@@ -5,33 +5,27 @@ use bevy::prelude::*;
 use smallvec::SmallVec;
 
 use crate::{
-    content::block::{
-        BlockDefinition, BlockLookup, BlockTextureLayer, BlockTextureRotations,
-    },
+    content::block::{BlockDefinition, BlockLookup, BlockTextureLayer, BlockTextureRotations},
     rendering::block_texture::{
         TerrainTextureTable, block_face_material_face, block_face_texture_layers,
         terrain_array_alpha_signature,
     },
 };
 
-use super::ChunkTerrainBatch;
 use super::super::{
     block_face::BlockFace,
     cell::VoxelCell,
-    mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{
-        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
-    },
     log_variant::is_hollow_log_id,
-    microblock::{
-        HOLLOW_LOG_WALL_THICKNESS, MICROBLOCK_EDGE, MicroblockMask, occupied_cell,
-    },
+    mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{ChunkLightingCache, face_lighting_with_cache, push_lit_quad},
+    microblock::{HOLLOW_LOG_WALL_THICKNESS, MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     orientation::{
         orientation_rotation, source_face_for_cell_visual, source_face_for_oriented_face,
     },
     read::VoxelRead,
     texture_rotation::TextureRotation,
 };
+use super::ChunkTerrainBatch;
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub(super) enum MaterialBatchKey<'a> {
@@ -71,7 +65,11 @@ impl<'a> MicroMeshBuffers<'a> {
         key: MaterialBatchKey<'a>,
         batch: ChunkTerrainBatch,
     ) -> &mut VoxelMeshBuffer {
-        if let Some(index) = self.entries.iter().position(|(candidate, _)| *candidate == key) {
+        if let Some(index) = self
+            .entries
+            .iter()
+            .position(|(candidate, _)| *candidate == key)
+        {
             return &mut self.entries[index].1.buffer;
         }
 
@@ -90,9 +88,7 @@ impl<'a> MicroMeshBuffers<'a> {
             .buffer
     }
 
-    pub(super) fn into_values(
-        self,
-    ) -> impl Iterator<Item = MaterialMeshBuffer> {
+    pub(super) fn into_values(self) -> impl Iterator<Item = MaterialMeshBuffer> {
         self.entries.into_iter().map(|(_, value)| value)
     }
 }
@@ -163,14 +159,13 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
 ) {
     let shape = MicroblockMask::geometry_for_cell(surface.cell);
     for face in BlockFace::ALL {
-        let lighting =
-            face_lighting_with_cache(
-                surface.lighting_cache,
-                surface.world,
-                surface.world_voxel,
-                face,
-                surface.block_srgb,
-            );
+        let lighting = face_lighting_with_cache(
+            surface.lighting_cache,
+            surface.world,
+            surface.world_voxel,
+            face,
+            surface.block_srgb,
+        );
         for depth in 0..EDGE {
             let mut visible = [false; EDGE * EDGE];
             for v in 0..EDGE {
@@ -184,7 +179,12 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
                     let neighbor = occupied_cell(surface.world, fine + face.offset());
                     let occluded = neighbor.is_some_and(|neighbor| {
                         let definition = blocks.get(neighbor.block_id);
-                        occludes(surface.cell.block_id, surface.block, neighbor.block_id, definition)
+                        occludes(
+                            surface.cell.block_id,
+                            surface.block,
+                            neighbor.block_id,
+                            definition,
+                        )
                     });
                     visible[u + v * EDGE] = !occluded
                         && !(face == BlockFace::Bottom
@@ -192,14 +192,7 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
                             && position[1] == 0);
                 }
             }
-            emit_rectangles(
-                surface,
-                buffers,
-                face,
-                depth,
-                &mut visible,
-                lighting,
-            );
+            emit_rectangles(surface, buffers, face, depth, &mut visible, lighting);
         }
     }
 }
@@ -228,30 +221,18 @@ pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
     let mut visible = [false; EDGE * EDGE];
     for v in 0..EDGE {
         for u in 0..EDGE {
-            visible[u + v * EDGE] = !neighbor_mask.contains(position_for(
-                face,
-                neighbor_depth,
-                u,
-                v,
-            ));
+            visible[u + v * EDGE] =
+                !neighbor_mask.contains(position_for(face, neighbor_depth, u, v));
         }
     }
-    let lighting =
-        face_lighting_with_cache(
-                surface.lighting_cache,
-                surface.world,
-                surface.world_voxel,
-                face,
-                surface.block_srgb,
-            );
-    emit_rectangles(
-        surface,
-        buffers,
+    let lighting = face_lighting_with_cache(
+        surface.lighting_cache,
+        surface.world,
+        surface.world_voxel,
         face,
-        depth,
-        &mut visible,
-        lighting,
+        surface.block_srgb,
     );
+    emit_rectangles(surface, buffers, face, depth, &mut visible, lighting);
 }
 
 pub(super) fn occludes(
@@ -300,17 +281,7 @@ fn emit_rectangles<'a, W: VoxelRead + ?Sized>(
                     visible[column + row * EDGE] = false;
                 }
             }
-            emit_rectangle(
-                surface,
-                buffers,
-                face,
-                depth,
-                u,
-                v,
-                width,
-                height,
-                lighting,
-            );
+            emit_rectangle(surface, buffers, face, depth, u, v, width, height, lighting);
         }
     }
 }
@@ -371,11 +342,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         })
     });
     if is_hollow_log_id(surface.cell.block_id) {
-        thin_hollow_log_shell(
-            &mut vertices,
-            surface.cell.orientation,
-            surface.local_voxel,
-        );
+        thin_hollow_log_shell(&mut vertices, surface.cell.orientation, surface.local_voxel);
     }
     let geometry_source_face = source_face_for_oriented_face(face, surface.cell.orientation);
     let source_face = source_face_for_cell_visual(face, surface.cell, surface.block);
@@ -387,25 +354,16 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
     let inverse_orientation = orientation_rotation(surface.cell.orientation).inverse();
     let uvs = vertices.map(|vertex| {
         let local = Vec3::from_array(vertex) - surface.local_voxel.as_vec3();
-        let oriented = Vec3::splat(0.5)
-            + inverse_orientation * (local - Vec3::splat(0.5));
+        let oriented = Vec3::splat(0.5) + inverse_orientation * (local - Vec3::splat(0.5));
         rotate_macro_uv(macro_uv(geometry_source_face, oriented), rotation)
     });
-    let material_face = block_face_material_face(
-        source_face,
-        surface.block,
-    );
+    let material_face = block_face_material_face(source_face, surface.block);
     let material_code = surface
         .texture_table
         .encoded_layers(block_face_texture_layers(material_face, surface.block))
         .unwrap_or(0.0);
     push_lit_quad(
-        material_buffer(
-            buffers,
-            surface.cell.block_id,
-            surface.block,
-            material_face,
-        ),
+        material_buffer(buffers, surface.cell.block_id, surface.block, material_face),
         vertices,
         face.normal(),
         uvs,
@@ -461,8 +419,7 @@ fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
     let inverse_orientation = orientation_rotation(surface.cell.orientation).inverse();
     let uvs = vertices.map(|vertex| {
         let local = Vec3::from_array(vertex) - surface.local_voxel.as_vec3();
-        let oriented = Vec3::splat(0.5)
-            + inverse_orientation * (local - Vec3::splat(0.5));
+        let oriented = Vec3::splat(0.5) + inverse_orientation * (local - Vec3::splat(0.5));
         rotate_macro_uv(macro_uv(geometry_source_face, oriented), rotation)
     });
     let material_face = block_face_material_face(source_face, surface.block);
@@ -479,12 +436,7 @@ fn emit_hollow_log_neighbor_opening<'a, W: VoxelRead + ?Sized>(
     );
 
     push_lit_quad(
-        material_buffer(
-            buffers,
-            surface.cell.block_id,
-            surface.block,
-            material_face,
-        ),
+        material_buffer(buffers, surface.cell.block_id, surface.block, material_face),
         vertices,
         face.normal(),
         uvs,

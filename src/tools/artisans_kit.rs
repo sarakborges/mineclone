@@ -8,23 +8,22 @@ use crate::{
     content::{
         block::BlockRegistry,
         tool::ToolRegistry,
-        tool_behavior::{
-            ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID,
-        },
+        tool_behavior::{ARTISANS_KIT_REMOVE_BEHAVIOR_ID, ARTISANS_KIT_RESTORE_BEHAVIOR_ID},
     },
     gameplay::availability::world_interaction_available,
     player::{
-        PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT,
-        camera::GameplayCamera,
-        hotbar::PlayerHotbar,
-        viewmodel::ViewModelAnimation,
+        PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, camera::GameplayCamera,
+        hotbar::PlayerHotbar, viewmodel::ViewModelAnimation,
     },
-    targeting::{ToolUse, block::{BlockTargetingSet, TargetedBlock}},
+    targeting::{
+        ToolUse,
+        block::{BlockTargetingSet, TargetedBlock},
+    },
     voxel::{
         edit::VoxelMutationRuntime,
         log_variant::is_hollow_log_id,
         microblock::{
-            MICROBLOCK_EDGE, ArtisansKitResolution, MicroblockMask, local_cell, parent_voxel,
+            ArtisansKitResolution, MICROBLOCK_EDGE, MicroblockMask, local_cell, parent_voxel,
         },
         raycast::raycast_micro_voxels,
         read::VoxelRead,
@@ -37,7 +36,10 @@ impl Plugin for ArtisansKitPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ArtisansKitResolution>().add_systems(
             Update,
-            (cycle_artisans_kit_resolution, handle_artisans_kit_use.after(BlockTargetingSet::Interaction))
+            (
+                cycle_artisans_kit_resolution,
+                handle_artisans_kit_use.after(BlockTargetingSet::Interaction),
+            )
                 .run_if(world_interaction_available),
         );
     }
@@ -58,8 +60,7 @@ fn cycle_artisans_kit_resolution(
                 || tool.uses_behavior(ARTISANS_KIT_RESTORE_BEHAVIOR_ID)
         });
 
-    if keys.just_pressed(keybinds.key_code(KeybindAction::ToolAction))
-        && selected_uses_artisans_kit
+    if keys.just_pressed(keybinds.key_code(KeybindAction::ToolAction)) && selected_uses_artisans_kit
     {
         *resolution = resolution.next();
     }
@@ -101,7 +102,10 @@ fn handle_artisans_kit_use(
         {
             continue;
         }
-        if !blocks.get(hit.block_id).is_some_and(|block| block.can_fragment()) {
+        if !blocks
+            .get(hit.block_id)
+            .is_some_and(|block| block.can_fragment())
+        {
             continue;
         }
 
@@ -128,7 +132,9 @@ fn handle_artisans_kit_use(
         if placing && (voxel != hit.voxel || !MicroblockMask::can_restore(source)) {
             continue;
         }
-        if !blocks.get(source.block_id).is_some_and(|block| block.can_fragment())
+        if !blocks
+            .get(source.block_id)
+            .is_some_and(|block| block.can_fragment())
             || !MicroblockMask::has_room(source)
         {
             continue;

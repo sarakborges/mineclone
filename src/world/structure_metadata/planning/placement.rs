@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 
-use crate::content::biome_structure::{
-    StructurePlacementRules, VolumeStructurePlacementRules,
-};
+use crate::content::biome_structure::{StructurePlacementRules, VolumeStructurePlacementRules};
 
 use super::hash::{avalanche, string_hash, unit_interval};
 
@@ -54,8 +52,7 @@ pub(crate) fn volume_structure_member_hash(
     structure_reference: &str,
     anchor: IVec3,
 ) -> u64 {
-    let mut hash =
-        world_seed.rotate_left(17) ^ string_hash(structure_reference).rotate_left(7);
+    let mut hash = world_seed.rotate_left(17) ^ string_hash(structure_reference).rotate_left(7);
     hash ^= string_hash(biome_id).rotate_left(37);
     hash ^= (anchor.x as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
     hash ^= (anchor.y as i64 as u64).wrapping_mul(0x94d0_49bb_1331_11eb);
@@ -69,8 +66,7 @@ pub(crate) fn structure_member_hash(
     structure_reference: &str,
     anchor: IVec2,
 ) -> u64 {
-    let mut hash =
-        world_seed.rotate_left(17) ^ string_hash(structure_reference).rotate_left(7);
+    let mut hash = world_seed.rotate_left(17) ^ string_hash(structure_reference).rotate_left(7);
     hash ^= string_hash(biome_id).rotate_left(37);
     hash ^= (anchor.x as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
     hash ^= (anchor.y as i64 as u64).wrapping_mul(0xa5a3_58d5_33f6_8d21);
@@ -108,14 +104,8 @@ mod tests {
 
         assert!(candidate_anchor(42, "biome", "structure", placement, IVec2::ZERO).is_some());
         assert!(
-            candidate_anchor(
-                42,
-                "biome",
-                "structure",
-                placement,
-                IVec2::new(i32::MAX, 0),
-            )
-            .is_none()
+            candidate_anchor(42, "biome", "structure", placement, IVec2::new(i32::MAX, 0),)
+                .is_none()
         );
     }
 }

@@ -20,11 +20,8 @@ use crate::{
 };
 
 use super::{
-    block_face::BlockFace,
-    cell::VoxelCell,
-    edit::VoxelTopologyRuntime,
-    orientation::source_face_for_cell_visual,
-    read::VoxelRead,
+    block_face::BlockFace, cell::VoxelCell, edit::VoxelTopologyRuntime,
+    orientation::source_face_for_cell_visual, read::VoxelRead,
     stackable_layer::stackable_layer_count,
 };
 
@@ -53,7 +50,9 @@ impl PendingBlockGravityUpdates {
         let batch_len = self.queue.len();
         let mut batch = Vec::with_capacity(batch_len);
         for _ in 0..batch_len {
-            let Some(position) = self.queue.pop_front() else { break; };
+            let Some(position) = self.queue.pop_front() else {
+                break;
+            };
             self.queued.remove(&position);
             batch.push(position);
         }
@@ -82,8 +81,14 @@ pub(crate) struct BlockGravityPlugin;
 impl Plugin for BlockGravityPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingBlockGravityUpdates>()
-            .add_systems(OnEnter(GameState::Loading), reset_resource::<PendingBlockGravityUpdates>)
-            .add_systems(OnExit(GameState::Gameplay), reset_resource::<PendingBlockGravityUpdates>)
+            .add_systems(
+                OnEnter(GameState::Loading),
+                reset_resource::<PendingBlockGravityUpdates>,
+            )
+            .add_systems(
+                OnExit(GameState::Gameplay),
+                reset_resource::<PendingBlockGravityUpdates>,
+            )
             .add_systems(
                 PostUpdate,
                 (process_block_gravity, simulate_falling_blocks)
@@ -109,8 +114,12 @@ fn process_block_gravity(
         .map_or(0.0, |definition| definition.gravity_strength);
 
     for position in runtime.take_block_gravity_batch() {
-        let Some(cell) = runtime.read().cell_at(position) else { continue; };
-        let Some(definition) = content.block_content.blocks.get(cell.block_id) else { continue; };
+        let Some(cell) = runtime.read().cell_at(position) else {
+            continue;
+        };
+        let Some(definition) = content.block_content.blocks.get(cell.block_id) else {
+            continue;
+        };
         let below = position - IVec3::Y;
 
         if is_stackable_layer(definition) {
@@ -183,9 +192,14 @@ fn spawn_falling_block(
     position: IVec3,
     cell: VoxelCell,
 ) {
-    let Some(block) = content.blocks.get(cell.block_id) else { return; };
+    let Some(block) = content.blocks.get(cell.block_id) else {
+        return;
+    };
     let tint = content
-        .tint_at(cell.block_id, Vec2::new(position.x as f32 + 0.5, position.z as f32 + 0.5))
+        .tint_at(
+            cell.block_id,
+            Vec2::new(position.x as f32 + 0.5, position.z as f32 + 0.5),
+        )
         .unwrap_or(Color::WHITE);
 
     commands
@@ -231,7 +245,9 @@ fn simulate_falling_blocks(
     mut commands: Commands,
     mut falling: Query<(Entity, &mut Transform, &mut FallingBlock)>,
 ) {
-    let Some(dimension) = dimension.definition() else { return; };
+    let Some(dimension) = dimension.definition() else {
+        return;
+    };
     let dt = time.delta_secs().min(0.05);
     if dt <= 0.0 {
         return;

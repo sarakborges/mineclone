@@ -173,11 +173,9 @@ pub(super) fn natural_spawn_creatures(
         return;
     }
 
-    let Some((feet, creature_id)) = find_natural_spawn(
-        &context,
-        dimension_definition.max_entities,
-        &mut state,
-    ) else {
+    let Some((feet, creature_id)) =
+        find_natural_spawn(&context, dimension_definition.max_entities, &mut state)
+    else {
         return;
     };
     match spawn_creature_at(
@@ -247,11 +245,15 @@ fn find_natural_spawn<'a>(
             state.counters.light_rejected += 1;
             continue;
         }
-        if context.creatures.iter().any(|(instance, transform, health)| {
-            !health.is_dead()
-                && instance.definition_id == rule.creature
-                && transform.translation.distance(feet) < rule.spacing
-        }) {
+        if context
+            .creatures
+            .iter()
+            .any(|(instance, transform, health)| {
+                !health.is_dead()
+                    && instance.definition_id == rule.creature
+                    && transform.translation.distance(feet) < rule.spacing
+            })
+        {
             state.counters.spacing_rejected += 1;
             continue;
         }
@@ -279,8 +281,7 @@ fn random_natural_spawn_position(
     let distance = NATURAL_SPAWN_MIN_DISTANCE
         + (next_u32(random_state) as f32 / u32::MAX as f32)
             * (NATURAL_SPAWN_MAX_DISTANCE - NATURAL_SPAWN_MIN_DISTANCE);
-    let position =
-        player_position + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
+    let position = player_position + Vec3::new(angle.cos() * distance, 0.0, angle.sin() * distance);
     let column = IVec2::new(position.x.floor() as i32, position.z.floor() as i32);
     let feet_y = natural_spawn_feet_y(world, column)?;
 
@@ -319,9 +320,9 @@ fn natural_spawn_rule_is_eligible(
     entity_counts: &DimensionEntityCounts,
 ) -> bool {
     rule.weight > 0.0
-        && definitions.get(&rule.creature).is_some_and(|creature| {
-            entity_counts.count(&rule.creature) < creature.max_per_type
-        })
+        && definitions
+            .get(&rule.creature)
+            .is_some_and(|creature| entity_counts.count(&rule.creature) < creature.max_per_type)
 }
 
 fn select_natural_spawn_rule<'a>(

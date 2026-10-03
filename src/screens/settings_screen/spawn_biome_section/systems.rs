@@ -13,7 +13,8 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         dropdown, scrollbar, selectable,
-        text_input::{self, editable_value}, typography,
+        text_input::{self, editable_value},
+        typography,
     },
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
@@ -27,8 +28,7 @@ use super::{
     state::{SpawnBiomeDropdownKind, SpawnBiomeDropdownState},
 };
 use crate::screens::settings_screen::{
-    game_rules_section::TicksPerSecondInputState,
-    new_world_section::SeedInputState,
+    game_rules_section::TicksPerSecondInputState, new_world_section::SeedInputState,
 };
 
 #[derive(SystemParam)]
@@ -121,11 +121,9 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
     });
 
     commands.entity(frame_entity).with_children(|frame| {
-        frame.spawn(
-            scrollbar::vertical_scrollbar_marked::<
-                dropdown::DropdownInside<SpawnBiomeDropdownKind>,
-            >(list_entity),
-        );
+        frame.spawn(scrollbar::vertical_scrollbar_marked::<
+            dropdown::DropdownInside<SpawnBiomeDropdownKind>,
+        >(list_entity));
     });
 }
 
@@ -189,10 +187,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
 
 pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside(
     mouse: Res<ButtonInput<MouseButton>>,
-    inside: Query<
-        &Interaction,
-        With<dropdown::DropdownInside<SpawnBiomeDropdownKind>>,
-    >,
+    inside: Query<&Interaction, With<dropdown::DropdownInside<SpawnBiomeDropdownKind>>>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
     if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {

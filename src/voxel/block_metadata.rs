@@ -119,6 +119,9 @@ mod tests {
         store.set(7, metadata);
 
         assert_eq!(store.len(), 1);
-        assert_eq!(store.get(7).and_then(|data| data.get("custom_name")), Some(&json!("Crate")));
+        assert_eq!(
+            store.get(7).and_then(|data| data.get("custom_name")),
+            Some(&json!("Crate"))
+        );
     }
 }

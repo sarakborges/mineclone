@@ -18,7 +18,6 @@ pub(super) fn update_fog_color(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,7 +41,11 @@ mod tests {
         app.update();
 
         assert_eq!(
-            app.world().entity(camera).get::<DistanceFog>().unwrap().color,
+            app.world()
+                .entity(camera)
+                .get::<DistanceFog>()
+                .unwrap()
+                .color,
             fog_color.to_color()
         );
     }

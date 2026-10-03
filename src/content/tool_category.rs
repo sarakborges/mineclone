@@ -20,7 +20,10 @@ pub struct ToolCategoryRegistry {
 impl ToolCategoryRegistry {
     pub fn insert(&mut self, mut definition: ToolCategoryDefinition) {
         definition.id = definition.id.trim().to_owned();
-        assert!(!definition.id.is_empty(), "tool category id cannot be empty");
+        assert!(
+            !definition.id.is_empty(),
+            "tool category id cannot be empty"
+        );
         definition
             .name
             .validate(&format!("tool category {} name", definition.id));
@@ -30,5 +33,4 @@ impl ToolCategoryRegistry {
     pub fn get(&self, id: &str) -> Option<&ToolCategoryDefinition> {
         self.definitions.get(id)
     }
-
 }

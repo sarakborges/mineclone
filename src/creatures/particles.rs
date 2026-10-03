@@ -98,15 +98,12 @@ impl CreatureParticleSpawner<'_, '_> {
             let horizontal = Vec2::new(angle.cos(), angle.sin());
             let size = effect.size * (0.78 + next_unit_f32(&mut self.random_state) * 0.44);
             let lifetime = effect.lifetime * (0.88 + next_unit_f32(&mut self.random_state) * 0.24);
-            let vertical_jitter =
-                next_signed_f32(&mut self.random_state) * effect.vertical_jitter;
+            let vertical_jitter = next_signed_f32(&mut self.random_state) * effect.vertical_jitter;
             let position = origin
                 + Vec3::new(
                     horizontal.x * radius,
                     effect.y_offset
-                        + next_signed_f32(&mut self.random_state)
-                            * effect.spawn_radius
-                            * 0.15,
+                        + next_signed_f32(&mut self.random_state) * effect.spawn_radius * 0.15,
                     horizontal.y * radius,
                 );
             let velocity = Vec3::new(
@@ -148,9 +145,7 @@ pub(super) fn emit_creature_particles(
 ) {
     spawner.initialize_random_state();
 
-    let dt = time
-        .delta_secs()
-        .min(MAX_PARTICLE_FRAME_DELTA_SECONDS);
+    let dt = time.delta_secs().min(MAX_PARTICLE_FRAME_DELTA_SECONDS);
     for (instance, transform, animation, mut emitter) in &mut creatures {
         let Some(definition) = definitions.get(&instance.definition_id) else {
             continue;
@@ -197,9 +192,7 @@ pub(super) fn update_creature_particles(
     mut commands: Commands,
     mut particles: Query<(Entity, &mut CreatureParticle, &mut Transform)>,
 ) {
-    let dt = time
-        .delta_secs()
-        .min(MAX_PARTICLE_FRAME_DELTA_SECONDS);
+    let dt = time.delta_secs().min(MAX_PARTICLE_FRAME_DELTA_SECONDS);
     for (entity, mut particle, mut transform) in &mut particles {
         particle.age += dt;
         if particle.age >= particle.lifetime {

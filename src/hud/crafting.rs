@@ -206,11 +206,17 @@ fn mount_crafting_workspace(
     mut session: ResMut<CraftingSession>,
     crafting_hosts: Query<
         Entity,
-        (With<SurvivalCraftingHost>, Without<CraftingWorkspaceMounted>),
+        (
+            With<SurvivalCraftingHost>,
+            Without<CraftingWorkspaceMounted>,
+        ),
     >,
     station_hosts: Query<
         Entity,
-        (With<SurvivalCurrentStationHost>, Without<CurrentStationMounted>),
+        (
+            With<SurvivalCurrentStationHost>,
+            Without<CurrentStationMounted>,
+        ),
     >,
 ) {
     let mut recipes = content
@@ -227,26 +233,17 @@ fn mount_crafting_workspace(
         session.selected_recipe = None;
     }
 
-    let selected_recipe = session.selected_recipe.as_deref().and_then(|selected| {
-        recipes
-            .iter()
-            .copied()
-            .find(|recipe| recipe.id == selected)
-    });
+    let selected_recipe = session
+        .selected_recipe
+        .as_deref()
+        .and_then(|selected| recipes.iter().copied().find(|recipe| recipe.id == selected));
 
     for host in &crafting_hosts {
         commands
             .entity(host)
             .insert(CraftingWorkspaceMounted)
             .with_children(|root| {
-                spawn_crafting_panel(
-                    root,
-                    &recipes,
-                    selected_recipe,
-                    &session,
-                    &content,
-                    &hotbar,
-                );
+                spawn_crafting_panel(root, &recipes, selected_recipe, &session, &content, &hotbar);
             });
     }
 
@@ -340,10 +337,7 @@ fn spawn_crafting_panel(
     });
 }
 
-fn spawn_current_station_panel(
-    parent: &mut ChildSpawnerCommands,
-    content: &CraftingContent<'_>,
-) {
+fn spawn_current_station_panel(parent: &mut ChildSpawnerCommands, content: &CraftingContent<'_>) {
     parent
         .spawn((
             surface::hud_container(Node {
@@ -413,14 +407,8 @@ fn spawn_current_station_panel(
                 ))
                 .with_children(|copy| {
                     copy.spawn((typography::caption("BASE STATION"), Pickable::IGNORE));
-                    copy.spawn((
-                        typography::hud_subheading("Inventory"),
-                        Pickable::IGNORE,
-                    ));
-                    copy.spawn((
-                        typography::muted("Personal crafting"),
-                        Pickable::IGNORE,
-                    ));
+                    copy.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+                    copy.spawn((typography::muted("Personal crafting"), Pickable::IGNORE));
                 });
         });
 }
@@ -548,10 +536,7 @@ fn spawn_recipe_details(
 
     spawn_result_card(parent, recipe, content);
 
-    parent.spawn((
-        typography::hud_subheading("Ingredients"),
-        Pickable::IGNORE,
-    ));
+    parent.spawn((typography::hud_subheading("Ingredients"), Pickable::IGNORE));
 
     parent
         .spawn((
@@ -815,7 +800,10 @@ fn handle_craft_clicks(
         for ingredient in &recipe.ingredients {
             let consumed =
                 consume_inventory_quantity(&mut hotbar, &ingredient.item, ingredient.quantity);
-            debug_assert!(consumed, "ingredient preflight must make consumption succeed");
+            debug_assert!(
+                consumed,
+                "ingredient preflight must make consumption succeed"
+            );
         }
 
         let mut remaining = recipe.result.quantity;
@@ -940,20 +928,10 @@ mod tests {
     #[test]
     fn ingredient_consumption_spans_inventory_slots() {
         let mut hotbar = PlayerHotbar::default();
-        hotbar.replace_inventory_item(
-            0,
-            Some(ItemStack::new("asteria:stick").with_quantity(2)),
-        );
-        hotbar.replace_inventory_item(
-            1,
-            Some(ItemStack::new("asteria:stick").with_quantity(2)),
-        );
+        hotbar.replace_inventory_item(0, Some(ItemStack::new("asteria:stick").with_quantity(2)));
+        hotbar.replace_inventory_item(1, Some(ItemStack::new("asteria:stick").with_quantity(2)));
 
-        assert!(consume_inventory_quantity(
-            &mut hotbar,
-            "asteria:stick",
-            3
-        ));
+        assert!(consume_inventory_quantity(&mut hotbar, "asteria:stick", 3));
         assert_eq!(inventory_quantity(&hotbar, "asteria:stick"), 1);
     }
 }

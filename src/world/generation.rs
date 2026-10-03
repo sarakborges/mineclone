@@ -30,10 +30,6 @@ use crate::{
     },
 };
 
-pub(crate) use self::{
-    columns::{GenerationColumnSample, ocean_weight_from_surface},
-    fluids::authored_surface_fluid_id_for_position,
-};
 pub(crate) use self::structures::{
     ResolvedConnectedPiece, fit_structure_to_ground, located_structure_origins_in_chunk,
     resolve_connected_piece_forest_with_ground_fit, resolve_connected_pieces_with_ground_fit,
@@ -48,6 +44,10 @@ use self::{
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
     surface_objects::rasterize_surface_objects,
+};
+pub(crate) use self::{
+    columns::{GenerationColumnSample, ocean_weight_from_surface},
+    fluids::authored_surface_fluid_id_for_position,
 };
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
@@ -140,8 +140,7 @@ pub(crate) fn generate_chunk(
     // while retaining two full chunks of headroom for high lake water, biome
     // transitions and structures reaching in from neighboring columns. Solid
     // volume modifiers, including floating islands, must remain eligible here.
-    if chunk_coord.y
-        > local_surface_chunk.max(structure_top_chunk) + LOCAL_EMPTY_HEADROOM_CHUNKS
+    if chunk_coord.y > local_surface_chunk.max(structure_top_chunk) + LOCAL_EMPTY_HEADROOM_CHUNKS
         && (!allow_solid_volume || !has_solid_volume)
     {
         return VoxelChunk::empty();
@@ -233,22 +232,14 @@ pub(crate) fn generation_surface_height(
             let surface = biome_map
                 .sample_at(local)
                 .as_field_sample(context.biome_field);
-            surface_height_from_sample(
-                position,
-                context.dimension,
-                context.biome_field,
-                &surface,
-            )
+            surface_height_from_sample(position, context.dimension, context.biome_field, &surface)
         }
         WorldGenerationMode::Flat => flat_surface_height(context.dimension),
         WorldGenerationMode::Void => 1,
     }
 }
 
-fn generate_void_chunk(
-    chunk_coord: IVec3,
-    context: &ChunkGenerationContext<'_>,
-) -> VoxelChunk {
+fn generate_void_chunk(chunk_coord: IVec3, context: &ChunkGenerationContext<'_>) -> VoxelChunk {
     if chunk_coord != IVec3::ZERO {
         return VoxelChunk::empty();
     }
@@ -276,11 +267,10 @@ pub(crate) fn maximum_structure_top_chunk_for_horizontal_chunk(
         return -1;
     }
 
-    let top_y = context.feature_fields.structure_top_y(horizontal_chunk, || {
-        self::structures::maximum_potential_structure_top_y_for_chunk(
-            horizontal_chunk,
-            context,
-        )
-    });
+    let top_y = context
+        .feature_fields
+        .structure_top_y(horizontal_chunk, || {
+            self::structures::maximum_potential_structure_top_y_for_chunk(horizontal_chunk, context)
+        });
     top_y.div_euclid(CHUNK_SIZE as i32)
 }

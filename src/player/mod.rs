@@ -1,13 +1,13 @@
 pub(crate) mod camera;
 pub(crate) mod character_info;
 pub(crate) mod game_mode;
-pub(crate) mod hotbar;
 mod held_sprite;
+pub(crate) mod hotbar;
 pub(crate) mod inventory;
 pub(crate) mod item_stack;
 mod material;
-pub(crate) mod movement;
 pub(crate) mod model;
+pub(crate) mod movement;
 pub(crate) mod player_id;
 pub(crate) mod save;
 pub(crate) mod skin_uv;
@@ -54,8 +54,11 @@ pub(crate) fn spawn_player_entity(
     saved_look: Option<(f32, f32)>,
     saved_flying: bool,
 ) {
-    let gameplay_camera = saved_look.map_or_else(GameplayCamera::default, |(yaw, pitch)| GameplayCamera::restored(yaw, pitch));
-    let transform = Transform::from_translation(translation).with_rotation(gameplay_camera.rotation());
+    let gameplay_camera = saved_look.map_or_else(GameplayCamera::default, |(yaw, pitch)| {
+        GameplayCamera::restored(yaw, pitch)
+    });
+    let transform =
+        Transform::from_translation(translation).with_rotation(gameplay_camera.rotation());
     log_gameplay_event(format!(
         "entity.spawn type=player id={:?} mode={:?} position={:?} health={:.3}",
         LOCAL_PLAYER_ID,
@@ -121,23 +124,18 @@ pub(crate) fn find_safe_spawn_position(
     preferred_column: IVec2,
     mut accepts_column: impl FnMut(IVec2) -> bool,
 ) -> Option<Vec3> {
-    find_map_square_rings(
-        preferred_column,
-        SPAWN_SEARCH_RADIUS_BLOCKS,
-        1,
-        |column| {
-            if !accepts_column(column) {
-                return None;
-            }
+    find_map_square_rings(preferred_column, SPAWN_SEARCH_RADIUS_BLOCKS, 1, |column| {
+        if !accepts_column(column) {
+            return None;
+        }
 
-            let feet_y = safe_surface_feet_y(world, column)?;
-            Some(Vec3::new(
-                column.x as f32 + 0.5,
-                feet_y as f32 + PLAYER_EYE_HEIGHT,
-                column.y as f32 + 0.5,
-            ))
-        },
-    )
+        let feet_y = safe_surface_feet_y(world, column)?;
+        Some(Vec3::new(
+            column.x as f32 + 0.5,
+            feet_y as f32 + PLAYER_EYE_HEIGHT,
+            column.y as f32 + 0.5,
+        ))
+    })
 }
 
 pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -> Vec3 {

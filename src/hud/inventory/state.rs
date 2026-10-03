@@ -20,8 +20,7 @@ pub(super) const SCROLLBAR_TOTAL_WIDTH: f32 = 14.0;
 pub(super) const TRASH_GAP: f32 = 10.0;
 pub(super) const CREATIVE_GRID_HEIGHT: f32 =
     CREATIVE_VISIBLE_ROWS as f32 * SLOT_SIZE + (CREATIVE_VISIBLE_ROWS - 1) as f32 * SLOT_GAP;
-pub(super) const CREATIVE_CATEGORY_HEIGHT: f32 =
-    CREATIVE_GRID_HEIGHT + SECTION_GAP + SLOT_SIZE;
+pub(super) const CREATIVE_CATEGORY_HEIGHT: f32 = CREATIVE_GRID_HEIGHT + SECTION_GAP + SLOT_SIZE;
 
 #[derive(Component)]
 pub(super) struct InventoryHudRoot;

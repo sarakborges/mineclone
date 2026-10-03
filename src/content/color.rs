@@ -86,8 +86,7 @@ impl Hsi {
         }
 
         let numerator = 0.5 * ((red - green) + (red - blue));
-        let denominator = ((red - green) * (red - green)
-            + (red - blue) * (green - blue))
+        let denominator = ((red - green) * (red - green) + (red - blue) * (green - blue))
             .max(0.0)
             .sqrt();
         let theta = if denominator <= f32::EPSILON {
@@ -224,12 +223,7 @@ impl Hsi {
             hue_y.atan2(hue_x).to_degrees().rem_euclid(HUE_TURN_DEGREES)
         };
 
-        Self::new(
-            hue,
-            saturation / total_weight,
-            intensity / total_weight,
-        )
-        .normalized()
+        Self::new(hue, saturation / total_weight, intensity / total_weight).normalized()
     }
 
     pub fn is_valid(self) -> bool {

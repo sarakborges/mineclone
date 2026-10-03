@@ -8,9 +8,8 @@ use crate::{
     app::game_state::GameState,
     content::{
         biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
-        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry, object::ObjectRegistry,
-        tool::ToolRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, fluid::FluidRegistry,
+        item::ItemRegistry, layer::LayerRegistry, object::ObjectRegistry, tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
     player::hotbar::PlayerHotbar,
@@ -49,7 +48,12 @@ impl Plugin for WorldSelectionPlugin {
             .add_systems(OnEnter(GameState::Loading), release_world_thumbnail_images)
             .add_systems(
                 Update,
-                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_feedback)
+                (
+                    poll_world_scan,
+                    handle_world_selection,
+                    poll_world_load,
+                    sync_world_selection_feedback,
+                )
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
@@ -197,7 +201,9 @@ fn poll_world_scan(
         Err(error) => {
             state.error = format!(
                 "{}: {error}",
-                context.localization.text(context.language.get(), "worldSelection.scanError")
+                context
+                    .localization
+                    .text(context.language.get(), "worldSelection.scanError")
             );
         }
     }
@@ -227,7 +233,10 @@ fn poll_world_load(
     let Some(completion) = pending.poll() else {
         return;
     };
-    let pending = state.loading.take().expect("completed load must be tracked");
+    let pending = state
+        .loading
+        .take()
+        .expect("completed load must be tracked");
     let id = pending.id().to_owned();
     if completion.abandoned {
         return;
@@ -278,11 +287,7 @@ fn poll_world_load(
         }
     };
 
-    activation.commit(
-        &mut commands,
-        &mut context.inventory,
-        &mut context.save,
-    );
+    activation.commit(&mut commands, &mut context.inventory, &mut context.save);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
 
@@ -349,9 +354,10 @@ fn handle_world_selection(
                 Err(error) => {
                     state.error = format!(
                         "{}: {error}",
-                        context
-                            .localization
-                            .text(context.language.get(), "worldSelection.openSavesFolderError")
+                        context.localization.text(
+                            context.language.get(),
+                            "worldSelection.openSavesFolderError"
+                        )
                     );
                 }
             }
@@ -359,7 +365,8 @@ fn handle_world_selection(
         }
 
         if state.loading.is_some() {
-            state.error = context.localization
+            state.error = context
+                .localization
                 .text(context.language.get(), "worldSelection.stillLoading")
                 .to_owned();
             return;
@@ -380,7 +387,9 @@ fn handle_world_selection(
                     Err(error) => {
                         state.error = format!(
                             "{} {id}: {error}",
-                            context.localization.text(context.language.get(), "worldSelection.deleteError")
+                            context
+                                .localization
+                                .text(context.language.get(), "worldSelection.deleteError")
                         );
                     }
                 }
@@ -388,7 +397,8 @@ fn handle_world_selection(
             }
             WorldSelectionAction::Load(id) => {
                 if state.scan.is_some() {
-                    state.error = context.localization
+                    state.error = context
+                        .localization
                         .text(context.language.get(), "worldSelection.stillVerifying")
                         .to_owned();
                     return;
@@ -398,7 +408,8 @@ fn handle_world_selection(
                 match PendingWorldLoad::start(id.clone(), context.content.registries()) {
                     Ok(pending) => {
                         state.loading = Some(pending);
-                        state.error = context.localization
+                        state.error = context
+                            .localization
                             .text(context.language.get(), "worldSelection.loadingSelected")
                             .to_owned();
                     }

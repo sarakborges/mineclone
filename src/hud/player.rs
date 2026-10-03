@@ -27,19 +27,19 @@ pub struct PlayerHudPlugin;
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-                OnEnter(GameState::Gameplay),
-                (portrait::spawn_player_preview_cameras, spawn_player_hud).chain(),
-            )
-            .add_systems(
-                Update,
-                portrait::sync_player_preview_cameras.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                Update,
-                (sync_player_hud_visibility, sync_inventory_hint)
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
-            );
+            OnEnter(GameState::Gameplay),
+            (portrait::spawn_player_preview_cameras, spawn_player_hud).chain(),
+        )
+        .add_systems(
+            Update,
+            portrait::sync_player_preview_cameras.run_if(in_state(GameState::Gameplay)),
+        )
+        .add_systems(
+            Update,
+            (sync_player_hud_visibility, sync_inventory_hint)
+                .chain()
+                .run_if(in_state(GameState::Gameplay)),
+        );
     }
 }
 
@@ -66,10 +66,7 @@ impl InventoryHintContent<'_> {
     fn text(&self) -> String {
         self.localization
             .text(self.language.get(), inventory_hint_key(*self.modal.get()))
-            .replace(
-                "{inventory}",
-                self.keybinds.label(KeybindAction::Inventory),
-            )
+            .replace("{inventory}", self.keybinds.label(KeybindAction::Inventory))
     }
 
     fn visibility(&self) -> Visibility {
@@ -129,10 +126,7 @@ fn player_hud_visibility(
     settings: SettingsState,
     game_mode: GameMode,
 ) -> Visibility {
-    if pause == PauseState::Paused
-        || settings == SettingsState::Open
-        || game_mode.is_spectator()
-    {
+    if pause == PauseState::Paused || settings == SettingsState::Open || game_mode.is_spectator() {
         Visibility::Hidden
     } else {
         Visibility::Visible

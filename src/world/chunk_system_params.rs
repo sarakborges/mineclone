@@ -1,14 +1,9 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::content::{
-    biome::BiomeRegistry,
-    block::BlockRegistry,
-    dimension::DimensionDefinition,
-    fluid::FluidRegistry,
-    layer::LayerRegistry,
-    secondary_property::SecondaryPropertyRegistry,
-    structure::StructureRegistry,
-    structure_set::StructureSetRegistry,
+    biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
+    fluid::FluidRegistry, layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
+    structure::StructureRegistry, structure_set::StructureSetRegistry,
 };
 
 use super::{

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::game_state::GameState,
-    world::current_context::SkyDayNightContext,
-};
+use crate::{app::game_state::GameState, world::current_context::SkyDayNightContext};
 
 use super::celestial_path::celestial_direction;
 
@@ -56,15 +53,13 @@ fn spawn_sun_light(mut commands: Commands) {
     ));
 }
 
-fn update_sun_light(
-    scene: SkyDayNightContext,
-    mut lights: SunLights,
-) {
+fn update_sun_light(scene: SkyDayNightContext, mut lights: SunLights) {
     if !scene.inputs_changed() {
         return;
     }
 
-    let (Some(sky), Some(cycle), Some(sample)) = (scene.sky(), scene.cycle(), scene.sample()) else {
+    let (Some(sky), Some(cycle), Some(sample)) = (scene.sky(), scene.cycle(), scene.sample())
+    else {
         hide_lights(&mut lights);
         return;
     };

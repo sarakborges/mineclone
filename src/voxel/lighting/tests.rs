@@ -1,9 +1,7 @@
 use super::*;
 use crate::{
     content::{
-        block::{
-            BlockDefinition, BlockRegistry, BlockTextureRotations, BlockTextures, BlockTint,
-        },
+        block::{BlockDefinition, BlockRegistry, BlockTextureRotations, BlockTextures, BlockTint},
         color::Hsi,
         fluid::{FluidDefinition, FluidRegistry},
         secondary_property::SecondaryPropertyRegistry,
@@ -252,12 +250,7 @@ fn fluid_dampening_applies_across_chunk_boundary() {
     let water = source + IVec3::X;
     let after_water = water + IVec3::X;
     let mut neighbor_chunk = VoxelChunk::empty();
-    neighbor_chunk.set_fluid(
-        0,
-        8,
-        8,
-        Some(FluidCell::source(water_id, MAX_FLUID_LEVEL)),
-    );
+    neighbor_chunk.set_fluid(0, 8, 8, Some(FluidCell::source(water_id, MAX_FLUID_LEVEL)));
 
     let mut world = VoxelWorld::default();
     world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
@@ -412,6 +405,8 @@ fn test_fluids() -> FluidRegistry {
         id: WATER_ID.to_owned(),
         name: localized_text(WATER_ID),
         color: Hsi::new(240.0, 1.0, 1.0),
+        biome_tint: false,
+        biome_immersion_tint: false,
         opacity: 0.5,
         roughness: 0.0,
         metallic: 0.0,

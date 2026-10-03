@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use crate::app::crash_log::log_gameplay_event;
 use crate::world::{
-    PendingFluidUpdates,
-    chunk_system_params::ChunkContent,
-    work_budget::FrameWorkBudget,
+    PendingFluidUpdates, chunk_system_params::ChunkContent, work_budget::FrameWorkBudget,
 };
 
 use super::super::{WorldLoadingPhase, system_params::WorldSetupProgress};
@@ -19,7 +17,10 @@ pub(super) fn settle_initial_fluids(
 ) {
     if !progress.loading_state.fluid_settling.is_active() {
         let coords = progress.loading_state.coords.clone();
-        log_gameplay_event(format!("world.loading.fluid_settling.start generated_chunks={}", coords.len()));
+        log_gameplay_event(format!(
+            "world.loading.fluid_settling.start generated_chunks={}",
+            coords.len()
+        ));
         progress
             .loading_state
             .fluid_settling
@@ -63,7 +64,12 @@ pub(super) fn settle_initial_fluids(
             fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
         }
 
-        log_gameplay_event(format!("world.loading.fluid_settling.complete generated_chunks={} changed_existing_positions={} owned_existing_chunks={}", progress.loading_state.coords.len(), completion.changed_existing_positions.len(), completion.owned_existing_chunks.len()));
+        log_gameplay_event(format!(
+            "world.loading.fluid_settling.complete generated_chunks={} changed_existing_positions={} owned_existing_chunks={}",
+            progress.loading_state.coords.len(),
+            completion.changed_existing_positions.len(),
+            completion.owned_existing_chunks.len()
+        ));
         progress.loading_state.phase = WorldLoadingPhase::Lighting;
     }
 }

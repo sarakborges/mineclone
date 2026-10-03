@@ -4,7 +4,7 @@ use crate::{
     app::keybinds::{KeybindAction, KeybindSetError, Keybinds, KeyboardKey},
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
-        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
         typography,
     },
 };
@@ -49,7 +49,12 @@ pub(super) fn keybinds_section(
             keybind_row(KeybindAction::Inventory, keybinds, localization, language),
             keybind_row(KeybindAction::Chat, keybinds, localization, language),
             keybind_row(KeybindAction::ToolAction, keybinds, localization, language),
-            keybind_row(KeybindAction::ChangePerspective, keybinds, localization, language),
+            keybind_row(
+                KeybindAction::ChangePerspective,
+                keybinds,
+                localization,
+                language
+            ),
             (
                 KeybindError,
                 typography::caption(String::new()),
@@ -79,7 +84,9 @@ fn keybind_row(
         },
         children![
             typography::setting_title(
-                localization.text(language, action.localization_key()).to_owned()
+                localization
+                    .text(language, action.localization_key())
+                    .to_owned()
             ),
             button(
                 keybinds.label(action),

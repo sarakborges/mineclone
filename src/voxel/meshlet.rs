@@ -13,8 +13,7 @@ use super::{
 
 pub(crate) const CHUNK_MESHLET_EDGE: usize = 8;
 const MESHLETS_PER_AXIS: usize = CHUNK_SIZE / CHUNK_MESHLET_EDGE;
-const MESHLET_COUNT: usize =
-    MESHLETS_PER_AXIS * MESHLETS_PER_AXIS * MESHLETS_PER_AXIS;
+const MESHLET_COUNT: usize = MESHLETS_PER_AXIS * MESHLETS_PER_AXIS * MESHLETS_PER_AXIS;
 
 const _: () = assert!(CHUNK_SIZE.is_multiple_of(CHUNK_MESHLET_EDGE));
 const _: () = assert!(MESHLETS_PER_AXIS == 2);
@@ -71,16 +70,10 @@ impl ChunkMeshletMask {
     }
 
     pub(crate) fn selected_voxel_count(self) -> usize {
-        self.0.count_ones() as usize
-            * CHUNK_MESHLET_EDGE
-            * CHUNK_MESHLET_EDGE
-            * CHUNK_MESHLET_EDGE
+        self.0.count_ones() as usize * CHUNK_MESHLET_EDGE * CHUNK_MESHLET_EDGE * CHUNK_MESHLET_EDGE
     }
 
-    pub(crate) fn for_each_voxel(
-        self,
-        mut visit: impl FnMut(usize, usize, usize),
-    ) {
+    pub(crate) fn for_each_voxel(self, mut visit: impl FnMut(usize, usize, usize)) {
         for meshlet_y in 0..MESHLETS_PER_AXIS {
             for meshlet_z in 0..MESHLETS_PER_AXIS {
                 for meshlet_x in 0..MESHLETS_PER_AXIS {
@@ -121,11 +114,7 @@ impl ChunkMeshletMask {
     }
 
     pub(crate) fn depends_on_neighbor_offset(self, offset: IVec3) -> bool {
-        if self.is_empty()
-            || offset.x.abs() > 1
-            || offset.y.abs() > 1
-            || offset.z.abs() > 1
-        {
+        if self.is_empty() || offset.x.abs() > 1 || offset.y.abs() > 1 || offset.z.abs() > 1 {
             return false;
         }
         if offset == IVec3::ZERO {
@@ -139,8 +128,7 @@ impl ChunkMeshletMask {
 
             let meshlet_x = index % MESHLETS_PER_AXIS;
             let meshlet_z = (index / MESHLETS_PER_AXIS) % MESHLETS_PER_AXIS;
-            let meshlet_y =
-                index / (MESHLETS_PER_AXIS * MESHLETS_PER_AXIS);
+            let meshlet_y = index / (MESHLETS_PER_AXIS * MESHLETS_PER_AXIS);
             let side_x = if meshlet_x == 0 { -1 } else { 1 };
             let side_y = if meshlet_y == 0 { -1 } else { 1 };
             let side_z = if meshlet_z == 0 { -1 } else { 1 };
@@ -341,12 +329,7 @@ impl MeshArrays {
 
     fn into_mesh(self) -> Mesh {
         let indices = if self.positions.len() <= usize::from(u16::MAX) + 1 {
-            Indices::U16(
-                self.indices
-                    .into_iter()
-                    .map(|index| index as u16)
-                    .collect(),
-            )
+            Indices::U16(self.indices.into_iter().map(|index| index as u16).collect())
         } else {
             Indices::U32(self.indices)
         };
@@ -407,17 +390,28 @@ mod tests {
         for (quad, &meshlet) in meshlets.iter().enumerate() {
             let x = position_offset + quad as f32;
             arrays.positions.extend([
-                [x, 0.0, 0.0], [x + 1.0, 0.0, 0.0],
-                [x + 1.0, 1.0, 0.0], [x, 1.0, 0.0],
+                [x, 0.0, 0.0],
+                [x + 1.0, 0.0, 0.0],
+                [x + 1.0, 1.0, 0.0],
+                [x, 1.0, 0.0],
             ]);
-            arrays.uvs.extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+            arrays
+                .uvs
+                .extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
             arrays.payloads.extend([meshlet << 28; 4]);
             arrays.colors.extend([[17, 39, 83, 255]; 4]);
-            arrays.indices.extend(quad_triangle_indices((quad * 4) as u32, true));
+            arrays
+                .indices
+                .extend(quad_triangle_indices((quad * 4) as u32, true));
         }
         let mut mesh = arrays.into_mesh();
         if wide_indices {
-            let indices = mesh.indices().unwrap().iter().map(|index| index as u32).collect();
+            let indices = mesh
+                .indices()
+                .unwrap()
+                .iter()
+                .map(|index| index as u32)
+                .collect();
             mesh.insert_indices(Indices::U32(indices));
         }
         mesh
@@ -429,9 +423,9 @@ mod tests {
             for replacement_wide in [false, true] {
                 let existing = quad_mesh(&[0, 1], 0.0, existing_wide);
                 let replacement = quad_mesh(&[0, 2], 100.0, replacement_wide);
-                let VoxelMeshPatch::Changed(patched) = patch_voxel_mesh(
-                    &existing, Some(&replacement), ChunkMeshletMask(1),
-                ).unwrap() else {
+                let VoxelMeshPatch::Changed(patched) =
+                    patch_voxel_mesh(&existing, Some(&replacement), ChunkMeshletMask(1)).unwrap()
+                else {
                     panic!("the selected meshlet must change");
                 };
 
@@ -444,7 +438,10 @@ mod tests {
                 assert_eq!(&actual.uvs[4..], &updated.uvs[..4]);
                 assert_eq!(&actual.colors[..4], &original.colors[4..]);
                 assert_eq!(&actual.colors[4..], &updated.colors[..4]);
-                assert_eq!(actual.payloads, &[1 << 28, 1 << 28, 1 << 28, 1 << 28, 0, 0, 0, 0]);
+                assert_eq!(
+                    actual.payloads,
+                    &[1 << 28, 1 << 28, 1 << 28, 1 << 28, 0, 0, 0, 0]
+                );
                 assert_eq!(
                     actual.indices.iter().collect::<Vec<_>>(),
                     vec![0, 1, 3, 1, 2, 3, 4, 5, 7, 5, 6, 7],
@@ -475,15 +472,16 @@ mod tests {
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; 3]);
         assert!(patch_voxel_mesh(&mismatched, None, ChunkMeshletMask(1)).is_none());
 
-        let invalid_indices = quad_mesh(&[1], 0.0, false)
-            .with_inserted_indices(Indices::U16(vec![0, 1, 4, 1, 2, 3]));
+        let invalid_indices =
+            quad_mesh(&[1], 0.0, false).with_inserted_indices(Indices::U16(vec![0, 1, 4, 1, 2, 3]));
         let replacement = quad_mesh(&[0], 10.0, false);
-        assert!(patch_voxel_mesh(
-            &invalid_indices, Some(&replacement), ChunkMeshletMask(1),
-        ).is_none());
-        assert!(patch_voxel_mesh(
-            &replacement, Some(&invalid_indices), ChunkMeshletMask::ALL,
-        ).is_none());
+        assert!(
+            patch_voxel_mesh(&invalid_indices, Some(&replacement), ChunkMeshletMask(1),).is_none()
+        );
+        assert!(
+            patch_voxel_mesh(&replacement, Some(&invalid_indices), ChunkMeshletMask::ALL,)
+                .is_none()
+        );
     }
 
     #[test]
@@ -492,13 +490,16 @@ mod tests {
         let existing = quad_mesh(&vec![1; quad_count], 0.0, false);
         let replacement = quad_mesh(&[0], 100.0, false);
         assert!(matches!(existing.indices(), Some(Indices::U16(_))));
-        let VoxelMeshPatch::Changed(patched) = patch_voxel_mesh(
-            &existing, Some(&replacement), ChunkMeshletMask(1),
-        ).unwrap() else {
+        let VoxelMeshPatch::Changed(patched) =
+            patch_voxel_mesh(&existing, Some(&replacement), ChunkMeshletMask(1)).unwrap()
+        else {
             panic!("adding a meshlet must change the mesh");
         };
         assert!(matches!(patched.indices(), Some(Indices::U32(_))));
         assert_eq!(patched.count_vertices(), (quad_count + 1) * 4);
-        assert_eq!(patched.indices().unwrap().iter().max(), Some(quad_count * 4 + 3));
+        assert_eq!(
+            patched.indices().unwrap().iter().max(),
+            Some(quad_count * 4 + 3)
+        );
     }
 }

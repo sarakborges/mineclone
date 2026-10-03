@@ -33,11 +33,7 @@ pub fn collides_aabb(world: &impl VoxelRead, min: Vec3, max: Vec3) -> bool {
                 if is_hollow_log_id(cell.block_id) && !MicroblockMask::is_modified(cell) {
                     let local_min = (min - origin).max(Vec3::ZERO);
                     let local_max = (max - origin).min(Vec3::ONE);
-                    if hollow_log_shell_intersects(
-                        cell.orientation,
-                        local_min,
-                        local_max,
-                    ) {
+                    if hollow_log_shell_intersects(cell.orientation, local_min, local_max) {
                         return true;
                     }
                     continue;
@@ -112,8 +108,7 @@ pub fn try_step_up_aabb(
         if aabb_is_clear(world, bounds_at(elevated))
             && let Some(horizontal_position) =
                 move_aabb_horizontally(world, elevated, horizontal_delta, &bounds_at)
-            && let Some(settled) =
-                settle_after_step(world, horizontal_position, rise, &bounds_at)
+            && let Some(settled) = settle_after_step(world, horizontal_position, rise, &bounds_at)
         {
             return Some(settled);
         }
@@ -124,8 +119,12 @@ pub fn try_step_up_aabb(
 }
 
 pub(crate) fn aabb_is_clear(world: &impl VoxelRead, bounds: (Vec3, Vec3)) -> bool {
-    let min = (bounds.0 + Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
-    let max = (bounds.1 - Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
+    let min = (bounds.0 + Vec3::splat(COLLISION_EPSILON))
+        .floor()
+        .as_ivec3();
+    let max = (bounds.1 - Vec3::splat(COLLISION_EPSILON))
+        .floor()
+        .as_ivec3();
     for y in min.y..=max.y {
         for z in min.z..=max.z {
             for x in min.x..=max.x {

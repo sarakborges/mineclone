@@ -8,8 +8,8 @@ use crate::{
     content::{
         biome_density::BiomeDensityModifier,
         biome_structure::{
-            BiomeStructurePlacementRules, StructurePlacementRules,
-            VolumeStructurePlacementMode, VolumeStructurePlacementRules,
+            BiomeStructurePlacementRules, StructurePlacementRules, VolumeStructurePlacementMode,
+            VolumeStructurePlacementRules,
         },
         block::BlockRegistry,
         fluid::FluidRegistry,
@@ -28,7 +28,8 @@ use crate::{
         structure_metadata::{
             ResolvedStructurePlacement,
             planning::{
-                StructureCandidate, connectors, geometry::rectangles_overlap,
+                StructureCandidate, connectors,
+                geometry::rectangles_overlap,
                 hash::{avalanche, unit_interval},
                 placement::{
                     candidate_anchor, structure_member_hash, volume_site_is_selected,
@@ -41,6 +42,7 @@ use crate::{
     },
 };
 
+pub(crate) use self::support::fit_structure_to_ground;
 pub(crate) use crate::world::structure_metadata::planning::{
     connectors::{
         ResolvedConnectedPiece, resolve_connected_piece_forest_with_ground_fit,
@@ -48,12 +50,8 @@ pub(crate) use crate::world::structure_metadata::planning::{
     },
     set::resolve_set_pieces,
 };
-pub(crate) use self::support::fit_structure_to_ground;
 
-use self::{
-    restrictions::candidate_satisfies_restrictions,
-    support::compute_structure_origin_y,
-};
+use self::{restrictions::candidate_satisfies_restrictions, support::compute_structure_origin_y};
 use super::{ChunkGenerationContext, generation_surface_height};
 
 const COLUMN_INDEX_MIN_VOXELS: usize = 512;
@@ -80,8 +78,7 @@ pub(super) fn rasterize_structures(
     let chunk_min_y = chunk_origin.y;
     let chunk_max_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
     let chunk_horizontal_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
-    let chunk_horizontal_maximum =
-        chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
+    let chunk_horizontal_maximum = chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
     let intersects_section = placements.iter().any(|placement| {
         placement.plan.pieces.iter().any(|piece| {
             let structure = context
@@ -130,8 +127,7 @@ pub(super) fn rasterize_structures(
         for local_y in 0..CHUNK_SIZE {
             for local_z in 0..CHUNK_SIZE {
                 for local_x in 0..CHUNK_SIZE {
-                    let index =
-                        local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+                    let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
                     if chunk
                         .cell_at(local_x as i32, local_y as i32, local_z as i32)
                         .is_some()
@@ -197,13 +193,7 @@ pub(crate) fn structure_candidate_anchor(
     placement: StructurePlacementRules,
     cell: IVec2,
 ) -> Option<IVec2> {
-    candidate_anchor(
-        world_seed,
-        biome_id,
-        structure_reference,
-        placement,
-        cell,
-    )
+    candidate_anchor(world_seed, biome_id, structure_reference, placement, cell)
 }
 
 fn validated_structure_origin_y(
@@ -213,23 +203,15 @@ fn validated_structure_origin_y(
     anchor: IVec2,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
-    context.feature_fields.structure_origin_y(
-        &structure.id,
-        rotation,
-        anchor,
-        || {
+    context
+        .feature_fields
+        .structure_origin_y(&structure.id, rotation, anchor, || {
             let origin_y = compute_structure_origin_y(anchor, structure, rotation, context)?;
             candidate_satisfies_restrictions(
-                biome_id,
-                structure,
-                rotation,
-                anchor,
-                origin_y,
-                context,
+                biome_id, structure, rotation, anchor, origin_y, context,
             )
             .then_some(origin_y)
-        },
-    )
+        })
 }
 
 pub(crate) fn structure_candidate_probe(
@@ -362,8 +344,7 @@ pub(crate) fn located_structure_origins_in_chunk(
     resolved_structure_placements(chunk_origin, context)
         .iter()
         .filter(|placement| {
-            placement.placement_anchor == placement_anchor
-                && placement.placement_y == placement_y
+            placement.placement_anchor == placement_anchor && placement.placement_y == placement_y
         })
         .flat_map(|placement| {
             placement.plan.pieces.iter().filter_map(move |piece| {
@@ -413,9 +394,11 @@ fn resolved_structure_placements(
         chunk_origin.x.div_euclid(chunk_size),
         chunk_origin.z.div_euclid(chunk_size),
     );
-    context.feature_fields.structure_placements(horizontal_chunk, || {
-        resolve_structure_placements_uncached(chunk_origin, context)
-    })
+    context
+        .feature_fields
+        .structure_placements(horizontal_chunk, || {
+            resolve_structure_placements_uncached(chunk_origin, context)
+        })
 }
 
 fn resolve_structure_placements_uncached(
@@ -529,98 +512,77 @@ fn collect_direct_structure_candidates<'a>(
     context
         .feature_fields
         .structure_field()
-        .visit_surface_anchors_intersecting(
-            field_entry,
-            target_min,
-            target_max,
-            |anchor| {
-                let member_hash = structure_member_hash(
-                    context.biome_field.seed(),
-                    biome_id,
-                    placement_id,
-                    anchor,
-                );
-                let structure = context
-                    .structures
-                    .select_for_reference(placement_id, member_hash)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "biome {biome_id} references empty structure group: {placement_id}"
-                        )
-                    });
-                let rotation = structure.rotation_for_hash(member_hash);
-                let resolved = context.feature_fields.surface_structure_placement(
-                    biome_id,
-                    placement_id,
-                    anchor,
-                    || {
-                        let surface_sample = context
-                            .biome_field
-                            .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
-                        if surface_sample.primary_id != biome_id {
-                            return None;
-                        }
+        .visit_surface_anchors_intersecting(field_entry, target_min, target_max, |anchor| {
+            let member_hash =
+                structure_member_hash(context.biome_field.seed(), biome_id, placement_id, anchor);
+            let structure = context
+                .structures
+                .select_for_reference(placement_id, member_hash)
+                .unwrap_or_else(|| {
+                    panic!("biome {biome_id} references empty structure group: {placement_id}")
+                });
+            let rotation = structure.rotation_for_hash(member_hash);
+            let resolved = context.feature_fields.surface_structure_placement(
+                biome_id,
+                placement_id,
+                anchor,
+                || {
+                    let surface_sample = context
+                        .biome_field
+                        .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
+                    if surface_sample.primary_id != biome_id {
+                        return None;
+                    }
 
-                        let origin_y = validated_structure_origin_y(
-                            biome_id,
-                            structure,
-                            rotation,
-                            anchor,
-                            context,
-                        )?;
-                        let pieces = connectors::resolve_connected_pieces_with_ground_fit(
-                            context.biome_field.seed(),
-                            structure,
-                            rotation,
-                            IVec3::new(anchor.x, origin_y, anchor.y),
-                            context.structures,
-                            |child, child_rotation, geometric_origin| {
-                                validated_structure_origin_y(
-                                    biome_id,
-                                    child,
-                                    child_rotation,
-                                    geometric_origin.xz(),
-                                    context,
-                                )
-                            },
-                        );
-                        let (minimum, maximum, minimum_y, maximum_y) =
-                            connected_piece_bounds(&pieces)?;
-                        Some(CachedStructureForest {
-                            pieces: cache_structure_forest_pieces(pieces),
-                            minimum,
-                            maximum,
-                            minimum_y,
-                            maximum_y,
-                        })
-                    },
-                );
-                let Some(resolved) = resolved.as_ref() else {
-                    return;
-                };
-                if !rectangles_overlap(
-                    resolved.minimum,
-                    resolved.maximum,
-                    target_min,
-                    target_max,
-                ) {
-                    return;
-                }
+                    let origin_y = validated_structure_origin_y(
+                        biome_id, structure, rotation, anchor, context,
+                    )?;
+                    let pieces = connectors::resolve_connected_pieces_with_ground_fit(
+                        context.biome_field.seed(),
+                        structure,
+                        rotation,
+                        IVec3::new(anchor.x, origin_y, anchor.y),
+                        context.structures,
+                        |child, child_rotation, geometric_origin| {
+                            validated_structure_origin_y(
+                                biome_id,
+                                child,
+                                child_rotation,
+                                geometric_origin.xz(),
+                                context,
+                            )
+                        },
+                    );
+                    let (minimum, maximum, minimum_y, maximum_y) = connected_piece_bounds(&pieces)?;
+                    Some(CachedStructureForest {
+                        pieces: cache_structure_forest_pieces(pieces),
+                        minimum,
+                        maximum,
+                        minimum_y,
+                        maximum_y,
+                    })
+                },
+            );
+            let Some(resolved) = resolved.as_ref() else {
+                return;
+            };
+            if !rectangles_overlap(resolved.minimum, resolved.maximum, target_min, target_max) {
+                return;
+            }
 
-                append_cached_structure_forest_candidates(
-                    resolved,
-                    biome_id,
-                    placement_id,
-                    anchor,
-                    0,
-                    structure.priority,
-                    structure.generation.reserve_space,
-                    &structure.conflict_groups,
-                    context,
-                    candidates,
-                );
-            },
-        );
+            append_cached_structure_forest_candidates(
+                resolved,
+                biome_id,
+                placement_id,
+                anchor,
+                0,
+                structure.priority,
+                structure.generation.reserve_space,
+                &structure.conflict_groups,
+                context,
+                candidates,
+            );
+        });
 }
 
 fn collect_structure_set_candidates<'a>(
@@ -652,9 +614,7 @@ fn collect_structure_set_candidates<'a>(
                     || {
                         if context
                             .biome_field
-                            .sample_surface(
-                                placement_anchor.as_vec2() + Vec2::splat(0.5),
-                            )
+                            .sample_surface(placement_anchor.as_vec2() + Vec2::splat(0.5))
                             .primary_id
                             != biome_id
                         {
@@ -668,39 +628,34 @@ fn collect_structure_set_candidates<'a>(
                             context.structures,
                             |structure, rotation, anchor| {
                                 validated_structure_origin_y(
-                                    biome_id,
-                                    structure,
-                                    rotation,
-                                    anchor,
-                                    context,
+                                    biome_id, structure, rotation, anchor, context,
                                 )
                             },
                         )?;
-                        let connected =
-                            connectors::resolve_connected_piece_forest_with_ground_fit(
-                                context.biome_field.seed(),
-                                pieces.iter().map(|piece| {
-                                    connectors::ResolvedConnectedPiece {
-                                        structure: piece.structure,
-                                        rotation: piece.rotation,
-                                        origin: IVec3::new(
-                                            piece.anchor.x,
-                                            piece.origin_y,
-                                            piece.anchor.y,
-                                        ),
-                                    }
+                        let connected = connectors::resolve_connected_piece_forest_with_ground_fit(
+                            context.biome_field.seed(),
+                            pieces
+                                .iter()
+                                .map(|piece| connectors::ResolvedConnectedPiece {
+                                    structure: piece.structure,
+                                    rotation: piece.rotation,
+                                    origin: IVec3::new(
+                                        piece.anchor.x,
+                                        piece.origin_y,
+                                        piece.anchor.y,
+                                    ),
                                 }),
-                                context.structures,
-                                |child, child_rotation, geometric_origin| {
-                                    validated_structure_origin_y(
-                                        biome_id,
-                                        child,
-                                        child_rotation,
-                                        geometric_origin.xz(),
-                                        context,
-                                    )
-                                },
-                            );
+                            context.structures,
+                            |child, child_rotation, geometric_origin| {
+                                validated_structure_origin_y(
+                                    biome_id,
+                                    child,
+                                    child_rotation,
+                                    geometric_origin.xz(),
+                                    context,
+                                )
+                            },
+                        );
                         let (minimum, maximum, minimum_y, maximum_y) =
                             connected_piece_bounds(&connected)?;
                         Some(CachedStructureForest {
@@ -715,12 +670,7 @@ fn collect_structure_set_candidates<'a>(
                 let Some(resolved) = resolved.as_ref() else {
                     return;
                 };
-                if !rectangles_overlap(
-                    resolved.minimum,
-                    resolved.maximum,
-                    target_min,
-                    target_max,
-                ) {
+                if !rectangles_overlap(resolved.minimum, resolved.maximum, target_min, target_max) {
                     return;
                 }
 
@@ -808,14 +758,16 @@ fn collect_volume_structure_candidates<'a>(
         .biomes
         .get(biome_id)
         .unwrap_or_else(|| panic!("missing volume biome definition: {biome_id}"));
-    if matches!(biome.density_modifier, Some(BiomeDensityModifier::Cavern { .. }))
-        && !context.world_generation.spawn_caves()
+    if matches!(
+        biome.density_modifier,
+        Some(BiomeDensityModifier::Cavern { .. })
+    ) && !context.world_generation.spawn_caves()
     {
         return;
     }
-    let range = biome
-        .vertical_range
-        .unwrap_or_else(|| panic!("volume biome {biome_id} with structures must define verticalRange"));
+    let range = biome.vertical_range.unwrap_or_else(|| {
+        panic!("volume biome {biome_id} with structures must define verticalRange")
+    });
     let bounds = context
         .feature_fields
         .structure_placement_bounds(placement_id, || {
@@ -884,21 +836,14 @@ fn collect_volume_structure_candidates<'a>(
             .structures
             .select_for_reference(placement_id, member_hash)
             .unwrap_or_else(|| {
-                panic!(
-                    "volume biome {biome_id} references empty structure group: {placement_id}"
-                )
+                panic!("volume biome {biome_id} references empty structure group: {placement_id}")
             });
         let rotation = structure.rotation_for_hash(member_hash.rotate_left(23));
 
         let (root_origin, restriction_biome_id) = match placement.mode {
             VolumeStructurePlacementMode::Volume => {
                 if !volume_root_satisfies_restrictions(
-                    biome_id,
-                    structure,
-                    rotation,
-                    anchor,
-                    context,
-                    &region,
+                    biome_id, structure, rotation, anchor, context, &region,
                 ) {
                     continue;
                 }
@@ -948,9 +893,8 @@ fn collect_volume_structure_candidates<'a>(
                         )
                     },
                 );
-                let (minimum, maximum, minimum_y, maximum_y) =
-                    connected_piece_bounds(&pieces)
-                        .expect("connected structure forest must include its root");
+                let (minimum, maximum, minimum_y, maximum_y) = connected_piece_bounds(&pieces)
+                    .expect("connected structure forest must include its root");
                 CachedStructureForest {
                     pieces: cache_structure_forest_pieces(pieces),
                     minimum,
@@ -960,12 +904,7 @@ fn collect_volume_structure_candidates<'a>(
                 }
             },
         );
-        if !rectangles_overlap(
-            resolved.minimum,
-            resolved.maximum,
-            target_min,
-            target_max,
-        ) {
+        if !rectangles_overlap(resolved.minimum, resolved.maximum, target_min, target_max) {
             continue;
         }
 
@@ -1026,8 +965,9 @@ fn connected_piece_bounds(
     pieces: &[connectors::ResolvedConnectedPiece<'_>],
 ) -> Option<(IVec2, IVec2, i32, i32)> {
     pieces.iter().fold(None, |bounds, piece| {
-        let (minimum_offset, maximum_offset) =
-            piece.structure.horizontal_bounds_for_rotation(piece.rotation);
+        let (minimum_offset, maximum_offset) = piece
+            .structure
+            .horizontal_bounds_for_rotation(piece.rotation);
         let minimum = piece.origin.xz() + minimum_offset;
         let maximum = piece.origin.xz() + maximum_offset;
         let minimum_y = piece.origin.y + piece.structure.min_y_offset();
@@ -1073,8 +1013,7 @@ fn rasterize_structure(
             let can_replace = match structure.generation.replace_policy {
                 StructureReplacePolicy::Any => true,
                 StructureReplacePolicy::AirOnly => {
-                    !bit_get(claimed, index)
-                        && !bit_get(context.base_occupied, index)
+                    !bit_get(claimed, index) && !bit_get(context.base_occupied, index)
                 }
                 StructureReplacePolicy::Terrain => !bit_get(claimed, index),
             };
@@ -1090,12 +1029,13 @@ fn rasterize_structure(
 
             if attachment_only {
                 let max_rise = structure.restrictions.max_slope.max(0) as usize;
-                let Some(support_y) = (local_y..=local_y.saturating_add(max_rise))
-                    .rev()
-                    .find(|&candidate_y| {
-                        candidate_y < CHUNK_SIZE
-                            && chunk.cell_at(local_x, candidate_y, local_z).is_some()
-                    })
+                let Some(support_y) =
+                    (local_y..=local_y.saturating_add(max_rise))
+                        .rev()
+                        .find(|&candidate_y| {
+                            candidate_y < CHUNK_SIZE
+                                && chunk.cell_at(local_x, candidate_y, local_z).is_some()
+                        })
                 else {
                     return false;
                 };
@@ -1259,8 +1199,7 @@ pub(crate) fn surface_layer_placements(
                 world_position,
                 face,
             );
-            let rotation =
-                TextureRotation::from_quarter_turn(((rotation_hash >> 32) & 3) as u8);
+            let rotation = TextureRotation::from_quarter_turn(((rotation_hash >> 32) & 3) as u8);
             placements.push((face, LayerCell::new(&surface.layer, rotation)));
         }
     }
@@ -1274,8 +1213,7 @@ fn surface_layer_hash(
     position: IVec3,
     face: LayerFace,
 ) -> u64 {
-    let mut hash =
-        world_seed ^ structure_hash.rotate_left(11) ^ layer_hash.rotate_left(37);
+    let mut hash = world_seed ^ structure_hash.rotate_left(11) ^ layer_hash.rotate_left(37);
     hash ^= (position.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
     hash ^= (position.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
     hash ^= (position.z as i64 as u64).wrapping_mul(0x1656_67b1_9e37_79f9);
@@ -1330,8 +1268,7 @@ fn visit_structure_voxels_in_chunk(
                 }
 
                 let local = IVec3::new(local_x, local_y, local_z);
-                let world_position =
-                    IVec3::new(world_horizontal.x, world_y, world_horizontal.y);
+                let world_position = IVec3::new(world_horizontal.x, world_y, world_horizontal.y);
                 if visit(voxel, world_position, local) {
                     return true;
                 }

@@ -3,9 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{
-        mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask, world::VoxelWorld,
-    },
+    voxel::{mesh_snapshot::ChunkMeshSnapshot, meshlet::ChunkMeshletMask, world::VoxelWorld},
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
@@ -82,29 +80,19 @@ pub(super) fn dispatch_initial_mesh_tasks(
         seed_loaded_chunk_direct_lighting(coord, content, work, queues);
 
         if chunk_is_empty {
-            integrate_empty_chunk(
-                content,
-                renderer,
-                work,
-                queues,
-                coord,
-                current_tick,
-            );
+            integrate_empty_chunk(content, renderer, work, queues, coord, current_tick);
             continue;
         }
 
-        let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
-            &*work.world,
-            coord,
-            |neighbor| renderer.pool.contains(neighbor),
-        )
-        .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !work.mesh_tasks.schedule(
-            coord,
-            snapshot,
-            &work.lighting_revisions,
-            &work.async_work,
-        ) {
+        let snapshot =
+            ChunkMeshSnapshot::capture_with_neighbor_filter(&*work.world, coord, |neighbor| {
+                renderer.pool.contains(neighbor)
+            })
+            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        if !work
+            .mesh_tasks
+            .schedule(coord, snapshot, &work.lighting_revisions, &work.async_work)
+        {
             work.state.defer_ready(coord);
             break;
         }
@@ -140,19 +128,12 @@ fn integrate_empty_chunk(
             Vec::new(),
             &render_context,
         );
-        renderer.pool.record_initial_presentation_sources(
-            coord,
-            content_source,
-            lighting_source,
-        );
+        renderer
+            .pool
+            .record_initial_presentation_sources(coord, content_source, lighting_source);
     }
     activate_published_chunk_runtime(coord, work, queues, current_tick);
-    notify_loaded_chunk_neighbors(
-        coord,
-        &work.world,
-        &renderer.pool,
-        &mut queues.remesh,
-    );
+    notify_loaded_chunk_neighbors(coord, &work.world, &renderer.pool, &mut queues.remesh);
 }
 
 pub(super) fn collect_built_chunk_meshes(
@@ -183,9 +164,10 @@ pub(super) fn collect_built_chunk_meshes(
         // higher-priority task must not head-of-line block other completed
         // meshes, otherwise all worker slots can remain occupied while visible
         // chunks wait indefinitely for publication.
-        let Some(completed) = work.mesh_tasks.poll_ready_by_key(|coord| {
-            chunk_load_priority(coord, center, movement_direction)
-        }) else {
+        let Some(completed) = work
+            .mesh_tasks
+            .poll_ready_by_key(|coord| chunk_load_priority(coord, center, movement_direction))
+        else {
             break;
         };
         budget.record(1);
@@ -251,23 +233,16 @@ pub(super) fn collect_built_chunk_meshes(
         }
         work.state.clear_initial_mesh_seed_catchup(completed.coord);
         if !catchup_meshlets.is_empty() {
-            queues.remesh.enqueue_geometry_meshlets_priority(
-                completed.coord,
-                catchup_meshlets,
-            );
+            queues
+                .remesh
+                .enqueue_geometry_meshlets_priority(completed.coord, catchup_meshlets);
             if chunk_has_fluid {
-                queues.remesh.enqueue_fluid_meshlets_priority(
-                    completed.coord,
-                    catchup_meshlets,
-                );
+                queues
+                    .remesh
+                    .enqueue_fluid_meshlets_priority(completed.coord, catchup_meshlets);
             }
         }
-        activate_published_chunk_runtime(
-            completed.coord,
-            work,
-            queues,
-            current_tick,
-        );
+        activate_published_chunk_runtime(completed.coord, work, queues, current_tick);
         notify_loaded_chunk_neighbors(
             completed.coord,
             &work.world,
@@ -303,19 +278,14 @@ fn notify_loaded_chunk_neighbors(
                 };
 
                 let new_content_border = chunk.dependency_boundary_has_content(offset);
-                let geometry = new_content_border
-                    && neighbor_chunk.dependency_boundary_has_content(-offset);
+                let geometry =
+                    new_content_border && neighbor_chunk.dependency_boundary_has_content(-offset);
                 let has_fluid_border = neighbor_chunk.dependency_boundary_has_fluid(-offset);
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
                 let fluid = (has_fluid_border && new_content_border) || new_cardinal_fluid;
                 if geometry || fluid {
-                    remesh_queue.enqueue_halo_change(
-                        neighbor,
-                        -offset,
-                        geometry,
-                        fluid,
-                    );
+                    remesh_queue.enqueue_halo_change(neighbor, -offset, geometry, fluid);
                 }
             }
         }
@@ -345,8 +315,7 @@ mod tests {
         let offset = IVec3::X;
 
         let new_content_border = incoming.dependency_boundary_has_content(offset);
-        let geometry = new_content_border
-            && neighbor.dependency_boundary_has_content(-offset);
+        let geometry = new_content_border && neighbor.dependency_boundary_has_content(-offset);
         let fluid = neighbor.dependency_boundary_has_fluid(-offset) && new_content_border;
 
         assert!(!geometry);

@@ -50,10 +50,7 @@ pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bo
     !lighting.is_empty()
 }
 
-pub(super) fn process_dynamic_lighting(
-    content: VoxelContent,
-    mut runtime: DynamicLightingRuntime,
-) {
+pub(super) fn process_dynamic_lighting(content: VoxelContent, mut runtime: DynamicLightingRuntime) {
     if runtime.lighting.is_empty() {
         return;
     }
@@ -110,8 +107,7 @@ pub(super) fn process_dynamic_lighting(
             .enqueue_lighting_meshlet_change(coord, meshlets, &runtime.world);
     }
 
-    if let Some((priority, background)) =
-        runtime.lighting.take_completed_settling_fluid_remeshes()
+    if let Some((priority, background)) = runtime.lighting.take_completed_settling_fluid_remeshes()
     {
         for coord in priority {
             if runtime.world.chunk(coord).is_some() {
@@ -142,5 +138,3 @@ pub(super) fn process_dynamic_lighting(
         runtime.diagnostics.processed_voxels = 0;
     }
 }
-
-

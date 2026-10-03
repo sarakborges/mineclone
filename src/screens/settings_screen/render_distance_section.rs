@@ -1,14 +1,9 @@
-use bevy::{
-    prelude::*,
-    ui_widgets::observe,
-};
+use bevy::{prelude::*, ui_widgets::observe};
 
 use crate::{
     localization::{Language, UiLocalization},
     ui::{
-        numeric_input::{
-            NumericInputSizing, NumericInputState, numeric_input_field,
-        },
+        numeric_input::{NumericInputSizing, NumericInputState, numeric_input_field},
         slider, typography,
     },
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
@@ -59,11 +54,7 @@ pub(super) fn graphics_section(
                     .to_owned(),
             ),
             (
-                typography::muted(render_distance_label(
-                    chunks,
-                    localization,
-                    language,
-                )),
+                typography::muted(render_distance_label(chunks, localization, language,)),
                 RenderDistanceValueText,
             ),
             (

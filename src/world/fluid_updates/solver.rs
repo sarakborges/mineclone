@@ -84,10 +84,7 @@ pub(super) fn desired_fluid_with_scratch(
     fluids: &FluidRegistry,
     scratch: &mut FluidSolverScratch,
 ) -> Option<FluidCell> {
-    scratch.metrics.desired_evaluations = scratch
-        .metrics
-        .desired_evaluations
-        .saturating_add(1);
+    scratch.metrics.desired_evaluations = scratch.metrics.desired_evaluations.saturating_add(1);
 
     if target_cell.is_some() {
         return None;
@@ -99,11 +96,7 @@ pub(super) fn desired_fluid_with_scratch(
 
     if let Some(above) = world.fluid_at(position + IVec3::Y) {
         // Falling vertically starts a fresh horizontal run once the column lands.
-        return Some(FluidCell::spreading(
-            above.fluid_id,
-            MAX_FLUID_LEVEL,
-            0,
-        ));
+        return Some(FluidCell::spreading(above.fluid_id, MAX_FLUID_LEVEL, 0));
     }
 
     let mut candidates = SmallVec::<[HorizontalCandidate; 4]>::new();
@@ -231,8 +224,7 @@ fn horizontal_spread_is_preferred_with_scratch(
         return true;
     };
 
-    horizontal_direction_bit(target - origin)
-        .is_some_and(|direction| preferred & direction != 0)
+    horizontal_direction_bit(target - origin).is_some_and(|direction| preferred & direction != 0)
 }
 
 /// Returns the first-step directions that reach the nearest downward opening
@@ -341,11 +333,7 @@ fn preferred_horizontal_directions(
     result
 }
 
-fn can_flow_horizontally_through(
-    world: &VoxelWorld,
-    position: IVec3,
-    fluid_id: FluidId,
-) -> bool {
+fn can_flow_horizontally_through(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool {
     world.sample_at(position).is_some_and(|(cell, fluid, _)| {
         cell.is_none() && fluid.is_none_or(|fluid| fluid.fluid_id == fluid_id)
     })
@@ -367,9 +355,7 @@ fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool
             // actual empty cell or an existing dynamic falling column keeps
             // the route classified as a drop after it fills.
             fluid.is_none_or(|fluid| {
-                fluid.fluid_id == fluid_id
-                    && !fluid.is_source()
-                    && fluid.spread_distance() == 0
+                fluid.fluid_id == fluid_id && !fluid.is_source() && fluid.spread_distance() == 0
             })
         })
 }
@@ -410,7 +396,10 @@ mod tests {
     fn horizontal_spread_maps_authored_range_across_full_height_range() {
         let source = FluidCell::source(0, MAX_FLUID_LEVEL);
         assert_eq!(horizontal_spread_state(source, 0), None);
-        assert_eq!(horizontal_spread_state(source, 1), Some((MIN_FLUID_LEVEL, 1)));
+        assert_eq!(
+            horizontal_spread_state(source, 1),
+            Some((MIN_FLUID_LEVEL, 1))
+        );
 
         // Water's authored range of 7 keeps the classic 8 -> 1 level ramp.
         assert_eq!(horizontal_spread_state(source, 7), Some((7, 1)));
@@ -435,19 +424,10 @@ mod tests {
         let position = IVec3::new(4, 3, 4);
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        world.set_fluid_at(
-            position + IVec3::Y,
-            Some(FluidCell::spreading(0, 1, 7)),
-        );
+        world.set_fluid_at(position + IVec3::Y, Some(FluidCell::spreading(0, 1, 7)));
 
         assert_eq!(
-            desired_fluid(
-                &world,
-                position,
-                None,
-                None,
-                &FluidRegistry::default(),
-            ),
+            desired_fluid(&world, position, None, None, &FluidRegistry::default(),),
             Some(FluidCell::spreading(0, MAX_FLUID_LEVEL, 0)),
         );
     }
@@ -490,12 +470,8 @@ mod tests {
 
         world.set_block_at(IVec3::new(8, 0, 6), None);
 
-        assert!(horizontal_spread_is_preferred(
-            &world, origin, east, 0, 7,
-        ));
-        assert!(!horizontal_spread_is_preferred(
-            &world, origin, north, 0, 7,
-        ));
+        assert!(horizontal_spread_is_preferred(&world, origin, east, 0, 7,));
+        assert!(!horizontal_spread_is_preferred(&world, origin, north, 0, 7,));
     }
 
     #[test]
@@ -512,12 +488,8 @@ mod tests {
             Some(FluidCell::spreading(0, MAX_FLUID_LEVEL, 0)),
         );
 
-        assert!(horizontal_spread_is_preferred(
-            &world, origin, east, 0, 7,
-        ));
-        assert!(!horizontal_spread_is_preferred(
-            &world, origin, north, 0, 7,
-        ));
+        assert!(horizontal_spread_is_preferred(&world, origin, east, 0, 7,));
+        assert!(!horizontal_spread_is_preferred(&world, origin, north, 0, 7,));
     }
 
     #[test]
@@ -547,12 +519,8 @@ mod tests {
         world.set_block_at(real_drop - IVec3::Y, None);
 
         assert!(!can_fall_from(&world, source_pool_ledge, 0));
-        assert!(!horizontal_spread_is_preferred(
-            &world, origin, east, 0, 7,
-        ));
-        assert!(horizontal_spread_is_preferred(
-            &world, origin, west, 0, 7,
-        ));
+        assert!(!horizontal_spread_is_preferred(&world, origin, east, 0, 7,));
+        assert!(horizontal_spread_is_preferred(&world, origin, west, 0, 7,));
     }
 
     #[test]

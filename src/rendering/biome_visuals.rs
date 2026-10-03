@@ -19,10 +19,7 @@ impl CurrentBiomeVisuals<'_> {
         self.current.is_changed() || self.biomes.is_changed()
     }
 
-    pub(crate) fn weighted_scalar(
-        &self,
-        value: impl Fn(&BiomeDefinition) -> f32,
-    ) -> f32 {
+    pub(crate) fn weighted_scalar(&self, value: impl Fn(&BiomeDefinition) -> f32) -> f32 {
         let surface_strength = (1.0 - self.current.volume_strength).clamp(0.0, 1.0);
         let volume_strength = self.current.volume_strength.clamp(0.0, 1.0);
         let value = &value;
@@ -35,18 +32,20 @@ impl CurrentBiomeVisuals<'_> {
                     .get(&influence.id)
                     .map(|biome| value(biome) * influence.weight * surface_strength)
             })
-            .chain(self.current.volume_influences.iter().filter_map(|influence| {
-                self.biomes
-                    .get(&influence.id)
-                    .map(|biome| value(biome) * influence.weight * volume_strength)
-            }))
+            .chain(
+                self.current
+                    .volume_influences
+                    .iter()
+                    .filter_map(|influence| {
+                        self.biomes
+                            .get(&influence.id)
+                            .map(|biome| value(biome) * influence.weight * volume_strength)
+                    }),
+            )
             .sum()
     }
 
-    pub(crate) fn blend_hsi(
-        &self,
-        value: impl Fn(&BiomeDefinition) -> Hsi,
-    ) -> Hsi {
+    pub(crate) fn blend_hsi(&self, value: impl Fn(&BiomeDefinition) -> Hsi) -> Hsi {
         let surface_strength = (1.0 - self.current.volume_strength).clamp(0.0, 1.0);
         let volume_strength = self.current.volume_strength.clamp(0.0, 1.0);
         let value = &value;
@@ -56,15 +55,20 @@ impl CurrentBiomeVisuals<'_> {
                 .surface_influences
                 .iter()
                 .filter_map(|influence| {
-                    self.biomes.get(&influence.id).map(|biome| {
-                        (value(biome), influence.weight * surface_strength)
-                    })
+                    self.biomes
+                        .get(&influence.id)
+                        .map(|biome| (value(biome), influence.weight * surface_strength))
                 })
-                .chain(self.current.volume_influences.iter().filter_map(|influence| {
-                    self.biomes.get(&influence.id).map(|biome| {
-                        (value(biome), influence.weight * volume_strength)
-                    })
-                })),
+                .chain(
+                    self.current
+                        .volume_influences
+                        .iter()
+                        .filter_map(|influence| {
+                            self.biomes
+                                .get(&influence.id)
+                                .map(|biome| (value(biome), influence.weight * volume_strength))
+                        }),
+                ),
         )
     }
 }

@@ -12,9 +12,7 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{
-        BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints,
-    },
+    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints},
     biome_density::BiomeDensityModifier,
     biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
@@ -37,6 +35,7 @@ pub(super) struct BiomeFieldEntry {
     pub surface_constraints: Option<VolumeSurfaceConstraints>,
     pub size: DimensionBiomeSize,
     pub weight: f32,
+    pub exclusive_neighbor_group: Option<String>,
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
     pub priority: i32,
@@ -141,6 +140,7 @@ impl BiomeField {
                 surface_constraints: biome.surface_constraints.clone(),
                 size,
                 weight: dimension_biome.weight,
+                exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
                 priority: biome.priority,
@@ -149,15 +149,15 @@ impl BiomeField {
                 density_modifier: biome.density_modifier,
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
-                surface_margin: biome.surface_margin.as_ref().map(|margin| SurfaceMarginField {
-                    width: margin.width,
-                    width_variation: margin.width_variation,
-                    variation_scale: margin.variation_scale,
-                    noise_seed: biome_density_seed(
-                        seed ^ 0x9e37_79b9_7f4a_7c15,
-                        &biome.id,
-                    ),
-                }),
+                surface_margin: biome
+                    .surface_margin
+                    .as_ref()
+                    .map(|margin| SurfaceMarginField {
+                        width: margin.width,
+                        width_variation: margin.width_variation,
+                        variation_scale: margin.variation_scale,
+                        noise_seed: biome_density_seed(seed ^ 0x9e37_79b9_7f4a_7c15, &biome.id),
+                    }),
             };
 
             match biome.kind {

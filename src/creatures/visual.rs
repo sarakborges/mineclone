@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use bevy::{
     animation::RepeatAnimation, asset::AssetId, ecs::system::SystemParam, gltf::GltfMaterialName,
@@ -8,9 +11,7 @@ use bevy::{
 use crate::content::{color::Hsi, creature::CreatureRegistry};
 
 use super::{
-    CreatureInstance,
-    material::apply_creature_material_overrides,
-    motion::CreatureMotion,
+    CreatureInstance, material::apply_creature_material_overrides, motion::CreatureMotion,
 };
 
 /// The glTF asset belongs to the visual loader; the root owns physics/position.
@@ -194,12 +195,7 @@ fn configure_loaded_scene(
             descendant,
             appearance,
         );
-        configure_creature_animation(
-            &mut commands,
-            &mut scene.players,
-            descendant,
-            appearance,
-        );
+        configure_creature_animation(&mut commands, &mut scene.players, descendant, appearance);
     }
 }
 

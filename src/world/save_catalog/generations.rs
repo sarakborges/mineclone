@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -9,8 +8,7 @@ use bevy::log::warn;
 
 use crate::{
     content::{
-        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
-        object::ObjectRegistry,
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, object::ObjectRegistry,
     },
     voxel::world::VoxelWorld,
 };
@@ -106,12 +104,10 @@ pub(super) fn newest_restorable_summary(
 ) -> io::Result<WorldSummary> {
     let pinned = snapshot_candidates(id)?;
     for candidate in &pinned.candidates {
-        let loaded = load_snapshot_summary(
-            &pinned.directory,
-            id,
-            &candidate.manifest,
-            |snapshot| registries.validate_playable(snapshot),
-        );
+        let loaded =
+            load_snapshot_summary(&pinned.directory, id, &candidate.manifest, |snapshot| {
+                registries.validate_playable(snapshot)
+            });
         match loaded {
             Ok(snapshot) => {
                 return Ok(WorldSummary {
@@ -293,10 +289,7 @@ fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
             .dimensions
             .iter()
             .all(|dimension| !dimension.is_empty())
-        && manifest
-            .dimensions
-            .windows(2)
-            .all(|pair| pair[0] < pair[1])
+        && manifest.dimensions.windows(2).all(|pair| pair[0] < pair[1])
         && manifest
             .dimensions
             .binary_search(&manifest.dimension_id)
@@ -313,20 +306,14 @@ fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
         && manifest.snapshot_file.as_deref() == Some(snapshot_name(generation).as_str())
 }
 
-fn manifest_payload_published(
-    directory: &Path,
-    manifest: &WorldManifest,
-) -> io::Result<bool> {
+fn manifest_payload_published(directory: &Path, manifest: &WorldManifest) -> io::Result<bool> {
     if !directory.join(snapshot_name(manifest.generation)).is_file() {
         return Ok(false);
     }
     generation_worlds_published(directory, manifest.generation, &manifest.dimensions)
 }
 
-pub(super) fn latest_complete_manifest(
-    directory: &Path,
-    id: &str,
-) -> io::Result<WorldManifest> {
+pub(super) fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManifest> {
     let mut candidates = manifest_paths(directory)?;
     candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
     for (generation, path) in candidates {
@@ -339,9 +326,9 @@ pub(super) fn latest_complete_manifest(
         match manifest_payload_published(directory, &manifest) {
             Ok(true) => return Ok(manifest),
             Ok(false) => {}
-            Err(error) => warn!(
-                "Skipping incomplete save for world {id}, generation {generation}: {error}"
-            ),
+            Err(error) => {
+                warn!("Skipping incomplete save for world {id}, generation {generation}: {error}")
+            }
         }
     }
     Err(invalid_data(format!(

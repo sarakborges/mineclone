@@ -2,10 +2,7 @@ use bevy::{prelude::*, render::storage::ShaderBuffer};
 
 use crate::app::game_state::GameState;
 
-use super::{
-    environment::EnvironmentVisualState,
-    terrain_material::TerrainLightingBuffer,
-};
+use super::{environment::EnvironmentVisualState, terrain_material::TerrainLightingBuffer};
 
 #[derive(Resource, Default)]
 struct AppliedSkyLightFactor(Option<f32>);

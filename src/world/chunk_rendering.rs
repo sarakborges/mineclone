@@ -7,13 +7,13 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
     voxel::{
-        chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask,
-        read::VoxelRead, world::VoxelWorld,
+        chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask, read::VoxelRead,
+        world::VoxelWorld,
     },
 };
 
@@ -24,9 +24,7 @@ pub(crate) use pool::{
     ChunkRenderPool, DeferredMeshAssetRetirements, advance_deferred_mesh_asset_retirements,
     clear_chunk_render_pool, retire_chunk_render_allocation,
 };
-pub(crate) use refresh::{
-    apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets,
-};
+pub(crate) use refresh::{apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets};
 pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
 
 const MEBIBYTE: usize = 1024 * 1024;

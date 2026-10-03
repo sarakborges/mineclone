@@ -49,10 +49,7 @@ pub(super) struct BrushPlugin;
 impl Plugin for BrushPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BrushMode>()
-            .add_systems(
-                OnEnter(GameState::Gameplay),
-                reset_resource::<BrushMode>,
-            )
+            .add_systems(OnEnter(GameState::Gameplay), reset_resource::<BrushMode>)
             .add_systems(
                 Update,
                 handle_brush_use

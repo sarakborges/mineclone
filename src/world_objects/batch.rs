@@ -12,23 +12,22 @@ use crate::{
     content::object::{ObjectDefinition, ObjectVisualDefinition},
     rendering::{
         block_tint::block_tint_at,
-        color::{quantize_srgba, MATERIAL_TINT_RGB_LEVELS},
+        color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba},
         extruded_sprite::{
-            resolve_extruded_sprite_assets, ExtrudedSpriteAssetContext,
-            ExtrudedSpriteAssetRequest, ExtrudedSpriteGeometry, ExtrudedSpriteMaterialCache,
-            ExtrudedSpriteMeshCache,
+            ExtrudedSpriteAssetContext, ExtrudedSpriteAssetRequest, ExtrudedSpriteGeometry,
+            ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache, resolve_extruded_sprite_assets,
         },
         object_primitives::{
-            crossed_sprite_mesh, cuboid_set_mesh, resolve_object_primitive_material,
             ObjectPrimitiveMaterialCache, ObjectPrimitiveMaterialContext,
-            ObjectPrimitiveMaterialRequest,
+            ObjectPrimitiveMaterialRequest, crossed_sprite_mesh, cuboid_set_mesh,
+            resolve_object_primitive_material,
         },
     },
     voxel::chunk::VoxelChunk,
 };
 
 use super::{
-    world_object_transform, ObjectMaterialCache, ObjectMaterialKey, WorldObjectSceneContent,
+    ObjectMaterialCache, ObjectMaterialKey, WorldObjectSceneContent, world_object_transform,
 };
 
 const MAX_INSTANCES_PER_BATCH: usize = 256;
@@ -123,13 +122,8 @@ pub(super) fn build_world_object_chunk(
             &content.biomes,
         );
 
-        let resolved = resolve_object_render_assets(
-            definition,
-            tint,
-            content,
-            assets,
-            &mut primitive_meshes,
-        )?;
+        let resolved =
+            resolve_object_render_assets(definition, tint, content, assets, &mut primitive_meshes)?;
 
         transform.translation -= chunk_origin_vec;
         let instance_mesh = resolved.mesh.transformed_by(transform);

@@ -8,9 +8,7 @@ use bevy::{
 use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, object::ObjectRegistry,
 };
-use crate::voxel::{
-    chunk::VoxelChunk, chunk_archive::ArchivedChunk, chunk_disk::DiskChunk,
-};
+use crate::voxel::{chunk::VoxelChunk, chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 
 use super::VoxelWorld;
 
@@ -41,7 +39,9 @@ impl ChunkPersistenceState {
     }
 
     pub(super) fn restore(&mut self, coord: IVec3) -> Option<VoxelChunk> {
-        self.archived_chunks.remove(&coord).map(|archived| archived.restore())
+        self.archived_chunks
+            .remove(&coord)
+            .map(|archived| archived.restore())
     }
 
     pub(super) fn persistent_coords(&self) -> impl Iterator<Item = IVec3> + '_ {

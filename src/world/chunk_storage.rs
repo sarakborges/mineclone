@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     content::{
-        block::BlockRegistry,
-        fluid::FluidRegistry,
-        layer::LayerRegistry,
-        object::ObjectRegistry,
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, object::ObjectRegistry,
     },
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
     world::storage_durability::{sync_directory, sync_directory_tree},
@@ -50,15 +47,13 @@ pub(crate) fn generation_storage_slot_exists(
     world_directory: &Path,
     generation: u64,
 ) -> io::Result<bool> {
-    Ok(
-        checked_directory_slot_exists(
-            world_directory,
-            Path::new(&generation_directory_name(generation)),
-        )? || checked_directory_slot_exists(
-            world_directory,
-            Path::new(&staging_generation_directory_name(generation)),
-        )?,
-    )
+    Ok(checked_directory_slot_exists(
+        world_directory,
+        Path::new(&generation_directory_name(generation)),
+    )? || checked_directory_slot_exists(
+        world_directory,
+        Path::new(&staging_generation_directory_name(generation)),
+    )?)
 }
 
 pub(crate) fn generation_chunks_published(
@@ -468,9 +463,9 @@ fn parse_chunk_file_z(value: &std::ffi::OsStr) -> io::Result<i32> {
 }
 
 fn parse_region_file_name(value: &std::ffi::OsStr) -> io::Result<ChunkRegionIdentity> {
-    let text = value
-        .to_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "region filename is not UTF-8"))?;
+    let text = value.to_str().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "region filename is not UTF-8")
+    })?;
     let suffix = format!(".{REGION_FILE_EXTENSION}");
     let coordinates = text.strip_suffix(&suffix).ok_or_else(|| {
         io::Error::new(
@@ -622,10 +617,7 @@ fn write_region_file(
     file.sync_all()
 }
 
-pub(crate) fn remove_generation_chunks(
-    world_directory: &Path,
-    generation: u64,
-) -> io::Result<()> {
+pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<()> {
     let relative = PathBuf::from(generation_directory_name(generation));
     let path = checked_directory_slot(world_directory, relative.as_path())?;
     match fs::symlink_metadata(path.as_path()) {
@@ -666,13 +658,10 @@ mod tests {
     #[test]
     fn chunk_identity_is_stable_across_disk_conversion() {
         let chunk = disk_chunk(IVec3::new(-7, 3, 12));
-        let identity = ChunkDiskIdentity::from_disk_chunk(&chunk)
-            .expect("disk chunk identity must be valid");
+        let identity =
+            ChunkDiskIdentity::from_disk_chunk(&chunk).expect("disk chunk identity must be valid");
         assert_eq!(identity.chunk_position(), IVec3::new(-7, 3, 12));
-        assert_eq!(
-            identity,
-            ChunkDiskIdentity::new(IVec3::new(-7, 3, 12))
-        );
+        assert_eq!(identity, ChunkDiskIdentity::new(IVec3::new(-7, 3, 12)));
     }
 
     #[test]
@@ -706,10 +695,7 @@ mod tests {
 
     #[test]
     fn staging_generation_directory_identity_is_distinct() {
-        assert_eq!(
-            staging_generation_directory_name(42),
-            ".generation-42.tmp"
-        );
+        assert_eq!(staging_generation_directory_name(42), ".generation-42.tmp");
         assert_ne!(
             staging_generation_directory_name(42),
             generation_directory_name(42)
@@ -781,8 +767,7 @@ mod tests {
     fn empty_generation_round_trips_without_storage_directory() {
         let root = temp_directory("chunk-empty");
         fs::create_dir_all(root.as_path()).expect("temp root must be created");
-        publish_generation_chunks(root.as_path(), 12, &[])
-            .expect("empty generation must publish");
+        publish_generation_chunks(root.as_path(), 12, &[]).expect("empty generation must publish");
         assert!(
             load_generation_chunks(root.as_path(), 12)
                 .expect("empty generation must load")
@@ -797,9 +782,8 @@ mod tests {
         fs::create_dir_all(root.as_path()).expect("temp root must be created");
         let generation = root.join(generation_directory_name(14));
         let chunk = disk_chunk(IVec3::new(-7, 3, 12));
-        let path = generation.join(
-            ChunkDiskIdentity::new(IVec3::new(-7, 3, 12)).legacy_relative_path(),
-        );
+        let path =
+            generation.join(ChunkDiskIdentity::new(IVec3::new(-7, 3, 12)).legacy_relative_path());
         fs::create_dir_all(path.parent().expect("legacy chunk must have a parent"))
             .expect("legacy parent must be created");
         fs::write(
@@ -862,13 +846,12 @@ mod tests {
             .expect("legacy parent must be created");
         fs::write(
             legacy,
-            serde_json::to_vec(&disk_chunk(IVec3::ZERO))
-                .expect("legacy chunk must serialize"),
+            serde_json::to_vec(&disk_chunk(IVec3::ZERO)).expect("legacy chunk must serialize"),
         )
         .expect("legacy chunk must be written");
 
-        let error = load_generation_chunks(root.as_path(), 15)
-            .expect_err("mixed layouts must be rejected");
+        let error =
+            load_generation_chunks(root.as_path(), 15).expect_err("mixed layouts must be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         fs::remove_dir_all(root).expect("temp root must be removed");
     }
@@ -897,12 +880,11 @@ mod tests {
         fs::create_dir(&staging).expect("staging must be created");
 
         let requested = IVec3::new(1, 2, 3);
-        let error = write_generation_chunk_source_to_staging(
-            staging.as_path(),
-            vec![requested],
-            |_| Ok(disk_chunk(IVec3::new(4, 5, 6))),
-        )
-        .expect_err("source identity mismatch must be rejected");
+        let error =
+            write_generation_chunk_source_to_staging(staging.as_path(), vec![requested], |_| {
+                Ok(disk_chunk(IVec3::new(4, 5, 6)))
+            })
+            .expect_err("source identity mismatch must be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
 
         fs::remove_dir_all(root).expect("temp root must be removed");

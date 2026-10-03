@@ -169,13 +169,13 @@ impl DimensionRuntimeContext<'_, '_> {
         let current_fluid_updates = self
             .pending_fluids
             .capture_saved(self.world_tick.current_tick(), &self.fluids)?;
-        let current_creatures = self.pending_creatures.snapshot(
-            self.creatures
-                .iter()
-                .filter_map(|(instance, transform, health, meta_tags)| {
+        let current_creatures = self
+            .pending_creatures
+            .snapshot(self.creatures.iter().filter_map(
+                |(instance, transform, health, meta_tags)| {
                     SavedCreature::from_runtime(instance, transform, health, meta_tags)
-                }),
-        );
+                },
+            ));
 
         let target_pending_fluids = self
             .inactive_dimensions

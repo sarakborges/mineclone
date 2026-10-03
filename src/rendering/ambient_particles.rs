@@ -6,7 +6,9 @@ use crate::{
     app::game_state::GameState,
     content::{
         ambient_particle::{AmbientParticleDefinition, AmbientParticleRange},
-        ambient_particle_registry::{AmbientParticleRegistry, AmbientParticleRule, AmbientParticleSource},
+        ambient_particle_registry::{
+            AmbientParticleRegistry, AmbientParticleRule, AmbientParticleSource,
+        },
         fluid::{FluidId, FluidRegistry},
     },
     player::camera::GameplayCamera,
@@ -167,12 +169,8 @@ fn spawn_ambient_particles(
             continue;
         }
 
-        let (mesh, material) = resolve_particle_assets(
-            rule,
-            &mut particle_assets,
-            &mut meshes,
-            &mut materials,
-        );
+        let (mesh, material) =
+            resolve_particle_assets(rule, &mut particle_assets, &mut meshes, &mut materials);
         for _ in 0..count {
             let position = match source.fluid_id {
                 Some(fluid_id) => find_fluid_surface_position(
@@ -358,10 +356,7 @@ fn update_ambient_particles(
     time: Res<Time>,
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
-    mut particles: Query<
-        (Entity, &mut AmbientParticle, &mut Transform),
-        Without<GameplayCamera>,
-    >,
+    mut particles: Query<(Entity, &mut AmbientParticle, &mut Transform), Without<GameplayCamera>>,
 ) {
     let delta_seconds = time.delta_secs().min(0.1);
     let camera_position = camera.translation;
