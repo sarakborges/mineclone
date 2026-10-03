@@ -2,21 +2,30 @@
   "id": "asteria:overworld/swamp",
   "terrain": {
     "type": "swamp",
-    "baseHeight": 1.4,
-    "depth": 3.2,
-    "amplitude": 0.85,
+    "baseHeight": 0.9,
+    "depth": 4.8,
+    "amplitude": 0.7,
     "scale": 0.0065,
-    "detailAmplitude": 0.45,
+    "detailAmplitude": 0.4,
     "detailScale": 0.045
   },
   "surfaceLayers": [
+    {
+      "block": "asteria:grass_block",
+      "alternates": [
+        "asteria:dirt",
+        "asteria:mud"
+      ],
+      "patchScale": 0.13,
+      "depth": 1
+    },
     {
       "block": "asteria:dirt",
       "alternates": [
         "asteria:mud"
       ],
-      "patchScale": 0.04,
-      "depth": 5
+      "patchScale": 0.15,
+      "depth": 4
     },
     {
       "block": "asteria:stone"
@@ -96,18 +105,18 @@
     },
     "grassColor": {
       "hue": 103,
-      "saturation": 0.48,
-      "intensity": 0.29
-    },
-    "leafColor": {
-      "hue": 111,
-      "saturation": 0.52,
+      "saturation": 0.24,
       "intensity": 0.31
     },
+    "leafColor": {
+      "hue": 108,
+      "saturation": 0.22,
+      "intensity": 0.3
+    },
     "foliageColor": {
-      "hue": 96,
-      "saturation": 0.46,
-      "intensity": 0.27
+      "hue": 99,
+      "saturation": 0.2,
+      "intensity": 0.29
     },
     "waterColor": {
       "hue": 112,
@@ -157,6 +166,7 @@
       "clusterMax": 5,
       "clusterRadius": 4,
       "groundBlocks": [
+        "asteria:grass_block",
         "asteria:dirt",
         "asteria:mud"
       ]
