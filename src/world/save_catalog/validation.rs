@@ -50,13 +50,17 @@ impl SaveRegistries<'_> {
         let duration = dimension
             .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
             .map(|cycle| cycle.day_duration_ticks);
-        let spawn_biome_valid = snapshot.spawn_biome.as_deref().is_none_or(|biome_id| {
-            self.biomes
-                .get(biome_id)
-                .is_some_and(|biome| biome.kind == BiomeKind::Surface)
-                && dimension.is_some_and(|dimension| {
-                    dimension.biomes.iter().any(|entry| entry.id == biome_id)
-                })
+        let spawn_biome_valid = dimension.is_some_and(|dimension| {
+            validate_dimension_spawn_biome(
+                snapshot.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| {
+                    self.biomes
+                        .get(biome_id)
+                        .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+                        && dimension.biomes.iter().any(|entry| entry.id == biome_id)
+                },
+            )
         });
         let current_biome_valid = snapshot
             .current_biome
@@ -89,9 +93,24 @@ impl SaveRegistries<'_> {
             if !dimensions.insert(saved.dimension_id.as_str()) {
                 return Err(invalid_data("duplicate saved dimension identity"));
             }
-            if self.dimensions.get(&saved.dimension_id).is_none() {
+            let Some(dimension) = self.dimensions.get(&saved.dimension_id) else {
                 return Err(invalid_data(format!(
                     "saved dimension is missing from content: {}",
+                    saved.dimension_id
+                )));
+            };
+            if !validate_dimension_spawn_biome(
+                saved.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| {
+                    self.biomes
+                        .get(biome_id)
+                        .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+                        && dimension.biomes.iter().any(|entry| entry.id == biome_id)
+                },
+            ) {
+                return Err(invalid_data(format!(
+                    "saved spawn biome is invalid for dimension {}",
                     saved.dimension_id
                 )));
             }
@@ -178,11 +197,16 @@ pub(crate) struct PruneRegistries {
 
 impl PruneRegistries {
     pub(crate) fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
-        let spawn_biome_valid = snapshot.spawn_biome.as_deref().is_none_or(|biome_id| {
-            self.valid_spawn_biomes
-                .get(&snapshot.dimension_id)
-                .is_some_and(|biomes| biomes.contains(biome_id))
-        });
+        let spawn_biome_valid = self
+            .valid_spawn_biomes
+            .get(&snapshot.dimension_id)
+            .is_some_and(|biomes| {
+                validate_dimension_spawn_biome(
+                    snapshot.spawn_biome.as_deref(),
+                    snapshot.world_generation.single_biome(),
+                    |biome_id| biomes.contains(biome_id),
+                )
+            });
         let current_biome_valid = snapshot
             .current_biome
             .as_deref()
@@ -208,9 +232,19 @@ impl PruneRegistries {
             if !dimensions.insert(saved.dimension_id.as_str()) {
                 return Err(invalid_data("duplicate saved dimension identity"));
             }
-            if !self.day_lengths.contains_key(&saved.dimension_id) {
+            let Some(valid_spawn_biomes) = self.valid_spawn_biomes.get(&saved.dimension_id) else {
                 return Err(invalid_data(format!(
                     "saved dimension is missing from content: {}",
+                    saved.dimension_id
+                )));
+            };
+            if !validate_dimension_spawn_biome(
+                saved.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| valid_spawn_biomes.contains(biome_id),
+            ) {
+                return Err(invalid_data(format!(
+                    "saved spawn biome is invalid for dimension {}",
                     saved.dimension_id
                 )));
             }
@@ -221,6 +255,18 @@ impl PruneRegistries {
             }
         }
         Ok(())
+    }
+}
+
+fn validate_dimension_spawn_biome(
+    spawn_biome: Option<&str>,
+    single_biome: bool,
+    is_valid: impl Fn(&str) -> bool,
+) -> bool {
+    if single_biome {
+        spawn_biome.is_some_and(is_valid)
+    } else {
+        spawn_biome.is_none_or(is_valid)
     }
 }
 
