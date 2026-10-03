@@ -1,0 +1,28 @@
+{
+  "id": "asteria:ambient/volcano_ash",
+  "source": {
+    "type": "biome",
+    "id": "asteria:overworld/volcano"
+  },
+  "color": {
+    "hue": 28,
+    "saturation": 0.08,
+    "intensity": 0.38
+  },
+  "opacity": 0.72,
+  "size": {
+    "min": 0.025,
+    "max": 0.065
+  },
+  "lifetime": {
+    "min": 5.0,
+    "max": 9.0
+  },
+  "spawnRate": 10.0,
+  "velocity": [0.0, -0.12, 0.0],
+  "velocityJitter": [0.24, 0.08, 0.24],
+  "acceleration": [0.0, -0.015, 0.0],
+  "wanderStrength": 0.075,
+  "spawnRadius": 22.0,
+  "verticalRange": 12.0
+}
