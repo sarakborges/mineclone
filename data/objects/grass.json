@@ -28,7 +28,7 @@
     "texture": "textures/objects/grass.png",
     "width": 0.72,
     "height": 0.62,
-    "planes": 3,
+    "planes": 4,
     "alphaCutoff": 0.5
   },
   "interaction": "break",
