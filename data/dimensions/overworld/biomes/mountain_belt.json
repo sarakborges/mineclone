@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/mountain_belt",
-  "name": {
-    "english": "Mountain Belt",
-    "portuguese_brazil": "Cinturão de Montanhas",
-    "spanish": "Cinturón Montañoso"
-  },
+  "name": null,
   "tags": [
     "mountain"
   ],

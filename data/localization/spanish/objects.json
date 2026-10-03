@@ -1,0 +1,11 @@
+{
+  "asteria:grass": {
+    "/name": "Césped"
+  },
+  "asteria:pebble": {
+    "/name": "Guijarro"
+  },
+  "asteria:stick": {
+    "/name": "Ramita"
+  }
+}

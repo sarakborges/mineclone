@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_oak_hollow",
-  "name": {
-    "english": "Hollow Oak Log",
-    "portuguese_brazil": "Tronco de Carvalho Oco",
-    "spanish": "Tronco de Roble Hueco"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {

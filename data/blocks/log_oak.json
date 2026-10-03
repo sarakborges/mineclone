@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_oak",
-  "name": {
-    "english": "Oak Log",
-    "portuguese_brazil": "Tronco de carvalho",
-    "spanish": "Tronco de roble"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [
     "fragmentable"

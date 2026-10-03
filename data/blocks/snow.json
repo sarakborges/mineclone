@@ -1,10 +1,6 @@
 {
   "id": "asteria:snow",
-  "name": {
-    "english": "Snow",
-    "portuguese_brazil": "Neve",
-    "spanish": "Nieve"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable"

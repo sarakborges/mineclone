@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_straight_01",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Natural Cavern Tunnel",
-    "portuguese_brazil": "Túnel Natural de Caverna",
-    "spanish": "Túnel Natural de Caverna"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

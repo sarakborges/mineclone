@@ -1,11 +1,7 @@
 {
   "id": "asteria:tree_enchanted_02",
   "group_id": "tree_enchanted",
-  "name": {
-    "english": "Enchanted Tree",
-    "portuguese_brazil": "Árvore Encantada",
-    "spanish": "Árbol Encantado"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

@@ -1,10 +1,6 @@
 {
   "id": "asteria:boulder_medium",
-  "name": {
-    "english": "Medium Boulder",
-    "portuguese_brazil": "Pedregulho médio",
-    "spanish": "Roca mediana"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "restrictions": {

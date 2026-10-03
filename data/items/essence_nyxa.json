@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_nyxa",
-  "name": {
-    "english": "Nyxa Essence",
-    "portuguese_brazil": "Essência Nyxa",
-    "spanish": "Esencia Nyxa"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_nyxa.png"
 }

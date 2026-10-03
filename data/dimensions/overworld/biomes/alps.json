@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/alps",
-  "name": {
-    "english": "Alps",
-    "portuguese_brazil": "Alpes",
-    "spanish": "Alpes"
-  },
+  "name": null,
   "tags": [
     "mountain"
   ],

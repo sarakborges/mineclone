@@ -1,0 +1,35 @@
+{
+  "asteria:enchanted_forest_spores": {
+    "/name": "Esporas del Bosque Encantado"
+  },
+  "asteria:essence_aqua": {
+    "/name": "Esencia Aqua"
+  },
+  "asteria:essence_kyra": {
+    "/name": "Esencia Kyra"
+  },
+  "asteria:essence_luma": {
+    "/name": "Esencia Luma"
+  },
+  "asteria:essence_nyxa": {
+    "/name": "Esencia Nyxa"
+  },
+  "asteria:essence_pyra": {
+    "/name": "Esencia Pyra"
+  },
+  "asteria:essence_terra": {
+    "/name": "Esencia Terra"
+  },
+  "asteria:essence_vaela": {
+    "/name": "Esencia Vaela"
+  },
+  "asteria:essence_verdra": {
+    "/name": "Esencia Verdra"
+  },
+  "asteria:essence_voltra": {
+    "/name": "Esencia Voltra"
+  },
+  "asteria:plant_fiber": {
+    "/name": "Fibra Vegetal"
+  }
+}

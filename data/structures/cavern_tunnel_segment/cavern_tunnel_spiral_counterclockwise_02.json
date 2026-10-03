@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_spiral_counterclockwise_02",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Rough Counterclockwise Spiral Cavern Tunnel",
-    "portuguese_brazil": "Túnel Espiral Anti-Horário Irregular de Caverna",
-    "spanish": "Túnel Espiral Antihorario Irregular de Caverna"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

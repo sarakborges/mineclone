@@ -1,0 +1,38 @@
+{
+  "asteria:architects_compass": {
+    "/hint": "Selects regions to export as structures.",
+    "/name": "Architect's Compass"
+  },
+  "asteria:artisans_kit_rustic": {
+    "/hint": "Sculpts fragmentable blocks.",
+    "/name": "Artisan's Kit"
+  },
+  "asteria:brush_rustic": {
+    "/hint": "Paints dyeable blocks or clears their dye.",
+    "/name": "Brush"
+  },
+  "asteria:bucket": {
+    "/hint": "Collects and places fluid sources.",
+    "/name": "Bucket"
+  },
+  "asteria:carpenters_axe_rustic": {
+    "/hint": "Left click hollows logs; right click strips bark.",
+    "/name": "Rustic Carpenter's Axe"
+  },
+  "asteria:hatchet_rustic": {
+    "/hint": "Chops logs and wooden blocks.",
+    "/name": "Rustic Hatchet"
+  },
+  "asteria:pickaxe_rustic": {
+    "/hint": "Mines stone and masonry blocks.",
+    "/name": "Rustic Pickaxe"
+  },
+  "asteria:shears": {
+    "/hint": "Removes surface layers from blocks.",
+    "/name": "Shears"
+  },
+  "asteria:shovel_rustic": {
+    "/hint": "Digs soil and loose natural blocks.",
+    "/name": "Rustic Shovel"
+  }
+}

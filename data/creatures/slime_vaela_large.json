@@ -1,10 +1,6 @@
 {
   "id": "asteria:slime_vaela_large",
-  "name": {
-    "english": "Large Vaela Slime",
-    "portuguese_brazil": "Slime Vaela Grande",
-    "spanish": "Slime Vaela Grande"
-  },
+  "name": null,
   "model": "models/creatures/slime_anemo_large/slime_anemo_large.glb",
   "health": 24,
   "maxPerType": 2,

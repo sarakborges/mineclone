@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_enchanted",
-  "name": {
-    "english": "Enchanted Log",
-    "portuguese_brazil": "Tronco Encantado",
-    "spanish": "Tronco Encantado"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [
     "fragmentable"

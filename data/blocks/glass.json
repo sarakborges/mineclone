@@ -1,10 +1,6 @@
 {
   "id": "asteria:glass",
-  "name": {
-    "english": "Glass",
-    "portuguese_brazil": "Vidro",
-    "spanish": "Vidrio"
-  },
+  "name": null,
   "category": "crafted_blocks",
   "secondaryProperties": [
     "dyed"

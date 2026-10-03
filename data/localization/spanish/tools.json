@@ -1,0 +1,38 @@
+{
+  "asteria:architects_compass": {
+    "/hint": "Selecciona regiones para exportarlas como estructuras.",
+    "/name": "Brújula del Arquitecto"
+  },
+  "asteria:artisans_kit_rustic": {
+    "/hint": "Esculpe bloques fragmentables.",
+    "/name": "Kit de Artesano"
+  },
+  "asteria:brush_rustic": {
+    "/hint": "Pinta bloques teñibles o elimina su tinte.",
+    "/name": "Pincel"
+  },
+  "asteria:bucket": {
+    "/hint": "Recoge y coloca fuentes de fluido.",
+    "/name": "Cubo"
+  },
+  "asteria:carpenters_axe_rustic": {
+    "/hint": "El clic izquierdo ahueca troncos; el derecho quita la corteza.",
+    "/name": "Hacha de Carpintero Rústica"
+  },
+  "asteria:hatchet_rustic": {
+    "/hint": "Corta troncos y bloques de madera.",
+    "/name": "Hacha Rústica"
+  },
+  "asteria:pickaxe_rustic": {
+    "/hint": "Mina bloques de piedra y mampostería.",
+    "/name": "Pico Rústico"
+  },
+  "asteria:shears": {
+    "/hint": "Elimina capas superficiales de los bloques.",
+    "/name": "Tijeras"
+  },
+  "asteria:shovel_rustic": {
+    "/hint": "Excava suelo y bloques naturales sueltos.",
+    "/name": "Pala Rústica"
+  }
+}

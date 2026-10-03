@@ -1,10 +1,6 @@
 {
   "id": "asteria:plant_fiber",
-  "name": {
-    "english": "Plant Fiber",
-    "portuguese_brazil": "Fibra Vegetal",
-    "spanish": "Fibra Vegetal"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/plant-fiber.png"
 }

@@ -1,0 +1,245 @@
+{
+  "asteria:boulder_big": {
+    "/name": "Roca grande"
+  },
+  "asteria:boulder_huge": {
+    "/name": "Roca enorme"
+  },
+  "asteria:boulder_medium": {
+    "/name": "Roca mediana"
+  },
+  "asteria:boulder_small": {
+    "/name": "Roca pequeña"
+  },
+  "asteria:cavern_entrance_curved": {
+    "/name": "Entrada Curva de Caverna"
+  },
+  "asteria:cavern_entrance_spiral_clockwise": {
+    "/name": "Entrada Espiral Horaria de Caverna"
+  },
+  "asteria:cavern_entrance_spiral_counterclockwise": {
+    "/name": "Entrada Espiral Antihoraria de Caverna"
+  },
+  "asteria:cavern_entrance_straight_01": {
+    "/name": "Entrada de Caverna"
+  },
+  "asteria:cavern_entrance_straight_02": {
+    "/name": "Entrada de Caverna"
+  },
+  "asteria:cavern_tunnel_curve_left": {
+    "/name": "Túnel Curvo de Caverna a la Izquierda"
+  },
+  "asteria:cavern_tunnel_curve_right": {
+    "/name": "Túnel Curvo de Caverna a la Derecha"
+  },
+  "asteria:cavern_tunnel_spiral_clockwise_01": {
+    "/name": "Túnel Espiral Horario de Caverna"
+  },
+  "asteria:cavern_tunnel_spiral_clockwise_02": {
+    "/name": "Túnel Espiral Horario Ancho de Caverna"
+  },
+  "asteria:cavern_tunnel_spiral_counterclockwise_01": {
+    "/name": "Túnel Espiral Antihorario de Caverna"
+  },
+  "asteria:cavern_tunnel_spiral_counterclockwise_02": {
+    "/name": "Túnel Espiral Antihorario Irregular de Caverna"
+  },
+  "asteria:cavern_tunnel_straight_01": {
+    "/name": "Túnel Natural de Caverna"
+  },
+  "asteria:cavern_tunnel_straight_02": {
+    "/name": "Túnel Ancho de Caverna"
+  },
+  "asteria:cavern_tunnel_straight_03": {
+    "/name": "Túnel Irregular de Caverna"
+  },
+  "asteria:enchanted_spring_01": {
+    "/name": "Manantial Encantado"
+  },
+  "asteria:enchanted_spring_02": {
+    "/name": "Manantial Encantado"
+  },
+  "asteria:enchanted_spring_03": {
+    "/name": "Manantial Encantado"
+  },
+  "asteria:lake_01": {
+    "/name": "Lago 01"
+  },
+  "asteria:lake_02": {
+    "/name": "Lago 02"
+  },
+  "asteria:lake_03": {
+    "/name": "Lago 03"
+  },
+  "asteria:mountain_pond_01": {
+    "/name": "Estanque de Montaña 01"
+  },
+  "asteria:mountain_pond_02": {
+    "/name": "Estanque de Montaña 02"
+  },
+  "asteria:mountain_pond_03": {
+    "/name": "Estanque de Montaña 03"
+  },
+  "asteria:mountain_waterfall_01": {
+    "/name": "Cascada de Montaña 01"
+  },
+  "asteria:mountain_waterfall_02": {
+    "/name": "Cascada de Montaña 02"
+  },
+  "asteria:mountain_waterfall_03": {
+    "/name": "Cascada de Montaña 03"
+  },
+  "asteria:river_lake_01": {
+    "/name": "Lago de Río 01"
+  },
+  "asteria:river_lake_02": {
+    "/name": "Lago de Río 02"
+  },
+  "asteria:river_lake_03": {
+    "/name": "Lago de Río 03"
+  },
+  "asteria:river_lake_04": {
+    "/name": "Lago de Río 04"
+  },
+  "asteria:river_lake_05": {
+    "/name": "Lago de Río 05"
+  },
+  "asteria:river_lake_06": {
+    "/name": "Lago de Río 06"
+  },
+  "asteria:river_ocean_mouth": {
+    "/name": "Desembocadura de Río Oceánica"
+  },
+  "asteria:river_segment_01": {
+    "/name": "Segmento de Río 01"
+  },
+  "asteria:river_segment_02": {
+    "/name": "Segmento de Río 02"
+  },
+  "asteria:river_segment_03": {
+    "/name": "Segmento de Río 03"
+  },
+  "asteria:river_segment_04": {
+    "/name": "Segmento de Río 04"
+  },
+  "asteria:river_segment_05": {
+    "/name": "Segmento de Río 05"
+  },
+  "asteria:river_segment_06": {
+    "/name": "Segmento de Río 06"
+  },
+  "asteria:river_segment_07": {
+    "/name": "Segmento de Río 07"
+  },
+  "asteria:river_segment_08": {
+    "/name": "Segmento de Río 08"
+  },
+  "asteria:river_segment_09": {
+    "/name": "Segmento de Río 09"
+  },
+  "asteria:river_segment_10": {
+    "/name": "Segmento de Río 10"
+  },
+  "asteria:river_segment_11": {
+    "/name": "Segmento de Río 11"
+  },
+  "asteria:river_segment_12": {
+    "/name": "Segmento de Río 12"
+  },
+  "asteria:river_segment_13": {
+    "/name": "Segmento de Río 13"
+  },
+  "asteria:river_segment_14": {
+    "/name": "Segmento de Río 14"
+  },
+  "asteria:river_segment_15": {
+    "/name": "Segmento de Río 15"
+  },
+  "asteria:river_segment_16": {
+    "/name": "Segmento de Río 16"
+  },
+  "asteria:river_segment_17": {
+    "/name": "Segmento de Río 17"
+  },
+  "asteria:river_segment_18": {
+    "/name": "Segmento de Río 18"
+  },
+  "asteria:river_segment_19": {
+    "/name": "Segmento de Río 19"
+  },
+  "asteria:river_segment_20": {
+    "/name": "Segmento de Río 20"
+  },
+  "asteria:river_segment_21": {
+    "/name": "Segmento de Río 21"
+  },
+  "asteria:river_segment_22": {
+    "/name": "Segmento de Río 22"
+  },
+  "asteria:river_segment_23": {
+    "/name": "Segmento de Río 23"
+  },
+  "asteria:river_segment_24": {
+    "/name": "Segmento de Río 24"
+  },
+  "asteria:root_arch_01": {
+    "/name": "Arco de Raíces"
+  },
+  "asteria:root_arch_02": {
+    "/name": "Arco de Raíces"
+  },
+  "asteria:root_arch_03": {
+    "/name": "Arco de Raíces"
+  },
+  "asteria:root_arch_04": {
+    "/name": "Arco de Raíces"
+  },
+  "asteria:tree_enchanted_01": {
+    "/name": "Árbol Encantado"
+  },
+  "asteria:tree_enchanted_02": {
+    "/name": "Árbol Encantado"
+  },
+  "asteria:tree_enchanted_03": {
+    "/name": "Árbol Encantado"
+  },
+  "asteria:tree_enchanted_04": {
+    "/name": "Árbol Encantado"
+  },
+  "asteria:tree_oak_01": {
+    "/name": "Roble"
+  },
+  "asteria:tree_oak_02": {
+    "/name": "Roble"
+  },
+  "asteria:tree_oak_03": {
+    "/name": "Roble"
+  },
+  "asteria:tree_oak_04": {
+    "/name": "Roble"
+  },
+  "asteria:tree_willow_01": {
+    "/name": "Sauce"
+  },
+  "asteria:tree_willow_02": {
+    "/name": "Sauce"
+  },
+  "asteria:tree_willow_03": {
+    "/name": "Sauce"
+  },
+  "asteria:world_tree_01": {
+    "/name": "Árbol del Mundo"
+  },
+  "asteria:world_tree_02": {
+    "/name": "Árbol del Mundo"
+  },
+  "asteria:world_tree_03": {
+    "/name": "Árbol del Mundo"
+  },
+  "asteria:world_tree_04": {
+    "/name": "Árbol del Mundo"
+  },
+  "asteria:world_tree_05": {
+    "/name": "Árbol del Mundo"
+  }
+}

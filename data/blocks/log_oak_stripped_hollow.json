@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_oak_stripped_hollow",
-  "name": {
-    "english": "Stripped Hollow Oak Log",
-    "portuguese_brazil": "Tronco de Carvalho Oco Descascado",
-    "spanish": "Tronco de Roble Hueco Descortezado"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {
@@ -23,11 +19,17 @@
     "front": false,
     "back": false
   },
-  "orientations": ["y", "z", "x"],
+  "orientations": [
+    "y",
+    "z",
+    "x"
+  ],
   "lightDampening": 15,
   "castsShadow": true,
   "mining": {
     "hardness": 1,
-    "requiredTools": ["hatchet"]
+    "requiredTools": [
+      "hatchet"
+    ]
   }
 }

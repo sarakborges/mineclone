@@ -1,10 +1,6 @@
 {
   "id": "asteria:boulder_big",
-  "name": {
-    "english": "Big Boulder",
-    "portuguese_brazil": "Pedregulho grande",
-    "spanish": "Roca grande"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "restrictions": {

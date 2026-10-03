@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_spiral_clockwise_01",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Clockwise Spiral Cavern Tunnel",
-    "portuguese_brazil": "Túnel Espiral Horário de Caverna",
-    "spanish": "Túnel Espiral Horario de Caverna"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

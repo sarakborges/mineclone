@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/volcano",
-  "name": {
-    "english": "Volcano",
-    "portuguese_brazil": "Vulcão",
-    "spanish": "Volcán"
-  },
+  "name": null,
   "tags": [
     "mountain"
   ],

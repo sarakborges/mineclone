@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_willow_hollow",
-  "name": {
-    "english": "Hollow Willow Log",
-    "portuguese_brazil": "Tronco de Salgueiro Oco",
-    "spanish": "Tronco de Sauce Hueco"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {

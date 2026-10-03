@@ -1,10 +1,6 @@
 {
   "id": "asteria:stick",
-  "name": {
-    "english": "Stick",
-    "portuguese_brazil": "Graveto",
-    "spanish": "Ramita"
-  },
+  "name": null,
   "category": "crafting_materials",
   "visual": {
     "type": "extrudedSprite",

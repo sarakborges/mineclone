@@ -1,11 +1,7 @@
 {
   "id": "asteria:tree_willow_03",
   "group_id": "tree_willow",
-  "name": {
-    "english": "Willow Tree",
-    "portuguese_brazil": "Salgueiro",
-    "spanish": "Sauce"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_entrance_spiral_clockwise",
   "group_id": "cavern_entrance_start",
-  "name": {
-    "english": "Clockwise Spiral Cavern Entrance",
-    "portuguese_brazil": "Entrada Espiral Horária de Caverna",
-    "spanish": "Entrada Espiral Horaria de Caverna"
-  },
+  "name": null,
   "locatable": true,
   "rotation": true,
   "priority": 5,

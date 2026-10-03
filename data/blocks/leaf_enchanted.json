@@ -1,10 +1,6 @@
 {
   "id": "asteria:leaf_enchanted",
-  "name": {
-    "english": "Enchanted Leaf",
-    "portuguese_brazil": "Folha Encantada",
-    "spanish": "Hoja Encantada"
-  },
+  "name": null,
   "category": "foliage",
   "tint": "none",
   "textures": {

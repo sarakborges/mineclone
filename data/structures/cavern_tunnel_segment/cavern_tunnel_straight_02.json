@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_straight_02",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Wide Cavern Tunnel",
-    "portuguese_brazil": "Túnel Largo de Caverna",
-    "spanish": "Túnel Ancho de Caverna"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

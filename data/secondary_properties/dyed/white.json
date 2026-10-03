@@ -1,5 +1,9 @@
 {
   "id": "white",
-  "name": { "english": "White", "portuguese_brazil": "Branco", "spanish": "Blanco" },
-  "color": { "hue": 171.050500, "saturation": 0.014511, "intensity": 0.990850 }
+  "name": null,
+  "color": {
+    "hue": 171.0505,
+    "saturation": 0.014511,
+    "intensity": 0.99085
+  }
 }

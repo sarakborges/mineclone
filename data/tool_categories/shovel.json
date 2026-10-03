@@ -1,8 +1,4 @@
 {
   "id": "shovel",
-  "name": {
-    "english": "Shovel",
-    "portuguese_brazil": "Pá",
-    "spanish": "Pala"
-  }
+  "name": null
 }

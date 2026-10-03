@@ -1,1 +1,94 @@
-{"id":"asteria:lake_02","group_id":"lake","name":{"english":"Lake 02","portuguese_brazil":"Lago 02","spanish":"Lago 02"},"locatable":false,"rotation":true,"priority":4,"conflictGroups":["surface_water_body"],"restrictions":{"maxSlope":0,"requiresDryGround":true,"requiredBiomeCoverage":0.7},"generation":{"replacePolicy":"terrain","fluidPolicy":"displace","reserveSpace":true},"anchor":{"x":9,"y":0,"z":0},"groundAnchorY":0,"clearAbove":4,"palette":{"S":{"clear":true},"W":{"fluid":"asteria:water"},"O":{"fluid":"asteria:water","connector":{"target":"asteria:river_segment","face":"back","strength":1}}},"layers":[{"y":-1,"rows":["...................","...................","...................","...................","...................","...................","...................","...................","...................","...................",".........S.........","...................","...................","...................","...................","...................","...................","...................","..................."]},{"y":0,"rows":["...................","...................","...................","...................","...................",".....WWWWOWWWW.....","...WWWWWWWWWWWWW...","..WWWWWWWWWWWWWWW..",".WWWWWWWWWWWWWWWWW.","..WWWWWWWWWWWWWWWW.","..WWWWWWWWWWWWWWWW.","..WWWWWWWWWWWWWWW..","...WWWWWWWWWWWWW...","...WWWWWWWWWWWW....","....WWWWWWWWWWW....",".....WWWWWWWWW.....","........WWWW.......","...................","..................."]}]}
+{
+  "id": "asteria:lake_02",
+  "group_id": "lake",
+  "name": null,
+  "locatable": false,
+  "rotation": true,
+  "priority": 4,
+  "conflictGroups": [
+    "surface_water_body"
+  ],
+  "restrictions": {
+    "maxSlope": 0,
+    "requiresDryGround": true,
+    "requiredBiomeCoverage": 0.7
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": true
+  },
+  "anchor": {
+    "x": 9,
+    "y": 0,
+    "z": 0
+  },
+  "groundAnchorY": 0,
+  "clearAbove": 4,
+  "palette": {
+    "S": {
+      "clear": true
+    },
+    "W": {
+      "fluid": "asteria:water"
+    },
+    "O": {
+      "fluid": "asteria:water",
+      "connector": {
+        "target": "asteria:river_segment",
+        "face": "back",
+        "strength": 1
+      }
+    }
+  },
+  "layers": [
+    {
+      "y": -1,
+      "rows": [
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        ".........S.........",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "..................."
+      ]
+    },
+    {
+      "y": 0,
+      "rows": [
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        "...................",
+        ".....WWWWOWWWW.....",
+        "...WWWWWWWWWWWWW...",
+        "..WWWWWWWWWWWWWWW..",
+        ".WWWWWWWWWWWWWWWWW.",
+        "..WWWWWWWWWWWWWWWW.",
+        "..WWWWWWWWWWWWWWWW.",
+        "..WWWWWWWWWWWWWWW..",
+        "...WWWWWWWWWWWWW...",
+        "...WWWWWWWWWWWW....",
+        "....WWWWWWWWWWW....",
+        ".....WWWWWWWWW.....",
+        "........WWWW.......",
+        "...................",
+        "..................."
+      ]
+    }
+  ]
+}

@@ -1,8 +1,4 @@
 {
   "id": "pickaxe",
-  "name": {
-    "english": "Pickaxe",
-    "portuguese_brazil": "Picareta",
-    "spanish": "Pico"
-  }
+  "name": null
 }

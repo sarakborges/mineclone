@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_luma",
-  "name": {
-    "english": "Luma Essence",
-    "portuguese_brazil": "Essência Luma",
-    "spanish": "Esencia Luma"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_luma.png"
 }

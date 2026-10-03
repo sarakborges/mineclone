@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/mountains",
-  "name": {
-    "english": "Mountains",
-    "portuguese_brazil": "Montanhas",
-    "spanish": "Montañas"
-  },
+  "name": null,
   "tags": [
     "mountain"
   ],

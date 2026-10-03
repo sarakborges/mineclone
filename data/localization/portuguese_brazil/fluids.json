@@ -1,0 +1,8 @@
+{
+  "asteria:lava": {
+    "/name": "Lava"
+  },
+  "asteria:water": {
+    "/name": "Água"
+  }
+}

@@ -1,10 +1,6 @@
 {
   "id": "asteria:sand_layer",
-  "name": {
-    "english": "Sand Layer",
-    "portuguese_brazil": "Camada de Areia",
-    "spanish": "Capa de Arena"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "stackable_layer"

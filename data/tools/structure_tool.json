@@ -1,15 +1,7 @@
 {
   "id": "asteria:architects_compass",
-  "name": {
-    "english": "Architect's Compass",
-    "portuguese_brazil": "Bússola do Arquiteto",
-    "spanish": "Brújula del Arquitecto"
-  },
-  "hint": {
-    "english": "Selects regions to export as structures.",
-    "portuguese_brazil": "Seleciona regiões para exportar como estruturas.",
-    "spanish": "Selecciona regiones para exportarlas como estructuras."
-  },
+  "name": null,
+  "hint": null,
   "category": "creative_tools",
   "icon": "textures/tools/architects-compass.png",
   "leftBehavior": "asteria:none",

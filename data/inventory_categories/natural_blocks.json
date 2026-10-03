@@ -1,10 +1,6 @@
 {
   "id": "natural_blocks",
-  "displayName": {
-    "english": "Natural Blocks",
-    "portuguese_brazil": "Blocos Naturais",
-    "spanish": "Bloques Naturales"
-  },
+  "displayName": null,
   "order": 10,
   "icon": "textures/creative_categories/natural_blocks.png"
 }

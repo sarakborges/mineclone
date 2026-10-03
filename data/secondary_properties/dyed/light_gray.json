@@ -1,5 +1,9 @@
 {
   "id": "light_gray",
-  "name": { "english": "Light Gray", "portuguese_brazil": "Cinza-claro", "spanish": "Gris claro" },
-  "color": { "hue": 60.000000, "saturation": 0.025806, "intensity": 0.607843 }
+  "name": null,
+  "color": {
+    "hue": 60.0,
+    "saturation": 0.025806,
+    "intensity": 0.607843
+  }
 }

@@ -1,0 +1,107 @@
+{
+  "asteria:bassalt": {
+    "/name": "Bassalt"
+  },
+  "asteria:bricks": {
+    "/name": "Bricks"
+  },
+  "asteria:clay": {
+    "/name": "Clay"
+  },
+  "asteria:dirt": {
+    "/name": "Dirt"
+  },
+  "asteria:glass": {
+    "/name": "Glass"
+  },
+  "asteria:grass_block": {
+    "/name": "Grass Block"
+  },
+  "asteria:gravel": {
+    "/name": "Gravel"
+  },
+  "asteria:lamp": {
+    "/name": "Lamp"
+  },
+  "asteria:leaf_enchanted": {
+    "/name": "Enchanted Leaf"
+  },
+  "asteria:leaf_oak": {
+    "/name": "Oak Leaf"
+  },
+  "asteria:leaf_willow": {
+    "/name": "Willow Leaf"
+  },
+  "asteria:leaf_world_tree": {
+    "/name": "World Tree Leaf"
+  },
+  "asteria:log_enchanted": {
+    "/name": "Enchanted Log"
+  },
+  "asteria:log_enchanted_hollow": {
+    "/name": "Hollow Enchanted Log"
+  },
+  "asteria:log_enchanted_stripped": {
+    "/name": "Stripped Enchanted Log"
+  },
+  "asteria:log_enchanted_stripped_hollow": {
+    "/name": "Stripped Hollow Enchanted Log"
+  },
+  "asteria:log_oak": {
+    "/name": "Oak Log"
+  },
+  "asteria:log_oak_hollow": {
+    "/name": "Hollow Oak Log"
+  },
+  "asteria:log_oak_stripped": {
+    "/name": "Stripped Oak Log"
+  },
+  "asteria:log_oak_stripped_hollow": {
+    "/name": "Stripped Hollow Oak Log"
+  },
+  "asteria:log_willow": {
+    "/name": "Willow Log"
+  },
+  "asteria:log_willow_hollow": {
+    "/name": "Hollow Willow Log"
+  },
+  "asteria:log_willow_stripped": {
+    "/name": "Stripped Willow Log"
+  },
+  "asteria:log_willow_stripped_hollow": {
+    "/name": "Stripped Hollow Willow Log"
+  },
+  "asteria:log_world_tree": {
+    "/name": "World Tree Log"
+  },
+  "asteria:log_world_tree_hollow": {
+    "/name": "Hollow World Tree Log"
+  },
+  "asteria:log_world_tree_stripped": {
+    "/name": "Stripped World Tree Log"
+  },
+  "asteria:log_world_tree_stripped_hollow": {
+    "/name": "Stripped Hollow World Tree Log"
+  },
+  "asteria:mud": {
+    "/name": "Mud"
+  },
+  "asteria:sand": {
+    "/name": "Sand"
+  },
+  "asteria:sand_layer": {
+    "/name": "Sand Layer"
+  },
+  "asteria:snow": {
+    "/name": "Snow"
+  },
+  "asteria:snow_layer": {
+    "/name": "Snow Layer"
+  },
+  "asteria:stone": {
+    "/name": "Stone"
+  },
+  "asteria:storage_box": {
+    "/name": "Storage Box"
+  }
+}

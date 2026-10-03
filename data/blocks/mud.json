@@ -1,10 +1,6 @@
 {
   "id": "asteria:mud",
-  "name": {
-    "english": "Mud",
-    "portuguese_brazil": "Lama",
-    "spanish": "Barro"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable"

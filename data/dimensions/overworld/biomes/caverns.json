@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/caverns",
-  "name": {
-    "english": "Caverns",
-    "portuguese_brazil": "Cavernas",
-    "spanish": "Cavernas"
-  },
+  "name": null,
   "kind": "volume",
   "verticalRange": {
     "min": 8,

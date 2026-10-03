@@ -1,0 +1,50 @@
+{
+  "asteria:overworld": {
+    "/name": "Mundo de la Superficie"
+  },
+  "asteria:overworld/alps": {
+    "/name": "Alpes"
+  },
+  "asteria:overworld/caverns": {
+    "/name": "Cavernas"
+  },
+  "asteria:overworld/enchanted_forest": {
+    "/name": "Bosque Encantado"
+  },
+  "asteria:overworld/floating_islands": {
+    "/name": "Islas Flotantes"
+  },
+  "asteria:overworld/gorge": {
+    "/name": "Desfiladero"
+  },
+  "asteria:overworld/mountain_belt": {
+    "/name": "Cinturón Montañoso"
+  },
+  "asteria:overworld/mountains": {
+    "/name": "Montañas"
+  },
+  "asteria:overworld/ocean": {
+    "/name": "Océano"
+  },
+  "asteria:overworld/plains": {
+    "/name": "Llanuras"
+  },
+  "asteria:overworld/volcano": {
+    "/name": "Volcán"
+  },
+  "asteria:overworld/wasteland": {
+    "/name": "Tierras Baldías"
+  },
+  "asteria:umbral": {
+    "/name": "The Umbral"
+  },
+  "asteria:umbral/umbral_reach": {
+    "/name": "Alcance Umbral"
+  },
+  "asteria:umbral/withered_waste": {
+    "/name": "Yermo Marchito"
+  },
+  "asteria:umbral/wraith_grove": {
+    "/name": "Arboleda Espectral"
+  }
+}

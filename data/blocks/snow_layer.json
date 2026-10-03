@@ -1,10 +1,6 @@
 {
   "id": "asteria:snow_layer",
-  "name": {
-    "english": "Snow Layer",
-    "portuguese_brazil": "Camada de Neve",
-    "spanish": "Capa de Nieve"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "stackable_layer"

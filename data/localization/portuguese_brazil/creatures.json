@@ -1,0 +1,62 @@
+{
+  "asteria:slime": {
+    "/name": "Gosma"
+  },
+  "asteria:slime_aqua": {
+    "/name": "Slime Aqua"
+  },
+  "asteria:slime_aqua_large": {
+    "/name": "Slime Aqua Grande"
+  },
+  "asteria:slime_kyra": {
+    "/name": "Slime Kyra"
+  },
+  "asteria:slime_kyra_large": {
+    "/name": "Slime Kyra Grande"
+  },
+  "asteria:slime_legacy": {
+    "/name": "Slime Legado"
+  },
+  "asteria:slime_luma": {
+    "/name": "Slime Luma"
+  },
+  "asteria:slime_luma_large": {
+    "/name": "Slime Luma Grande"
+  },
+  "asteria:slime_nyxa": {
+    "/name": "Slime Nyxa"
+  },
+  "asteria:slime_nyxa_large": {
+    "/name": "Slime Nyxa Grande"
+  },
+  "asteria:slime_pyra": {
+    "/name": "Slime Pyra"
+  },
+  "asteria:slime_pyra_large": {
+    "/name": "Slime Pyra Grande"
+  },
+  "asteria:slime_terra": {
+    "/name": "Slime Terra"
+  },
+  "asteria:slime_terra_large": {
+    "/name": "Slime Terra Grande"
+  },
+  "asteria:slime_vaela": {
+    "/name": "Slime Vaela"
+  },
+  "asteria:slime_vaela_large": {
+    "/name": "Slime Vaela Grande"
+  },
+  "asteria:slime_verdra": {
+    "/name": "Slime Verdra"
+  },
+  "asteria:slime_verdra_large": {
+    "/name": "Slime Verdra Grande"
+  },
+  "asteria:slime_voltra": {
+    "/name": "Slime Voltra"
+  },
+  "asteria:slime_voltra_large": {
+    "/name": "Slime Voltra Grande"
+  }
+}

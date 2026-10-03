@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_entrance_curved",
   "group_id": "cavern_entrance_start",
-  "name": {
-    "english": "Curved Cavern Entrance",
-    "portuguese_brazil": "Entrada Curva de Caverna",
-    "spanish": "Entrada Curva de Caverna"
-  },
+  "name": null,
   "locatable": true,
   "rotation": true,
   "priority": 5,

@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_entrance_straight_01",
   "group_id": "cavern_entrance_start",
-  "name": {
-    "english": "Cavern Entrance",
-    "portuguese_brazil": "Entrada de Caverna",
-    "spanish": "Entrada de Caverna"
-  },
+  "name": null,
   "locatable": true,
   "rotation": true,
   "priority": 5,
