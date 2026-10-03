@@ -15,13 +15,24 @@ Use `docs/README.md` as the documentation map. `HANDOFF.md` is the only active h
 
 ## Active branch and Git discipline
 
-> **THE ACTIVE IMPLEMENTATION BRANCH IS `main`. DO NOT WORK ON `develop` UNLESS THE USER EXPLICITLY REQUESTS IT.**
+> **THE ACTIVE IMPLEMENTATION BRANCH IS THE REPOSITORY'S CURRENT DEFAULT BRANCH (`main` AT THE TIME OF WRITING). DO NOT WORK ON `develop` UNLESS THE USER EXPLICITLY REQUESTS IT.**
 
-Branch identity is part of correctness. Never rely on an ambient checkout, repository default resolution, cached state, or an omitted `ref`/`branch` argument.
+Branch identity is part of correctness. Never rely on an ambient checkout, cached state, repository history from a previous task, conversation context, memory, a stale handoff, or an omitted `ref`/`branch` argument.
+
+### Mandatory repository bootstrap
+
+Before any repository discovery, content/code search, file read, or write:
+
+- If the user explicitly names a branch for the current task, that branch is authoritative.
+- Otherwise, query repository metadata first and resolve the repository's current `default_branch`.
+- Fetch the root `AGENTS.md` from that resolved branch before continuing repository work.
+- Never infer the branch from previous conversations, previous tasks, recent commits, cached tool state, remembered project context, or an old instruction that named a branch.
+- Never reuse a branch from an earlier task unless the current user instruction explicitly carries that branch forward.
+- If remembered context conflicts with live repository metadata or root `AGENTS.md`, live repository state wins.
 
 For every task that reads or writes repository state:
 
-- Resolve the target branch before discovery or edits. When the user does not specify another branch, use `main`.
+- Resolve the target branch before discovery or edits. When the user does not specify another branch, use the live repository `default_branch` resolved during bootstrap.
 - Pass the target branch explicitly to every GitHub/file operation that accepts `ref` or `branch`.
 - Before editing, read the remote target-branch HEAD and treat that SHA as the task base.
 - Before publishing, verify the target branch has not moved unexpectedly. If it moved, reconcile with the new HEAD instead of overwriting concurrent work.
