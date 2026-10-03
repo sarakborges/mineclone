@@ -55,9 +55,7 @@ impl SaveRegistries<'_> {
                 .get(biome_id)
                 .is_some_and(|biome| biome.kind == BiomeKind::Surface)
                 && dimension.is_some_and(|dimension| {
-                    dimension.biomes.iter().any(|entry| {
-                        entry.id == biome_id && entry.require_near.is_empty()
-                    })
+                    dimension.biomes.iter().any(|entry| entry.id == biome_id)
                 })
         });
         let current_biome_valid = snapshot
@@ -116,7 +114,6 @@ impl SaveRegistries<'_> {
                 let valid = dimension
                     .biomes
                     .iter()
-                    .filter(|entry| entry.require_near.is_empty())
                     .filter_map(|entry| {
                         self.biomes
                             .get(&entry.id)
