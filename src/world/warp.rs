@@ -348,7 +348,7 @@ pub(super) fn resolve_pending_warp(
     let search_elapsed = search_started.elapsed();
     if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
         log_gameplay_warn(format!(
-            "warp.search slow target={target:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
+            "warp.search slow target={:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
             target,
             pending.search.radius,
             pending.search.frontier.len(),
