@@ -1,0 +1,28 @@
+{
+  "id": "asteria:swamp_fireflies",
+  "source": {
+    "type": "biome",
+    "id": "asteria:overworld/swamp"
+  },
+  "color": {
+    "hue": 72,
+    "saturation": 0.9,
+    "intensity": 0.78
+  },
+  "opacity": 0.95,
+  "size": {
+    "min": 0.045,
+    "max": 0.085
+  },
+  "lifetime": {
+    "min": 6.0,
+    "max": 11.0
+  },
+  "spawnRate": 4.0,
+  "velocity": [0.0, 0.025, 0.0],
+  "velocityJitter": [0.06, 0.035, 0.06],
+  "acceleration": [0.0, 0.0, 0.0],
+  "wanderStrength": 0.38,
+  "spawnRadius": 18.0,
+  "verticalRange": 4.5
+}
