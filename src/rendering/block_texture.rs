@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::{
-    content::block::{BlockDefinition, BlockRegistry, BlockTextureLayer, BlockTint},
+    content::block::{BlockDefinition, BlockRegistry, BlockTextureLayer},
     voxel::block_face::BlockFace,
 };
 
@@ -46,7 +46,6 @@ impl TerrainTextureTable {
         let mut unique = BTreeSet::<String>::new();
         let mut wind_sway_paths = BTreeSet::<String>::new();
         for block in blocks.iter() {
-            let wind_sway = matches!(block.tint, BlockTint::Leaf | BlockTint::Foliage);
             for face in BlockFace::ALL {
                 let layers = block_face_texture_layers(face, block);
                 if layers.len() > 2 {
@@ -54,7 +53,7 @@ impl TerrainTextureTable {
                 }
                 for layer in layers {
                     unique.insert(layer.texture.clone());
-                    if wind_sway {
+                    if block.wind_sway {
                         wind_sway_paths.insert(layer.texture.clone());
                     }
                 }
