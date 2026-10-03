@@ -138,7 +138,11 @@ impl BootstrapGenerationSettings {
                 let forced_spawn_biome = new_world_config
                     .spawn_biome()
                     .map(str::to_owned)
-                    .or_else(|| Some(random_spawn_biome_id(dimension, biomes, seed).to_owned()));
+                    .or_else(|| {
+                        world_generation
+                            .single_biome()
+                            .then(|| random_spawn_biome_id(dimension, biomes, seed).to_owned())
+                    });
 
                 Self {
                     forced_spawn_biome,
@@ -443,8 +447,6 @@ pub(in crate::world) fn begin_world_loading(
         biome_field: &biome_field,
     }
     .resolve(saved_player_position);
-    // Saves persist only modified chunks. Untouched terrain is intentionally absent and
-    // must be regenerated from the pinned worldgen identity around the restored player.
     let coords = bootstrap_chunk_coords(
         initial_center,
         &config.render_distance,
@@ -605,8 +607,6 @@ fn random_spawn_biome_id<'a>(
         }
     }
 
-    // Floating-point accumulation can only leave a tiny tail at the upper
-    // boundary; return the last weighted candidate deterministically.
     dimension
         .biomes
         .iter()
@@ -647,34 +647,38 @@ fn find_initial_spawn_column(
     biome_field: &BiomeField,
     restrict_to_spawn_target: bool,
 ) -> IVec2 {
-    find_map_square_rings(
-        DEFAULT_SPAWN_COLUMN,
-        SPAWN_SEARCH_RADIUS_STEPS,
-        SPAWN_SEARCH_STEP_BLOCKS,
-        |candidate| {
-            let position = candidate.as_vec2() + Vec2::splat(0.5);
-            if restrict_to_spawn_target && !biome_field.spawn_target_contains(position) {
-                return None;
-            }
+    let find_column = |restrict_to_spawn_target: bool| {
+        find_map_square_rings(
+            DEFAULT_SPAWN_COLUMN,
+            SPAWN_SEARCH_RADIUS_STEPS,
+            SPAWN_SEARCH_STEP_BLOCKS,
+            |candidate| {
+                let position = candidate.as_vec2() + Vec2::splat(0.5);
+                if restrict_to_spawn_target && !biome_field.spawn_target_contains(position) {
+                    return None;
+                }
 
-            (!spawn_column_has_surface_fluid(
-                candidate,
-                dimension,
-                biomes,
-                biome_field,
-            ))
-                .then_some(candidate)
-        },
-    )
-    .unwrap_or_else(|| {
-        if restrict_to_spawn_target {
-            panic!("could not find a fluid-free spawn column in the selected spawn biome")
-        }
-        panic!(
-            "could not find a fluid-free spawn column within {} blocks",
-            SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
+                (!spawn_column_has_surface_fluid(
+                    candidate,
+                    dimension,
+                    biomes,
+                    biome_field,
+                ))
+                    .then_some(candidate)
+            },
         )
-    })
+    };
+
+    if let Some(column) = find_column(restrict_to_spawn_target) {
+        return column;
+    }
+    if restrict_to_spawn_target
+        && let Some(column) = find_column(false)
+    {
+        return column;
+    }
+
+    DEFAULT_SPAWN_COLUMN
 }
 
 fn spawn_column_has_surface_fluid(
@@ -744,5 +748,4 @@ mod tests {
         assert_eq!(tops.get(&IVec2::new(2, -3)), Some(&4));
         assert_eq!(tops.get(&IVec2::new(1, 7)), Some(&2));
     }
-
 }
