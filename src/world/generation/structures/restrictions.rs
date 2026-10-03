@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
+        biome_terrain::BiomeTerrain,
         structure::{StructureDefinition, StructureRotation},
         structure_rules::{
             StructureFluidPolicy, StructureProximityMode, StructureProximityRestriction,
@@ -9,7 +10,9 @@ use crate::{
         },
     },
     world::{
-        biome_field::BiomeFieldSample, new_world::WorldGenerationMode,
+        biome_field::BiomeFieldSample,
+        material_field::resolve_material_layer_block,
+        new_world::WorldGenerationMode,
         terrain::surface_height_from_sample,
     },
 };
@@ -127,7 +130,14 @@ fn surface_block_matches(
             .biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing flat-world biome definition: {biome_id}"));
-        return biome.surface_block_at_depth(0).is_some_and(matches);
+        return biome.surface_layer_at_depth(0).is_some_and(|layer| {
+            matches(resolve_material_layer_block(
+                biome_id,
+                layer,
+                position.as_vec2() + Vec2::splat(0.5),
+                context.biome_field.seed(),
+            ))
+        });
     }
 
     let probe = normal_surface_probe(position, context);
@@ -159,9 +169,17 @@ fn surface_block_matches(
                 .biomes
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
-            biome
-                .surface_block_at_depth(0)
-                .map(|block| (block, influence.weight))
+            biome.surface_layer_at_depth(0).map(|layer| {
+                (
+                    resolve_material_layer_block(
+                        biome_id,
+                        layer,
+                        position.as_vec2() + Vec2::splat(0.5),
+                        context.biome_field.seed(),
+                    ),
+                    influence.weight,
+                )
+            })
         })
         .max_by(|(_, left), (_, right)| left.total_cmp(right))
         .is_some_and(|(block, _)| matches(block))
@@ -262,7 +280,7 @@ pub(super) fn surface_has_fluid(position: IVec2, context: &ChunkGenerationContex
     }
 
     let probe = normal_surface_probe(position, context);
-    ocean_surface_water_at(&probe, context)
+    static_sea_surface_water_at(&probe, context)
 }
 
 fn surface_fluid_matches(
@@ -278,27 +296,29 @@ fn surface_fluid_matches(
     }
 
     let probe = normal_surface_probe(position, context);
-    ocean_surface_water_at(&probe, context) && context.dimension.sea_fluid == target_fluid
+    static_sea_surface_water_at(&probe, context) && context.dimension.sea_fluid == target_fluid
 }
 
-fn ocean_surface_water_at(
+fn static_sea_surface_water_at(
     probe: &NormalSurfaceProbe<'_>,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
-    if !context.world_generation.spawn_oceans()
-        || probe.surface_height >= context.dimension.sea_level
-    {
+    if probe.surface_height >= context.dimension.sea_level {
         return false;
     }
 
-    let Some(ocean_index) = context.biome_field.ocean_surface_index() else {
-        return false;
-    };
-    probe
-        .surface
-        .influences
-        .iter()
-        .any(|influence| influence.surface_index == ocean_index && influence.weight > f32::EPSILON)
+    if context.biome_field.ocean_surface_index() == Some(probe.surface.identity_surface_index) {
+        return true;
+    }
+
+    let biome_id = context
+        .biome_field
+        .surface_biome_id(probe.surface.identity_surface_index);
+    let biome = context
+        .biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
+    matches!(biome.terrain, Some(BiomeTerrain::Swamp { .. }))
 }
 
 fn intersects_surface_fluid(
@@ -318,7 +338,7 @@ fn intersects_surface_fluid(
         let structure_min = origin_y + span.min_y_offset;
         let structure_max = origin_y + span.max_y_offset;
 
-        if ocean_surface_water_at(&probe, context) {
+        if static_sea_surface_water_at(&probe, context) {
             return structure_max as f32 + 1.0 > probe.surface_height as f32
                 && (structure_min as f32) < context.dimension.sea_level as f32;
         }
