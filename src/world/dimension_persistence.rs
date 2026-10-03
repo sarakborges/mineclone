@@ -96,26 +96,30 @@ pub(crate) struct InactiveDimensionStates {
 }
 
 impl InactiveDimensionStates {
-    pub(crate) fn insert(&mut self, dimension_id: DimensionId, state: InactiveDimensionState) {
-        let previous = self.states.insert(dimension_id, state);
+    pub(crate) fn insert(
+        &mut self,
+        dimension_id: impl Into<DimensionId>,
+        state: InactiveDimensionState,
+    ) {
+        let previous = self.states.insert(dimension_id.into(), state);
         assert!(
             previous.is_none(),
             "inactive dimension state must not be replaced without activation"
         );
     }
 
-    pub(crate) fn get(&self, dimension_id: &DimensionId) -> Option<&InactiveDimensionState> {
-        self.states.get(dimension_id)
+    pub(crate) fn get(&self, dimension_id: &str) -> Option<&InactiveDimensionState> {
+        self.states.get(&DimensionId::from(dimension_id))
     }
 
-    pub(crate) fn take(&mut self, dimension_id: &DimensionId) -> Option<InactiveDimensionState> {
-        self.states.remove(dimension_id)
+    pub(crate) fn take(&mut self, dimension_id: &str) -> Option<InactiveDimensionState> {
+        self.states.remove(&DimensionId::from(dimension_id))
     }
 
-    pub(crate) fn iter(
-        &self,
-    ) -> impl Iterator<Item = (&DimensionId, &InactiveDimensionState)> {
-        self.states.iter()
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&str, &InactiveDimensionState)> {
+        self.states
+            .iter()
+            .map(|(dimension_id, state)| (dimension_id.as_str(), state))
     }
 }
 
@@ -147,10 +151,7 @@ impl DimensionRuntimeContext<'_, '_> {
         &self.world
     }
 
-    pub(crate) fn inactive_spawn_biome(
-        &self,
-        dimension_id: &DimensionId,
-    ) -> Option<Option<&str>> {
+    pub(crate) fn inactive_spawn_biome(&self, dimension_id: &str) -> Option<Option<&str>> {
         self.inactive_dimensions
             .get(dimension_id)
             .map(InactiveDimensionState::spawn_biome)
@@ -160,7 +161,7 @@ impl DimensionRuntimeContext<'_, '_> {
         &mut self,
         current_dimension: &DimensionId,
         current_spawn_biome: Option<String>,
-        target_dimension: DimensionId,
+        target_dimension: &str,
         new_target_spawn_biome: Option<String>,
     ) -> io::Result<Option<String>> {
         let current_fluid_updates = self
@@ -176,13 +177,13 @@ impl DimensionRuntimeContext<'_, '_> {
 
         let target_pending_fluids = self
             .inactive_dimensions
-            .get(&target_dimension)
+            .get(target_dimension)
             .map(|state| PendingFluidUpdates::from_saved(state.fluid_updates(), &self.fluids))
             .transpose()?
             .unwrap_or_default();
         let target_state = self
             .inactive_dimensions
-            .take(&target_dimension)
+            .take(target_dimension)
             .unwrap_or_else(|| InactiveDimensionState::empty(new_target_spawn_biome));
 
         self.storage_boxes.close();
