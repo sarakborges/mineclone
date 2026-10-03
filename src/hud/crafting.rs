@@ -29,22 +29,23 @@ use crate::{
     },
 };
 
+use super::inventory::{
+    INVENTORY_HEADER_GAP, INVENTORY_PANEL_BORDER_WIDTH, INVENTORY_PANEL_PADDING,
+    INVENTORY_SECTION_GAP, INVENTORY_SLOT_GAP,
+};
+
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
 pub(super) const CRAFTING_PANEL_WIDTH: f32 = 482.0;
-const CRAFTING_RECIPE_LIST_WIDTH: f32 = 196.0;
-const CRAFTING_PANEL_GAP: f32 = 14.0;
-const CRAFTING_INSET_GAP: f32 = 8.0;
-const CRAFTING_PANEL_PADDING: f32 = 18.0;
-const CRAFTING_PANEL_BORDER: f32 = 2.0;
+const CRAFTING_RECIPE_LIST_WIDTH: f32 = 184.0;
 const CRAFTING_RECIPE_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_INGREDIENT_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
 const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
 const CRAFTING_ICON_SIZE: f32 = 32.0;
 const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
-pub(super) const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
-const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 160.0;
-const CURRENT_STATION_ICON_SIZE: f32 = 112.0;
+pub(super) const CURRENT_STATION_PANEL_WIDTH: f32 = 268.0;
+const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 196.0;
+const CURRENT_STATION_ICON_SIZE: f32 = 136.0;
 const CURRENT_STATION_ICON: &str = "textures/creative_categories/crafting_materials.png";
 const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
 const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
@@ -290,11 +291,11 @@ fn spawn_crafting_panel(
         CraftingRoot,
         surface::hud_container(Node {
             width: px(CRAFTING_PANEL_WIDTH),
-            padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-            border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+            padding: UiRect::all(px(INVENTORY_PANEL_PADDING)),
+            border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
-            column_gap: px(CRAFTING_PANEL_GAP),
+            column_gap: px(INVENTORY_SECTION_GAP),
             ..default()
         }),
         Pickable::IGNORE,
@@ -307,7 +308,7 @@ fn spawn_crafting_panel(
                     min_width: px(CRAFTING_RECIPE_LIST_WIDTH),
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
-                    row_gap: px(CRAFTING_PANEL_GAP),
+                    row_gap: px(INVENTORY_SECTION_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
@@ -327,7 +328,7 @@ fn spawn_crafting_panel(
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
-                    row_gap: px(CRAFTING_PANEL_GAP),
+                    row_gap: px(INVENTORY_SECTION_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
@@ -346,11 +347,11 @@ fn spawn_current_station_panel(
         .spawn((
             surface::hud_container(Node {
                 width: px(CURRENT_STATION_PANEL_WIDTH),
-                padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                padding: UiRect::all(px(INVENTORY_PANEL_PADDING)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
-                row_gap: px(CRAFTING_PANEL_GAP),
+                row_gap: px(INVENTORY_SECTION_GAP),
                 ..default()
             }),
             Pickable::IGNORE,
@@ -376,7 +377,7 @@ fn spawn_current_station_panel(
                                 height: px(CURRENT_STATION_ICON_FRAME_SIZE),
                                 min_width: px(CURRENT_STATION_ICON_FRAME_SIZE),
                                 min_height: px(CURRENT_STATION_ICON_FRAME_SIZE),
-                                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                                 align_items: AlignItems::Center,
                                 justify_content: JustifyContent::Center,
                                 ..default()
@@ -404,7 +405,7 @@ fn spawn_current_station_panel(
                         width: percent(100),
                         flex_direction: FlexDirection::Column,
                         align_items: AlignItems::FlexStart,
-                        row_gap: px(4),
+                        row_gap: px(INVENTORY_SLOT_GAP),
                         ..default()
                     },
                     Pickable::IGNORE,
@@ -438,11 +439,11 @@ fn spawn_recipe_list(
         .spawn((
             Node {
                 width: percent(100),
-                padding: UiRect::all(px(CRAFTING_INSET_GAP)),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                padding: UiRect::all(px(INVENTORY_HEADER_GAP)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
-                row_gap: px(CRAFTING_INSET_GAP),
+                row_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             BackgroundColor(theme::SURFACE_INSET),
@@ -475,12 +476,12 @@ fn spawn_recipe_button(
     recipe_button.insert(Node {
         width: percent(100),
         height: px(CRAFTING_RECIPE_ROW_HEIGHT),
-        padding: UiRect::horizontal(px(10)),
-        border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+        padding: UiRect::horizontal(px(INVENTORY_HEADER_GAP)),
+        border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
         flex_direction: FlexDirection::Row,
         align_items: AlignItems::Center,
         justify_content: JustifyContent::FlexStart,
-        column_gap: px(10),
+        column_gap: px(INVENTORY_HEADER_GAP),
         ..default()
     });
     recipe_button.with_children(|button_node| {
@@ -505,17 +506,18 @@ fn spawn_recipe_button(
         button_node
             .spawn((
                 Node {
+                    min_width: px(0),
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::FlexStart,
-                    row_gap: px(2),
+                    row_gap: px(INVENTORY_SLOT_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
             .with_children(|copy| {
                 copy.spawn((
-                    typography::hud(content.item_name(&recipe.result.item)),
+                    typography::inventory_category(content.item_name(&recipe.result.item)),
                     Pickable::IGNORE,
                 ));
                 copy.spawn((
@@ -555,7 +557,7 @@ fn spawn_recipe_details(
                 width: percent(100),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
-                row_gap: px(CRAFTING_INSET_GAP),
+                row_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             Pickable::IGNORE,
@@ -597,11 +599,11 @@ fn spawn_result_card(
             Node {
                 width: percent(100),
                 min_height: px(96),
-                padding: UiRect::all(px(12)),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                padding: UiRect::all(px(INVENTORY_HEADER_GAP)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
-                column_gap: px(14),
+                column_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             BackgroundColor(theme::SURFACE_INSET),
@@ -618,10 +620,11 @@ fn spawn_result_card(
             );
             card.spawn((
                 Node {
+                    min_width: px(0),
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::FlexStart,
-                    row_gap: px(4),
+                    row_gap: px(INVENTORY_SLOT_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
@@ -659,11 +662,11 @@ fn spawn_ingredient_row(
             Node {
                 width: percent(100),
                 min_height: px(CRAFTING_INGREDIENT_ROW_HEIGHT),
-                padding: UiRect::axes(px(10), px(8)),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                padding: UiRect::all(px(INVENTORY_HEADER_GAP)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
-                column_gap: px(10),
+                column_gap: px(INVENTORY_HEADER_GAP),
                 ..default()
             },
             BackgroundColor(theme::SURFACE_INSET),
@@ -684,10 +687,11 @@ fn spawn_ingredient_row(
             );
             row.spawn((
                 Node {
+                    min_width: px(0),
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::FlexStart,
-                    row_gap: px(2),
+                    row_gap: px(INVENTORY_SLOT_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
@@ -730,7 +734,7 @@ fn spawn_item_icon_frame(
                 height: px(frame_size),
                 min_width: px(frame_size),
                 min_height: px(frame_size),
-                border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
+                border: UiRect::all(px(INVENTORY_PANEL_BORDER_WIDTH)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
