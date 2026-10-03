@@ -163,10 +163,9 @@ impl ReadyChunkQueue {
     }
 
     fn index_insert(&mut self, coord: ChunkCoord) {
-        self.columns
-            .entry(coord.as_ivec3().xz())
-            .or_default()
-            .insert(coord);
+        let position = coord.as_ivec3();
+        let horizontal = IVec2::new(position.x, position.z);
+        self.columns.entry(horizontal).or_default().insert(coord);
     }
 
     fn remove_chunk_coord(&mut self, coord: ChunkCoord) -> bool {
@@ -174,15 +173,15 @@ impl ReadyChunkQueue {
             return false;
         }
 
-        let horizontal = coord.as_ivec3().xz();
-        let remove_column = if let Some(column) = self.columns.get_mut(&horizontal) {
-            let indexed = column.remove(&coord);
-            debug_assert!(indexed, "ready column index must contain queued chunk");
-            column.is_empty()
-        } else {
-            debug_assert!(false, "ready column index must contain queued column");
-            false
-        };
+        let position = coord.as_ivec3();
+        let horizontal = IVec2::new(position.x, position.z);
+        let column = self
+            .columns
+            .get_mut(&horizontal)
+            .expect("ready column index must contain queued column");
+        let indexed = column.remove(&coord);
+        debug_assert!(indexed, "ready column index must contain queued chunk");
+        let remove_column = column.is_empty();
         if remove_column {
             self.columns.remove(&horizontal);
         }
