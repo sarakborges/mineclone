@@ -20,7 +20,7 @@ pub(crate) fn apply_player_skin_material(
     material.perceptual_roughness = 1.0;
 }
 
-fn player_skin_texture_path() -> &'static str {
+pub(super) fn player_skin_texture_path() -> &'static str {
     select_player_skin_texture_path(|path| Path::new("assets").join(path).is_file())
         .unwrap_or_else(|| {
             panic!(
