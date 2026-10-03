@@ -50,6 +50,7 @@ pub(crate) struct PendingLightingUpdates {
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
     initial_relaxation_frontiers: HashMap<IVec3, Vec<IVec3>>,
     seeded_chunks: HashSet<IVec3>,
+    pending_loaded_columns_below: HashMap<IVec2, i32>,
     context: LightingContext,
     interactive_changed_chunks: HashSet<IVec3>,
     interactive_changed_positions: HashSet<IVec3>,
@@ -163,16 +164,12 @@ impl PendingLightingUpdates {
         self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
-    pub(crate) fn enqueue_loaded_column_below(&mut self, world: &VoxelWorld, coord: IVec3) {
-        let top_y = CHUNK_SIZE as i32 - 1;
-        for lower in world.loaded_chunk_coords_below(coord) {
-            let origin = chunk_origin(lower);
-            for z in 0..CHUNK_SIZE as i32 {
-                for x in 0..CHUNK_SIZE as i32 {
-                    self.queue.enqueue(origin + IVec3::new(x, top_y, z));
-                }
-            }
-        }
+    pub(crate) fn enqueue_loaded_column_below(&mut self, _world: &VoxelWorld, coord: IVec3) {
+        let horizontal = coord.xz();
+        self.pending_loaded_columns_below
+            .entry(horizontal)
+            .and_modify(|highest_y| *highest_y = (*highest_y).max(coord.y))
+            .or_insert(coord.y);
     }
 
     pub(crate) fn enqueue_empty_chunk_relaxation(&mut self, coord: IVec3) {
@@ -219,7 +216,9 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn has_propagation_work(&self) -> bool {
-        !self.queue.is_empty() || !self.emission_edit_previous_cells.is_empty()
+        !self.queue.is_empty()
+            || !self.emission_edit_previous_cells.is_empty()
+            || !self.pending_loaded_columns_below.is_empty()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -230,6 +229,30 @@ impl PendingLightingUpdates {
             && self.settling_changed_positions.is_empty()
             && self.settling_fluid_remesh_priority.is_empty()
             && self.settling_fluid_remesh_background.is_empty()
+    }
+
+    fn flush_loaded_columns_below(&mut self, world: &VoxelWorld) {
+        if self.pending_loaded_columns_below.is_empty() {
+            return;
+        }
+
+        let requests = self
+            .pending_loaded_columns_below
+            .drain()
+            .collect::<Vec<_>>();
+        let top_y = CHUNK_SIZE as i32 - 1;
+
+        for (horizontal, upper_y) in requests {
+            let upper = IVec3::new(horizontal.x, upper_y, horizontal.y);
+            for lower in world.loaded_chunk_coords_below(upper) {
+                let origin = chunk_origin(lower);
+                for z in 0..CHUNK_SIZE as i32 {
+                    for x in 0..CHUNK_SIZE as i32 {
+                        self.queue.enqueue(origin + IVec3::new(x, top_y, z));
+                    }
+                }
+            }
+        }
     }
 
     fn enqueue_emission_edit_volumes(
@@ -451,6 +474,7 @@ pub(crate) fn process_pending_lighting(
     is_chunk_active: &impl Fn(IVec3) -> bool,
     budget_exhausted: impl FnMut(usize) -> bool,
 ) {
+    pending.flush_loaded_columns_below(world);
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
     let PendingLightingUpdates {
         queue,
