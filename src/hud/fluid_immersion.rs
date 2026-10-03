@@ -69,22 +69,35 @@ fn update_fluid_immersion_tint(
         return;
     }
 
+    let definition = fluids
+        .get(cell.fluid_id)
+        .unwrap_or_else(|| panic!("missing fluid definition for id {}", cell.fluid_id));
+
     let entering_fluid = *visibility != Visibility::Visible;
     let fluid_changed = *active_fluid != Some(cell.fluid_id);
+
+    let resolved_tint = if let Some(tint) = definition.immersion_tint {
+        Some((tint.color, tint.opacity))
+    } else if definition.id == "asteria:water" {
+        Some((
+            biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color),
+            biome_visuals
+                .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
+                .clamp(0.0, 1.0),
+        ))
+    } else {
+        None
+    };
+
+    let Some((color, opacity)) = resolved_tint else {
+        *active_fluid = Some(cell.fluid_id);
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    };
+
     if entering_fluid || fluid_changed || biome_visuals.inputs_changed() || fluids.is_changed() {
-        let definition = fluids
-            .get(cell.fluid_id)
-            .unwrap_or_else(|| panic!("missing fluid definition for id {}", cell.fluid_id));
-        let (color, opacity) = if let Some(tint) = definition.immersion_tint {
-            (tint.color, tint.opacity)
-        } else {
-            (
-                biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color),
-                biome_visuals
-                    .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
-                    .clamp(0.0, 1.0),
-            )
-        };
         let [red, green, blue] = color.to_srgb();
         background.0 = Color::srgba(red, green, blue, opacity);
     }
