@@ -1,3 +1,4 @@
+mod ambient_particles;
 mod asset_upload;
 pub(crate) mod biome_visuals;
 pub(crate) mod block_display;
@@ -23,6 +24,7 @@ mod sky;
 mod sky_layers;
 pub(crate) mod terrain_material;
 
+use ambient_particles::AmbientParticlesPlugin;
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
 use block_model::{setup_block_model_assets, sync_block_model_mesh_geometry};
@@ -66,6 +68,7 @@ impl Plugin for RenderingPlugin {
                 SkyPlugin,
                 SkyLayersPlugin,
                 CelestialPlugin,
+                AmbientParticlesPlugin,
             ));
     }
 }
