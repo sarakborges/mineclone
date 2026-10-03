@@ -23,15 +23,13 @@ use crate::content::{
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
-    constants::{SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
+    constants::VOLUME_SITE_GAP,
     spatial::{surface_map_spacing, surface_site_position},
     surface_field::SurfaceFieldConfig,
 };
 use super::{macro_climate::MacroClimateField, new_world::biome_size_multiplier_tenths};
 
-const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
-pub(crate) const MAX_SURFACE_INFLUENCES: usize =
-    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
+pub(crate) const MAX_SURFACE_INFLUENCES: usize = 2;
 
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
