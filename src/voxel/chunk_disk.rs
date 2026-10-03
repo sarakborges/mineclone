@@ -660,10 +660,10 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
             "invalid block rotation, orientation or state entry count",
         ));
     }
-    let definition = blocks
+    blocks
         .get(&state.id)
         .ok_or_else(|| invalid_data(format!("missing block definition: {}", state.id)))?;
-    validate_block_state(&state.state, definition.can_fragment())?;
+    validate_block_state(&state.state)?;
     let mut block_state = BlockState::default();
     let mut artisans_kit_mask = None;
     for (key, value) in state.state {
@@ -707,7 +707,7 @@ fn decode_fluid_state(state: DiskFluidState, fluids: &FluidRegistry) -> io::Resu
     ))
 }
 
-fn validate_block_state(state: &[(String, String)], can_fragment: bool) -> io::Result<()> {
+fn validate_block_state(state: &[(String, String)]) -> io::Result<()> {
     for (entry_index, (key, value)) in state.iter().enumerate() {
         if key.is_empty()
             || value.is_empty()
@@ -717,12 +717,8 @@ fn validate_block_state(state: &[(String, String)], can_fragment: bool) -> io::R
         {
             return Err(invalid_data("empty or duplicate block state entry"));
         }
-        if key == ARTISANS_KIT_MASK_PROPERTY
-            && (!can_fragment || !MicroblockMask::valid_saved(value))
-        {
-            return Err(invalid_data(
-                "invalid Artisan's Kit mask or ineligible block",
-            ));
+        if key == ARTISANS_KIT_MASK_PROPERTY && !MicroblockMask::valid_saved(value) {
+            return Err(invalid_data("invalid Artisan's Kit mask"));
         }
     }
     Ok(())
