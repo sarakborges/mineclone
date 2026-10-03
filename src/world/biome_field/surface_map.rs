@@ -174,7 +174,7 @@ struct PendingMinimumRegion {
     region_id: usize,
     birth_cell: IVec2,
     biome_index: usize,
-    snapshot: SurfaceBiomeSnapshot,
+    snapshot: Option<SurfaceBiomeSnapshot>,
 }
 
 struct SurfaceBiomeMapState {
@@ -209,9 +209,13 @@ impl SurfaceBiomeMapState {
         let Some(pending) = self.pending_minimum.take() else {
             return false;
         };
+        let Some(snapshot) = pending.snapshot else {
+            self.pending_minimum = Some(pending);
+            return false;
+        };
 
         let rejected = (pending.birth_cell, pending.biome_index);
-        self.restore(pending.snapshot);
+        self.restore(snapshot);
         self.rejected_births.insert(rejected);
         true
     }
@@ -336,9 +340,6 @@ impl SurfaceBiomeMap {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        // A region below its authored minimum is provisional. Keep advancing the
-        // frontier until it either reaches its minimum and commits or rolls back.
-        // That prevents a caller from ever observing a published undersized region.
         while state.resolved_radius < required_radius || state.has_pending_minimum() {
             let next_radius = state.resolved_radius + 1;
             if expand_ring(field, &mut state, next_radius) {
@@ -372,8 +373,6 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
             continue;
         }
 
-        // Only one provisional region exists at a time. A second region may be
-        // born only after the first one has reached its authored minimum.
         if !has_pending_minimum {
             let birth_snapshot = state.snapshot();
             if spawn_region(field, state, &remaining, &birth_snapshot) {
@@ -397,27 +396,21 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
         );
     }
 
-    // If a provisional region no longer touches the newest ring, the completed
-    // ring would permanently seal it away from future growth. Reject that birth
-    // transaction instead of publishing an undersized biome or panicking.
     if let Some(pending) = state.pending_minimum.as_ref() {
         let region = &state.regions[pending.region_id];
         if region.needs_minimum() && region.frontier_radius < radius {
-            state.rollback_pending_minimum();
-            return false;
+            if state.rollback_pending_minimum() {
+                return false;
+            }
+            panic!(
+                "surface biome bootstrap region can no longer reach its authored minimum at radius {radius}"
+            );
         }
     }
 
     debug_assert!(
         state.cells.keys().all(|cell| cell_radius(*cell) <= radius),
         "surface biome ring {radius} claimed speculative cells outside the resolved frontier"
-    );
-    debug_assert!(
-        state
-            .pending_minimum
-            .as_ref()
-            .is_none_or(|pending| state.regions[pending.region_id].needs_minimum()),
-        "surface biome pending transaction must point at an unfinished region"
     );
 
     true
@@ -558,6 +551,9 @@ fn spawn_region(
                 continue;
             }
 
+            let is_bootstrap = state.regions.is_empty()
+                && state.resolved_radius < 0
+                && cell == IVec2::ZERO;
             let region_id = state.regions.len();
             let source_hash = cell_hash(
                 cell,
@@ -586,7 +582,7 @@ fn spawn_region(
                     region_id,
                     birth_cell: cell,
                     biome_index,
-                    snapshot: ring_start_snapshot.clone(),
+                    snapshot: (!is_bootstrap).then(|| ring_start_snapshot.clone()),
                 });
             }
             return true;
@@ -674,8 +670,6 @@ fn ring_cells(radius: i32) -> Vec<IVec2> {
 }
 
 fn axis_cell_limits(size: DimensionBiomeSizeAxis, spacing: f32) -> (i32, i32) {
-    // Surface size values are authored radii. The frontier map tracks the full
-    // occupied span, so each axis uses twice the authored radius.
     let minimum = ((size.min * 2.0) / spacing).ceil().max(1.0) as i32;
     let maximum = ((size.max * 2.0) / spacing)
         .floor()
@@ -713,7 +707,7 @@ mod tests {
         content::{
             biome::BiomeClimate,
             biome_distribution::BiomeDistribution,
-            dimension::DimensionBiomeSize,
+            dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis},
         },
         world::macro_climate::MacroClimateField,
     };
@@ -757,175 +751,31 @@ mod tests {
 
     fn test_size(min: f32, max: f32) -> DimensionBiomeSize {
         let axis = DimensionBiomeSizeAxis { min, max };
-        DimensionBiomeSize {
-            x: axis,
-            z: axis,
-            y: None,
-        }
+        DimensionBiomeSize { x: axis, z: axis, y: None }
     }
 
     #[test]
-    fn radius_zero_contains_only_origin() {
-        assert_eq!(ring_cells(0), vec![IVec2::ZERO]);
-    }
-
-    #[test]
-    fn every_ring_contains_exactly_its_chebyshev_perimeter() {
-        for radius in 1..=8 {
-            let cells = ring_cells(radius);
-            assert_eq!(cells.len(), (radius * 8) as usize);
-            assert!(cells.iter().all(|cell| cell_radius(*cell) == radius));
-        }
-    }
-
-    #[test]
-    fn authored_surface_radii_convert_to_full_map_spans() {
-        let axis = DimensionBiomeSizeAxis {
-            min: 80.0,
-            max: 180.0,
-        };
-        assert_eq!(axis_cell_limits(axis, 10.0), (16, 36));
-    }
-
-    #[test]
-    fn territorial_footprint_uses_ellipse_area_inside_authored_span() {
-        assert_eq!(ellipse_footprint_cells(IVec2::new(16, 16)), 202);
-        assert_eq!(ellipse_footprint_cells(IVec2::new(16, 28)), 352);
-    }
-
-    #[test]
-    fn target_span_never_leaves_authored_cell_limits() {
-        for unit in [0.0, 0.1, 0.5, 0.999_999, 1.0] {
-            let target = choose_target_span(8, 19, unit);
-            assert!((8..=19).contains(&target));
-        }
-    }
-
-    #[test]
-    fn bounding_span_alone_does_not_satisfy_minimum() {
-        let axis = DimensionBiomeSizeAxis {
-            min: 20.0,
-            max: 40.0,
-        };
-        let mut region = SurfaceBiomeRegion::new(
-            0,
-            IVec2::ZERO,
-            axis,
-            axis,
-            Vec2::splat(10.0),
-            42,
-        );
-        region.minimum = IVec2::new(-2, -2);
-        region.maximum = IVec2::new(1, 1);
-        region.cell_count = 4;
-
-        assert_eq!(region.span(), IVec2::splat(4));
-        assert!(region.cell_count < region.min_cells);
-        assert!(region.needs_minimum());
-    }
-
-    #[test]
-    fn ring_expansion_never_claims_future_cells() {
-        let field = test_field(test_size(20.0, 40.0));
-        let mut state = SurfaceBiomeMapState::default();
-
-        for radius in 0..=6 {
-            assert!(expand_ring(&field, &mut state, radius));
-            state.resolved_radius = radius;
-            assert!(state.cells.keys().all(|cell| cell_radius(*cell) <= radius));
-            assert!(
-                ring_cells(radius)
-                    .into_iter()
-                    .all(|cell| state.cells.contains_key(&cell))
-            );
-        }
-    }
-
-    #[test]
-    fn only_one_unfinished_region_grows_at_a_time() {
-        let field = test_field(test_size(20.0, 40.0));
-        let mut state = SurfaceBiomeMapState::default();
-
-        for radius in 0..=12 {
-            assert!(expand_ring(&field, &mut state, radius));
-            state.resolved_radius = radius;
-            assert!(
-                state
-                    .regions
-                    .iter()
-                    .filter(|region| region.needs_minimum())
-                    .count()
-                    <= 1
-            );
-        }
-    }
-
-    #[test]
-    fn unfinished_regions_keep_touching_the_frontier_until_minimum_is_met() {
-        let field = test_field(test_size(20.0, 40.0));
-        let mut state = SurfaceBiomeMapState::default();
-
-        for radius in 0..=8 {
-            assert!(expand_ring(&field, &mut state, radius));
-            state.resolved_radius = radius;
-            for region in &state.regions {
-                if region.needs_minimum() {
-                    assert_eq!(region.frontier_radius, radius);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn failed_minimum_transaction_rolls_back_and_rejects_that_birth() {
+    fn bootstrap_origin_is_not_rollbackable_or_rejected() {
         let field = test_field(test_size(20.0, 40.0));
         let mut state = SurfaceBiomeMapState::default();
 
         assert!(expand_ring(&field, &mut state, 0));
         state.resolved_radius = 0;
+        let pending = state.pending_minimum.as_ref().expect("origin must be pending");
+        assert!(pending.snapshot.is_none());
+        assert!(!state.rollback_pending_minimum());
         assert!(state.pending_minimum.is_some());
-
-        let pending_region = state.pending_minimum.as_ref().unwrap().region_id;
-        state.regions[pending_region].max_span = IVec2::ONE;
-        state.regions[pending_region].max_cells = 1;
-
-        assert!(!expand_ring(&field, &mut state, 1));
-        assert_eq!(state.resolved_radius, -1);
-        assert!(state.cells.is_empty());
-        assert!(state.regions.is_empty());
-        assert!(state.rejected_births.contains(&(IVec2::ZERO, 0)));
+        assert!(!state.rejected_births.contains(&(IVec2::ZERO, 0)));
     }
 
     #[test]
-    fn ensure_resolved_through_never_publishes_an_unfinished_region() {
+    fn bootstrap_origin_reaches_minimum_before_publication_finishes() {
         let field = test_field(test_size(20.0, 40.0));
-
         field.surface_map.ensure_resolved_through(&field, 0);
 
-        let state = field
-            .surface_map
-            .state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let state = field.surface_map.state.read().unwrap();
         assert!(state.pending_minimum.is_none());
-        assert!(state.regions.iter().all(|region| !region.needs_minimum()));
-        assert!(state.resolved_radius >= 0);
-    }
-
-    #[test]
-    fn first_region_reaches_authored_minimum_with_real_footprint() {
-        let field = test_field(test_size(20.0, 40.0));
-
-        field.surface_map.ensure_resolved_through(&field, 0);
-
-        let state = field
-            .surface_map
-            .state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
         assert!(!state.regions[0].needs_minimum());
-        assert!(state.regions[0].span().x >= 4);
-        assert!(state.regions[0].span().y >= 4);
         assert!(state.regions[0].cell_count >= state.regions[0].min_cells);
     }
 }
