@@ -78,7 +78,7 @@ pub(super) fn fluid_emission_for_cell(
     }
 
     let level = scale_emission(definition.light_emission, cell.level);
-    BlockLight::from_hsi(definition.color, level)
+    BlockLight::from_hsi(definition.light_color.unwrap_or(definition.color), level)
 }
 
 fn scale_emission(full_emission: u8, level: u8) -> u8 {
