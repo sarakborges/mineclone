@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_vaela_large",
-  "name": null,
   "model": "models/creatures/slime_anemo_large/slime_anemo_large.glb",
   "health": 24,
   "maxPerType": 2,

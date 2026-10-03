@@ -1,7 +1,6 @@
 {
   "id": "asteria:cavern_entrance_spiral_clockwise",
   "group_id": "cavern_entrance_start",
-  "name": null,
   "locatable": true,
   "rotation": true,
   "priority": 5,

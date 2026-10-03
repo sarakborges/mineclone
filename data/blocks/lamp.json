@@ -1,6 +1,5 @@
 {
   "id": "asteria:lamp",
-  "name": null,
   "category": "light_sources",
   "secondaryProperties": [
     "dyed"

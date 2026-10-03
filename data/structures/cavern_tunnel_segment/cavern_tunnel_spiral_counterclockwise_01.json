@@ -1,7 +1,6 @@
 {
   "id": "asteria:cavern_tunnel_spiral_counterclockwise_01",
   "group_id": "cavern_tunnel_segment",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

@@ -1,7 +1,6 @@
 {
   "id": "asteria:lake_01",
   "group_id": "lake",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 4,

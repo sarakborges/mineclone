@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_nyxa_large",
-  "name": null,
   "model": "models/creatures/slime_tenebra_large/slime_tenebra_large.glb",
   "health": 36,
   "maxPerType": 2,

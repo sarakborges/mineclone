@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_verdra_large",
-  "name": null,
   "model": "models/creatures/slime_dendro_large/slime_dendro_large.glb",
   "health": 36,
   "maxPerType": 2,

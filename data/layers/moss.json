@@ -1,6 +1,5 @@
 {
   "id": "asteria:moss",
-  "name": null,
   "category": "natural_blocks",
   "texture": "textures/layers/moss.png",
   "tint": "foliage",

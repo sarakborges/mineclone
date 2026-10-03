@@ -1,7 +1,6 @@
 {
   "id": "asteria:tree_enchanted_03",
   "group_id": "tree_enchanted",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

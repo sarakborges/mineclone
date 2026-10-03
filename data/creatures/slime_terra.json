@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_terra",
-  "name": null,
   "model": "models/creatures/slime_geo/slime_geo.glb",
   "health": 14,
   "maxPerType": 3,

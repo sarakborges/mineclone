@@ -1,7 +1,6 @@
 {
   "id": "asteria:mountain_waterfall_03",
   "group_id": "mountain_waterfall",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 4,

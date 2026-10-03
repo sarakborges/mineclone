@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_pyra",
-  "name": null,
   "model": "models/creatures/slime_pyro/slime_pyro.glb",
   "health": 10,
   "maxPerType": 4,

@@ -1,6 +1,5 @@
 {
   "id": "asteria:stick",
-  "name": null,
   "category": "crafting_materials",
   "visual": {
     "type": "extrudedSprite",

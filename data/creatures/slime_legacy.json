@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_legacy",
-  "name": null,
   "model": "models/creatures/slime/slime.glb",
   "health": 10,
   "maxPerType": 4,

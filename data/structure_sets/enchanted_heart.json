@@ -1,6 +1,5 @@
 {
   "id": "asteria:enchanted_heart",
-  "name": null,
   "locatable": true,
   "priority": 100,
   "conflictGroups": [

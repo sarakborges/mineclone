@@ -1,7 +1,6 @@
 {
   "id": "asteria:mountain_pond_03",
   "group_id": "mountain_pond",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 4,

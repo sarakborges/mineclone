@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_kyra_large",
-  "name": null,
   "model": "models/creatures/slime_cryo_large/slime_cryo_large.glb",
   "health": 36,
   "maxPerType": 2,

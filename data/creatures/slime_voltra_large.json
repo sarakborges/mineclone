@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_voltra_large",
-  "name": null,
   "model": "models/creatures/slime_electro_large/slime_electro_large.glb",
   "health": 30,
   "maxPerType": 2,

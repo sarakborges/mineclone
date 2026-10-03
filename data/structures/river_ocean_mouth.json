@@ -1,6 +1,5 @@
 {
   "id": "asteria:river_ocean_mouth",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 4,

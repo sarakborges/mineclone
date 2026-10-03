@@ -1,7 +1,6 @@
 {
   "id": "asteria:root_arch_01",
   "group_id": "root_arch",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

@@ -1,6 +1,5 @@
 {
   "id": "asteria:pebble",
-  "name": null,
   "category": "crafting_materials",
   "visual": {
     "type": "extrudedSprite",

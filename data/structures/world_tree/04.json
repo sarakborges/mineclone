@@ -1,7 +1,6 @@
 {
   "id": "asteria:world_tree_04",
   "group_id": "world_tree",
-  "name": null,
   "locatable": true,
   "rotation": true,
   "priority": 100,

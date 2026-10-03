@@ -1,7 +1,6 @@
 {
   "id": "asteria:tree_willow_02",
   "group_id": "tree_willow",
-  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

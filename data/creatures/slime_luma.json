@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_luma",
-  "name": null,
   "model": "models/creatures/slime_lumen/slime_lumen.glb",
   "health": 10,
   "maxPerType": 3,

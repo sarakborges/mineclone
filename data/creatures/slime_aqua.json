@@ -1,6 +1,5 @@
 {
   "id": "asteria:slime_aqua",
-  "name": null,
   "model": "models/creatures/slime_hydro/slime_hydro.glb",
   "health": 11,
   "maxPerType": 4,
