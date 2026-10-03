@@ -1,12 +1,9 @@
 use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
-use crate::content::biome_distribution::BiomeDistribution;
-
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES, SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
-    distribution::distribution_strength,
     spatial::{smoothstep, varied_surface_margin_width, warp_surface_position},
 };
 
@@ -139,33 +136,16 @@ impl BiomeField {
             .filter(|(_, weight)| *weight > 0.0)
             .map(|(index, weight)| {
                 let biome = &self.surface_biomes[*index];
-                let terrain_strength = biome
-                    .distributions
-                    .iter()
-                    .copied()
-                    .map(|distribution| {
-                        distribution_strength(
-                            distribution,
-                            position,
-                            self.seed,
-                            biome.id.as_str(),
-                        )
-                    })
-                    .fold(0.0_f32, f32::max)
-                    .clamp(0.0, 1.0);
-
                 BiomeInfluence {
                     id: biome.id.as_str(),
                     weight: *weight / total_weight,
                     surface_index: *index,
-                    terrain_strength,
+                    terrain_strength: 1.0,
                 }
             })
             .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
         if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position) {
-            let forced_terrain_strength =
-                self.forced_surface_terrain_strength(forced_index, position);
             for influence in &mut influences {
                 influence.weight *= 1.0 - forced_weight;
             }
@@ -174,14 +154,13 @@ impl BiomeField {
                 .find(|influence| influence.surface_index == forced_index)
             {
                 existing.weight += forced_weight;
-                existing.terrain_strength =
-                    existing.terrain_strength.max(forced_terrain_strength);
+                existing.terrain_strength = 1.0;
             } else {
                 influences.push(BiomeInfluence {
                     id: self.surface_biomes[forced_index].id.as_str(),
                     weight: forced_weight,
                     surface_index: forced_index,
-                    terrain_strength: forced_terrain_strength,
+                    terrain_strength: 1.0,
                 });
             }
 
@@ -220,50 +199,6 @@ impl BiomeField {
             surface_margin_index,
             identity_surface_index,
             influences,
-        }
-    }
-}
-
-impl BiomeField {
-    fn forced_surface_terrain_strength(&self, biome_index: usize, position: Vec2) -> f32 {
-        let forced = self
-            .forced_surface_biome
-            .expect("forced terrain strength requires a forced surface biome");
-        debug_assert_eq!(forced.biome_index, biome_index);
-
-        let delta = forced.warped_delta(position);
-        let normalized = Vec2::new(delta.x / forced.radii.x, delta.y / forced.radii.y);
-        let radial_distance = normalized.length();
-        let lateral_distance = if forced.radii.x <= forced.radii.y {
-            normalized.x.abs()
-        } else {
-            normalized.y.abs()
-        };
-
-        self.surface_biomes[biome_index]
-            .distributions
-            .iter()
-            .copied()
-            .map(|distribution| {
-                forced_distribution_strength(distribution, radial_distance, lateral_distance)
-            })
-            .fold(0.0_f32, f32::max)
-            .clamp(0.0, 1.0)
-    }
-}
-
-fn forced_distribution_strength(
-    distribution: BiomeDistribution,
-    radial_distance: f32,
-    lateral_distance: f32,
-) -> f32 {
-    match distribution {
-        BiomeDistribution::Regional => 1.0,
-        BiomeDistribution::MountainPeak { .. } => {
-            smoothstep((1.0 - radial_distance).clamp(0.0, 1.0))
-        }
-        BiomeDistribution::NoiseBand { .. } | BiomeDistribution::MountainBelt { .. } => {
-            smoothstep((1.0 - lateral_distance).clamp(0.0, 1.0))
         }
     }
 }
