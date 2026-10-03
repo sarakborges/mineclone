@@ -69,7 +69,7 @@ def inspect(value: Any, context: str) -> None:
 def check_ui_catalogs() -> None:
     catalogs: dict[str, dict[str, str]] = {}
     for language in LANGUAGES:
-        path = DATA / "localization" / f"{language}.json"
+        path = DATA / "localization" / language / "ui.json"
         catalog = read_json(path)
         if isinstance(catalog, dict):
             catalogs[language] = catalog
@@ -84,27 +84,28 @@ def check_ui_catalogs() -> None:
             continue
         if set(catalog) != set(english):
             errors.append(
-                f"data/localization/{language}.json: missing {sorted(set(english) - set(catalog))}; "
+                f"data/localization/{language}/ui.json: missing {sorted(set(english) - set(catalog))}; "
                 f"unexpected {sorted(set(catalog) - set(english))}"
             )
         for key in set(english) & set(catalog):
             original, translated = english[key], catalog[key]
             if not isinstance(original, str) or not original.strip():
-                errors.append(f"data/localization/english.json:{key}: empty or non-string")
+                errors.append(f"data/localization/english/ui.json:{key}: empty or non-string")
             if not isinstance(translated, str) or not translated.strip():
-                errors.append(f"data/localization/{language}.json:{key}: empty or non-string")
+                errors.append(f"data/localization/{language}/ui.json:{key}: empty or non-string")
             elif isinstance(original, str) and Counter(
                 PLACEHOLDERS.findall(original)
             ) != Counter(PLACEHOLDERS.findall(translated)):
-                errors.append(f"data/localization/{language}.json:{key}: placeholders differ")
+                errors.append(f"data/localization/{language}/ui.json:{key}: placeholders differ")
 
 
 def main() -> int:
     if not DATA.is_dir():
         print(f"Missing content directory: {DATA}", file=sys.stderr)
         return 1
+    localization_root = DATA / "localization"
     for path in sorted(DATA.rglob("*.json")):
-        if path.parent == DATA / "localization":
+        if localization_root in path.parents:
             continue
         content = read_json(path)
         if content is not None:
