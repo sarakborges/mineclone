@@ -104,27 +104,39 @@ struct AmbientParticleAssets {
 }
 
 #[derive(SystemParam)]
-struct AmbientParticleEnvironment<'w> {
+struct AmbientParticleSpawnContext<'w, 's> {
+    dimension: CurrentDimensionContext<'w>,
+    current_biome: Res<'w, CurrentBiome>,
+    registry: Res<'w, AmbientParticleRegistry>,
+    fluids: Res<'w, FluidRegistry>,
     wind: Res<'w, Wind>,
     world: Res<'w, VoxelWorld>,
+    active_particles: Query<'w, 's, Entity, With<AmbientParticle>>,
+}
+
+#[derive(SystemParam)]
+struct AmbientParticleSpawnAssets<'w> {
+    runtime: ResMut<'w, AmbientParticleRuntime>,
+    particle_assets: ResMut<'w, AmbientParticleAssets>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
 fn spawn_ambient_particles(
     mut commands: Commands,
     time: Res<Time>,
     camera: Single<&Transform, With<GameplayCamera>>,
-    dimension: CurrentDimensionContext,
-    current_biome: Res<CurrentBiome>,
-    registry: Res<AmbientParticleRegistry>,
-    fluids: Res<FluidRegistry>,
-    environment: AmbientParticleEnvironment,
-    mut runtime: ResMut<AmbientParticleRuntime>,
-    mut particle_assets: ResMut<AmbientParticleAssets>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    active_particles: Query<Entity, With<AmbientParticle>>,
+    context: AmbientParticleSpawnContext,
+    assets: AmbientParticleSpawnAssets,
 ) {
-    let mut active_count = active_particles.iter().count();
+    let AmbientParticleSpawnAssets {
+        mut runtime,
+        mut particle_assets,
+        mut meshes,
+        mut materials,
+    } = assets;
+
+    let mut active_count = context.active_particles.iter().count();
     if active_count >= MAX_ACTIVE_PARTICLES {
         return;
     }
@@ -132,12 +144,17 @@ fn spawn_ambient_particles(
     let delta_seconds = time.delta_secs().min(0.1);
     let camera_position = camera.translation;
 
-    for rule in registry.iter() {
+    for rule in context.registry.iter() {
         if active_count >= MAX_ACTIVE_PARTICLES {
             break;
         }
 
-        let Some(source) = active_source(rule, &dimension, &current_biome, &fluids) else {
+        let Some(source) = active_source(
+            rule,
+            &context.dimension,
+            &context.current_biome,
+            &context.fluids,
+        ) else {
             continue;
         };
         let requested = runtime.take_emissions(
@@ -162,13 +179,13 @@ fn spawn_ambient_particles(
                     camera_position,
                     fluid_id,
                     &rule.particle,
-                    &environment.world,
+                    &context.world,
                     &mut runtime,
                 ),
                 None => find_ambient_position(
                     camera_position,
                     &rule.particle,
-                    &environment.world,
+                    &context.world,
                     &mut runtime,
                 ),
             };
@@ -179,7 +196,7 @@ fn spawn_ambient_particles(
             let size = runtime.range(rule.particle.size);
             let lifetime = runtime.range(rule.particle.lifetime);
             let velocity = runtime.jittered_velocity(&rule.particle)
-                + environment.wind.velocity(rule.particle.wind_influence);
+                + context.wind.velocity(rule.particle.wind_influence);
             let phase = Vec3::new(
                 runtime.unit() * std::f32::consts::TAU,
                 runtime.unit() * std::f32::consts::TAU,
