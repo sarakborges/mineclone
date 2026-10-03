@@ -12,13 +12,5 @@
   "lightDampening": 15,
   "lightEmission": 15,
   "spreadSpeed": 4,
-  "maxSpread": 3,
-  "immersionTint": {
-    "color": {
-      "hue": 8,
-      "saturation": 0.98,
-      "intensity": 0.3
-    },
-    "opacity": 0.72
-  }
+  "maxSpread": 3
 }
