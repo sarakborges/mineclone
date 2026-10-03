@@ -52,6 +52,8 @@ pub struct AmbientParticleDefinition {
     pub acceleration: [f32; 3],
     #[serde(default)]
     pub wander_strength: f32,
+    #[serde(default)]
+    pub wind_influence: f32,
     #[serde(default = "default_spawn_radius")]
     pub spawn_radius: f32,
     #[serde(default = "default_vertical_range")]
@@ -80,6 +82,10 @@ impl AmbientParticleDefinition {
         assert!(
             self.wander_strength.is_finite() && self.wander_strength >= 0.0,
             "{owner} ambient particle wanderStrength must be finite and non-negative"
+        );
+        assert!(
+            self.wind_influence.is_finite() && self.wind_influence >= 0.0,
+            "{owner} ambient particle windInfluence must be finite and non-negative"
         );
         assert!(
             self.spawn_radius.is_finite() && self.spawn_radius > 0.0,
@@ -143,6 +149,7 @@ mod tests {
             velocity_jitter: [0.1, 0.1, 0.1],
             acceleration: [0.0, -0.2, 0.0],
             wander_strength: 0.1,
+            wind_influence: 0.0,
             spawn_radius: 12.0,
             vertical_range: 6.0,
         }
