@@ -1,8 +1,4 @@
 mod constants;
-pub(crate) mod distribution;
-mod mountain_belt;
-mod mountain_peak;
-mod noise_band;
 mod selection;
 mod spatial;
 mod surface;
@@ -20,7 +16,6 @@ use crate::content::{
         BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints,
     },
     biome_density::BiomeDensityModifier,
-    biome_distribution::BiomeDistribution,
     biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis, DimensionDefinition},
@@ -52,7 +47,6 @@ pub(super) struct BiomeFieldEntry {
     pub id: String,
     pub tags: Vec<String>,
     pub surface_constraints: Option<VolumeSurfaceConstraints>,
-    pub distributions: Vec<BiomeDistribution>,
     pub size: DimensionBiomeSize,
     pub weight: f32,
     pub climate: BiomeClimate,
@@ -202,7 +196,6 @@ impl BiomeField {
 
         let mut surface_biomes = Vec::new();
         let mut volume_biomes = Vec::new();
-        let mut surface_smallest_radius = f32::INFINITY;
         let mut volume_minimum_radius = Vec3::ZERO;
         let mut has_active_volume_biome = false;
 
@@ -223,7 +216,6 @@ impl BiomeField {
                 id: biome.id.clone(),
                 tags: biome.tags.clone(),
                 surface_constraints: biome.surface_constraints.clone(),
-                distributions: biome.distributions.clone(),
                 size,
                 weight: dimension_biome.weight,
                 climate: biome.climate,
@@ -249,14 +241,7 @@ impl BiomeField {
             };
 
             match biome.kind {
-                BiomeKind::Surface => {
-                    if entry.weight > 0.0 {
-                        surface_smallest_radius = surface_smallest_radius
-                            .min(entry.size.x.min)
-                            .min(entry.size.z.min);
-                    }
-                    surface_biomes.push(entry);
-                }
+                BiomeKind::Surface => surface_biomes.push(entry),
                 BiomeKind::Volume => {
                     if entry.weight > 0.0 {
                         let vertical_size = entry.size.y.unwrap_or_else(|| {
@@ -277,9 +262,8 @@ impl BiomeField {
             "dimension {} must define at least one active surface biome",
             dimension.id
         );
-        debug_assert!(surface_smallest_radius.is_finite());
 
-        let surface_site_spacing = surface_map_spacing(Vec2::splat(surface_smallest_radius));
+        let surface_site_spacing = surface_map_spacing();
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
         let ocean_surface_index = dimension
