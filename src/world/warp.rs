@@ -399,7 +399,6 @@ fn dimension_warp_spawn_biome(
         dimension.biomes.iter().any(|entry| {
             entry.id == id
                 && entry.weight > f32::EPSILON
-                && entry.require_near.is_empty()
                 && biomes
                     .get(id)
                     .is_some_and(|biome| biome.kind == BiomeKind::Surface)

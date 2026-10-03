@@ -2,7 +2,7 @@ mod constants;
 mod selection;
 mod spatial;
 mod surface;
-mod surface_map;
+mod surface_field;
 mod visuals;
 mod volume;
 
@@ -23,21 +23,12 @@ use crate::content::{
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
-    constants::{SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
-    spatial::{surface_map_spacing, surface_site_position},
-    surface_map::SurfaceBiomeMap,
+    constants::VOLUME_SITE_GAP,
+    surface_field::{SurfaceFieldConfig, land_site_position},
 };
 use super::{macro_climate::MacroClimateField, new_world::biome_size_multiplier_tenths};
 
-const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
-pub(crate) const MAX_SURFACE_INFLUENCES: usize =
-    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
-
-#[derive(Clone, Copy)]
-pub(super) struct SurfaceSiteCacheEntry {
-    pub(super) position: Vec2,
-    pub(super) biome_index: usize,
-}
+pub(crate) const MAX_SURFACE_INFLUENCES: usize = 2;
 
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
@@ -54,9 +45,6 @@ pub(super) struct BiomeFieldEntry {
     pub density_modifier: Option<BiomeDensityModifier>,
     pub solid_block: Option<String>,
     pub density_seed: u64,
-    pub avoid_near: Vec<String>,
-    pub require_near: Vec<String>,
-    pub exclusive_neighbor_group: Option<String>,
     pub surface_margin: Option<SurfaceMarginField>,
 }
 
@@ -72,15 +60,14 @@ pub(super) struct SurfaceMarginField {
 pub struct BiomeField {
     pub(super) surface_biomes: Arc<Vec<BiomeFieldEntry>>,
     pub(super) volume_biomes: Arc<Vec<BiomeFieldEntry>>,
-    pub(super) surface_site_spacing: Vec2,
+    surface_field_config: SurfaceFieldConfig,
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
-    pub(super) surface_map: SurfaceBiomeMap,
-    forced_surface_biome: Option<ForcedSurfaceBiome>,
-    single_surface_biome: Option<usize>,
-    ocean_surface_index: Option<usize>,
-    spawn_oceans: bool,
+    pub(super) single_surface_biome: Option<usize>,
+    pub(super) ocean_surface_index: Option<usize>,
+    pub(super) spawn_oceans: bool,
+    spawn_target_surface_biome: Option<usize>,
 }
 
 #[derive(Clone, Copy)]
@@ -98,24 +85,11 @@ pub(crate) struct SurfaceBoundarySample {
 }
 
 pub struct BiomeFieldSample<'a> {
-    /// Effective surface identity at this position. A source biome's
-    /// surfaceMargin may own this identity across the regional boundary.
     pub primary_id: &'a str,
-    /// Regional terrain owner used by the blended terrain field.
     pub(crate) primary_surface_index: usize,
-    /// Source biome whose authored margin owns this position, if any.
     pub(crate) surface_margin_index: Option<usize>,
-    /// Index matching primary_id; equals primary_surface_index outside margins.
     pub(crate) identity_surface_index: usize,
-    /// Regional terrain influences. These intentionally remain independent
-    /// from an effective margin identity so shoreline shape stays continuous.
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ForcedSurfaceBiome {
-    biome_index: usize,
-    center: Vec2,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -125,18 +99,6 @@ pub(crate) struct VolumeBiomeAnchor<'a> {
 }
 
 impl BiomeField {
-    pub(crate) fn retain_surface_site_cache(
-        &self,
-        center_chunk: IVec2,
-        radius_chunks: i32,
-    ) {
-        self.surface_map.retain_samples_around(
-            center_chunk,
-            radius_chunks,
-            self.surface_site_spacing,
-        );
-    }
-
     pub fn from_dimension(
         dimension: &DimensionDefinition,
         biomes: &BiomeRegistry,
@@ -187,9 +149,6 @@ impl BiomeField {
                 density_modifier: biome.density_modifier,
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
-                avoid_near: dimension_biome.avoid_near.clone(),
-                require_near: dimension_biome.require_near.clone(),
-                exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
                 surface_margin: biome.surface_margin.as_ref().map(|margin| SurfaceMarginField {
                     width: margin.width,
                     width_variation: margin.width_variation,
@@ -224,25 +183,26 @@ impl BiomeField {
             dimension.id
         );
 
-        let surface_site_spacing = surface_map_spacing();
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
         let ocean_surface_index = dimension
             .ocean_biome
             .as_deref()
             .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
+        let surface_field_config =
+            SurfaceFieldConfig::from_biomes(&surface_biomes, ocean_surface_index);
+
         Self {
             surface_biomes: Arc::new(surface_biomes),
             volume_biomes: Arc::new(volume_biomes),
-            surface_site_spacing,
+            surface_field_config,
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
             seed,
-            surface_map: SurfaceBiomeMap::new(),
-            forced_surface_biome: None,
             single_surface_biome: None,
             ocean_surface_index,
             spawn_oceans: true,
+            spawn_target_surface_biome: None,
         }
     }
 
@@ -251,11 +211,7 @@ impl BiomeField {
     }
 
     pub(crate) fn set_spawn_oceans(&mut self, spawn_oceans: bool) {
-        if self.spawn_oceans == spawn_oceans {
-            return;
-        }
         self.spawn_oceans = spawn_oceans;
-        self.surface_map.clear();
     }
 
     pub(super) fn surface_biome_is_enabled(&self, index: usize) -> bool {
@@ -269,26 +225,21 @@ impl BiomeField {
             .position(|biome| biome.id == biome_id)
             .unwrap_or_else(|| panic!("single biome is not a surface biome: {biome_id}"));
         self.single_surface_biome = Some(biome_index);
-        self.forced_surface_biome = None;
-        self.surface_map.clear();
+        self.spawn_target_surface_biome = None;
     }
 
-    pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {
+    pub(crate) fn set_spawn_target_surface_biome(&mut self, biome_id: &str) {
         let biome_index = self
             .surface_biomes
             .iter()
             .position(|biome| biome.id == biome_id)
-            .unwrap_or_else(|| panic!("forced surface biome is not a surface biome: {biome_id}"));
-        self.forced_surface_biome = Some(ForcedSurfaceBiome {
-            biome_index,
-            center,
-        });
-        self.surface_map.clear();
+            .unwrap_or_else(|| panic!("spawn target is not a surface biome: {biome_id}"));
+        self.spawn_target_surface_biome = Some(biome_index);
     }
 
-    pub(crate) fn forced_surface_core_contains(&self, position: Vec2) -> bool {
-        self.forced_surface_biome.is_some()
-            && self.surface_map.forced_region_contains(self, position)
+    pub(crate) fn spawn_target_contains(&self, position: Vec2) -> bool {
+        self.spawn_target_surface_biome
+            .is_some_and(|target| self.surface_biome_index_at(position) == target)
     }
 
     pub(crate) fn ocean_surface_index(&self) -> Option<usize> {
@@ -296,11 +247,11 @@ impl BiomeField {
     }
 
     pub(crate) fn surface_site_spacing(&self) -> Vec2 {
-        self.surface_site_spacing
+        self.surface_field_config.land_spacing
     }
 
     pub(crate) fn surface_site_position(&self, cell: IVec2) -> Vec2 {
-        surface_site_position(cell, self.surface_site_spacing, self.seed)
+        land_site_position(cell, self.surface_field_config.land_spacing, self.seed)
     }
 
     pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
