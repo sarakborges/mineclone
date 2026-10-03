@@ -56,6 +56,7 @@ pub(crate) struct SavedPlayer {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SavedDimensionState {
     pub(crate) dimension_id: String,
+    pub(crate) spawn_biome: Option<String>,
     pub(crate) storage_boxes: Vec<SavedStorageBox>,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
@@ -247,8 +248,12 @@ impl WorldSnapshot {
         let mut dimensions = HashSet::with_capacity(source.inactive_dimensions.len() + 1);
         dimensions.insert(source.dimension_id);
         for dimension in &source.inactive_dimensions {
-            if dimension.dimension_id.is_empty() || !dimensions.insert(dimension.dimension_id.as_str()) {
-                return Err(invalid_data("saved dimension identities must be unique and non-empty"));
+            if dimension.dimension_id.is_empty()
+                || !dimensions.insert(dimension.dimension_id.as_str())
+            {
+                return Err(invalid_data(
+                    "saved dimension identities must be unique and non-empty",
+                ));
             }
         }
 
@@ -334,6 +339,7 @@ mod tests {
             creatures: Vec::new(),
             inactive_dimensions: vec![SavedDimensionState {
                 dimension_id: "asteria:overworld".to_owned(),
+                spawn_biome: None,
                 storage_boxes: Vec::new(),
                 fluid_updates: SavedFluidUpdates::default(),
                 creatures: Vec::new(),
