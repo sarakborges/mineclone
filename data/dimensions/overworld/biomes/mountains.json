@@ -28,18 +28,18 @@
     "type": "mountains",
     "baseHeight": 8,
     "amplitude": 48,
-    "scale": 0.01,
-    "sharpness": 1.65
+    "scale": 0.0115,
+    "sharpness": 1.82
   },
   "terrainModifiers": [
     {
       "type": "cliffs",
-      "scale": 0.016,
-      "threshold": 0.66,
-      "height": 13,
-      "edgeWidth": 0.12,
-      "warpScale": 0.006,
-      "warpStrength": 14
+      "scale": 0.025,
+      "threshold": 0.62,
+      "height": 11,
+      "edgeWidth": 0.035,
+      "warpScale": 0.012,
+      "warpStrength": 22
     }
   ],
   "surfaceLayers": [
