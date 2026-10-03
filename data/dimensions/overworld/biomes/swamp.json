@@ -1,0 +1,151 @@
+{
+  "id": "asteria:overworld/swamp",
+  "name": null,
+  "terrain": {
+    "type": "swamp",
+    "baseHeight": 1.5,
+    "depth": 5.5,
+    "amplitude": 1.5,
+    "scale": 0.009,
+    "detailAmplitude": 0.75,
+    "detailScale": 0.035
+  },
+  "surfaceLayers": [
+    {
+      "block": "asteria:mud",
+      "depth": 2
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 3
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
+  "creatureSpawns": [
+    {
+      "creature": "asteria:slime",
+      "weight": 1,
+      "lightMin": 0,
+      "lightMax": 15,
+      "spacing": 14
+    }
+  ],
+  "structures": [
+    {
+      "id": "asteria:tree_willow",
+      "placement": {
+        "spacing": 18,
+        "chance": 0.78,
+        "jitter": 5
+      }
+    },
+    {
+      "id": "asteria:boulder_small",
+      "placement": {
+        "spacing": 52,
+        "chance": 0.18,
+        "jitter": 15
+      }
+    }
+  ],
+  "visuals": {
+    "skyColor": {
+      "dawn": {
+        "hue": 207,
+        "saturation": 0.28,
+        "intensity": 0.62
+      },
+      "day": {
+        "hue": 198,
+        "saturation": 0.38,
+        "intensity": 0.54
+      },
+      "dusk": {
+        "hue": 255,
+        "saturation": 0.22,
+        "intensity": 0.5
+      },
+      "night": {
+        "hue": 218,
+        "saturation": 0.48,
+        "intensity": 0.055
+      }
+    },
+    "fogColor": {
+      "dawn": {
+        "hue": 133,
+        "saturation": 0.16,
+        "intensity": 0.5
+      },
+      "day": {
+        "hue": 125,
+        "saturation": 0.19,
+        "intensity": 0.55
+      },
+      "dusk": {
+        "hue": 210,
+        "saturation": 0.15,
+        "intensity": 0.42
+      },
+      "night": {
+        "hue": 176,
+        "saturation": 0.28,
+        "intensity": 0.06
+      }
+    },
+    "grassColor": {
+      "hue": 103,
+      "saturation": 0.48,
+      "intensity": 0.29
+    },
+    "leafColor": {
+      "hue": 111,
+      "saturation": 0.52,
+      "intensity": 0.31
+    },
+    "foliageColor": {
+      "hue": 96,
+      "saturation": 0.46,
+      "intensity": 0.27
+    },
+    "waterColor": {
+      "hue": 112,
+      "saturation": 0.34,
+      "intensity": 0.25
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 118,
+        "saturation": 0.42,
+        "intensity": 0.22
+      },
+      "opacity": 0.34
+    },
+    "stars": {
+      "density": 0.55,
+      "color": {
+        "hue": 215,
+        "saturation": 0.06,
+        "intensity": 0.88
+      }
+    },
+    "clouds": {
+      "density": 0.62,
+      "color": {
+        "hue": 130,
+        "saturation": 0.06,
+        "intensity": 0.76
+      }
+    },
+    "terrainRoughness": 1,
+    "terrainMetallic": 0
+  },
+  "climate": {
+    "continentalness": {
+      "min": 0.36,
+      "max": 1
+    }
+  }
+}
