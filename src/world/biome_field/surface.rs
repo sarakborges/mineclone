@@ -3,13 +3,24 @@ use bevy::prelude::*;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES, SurfaceBoundarySample,
-    constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
-    spatial::{smoothstep, surface_site_position, varied_surface_margin_width},
+    constants::BORDER_TRANSITION_WIDTH,
+    spatial::{smoothstep, varied_surface_margin_width},
 };
 
-const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
-const SITE_SAMPLE_COUNT: usize = SITE_SEARCH_DIAMETER * SITE_SEARCH_DIAMETER;
-const MAX_WEIGHT_ENTRIES: usize = MAX_SURFACE_INFLUENCES;
+const EDGE_PROBE_STEP: f32 = 4.0;
+const EDGE_PROBE_DIRECTION_PADDING: f32 = 1.1;
+const EDGE_REFINEMENT_STEPS: usize = 6;
+const DIAGONAL: f32 = std::f32::consts::FRAC_1_SQRT_2;
+const EDGE_PROBE_DIRECTIONS: [Vec2; 8] = [
+    Vec2::X,
+    Vec2::NEG_X,
+    Vec2::Y,
+    Vec2::NEG_Y,
+    Vec2::new(DIAGONAL, DIAGONAL),
+    Vec2::new(DIAGONAL, -DIAGONAL),
+    Vec2::new(-DIAGONAL, DIAGONAL),
+    Vec2::new(-DIAGONAL, -DIAGONAL),
+];
 
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
@@ -18,82 +29,40 @@ impl BiomeField {
         }
 
         let primary_index = self.surface_biome_index_at(position);
-        let center = IVec2::new(
-            (position.x / self.surface_site_spacing.x).round() as i32,
-            (position.y / self.surface_site_spacing.y).round() as i32,
-        );
-
-        let mut sampled_sites = [(Vec2::ZERO, 0_usize); SITE_SAMPLE_COUNT];
-        let mut sample_count = 0;
-        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                let cell = center + IVec2::new(x, z);
-                let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
-                sampled_sites[sample_count] = (site, self.surface_biome_index_at(site));
-                sample_count += 1;
-            }
-        }
-        debug_assert_eq!(sample_count, SITE_SAMPLE_COUNT);
-
-        let primary_site = sampled_sites[..sample_count]
-            .iter()
-            .filter(|(_, index)| *index == primary_index)
-            .min_by(|left, right| {
-                position
-                    .distance_squared(left.0)
-                    .total_cmp(&position.distance_squared(right.0))
-            })
-            .map(|(site, _)| *site)
-            .unwrap_or(position);
-
         let regional_boundary = nearest_surface_boundary(
+            self,
             position,
-            primary_site,
             primary_index,
-            &sampled_sites[..sample_count],
+            maximum_boundary_interest_radius(self),
         );
 
-        let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
-        let mut weight_count = 0;
-        set_max_weight(&mut weights, &mut weight_count, primary_index, 1.0);
-
-        for (site, candidate_index) in &sampled_sites[..sample_count] {
-            if *candidate_index == primary_index {
-                continue;
-            }
-            let boundary_distance = bisector_distance(position, primary_site, *site);
-            if boundary_distance > BORDER_TRANSITION_WIDTH {
-                continue;
-            }
-            let border_progress =
-                1.0 - (boundary_distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
-            set_max_weight(
-                &mut weights,
-                &mut weight_count,
-                *candidate_index,
-                smoothstep(border_progress),
-            );
+        let mut influences = ArrayVec::<BiomeInfluence<'_>, MAX_SURFACE_INFLUENCES>::new();
+        let neighbor_weight = regional_boundary
+            .filter(|boundary| boundary.distance <= BORDER_TRANSITION_WIDTH)
+            .map(|boundary| {
+                let progress =
+                    1.0 - (boundary.distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+                (boundary.neighbor_surface_index, smoothstep(progress))
+            });
+        let total_weight = 1.0 + neighbor_weight.map_or(0.0, |(_, weight)| weight);
+        let primary = &self.surface_biomes[primary_index];
+        influences.push(BiomeInfluence {
+            id: primary.id.as_str(),
+            weight: 1.0 / total_weight,
+            surface_index: primary_index,
+            terrain_strength: 1.0,
+        });
+        if let Some((neighbor_index, weight)) = neighbor_weight
+            && weight > 0.0
+        {
+            let neighbor = &self.surface_biomes[neighbor_index];
+            influences.push(BiomeInfluence {
+                id: neighbor.id.as_str(),
+                weight: weight / total_weight,
+                surface_index: neighbor_index,
+                terrain_strength: 1.0,
+            });
         }
-
-        let total_weight = weights[..weight_count]
-            .iter()
-            .map(|(_, weight)| *weight)
-            .sum::<f32>()
-            .max(f32::MIN_POSITIVE);
-        weights[..weight_count].sort_unstable_by_key(|(index, _)| *index);
-        let influences = weights[..weight_count]
-            .iter()
-            .filter(|(_, weight)| *weight > 0.0)
-            .map(|(index, weight)| {
-                let biome = &self.surface_biomes[*index];
-                BiomeInfluence {
-                    id: biome.id.as_str(),
-                    weight: *weight / total_weight,
-                    surface_index: *index,
-                    terrain_strength: 1.0,
-                }
-            })
-            .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
         let surface_margin_index = regional_boundary.and_then(|boundary| {
             let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
@@ -137,54 +106,90 @@ fn single_biome_sample(field: &BiomeField, index: usize) -> BiomeFieldSample<'_>
     }
 }
 
-fn nearest_surface_boundary(
-    position: Vec2,
-    primary_site: Vec2,
-    primary_index: usize,
-    sampled_sites: &[(Vec2, usize)],
-) -> Option<SurfaceBoundarySample> {
-    sampled_sites
+fn maximum_boundary_interest_radius(field: &BiomeField) -> f32 {
+    field
+        .surface_biomes
         .iter()
-        .filter(|(_, candidate_index)| *candidate_index != primary_index)
-        .map(|(site, candidate_index)| SurfaceBoundarySample {
-            neighbor_surface_index: *candidate_index,
-            distance: bisector_distance(position, primary_site, *site),
-        })
-        .min_by(|left, right| {
-            left.distance
-                .total_cmp(&right.distance)
-                .then_with(|| left.neighbor_surface_index.cmp(&right.neighbor_surface_index))
-        })
+        .filter_map(|biome| biome.surface_margin)
+        .map(|margin| margin.width + margin.width_variation.abs())
+        .fold(BORDER_TRANSITION_WIDTH, f32::max)
+        .max(0.0)
 }
 
-fn bisector_distance(position: Vec2, primary_site: Vec2, candidate_site: Vec2) -> f32 {
-    let pair_distance = primary_site.distance(candidate_site);
-    if pair_distance <= f32::EPSILON {
-        return f32::INFINITY;
+fn nearest_surface_boundary(
+    field: &BiomeField,
+    position: Vec2,
+    primary_index: usize,
+    interest_radius: f32,
+) -> Option<SurfaceBoundarySample> {
+    if interest_radius <= f32::EPSILON {
+        return None;
     }
 
-    let primary_score = position.distance_squared(primary_site);
-    let candidate_score = position.distance_squared(candidate_site);
-    ((candidate_score - primary_score).abs() / (2.0 * pair_distance)).max(0.0)
+    let probe_radius = interest_radius * EDGE_PROBE_DIRECTION_PADDING + EDGE_PROBE_STEP;
+    let probe_steps = (probe_radius / EDGE_PROBE_STEP).ceil() as usize;
+    let mut best: Option<SurfaceBoundarySample> = None;
+
+    for direction in EDGE_PROBE_DIRECTIONS {
+        let mut previous_distance = 0.0;
+        for step in 1..=probe_steps {
+            let distance = (step as f32 * EDGE_PROBE_STEP).min(probe_radius);
+            let candidate_index =
+                field.surface_biome_index_at(position + direction * distance);
+            if candidate_index == primary_index {
+                previous_distance = distance;
+                continue;
+            }
+
+            let boundary = refine_surface_boundary(
+                field,
+                position,
+                direction,
+                primary_index,
+                previous_distance,
+                distance,
+                candidate_index,
+            );
+            if boundary.distance <= interest_radius
+                && best.is_none_or(|current| {
+                    boundary.distance < current.distance
+                        || (boundary.distance == current.distance
+                            && boundary.neighbor_surface_index < current.neighbor_surface_index)
+                })
+            {
+                best = Some(boundary);
+            }
+            break;
+        }
+    }
+
+    best
 }
 
-fn set_max_weight(
-    weights: &mut [(usize, f32); MAX_WEIGHT_ENTRIES],
-    weight_count: &mut usize,
-    index: usize,
-    weight: f32,
-) {
-    if let Some((_, existing)) = weights[..*weight_count]
-        .iter_mut()
-        .find(|(candidate, _)| *candidate == index)
-    {
-        *existing = existing.max(weight);
-        return;
+fn refine_surface_boundary(
+    field: &BiomeField,
+    position: Vec2,
+    direction: Vec2,
+    primary_index: usize,
+    mut lower: f32,
+    mut upper: f32,
+    mut neighbor_surface_index: usize,
+) -> SurfaceBoundarySample {
+    for _ in 0..EDGE_REFINEMENT_STEPS {
+        let middle = (lower + upper) * 0.5;
+        let candidate_index = field.surface_biome_index_at(position + direction * middle);
+        if candidate_index == primary_index {
+            lower = middle;
+        } else {
+            upper = middle;
+            neighbor_surface_index = candidate_index;
+        }
     }
 
-    debug_assert!(*weight_count < weights.len());
-    weights[*weight_count] = (index, weight);
-    *weight_count += 1;
+    SurfaceBoundarySample {
+        neighbor_surface_index,
+        distance: upper,
+    }
 }
 
 #[cfg(test)]
@@ -192,25 +197,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_weights_keep_maximum_per_biome() {
-        let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
-        let mut count = 0;
-
-        set_max_weight(&mut weights, &mut count, 4, 0.25);
-        set_max_weight(&mut weights, &mut count, 4, 0.75);
-        set_max_weight(&mut weights, &mut count, 2, 0.50);
-        set_max_weight(&mut weights, &mut count, 7, 0.20);
-
-        assert_eq!(count, 3);
-        assert_eq!(weights[0], (4, 0.75));
-        assert_eq!(weights[1], (2, 0.50));
-        assert_eq!(weights[2], (7, 0.20));
+    fn edge_probe_directions_are_unit_vectors() {
+        for direction in EDGE_PROBE_DIRECTIONS {
+            assert!((direction.length() - 1.0).abs() <= 1e-6);
+        }
     }
 
     #[test]
-    fn far_neighbor_has_no_transition_weight() {
-        let distance = bisector_distance(Vec2::ZERO, Vec2::ZERO, Vec2::new(128.0, 0.0));
-        assert_eq!(distance, 64.0);
-        assert!(distance > BORDER_TRANSITION_WIDTH);
+    fn direction_padding_covers_half_of_an_eight_way_sector() {
+        let half_sector = std::f32::consts::FRAC_PI_8;
+        assert!(EDGE_PROBE_DIRECTION_PADDING >= 1.0 / half_sector.cos());
     }
 }
