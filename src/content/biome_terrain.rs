@@ -21,6 +21,14 @@ pub enum BiomeTerrain {
         detail_amplitude: f32,
         detail_scale: f32,
     },
+    Swamp {
+        base_height: f32,
+        depth: f32,
+        amplitude: f32,
+        scale: f32,
+        detail_amplitude: f32,
+        detail_scale: f32,
+    },
     Mountains {
         base_height: f32,
         amplitude: f32,
@@ -80,6 +88,12 @@ impl BiomeTerrain {
                 detail_amplitude,
                 ..
             } => -depth + amplitude.abs() + detail_amplitude.abs(),
+            Self::Swamp {
+                base_height,
+                amplitude,
+                detail_amplitude,
+                ..
+            } => base_height + amplitude.abs() + detail_amplitude.abs(),
             Self::Mountains {
                 base_height,
                 amplitude,
@@ -166,6 +180,32 @@ impl BiomeTerrain {
                 assert!(
                     detail_scale > 0.0,
                     "biome {biome_id} ocean detailScale must be positive"
+                );
+            }
+            Self::Swamp {
+                depth,
+                amplitude,
+                scale,
+                detail_amplitude,
+                detail_scale,
+                ..
+            } => {
+                assert!(depth > 0.0, "biome {biome_id} swamp depth must be positive");
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} swamp amplitude cannot be negative"
+                );
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} swamp scale must be positive"
+                );
+                assert!(
+                    detail_amplitude >= 0.0,
+                    "biome {biome_id} swamp detailAmplitude cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} swamp detailScale must be positive"
                 );
             }
             Self::Mountains {
