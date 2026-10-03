@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply requested fixes
-        run: python3 tools/apply_biome_fluid_fixes_once.py
+        run: python3 tools/apply_biome_fluid_fixes_once_v2.py
 
       - name: Validate JSON
         shell: bash
