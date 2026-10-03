@@ -29,8 +29,11 @@ jobs:
           import re
           import sys
 
-          with_comma = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*,[ \t]*(?:\r?\n)?$')
-          without_comma = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*(?:\r?\n)?$')
+          with_comma_line = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*,[ \t]*(?:\r?\n)?$')
+          without_comma_line = re.compile(r'^[ \t]*"name"[ \t]*:[ \t]*null[ \t]*(?:\r?\n)?$')
+          inline_before_comma = re.compile(r'"name"[ \t]*:[ \t]*null[ \t]*,')
+          inline_after_comma = re.compile(r',[ \t]*"name"[ \t]*:[ \t]*null')
+          sole_property = re.compile(r'(?<=\{)[ \t]*"name"[ \t]*:[ \t]*null[ \t]*(?=\})')
           any_null_name = re.compile(r'"name"[ \t]*:[ \t]*null')
 
           changed = []
@@ -39,32 +42,39 @@ jobs:
           for path in sorted(Path('.').rglob('*.json')):
               if '.git' in path.parts:
                   continue
+
               original = path.read_text(encoding='utf-8')
+              before_count = len(any_null_name.findall(original))
+              if not before_count:
+                  continue
+
               lines = original.splitlines(keepends=True)
               output = []
-              file_removed = 0
 
               for line in lines:
-                  if with_comma.fullmatch(line):
-                      file_removed += 1
+                  if with_comma_line.fullmatch(line):
                       continue
-                  if without_comma.fullmatch(line):
+                  if without_comma_line.fullmatch(line):
                       for index in range(len(output) - 1, -1, -1):
                           if output[index].strip():
-                              output[index] = re.sub(r',[ \t]*(\r?\n)?$', lambda m: (m.group(1) or ''), output[index])
+                              output[index] = re.sub(r',[ \t]*(\r?\n)?$', lambda match: (match.group(1) or ''), output[index])
                               break
-                      file_removed += 1
                       continue
                   output.append(line)
 
-              if not file_removed:
-                  continue
-
               updated = ''.join(output)
+              updated = inline_before_comma.sub('', updated)
+              updated = inline_after_comma.sub('', updated)
+              updated = sole_property.sub('', updated)
+
+              remaining_count = len(any_null_name.findall(updated))
+              if remaining_count:
+                  raise RuntimeError(f'{path}: {remaining_count} null name properties remain')
+
               json.loads(updated)
               path.write_text(updated, encoding='utf-8')
               changed.append(path.as_posix())
-              removed += file_removed
+              removed += before_count
 
           invalid = []
           remaining = []
