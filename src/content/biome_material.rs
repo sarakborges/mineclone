@@ -7,21 +7,30 @@ use super::{biome::BiomeDefinition, block::BlockRegistry};
 pub struct BiomeMaterialLayer {
     pub block: String,
     #[serde(default)]
+    pub alternates: Vec<String>,
+    #[serde(default = "default_patch_scale")]
+    pub patch_scale: f32,
+    #[serde(default)]
     pub depth: Option<u32>,
 }
 
 impl BiomeDefinition {
-    pub fn surface_block_at_depth(&self, depth: u32) -> Option<&str> {
+    pub fn surface_layer_at_depth(&self, depth: u32) -> Option<&BiomeMaterialLayer> {
         let mut remaining = depth;
 
         for layer in &self.surface_layers {
             match layer.depth {
                 Some(layer_depth) if remaining >= layer_depth => remaining -= layer_depth,
-                _ => return Some(layer.block.as_str()),
+                _ => return Some(layer),
             }
         }
 
         None
+    }
+
+    pub fn surface_block_at_depth(&self, depth: u32) -> Option<&str> {
+        self.surface_layer_at_depth(depth)
+            .map(|layer| layer.block.as_str())
     }
 
     pub(crate) fn validate_surface_materials(&self) {
@@ -35,6 +44,18 @@ impl BiomeDefinition {
             assert!(
                 !layer.block.trim().is_empty(),
                 "biome {} surfaceLayers[{index}].block cannot be empty",
+                self.id
+            );
+            for (alternate_index, alternate) in layer.alternates.iter().enumerate() {
+                assert!(
+                    !alternate.trim().is_empty(),
+                    "biome {} surfaceLayers[{index}].alternates[{alternate_index}] cannot be empty",
+                    self.id
+                );
+            }
+            assert!(
+                layer.patch_scale.is_finite() && layer.patch_scale > 0.0,
+                "biome {} surfaceLayers[{index}].patchScale must be positive and finite",
                 self.id
             );
 
@@ -63,6 +84,14 @@ impl BiomeDefinition {
                 self.id,
                 layer.block
             );
+            for alternate in &layer.alternates {
+                assert!(
+                    blocks.get(alternate).is_some(),
+                    "biome {} surface layer references missing alternate block: {}",
+                    self.id,
+                    alternate
+                );
+            }
         }
 
         if let Some(margin) = &self.surface_margin {
@@ -73,6 +102,14 @@ impl BiomeDefinition {
                     self.id,
                     layer.block
                 );
+                for alternate in &layer.alternates {
+                    assert!(
+                        blocks.get(alternate).is_some(),
+                        "biome {} surface margin references missing alternate block: {}",
+                        self.id,
+                        alternate
+                    );
+                }
             }
         }
 
@@ -84,4 +121,8 @@ impl BiomeDefinition {
             );
         }
     }
+}
+
+fn default_patch_scale() -> f32 {
+    0.04
 }
