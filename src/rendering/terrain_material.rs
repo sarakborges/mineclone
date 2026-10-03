@@ -19,21 +19,27 @@ pub(crate) struct TerrainLightingBuffer {
     handle: Handle<ShaderBuffer>,
     sky_light_factor: f32,
     dynamic_light_enabled: f32,
+    wind_x: f32,
+    wind_z: f32,
 }
 
 impl TerrainLightingBuffer {
     pub(crate) fn new(buffers: &mut Assets<ShaderBuffer>) -> Self {
         let sky_light_factor = 1.0;
         let dynamic_light_enabled = 0.0;
+        let wind_x = 0.0;
+        let wind_z = 0.0;
         Self {
             handle: buffers.add(ShaderBuffer::from(vec![[
                 sky_light_factor,
                 dynamic_light_enabled,
-                0.0,
-                0.0,
+                wind_x,
+                wind_z,
             ]])),
             sky_light_factor,
             dynamic_light_enabled,
+            wind_x,
+            wind_z,
         }
     }
 
@@ -63,6 +69,19 @@ impl TerrainLightingBuffer {
         self.write(buffers);
     }
 
+    pub(crate) fn set_wind_velocity(
+        &mut self,
+        buffers: &mut Assets<ShaderBuffer>,
+        velocity: Vec3,
+    ) {
+        if self.wind_x == velocity.x && self.wind_z == velocity.z {
+            return;
+        }
+        self.wind_x = velocity.x;
+        self.wind_z = velocity.z;
+        self.write(buffers);
+    }
+
     fn write(&self, buffers: &mut Assets<ShaderBuffer>) {
         buffers
             .get_mut(&self.handle)
@@ -70,8 +89,8 @@ impl TerrainLightingBuffer {
             .set_data(vec![[
                 self.sky_light_factor,
                 self.dynamic_light_enabled,
-                0.0,
-                0.0,
+                self.wind_x,
+                self.wind_z,
             ]]);
     }
 }
