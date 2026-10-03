@@ -2,6 +2,7 @@
   "id": "asteria:leaf_oak",
   "category": "foliage",
   "tint": "leaf",
+  "windSway": true,
   "textures": {
     "top": [
       {
