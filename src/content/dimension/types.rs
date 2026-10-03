@@ -34,12 +34,6 @@ pub struct DimensionBiome {
     pub spawn_weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
-    #[serde(default)]
-    pub avoid_near: Vec<String>,
-    #[serde(default)]
-    pub require_near: Vec<String>,
-    #[serde(default)]
-    pub exclusive_neighbor_group: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
