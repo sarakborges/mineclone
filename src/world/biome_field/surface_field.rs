@@ -180,7 +180,7 @@ impl BiomeField {
     }
 }
 
-fn land_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
+pub(super) fn land_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = (cell.as_vec2() + Vec2::splat(0.5)) * spacing;
     let jitter_x = hash_signed(cell_hash(
         cell,
@@ -248,7 +248,6 @@ mod tests {
         BiomeField {
             surface_biomes,
             volume_biomes: Arc::new(Vec::new()),
-            surface_site_spacing: Vec2::splat(8.0),
             surface_field_config: config,
             volume_site_spacing: None,
             climate: MacroClimateField::new(seed),
@@ -309,5 +308,15 @@ mod tests {
             let point = Vec2::new(i as f32 * 173.0, i as f32 * -91.0);
             a.surface_biome_index_at(point) != b.surface_biome_index_at(point)
         }));
+    }
+
+    #[test]
+    fn locate_sites_use_the_same_spacing_as_surface_ownership() {
+        let field = field(42);
+        let spacing = field.surface_field_config.land_spacing;
+        let site = land_site_position(IVec2::new(3, -2), spacing, field.seed);
+        let cell_center = (IVec2::new(3, -2).as_vec2() + Vec2::splat(0.5)) * spacing;
+        assert!((site.x - cell_center.x).abs() <= spacing.x * LAND_SITE_JITTER_FRACTION);
+        assert!((site.y - cell_center.y).abs() <= spacing.y * LAND_SITE_JITTER_FRACTION);
     }
 }
