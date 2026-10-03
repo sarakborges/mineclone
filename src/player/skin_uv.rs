@@ -509,15 +509,7 @@ fn infer_skin_model(image: &RgbaImage) -> PlayerSkinModel {
     if unused
         .iter()
         .copied()
-        .any(|rect| area_has_transparency(image, rect, scale))
-        || unused
-            .iter()
-            .copied()
-            .all(|rect| area_is_rgba(image, rect, scale, [0, 0, 0, 255]))
-        || unused
-            .iter()
-            .copied()
-            .all(|rect| area_is_rgba(image, rect, scale, [255, 255, 255, 255]))
+        .all(|rect| area_is_fully_transparent(image, rect, scale))
     {
         PlayerSkinModel::Slim
     } else {
@@ -525,21 +517,12 @@ fn infer_skin_model(image: &RgbaImage) -> PlayerSkinModel {
     }
 }
 
-fn area_has_transparency(
+fn area_is_fully_transparent(
     image: &RgbaImage,
     (x, y, width, height): (u32, u32, u32, u32),
     scale: u32,
 ) -> bool {
-    pixels_in_area(image, (x, y, width, height), scale).any(|pixel| pixel[3] != 255)
-}
-
-fn area_is_rgba(
-    image: &RgbaImage,
-    (x, y, width, height): (u32, u32, u32, u32),
-    scale: u32,
-    expected: [u8; 4],
-) -> bool {
-    pixels_in_area(image, (x, y, width, height), scale).all(|pixel| pixel.0 == expected)
+    pixels_in_area(image, (x, y, width, height), scale).all(|pixel| pixel[3] == 0)
 }
 
 fn pixels_in_area(
@@ -568,6 +551,19 @@ mod tests {
         ];
         assert!((actual[0] - expected[0]).abs() < f32::EPSILON);
         assert!((actual[1] - expected[1]).abs() < f32::EPSILON);
+    }
+
+    fn paint_area(
+        image: &mut RgbaImage,
+        (x, y, width, height): (u32, u32, u32, u32),
+        scale: u32,
+        color: Rgba<u8>,
+    ) {
+        for py in y * scale..(y + height) * scale {
+            for px in x * scale..(x + width) * scale {
+                image.put_pixel(px, py, color);
+            }
+        }
     }
 
     #[test]
@@ -637,9 +633,25 @@ mod tests {
     }
 
     #[test]
-    fn transparent_unused_arm_pixels_identify_slim_skin() {
+    fn one_transparent_pixel_does_not_misclassify_classic_skin() {
         let mut image = RgbaImage::from_pixel(64, 64, Rgba([40, 50, 60, 255]));
         image.put_pixel(50, 16, Rgba([0, 0, 0, 0]));
+
+        assert_eq!(infer_skin_model(&image), PlayerSkinModel::Classic);
+    }
+
+    #[test]
+    fn fully_transparent_unused_arm_strips_identify_slim_skin_at_256() {
+        let scale = 4;
+        let mut image = RgbaImage::from_pixel(256, 256, Rgba([40, 50, 60, 255]));
+        for rect in [
+            (50, 16, 2, 4),
+            (54, 20, 2, 12),
+            (42, 48, 2, 4),
+            (46, 52, 2, 12),
+        ] {
+            paint_area(&mut image, rect, scale, Rgba([0, 0, 0, 0]));
+        }
 
         assert_eq!(infer_skin_model(&image), PlayerSkinModel::Slim);
     }
