@@ -3,7 +3,9 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use crate::content::{builtin_ids::WATER_FLUID_ID, registry::DefinitionMap};
+use crate::content::{
+    biome::SurfaceBiomeSelector, builtin_ids::WATER_FLUID_ID, registry::DefinitionMap,
+};
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +35,8 @@ pub struct DimensionBiome {
     pub size: Option<DimensionBiomeSize>,
     #[serde(default)]
     pub exclusive_neighbor_group: Option<String>,
+    #[serde(default)]
+    pub neighbor_deny: Option<SurfaceBiomeSelector>,
 }
 
 #[derive(Clone, Deserialize)]
