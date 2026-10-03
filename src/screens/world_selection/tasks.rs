@@ -122,7 +122,9 @@ impl OwnedLoadContent {
         let mut dimensions = DimensionRegistry::default();
         let mut cycles = DayNightCycleRegistry::default();
         for definition in registries.dimensions.iter() {
-            if let Some(cycle) = registries.cycles.get(&definition.day_night_cycle) {
+            if cycles.get(&definition.day_night_cycle).is_none()
+                && let Some(cycle) = registries.cycles.get(&definition.day_night_cycle)
+            {
                 cycles.insert(cycle.clone());
             }
             dimensions.insert(definition.clone());
