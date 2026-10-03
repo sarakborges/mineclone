@@ -185,6 +185,8 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub tint: BlockTint,
     #[serde(default)]
+    pub wind_sway: bool,
+    #[serde(default)]
     pub textures: BlockTextures,
     #[serde(default)]
     pub rotate_texture: BlockTextureRotations,
@@ -454,6 +456,7 @@ mod tests {
             loot_table: LootTableDefinition::default(),
             tags: Vec::new(),
             tint: BlockTint::None,
+            wind_sway: false,
             textures: BlockTextures::default(),
             rotate_texture: BlockTextureRotations::default(),
             orientations: Vec::new(),
