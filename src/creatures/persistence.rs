@@ -75,10 +75,6 @@ impl PendingCreatureRestores {
         Self { creatures }
     }
 
-    pub(crate) fn saved(&self) -> &[SavedCreature] {
-        &self.creatures
-    }
-
     pub(crate) fn snapshot(
         &self,
         active: impl Iterator<Item = SavedCreature>,
