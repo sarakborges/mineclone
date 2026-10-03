@@ -77,7 +77,6 @@ impl BiomeField {
                 primary_index = *candidate_index;
             }
         }
-        let regional_primary_index = primary_index;
         let regional_boundary = nearest_surface_boundary(
             nearest_sample_index,
             nearest_score,
@@ -131,7 +130,7 @@ impl BiomeField {
             .iter()
             .map(|(_, weight)| *weight)
             .sum();
-        let mut influences = weights[..weight_count]
+        let influences = weights[..weight_count]
             .iter()
             .filter(|(_, weight)| *weight > 0.0)
             .map(|(index, weight)| {
@@ -145,41 +144,7 @@ impl BiomeField {
             })
             .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
-        if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position) {
-            for influence in &mut influences {
-                influence.weight *= 1.0 - forced_weight;
-            }
-            if let Some(existing) = influences
-                .iter_mut()
-                .find(|influence| influence.surface_index == forced_index)
-            {
-                existing.weight += forced_weight;
-                existing.terrain_strength = 1.0;
-            } else {
-                influences.push(BiomeInfluence {
-                    id: self.surface_biomes[forced_index].id.as_str(),
-                    weight: forced_weight,
-                    surface_index: forced_index,
-                    terrain_strength: 1.0,
-                });
-            }
-
-            primary_index = influences
-                .iter()
-                .filter(|influence| influence.weight > 0.0)
-                .max_by(|left, right| {
-                    left.weight
-                        .total_cmp(&right.weight)
-                        .then_with(|| left.surface_index.cmp(&right.surface_index))
-                })
-                .map(|influence| influence.surface_index)
-                .unwrap_or(forced_index);
-        }
-
-        let nearest_boundary = (primary_index == regional_primary_index)
-            .then_some(regional_boundary)
-            .flatten();
-        let surface_margin_index = nearest_boundary.and_then(|boundary| {
+        let surface_margin_index = regional_boundary.and_then(|boundary| {
             let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
             let margin = margin_owner.surface_margin?;
             let width = varied_surface_margin_width(
