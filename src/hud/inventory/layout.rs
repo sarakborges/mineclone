@@ -273,11 +273,7 @@ pub(super) fn spawn_inventory_root(
                     UiRect::all(px(PANEL_GAP))
                 },
                 flex_direction: FlexDirection::Row,
-                align_items: if creative_inventory {
-                    AlignItems::Center
-                } else {
-                    AlignItems::FlexStart
-                },
+                align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 column_gap: px(PANEL_GAP),
                 ..default()
