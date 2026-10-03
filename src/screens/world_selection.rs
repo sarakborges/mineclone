@@ -69,6 +69,14 @@ struct WorldSelectionState {
     thumbnail_images: Vec<Handle<Image>>,
 }
 
+impl WorldSelectionState {
+    fn abandon_load(&mut self) {
+        if let Some(pending) = self.loading.take() {
+            pending.abandon();
+        }
+    }
+}
+
 #[derive(Component, Clone)]
 enum WorldSelectionAction {
     Load(String),
@@ -291,10 +299,8 @@ fn poll_world_load(
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
 
-fn abandon_world_load(state: Res<WorldSelectionState>) {
-    if let Some(pending) = state.loading.as_ref() {
-        pending.abandon();
-    }
+fn abandon_world_load(mut state: ResMut<WorldSelectionState>) {
+    state.abandon_load();
 }
 
 fn release_world_thumbnail_images(
@@ -328,9 +334,7 @@ fn handle_world_selection(
     if interactions.iter().any(|(interaction, action)| {
         *interaction == Interaction::Pressed && matches!(action, WorldSelectionAction::Back)
     }) {
-        if let Some(pending) = state.loading.as_ref() {
-            pending.abandon();
-        }
+        state.abandon_load();
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
     }
@@ -341,9 +345,7 @@ fn handle_world_selection(
         }
 
         if matches!(action, WorldSelectionAction::NewWorld) {
-            if let Some(pending) = state.loading.as_ref() {
-                pending.abandon();
-            }
+            state.abandon_load();
             transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
             return;
         }
