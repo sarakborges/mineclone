@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -103,6 +103,12 @@ struct AmbientParticleAssets {
     materials: HashMap<String, Handle<StandardMaterial>>,
 }
 
+#[derive(SystemParam)]
+struct AmbientParticleEnvironment<'w> {
+    wind: Res<'w, Wind>,
+    world: Res<'w, VoxelWorld>,
+}
+
 fn spawn_ambient_particles(
     mut commands: Commands,
     time: Res<Time>,
@@ -111,8 +117,7 @@ fn spawn_ambient_particles(
     current_biome: Res<CurrentBiome>,
     registry: Res<AmbientParticleRegistry>,
     fluids: Res<FluidRegistry>,
-    wind: Res<Wind>,
-    world: Res<VoxelWorld>,
+    environment: AmbientParticleEnvironment,
     mut runtime: ResMut<AmbientParticleRuntime>,
     mut particle_assets: ResMut<AmbientParticleAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -157,13 +162,13 @@ fn spawn_ambient_particles(
                     camera_position,
                     fluid_id,
                     &rule.particle,
-                    &world,
+                    &environment.world,
                     &mut runtime,
                 ),
                 None => find_ambient_position(
                     camera_position,
                     &rule.particle,
-                    &world,
+                    &environment.world,
                     &mut runtime,
                 ),
             };
@@ -174,7 +179,7 @@ fn spawn_ambient_particles(
             let size = runtime.range(rule.particle.size);
             let lifetime = runtime.range(rule.particle.lifetime);
             let velocity = runtime.jittered_velocity(&rule.particle)
-                + wind.velocity(rule.particle.wind_influence);
+                + environment.wind.velocity(rule.particle.wind_influence);
             let phase = Vec3::new(
                 runtime.unit() * std::f32::consts::TAU,
                 runtime.unit() * std::f32::consts::TAU,
