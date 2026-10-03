@@ -2,6 +2,7 @@
   "id": "asteria:leaf_world_tree",
   "category": "foliage",
   "tint": "none",
+  "windSway": true,
   "textures": {
     "top": [
       {
