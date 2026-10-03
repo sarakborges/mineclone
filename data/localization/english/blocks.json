@@ -2,6 +2,18 @@
   "asteria:basalt": {
     "/name": "Basalt"
   },
+  "asteria:basalt_bricks": {
+    "/name": "Basalt Bricks"
+  },
+  "asteria:basalt_cobble": {
+    "/name": "Basalt Cobble"
+  },
+  "asteria:basalt_polished": {
+    "/name": "Polished Basalt"
+  },
+  "asteria:basalt_tiles": {
+    "/name": "Basalt Tiles"
+  },
   "asteria:bricks": {
     "/name": "Bricks"
   },
@@ -19,6 +31,18 @@
   },
   "asteria:gravel": {
     "/name": "Gravel"
+  },
+  "asteria:ice": {
+    "/name": "Ice"
+  },
+  "asteria:ice_bricks": {
+    "/name": "Ice Bricks"
+  },
+  "asteria:ice_polished": {
+    "/name": "Polished Ice"
+  },
+  "asteria:ice_tiles": {
+    "/name": "Ice Tiles"
   },
   "asteria:lamp": {
     "/name": "Lamp"
@@ -86,22 +110,82 @@
   "asteria:mud": {
     "/name": "Mud"
   },
+  "asteria:mud_bricks": {
+    "/name": "Mud Bricks"
+  },
+  "asteria:mud_dry": {
+    "/name": "Dry Mud"
+  },
+  "asteria:mud_polished": {
+    "/name": "Polished Mud"
+  },
+  "asteria:mud_tiles": {
+    "/name": "Mud Tiles"
+  },
+  "asteria:planks_enchanted": {
+    "/name": "Enchanted Planks"
+  },
+  "asteria:planks_oak": {
+    "/name": "Oak Planks"
+  },
+  "asteria:planks_willow": {
+    "/name": "Willow Planks"
+  },
+  "asteria:planks_world_tree": {
+    "/name": "World Tree Planks"
+  },
   "asteria:sand": {
     "/name": "Sand"
   },
   "asteria:sand_layer": {
     "/name": "Sand Layer"
   },
+  "asteria:sandstone": {
+    "/name": "Sandstone"
+  },
+  "asteria:sandstone_bricks": {
+    "/name": "Sandstone Bricks"
+  },
+  "asteria:sandstone_polished": {
+    "/name": "Polished Sandstone"
+  },
+  "asteria:sandstone_tiles": {
+    "/name": "Sandstone Tiles"
+  },
   "asteria:snow": {
     "/name": "Snow"
+  },
+  "asteria:snow_bricks": {
+    "/name": "Snow Bricks"
   },
   "asteria:snow_layer": {
     "/name": "Snow Layer"
   },
+  "asteria:snow_polished": {
+    "/name": "Polished Snow"
+  },
+  "asteria:snow_tiles": {
+    "/name": "Snow Tiles"
+  },
   "asteria:stone": {
     "/name": "Stone"
   },
+  "asteria:stone_bricks": {
+    "/name": "Stone Bricks"
+  },
+  "asteria:stone_cobble": {
+    "/name": "Stone Cobble"
+  },
+  "asteria:stone_polished": {
+    "/name": "Polished Stone"
+  },
+  "asteria:stone_tiles": {
+    "/name": "Stone Tiles"
+  },
   "asteria:storage_box": {
     "/name": "Storage Box"
+  },
+  "asteria:terracotta": {
+    "/name": "Terracotta"
   }
 }

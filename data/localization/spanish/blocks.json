@@ -2,6 +2,18 @@
   "asteria:basalt": {
     "/name": "Basalto"
   },
+  "asteria:basalt_bricks": {
+    "/name": "Ladrillos de Basalto"
+  },
+  "asteria:basalt_cobble": {
+    "/name": "Basalto Rústico"
+  },
+  "asteria:basalt_polished": {
+    "/name": "Basalto Pulido"
+  },
+  "asteria:basalt_tiles": {
+    "/name": "Baldosas de Basalto"
+  },
   "asteria:bricks": {
     "/name": "Ladrillos"
   },
@@ -19,6 +31,18 @@
   },
   "asteria:gravel": {
     "/name": "Grava"
+  },
+  "asteria:ice": {
+    "/name": "Hielo"
+  },
+  "asteria:ice_bricks": {
+    "/name": "Ladrillos de Hielo"
+  },
+  "asteria:ice_polished": {
+    "/name": "Hielo Pulido"
+  },
+  "asteria:ice_tiles": {
+    "/name": "Baldosas de Hielo"
   },
   "asteria:lamp": {
     "/name": "Lámpara"
@@ -86,22 +110,82 @@
   "asteria:mud": {
     "/name": "Barro"
   },
+  "asteria:mud_bricks": {
+    "/name": "Ladrillos de Barro"
+  },
+  "asteria:mud_dry": {
+    "/name": "Barro Seco"
+  },
+  "asteria:mud_polished": {
+    "/name": "Barro Pulido"
+  },
+  "asteria:mud_tiles": {
+    "/name": "Baldosas de Barro"
+  },
+  "asteria:planks_enchanted": {
+    "/name": "Tablones Encantados"
+  },
+  "asteria:planks_oak": {
+    "/name": "Tablones de Roble"
+  },
+  "asteria:planks_willow": {
+    "/name": "Tablones de Sauce"
+  },
+  "asteria:planks_world_tree": {
+    "/name": "Tablones del Árbol del Mundo"
+  },
   "asteria:sand": {
     "/name": "Arena"
   },
   "asteria:sand_layer": {
     "/name": "Capa de Arena"
   },
+  "asteria:sandstone": {
+    "/name": "Arenisca"
+  },
+  "asteria:sandstone_bricks": {
+    "/name": "Ladrillos de Arenisca"
+  },
+  "asteria:sandstone_polished": {
+    "/name": "Arenisca Pulida"
+  },
+  "asteria:sandstone_tiles": {
+    "/name": "Baldosas de Arenisca"
+  },
   "asteria:snow": {
     "/name": "Nieve"
+  },
+  "asteria:snow_bricks": {
+    "/name": "Ladrillos de Nieve"
   },
   "asteria:snow_layer": {
     "/name": "Capa de Nieve"
   },
+  "asteria:snow_polished": {
+    "/name": "Nieve Pulida"
+  },
+  "asteria:snow_tiles": {
+    "/name": "Baldosas de Nieve"
+  },
   "asteria:stone": {
     "/name": "Piedra"
   },
+  "asteria:stone_bricks": {
+    "/name": "Ladrillos de Piedra"
+  },
+  "asteria:stone_cobble": {
+    "/name": "Piedra Rústica"
+  },
+  "asteria:stone_polished": {
+    "/name": "Piedra Pulida"
+  },
+  "asteria:stone_tiles": {
+    "/name": "Baldosas de Piedra"
+  },
   "asteria:storage_box": {
     "/name": "Caja de almacenamiento"
+  },
+  "asteria:terracotta": {
+    "/name": "Terracota"
   }
 }

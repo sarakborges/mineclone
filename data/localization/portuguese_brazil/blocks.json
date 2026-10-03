@@ -2,6 +2,18 @@
   "asteria:basalt": {
     "/name": "Basalto"
   },
+  "asteria:basalt_bricks": {
+    "/name": "Tijolos de Basalto"
+  },
+  "asteria:basalt_cobble": {
+    "/name": "Basalto Bruto"
+  },
+  "asteria:basalt_polished": {
+    "/name": "Basalto Polido"
+  },
+  "asteria:basalt_tiles": {
+    "/name": "Ladrilhos de Basalto"
+  },
   "asteria:bricks": {
     "/name": "Tijolos"
   },
@@ -19,6 +31,18 @@
   },
   "asteria:gravel": {
     "/name": "Cascalho"
+  },
+  "asteria:ice": {
+    "/name": "Gelo"
+  },
+  "asteria:ice_bricks": {
+    "/name": "Tijolos de Gelo"
+  },
+  "asteria:ice_polished": {
+    "/name": "Gelo Polido"
+  },
+  "asteria:ice_tiles": {
+    "/name": "Ladrilhos de Gelo"
   },
   "asteria:lamp": {
     "/name": "Lâmpada"
@@ -86,22 +110,82 @@
   "asteria:mud": {
     "/name": "Lama"
   },
+  "asteria:mud_bricks": {
+    "/name": "Tijolos de Lama"
+  },
+  "asteria:mud_dry": {
+    "/name": "Lama Seca"
+  },
+  "asteria:mud_polished": {
+    "/name": "Lama Polida"
+  },
+  "asteria:mud_tiles": {
+    "/name": "Ladrilhos de Lama"
+  },
+  "asteria:planks_enchanted": {
+    "/name": "Tábuas Encantadas"
+  },
+  "asteria:planks_oak": {
+    "/name": "Tábuas de Carvalho"
+  },
+  "asteria:planks_willow": {
+    "/name": "Tábuas de Salgueiro"
+  },
+  "asteria:planks_world_tree": {
+    "/name": "Tábuas da Árvore do Mundo"
+  },
   "asteria:sand": {
     "/name": "Areia"
   },
   "asteria:sand_layer": {
     "/name": "Camada de Areia"
   },
+  "asteria:sandstone": {
+    "/name": "Arenito"
+  },
+  "asteria:sandstone_bricks": {
+    "/name": "Tijolos de Arenito"
+  },
+  "asteria:sandstone_polished": {
+    "/name": "Arenito Polido"
+  },
+  "asteria:sandstone_tiles": {
+    "/name": "Ladrilhos de Arenito"
+  },
   "asteria:snow": {
     "/name": "Neve"
+  },
+  "asteria:snow_bricks": {
+    "/name": "Tijolos de Neve"
   },
   "asteria:snow_layer": {
     "/name": "Camada de Neve"
   },
+  "asteria:snow_polished": {
+    "/name": "Neve Polida"
+  },
+  "asteria:snow_tiles": {
+    "/name": "Ladrilhos de Neve"
+  },
   "asteria:stone": {
     "/name": "Pedra"
   },
+  "asteria:stone_bricks": {
+    "/name": "Tijolos de Pedra"
+  },
+  "asteria:stone_cobble": {
+    "/name": "Pedra Bruta"
+  },
+  "asteria:stone_polished": {
+    "/name": "Pedra Polida"
+  },
+  "asteria:stone_tiles": {
+    "/name": "Ladrilhos de Pedra"
+  },
   "asteria:storage_box": {
     "/name": "Caixa de armazenamento"
+  },
+  "asteria:terracotta": {
+    "/name": "Terracota"
   }
 }
