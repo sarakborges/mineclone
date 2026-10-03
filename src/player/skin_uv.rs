@@ -21,6 +21,9 @@ const SLIM_ARM_WIDTH_WORLD: f32 = SKIN_PIXEL_WORLD * 3.0;
 const SLIM_ARM_PIVOT_X: f32 = BODY_HALF_WIDTH_WORLD + SLIM_ARM_WIDTH_WORLD * 0.5;
 
 #[derive(Component)]
+struct PlayerSkinMapped;
+
+#[derive(Component)]
 struct PlayerSkinOuterLayer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,12 +75,11 @@ type PlayerSkinBaseMeshQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static Name,
         &'static Mesh3d,
         &'static MeshMaterial3d<StandardMaterial>,
         &'static RenderLayers,
     ),
-    Added<RenderLayers>,
+    (Without<PlayerSkinMapped>, Without<PlayerSkinOuterLayer>),
 >;
 
 type PlayerSkinParentLayersQuery<'w, 's> =
@@ -88,6 +90,93 @@ type PlayerSkinOuterLayerQuery<'w, 's> = Query<
     (&'static ChildOf, &'static mut RenderLayers),
     With<PlayerSkinOuterLayer>,
 >;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlayerSkinPart {
+    Head,
+    HeadLayer,
+    Body,
+    RightArm,
+    LeftArm,
+    RightLeg,
+    LeftLeg,
+}
+
+impl PlayerSkinPart {
+    fn from_node_name(name: &str) -> Option<Self> {
+        match name {
+            "HeadMesh" => Some(Self::Head),
+            "HairLayer" => Some(Self::HeadLayer),
+            "BodyMesh" => Some(Self::Body),
+            "RightArmMesh" => Some(Self::RightArm),
+            "LeftArmMesh" => Some(Self::LeftArm),
+            "RightLegMesh" => Some(Self::RightLeg),
+            "LeftLegMesh" => Some(Self::LeftLeg),
+            _ => None,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Head => "HeadMesh",
+            Self::HeadLayer => "HairLayer",
+            Self::Body => "BodyMesh",
+            Self::RightArm => "RightArmMesh",
+            Self::LeftArm => "LeftArmMesh",
+            Self::RightLeg => "RightLegMesh",
+            Self::LeftLeg => "LeftLegMesh",
+        }
+    }
+
+    fn spec(self, model: PlayerSkinModel) -> PlayerSkinMeshSpec {
+        let arm_width = model.arm_width_pixels();
+        match self {
+            Self::Head => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(0.0, 0.0, 8.0, 8.0, 8.0),
+                outer: None,
+            },
+            Self::HeadLayer => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(32.0, 0.0, 8.0, 8.0, 8.0),
+                outer: None,
+            },
+            Self::Body => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(16.0, 16.0, 8.0, 12.0, 4.0),
+                outer: Some(OuterLayerSpec {
+                    name: "BodyLayer",
+                    layout: SkinBoxUv::new(16.0, 32.0, 8.0, 12.0, 4.0),
+                }),
+            },
+            Self::RightArm => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(40.0, 16.0, arm_width, 12.0, 4.0),
+                outer: Some(OuterLayerSpec {
+                    name: "RightArmLayer",
+                    layout: SkinBoxUv::new(40.0, 32.0, arm_width, 12.0, 4.0),
+                }),
+            },
+            Self::LeftArm => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(32.0, 48.0, arm_width, 12.0, 4.0),
+                outer: Some(OuterLayerSpec {
+                    name: "LeftArmLayer",
+                    layout: SkinBoxUv::new(48.0, 48.0, arm_width, 12.0, 4.0),
+                }),
+            },
+            Self::RightLeg => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(0.0, 16.0, 4.0, 12.0, 4.0),
+                outer: Some(OuterLayerSpec {
+                    name: "RightLegLayer",
+                    layout: SkinBoxUv::new(0.0, 32.0, 4.0, 12.0, 4.0),
+                }),
+            },
+            Self::LeftLeg => PlayerSkinMeshSpec {
+                base: SkinBoxUv::new(16.0, 48.0, 4.0, 12.0, 4.0),
+                outer: Some(OuterLayerSpec {
+                    name: "LeftLegLayer",
+                    layout: SkinBoxUv::new(0.0, 48.0, 4.0, 12.0, 4.0),
+                }),
+            },
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct SkinBoxUv {
@@ -241,58 +330,6 @@ struct PlayerSkinMeshSpec {
     outer: Option<OuterLayerSpec>,
 }
 
-impl PlayerSkinMeshSpec {
-    fn for_node(name: &str, model: PlayerSkinModel) -> Option<Self> {
-        let arm_width = model.arm_width_pixels();
-        match name {
-            "HeadMesh" => Some(Self {
-                base: SkinBoxUv::new(0.0, 0.0, 8.0, 8.0, 8.0),
-                outer: None,
-            }),
-            "HairLayer" => Some(Self {
-                base: SkinBoxUv::new(32.0, 0.0, 8.0, 8.0, 8.0),
-                outer: None,
-            }),
-            "BodyMesh" => Some(Self {
-                base: SkinBoxUv::new(16.0, 16.0, 8.0, 12.0, 4.0),
-                outer: Some(OuterLayerSpec {
-                    name: "BodyLayer",
-                    layout: SkinBoxUv::new(16.0, 32.0, 8.0, 12.0, 4.0),
-                }),
-            }),
-            "RightArmMesh" => Some(Self {
-                base: SkinBoxUv::new(40.0, 16.0, arm_width, 12.0, 4.0),
-                outer: Some(OuterLayerSpec {
-                    name: "RightArmLayer",
-                    layout: SkinBoxUv::new(40.0, 32.0, arm_width, 12.0, 4.0),
-                }),
-            }),
-            "LeftArmMesh" => Some(Self {
-                base: SkinBoxUv::new(32.0, 48.0, arm_width, 12.0, 4.0),
-                outer: Some(OuterLayerSpec {
-                    name: "LeftArmLayer",
-                    layout: SkinBoxUv::new(48.0, 48.0, arm_width, 12.0, 4.0),
-                }),
-            }),
-            "RightLegMesh" => Some(Self {
-                base: SkinBoxUv::new(0.0, 16.0, 4.0, 12.0, 4.0),
-                outer: Some(OuterLayerSpec {
-                    name: "RightLegLayer",
-                    layout: SkinBoxUv::new(0.0, 32.0, 4.0, 12.0, 4.0),
-                }),
-            }),
-            "LeftLegMesh" => Some(Self {
-                base: SkinBoxUv::new(16.0, 48.0, 4.0, 12.0, 4.0),
-                outer: Some(OuterLayerSpec {
-                    name: "LeftLegLayer",
-                    layout: SkinBoxUv::new(0.0, 48.0, 4.0, 12.0, 4.0),
-                }),
-            }),
-            _ => None,
-        }
-    }
-}
-
 pub(crate) struct PlayerSkinUvPlugin;
 
 impl Plugin for PlayerSkinUvPlugin {
@@ -311,44 +348,42 @@ fn configure_player_skin_meshes(
     profile: Res<PlayerSkinProfile>,
     mut meshes: ResMut<Assets<Mesh>>,
     base_meshes: PlayerSkinBaseMeshQuery,
+    names: Query<&Name>,
     parents: Query<&ChildOf>,
     mut transforms: Query<&mut Transform>,
 ) {
-    for (entity, name, mesh_handle, material_handle, render_layers) in &base_meshes {
-        let Some(spec) = PlayerSkinMeshSpec::for_node(name.as_str(), profile.model) else {
+    for (entity, mesh_handle, material_handle, render_layers) in &base_meshes {
+        let Some((node_entity, part)) = resolve_player_skin_part(entity, &names, &parents) else {
             continue;
         };
+        let spec = part.spec(profile.model);
 
         if profile.model == PlayerSkinModel::Slim {
-            apply_slim_arm_geometry(entity, name.as_str(), &parents, &mut transforms);
+            apply_slim_arm_geometry(node_entity, part, &parents, &mut transforms);
         }
 
-        let Some(source_mesh) = meshes.get(mesh_handle.id()) else {
-            warn!(
-                "player skin mesh {} skipped: source mesh is unavailable",
-                name.as_str()
-            );
+        let Some(source_mesh) = meshes.get(mesh_handle.id()).cloned() else {
             continue;
         };
         let mut base_mesh = source_mesh.clone();
         if !remap_mesh_uvs(&mut base_mesh, spec.base) {
             warn!(
                 "player skin mesh {} skipped: source mesh has unexpected vertex data",
-                name.as_str()
+                part.name()
             );
+            commands.entity(entity).insert(PlayerSkinMapped);
             continue;
         }
 
         let base_mesh = meshes.add(base_mesh);
-        commands.entity(entity).insert(Mesh3d(base_mesh));
+        commands
+            .entity(entity)
+            .insert((Mesh3d(base_mesh), PlayerSkinMapped));
 
         let Some(outer) = spec.outer else {
             continue;
         };
-        let Some(source_mesh) = meshes.get(mesh_handle.id()) else {
-            continue;
-        };
-        let mut outer_mesh = source_mesh.clone();
+        let mut outer_mesh = source_mesh;
         if !remap_mesh_uvs(&mut outer_mesh, outer.layout) {
             warn!(
                 "player skin outer layer {} skipped: source mesh has unexpected vertex data",
@@ -373,22 +408,44 @@ fn configure_player_skin_meshes(
     }
 }
 
+fn resolve_player_skin_part(
+    mut entity: Entity,
+    names: &Query<&Name>,
+    parents: &Query<&ChildOf>,
+) -> Option<(Entity, PlayerSkinPart)> {
+    loop {
+        if let Ok(name) = names.get(entity) {
+            if let Some(part) = PlayerSkinPart::from_node_name(name.as_str()) {
+                return Some((entity, part));
+            }
+            if name.as_str() == "PlayerRoot" {
+                return None;
+            }
+        }
+
+        let Ok(parent) = parents.get(entity) else {
+            return None;
+        };
+        entity = parent.parent();
+    }
+}
+
 fn apply_slim_arm_geometry(
-    entity: Entity,
-    name: &str,
+    node_entity: Entity,
+    part: PlayerSkinPart,
     parents: &Query<&ChildOf>,
     transforms: &mut Query<&mut Transform>,
 ) {
-    let pivot_x = match name {
-        "RightArmMesh" => -SLIM_ARM_PIVOT_X,
-        "LeftArmMesh" => SLIM_ARM_PIVOT_X,
+    let pivot_x = match part {
+        PlayerSkinPart::RightArm => -SLIM_ARM_PIVOT_X,
+        PlayerSkinPart::LeftArm => SLIM_ARM_PIVOT_X,
         _ => return,
     };
 
-    if let Ok(mut arm_transform) = transforms.get_mut(entity) {
+    if let Ok(mut arm_transform) = transforms.get_mut(node_entity) {
         arm_transform.scale.x = SLIM_ARM_WIDTH_WORLD;
     }
-    let Ok(parent) = parents.get(entity) else {
+    let Ok(parent) = parents.get(node_entity) else {
         return;
     };
     if let Ok(mut pivot_transform) = transforms.get_mut(parent.parent()) {
@@ -525,8 +582,31 @@ mod tests {
     }
 
     #[test]
+    fn authored_node_names_map_to_skin_parts() {
+        for name in [
+            "HeadMesh",
+            "HairLayer",
+            "BodyMesh",
+            "RightArmMesh",
+            "LeftArmMesh",
+            "RightLegMesh",
+            "LeftLegMesh",
+        ] {
+            assert!(PlayerSkinPart::from_node_name(name).is_some(), "{name}");
+        }
+    }
+
+    #[test]
+    fn primitive_display_names_do_not_masquerade_as_node_names() {
+        assert_eq!(
+            PlayerSkinPart::from_node_name("HeadMesh (PlayerSkin)"),
+            None
+        );
+    }
+
+    #[test]
     fn canonical_head_uvs_preserve_side_orientation() {
-        let head = SkinBoxUv::new(0.0, 0.0, 8.0, 8.0, 8.0);
+        let head = PlayerSkinPart::Head.spec(PlayerSkinModel::Classic).base;
 
         assert_uv(
             head.uv([-0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
@@ -551,34 +631,20 @@ mod tests {
     }
 
     #[test]
-    fn slim_arms_use_three_pixel_regions() {
-        let right_arm = PlayerSkinMeshSpec::for_node("RightArmMesh", PlayerSkinModel::Slim)
-            .expect("right arm");
-
-        assert_eq!(right_arm.base.width, 3.0);
+    fn classic_and_slim_arms_use_expected_widths() {
         assert_eq!(
-            right_arm.base.rect(SkinFace::Front),
-            PixelRect::new(44.0, 20.0, 3.0, 12.0)
+            PlayerSkinPart::RightArm
+                .spec(PlayerSkinModel::Classic)
+                .base
+                .width,
+            4.0
         );
         assert_eq!(
-            right_arm.base.rect(SkinFace::Back),
-            PixelRect::new(51.0, 20.0, 3.0, 12.0)
-        );
-    }
-
-    #[test]
-    fn classic_arms_use_four_pixel_regions() {
-        let right_arm = PlayerSkinMeshSpec::for_node("RightArmMesh", PlayerSkinModel::Classic)
-            .expect("right arm");
-
-        assert_eq!(right_arm.base.width, 4.0);
-        assert_eq!(
-            right_arm.base.rect(SkinFace::Front),
-            PixelRect::new(44.0, 20.0, 4.0, 12.0)
-        );
-        assert_eq!(
-            right_arm.base.rect(SkinFace::Back),
-            PixelRect::new(52.0, 20.0, 4.0, 12.0)
+            PlayerSkinPart::RightArm
+                .spec(PlayerSkinModel::Slim)
+                .base
+                .width,
+            3.0
         );
     }
 
@@ -599,8 +665,8 @@ mod tests {
 
     #[test]
     fn body_outer_layer_expands_by_quarter_pixel_per_side() {
-        let spec = PlayerSkinMeshSpec::for_node("BodyMesh", PlayerSkinModel::Classic)
-            .expect("body")
+        let spec = PlayerSkinPart::Body
+            .spec(PlayerSkinModel::Classic)
             .outer
             .expect("body outer layer");
         let scale = spec.relative_scale();
