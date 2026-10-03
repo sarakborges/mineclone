@@ -6,7 +6,7 @@ use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::{
         biome_field::{BiomeField, BiomeFieldSample},
-        terrain::surface_height_from_sample,
+        terrain::surface_height_and_layer_from_sample,
     },
 };
 
@@ -14,8 +14,15 @@ use super::biome_map::{BIOME_MAP_HALO, BiomeMapSample, BiomeMapTile};
 
 const SURFACE_LAYER_MAX_SLOPE: i32 = 1;
 
+#[derive(Clone, Copy)]
+struct SampledSurfaceHeight {
+    height: i32,
+    layer_count: Option<u8>,
+}
+
 pub(crate) struct GenerationColumnSample {
     pub(crate) surface_height: i32,
+    pub(crate) surface_layer_count: Option<u8>,
     pub(crate) identity_surface_index: usize,
     pub(crate) primary_terrain_strength: f32,
     pub(crate) ocean_weight: f32,
@@ -41,6 +48,7 @@ pub(super) fn sample_flat_generation_columns_from_map(
 
             columns.push(GenerationColumnSample {
                 surface_height,
+                surface_layer_count: None,
                 identity_surface_index: surface.primary_surface_index,
                 primary_terrain_strength: surface.primary_terrain_strength(),
                 ocean_weight: surface.ocean_weight,
@@ -69,7 +77,8 @@ pub(super) fn sample_generation_columns_from_map(
         for local_x in 0..CHUNK_SIZE {
             let local = IVec2::new(local_x as i32, local_z as i32);
             let surface = biome_map.sample_at(local);
-            let surface_height = heights[BiomeMapTile::sample_index(local)];
+            let sampled_height = heights[BiomeMapTile::sample_index(local)];
+            let surface_height = sampled_height.height;
             let surface_margin_index = resolved_surface_margin_index(
                 local,
                 surface_height,
@@ -86,12 +95,13 @@ pub(super) fn sample_generation_columns_from_map(
                 .map(|influence| (influence.surface_index, influence.weight))
                 .collect();
             let steep_surface = cardinal_neighbors(local).into_iter().any(|neighbor| {
-                let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)];
+                let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)].height;
                 (neighbor_height - surface_height).abs() > SURFACE_LAYER_MAX_SLOPE
             });
 
             columns.push(GenerationColumnSample {
                 surface_height,
+                surface_layer_count: sampled_height.layer_count,
                 identity_surface_index,
                 primary_terrain_strength: surface.primary_terrain_strength(),
                 ocean_weight: surface.ocean_weight,
@@ -110,7 +120,7 @@ fn sample_surface_heights(
     dimension: &DimensionDefinition,
     biome_field: &BiomeField,
     biome_map: &BiomeMapTile,
-) -> Vec<i32> {
+) -> Vec<SampledSurfaceHeight> {
     let edge = CHUNK_SIZE + BIOME_MAP_HALO as usize * 2;
     let mut heights = Vec::with_capacity(edge * edge);
 
@@ -119,12 +129,16 @@ fn sample_surface_heights(
             let local = IVec2::new(local_x, local_z);
             let world_position = chunk_origin + local;
             let surface = biome_map.sample_at(local).as_field_sample(biome_field);
-            heights.push(surface_height_from_sample(
+            let (height, layer_count) = surface_height_and_layer_from_sample(
                 world_position,
                 dimension,
                 biome_field,
                 &surface,
-            ));
+            );
+            heights.push(SampledSurfaceHeight {
+                height,
+                layer_count,
+            });
         }
     }
 
@@ -152,7 +166,7 @@ fn resolved_surface_margin_index(
     local: IVec2,
     surface_height: i32,
     surface: &BiomeMapSample,
-    heights: &[i32],
+    heights: &[SampledSurfaceHeight],
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Option<usize> {
@@ -182,7 +196,7 @@ fn resolved_surface_margin_index(
     };
 
     let climbs_steep_surface = cardinal_neighbors(local).into_iter().any(|neighbor| {
-        let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)];
+        let neighbor_height = heights[BiomeMapTile::sample_index(neighbor)].height;
         (neighbor_height - surface_height).abs() > max_slope
     });
 

@@ -8,6 +8,9 @@
   "asteria:overworld/caverns": {
     "/name": "Caverns"
   },
+  "asteria:overworld/desert": {
+    "/name": "Desert"
+  },
   "asteria:overworld/enchanted_forest": {
     "/name": "Enchanted Forest"
   },

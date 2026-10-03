@@ -11,6 +11,7 @@ use super::biome_field::{BiomeField, BiomeFieldSample};
 
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
+const SURFACE_LAYER_STEPS: f32 = 8.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HeightInfluencePolicy {
@@ -35,8 +36,33 @@ pub(crate) fn surface_height_from_sample(
     biome_field: &BiomeField,
     sample: &BiomeFieldSample<'_>,
 ) -> i32 {
+    surface_height_and_layer_from_sample(position, dimension, biome_field, sample).0
+}
+
+pub(crate) fn surface_height_and_layer_from_sample(
+    position: IVec2,
+    dimension: &DimensionDefinition,
+    biome_field: &BiomeField,
+    sample: &BiomeFieldSample<'_>,
+) -> (i32, Option<u8>) {
+    let height = composed_surface_height_from_sample(position, dimension, biome_field, sample);
+    let (primary_terrain, _, _) = biome_field.surface_terrain(sample.primary_surface_index);
+
+    if matches!(primary_terrain, BiomeTerrain::Dunes { .. }) {
+        quantize_layered_surface(height)
+    } else {
+        (height.round().max(1.0) as i32, None)
+    }
+}
+
+fn composed_surface_height_from_sample(
+    position: IVec2,
+    dimension: &DimensionDefinition,
+    biome_field: &BiomeField,
+    sample: &BiomeFieldSample<'_>,
+) -> f32 {
     let horizontal = position.as_vec2();
-    let height = compose_surface_height(sample.influences.iter().map(|influence| {
+    compose_surface_height(sample.influences.iter().map(|influence| {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
         let sampled_height = biome_surface_height(
@@ -52,9 +78,21 @@ pub(crate) fn surface_height_from_sample(
             influence.weight,
             height_influence_policy(terrain),
         )
-    }));
+    }))
+}
 
-    height.round().max(1.0) as i32
+fn quantize_layered_surface(height: f32) -> (i32, Option<u8>) {
+    let quantized = (height * SURFACE_LAYER_STEPS).round() / SURFACE_LAYER_STEPS;
+    let quantized = quantized.max(1.0);
+    let floor = quantized.floor();
+    let layer_count = ((quantized - floor) * SURFACE_LAYER_STEPS).round() as u8;
+    let surface_height = quantized.ceil() as i32;
+
+    (
+        surface_height,
+        (1..SURFACE_LAYER_STEPS as u8).contains(&layer_count)
+            .then_some(layer_count),
+    )
 }
 
 fn height_influence_policy(terrain: BiomeTerrain) -> HeightInfluencePolicy {
@@ -161,6 +199,37 @@ fn biome_surface_height(
             let broad = fractal_noise(position * scale, seed);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
             sea_level + base_height + broad * amplitude + detail * detail_amplitude
+        }
+        BiomeTerrain::Dunes {
+            base_height,
+            amplitude,
+            scale,
+            sharpness,
+            warp_scale,
+            warp_strength,
+            detail_amplitude,
+            detail_scale,
+        } => {
+            let warp_position = position * warp_scale;
+            let warp = Vec2::new(
+                fractal_noise(warp_position, seed.rotate_left(7)),
+                fractal_noise(
+                    warp_position + Vec2::new(31.7, -17.9),
+                    seed.rotate_left(43),
+                ),
+            ) * warp_strength;
+            let warped = position + warp;
+            let phase = (warped.x + warped.y * 0.35) * scale * std::f32::consts::TAU;
+            let wave = ((phase.sin() + 1.0) * 0.5).clamp(0.0, 1.0);
+            let broad = ((fractal_noise(warped * (scale * 0.55), seed.rotate_left(19)) + 1.0)
+                * 0.5)
+                .clamp(0.0, 1.0);
+            let dune = (wave * 0.72 + broad * 0.28)
+                .clamp(0.0, 1.0)
+                .powf(sharpness);
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(29));
+
+            sea_level + base_height + dune * amplitude + detail * detail_amplitude
         }
         BiomeTerrain::Ocean {
             depth,
@@ -420,6 +489,13 @@ mod tests {
         ]);
 
         assert!((composed - 70.8).abs() < 0.001);
+    }
+
+    #[test]
+    fn layered_surface_quantizes_to_eighths() {
+        assert_eq!(quantize_layered_surface(10.26), (11, Some(2)));
+        assert_eq!(quantize_layered_surface(10.74), (11, Some(6)));
+        assert_eq!(quantize_layered_surface(10.0), (10, None));
     }
 
     #[test]

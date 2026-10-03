@@ -5,6 +5,7 @@ use crate::{
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
+        stackable_layer::stackable_layer_mask,
         texture_rotation::TextureRotation,
     },
     world::{
@@ -65,7 +66,7 @@ pub(super) fn rasterize_material_pass(
                         depth: (column.surface_height - world_position.y - 1).max(0) as u32,
                         steep: column.steep_surface,
                     };
-                    let block_id = solid_block_id(
+                    let resolved_block_id = solid_block_id(
                         surface_sample,
                         density.volume_at(index),
                         density.volume_surface_depth_at(index),
@@ -73,19 +74,29 @@ pub(super) fn rasterize_material_pass(
                         context.biome_field,
                         context.biomes,
                     );
+                    let partial_sand_layer = (surface_sample.depth == 0
+                        && resolved_block_id == "asteria:sand")
+                        .then_some(column.surface_layer_count)
+                        .flatten();
+                    let block_id = if partial_sand_layer.is_some() {
+                        "asteria:sand_layer"
+                    } else {
+                        resolved_block_id
+                    };
                     let block = context
                         .blocks
                         .get(block_id)
                         .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
                     let rotation =
                         TextureRotation::for_position(world_position, block.rotate_texture.any());
+                    let cell = VoxelCell::new(block_id, rotation);
+                    let cell = if let Some(layer_count) = partial_sand_layer {
+                        stackable_layer_mask(layer_count as usize).apply_to_cell(cell, false)
+                    } else {
+                        cell
+                    };
 
-                    chunk.set_block(
-                        local_x,
-                        local_y,
-                        local_z,
-                        VoxelCell::new(block_id, rotation),
-                    );
+                    chunk.set_block(local_x, local_y, local_z, cell);
                 }
             }
         }

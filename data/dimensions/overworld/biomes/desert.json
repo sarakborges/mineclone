@@ -71,18 +71,18 @@
       }
     },
     "grassColor": {
-      "hue": 54.0,
-      "saturation": 0.36,
+      "hue": 72.0,
+      "saturation": 0.42,
       "intensity": 0.39
     },
     "leafColor": {
-      "hue": 68.0,
-      "saturation": 0.35,
+      "hue": 78.0,
+      "saturation": 0.38,
       "intensity": 0.34
     },
     "foliageColor": {
-      "hue": 62.0,
-      "saturation": 0.31,
+      "hue": 74.0,
+      "saturation": 0.4,
       "intensity": 0.37
     },
     "underwaterTint": {
