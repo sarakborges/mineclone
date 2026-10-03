@@ -89,6 +89,12 @@
           "max": 420
         },
         "y": null
+      },
+      "neighborDeny": {
+        "ids": [
+          "asteria:overworld/arctic",
+          "asteria:overworld/ocean"
+        ]
       }
     },
     {
@@ -104,6 +110,13 @@
           "max": 460
         },
         "y": null
+      },
+      "neighborDeny": {
+        "ids": [
+          "asteria:overworld/arctic",
+          "asteria:overworld/desert",
+          "asteria:overworld/volcano"
+        ]
       }
     },
     {
