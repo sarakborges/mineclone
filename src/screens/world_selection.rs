@@ -405,7 +405,9 @@ fn handle_world_selection(
                     Err(error) => {
                         state.error = format!(
                             "{}: {error}",
-                            context.localization.text(language.get(), "worldSelection.loadStartError")
+                            context
+                                .localization
+                                .text(context.language.get(), "worldSelection.loadStartError")
                         );
                     }
                 }
