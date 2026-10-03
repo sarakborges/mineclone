@@ -57,6 +57,25 @@ impl AuthoredSurfaceFluidColumn {
     }
 }
 
+fn column_uses_static_sea_surface(
+    column: &GenerationColumnSample,
+    pass: &FluidPassContext<'_>,
+) -> bool {
+    if column.ocean_weight > f32::EPSILON {
+        return true;
+    }
+
+    let biome_id = pass
+        .biome_field
+        .surface_biome_id(column.identity_surface_index);
+    let biome = pass
+        .biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
+
+    matches!(biome.terrain, Some(BiomeTerrain::Swamp { .. }))
+}
+
 pub(super) fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
@@ -77,7 +96,7 @@ pub(super) fn rasterize_fluid_pass(
             let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
             let column = &columns[column_index(local_x, local_z)];
             let surface_height = column.surface_height as f32;
-            let sea_surface = (column.ocean_weight > f32::EPSILON
+            let sea_surface = (column_uses_static_sea_surface(column, pass)
                 && surface_height < pass.sea_level as f32)
                 .then_some(pass.sea_level as f32);
             let maximum_world_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
