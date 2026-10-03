@@ -10,7 +10,7 @@ use crate::{
 
 use super::super::{ChunkGenerationContext, flat_surface_height};
 
-/// Both world generation and /place use the exact same bottom-voxel footprint
+/// Both world generation and /place use the exact same support footprint
 /// and maximum terrain-variation rule. World generation may additionally apply
 /// authored minimum relief through `fit_structure_to_ground_with_slope_range`.
 pub(crate) fn fit_structure_to_ground(
@@ -59,6 +59,22 @@ fn fit_structure_to_ground_with_slope_range(
     Some(minimum_ground_y - minimum_offset_y)
 }
 
+fn authored_ground_support_offsets(
+    structure: &StructureDefinition,
+    rotation: StructureRotation,
+) -> Vec<IVec2> {
+    if structure.ground_anchor_y.is_some() {
+        // `groundAnchorY` explicitly declares which authored Y plane is fitted to
+        // terrain. In that mode the structure's full horizontal footprint must be
+        // valid terrain, rather than only the voxels living on the absolute lowest
+        // authored layer. This matters for recessed terrain features such as lakes,
+        // ponds and rivers whose excavation can extend below the ground anchor.
+        structure.horizontal_footprint_for_rotation(rotation)
+    } else {
+        structure.support_offsets_for_rotation(rotation)
+    }
+}
+
 pub(super) fn compute_structure_origin_y(
     anchor: IVec2,
     structure: &StructureDefinition,
@@ -68,11 +84,13 @@ pub(super) fn compute_structure_origin_y(
     if context.world_generation.mode() == WorldGenerationMode::Void {
         return None;
     }
+
+    let support_offsets = authored_ground_support_offsets(structure, rotation);
     if context.world_generation.mode() == WorldGenerationMode::Flat {
         let ground_y = flat_surface_height(context.dimension) - 1;
         return fit_structure_to_ground_with_slope_range(
             anchor,
-            &structure.support_offsets_for_rotation(rotation),
+            &support_offsets,
             structure.ground_anchor_y_offset(),
             structure.restrictions.min_slope,
             structure.restrictions.max_slope,
@@ -80,7 +98,6 @@ pub(super) fn compute_structure_origin_y(
         );
     }
 
-    let support_offsets = structure.support_offsets_for_rotation(rotation);
     fit_structure_to_ground_with_slope_range(
         anchor,
         &support_offsets,
