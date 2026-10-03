@@ -10,7 +10,8 @@
   "restrictions": {
     "groundBlocks": [
       "asteria:grass_block",
-      "asteria:dirt"
+      "asteria:dirt",
+      "asteria:mud"
     ],
     "maxSlope": 1,
     "requiresDryGround": true,
@@ -20,8 +21,8 @@
           "fluid": "asteria:water"
         },
         "mode": "required",
-        "minDistance": 5,
-        "maxDistance": 10
+        "minDistance": 1,
+        "maxDistance": 12
       }
     ]
   },
