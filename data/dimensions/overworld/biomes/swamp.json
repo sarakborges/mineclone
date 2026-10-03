@@ -16,7 +16,7 @@
         "asteria:mud"
       ],
       "patchScale": 0.04,
-      "depth": 1
+      "depth": 5
     },
     {
       "block": "asteria:stone"
