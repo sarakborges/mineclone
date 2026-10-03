@@ -23,6 +23,8 @@ pub struct FluidDefinition {
     pub name: LocalizedText,
     pub color: Hsi,
     #[serde(default)]
+    pub light_color: Option<Hsi>,
+    #[serde(default)]
     pub biome_tint: bool,
     #[serde(default)]
     pub biome_immersion_tint: bool,
@@ -57,6 +59,13 @@ impl FluidRegistry {
             "fluid {} HSI color is invalid",
             definition.id
         );
+        if let Some(light_color) = definition.light_color {
+            assert!(
+                light_color.is_valid(),
+                "fluid {} lightColor HSI color is invalid",
+                definition.id
+            );
+        }
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",
