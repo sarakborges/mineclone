@@ -1,0 +1,29 @@
+{
+  "id": "asteria:desert_sand",
+  "source": {
+    "type": "biome",
+    "id": "asteria:overworld/desert"
+  },
+  "color": {
+    "hue": 39,
+    "saturation": 0.48,
+    "intensity": 0.72
+  },
+  "opacity": 0.42,
+  "size": {
+    "min": 0.025,
+    "max": 0.06
+  },
+  "lifetime": {
+    "min": 1.6,
+    "max": 3.2
+  },
+  "spawnRate": 18.0,
+  "velocity": [0.0, 0.02, 0.0],
+  "velocityJitter": [0.08, 0.04, 0.08],
+  "acceleration": [0.0, -0.015, 0.0],
+  "wanderStrength": 0.06,
+  "windInfluence": 1.8,
+  "spawnRadius": 20.0,
+  "verticalRange": 2.5
+}
