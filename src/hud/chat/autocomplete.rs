@@ -8,11 +8,15 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, creature::CreatureRegistry, dimension::DimensionRegistry,
-        structure::StructureRegistry, structure_set::StructureSetRegistry,
+        biome::BiomeRegistry,
+        creature::CreatureRegistry,
+        dimension::{DimensionDefinition, DimensionRegistry},
+        structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     localization::ActiveLanguage,
     player::{PLAYER_EYE_HEIGHT, PlayerEntity},
+    world::current_context::CurrentDimensionContext,
 };
 
 use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
@@ -225,6 +229,7 @@ fn coordinate_suggestions(value: Option<i32>, axis: &str, prefix: &str) -> Vec<S
 struct AutocompleteCatalog<'a> {
     creatures: &'a CreatureRegistry,
     biomes: &'a BiomeRegistry,
+    current_dimension: &'a DimensionDefinition,
     structures: &'a StructureRegistry,
     structure_sets: &'a StructureSetRegistry,
     dimensions: &'a DimensionRegistry,
@@ -270,6 +275,19 @@ impl AutocompleteCatalog<'_> {
         );
 
         values
+    }
+
+    fn biome_suggestions(&self, prefix: &str) -> Vec<Suggestion> {
+        self.current_dimension
+            .biomes
+            .iter()
+            .filter(|placement| id_matches_query(&placement.id, prefix))
+            .filter_map(|placement| self.biomes.get(&placement.id))
+            .map(|biome| Suggestion {
+                value: biome.id.clone(),
+                description: biome.name.text(self.language.get()).to_owned(),
+            })
+            .collect()
     }
 }
 
@@ -356,15 +374,7 @@ fn suggestions_for(
                 &prefix,
             ),
             ParameterKind::LocateTargetId => match first_argument? {
-                "biome" => catalog
-                    .biomes
-                    .iter()
-                    .filter(|biome| id_matches_query(&biome.id, &prefix))
-                    .map(|biome| Suggestion {
-                        value: biome.id.clone(),
-                        description: biome.name.text(catalog.language.get()).to_owned(),
-                    })
-                    .collect::<Vec<_>>(),
+                "biome" => catalog.biome_suggestions(&prefix),
                 "structure" => catalog.structure_suggestions(&prefix, true),
                 _ => Vec::new(),
             },
@@ -418,6 +428,7 @@ pub(super) struct AutocompleteContent<'w> {
     structures: Res<'w, StructureRegistry>,
     structure_sets: Res<'w, StructureSetRegistry>,
     dimensions: Res<'w, DimensionRegistry>,
+    dimension: CurrentDimensionContext<'w>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -426,6 +437,7 @@ impl AutocompleteContent<'_> {
         AutocompleteCatalog {
             creatures: &self.creatures,
             biomes: &self.biomes,
+            current_dimension: self.dimension.definition(),
             structures: &self.structures,
             structure_sets: &self.structure_sets,
             dimensions: &self.dimensions,
