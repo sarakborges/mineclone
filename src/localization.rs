@@ -106,7 +106,8 @@ impl UiLocalization {
         for language in Language::ALL {
             let path = data_root()
                 .join("localization")
-                .join(format!("{}.json", language.key()));
+                .join(language.key())
+                .join("ui.json");
             let source = fs::read_to_string(&path).unwrap_or_else(|error| {
                 panic!("failed to read localization file {}: {error}", path.display())
             });
