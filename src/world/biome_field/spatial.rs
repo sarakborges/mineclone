@@ -10,16 +10,10 @@ use super::constants::{
     VOLUME_WARP_AMPLITUDE,
 };
 
-const SURFACE_MAP_CELLS_PER_MINIMUM_RADIUS: f32 = 8.0;
-const MIN_SURFACE_MAP_SPACING: f32 = 8.0;
-const MAX_SURFACE_MAP_SPACING: f32 = 16.0;
+const SURFACE_MAP_CELL_SIZE: f32 = 8.0;
 
-pub(super) fn surface_map_spacing(minimum_radius: Vec2) -> Vec2 {
-    let smallest_radius = minimum_radius.min_element().max(1.0);
-    Vec2::splat(
-        (smallest_radius / SURFACE_MAP_CELLS_PER_MINIMUM_RADIUS)
-            .clamp(MIN_SURFACE_MAP_SPACING, MAX_SURFACE_MAP_SPACING),
-    )
+pub(super) fn surface_map_spacing() -> Vec2 {
+    Vec2::splat(SURFACE_MAP_CELL_SIZE)
 }
 
 pub(super) fn warp_surface_position(position: Vec2, seed: u64) -> Vec2 {
@@ -103,9 +97,8 @@ pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {
 pub(super) fn surface_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
 
-    // The frontier map owns territorial decisions. Row jitter only breaks the
-    // visual sampling lattice so borders do not look axis-aligned; it never
-    // changes which map cell belongs to which biome region.
+    // Row jitter only breaks the visual sampling lattice so borders do not look
+    // axis-aligned. It never changes territorial cell ownership.
     if cell.y == 0 {
         return base;
     }
@@ -182,10 +175,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn surface_map_spacing_keeps_multiple_cells_inside_the_smallest_biome_radius() {
-        assert_eq!(surface_map_spacing(Vec2::splat(80.0)), Vec2::splat(10.0));
-        assert_eq!(surface_map_spacing(Vec2::splat(160.0)), Vec2::splat(16.0));
-        assert_eq!(surface_map_spacing(Vec2::splat(8.0)), Vec2::splat(8.0));
+    fn surface_map_spacing_is_fixed() {
+        assert_eq!(surface_map_spacing(), Vec2::splat(8.0));
     }
 
     #[test]
