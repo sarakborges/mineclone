@@ -6,12 +6,14 @@ This directory contains project documentation that is not required to live at th
 
 Repository-wide authority and active work state stay in the root because agents and contributors must find them immediately:
 
-- [`../AGENTS.md`](../AGENTS.md) — mandatory agent/contributor rules and forward-only feature policy.
+- [`../AGENTS.md`](../AGENTS.md) — mandatory agent/contributor rules, including `main` branch targeting, scoped repository navigation, anti-loop tool discipline, Git delivery verification, and forward-only feature policy.
 - [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — canonical Asteria architecture contracts.
 - [`../ENGINEERING_PRACTICES.md`](../ENGINEERING_PRACTICES.md) — canonical engineering rules.
 - [`../HANDOFF.md`](../HANDOFF.md) — current implementation handoff only.
 
 When documents disagree, `AGENTS.md`, `ARCHITECTURE.md`, and `ENGINEERING_PRACTICES.md` are normative. Archived plans and handoffs are historical evidence, not current authority.
+
+The active implementation branch is `main`. Branch/tool/Git execution rules are intentionally centralized in `AGENTS.md`; feature documents and handoffs must not redefine them.
 
 ## Current documentation
 
@@ -54,3 +56,4 @@ Archived documents must not be used as current requirements when they conflict w
 5. Use lowercase kebab-case filenames inside `docs/`.
 6. Prefer updating an existing canonical document over creating another document that describes the same contract.
 7. If a document becomes normative for all implementation work, promote the rule into `AGENTS.md`, `ARCHITECTURE.md`, or `ENGINEERING_PRACTICES.md` instead of relying on a buried feature document.
+8. Keep repository/tool/Git execution policy centralized in `AGENTS.md`; other documents may point to it but must not fork the rules.
