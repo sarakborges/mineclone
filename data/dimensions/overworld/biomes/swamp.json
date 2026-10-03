@@ -12,11 +12,11 @@
   "surfaceLayers": [
     {
       "block": "asteria:dirt",
-      "depth": 2
-    },
-    {
-      "block": "asteria:mud",
-      "depth": 2
+      "alternates": [
+        "asteria:mud"
+      ],
+      "patchScale": 0.04,
+      "depth": 1
     },
     {
       "block": "asteria:stone"
