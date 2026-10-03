@@ -1,10 +1,6 @@
 {
   "id": "tools",
-  "displayName": {
-    "english": "Tools",
-    "portuguese_brazil": "Ferramentas",
-    "spanish": "Herramientas"
-  },
+  "displayName": null,
   "order": 70,
   "icon": "textures/creative_categories/tools.png"
 }

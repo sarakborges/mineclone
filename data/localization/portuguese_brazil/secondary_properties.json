@@ -1,0 +1,50 @@
+{
+  "black": {
+    "/name": "Preto"
+  },
+  "blue": {
+    "/name": "Azul"
+  },
+  "brown": {
+    "/name": "Marrom"
+  },
+  "cyan": {
+    "/name": "Ciano"
+  },
+  "gray": {
+    "/name": "Cinza"
+  },
+  "green": {
+    "/name": "Verde"
+  },
+  "light_blue": {
+    "/name": "Azul-claro"
+  },
+  "light_gray": {
+    "/name": "Cinza-claro"
+  },
+  "lime": {
+    "/name": "Verde-limão"
+  },
+  "magenta": {
+    "/name": "Magenta"
+  },
+  "orange": {
+    "/name": "Laranja"
+  },
+  "pink": {
+    "/name": "Rosa"
+  },
+  "purple": {
+    "/name": "Roxo"
+  },
+  "red": {
+    "/name": "Vermelho"
+  },
+  "white": {
+    "/name": "Branco"
+  },
+  "yellow": {
+    "/name": "Amarelo"
+  }
+}

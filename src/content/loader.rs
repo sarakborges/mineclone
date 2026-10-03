@@ -15,7 +15,7 @@ use super::{
     fluid::{FluidDefinition, FluidRegistry},
     inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
     item::{ItemDefinition, ItemRegistry},
-    json_file::{collect_json_files, read_json_definition},
+    json_file::{collect_json_files, read_localized_json_definition, DataLocalization},
     layer::{LayerDefinition, LayerRegistry},
     object::{ObjectDefinition, ObjectRegistry},
     player::PlayerDefinition,
@@ -85,6 +85,7 @@ pub fn load_content(mut commands: Commands) {
 pub(crate) fn read_content() -> LoadedContent {
     let started = Instant::now();
     let root = data_root();
+    let localizations = DataLocalization::load();
     let mut content = LoadedContent::default();
     let mut files = Vec::new();
     let mut player_loaded = false;
@@ -94,7 +95,7 @@ pub(crate) fn read_content() -> LoadedContent {
     let file_count = files.len();
 
     for path in files {
-        load_definition(&path, &mut content, &mut player_loaded);
+        load_definition(&path, &mut content, &mut player_loaded, &localizations);
     }
 
     assert!(
@@ -111,7 +112,12 @@ pub(crate) fn read_content() -> LoadedContent {
     content
 }
 
-fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut bool) {
+fn load_definition(
+    path: &Path,
+    content: &mut LoadedContent,
+    player_loaded: &mut bool,
+    localizations: &DataLocalization,
+) {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -123,49 +129,49 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
             "duplicate player definition: {}",
             path.display()
         );
-        content.player = read_json_definition::<PlayerDefinition>(path);
+        content.player = read_localized_json_definition::<PlayerDefinition>(path, localizations);
         content.player.validate();
         *player_loaded = true;
     } else if path_has_component(path, "attacks") {
         content
             .attacks
-            .insert(read_json_definition::<AttackDefinition>(path));
+            .insert(read_localized_json_definition::<AttackDefinition>(path, localizations));
     } else if file_name == "dimension.json" {
         content
             .dimensions
-            .insert(read_json_definition::<DimensionDefinition>(path));
+            .insert(read_localized_json_definition::<DimensionDefinition>(path, localizations));
     } else if file_name == "day_night_cycle.json" {
         content
             .day_night_cycles
-            .insert(read_json_definition::<DayNightCycleDefinition>(path));
+            .insert(read_localized_json_definition::<DayNightCycleDefinition>(path, localizations));
     } else if file_name == "sky.json" {
         content
             .skies
-            .insert(read_json_definition::<SkyDefinition>(path));
+            .insert(read_localized_json_definition::<SkyDefinition>(path, localizations));
     } else if path_has_component(path, "inventory_categories") {
         content
             .inventory_categories
-            .insert(read_json_definition::<InventoryCategoryDefinition>(path));
+            .insert(read_localized_json_definition::<InventoryCategoryDefinition>(path, localizations));
     } else if path_has_component(path, "crafting_recipes") {
         content
             .crafting_recipes
-            .insert(read_json_definition::<CraftingRecipeDefinition>(path));
+            .insert(read_localized_json_definition::<CraftingRecipeDefinition>(path, localizations));
     } else if path_has_component(path, "items") {
         content
             .items
-            .insert(read_json_definition::<ItemDefinition>(path));
+            .insert(read_localized_json_definition::<ItemDefinition>(path, localizations));
     } else if path_has_component(path, "layers") {
         content
             .layers
-            .insert(read_json_definition::<LayerDefinition>(path));
+            .insert(read_localized_json_definition::<LayerDefinition>(path, localizations));
     } else if path_has_component(path, "objects") {
         content
             .objects
-            .insert(read_json_definition::<ObjectDefinition>(path));
+            .insert(read_localized_json_definition::<ObjectDefinition>(path, localizations));
     } else if path_has_component(path, "world_recipes") {
         content
             .world_recipes
-            .insert(read_json_definition::<WorldRecipeDefinition>(path));
+            .insert(read_localized_json_definition::<WorldRecipeDefinition>(path, localizations));
     } else if path_has_component(path, "secondary_properties") {
         let property = secondary_property_group(path).unwrap_or_else(|| {
             panic!(
@@ -175,32 +181,32 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         });
         content.secondary_properties.insert(
             property,
-            read_json_definition::<SecondaryPropertyDefinition>(path),
+            read_localized_json_definition::<SecondaryPropertyDefinition>(path, localizations),
         );
     } else if path_has_component(path, "biomes") {
         content
             .biomes
-            .insert(read_json_definition::<BiomeDefinition>(path));
+            .insert(read_localized_json_definition::<BiomeDefinition>(path, localizations));
     } else if path_has_component(path, "blocks") {
         content
             .blocks
-            .insert(read_json_definition::<BlockDefinition>(path));
+            .insert(read_localized_json_definition::<BlockDefinition>(path, localizations));
     } else if path_has_component(path, "creatures") {
         content
             .creatures
-            .insert(read_json_definition::<CreatureDefinition>(path));
+            .insert(read_localized_json_definition::<CreatureDefinition>(path, localizations));
     } else if path_has_component(path, "tool_categories") {
         content
             .tool_categories
-            .insert(read_json_definition::<ToolCategoryDefinition>(path));
+            .insert(read_localized_json_definition::<ToolCategoryDefinition>(path, localizations));
     } else if path_has_component(path, "tools") {
         content
             .tools
-            .insert(read_json_definition::<ToolDefinition>(path));
+            .insert(read_localized_json_definition::<ToolDefinition>(path, localizations));
     } else if path_has_component(path, "fluids") {
         content
             .fluids
-            .insert(read_json_definition::<FluidDefinition>(path));
+            .insert(read_localized_json_definition::<FluidDefinition>(path, localizations));
     } else if path_has_component(path, "structure_sets") {
         assert!(
             path.starts_with(data_root().join("structure_sets")),
@@ -209,7 +215,7 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         );
         content
             .structure_sets
-            .insert(read_json_definition::<StructureSetDefinition>(path));
+            .insert(read_localized_json_definition::<StructureSetDefinition>(path, localizations));
     } else if path_has_component(path, "structures") {
         assert!(
             path.starts_with(data_root().join("structures")),
@@ -218,7 +224,7 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         );
         content
             .structures
-            .insert(read_json_definition::<StructureDefinition>(path));
+            .insert(read_localized_json_definition::<StructureDefinition>(path, localizations));
     } else if path.starts_with(data_root().join("localization")) {
         // Localization owns its own JSON loader. Keep this explicit so a
         // misspelled or misplaced content definition never disappears silently.

@@ -1,1 +1,91 @@
-{"id":"asteria:river_ocean_mouth","name":{"english":"Ocean River Mouth","portuguese_brazil":"Foz de Rio Oceânica","spanish":"Desembocadura de Río Oceánica"},"locatable":false,"rotation":true,"priority":4,"restrictions":{"maxSlope":0,"requiresDryGround":false,"requiredBiomeCoverage":0,"proximity":[{"target":{"fluid":"asteria:water"},"mode":"required","minDistance":1,"maxDistance":5},{"target":{"fluid":"asteria:water"},"mode":"forbidden","maxDistance":0}]},"generation":{"replacePolicy":"terrain","fluidPolicy":"displace","reserveSpace":false},"anchor":{"x":5,"y":0,"z":5},"groundAnchorY":0,"clearAbove":4,"palette":{"S":{"clear":true},"W":{"fluid":"asteria:water"},"O":{"fluid":"asteria:water","connector":{"target":"asteria:river_segment","face":"front","strength":1}}},"layers":[{"y":-1,"rows":["...........","...........","...........","...........","...........",".....S.....","...........","...........","...........","...........","..........."]},{"y":0,"rows":[".....W.....","..WWWWWWW..",".WWWWWWWWW.",".WWWWWWWWW.",".WWWWWWWWW.","WWWWWWWWWWW",".WWWWWWWWW.",".WWWWWWWWW.",".WWWWWWWWW.","..WWWWWWW..",".....O....."]}]}
+{
+  "id": "asteria:river_ocean_mouth",
+  "name": null,
+  "locatable": false,
+  "rotation": true,
+  "priority": 4,
+  "restrictions": {
+    "maxSlope": 0,
+    "requiresDryGround": false,
+    "requiredBiomeCoverage": 0,
+    "proximity": [
+      {
+        "target": {
+          "fluid": "asteria:water"
+        },
+        "mode": "required",
+        "minDistance": 1,
+        "maxDistance": 5
+      },
+      {
+        "target": {
+          "fluid": "asteria:water"
+        },
+        "mode": "forbidden",
+        "maxDistance": 0
+      }
+    ]
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 5,
+    "y": 0,
+    "z": 5
+  },
+  "groundAnchorY": 0,
+  "clearAbove": 4,
+  "palette": {
+    "S": {
+      "clear": true
+    },
+    "W": {
+      "fluid": "asteria:water"
+    },
+    "O": {
+      "fluid": "asteria:water",
+      "connector": {
+        "target": "asteria:river_segment",
+        "face": "front",
+        "strength": 1
+      }
+    }
+  },
+  "layers": [
+    {
+      "y": -1,
+      "rows": [
+        "...........",
+        "...........",
+        "...........",
+        "...........",
+        "...........",
+        ".....S.....",
+        "...........",
+        "...........",
+        "...........",
+        "...........",
+        "..........."
+      ]
+    },
+    {
+      "y": 0,
+      "rows": [
+        ".....W.....",
+        "..WWWWWWW..",
+        ".WWWWWWWWW.",
+        ".WWWWWWWWW.",
+        ".WWWWWWWWW.",
+        "WWWWWWWWWWW",
+        ".WWWWWWWWW.",
+        ".WWWWWWWWW.",
+        ".WWWWWWWWW.",
+        "..WWWWWWW..",
+        ".....O....."
+      ]
+    }
+  ]
+}

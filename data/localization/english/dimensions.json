@@ -1,0 +1,50 @@
+{
+  "asteria:overworld": {
+    "/name": "The Overworld"
+  },
+  "asteria:overworld/alps": {
+    "/name": "Alps"
+  },
+  "asteria:overworld/caverns": {
+    "/name": "Caverns"
+  },
+  "asteria:overworld/enchanted_forest": {
+    "/name": "Enchanted Forest"
+  },
+  "asteria:overworld/floating_islands": {
+    "/name": "Floating Islands"
+  },
+  "asteria:overworld/gorge": {
+    "/name": "Gorge"
+  },
+  "asteria:overworld/mountain_belt": {
+    "/name": "Mountain Belt"
+  },
+  "asteria:overworld/mountains": {
+    "/name": "Mountains"
+  },
+  "asteria:overworld/ocean": {
+    "/name": "Ocean"
+  },
+  "asteria:overworld/plains": {
+    "/name": "Plains"
+  },
+  "asteria:overworld/volcano": {
+    "/name": "Volcano"
+  },
+  "asteria:overworld/wasteland": {
+    "/name": "Wasteland"
+  },
+  "asteria:umbral": {
+    "/name": "The Umbral"
+  },
+  "asteria:umbral/umbral_reach": {
+    "/name": "Umbral Reach"
+  },
+  "asteria:umbral/withered_waste": {
+    "/name": "Withered Waste"
+  },
+  "asteria:umbral/wraith_grove": {
+    "/name": "Wraith Grove"
+  }
+}

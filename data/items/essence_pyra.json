@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_pyra",
-  "name": {
-    "english": "Pyra Essence",
-    "portuguese_brazil": "Essência Pyra",
-    "spanish": "Esencia Pyra"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_pyra.png"
 }

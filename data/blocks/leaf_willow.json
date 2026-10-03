@@ -1,10 +1,6 @@
 {
   "id": "asteria:leaf_willow",
-  "name": {
-    "english": "Willow Leaf",
-    "portuguese_brazil": "Folha de salgueiro",
-    "spanish": "Hoja de sauce"
-  },
+  "name": null,
   "category": "foliage",
   "tint": "leaf",
   "textures": {

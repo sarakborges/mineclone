@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_enchanted_hollow",
-  "name": {
-    "english": "Hollow Enchanted Log",
-    "portuguese_brazil": "Tronco Encantado Oco",
-    "spanish": "Tronco Encantado Hueco"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {

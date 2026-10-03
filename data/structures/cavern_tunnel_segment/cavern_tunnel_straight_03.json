@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_straight_03",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Rough Cavern Tunnel",
-    "portuguese_brazil": "Túnel Irregular de Caverna",
-    "spanish": "Túnel Irregular de Caverna"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

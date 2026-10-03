@@ -1,10 +1,6 @@
 {
   "id": "asteria:storage_box",
-  "name": {
-    "english": "Storage Box",
-    "portuguese_brazil": "Caixa de armazenamento",
-    "spanish": "Caja de almacenamiento"
-  },
+  "name": null,
   "category": "crafted_blocks",
   "tags": [
     "fragmentable",

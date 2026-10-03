@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_world_tree_stripped_hollow",
-  "name": {
-    "english": "Stripped Hollow World Tree Log",
-    "portuguese_brazil": "Tronco Oco Descascado da Árvore do Mundo",
-    "spanish": "Tronco Hueco Descortezado del Árbol del Mundo"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {
@@ -23,11 +19,17 @@
     "front": false,
     "back": false
   },
-  "orientations": ["y", "z", "x"],
+  "orientations": [
+    "y",
+    "z",
+    "x"
+  ],
   "lightDampening": 15,
   "castsShadow": true,
   "mining": {
     "hardness": 1,
-    "requiredTools": ["hatchet"]
+    "requiredTools": [
+      "hatchet"
+    ]
   }
 }

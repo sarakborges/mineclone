@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_verdra",
-  "name": {
-    "english": "Verdra Essence",
-    "portuguese_brazil": "Essência Verdra",
-    "spanish": "Esencia Verdra"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_verdra.png"
 }

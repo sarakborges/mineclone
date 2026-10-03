@@ -1,10 +1,6 @@
 {
   "id": "asteria:gravel",
-  "name": {
-    "english": "Gravel",
-    "portuguese_brazil": "Cascalho",
-    "spanish": "Grava"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable",

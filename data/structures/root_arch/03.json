@@ -1,11 +1,7 @@
 {
   "id": "asteria:root_arch_03",
   "group_id": "root_arch",
-  "name": {
-    "english": "Root Arch",
-    "portuguese_brazil": "Arco de Raízes",
-    "spanish": "Arco de Raíces"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

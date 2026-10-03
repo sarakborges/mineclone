@@ -1,15 +1,7 @@
 {
   "id": "asteria:hatchet_rustic",
-  "name": {
-    "english": "Rustic Hatchet",
-    "portuguese_brazil": "Machadinha Rústica",
-    "spanish": "Hacha Rústica"
-  },
-  "hint": {
-    "english": "Chops logs and wooden blocks.",
-    "portuguese_brazil": "Corta troncos e blocos de madeira.",
-    "spanish": "Corta troncos y bloques de madera."
-  },
+  "name": null,
+  "hint": null,
   "category": "tools",
   "icon": "textures/tools/hatchet-rustic.png",
   "leftBehavior": "asteria:mine",

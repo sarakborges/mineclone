@@ -1,0 +1,11 @@
+{
+  "hatchet": {
+    "/name": "Hacha"
+  },
+  "pickaxe": {
+    "/name": "Pico"
+  },
+  "shovel": {
+    "/name": "Pala"
+  }
+}

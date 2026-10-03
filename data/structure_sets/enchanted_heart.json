@@ -1,10 +1,6 @@
 {
   "id": "asteria:enchanted_heart",
-  "name": {
-    "english": "Enchanted Heart",
-    "portuguese_brazil": "Coração Encantado",
-    "spanish": "Corazón Encantado"
-  },
+  "name": null,
   "locatable": true,
   "priority": 100,
   "conflictGroups": [

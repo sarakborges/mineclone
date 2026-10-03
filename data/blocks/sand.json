@@ -1,10 +1,6 @@
 {
   "id": "asteria:sand",
-  "name": {
-    "english": "Sand",
-    "portuguese_brazil": "Areia",
-    "spanish": "Arena"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable",

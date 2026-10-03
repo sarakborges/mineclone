@@ -1,10 +1,6 @@
 {
   "id": "asteria:stone",
-  "name": {
-    "english": "Stone",
-    "portuguese_brazil": "Pedra",
-    "spanish": "Piedra"
-  },
+  "name": null,
   "category": "stone_blocks",
   "tags": [
     "fragmentable"

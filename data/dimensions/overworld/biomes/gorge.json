@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/gorge",
-  "name": {
-    "english": "Gorge",
-    "portuguese_brazil": "Desfiladeiro",
-    "spanish": "Desfiladero"
-  },
+  "name": null,
   "tags": [
     "mountain"
   ],

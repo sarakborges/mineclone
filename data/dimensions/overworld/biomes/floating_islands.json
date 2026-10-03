@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/floating_islands",
-  "name": {
-    "english": "Floating Islands",
-    "portuguese_brazil": "Ilhas Flutuantes",
-    "spanish": "Islas Flotantes"
-  },
+  "name": null,
   "kind": "volume",
   "verticalRange": {
     "min": 200,

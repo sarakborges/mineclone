@@ -1,1 +1,188 @@
-{"id":"asteria:mountain_waterfall_01","group_id":"mountain_waterfall","name":{"english":"Mountain Waterfall 01","portuguese_brazil":"Cachoeira de Montanha 01","spanish":"Cascada de Montaña 01"},"locatable":false,"rotation":true,"priority":4,"restrictions":{"minSlope":4,"maxSlope":80,"requiresDryGround":true,"requiredBiomeCoverage":0.5},"generation":{"replacePolicy":"terrain","fluidPolicy":"displace","reserveSpace":false},"anchor":{"x":3,"y":0,"z":4},"groundAnchorY":0,"clearAbove":2,"palette":{"S":{"block":"asteria:stone"},"W":{"fluid":"asteria:water"},"O":{"fluid":"asteria:water","connector":{"target":"asteria:mountain_pond","face":"front","strength":1}}},"layers":[{"y":0,"rows":["..SSS..",".SSSSS.","SSSSSSS",".SSSSS.",".SSWSS.","..SWS..","..SWS..","..SWS..","..SWS..","..SWS..","..SOS.."]},{"y":1,"rows":[".......","..SSS..",".SSSSS.",".SSSSS.",".SSWSS.",".......",".......",".......",".......",".......","......."]},{"y":2,"rows":[".......","..SSS..",".SSSSS.",".SSSSS.",".SSWSS.",".......",".......",".......",".......",".......","......."]},{"y":3,"rows":[".......","..SSS..",".SSSSS.",".SSSSS.",".SSWSS.",".......",".......",".......",".......",".......","......."]},{"y":4,"rows":[".......",".......","..SSS..","..SSS..","..SWS..",".......",".......",".......",".......",".......","......."]},{"y":5,"rows":[".......",".......","..SSS..","..SSS..","..SWS..",".......",".......",".......",".......",".......","......."]},{"y":6,"rows":[".......",".......","...S...","..SSS..","..SWS..",".......",".......",".......",".......",".......","......."]},{"y":7,"rows":["..SSS..",".SSSSS.",".SSSSS.",".SSSSS.","..SWS..",".......",".......",".......",".......",".......","......."]},{"y":8,"rows":["..SSS..",".SWWWS.",".SWWWS.",".SWWWS.","..SWS..",".......",".......",".......",".......",".......","......."]}]}
+{
+  "id": "asteria:mountain_waterfall_01",
+  "group_id": "mountain_waterfall",
+  "name": null,
+  "locatable": false,
+  "rotation": true,
+  "priority": 4,
+  "restrictions": {
+    "minSlope": 4,
+    "maxSlope": 80,
+    "requiresDryGround": true,
+    "requiredBiomeCoverage": 0.5
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 3,
+    "y": 0,
+    "z": 4
+  },
+  "groundAnchorY": 0,
+  "clearAbove": 2,
+  "palette": {
+    "S": {
+      "block": "asteria:stone"
+    },
+    "W": {
+      "fluid": "asteria:water"
+    },
+    "O": {
+      "fluid": "asteria:water",
+      "connector": {
+        "target": "asteria:mountain_pond",
+        "face": "front",
+        "strength": 1
+      }
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        "..SSS..",
+        ".SSSSS.",
+        "SSSSSSS",
+        ".SSSSS.",
+        ".SSWSS.",
+        "..SWS..",
+        "..SWS..",
+        "..SWS..",
+        "..SWS..",
+        "..SWS..",
+        "..SOS.."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".......",
+        "..SSS..",
+        ".SSSSS.",
+        ".SSSSS.",
+        ".SSWSS.",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".......",
+        "..SSS..",
+        ".SSSSS.",
+        ".SSSSS.",
+        ".SSWSS.",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 3,
+      "rows": [
+        ".......",
+        "..SSS..",
+        ".SSSSS.",
+        ".SSSSS.",
+        ".SSWSS.",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 4,
+      "rows": [
+        ".......",
+        ".......",
+        "..SSS..",
+        "..SSS..",
+        "..SWS..",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 5,
+      "rows": [
+        ".......",
+        ".......",
+        "..SSS..",
+        "..SSS..",
+        "..SWS..",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 6,
+      "rows": [
+        ".......",
+        ".......",
+        "...S...",
+        "..SSS..",
+        "..SWS..",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 7,
+      "rows": [
+        "..SSS..",
+        ".SSSSS.",
+        ".SSSSS.",
+        ".SSSSS.",
+        "..SWS..",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    },
+    {
+      "y": 8,
+      "rows": [
+        "..SSS..",
+        ".SWWWS.",
+        ".SWWWS.",
+        ".SWWWS.",
+        "..SWS..",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        "......."
+      ]
+    }
+  ]
+}

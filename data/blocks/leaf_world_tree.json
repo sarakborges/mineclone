@@ -1,10 +1,6 @@
 {
   "id": "asteria:leaf_world_tree",
-  "name": {
-    "english": "World Tree Leaf",
-    "portuguese_brazil": "Folha da Árvore do Mundo",
-    "spanish": "Hoja del Árbol del Mundo"
-  },
+  "name": null,
   "category": "foliage",
   "tint": "none",
   "textures": {

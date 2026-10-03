@@ -1,5 +1,9 @@
 {
   "id": "magenta",
-  "name": { "english": "Magenta", "portuguese_brazil": "Magenta", "spanish": "Magenta" },
-  "color": { "hue": 304.269665, "saturation": 0.497854, "intensity": 0.609150 }
+  "name": null,
+  "color": {
+    "hue": 304.269665,
+    "saturation": 0.497854,
+    "intensity": 0.60915
+  }
 }

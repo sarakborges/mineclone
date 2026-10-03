@@ -1,11 +1,7 @@
 {
   "id": "asteria:cavern_tunnel_curve_right",
   "group_id": "cavern_tunnel_segment",
-  "name": {
-    "english": "Right Curving Cavern Tunnel",
-    "portuguese_brazil": "Túnel Curvo de Caverna à Direita",
-    "spanish": "Túnel Curvo de Caverna a la Derecha"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 5,

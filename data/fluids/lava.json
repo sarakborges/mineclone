@@ -1,10 +1,6 @@
 {
   "id": "asteria:lava",
-  "name": {
-    "english": "Lava",
-    "portuguese_brazil": "Lava",
-    "spanish": "Lava"
-  },
+  "name": null,
   "color": {
     "hue": 16,
     "saturation": 0.98,

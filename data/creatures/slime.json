@@ -1,10 +1,6 @@
 {
   "id": "asteria:slime",
-  "name": {
-    "english": "Slime",
-    "portuguese_brazil": "Gosma",
-    "spanish": "Limo"
-  },
+  "name": null,
   "model": "models/creatures/slime_blob/slime_blob.glb",
   "health": 10,
   "maxPerType": 4,

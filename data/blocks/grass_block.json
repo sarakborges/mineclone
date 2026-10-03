@@ -1,10 +1,6 @@
 {
   "id": "asteria:grass_block",
-  "name": {
-    "english": "Grass Block",
-    "portuguese_brazil": "Bloco de Grama",
-    "spanish": "Bloque de Césped"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable"

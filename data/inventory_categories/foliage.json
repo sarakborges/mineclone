@@ -1,10 +1,6 @@
 {
   "id": "foliage",
-  "displayName": {
-    "english": "Foliage",
-    "portuguese_brazil": "Folhagem",
-    "spanish": "Follaje"
-  },
+  "displayName": null,
   "order": 20,
   "icon": "textures/creative_categories/foliage.png"
 }

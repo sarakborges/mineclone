@@ -1,5 +1,9 @@
 {
   "id": "green",
-  "name": { "english": "Green", "portuguese_brazil": "Verde", "spanish": "Verde" },
-  "color": { "hue": 76.627322, "saturation": 0.724999, "intensity": 0.313726 }
+  "name": null,
+  "color": {
+    "hue": 76.627322,
+    "saturation": 0.724999,
+    "intensity": 0.313726
+  }
 }

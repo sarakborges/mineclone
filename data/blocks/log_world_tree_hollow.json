@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_world_tree_hollow",
-  "name": {
-    "english": "Hollow World Tree Log",
-    "portuguese_brazil": "Tronco Oco da Árvore do Mundo",
-    "spanish": "Tronco Hueco del Árbol del Mundo"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [],
   "textures": {

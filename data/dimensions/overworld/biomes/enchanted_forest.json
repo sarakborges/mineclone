@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/enchanted_forest",
-  "name": {
-    "english": "Enchanted Forest",
-    "portuguese_brazil": "Floresta Encantada",
-    "spanish": "Bosque Encantado"
-  },
+  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

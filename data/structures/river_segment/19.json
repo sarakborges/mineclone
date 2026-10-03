@@ -1,1 +1,91 @@
-{"id":"asteria:river_segment_19","group_id":"river_segment","name":{"english":"River Segment 19","portuguese_brazil":"Segmento de Rio 19","spanish":"Segmento de Río 19"},"locatable":false,"rotation":true,"priority":3,"restrictions":{"maxSlope":0,"requiresDryGround":false,"requiredBiomeCoverage":0,"proximity":[{"target":{"fluid":"asteria:water"},"mode":"forbidden","maxDistance":0}]},"generation":{"replacePolicy":"terrain","fluidPolicy":"displace","reserveSpace":false},"anchor":{"x":6,"y":0,"z":1},"groundAnchorY":0,"clearAbove":6,"palette":{"I":{"connector":{"face":"back"}},"S":{"clear":true},"W":{"fluid":"asteria:water"},"O":{"fluid":"asteria:water","connector":{"target":"asteria:river_segment_20","face":"front","strength":1}}},"layers":[{"y":-1,"rows":[".............",".............","......S......",".............",".............",".............",".............",".............",".............",".............",".............","............."]},{"y":0,"rows":[".............","......I......","....WWWWW....","....WWWWW....",".....WWWWW...",".....WWWWW...","....WWWWW....","....WWWWW....","...WWWWW.....","...WWWWW.....","....WWWWW....","....WWOWW...."]}]}
+{
+  "id": "asteria:river_segment_19",
+  "group_id": "river_segment",
+  "name": null,
+  "locatable": false,
+  "rotation": true,
+  "priority": 3,
+  "restrictions": {
+    "maxSlope": 0,
+    "requiresDryGround": false,
+    "requiredBiomeCoverage": 0,
+    "proximity": [
+      {
+        "target": {
+          "fluid": "asteria:water"
+        },
+        "mode": "forbidden",
+        "maxDistance": 0
+      }
+    ]
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 6,
+    "y": 0,
+    "z": 1
+  },
+  "groundAnchorY": 0,
+  "clearAbove": 6,
+  "palette": {
+    "I": {
+      "connector": {
+        "face": "back"
+      }
+    },
+    "S": {
+      "clear": true
+    },
+    "W": {
+      "fluid": "asteria:water"
+    },
+    "O": {
+      "fluid": "asteria:water",
+      "connector": {
+        "target": "asteria:river_segment_20",
+        "face": "front",
+        "strength": 1
+      }
+    }
+  },
+  "layers": [
+    {
+      "y": -1,
+      "rows": [
+        ".............",
+        ".............",
+        "......S......",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 0,
+      "rows": [
+        ".............",
+        "......I......",
+        "....WWWWW....",
+        "....WWWWW....",
+        ".....WWWWW...",
+        ".....WWWWW...",
+        "....WWWWW....",
+        "....WWWWW....",
+        "...WWWWW.....",
+        "...WWWWW.....",
+        "....WWWWW....",
+        "....WWOWW...."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "asteria:grass": {
+    "/name": "Grama"
+  },
+  "asteria:pebble": {
+    "/name": "Pedrinha"
+  },
+  "asteria:stick": {
+    "/name": "Graveto"
+  }
+}

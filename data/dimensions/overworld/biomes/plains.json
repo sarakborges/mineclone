@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/plains",
-  "name": {
-    "english": "Plains",
-    "portuguese_brazil": "Planícies",
-    "spanish": "Llanuras"
-  },
+  "name": null,
   "terrain": {
     "type": "rolling",
     "baseHeight": 4,

@@ -1,11 +1,7 @@
 {
   "id": "asteria:tree_oak_03",
   "group_id": "tree_oak",
-  "name": {
-    "english": "Oak Tree",
-    "portuguese_brazil": "Carvalho",
-    "spanish": "Roble"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

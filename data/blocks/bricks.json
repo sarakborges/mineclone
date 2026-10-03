@@ -1,10 +1,6 @@
 {
   "id": "asteria:bricks",
-  "name": {
-    "english": "Bricks",
-    "portuguese_brazil": "Tijolos",
-    "spanish": "Ladrillos"
-  },
+  "name": null,
   "category": "crafted_blocks",
   "tags": [
     "fragmentable"

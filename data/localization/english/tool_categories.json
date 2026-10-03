@@ -1,0 +1,11 @@
+{
+  "hatchet": {
+    "/name": "Hatchet"
+  },
+  "pickaxe": {
+    "/name": "Pickaxe"
+  },
+  "shovel": {
+    "/name": "Shovel"
+  }
+}

@@ -1,10 +1,6 @@
 {
   "id": "asteria:clay",
-  "name": {
-    "english": "Clay",
-    "portuguese_brazil": "Argila",
-    "spanish": "Arcilla"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable"

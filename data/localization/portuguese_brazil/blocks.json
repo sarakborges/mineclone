@@ -1,0 +1,107 @@
+{
+  "asteria:bassalt": {
+    "/name": "Basalto"
+  },
+  "asteria:bricks": {
+    "/name": "Tijolos"
+  },
+  "asteria:clay": {
+    "/name": "Argila"
+  },
+  "asteria:dirt": {
+    "/name": "Terra"
+  },
+  "asteria:glass": {
+    "/name": "Vidro"
+  },
+  "asteria:grass_block": {
+    "/name": "Bloco de Grama"
+  },
+  "asteria:gravel": {
+    "/name": "Cascalho"
+  },
+  "asteria:lamp": {
+    "/name": "Lâmpada"
+  },
+  "asteria:leaf_enchanted": {
+    "/name": "Folha Encantada"
+  },
+  "asteria:leaf_oak": {
+    "/name": "Folha de carvalho"
+  },
+  "asteria:leaf_willow": {
+    "/name": "Folha de salgueiro"
+  },
+  "asteria:leaf_world_tree": {
+    "/name": "Folha da Árvore do Mundo"
+  },
+  "asteria:log_enchanted": {
+    "/name": "Tronco Encantado"
+  },
+  "asteria:log_enchanted_hollow": {
+    "/name": "Tronco Encantado Oco"
+  },
+  "asteria:log_enchanted_stripped": {
+    "/name": "Tronco Encantado Descascado"
+  },
+  "asteria:log_enchanted_stripped_hollow": {
+    "/name": "Tronco Encantado Oco Descascado"
+  },
+  "asteria:log_oak": {
+    "/name": "Tronco de carvalho"
+  },
+  "asteria:log_oak_hollow": {
+    "/name": "Tronco de Carvalho Oco"
+  },
+  "asteria:log_oak_stripped": {
+    "/name": "Tronco de Carvalho Descascado"
+  },
+  "asteria:log_oak_stripped_hollow": {
+    "/name": "Tronco de Carvalho Oco Descascado"
+  },
+  "asteria:log_willow": {
+    "/name": "Tronco de salgueiro"
+  },
+  "asteria:log_willow_hollow": {
+    "/name": "Tronco de Salgueiro Oco"
+  },
+  "asteria:log_willow_stripped": {
+    "/name": "Tronco de Salgueiro Descascado"
+  },
+  "asteria:log_willow_stripped_hollow": {
+    "/name": "Tronco de Salgueiro Oco Descascado"
+  },
+  "asteria:log_world_tree": {
+    "/name": "Tronco da Árvore do Mundo"
+  },
+  "asteria:log_world_tree_hollow": {
+    "/name": "Tronco Oco da Árvore do Mundo"
+  },
+  "asteria:log_world_tree_stripped": {
+    "/name": "Tronco Descascado da Árvore do Mundo"
+  },
+  "asteria:log_world_tree_stripped_hollow": {
+    "/name": "Tronco Oco Descascado da Árvore do Mundo"
+  },
+  "asteria:mud": {
+    "/name": "Lama"
+  },
+  "asteria:sand": {
+    "/name": "Areia"
+  },
+  "asteria:sand_layer": {
+    "/name": "Camada de Areia"
+  },
+  "asteria:snow": {
+    "/name": "Neve"
+  },
+  "asteria:snow_layer": {
+    "/name": "Camada de Neve"
+  },
+  "asteria:stone": {
+    "/name": "Pedra"
+  },
+  "asteria:storage_box": {
+    "/name": "Caixa de armazenamento"
+  }
+}

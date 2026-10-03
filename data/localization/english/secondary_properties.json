@@ -1,0 +1,50 @@
+{
+  "black": {
+    "/name": "Black"
+  },
+  "blue": {
+    "/name": "Blue"
+  },
+  "brown": {
+    "/name": "Brown"
+  },
+  "cyan": {
+    "/name": "Cyan"
+  },
+  "gray": {
+    "/name": "Gray"
+  },
+  "green": {
+    "/name": "Green"
+  },
+  "light_blue": {
+    "/name": "Light Blue"
+  },
+  "light_gray": {
+    "/name": "Light Gray"
+  },
+  "lime": {
+    "/name": "Lime"
+  },
+  "magenta": {
+    "/name": "Magenta"
+  },
+  "orange": {
+    "/name": "Orange"
+  },
+  "pink": {
+    "/name": "Pink"
+  },
+  "purple": {
+    "/name": "Purple"
+  },
+  "red": {
+    "/name": "Red"
+  },
+  "white": {
+    "/name": "White"
+  },
+  "yellow": {
+    "/name": "Yellow"
+  }
+}

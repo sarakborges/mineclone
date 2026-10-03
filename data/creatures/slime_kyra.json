@@ -1,10 +1,6 @@
 {
   "id": "asteria:slime_kyra",
-  "name": {
-    "english": "Kyra Slime",
-    "portuguese_brazil": "Slime Kyra",
-    "spanish": "Slime Kyra"
-  },
+  "name": null,
   "model": "models/creatures/slime_cryo/slime_cryo.glb",
   "health": 12,
   "maxPerType": 3,
@@ -61,7 +57,12 @@
   "particleEffects": {
     "idle": {
       "count": 2,
-      "color": [0.76, 0.94, 1, 0.68],
+      "color": [
+        0.76,
+        0.94,
+        1,
+        0.68
+      ],
       "size": 0.038,
       "lifetime": 1,
       "interval": 0.55,
@@ -75,7 +76,12 @@
     },
     "land": {
       "count": 8,
-      "color": [0.76, 0.94, 1, 0.68],
+      "color": [
+        0.76,
+        0.94,
+        1,
+        0.68
+      ],
       "size": 0.048,
       "lifetime": 0.52,
       "spawnRadius": 0.33456,
@@ -88,7 +94,12 @@
     },
     "hurt": {
       "count": 7,
-      "color": [0.8608, 0.9652, 1, 0.78],
+      "color": [
+        0.8608,
+        0.9652,
+        1,
+        0.78
+      ],
       "size": 0.05,
       "lifetime": 0.5,
       "spawnRadius": 0.29376,
@@ -101,7 +112,12 @@
     },
     "death": {
       "count": 18,
-      "color": [0.8608, 0.9652, 1, 0.78],
+      "color": [
+        0.8608,
+        0.9652,
+        1,
+        0.78
+      ],
       "size": 0.062,
       "lifetime": 0.9,
       "spawnRadius": 0.408,

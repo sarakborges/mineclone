@@ -1,10 +1,6 @@
 {
   "id": "asteria:dirt",
-  "name": {
-    "english": "Dirt",
-    "portuguese_brazil": "Terra",
-    "spanish": "Tierra"
-  },
+  "name": null,
   "category": "natural_blocks",
   "tags": [
     "fragmentable"

@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_kyra",
-  "name": {
-    "english": "Kyra Essence",
-    "portuguese_brazil": "Essência Kyra",
-    "spanish": "Esencia Kyra"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_kyra.png"
 }

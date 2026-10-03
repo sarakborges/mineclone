@@ -1,1 +1,88 @@
-{"id":"asteria:mountain_pond_02","group_id":"mountain_pond","name":{"english":"Mountain Pond 02","portuguese_brazil":"Lagoa de Montanha 02","spanish":"Estanque de Montaña 02"},"locatable":false,"rotation":true,"priority":4,"restrictions":{"maxSlope":3,"requiresDryGround":false,"requiredBiomeCoverage":0},"generation":{"replacePolicy":"terrain","fluidPolicy":"displace","reserveSpace":false},"anchor":{"x":6,"y":0,"z":0},"groundAnchorY":0,"clearAbove":3,"palette":{"I":{"connector":{"face":"back"}},"S":{"clear":true},"W":{"fluid":"asteria:water"},"O":{"fluid":"asteria:water","connector":{"target":"asteria:river_segment","face":"front","strength":1}}},"layers":[{"y":-1,"rows":[".............",".............",".............",".............",".............",".............",".............","......S......",".............",".............",".............",".............",".............",".............","............."]},{"y":0,"rows":["......I......",".....WWW.....","....WWWWW....","...WWWWWWW...","..WWWWWWWWW..","..WWWWWWWWW..",".WWWWWWWWWWW.",".WWWWWWWWWWW.",".WWWWWWWWWWW.","..WWWWWWWWW..","..WWWWWWWWW..","...WWWWWWW...","....WWWWW....",".....WWW.....","......O......"]}]}
+{
+  "id": "asteria:mountain_pond_02",
+  "group_id": "mountain_pond",
+  "name": null,
+  "locatable": false,
+  "rotation": true,
+  "priority": 4,
+  "restrictions": {
+    "maxSlope": 3,
+    "requiresDryGround": false,
+    "requiredBiomeCoverage": 0
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "displace",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 6,
+    "y": 0,
+    "z": 0
+  },
+  "groundAnchorY": 0,
+  "clearAbove": 3,
+  "palette": {
+    "I": {
+      "connector": {
+        "face": "back"
+      }
+    },
+    "S": {
+      "clear": true
+    },
+    "W": {
+      "fluid": "asteria:water"
+    },
+    "O": {
+      "fluid": "asteria:water",
+      "connector": {
+        "target": "asteria:river_segment",
+        "face": "front",
+        "strength": 1
+      }
+    }
+  },
+  "layers": [
+    {
+      "y": -1,
+      "rows": [
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        "......S......",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        ".............",
+        "............."
+      ]
+    },
+    {
+      "y": 0,
+      "rows": [
+        "......I......",
+        ".....WWW.....",
+        "....WWWWW....",
+        "...WWWWWWW...",
+        "..WWWWWWWWW..",
+        "..WWWWWWWWW..",
+        ".WWWWWWWWWWW.",
+        ".WWWWWWWWWWW.",
+        ".WWWWWWWWWWW.",
+        "..WWWWWWWWW..",
+        "..WWWWWWWWW..",
+        "...WWWWWWW...",
+        "....WWWWW....",
+        ".....WWW.....",
+        "......O......"
+      ]
+    }
+  ]
+}

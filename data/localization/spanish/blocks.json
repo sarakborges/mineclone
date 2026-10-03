@@ -1,0 +1,107 @@
+{
+  "asteria:bassalt": {
+    "/name": "Basalto"
+  },
+  "asteria:bricks": {
+    "/name": "Ladrillos"
+  },
+  "asteria:clay": {
+    "/name": "Arcilla"
+  },
+  "asteria:dirt": {
+    "/name": "Tierra"
+  },
+  "asteria:glass": {
+    "/name": "Vidrio"
+  },
+  "asteria:grass_block": {
+    "/name": "Bloque de Césped"
+  },
+  "asteria:gravel": {
+    "/name": "Grava"
+  },
+  "asteria:lamp": {
+    "/name": "Lámpara"
+  },
+  "asteria:leaf_enchanted": {
+    "/name": "Hoja Encantada"
+  },
+  "asteria:leaf_oak": {
+    "/name": "Hoja de roble"
+  },
+  "asteria:leaf_willow": {
+    "/name": "Hoja de sauce"
+  },
+  "asteria:leaf_world_tree": {
+    "/name": "Hoja del Árbol del Mundo"
+  },
+  "asteria:log_enchanted": {
+    "/name": "Tronco Encantado"
+  },
+  "asteria:log_enchanted_hollow": {
+    "/name": "Tronco Encantado Hueco"
+  },
+  "asteria:log_enchanted_stripped": {
+    "/name": "Tronco Encantado Descortezado"
+  },
+  "asteria:log_enchanted_stripped_hollow": {
+    "/name": "Tronco Encantado Hueco Descortezado"
+  },
+  "asteria:log_oak": {
+    "/name": "Tronco de roble"
+  },
+  "asteria:log_oak_hollow": {
+    "/name": "Tronco de Roble Hueco"
+  },
+  "asteria:log_oak_stripped": {
+    "/name": "Tronco de Roble Descortezado"
+  },
+  "asteria:log_oak_stripped_hollow": {
+    "/name": "Tronco de Roble Hueco Descortezado"
+  },
+  "asteria:log_willow": {
+    "/name": "Tronco de sauce"
+  },
+  "asteria:log_willow_hollow": {
+    "/name": "Tronco de Sauce Hueco"
+  },
+  "asteria:log_willow_stripped": {
+    "/name": "Tronco de Sauce Descortezado"
+  },
+  "asteria:log_willow_stripped_hollow": {
+    "/name": "Tronco de Sauce Hueco Descortezado"
+  },
+  "asteria:log_world_tree": {
+    "/name": "Tronco del Árbol del Mundo"
+  },
+  "asteria:log_world_tree_hollow": {
+    "/name": "Tronco Hueco del Árbol del Mundo"
+  },
+  "asteria:log_world_tree_stripped": {
+    "/name": "Tronco Descortezado del Árbol del Mundo"
+  },
+  "asteria:log_world_tree_stripped_hollow": {
+    "/name": "Tronco Hueco Descortezado del Árbol del Mundo"
+  },
+  "asteria:mud": {
+    "/name": "Barro"
+  },
+  "asteria:sand": {
+    "/name": "Arena"
+  },
+  "asteria:sand_layer": {
+    "/name": "Capa de Arena"
+  },
+  "asteria:snow": {
+    "/name": "Nieve"
+  },
+  "asteria:snow_layer": {
+    "/name": "Capa de Nieve"
+  },
+  "asteria:stone": {
+    "/name": "Piedra"
+  },
+  "asteria:storage_box": {
+    "/name": "Caja de almacenamiento"
+  }
+}

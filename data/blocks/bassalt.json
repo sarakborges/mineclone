@@ -1,10 +1,6 @@
 {
   "id": "asteria:bassalt",
-  "name": {
-    "english": "Bassalt",
-    "portuguese_brazil": "Basalto",
-    "spanish": "Basalto"
-  },
+  "name": null,
   "category": "stone_blocks",
   "tags": [
     "fragmentable"

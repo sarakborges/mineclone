@@ -1,10 +1,6 @@
 {
   "id": "asteria:essence_vaela",
-  "name": {
-    "english": "Vaela Essence",
-    "portuguese_brazil": "Essência Vaela",
-    "spanish": "Esencia Vaela"
-  },
+  "name": null,
   "category": "crafting_materials",
   "icon": "textures/items/essence_vaela.png"
 }

@@ -1,11 +1,7 @@
 {
   "id": "asteria:enchanted_spring_01",
   "group_id": "enchanted_spring",
-  "name": {
-    "english": "Enchanted Spring",
-    "portuguese_brazil": "Nascente Encantada",
-    "spanish": "Manantial Encantado"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "priority": 0,

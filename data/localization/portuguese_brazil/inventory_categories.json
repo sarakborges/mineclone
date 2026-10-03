@@ -1,0 +1,29 @@
+{
+  "crafted_blocks": {
+    "/displayName": "Blocos Fabricados"
+  },
+  "crafting_materials": {
+    "/displayName": "Materiais de Fabricação"
+  },
+  "creative_tools": {
+    "/displayName": "Ferramentas Criativas"
+  },
+  "foliage": {
+    "/displayName": "Folhagem"
+  },
+  "light_sources": {
+    "/displayName": "Fontes de Luz"
+  },
+  "natural_blocks": {
+    "/displayName": "Blocos Naturais"
+  },
+  "stone_blocks": {
+    "/displayName": "Blocos de Pedra"
+  },
+  "tools": {
+    "/displayName": "Ferramentas"
+  },
+  "wooden_blocks": {
+    "/displayName": "Blocos de Madeira"
+  }
+}

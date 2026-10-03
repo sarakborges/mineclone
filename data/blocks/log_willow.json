@@ -1,10 +1,6 @@
 {
   "id": "asteria:log_willow",
-  "name": {
-    "english": "Willow Log",
-    "portuguese_brazil": "Tronco de salgueiro",
-    "spanish": "Tronco de sauce"
-  },
+  "name": null,
   "category": "wooden_blocks",
   "tags": [
     "fragmentable"

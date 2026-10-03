@@ -1,10 +1,6 @@
 {
   "id": "asteria:overworld/ocean",
-  "name": {
-    "english": "Ocean",
-    "portuguese_brazil": "Oceano",
-    "spanish": "Océano"
-  },
+  "name": null,
   "kind": "surface",
   "visuals": {
     "skyColor": {

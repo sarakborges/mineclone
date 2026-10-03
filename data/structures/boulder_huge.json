@@ -1,10 +1,6 @@
 {
   "id": "asteria:boulder_huge",
-  "name": {
-    "english": "Huge Boulder",
-    "portuguese_brazil": "Pedregulho enorme",
-    "spanish": "Roca enorme"
-  },
+  "name": null,
   "locatable": false,
   "rotation": true,
   "restrictions": {
