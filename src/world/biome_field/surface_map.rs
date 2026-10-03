@@ -853,11 +853,7 @@ fn div_ceil_i32(value: i32, divisor: i32) -> i32 {
 mod tests {
     use super::*;
     use crate::{
-        content::{
-            biome::BiomeClimate,
-            biome_distribution::BiomeDistribution,
-            dimension::DimensionBiomeSize,
-        },
+        content::{biome::BiomeClimate, dimension::DimensionBiomeSize},
         world::macro_climate::MacroClimateField,
     };
 
@@ -880,7 +876,6 @@ mod tests {
             id: id.to_owned(),
             tags: Vec::new(),
             surface_constraints: None,
-            distributions: vec![BiomeDistribution::Regional],
             size,
             weight,
             climate: BiomeClimate::default(),
