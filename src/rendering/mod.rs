@@ -23,6 +23,7 @@ mod mesh_allocator_diagnostics;
 mod sky;
 mod sky_layers;
 pub(crate) mod terrain_material;
+pub(crate) mod wind;
 
 use ambient_particles::AmbientParticlesPlugin;
 use asset_upload::AssetUploadPlugin;
@@ -41,6 +42,7 @@ use object_primitives::ObjectPrimitivesPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
+use wind::Wind;
 
 pub(crate) use gameplay_asset_preload::GameplayAssetPreloads;
 
@@ -49,6 +51,7 @@ pub(crate) struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameplayAssetPreloads>()
+            .init_resource::<Wind>()
             .add_plugins((
                 MaterialPlugin::<TerrainMaterial>::default(),
                 MaterialPlugin::<BlockModelMaterial>::default(),
