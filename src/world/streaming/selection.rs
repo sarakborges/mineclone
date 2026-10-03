@@ -203,9 +203,6 @@ pub(super) fn rebuild_queue(
     }
     if prune_caches {
         context.feature_fields.retain_for_chunks(&scratch.desired);
-        context
-            .biome_field
-            .retain_surface_site_cache(center.xz(), retention_radius);
     }
 
     streaming.retain_mesh_pressure_evictions(&scratch.desired, center);
