@@ -18,12 +18,7 @@ mod tool_icon;
 mod fluid_immersion;
 mod world;
 
-use bevy::{
-    camera::CameraOutputMode,
-    prelude::*,
-    render::render_resource::BlendState,
-    ui::IsDefaultUiCamera,
-};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
 use chat::ChatHudPlugin;
@@ -44,7 +39,6 @@ use world::WorldHudPlugin;
 use crate::{
     app::game_state::GameState,
     player::game_mode::GameMode,
-    rendering::camera_stack::UI_CAMERA_ORDER,
     targeting::block::BlockTargetingSet,
 };
 
@@ -220,7 +214,6 @@ pub(crate) struct HudPlugin;
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HudSettings>()
-            .add_systems(OnEnter(GameState::Gameplay), spawn_gameplay_ui_camera)
             .add_systems(
                 PreUpdate,
                 sync_spectator_hud_override.run_if(in_state(GameState::Gameplay)),
@@ -259,22 +252,4 @@ fn sync_spectator_hud_override(
     mut settings: ResMut<HudSettings>,
 ) {
     settings.set_spectator_override(game_mode.is_spectator());
-}
-
-fn spawn_gameplay_ui_camera(mut commands: Commands) {
-    commands.spawn((
-        GameplayUiCamera,
-        Camera2d,
-        Camera {
-            order: UI_CAMERA_ORDER,
-            clear_color: ClearColorConfig::Custom(Color::NONE),
-            output_mode: CameraOutputMode::Write {
-                blend_state: Some(BlendState::ALPHA_BLENDING),
-                clear_color: ClearColorConfig::None,
-            },
-            ..default()
-        },
-        IsDefaultUiCamera,
-        DespawnOnExit(GameState::Gameplay),
-    ));
 }

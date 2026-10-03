@@ -1,7 +1,14 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    camera::CameraOutputMode,
+    ecs::system::SystemParam,
+    prelude::*,
+    render::render_resource::BlendState,
+    ui::IsDefaultUiCamera,
+};
 
 use crate::{
     app::game_state::GameState,
+    hud::GameplayUiCamera,
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::camera_stack::UI_CAMERA_ORDER,
     ui::{
@@ -72,13 +79,20 @@ fn setup_loading_screen(
     language: Res<ActiveLanguage>,
 ) {
     commands.spawn((
+        GameplayUiCamera,
         Camera2d,
         Camera {
             order: UI_CAMERA_ORDER,
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
             ..default()
         },
         BoxShadowSamples(8),
-        DespawnOnExit(GameState::Loading),
+        IsDefaultUiCamera,
+        DespawnOnExit(GameState::Gameplay),
     ));
     let language = language.get();
 
