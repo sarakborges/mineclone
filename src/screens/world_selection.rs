@@ -49,8 +49,6 @@ impl Plugin for WorldSelectionPlugin {
             .add_systems(OnEnter(GameState::Loading), release_world_thumbnail_images)
             .add_systems(
                 Update,
-                // Consume Back before a worker result. A completed load in the
-                // same frame as Back must never activate the discarded world.
                 (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
@@ -76,8 +74,6 @@ enum WorldSelectionAction {
     Back,
 }
 
-/// Content needed to validate the world catalog, not the mutable state needed
-/// to activate a selected world. Keep the scan's resource access read-only.
 #[derive(SystemParam)]
 struct WorldSelectionScanContent<'w> {
     biomes: Res<'w, BiomeRegistry>,
@@ -117,9 +113,6 @@ fn refresh_world_list(
 ) {
     state.worlds.clear();
     state.error.clear();
-    // Reuse an unfinished scan after a return to the menu. An abandoned load
-    // likewise stays tracked until its completion is consumed, but its heavy
-    // result is disposed on a worker even if the menu is never reopened.
     if state.scan.is_some() {
         return;
     }
@@ -217,9 +210,6 @@ struct WorldSelectionLoadContext<'w> {
     save: ResMut<'w, InMemoryWorldSave>,
 }
 
-/// Polling a completed result is cheap relative to parsing and rehydrating
-/// saved chunks, which happens on the worker. All fallible activation
-/// preparation finishes before any live world resource is mutated.
 fn poll_world_load(
     mut commands: Commands,
     mut state: ResMut<WorldSelectionState>,
@@ -250,7 +240,7 @@ fn poll_world_load(
         );
         return;
     };
-    let (snapshot, world, session_lock) = match result {
+    let (snapshot, world, inactive_worlds, session_lock) = match result {
         Ok(loaded) => loaded,
         Err(error) => {
             state.error = format!(
@@ -266,6 +256,7 @@ fn poll_world_load(
         id.clone(),
         snapshot,
         world,
+        inactive_worlds,
         session_lock,
         context.content.registries(),
     ) {
@@ -329,7 +320,6 @@ fn handle_world_selection(
         return;
     }
 
-    // Back takes precedence even if another action changed in the same frame.
     if interactions.iter().any(|(interaction, action)| {
         *interaction == Interaction::Pressed && matches!(action, WorldSelectionAction::Back)
     }) {
@@ -415,7 +405,9 @@ fn handle_world_selection(
                     Err(error) => {
                         state.error = format!(
                             "{}: {error}",
-                            context.localization.text(context.language.get(), "worldSelection.loadStartError")
+                            context
+                                .localization
+                                .text(context.language.get(), "worldSelection.loadStartError")
                         );
                     }
                 }

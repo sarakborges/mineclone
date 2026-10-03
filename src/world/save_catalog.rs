@@ -1,3 +1,4 @@
+mod dimensions;
 mod generations;
 mod locking;
 mod snapshot;
@@ -18,6 +19,10 @@ use bevy::log::warn;
 use crate::{content::fluid::FluidRegistry, voxel::world::VoxelWorld};
 
 use self::{
+    dimensions::{
+        generation_world_storage_slot_exists, publish_generation_worlds,
+        remove_generation_worlds,
+    },
     generations::{
         RETAINED_GENERATIONS, latest_complete_manifest, newest_restorable_summary,
         prune_old_generations,
@@ -25,20 +30,18 @@ use self::{
     locking::{
         acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
     },
-    snapshot::{WorldManifest, SAVE_FORMAT_VERSION},
+    snapshot::{SAVE_FORMAT_VERSION, WorldManifest},
     storage::{highest_generation, manifest_name, publish_json, read_json, snapshot_name},
 };
 pub(crate) use self::{
     generations::load_world,
     locking::WorldDirectoryLock,
-    snapshot::{SavedPlayer, SnapshotSource, WorldSnapshot},
+    snapshot::{SavedDimensionState, SavedPlayer, SnapshotSource, WorldSnapshot},
     validation::{PruneRegistries, SaveRegistries},
 };
 
 use super::{
-    chunk_storage::{
-        generation_storage_slot_exists, publish_generation_world_chunks, remove_generation_chunks,
-    },
+    dimension_persistence::InactiveDimensionStates,
     new_world::{
         WorldGenerationSettings, WorldgenVersion, biome_size_multiplier_tenths,
         is_valid_biome_size_multiplier,
@@ -114,10 +117,21 @@ pub(crate) fn create_new_world(
     spawn_creatures: bool,
     world_generation: WorldGenerationSettings,
 ) -> io::Result<(String, WorldDirectoryLock)> {
-    if ticks_per_second == 0 || dimension_id.is_empty() { return Err(io::Error::new(io::ErrorKind::InvalidInput, "World seed metadata must include a dimension and a positive tick rate")); }
-    if !is_valid_biome_size_multiplier(biome_size_multiplier) { return Err(io::Error::new(io::ErrorKind::InvalidInput, "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments")); }
+    if ticks_per_second == 0 || dimension_id.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "World seed metadata must include a dimension and a positive tick rate",
+        ));
+    }
+    if !is_valid_biome_size_multiplier(biome_size_multiplier) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments",
+        ));
+    }
     let created_at = now_unix_ms()?;
-    let root = Path::new(WORLDS_DIRECTORY); fs::create_dir_all(root)?;
+    let root = Path::new(WORLDS_DIRECTORY);
+    fs::create_dir_all(root)?;
     let mut candidate = available_world_name(requested_name)?;
     loop {
         validate_world_name(&candidate)?;
@@ -126,21 +140,39 @@ pub(crate) fn create_new_world(
             Ok(()) => {
                 let session_lock = match acquire_world_directory_lock(&directory) {
                     Ok(lock) => lock,
-                    Err(error) => { let _ = remove_world_directory_lock_file(&directory); let _ = fs::remove_dir(&directory); return Err(error); }
+                    Err(error) => {
+                        let _ = remove_world_directory_lock_file(&directory);
+                        let _ = fs::remove_dir(&directory);
+                        return Err(error);
+                    }
                 };
                 let manifest = WorldManifest {
-                    format_version: SAVE_FORMAT_VERSION, id: candidate.clone(), seed, dimension_id: dimension_id.to_owned(),
-                    worldgen_version: WorldgenVersion::current(), biome_size_multiplier, ticks_per_second, spawn_creatures,
+                    format_version: SAVE_FORMAT_VERSION,
+                    id: candidate.clone(),
+                    seed,
+                    dimension_id: dimension_id.to_owned(),
+                    dimensions: vec![dimension_id.to_owned()],
+                    worldgen_version: WorldgenVersion::current(),
+                    biome_size_multiplier,
+                    ticks_per_second,
+                    spawn_creatures,
                     world_generation,
-                    last_saved_unix_ms: created_at, generation: 0, snapshot_file: None,
+                    last_saved_unix_ms: created_at,
+                    generation: 0,
+                    snapshot_file: None,
                 };
                 if let Err(error) = publish_json(&directory, &manifest_name(0), &manifest) {
-                    drop(session_lock); let _ = fs::remove_file(directory.join(format!("{}.tmp", manifest_name(0))));
-                    let _ = remove_world_directory_lock_file(&directory); let _ = fs::remove_dir(&directory); return Err(error);
+                    drop(session_lock);
+                    let _ = fs::remove_file(directory.join(format!("{}.tmp", manifest_name(0))));
+                    let _ = remove_world_directory_lock_file(&directory);
+                    let _ = fs::remove_dir(&directory);
+                    return Err(error);
                 }
                 return Ok((candidate, session_lock));
             }
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => candidate = available_world_name(requested_name)?,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                candidate = available_world_name(requested_name)?;
+            }
             Err(error) => return Err(error),
         }
     }
@@ -149,19 +181,23 @@ pub(crate) fn create_new_world(
 pub(crate) fn save_world(
     snapshot: &WorldSnapshot,
     world: &VoxelWorld,
+    inactive_dimensions: &InactiveDimensionStates,
     fluids: &FluidRegistry,
     registries: SaveRegistries<'_>,
 ) -> io::Result<u64> {
     save_world_owned(
         snapshot,
         world,
+        inactive_dimensions,
         fluids,
         registries.owned_for_pruning(),
     )
 }
+
 pub(crate) fn save_world_owned(
     snapshot: &WorldSnapshot,
     world: &VoxelWorld,
+    inactive_dimensions: &InactiveDimensionStates,
     fluids: &FluidRegistry,
     registries: PruneRegistries,
 ) -> io::Result<u64> {
@@ -179,9 +215,6 @@ pub(crate) fn save_world_owned(
     initial
         .worldgen_version
         .validate_matches(snapshot.worldgen_version)?;
-    // The generation-zero manifest reserves immutable world identity. The
-    // active dimension is mutable session state: dimension warps intentionally
-    // change it and each published generation records the current dimension.
     if initial.id != snapshot.id
         || initial.seed != snapshot.seed
         || initial.world_generation != snapshot.world_generation
@@ -193,6 +226,20 @@ pub(crate) fn save_world_owned(
     {
         return Err(invalid_data(
             "snapshot does not match reserved world identity",
+        ));
+    }
+
+    let snapshot_dimensions = snapshot.dimension_ids();
+    let mut runtime_dimensions = vec![snapshot.dimension_id.clone()];
+    runtime_dimensions.extend(
+        inactive_dimensions
+            .iter()
+            .map(|(dimension_id, _)| dimension_id.to_owned()),
+    );
+    runtime_dimensions.sort_unstable();
+    if runtime_dimensions != snapshot_dimensions {
+        return Err(invalid_data(
+            "snapshot dimension state does not match runtime dimension worlds",
         ));
     }
 
@@ -208,7 +255,7 @@ pub(crate) fn save_world_owned(
             || directory
                 .join(format!("{}.tmp", manifest_name(next)))
                 .exists()
-            || generation_storage_slot_exists(&directory, next)?;
+            || generation_world_storage_slot_exists(&directory, next)?;
         if !occupied {
             break;
         }
@@ -219,9 +266,12 @@ pub(crate) fn save_world_owned(
 
     let saved_at = now_unix_ms()?;
 
-    if let Err(error) =
-        publish_generation_world_chunks(&directory, next, world, fluids)
-    {
+    let worlds = std::iter::once((snapshot.dimension_id.as_str(), world)).chain(
+        inactive_dimensions
+            .iter()
+            .map(|(dimension_id, state)| (dimension_id, state.world())),
+    );
+    if let Err(error) = publish_generation_worlds(&directory, next, worlds, fluids) {
         cleanup_unpublished_generation(&directory, next, None);
         return Err(error);
     }
@@ -237,6 +287,7 @@ pub(crate) fn save_world_owned(
         id: snapshot.id.clone(),
         seed: snapshot.seed,
         dimension_id: snapshot.dimension_id.clone(),
+        dimensions: snapshot_dimensions,
         worldgen_version: snapshot.worldgen_version,
         biome_size_multiplier: snapshot.biome_size_multiplier,
         ticks_per_second: snapshot.ticks_per_second,
@@ -269,8 +320,8 @@ fn cleanup_unpublished_generation(
     {
         warn!("Could not remove unpublished world snapshot: {error}");
     }
-    if let Err(error) = remove_generation_chunks(directory, generation) {
-        warn!("Could not remove unpublished chunk generation {generation}: {error}");
+    if let Err(error) = remove_generation_worlds(directory, generation) {
+        warn!("Could not remove unpublished dimension generation {generation}: {error}");
     }
 }
 
@@ -299,13 +350,22 @@ fn schedule_backup_prune(id: String, owned: PruneRegistries) {
         warn!("World was saved, but backup cleanup thread could not start: {error}");
     }
 }
+
 pub(crate) fn delete_world(id: &str) -> io::Result<()> {
-    validate_world_name(id)?; let gate = world_lock(id)?;
+    validate_world_name(id)?;
+    let gate = world_lock(id)?;
     let _lock = gate.lock_write()?;
-    let directory = Path::new(WORLDS_DIRECTORY).join(id); let metadata = fs::symlink_metadata(&directory)?;
-    if !metadata.file_type().is_dir() { return Err(invalid_data("world directory cannot be a symbolic link")); }
-    let session_lock = acquire_world_directory_lock(&directory)?; fs::remove_dir_all(&directory)?; drop(session_lock); Ok(())
+    let directory = Path::new(WORLDS_DIRECTORY).join(id);
+    let metadata = fs::symlink_metadata(&directory)?;
+    if !metadata.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
+    let session_lock = acquire_world_directory_lock(&directory)?;
+    fs::remove_dir_all(&directory)?;
+    drop(session_lock);
+    Ok(())
 }
+
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
     let entries = match fs::read_dir(WORLDS_DIRECTORY) {
         Ok(entries) => entries,
@@ -376,6 +436,7 @@ pub(crate) fn list_verified_worlds(
     });
     Ok(verified)
 }
+
 fn now_unix_ms() -> io::Result<u64> {
     let elapsed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -383,4 +444,6 @@ fn now_unix_ms() -> io::Result<u64> {
     u64::try_from(elapsed.as_millis()).map_err(io::Error::other)
 }
 
-fn invalid_data(message:impl Into<String>)->io::Error{io::Error::new(io::ErrorKind::InvalidData,message.into())}
+fn invalid_data(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.into())
+}

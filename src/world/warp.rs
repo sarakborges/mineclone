@@ -37,6 +37,7 @@ use crate::{
 use super::{
     InMemoryWorldSave, WorldLoadMode,
     dimension::{CurrentDimension, DimensionId},
+    dimension_persistence::DimensionRuntimeContext,
 };
 
 const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
@@ -207,6 +208,7 @@ pub(super) struct DimensionWarpContext<'w, 's> {
     current_dimension: ResMut<'w, CurrentDimension>,
     load_mode: ResMut<'w, WorldLoadMode>,
     save: ResMut<'w, InMemoryWorldSave>,
+    runtime: DimensionRuntimeContext<'w, 's>,
     next_game_state: ResMut<'w, NextState<GameState>>,
 }
 
@@ -240,7 +242,6 @@ enum WarpSearchResult {
 
 pub(super) fn resolve_pending_warp(
     mut pending: ResMut<PendingWarp>,
-    world: Res<VoxelWorld>,
     mut dimension: DimensionWarpContext,
     mut slow_search_warned: Local<bool>,
     mut player: WarpPlayer,
@@ -263,19 +264,23 @@ pub(super) fn resolve_pending_warp(
                 return;
             };
 
-            let spawn_biome = match dimension_warp_spawn_biome(
-                definition,
-                &dimension.biomes,
-                &dimension.save,
-            ) {
-                Ok(spawn_biome) => spawn_biome,
-                Err(()) => {
-                    log_gameplay_warn(format!(
-                        "warp.failed target={target:?} dimension={requested_dimension} reason=no_single_biome_candidate"
-                    ));
-                    pending.fail();
-                    *slow_search_warned = false;
-                    return;
+            let spawn_biome = if let Some(saved) = dimension
+                .runtime
+                .inactive_spawn_biome(&requested_dimension)
+                .map(|spawn_biome| spawn_biome.map(str::to_owned))
+            {
+                saved
+            } else {
+                match dimension_warp_spawn_biome(definition, &dimension.biomes, &dimension.save) {
+                    Ok(spawn_biome) => spawn_biome,
+                    Err(()) => {
+                        log_gameplay_warn(format!(
+                            "warp.failed target={target:?} dimension={requested_dimension} reason=no_single_biome_candidate"
+                        ));
+                        pending.fail();
+                        *slow_search_warned = false;
+                        return;
+                    }
                 }
             };
 
@@ -285,9 +290,29 @@ pub(super) fn resolve_pending_warp(
                 target.y as f32 + PLAYER_EYE_HEIGHT,
                 target.z as f32 + 0.5,
             );
+
+            let previous_dimension = dimension.current_dimension.id.clone();
+            let previous_spawn_biome = dimension.save.spawn_biome().map(str::to_owned);
+            let active_spawn_biome = match dimension.runtime.swap_to(
+                &previous_dimension,
+                previous_spawn_biome,
+                &requested_dimension,
+                spawn_biome,
+            ) {
+                Ok(spawn_biome) => spawn_biome,
+                Err(error) => {
+                    log_gameplay_warn(format!(
+                        "warp.failed target={target:?} dimension={requested_dimension} reason=dimension_state error={error}"
+                    ));
+                    pending.fail();
+                    *slow_search_warned = false;
+                    return;
+                }
+            };
+
             dimension
                 .save
-                .prepare_dimension_warp(&requested_dimension, spawn_biome.as_deref());
+                .prepare_dimension_warp(&requested_dimension, active_spawn_biome.as_deref());
             dimension.save.save_player_state_with_health(
                 LOCAL_PLAYER_ID,
                 requested_eye,
@@ -297,17 +322,16 @@ pub(super) fn resolve_pending_warp(
                 flight.is_active(),
             );
 
-            let previous_dimension = dimension.current_dimension.id.to_string();
+            let previous_dimension_text = previous_dimension.to_string();
             dimension.current_dimension.id = DimensionId::from(requested_dimension.clone());
             *dimension.load_mode = WorldLoadMode::Load;
-            dimension.commands.insert_resource(VoxelWorld::default());
             dimension
                 .commands
                 .insert_resource(PendingDimensionWarp { target });
             dimension.next_game_state.set(GameState::Loading);
             log_gameplay_event(format!(
                 "warp.dimension_transition from={} to={} target={:?} next_state=Loading",
-                previous_dimension, requested_dimension, target
+                previous_dimension_text, requested_dimension, target
             ));
 
             pending.target = None;
@@ -320,11 +344,12 @@ pub(super) fn resolve_pending_warp(
     }
 
     let search_started = Instant::now();
-    let result = advance_safe_eye_position_search(&world, target, &mut pending.search);
+    let result = advance_safe_eye_position_search(dimension.runtime.world(), target, &mut pending.search);
     let search_elapsed = search_started.elapsed();
     if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
         log_gameplay_warn(format!(
-            "warp.search slow target={target:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
+            "warp.search slow target={:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
+            target,
             pending.search.radius,
             pending.search.frontier.len(),
             pending.search.visited.iter().filter(|visited| **visited).count(),
@@ -355,8 +380,7 @@ pub(super) fn resolve_pending_warp(
         WarpSearchResult::Exhausted => {
             warn!(
                 "could not find a safe warp destination within {} blocks of {:?}",
-                WARP_SEARCH_RADIUS_BLOCKS,
-                target
+                WARP_SEARCH_RADIUS_BLOCKS, target
             );
             pending.target = None;
             pending.search.reset();

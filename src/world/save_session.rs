@@ -19,7 +19,10 @@ use crate::{
         fluid::FluidRegistry, item::ItemRegistry, layer::LayerRegistry,
         object::ObjectRegistry, tool::ToolRegistry,
     },
-    creatures::{CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature},
+    creatures::{
+        CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature,
+        sort_saved_creatures,
+    },
     entity::EntityHealth,
     gameplay::storage_box::StorageBoxStorage,
     player::{
@@ -35,9 +38,12 @@ use super::{
     current_context::CurrentDimensionContext,
     day_night::DayNightClock,
     dimension::CurrentDimension,
-    game_rules::GameRules,
+    dimension_persistence::InactiveDimensionStates,
     fluid_updates::PendingFluidUpdates,
-    save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
+    game_rules::GameRules,
+    save_catalog::{
+        SaveRegistries, SavedDimensionState, SavedPlayer, SnapshotSource, WorldSnapshot, save_world,
+    },
     seed::WorldSeed,
     thumbnail::{
         WorldThumbnailCameraQuery, WorldThumbnailCapture, WorldThumbnailCompletion,
@@ -107,6 +113,7 @@ impl WorldSession {
         if let Err(error) = save_world(
             &captured,
             &snapshot.state.world,
+            &snapshot.state.inactive_dimensions,
             &snapshot.registries.fluids,
             snapshot.registries.for_validation(),
         ) {
@@ -119,9 +126,6 @@ impl WorldSession {
         }
         let publication_elapsed = publication_started.elapsed();
 
-        // Measured on the machine running the game, not inferred from CI.
-        // Publication includes JSON serialization, fsync and cleanup dispatch;
-        // final world exit remains blocked until the commit is durable.
         log_gameplay_event(format!(
             "world.save success id={} capture_ms={:.2} publication_ms={:.2}",
             id,
@@ -143,6 +147,7 @@ struct WorldSnapshotState<'w> {
     inventory: Res<'w, PlayerHotbar>,
     storage_boxes: Res<'w, StorageBoxStorage>,
     world: Res<'w, VoxelWorld>,
+    inactive_dimensions: Res<'w, InactiveDimensionStates>,
     pending_fluids: Res<'w, PendingFluidUpdates>,
     world_ticks: Res<'w, WorldTickClock>,
 }
@@ -198,26 +203,13 @@ impl WorldSaveEntities<'_, '_> {
     }
 
     fn saved_creatures(&self) -> Vec<SavedCreature> {
-        let mut creatures = self.pending_creatures.saved().to_vec();
-        creatures.extend(
+        self.pending_creatures.snapshot(
             self.creatures
                 .iter()
-                .filter(|(_, _, health, _)| !health.is_dead())
-                .map(|(instance, transform, health, meta_tags)| SavedCreature {
-                    definition_id: instance.definition_id.clone(),
-                    position: transform.translation.to_array(),
-                    health: health.current(),
-                    meta_tags: meta_tags.clone(),
+                .filter_map(|(instance, transform, health, meta_tags)| {
+                    SavedCreature::from_runtime(instance, transform, health, meta_tags)
                 }),
-        );
-        creatures.sort_unstable_by(|left, right| {
-            left.definition_id
-                .cmp(&right.definition_id)
-                .then_with(|| left.position[0].total_cmp(&right.position[0]))
-                .then_with(|| left.position[1].total_cmp(&right.position[1]))
-                .then_with(|| left.position[2].total_cmp(&right.position[2]))
-        });
-        creatures
+        )
     }
 }
 
@@ -261,6 +253,24 @@ pub(crate) struct WorldSaveContext<'w, 's> {
 
 impl WorldSaveContext<'_, '_> {
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
+        let mut inactive_dimensions = self
+            .state
+            .inactive_dimensions
+            .iter()
+            .map(|(dimension_id, state)| {
+                let mut creatures = state.creatures().to_vec();
+                sort_saved_creatures(&mut creatures);
+                SavedDimensionState {
+                    dimension_id: dimension_id.to_owned(),
+                    spawn_biome: state.spawn_biome().map(str::to_owned),
+                    storage_boxes: state.storage_boxes().saved_boxes(),
+                    fluid_updates: state.fluid_updates().clone(),
+                    creatures,
+                }
+            })
+            .collect::<Vec<_>>();
+        inactive_dimensions.sort_unstable_by(|left, right| left.dimension_id.cmp(&right.dimension_id));
+
         WorldSnapshot::capture(SnapshotSource {
             id,
             seed: self.state.seed.0,
@@ -281,6 +291,7 @@ impl WorldSaveContext<'_, '_> {
             pending_fluids: &self.state.pending_fluids,
             world_tick: self.state.world_ticks.current_tick(),
             creatures: self.entities.saved_creatures(),
+            inactive_dimensions,
         })
     }
 }
@@ -310,9 +321,6 @@ pub(crate) fn restore_loaded_clock(
     ));
 }
 
-/// The default Bevy close handler is disabled so gameplay can durably save
-/// before the process exits. On failure the close request is consumed and the
-/// window remains open, matching Leave World / Exit Game retry semantics.
 pub(crate) fn save_on_gameplay_window_close(
     mut commands: Commands,
     mut close_requests: MessageReader<WindowCloseRequested>,
@@ -353,9 +361,6 @@ pub(crate) fn save_on_gameplay_window_close(
     );
 }
 
-/// Keep consuming close requests while Gameplay owns the save-specific reader,
-/// but exit immediately in menu/loading states where there is no active world
-/// snapshot to publish.
 pub(crate) fn exit_on_window_close_without_gameplay(
     state: Res<State<GameState>>,
     mut close_requests: MessageReader<WindowCloseRequested>,

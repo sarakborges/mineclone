@@ -17,7 +17,7 @@ use crate::{
         object::ObjectRegistry,
         tool::ToolRegistry,
     },
-    gameplay::storage_box::STORAGE_BOX_SLOT_COUNT,
+    gameplay::storage_box::{STORAGE_BOX_SLOT_COUNT, SavedStorageBox},
     player::{
         hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
         item_stack::SavedItemStack,
@@ -50,35 +50,75 @@ impl SaveRegistries<'_> {
         let duration = dimension
             .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
             .map(|cycle| cycle.day_duration_ticks);
-        let spawn_biome_valid = snapshot.spawn_biome.as_deref().is_none_or(|biome_id| {
-            self.biomes
-                .get(biome_id)
-                .is_some_and(|biome| biome.kind == BiomeKind::Surface)
-                && dimension.is_some_and(|dimension| {
-                    dimension.biomes.iter().any(|entry| entry.id == biome_id)
-                })
+        let spawn_biome_valid = dimension.is_some_and(|dimension| {
+            validate_dimension_spawn_biome(
+                snapshot.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| {
+                    self.biomes
+                        .get(biome_id)
+                        .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+                        && dimension.biomes.iter().any(|entry| entry.id == biome_id)
+                },
+            )
         });
         let current_biome_valid = snapshot
             .current_biome
             .as_deref()
             .is_none_or(|biome_id| self.biomes.get(biome_id).is_some());
+        let valid_item = |id: &str| {
+            self.items.get(id).is_some()
+                || self.blocks.get(id).is_some()
+                || self.layers.get(id).is_some()
+                || self.objects.get(id).is_some()
+                || self.tools.get(id).is_some()
+        };
+        let valid_biome = |id: &str| self.biomes.get(id).is_some();
         validate_playable(
             snapshot,
             duration,
             spawn_biome_valid,
             current_biome_valid,
-            |id| {
-                self.items.get(id).is_some()
-                    || self.blocks.get(id).is_some()
-                    || self.layers.get(id).is_some()
-                    || self.objects.get(id).is_some()
-                    || self.tools.get(id).is_some()
-            },
-            |id| self.biomes.get(id).is_some(),
+            &valid_item,
+            &valid_biome,
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
         for creature in &snapshot.creatures {
             creature.validate(self.creatures)?;
+        }
+
+        let mut dimensions = HashSet::with_capacity(snapshot.inactive_dimensions.len() + 1);
+        dimensions.insert(snapshot.dimension_id.as_str());
+        for saved in &snapshot.inactive_dimensions {
+            if !dimensions.insert(saved.dimension_id.as_str()) {
+                return Err(invalid_data("duplicate saved dimension identity"));
+            }
+            let Some(dimension) = self.dimensions.get(&saved.dimension_id) else {
+                return Err(invalid_data(format!(
+                    "saved dimension is missing from content: {}",
+                    saved.dimension_id
+                )));
+            };
+            if !validate_dimension_spawn_biome(
+                saved.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| {
+                    self.biomes
+                        .get(biome_id)
+                        .is_some_and(|biome| biome.kind == BiomeKind::Surface)
+                        && dimension.biomes.iter().any(|entry| entry.id == biome_id)
+                },
+            ) {
+                return Err(invalid_data(format!(
+                    "saved spawn biome is invalid for dimension {}",
+                    saved.dimension_id
+                )));
+            }
+            validate_storage_boxes(&saved.storage_boxes, &valid_item, &valid_biome)?;
+            PendingFluidUpdates::from_saved(&saved.fluid_updates, self.fluids)?;
+            for creature in &saved.creatures {
+                creature.validate(self.creatures)?;
+            }
         }
         Ok(())
     }
@@ -157,28 +197,76 @@ pub(crate) struct PruneRegistries {
 
 impl PruneRegistries {
     pub(crate) fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
-        let spawn_biome_valid = snapshot.spawn_biome.as_deref().is_none_or(|biome_id| {
-            self.valid_spawn_biomes
-                .get(&snapshot.dimension_id)
-                .is_some_and(|biomes| biomes.contains(biome_id))
-        });
+        let spawn_biome_valid = self
+            .valid_spawn_biomes
+            .get(&snapshot.dimension_id)
+            .is_some_and(|biomes| {
+                validate_dimension_spawn_biome(
+                    snapshot.spawn_biome.as_deref(),
+                    snapshot.world_generation.single_biome(),
+                    |biome_id| biomes.contains(biome_id),
+                )
+            });
         let current_biome_valid = snapshot
             .current_biome
             .as_deref()
             .is_none_or(|biome_id| self.valid_biomes.contains(biome_id));
+        let valid_item = |id: &str| self.valid_items.contains(id);
+        let valid_biome = |id: &str| self.valid_biomes.contains(id);
         validate_playable(
             snapshot,
             self.day_lengths.get(&snapshot.dimension_id).copied(),
             spawn_biome_valid,
             current_biome_valid,
-            |id| self.valid_items.contains(id),
-            |id| self.valid_biomes.contains(id),
+            &valid_item,
+            &valid_biome,
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
         for creature in &snapshot.creatures {
             creature.validate(&self.creatures)?;
         }
+
+        let mut dimensions = HashSet::with_capacity(snapshot.inactive_dimensions.len() + 1);
+        dimensions.insert(snapshot.dimension_id.as_str());
+        for saved in &snapshot.inactive_dimensions {
+            if !dimensions.insert(saved.dimension_id.as_str()) {
+                return Err(invalid_data("duplicate saved dimension identity"));
+            }
+            let Some(valid_spawn_biomes) = self.valid_spawn_biomes.get(&saved.dimension_id) else {
+                return Err(invalid_data(format!(
+                    "saved dimension is missing from content: {}",
+                    saved.dimension_id
+                )));
+            };
+            if !validate_dimension_spawn_biome(
+                saved.spawn_biome.as_deref(),
+                snapshot.world_generation.single_biome(),
+                |biome_id| valid_spawn_biomes.contains(biome_id),
+            ) {
+                return Err(invalid_data(format!(
+                    "saved spawn biome is invalid for dimension {}",
+                    saved.dimension_id
+                )));
+            }
+            validate_storage_boxes(&saved.storage_boxes, &valid_item, &valid_biome)?;
+            PendingFluidUpdates::from_saved(&saved.fluid_updates, &self.fluids)?;
+            for creature in &saved.creatures {
+                creature.validate(&self.creatures)?;
+            }
+        }
         Ok(())
+    }
+}
+
+fn validate_dimension_spawn_biome(
+    spawn_biome: Option<&str>,
+    single_biome: bool,
+    is_valid: impl Fn(&str) -> bool,
+) -> bool {
+    if single_biome {
+        spawn_biome.is_some_and(is_valid)
+    } else {
+        spawn_biome.is_none_or(is_valid)
     }
 }
 
@@ -187,8 +275,8 @@ fn validate_playable(
     duration: Option<u64>,
     spawn_biome_valid: bool,
     current_biome_valid: bool,
-    valid_item: impl Fn(&str) -> bool,
-    valid_biome: impl Fn(&str) -> bool,
+    valid_item: &impl Fn(&str) -> bool,
+    valid_biome: &impl Fn(&str) -> bool,
 ) -> io::Result<()> {
     if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) {
         return Err(invalid_data("saved dimension or world clock is invalid"));
@@ -220,11 +308,19 @@ fn validate_playable(
         return Err(invalid_data("invalid selected hotbar slot"));
     }
     for stack in snapshot.inventory.iter().flatten() {
-        validate_saved_stack(stack, "inventory", &valid_item, &valid_biome)?;
+        validate_saved_stack(stack, "inventory", valid_item, valid_biome)?;
     }
 
+    validate_storage_boxes(&snapshot.storage_boxes, valid_item, valid_biome)
+}
+
+fn validate_storage_boxes(
+    storage_boxes: &[SavedStorageBox],
+    valid_item: &impl Fn(&str) -> bool,
+    valid_biome: &impl Fn(&str) -> bool,
+) -> io::Result<()> {
     let mut storage_positions = HashSet::new();
-    for storage_box in &snapshot.storage_boxes {
+    for storage_box in storage_boxes {
         if storage_box.items().len() != STORAGE_BOX_SLOT_COUNT {
             return Err(invalid_data("invalid storage box inventory length"));
         }
@@ -236,7 +332,7 @@ fn validate_playable(
             return Err(invalid_data("duplicate storage box position"));
         }
         for stack in storage_box.items().iter().flatten() {
-            validate_saved_stack(stack, "storage box", &valid_item, &valid_biome)?;
+            validate_saved_stack(stack, "storage box", valid_item, valid_biome)?;
         }
     }
     Ok(())

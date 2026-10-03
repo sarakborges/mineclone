@@ -20,7 +20,7 @@ use lifecycle::{despawn_dead_creatures, despawn_distant_creatures};
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use metadata::EntityMetaTags;
 use motion::move_creatures;
-pub(crate) use persistence::{PendingCreatureRestores, SavedCreature};
+pub(crate) use persistence::{PendingCreatureRestores, SavedCreature, sort_saved_creatures};
 use natural_spawn::natural_spawn_creatures;
 use particles::{emit_creature_particles, update_creature_particles};
 use spawn::restore_saved_creatures;

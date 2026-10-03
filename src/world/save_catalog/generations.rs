@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     io,
     path::{Path, PathBuf},
@@ -15,6 +16,8 @@ use crate::{
 };
 
 use super::{
+    WorldSummary,
+    dimensions::{generation_worlds_published, load_dimension_world, remove_generation_worlds},
     invalid_data,
     locking::{ReadLease, WorldDirectoryLock, acquire_world_directory_lock, world_lock},
     snapshot::{SAVE_FORMAT_VERSION, StoredWorldSnapshot, WorldManifest, WorldSnapshot},
@@ -23,12 +26,8 @@ use super::{
         snapshot_name,
     },
     validation::{PruneRegistries, SaveRegistries},
-    WorldSummary,
 };
 use crate::world::{
-    chunk_storage::{
-        generation_chunks_published, load_generation_world, remove_generation_chunks,
-    },
     new_world::{biome_size_multiplier_tenths, is_valid_biome_size_multiplier},
     world_names::{WORLDS_DIRECTORY, validate_world_name},
 };
@@ -141,8 +140,8 @@ fn load_snapshot_summary(
     manifest: &WorldManifest,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<WorldSnapshot> {
-    if !generation_chunks_published(directory, manifest.generation)? {
-        return Err(invalid_data("saved chunk generation is missing"));
+    if !generation_worlds_published(directory, manifest.generation, &manifest.dimensions)? {
+        return Err(invalid_data("saved dimension generation is missing"));
     }
     let file = open_snapshot_file(directory, manifest)?;
     decode_snapshot_state(file, id, manifest, validate)
@@ -151,7 +150,12 @@ fn load_snapshot_summary(
 pub(crate) fn load_world(
     id: &str,
     registries: SaveRegistries<'_>,
-) -> io::Result<(WorldSnapshot, VoxelWorld, WorldDirectoryLock)> {
+) -> io::Result<(
+    WorldSnapshot,
+    VoxelWorld,
+    HashMap<String, VoxelWorld>,
+    WorldDirectoryLock,
+)> {
     validate_world_name(id)?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
@@ -170,7 +174,9 @@ pub(crate) fn load_world(
             |snapshot| registries.validate_playable(snapshot),
         );
         match loaded {
-            Ok((snapshot, world)) => return Ok((snapshot, world, session_lock)),
+            Ok((snapshot, world, inactive_worlds)) => {
+                return Ok((snapshot, world, inactive_worlds, session_lock));
+            }
             Err(error) => {
                 warn!(
                     "Skipping damaged save for world {id}, generation {}: {error}",
@@ -190,7 +196,7 @@ fn load_snapshot(
     manifest: &WorldManifest,
     registries: ChunkLoadRegistries<'_>,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
-) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+) -> io::Result<(WorldSnapshot, VoxelWorld, HashMap<String, VoxelWorld>)> {
     let file = open_snapshot_file(directory, manifest)?;
     decode_snapshot(directory, file, id, manifest, registries, validate)
 }
@@ -202,18 +208,37 @@ fn decode_snapshot(
     manifest: &WorldManifest,
     registries: ChunkLoadRegistries<'_>,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
-) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+) -> io::Result<(WorldSnapshot, VoxelWorld, HashMap<String, VoxelWorld>)> {
     let snapshot = decode_snapshot_state(file, id, manifest, validate)?;
 
-    let world = load_generation_world(
+    let world = load_dimension_world(
         directory,
         manifest.generation,
+        &snapshot.dimension_id,
         registries.blocks,
         registries.layers,
         registries.objects,
         registries.fluids,
     )?;
-    Ok((snapshot, world))
+    let mut inactive_worlds = HashMap::with_capacity(snapshot.inactive_dimensions.len());
+    for saved in &snapshot.inactive_dimensions {
+        let inactive = load_dimension_world(
+            directory,
+            manifest.generation,
+            &saved.dimension_id,
+            registries.blocks,
+            registries.layers,
+            registries.objects,
+            registries.fluids,
+        )?;
+        if inactive_worlds
+            .insert(saved.dimension_id.clone(), inactive)
+            .is_some()
+        {
+            return Err(invalid_data("duplicate saved dimension world"));
+        }
+    }
+    Ok((snapshot, world, inactive_worlds))
 }
 
 fn decode_snapshot_state(
@@ -253,17 +278,37 @@ fn decode_snapshot_state(
     }
 
     let snapshot = stored.into_runtime();
+    if snapshot.dimension_ids() != manifest.dimensions {
+        return Err(invalid_data(
+            "snapshot dimension set does not match generation manifest",
+        ));
+    }
     validate(&snapshot)?;
     Ok(snapshot)
 }
 
 fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
+    let dimensions_are_canonical = !manifest.dimensions.is_empty()
+        && manifest
+            .dimensions
+            .iter()
+            .all(|dimension| !dimension.is_empty())
+        && manifest
+            .dimensions
+            .windows(2)
+            .all(|pair| pair[0] < pair[1])
+        && manifest
+            .dimensions
+            .binary_search(&manifest.dimension_id)
+            .is_ok();
+
     manifest.format_version == SAVE_FORMAT_VERSION
         && manifest.id == id
         && manifest.generation == generation
         && manifest.worldgen_version.validate().is_ok()
         && is_valid_biome_size_multiplier(manifest.biome_size_multiplier)
         && manifest.ticks_per_second > 0
+        && dimensions_are_canonical
         && generation > 0
         && manifest.snapshot_file.as_deref() == Some(snapshot_name(generation).as_str())
 }
@@ -275,7 +320,7 @@ fn manifest_payload_published(
     if !directory.join(snapshot_name(manifest.generation)).is_file() {
         return Ok(false);
     }
-    generation_chunks_published(directory, manifest.generation)
+    generation_worlds_published(directory, manifest.generation, &manifest.dimensions)
 }
 
 pub(super) fn latest_complete_manifest(
@@ -392,7 +437,7 @@ pub(super) fn prune_old_generations(
     }
 
     for generation in stale_generations {
-        remove_generation_chunks(directory, generation)?;
+        remove_generation_worlds(directory, generation)?;
     }
 
     Ok(())

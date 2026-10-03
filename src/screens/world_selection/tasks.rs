@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io,
     sync::{Arc, Mutex},
     thread,
@@ -22,7 +23,12 @@ use crate::{
 
 type WorldScanResult = Arc<Mutex<Option<io::Result<Vec<WorldSummary>>>>>;
 type WorldLoadResult = Arc<Mutex<WorldLoadSlot>>;
-type LoadedWorld = (WorldSnapshot, VoxelWorld, WorldDirectoryLock);
+type LoadedWorld = (
+    WorldSnapshot,
+    VoxelWorld,
+    HashMap<String, VoxelWorld>,
+    WorldDirectoryLock,
+);
 
 #[derive(Default)]
 struct WorldLoadSlot {
@@ -231,10 +237,6 @@ impl PendingWorldLoad {
 
     pub(super) fn abandon(&self) {
         log_system_event(format!("world.load cancel_requested id={}", self.id));
-        // Cancellation and worker publication are serialized by THIS small
-        // mutex. An already-completed large world is moved to a disposer rather
-        // than being dropped on the input frame; a late result is discarded by
-        // the original worker itself. Neither case leaves a world in the menu.
         let stale = {
             let mut slot = self
                 .result

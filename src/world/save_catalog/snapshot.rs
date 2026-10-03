@@ -1,4 +1,4 @@
-use std::io;
+use std::{collections::HashSet, io};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ use crate::world::{
     world_names::validate_world_name,
 };
 
-pub(super) const SAVE_FORMAT_VERSION: u32 = 5;
+pub(super) const SAVE_FORMAT_VERSION: u32 = 6;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -27,6 +27,7 @@ pub(super) struct WorldManifest {
     pub(super) id: String,
     pub(super) seed: u64,
     pub(super) dimension_id: String,
+    pub(super) dimensions: Vec<String>,
     pub(super) worldgen_version: WorldgenVersion,
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
@@ -51,6 +52,16 @@ pub(crate) struct SavedPlayer {
     pub(crate) pitch: f32,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SavedDimensionState {
+    pub(crate) dimension_id: String,
+    pub(crate) spawn_biome: Option<String>,
+    pub(crate) storage_boxes: Vec<SavedStorageBox>,
+    pub(crate) fluid_updates: SavedFluidUpdates,
+    pub(crate) creatures: Vec<SavedCreature>,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct WorldSnapshot {
     pub(crate) id: String,
@@ -71,6 +82,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) storage_boxes: Vec<SavedStorageBox>,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
+    pub(crate) inactive_dimensions: Vec<SavedDimensionState>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,10 +105,10 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) tick_in_day: u64,
     pub(super) inventory: Vec<Option<SavedItemStack>>,
     pub(super) selected_hotbar_slot: usize,
-    #[serde(default)]
     pub(super) storage_boxes: Vec<SavedStorageBox>,
     pub(super) fluid_updates: SavedFluidUpdates,
     pub(super) creatures: Vec<SavedCreature>,
+    pub(super) inactive_dimensions: Vec<SavedDimensionState>,
 }
 
 #[derive(Serialize)]
@@ -120,6 +132,7 @@ pub(super) struct DiskWorldSnapshot<'a> {
     storage_boxes: &'a [SavedStorageBox],
     fluid_updates: &'a SavedFluidUpdates,
     creatures: &'a [SavedCreature],
+    inactive_dimensions: &'a [SavedDimensionState],
 }
 
 impl StoredWorldSnapshot {
@@ -143,6 +156,7 @@ impl StoredWorldSnapshot {
             storage_boxes: self.storage_boxes,
             fluid_updates: self.fluid_updates,
             creatures: self.creatures,
+            inactive_dimensions: self.inactive_dimensions,
         }
     }
 }
@@ -167,9 +181,22 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) pending_fluids: &'a PendingFluidUpdates,
     pub(crate) world_tick: u64,
     pub(crate) creatures: Vec<SavedCreature>,
+    pub(crate) inactive_dimensions: Vec<SavedDimensionState>,
 }
 
 impl WorldSnapshot {
+    pub(crate) fn dimension_ids(&self) -> Vec<String> {
+        let mut dimensions = Vec::with_capacity(self.inactive_dimensions.len() + 1);
+        dimensions.push(self.dimension_id.clone());
+        dimensions.extend(
+            self.inactive_dimensions
+                .iter()
+                .map(|dimension| dimension.dimension_id.clone()),
+        );
+        dimensions.sort_unstable();
+        dimensions
+    }
+
     pub(super) fn disk_snapshot(&self) -> DiskWorldSnapshot<'_> {
         DiskWorldSnapshot {
             format_version: SAVE_FORMAT_VERSION,
@@ -191,6 +218,7 @@ impl WorldSnapshot {
             storage_boxes: &self.storage_boxes,
             fluid_updates: &self.fluid_updates,
             creatures: &self.creatures,
+            inactive_dimensions: &self.inactive_dimensions,
         }
     }
 
@@ -217,6 +245,18 @@ impl WorldSnapshot {
             }
         }
 
+        let mut dimensions = HashSet::with_capacity(source.inactive_dimensions.len() + 1);
+        dimensions.insert(source.dimension_id);
+        for dimension in &source.inactive_dimensions {
+            if dimension.dimension_id.is_empty()
+                || !dimensions.insert(dimension.dimension_id.as_str())
+            {
+                return Err(invalid_data(
+                    "saved dimension identities must be unique and non-empty",
+                ));
+            }
+        }
+
         Ok(Self {
             id: source.id.to_owned(),
             seed: source.seed,
@@ -238,6 +278,7 @@ impl WorldSnapshot {
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
             creatures: source.creatures,
+            inactive_dimensions: source.inactive_dimensions,
         })
     }
 }
@@ -267,10 +308,46 @@ mod tests {
             storage_boxes: Vec::new(),
             fluid_updates: SavedFluidUpdates::default(),
             creatures: Vec::new(),
+            inactive_dimensions: Vec::new(),
         };
 
         let value = serde_json::to_value(snapshot.disk_snapshot()).unwrap();
         assert_eq!(value["format_version"], SAVE_FORMAT_VERSION);
         assert!(value.get("chunks").is_none());
+    }
+
+    #[test]
+    fn dimension_ids_include_active_and_inactive_dimensions_canonically() {
+        let snapshot = WorldSnapshot {
+            id: "World".to_owned(),
+            seed: 1,
+            dimension_id: "asteria:umbral".to_owned(),
+            worldgen_version: WorldgenVersion::current(),
+            spawn_biome: None,
+            current_biome: None,
+            biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
+            ticks_per_second: 20,
+            spawn_creatures: true,
+            world_generation: WorldGenerationSettings::default(),
+            player: None,
+            day: 1,
+            tick_in_day: 0,
+            inventory: Vec::new(),
+            selected_hotbar_slot: 0,
+            storage_boxes: Vec::new(),
+            fluid_updates: SavedFluidUpdates::default(),
+            creatures: Vec::new(),
+            inactive_dimensions: vec![SavedDimensionState {
+                dimension_id: "asteria:overworld".to_owned(),
+                spawn_biome: None,
+                storage_boxes: Vec::new(),
+                fluid_updates: SavedFluidUpdates::default(),
+                creatures: Vec::new(),
+            }],
+        };
+        assert_eq!(
+            snapshot.dimension_ids(),
+            vec!["asteria:overworld".to_owned(), "asteria:umbral".to_owned()]
+        );
     }
 }
