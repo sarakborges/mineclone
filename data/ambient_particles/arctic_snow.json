@@ -1,0 +1,40 @@
+{
+  "id": "asteria:arctic_snow",
+  "source": {
+    "type": "biome",
+    "id": "asteria:overworld/arctic"
+  },
+  "color": {
+    "hue": 205.0,
+    "saturation": 0.04,
+    "intensity": 0.98
+  },
+  "opacity": 0.9,
+  "size": {
+    "min": 0.045,
+    "max": 0.095
+  },
+  "lifetime": {
+    "min": 7.0,
+    "max": 12.0
+  },
+  "spawnRate": 14.0,
+  "velocity": [
+    0.0,
+    -0.65,
+    0.0
+  ],
+  "velocityJitter": [
+    0.18,
+    0.12,
+    0.18
+  ],
+  "acceleration": [
+    0.0,
+    -0.06,
+    0.0
+  ],
+  "wanderStrength": 0.18,
+  "spawnRadius": 22.0,
+  "verticalRange": 12.0
+}
