@@ -6,15 +6,8 @@ pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
     BORDER_WARP_BROAD_AMPLITUDE, BORDER_WARP_BROAD_SCALE, BORDER_WARP_DETAIL_AMPLITUDE,
-    BORDER_WARP_DETAIL_SCALE, SURFACE_ROW_JITTER_FRACTION, VOLUME_SITE_JITTER_FRACTION,
-    VOLUME_WARP_AMPLITUDE,
+    BORDER_WARP_DETAIL_SCALE, VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
 };
-
-const SURFACE_MAP_CELL_SIZE: f32 = 8.0;
-
-pub(super) fn surface_map_spacing() -> Vec2 {
-    Vec2::splat(SURFACE_MAP_CELL_SIZE)
-}
 
 pub(super) fn warp_surface_position(position: Vec2, seed: u64) -> Vec2 {
     let broad_position = position * BORDER_WARP_BROAD_SCALE;
@@ -94,22 +87,6 @@ pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {
         )
 }
 
-pub(super) fn surface_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
-    let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
-
-    if cell.y == 0 {
-        return base;
-    }
-
-    let row_hash = cell_hash(
-        IVec2::new(0, cell.y),
-        seed ^ 0xd1b5_4a32_d192_ed03,
-    );
-    let row_offset = hash_signed(row_hash) * spacing.x * SURFACE_ROW_JITTER_FRACTION;
-
-    base + Vec2::new(row_offset, 0.0)
-}
-
 pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec3 {
     let base = Vec3::new(
         cell.x as f32 * spacing.x,
@@ -165,31 +142,6 @@ pub(super) fn volume_cell_hash(cell: IVec3, seed: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn surface_map_spacing_is_fixed() {
-        assert_eq!(surface_map_spacing(), Vec2::splat(8.0));
-    }
-
-    #[test]
-    fn surface_row_jitter_preserves_lattice_axis_spacing() {
-        let spacing = Vec2::new(10.0, 10.0);
-        let tolerance = spacing.max_element() * 1e-5;
-        let seed = 42;
-
-        for y in -4..=4 {
-            for x in -4..=4 {
-                let cell = IVec2::new(x, y);
-                let site = surface_site_position(cell, spacing, seed);
-                let right = surface_site_position(cell + IVec2::X, spacing, seed);
-                let above = surface_site_position(cell + IVec2::Y, spacing, seed);
-
-                assert!((right.x - site.x - spacing.x).abs() <= tolerance);
-                assert!((right.y - site.y).abs() <= tolerance);
-                assert!((above.y - site.y - spacing.y).abs() <= tolerance);
-            }
-        }
-    }
 
     #[test]
     fn volume_site_jitter_preserves_lattice_axis_spacing() {
