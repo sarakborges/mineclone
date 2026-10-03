@@ -95,6 +95,7 @@ impl PreparedWorldActivation {
                 saved.dimension_id,
                 InactiveDimensionState::new(
                     inactive_world,
+                    saved.spawn_biome,
                     storage,
                     saved.fluid_updates,
                     saved.creatures,
