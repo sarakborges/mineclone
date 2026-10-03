@@ -1,6 +1,9 @@
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard};
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::{content::dimension::DimensionBiomeSizeAxis, voxel::chunk::CHUNK_SIZE};
 
@@ -37,7 +40,7 @@ struct SurfaceBiomeCell {
     region_id: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct SurfaceBiomeRegion {
     biome_index: usize,
     min_span: IVec2,
@@ -160,10 +163,67 @@ impl SurfaceBiomeRegion {
     }
 }
 
+#[derive(Clone)]
+struct SurfaceBiomeSnapshot {
+    resolved_radius: i32,
+    cells: HashMap<IVec2, SurfaceBiomeCell>,
+    regions: Vec<SurfaceBiomeRegion>,
+}
+
+struct PendingMinimumRegion {
+    region_id: usize,
+    birth_cell: IVec2,
+    biome_index: usize,
+    snapshot: SurfaceBiomeSnapshot,
+}
+
 struct SurfaceBiomeMapState {
     resolved_radius: i32,
     cells: HashMap<IVec2, SurfaceBiomeCell>,
     regions: Vec<SurfaceBiomeRegion>,
+    pending_minimum: Option<PendingMinimumRegion>,
+    rejected_births: HashSet<(IVec2, usize)>,
+}
+
+impl SurfaceBiomeMapState {
+    fn snapshot(&self) -> SurfaceBiomeSnapshot {
+        SurfaceBiomeSnapshot {
+            resolved_radius: self.resolved_radius,
+            cells: self.cells.clone(),
+            regions: self.regions.clone(),
+        }
+    }
+
+    fn restore(&mut self, snapshot: SurfaceBiomeSnapshot) {
+        self.resolved_radius = snapshot.resolved_radius;
+        self.cells = snapshot.cells;
+        self.regions = snapshot.regions;
+        self.pending_minimum = None;
+    }
+
+    fn has_pending_minimum(&self) -> bool {
+        self.pending_minimum.is_some()
+    }
+
+    fn rollback_pending_minimum(&mut self) -> bool {
+        let Some(pending) = self.pending_minimum.take() else {
+            return false;
+        };
+
+        let rejected = (pending.birth_cell, pending.biome_index);
+        self.restore(pending.snapshot);
+        self.rejected_births.insert(rejected);
+        true
+    }
+
+    fn finalize_pending_minimum_if_ready(&mut self) {
+        let Some(region_id) = self.pending_minimum.as_ref().map(|pending| pending.region_id) else {
+            return;
+        };
+        if !self.regions[region_id].needs_minimum() {
+            self.pending_minimum = None;
+        }
+    }
 }
 
 impl Default for SurfaceBiomeMapState {
@@ -172,6 +232,8 @@ impl Default for SurfaceBiomeMapState {
             resolved_radius: -1,
             cells: HashMap::new(),
             regions: Vec::new(),
+            pending_minimum: None,
+            rejected_births: HashSet::new(),
         }
     }
 }
@@ -274,15 +336,19 @@ impl SurfaceBiomeMap {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        while state.resolved_radius < required_radius {
+        // A region below its authored minimum is provisional. Keep advancing the
+        // frontier until it either reaches its minimum and commits or rolls back.
+        // That prevents a caller from ever observing a published undersized region.
+        while state.resolved_radius < required_radius || state.has_pending_minimum() {
             let next_radius = state.resolved_radius + 1;
-            expand_ring(field, &mut state, next_radius);
-            state.resolved_radius = next_radius;
+            if expand_ring(field, &mut state, next_radius) {
+                state.resolved_radius = next_radius;
+            }
         }
     }
 }
 
-fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32) {
+fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32) -> bool {
     let mut remaining = ring_cells(radius);
     remaining.retain(|cell| !state.cells.contains_key(cell));
     remaining.sort_unstable_by_key(|cell| {
@@ -299,20 +365,21 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
             continue;
         }
 
-        let has_unfinished_region = state.regions.iter().any(SurfaceBiomeRegion::needs_minimum);
+        let has_pending_minimum = state.has_pending_minimum();
 
         if claim_existing(field, state, &remaining, GrowthMode::Target) {
             remaining.retain(|cell| !state.cells.contains_key(cell));
             continue;
         }
 
-        // Region births are serialized until the previous region owns a real
-        // minimum footprint. Otherwise several thin regions can grow in
-        // parallel, satisfy only their bounding spans, and produce a mosaic of
-        // tiny visible biomes despite large authored min sizes.
-        if !has_unfinished_region && spawn_region(field, state, &remaining) {
-            remaining.retain(|cell| !state.cells.contains_key(cell));
-            continue;
+        // Only one provisional region exists at a time. A second region may be
+        // born only after the first one has reached its authored minimum.
+        if !has_pending_minimum {
+            let birth_snapshot = state.snapshot();
+            if spawn_region(field, state, &remaining, &birth_snapshot) {
+                remaining.retain(|cell| !state.cells.contains_key(cell));
+                continue;
+            }
         }
 
         if claim_existing(field, state, &remaining, GrowthMode::Maximum) {
@@ -320,15 +387,25 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
             continue;
         }
 
-        let cell = remaining[0];
-        if has_unfinished_region {
-            panic!(
-                "surface biome frontier at radius {radius} cannot preserve an unfinished minimum region while resolving cell {cell:?}"
-            );
+        if state.rollback_pending_minimum() {
+            return false;
         }
+
+        let cell = remaining[0];
         panic!(
             "surface biome frontier at radius {radius} cannot resolve cell {cell:?} without exceeding max size or violating authored adjacency constraints"
         );
+    }
+
+    // If a provisional region no longer touches the newest ring, the completed
+    // ring would permanently seal it away from future growth. Reject that birth
+    // transaction instead of publishing an undersized biome or panicking.
+    if let Some(pending) = state.pending_minimum.as_ref() {
+        let region = &state.regions[pending.region_id];
+        if region.needs_minimum() && region.frontier_radius < radius {
+            state.rollback_pending_minimum();
+            return false;
+        }
     }
 
     debug_assert!(
@@ -337,13 +414,13 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
     );
     debug_assert!(
         state
-            .regions
-            .iter()
-            .filter(|region| region.needs_minimum())
-            .count()
-            <= 1,
-        "surface biome frontier must not grow multiple unfinished regions at once"
+            .pending_minimum
+            .as_ref()
+            .is_none_or(|pending| state.regions[pending.region_id].needs_minimum()),
+        "surface biome pending transaction must point at an unfinished region"
     );
+
+    true
 }
 
 fn claim_existing(
@@ -449,8 +526,13 @@ fn best_neighbor_region(
     best.map(|(_, _, _, region_id)| region_id)
 }
 
-fn spawn_region(field: &BiomeField, state: &mut SurfaceBiomeMapState, remaining: &[IVec2]) -> bool {
-    debug_assert!(state.regions.iter().all(|region| !region.needs_minimum()));
+fn spawn_region(
+    field: &BiomeField,
+    state: &mut SurfaceBiomeMapState,
+    remaining: &[IVec2],
+    ring_start_snapshot: &SurfaceBiomeSnapshot,
+) -> bool {
+    debug_assert!(!state.has_pending_minimum());
 
     for &cell in remaining {
         if state.cells.contains_key(&cell) {
@@ -462,6 +544,10 @@ fn spawn_region(field: &BiomeField, state: &mut SurfaceBiomeMapState, remaining:
         let candidates = field.ranked_surface_biome_indices(cell, position);
 
         for biome_index in candidates {
+            if state.rejected_births.contains(&(cell, biome_index)) {
+                continue;
+            }
+
             let biome = &field.surface_biomes[biome_index];
             if neighbor_indices.iter().copied().any(|neighbor_index| {
                 surface_biomes_conflict(biome, &field.surface_biomes[neighbor_index])
@@ -494,6 +580,15 @@ fn spawn_region(field: &BiomeField, state: &mut SurfaceBiomeMapState, remaining:
                     region_id,
                 },
             );
+
+            if state.regions[region_id].needs_minimum() {
+                state.pending_minimum = Some(PendingMinimumRegion {
+                    region_id,
+                    birth_cell: cell,
+                    biome_index,
+                    snapshot: ring_start_snapshot.clone(),
+                });
+            }
             return true;
         }
     }
@@ -511,6 +606,7 @@ fn claim_cell(state: &mut SurfaceBiomeMapState, region_id: usize, cell: IVec2) {
             region_id,
         },
     );
+    state.finalize_pending_minimum_if_ready();
 }
 
 fn claim_respects_adjacency(
@@ -734,7 +830,8 @@ mod tests {
         let mut state = SurfaceBiomeMapState::default();
 
         for radius in 0..=6 {
-            expand_ring(&field, &mut state, radius);
+            assert!(expand_ring(&field, &mut state, radius));
+            state.resolved_radius = radius;
             assert!(state.cells.keys().all(|cell| cell_radius(*cell) <= radius));
             assert!(
                 ring_cells(radius)
@@ -750,7 +847,8 @@ mod tests {
         let mut state = SurfaceBiomeMapState::default();
 
         for radius in 0..=12 {
-            expand_ring(&field, &mut state, radius);
+            assert!(expand_ring(&field, &mut state, radius));
+            state.resolved_radius = radius;
             assert!(
                 state
                     .regions
@@ -768,7 +866,8 @@ mod tests {
         let mut state = SurfaceBiomeMapState::default();
 
         for radius in 0..=8 {
-            expand_ring(&field, &mut state, radius);
+            assert!(expand_ring(&field, &mut state, radius));
+            state.resolved_radius = radius;
             for region in &state.regions {
                 if region.needs_minimum() {
                     assert_eq!(region.frontier_radius, radius);
@@ -778,14 +877,52 @@ mod tests {
     }
 
     #[test]
-    fn first_region_reaches_authored_minimum_with_real_footprint() {
+    fn failed_minimum_transaction_rolls_back_and_rejects_that_birth() {
         let field = test_field(test_size(20.0, 40.0));
         let mut state = SurfaceBiomeMapState::default();
 
-        for radius in 0..=4 {
-            expand_ring(&field, &mut state, radius);
-        }
+        assert!(expand_ring(&field, &mut state, 0));
+        state.resolved_radius = 0;
+        assert!(state.pending_minimum.is_some());
 
+        let pending_region = state.pending_minimum.as_ref().unwrap().region_id;
+        state.regions[pending_region].max_span = IVec2::ONE;
+        state.regions[pending_region].max_cells = 1;
+
+        assert!(!expand_ring(&field, &mut state, 1));
+        assert_eq!(state.resolved_radius, -1);
+        assert!(state.cells.is_empty());
+        assert!(state.regions.is_empty());
+        assert!(state.rejected_births.contains(&(IVec2::ZERO, 0)));
+    }
+
+    #[test]
+    fn ensure_resolved_through_never_publishes_an_unfinished_region() {
+        let field = test_field(test_size(20.0, 40.0));
+
+        field.surface_map.ensure_resolved_through(&field, 0);
+
+        let state = field
+            .surface_map
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert!(state.pending_minimum.is_none());
+        assert!(state.regions.iter().all(|region| !region.needs_minimum()));
+        assert!(state.resolved_radius >= 0);
+    }
+
+    #[test]
+    fn first_region_reaches_authored_minimum_with_real_footprint() {
+        let field = test_field(test_size(20.0, 40.0));
+
+        field.surface_map.ensure_resolved_through(&field, 0);
+
+        let state = field
+            .surface_map
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         assert!(!state.regions[0].needs_minimum());
         assert!(state.regions[0].span().x >= 4);
         assert!(state.regions[0].span().y >= 4);
