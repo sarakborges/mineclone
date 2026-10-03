@@ -14,6 +14,16 @@ pub enum BiomeTerrain {
         detail_amplitude: f32,
         detail_scale: f32,
     },
+    Dunes {
+        base_height: f32,
+        amplitude: f32,
+        scale: f32,
+        sharpness: f32,
+        warp_scale: f32,
+        warp_strength: f32,
+        detail_amplitude: f32,
+        detail_scale: f32,
+    },
     Ocean {
         depth: f32,
         amplitude: f32,
@@ -81,6 +91,12 @@ impl BiomeTerrain {
                 amplitude,
                 detail_amplitude,
                 ..
+            }
+            | Self::Dunes {
+                base_height,
+                amplitude,
+                detail_amplitude,
+                ..
             } => base_height + amplitude.abs() + detail_amplitude.abs(),
             Self::Ocean {
                 depth,
@@ -110,7 +126,7 @@ impl BiomeTerrain {
                     + wall_height.max(0.0)
                     + top_amplitude.max(0.0)
                     + floor_amplitude.max(0.0)
-            },
+            }
             Self::Alps {
                 base_height,
                 amplitude,
@@ -155,6 +171,42 @@ impl BiomeTerrain {
                 assert!(
                     detail_scale > 0.0,
                     "biome {biome_id} rolling detailScale must be positive"
+                );
+            }
+            Self::Dunes {
+                amplitude,
+                scale,
+                sharpness,
+                warp_scale,
+                warp_strength,
+                detail_amplitude,
+                detail_scale,
+                ..
+            } => {
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} dunes amplitude cannot be negative"
+                );
+                assert!(scale > 0.0, "biome {biome_id} dunes scale must be positive");
+                assert!(
+                    sharpness > 0.0,
+                    "biome {biome_id} dunes sharpness must be positive"
+                );
+                assert!(
+                    warp_scale > 0.0,
+                    "biome {biome_id} dunes warpScale must be positive"
+                );
+                assert!(
+                    warp_strength >= 0.0,
+                    "biome {biome_id} dunes warpStrength cannot be negative"
+                );
+                assert!(
+                    detail_amplitude >= 0.0,
+                    "biome {biome_id} dunes detailAmplitude cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} dunes detailScale must be positive"
                 );
             }
             Self::Ocean {
@@ -226,7 +278,7 @@ impl BiomeTerrain {
                     sharpness > 0.0,
                     "biome {biome_id} mountains sharpness must be positive"
                 );
-            },
+            }
             Self::Gorge {
                 depth,
                 wall_height,
