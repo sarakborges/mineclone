@@ -9,21 +9,21 @@
     "saturation": 0.48,
     "intensity": 0.72
   },
-  "opacity": 0.42,
+  "opacity": 0.48,
   "size": {
     "min": 0.025,
-    "max": 0.06
+    "max": 0.065
   },
   "lifetime": {
-    "min": 1.6,
-    "max": 3.2
+    "min": 3.0,
+    "max": 5.5
   },
-  "spawnRate": 18.0,
-  "velocity": [0.0, 0.02, 0.0],
-  "velocityJitter": [0.08, 0.04, 0.08],
-  "acceleration": [0.0, -0.015, 0.0],
-  "wanderStrength": 0.06,
-  "windInfluence": 1.8,
-  "spawnRadius": 20.0,
-  "verticalRange": 2.5
+  "spawnRate": 28.0,
+  "velocity": [0.03, 0.01, 0.0],
+  "velocityJitter": [0.12, 0.03, 0.12],
+  "acceleration": [0.0, -0.012, 0.0],
+  "wanderStrength": 0.09,
+  "windInfluence": 2.3,
+  "spawnRadius": 24.0,
+  "verticalRange": 3.5
 }
