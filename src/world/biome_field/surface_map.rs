@@ -174,7 +174,7 @@ struct PendingMinimumRegion {
     region_id: usize,
     birth_cell: IVec2,
     biome_index: usize,
-    snapshot: SurfaceBiomeSnapshot,
+    snapshot: Option<SurfaceBiomeSnapshot>,
 }
 
 struct SurfaceBiomeMapState {
@@ -209,9 +209,13 @@ impl SurfaceBiomeMapState {
         let Some(pending) = self.pending_minimum.take() else {
             return false;
         };
+        let Some(snapshot) = pending.snapshot else {
+            self.pending_minimum = Some(pending);
+            return false;
+        };
 
         let rejected = (pending.birth_cell, pending.biome_index);
-        self.restore(pending.snapshot);
+        self.restore(snapshot);
         self.rejected_births.insert(rejected);
         true
     }
@@ -399,12 +403,17 @@ fn expand_ring(field: &BiomeField, state: &mut SurfaceBiomeMapState, radius: i32
 
     // If a provisional region no longer touches the newest ring, the completed
     // ring would permanently seal it away from future growth. Reject that birth
-    // transaction instead of publishing an undersized biome or panicking.
+    // transaction instead of publishing an undersized biome. The bootstrap
+    // region at the origin is mandatory and therefore cannot be rolled back.
     if let Some(pending) = state.pending_minimum.as_ref() {
         let region = &state.regions[pending.region_id];
         if region.needs_minimum() && region.frontier_radius < radius {
-            state.rollback_pending_minimum();
-            return false;
+            if state.rollback_pending_minimum() {
+                return false;
+            }
+            panic!(
+                "surface biome bootstrap region can no longer reach its authored minimum at radius {radius}"
+            );
         }
     }
 
@@ -558,6 +567,9 @@ fn spawn_region(
                 continue;
             }
 
+            let is_bootstrap = state.regions.is_empty()
+                && state.resolved_radius < 0
+                && cell == IVec2::ZERO;
             let region_id = state.regions.len();
             let source_hash = cell_hash(
                 cell,
@@ -586,7 +598,7 @@ fn spawn_region(
                     region_id,
                     birth_cell: cell,
                     biome_index,
-                    snapshot: ring_start_snapshot.clone(),
+                    snapshot: (!is_bootstrap).then(|| ring_start_snapshot.clone()),
                 });
             }
             return true;
@@ -877,23 +889,59 @@ mod tests {
     }
 
     #[test]
-    fn failed_minimum_transaction_rolls_back_and_rejects_that_birth() {
+    fn bootstrap_origin_is_not_rollbackable_or_rejected() {
         let field = test_field(test_size(20.0, 40.0));
         let mut state = SurfaceBiomeMapState::default();
 
         assert!(expand_ring(&field, &mut state, 0));
         state.resolved_radius = 0;
+        let pending = state.pending_minimum.as_ref().expect("origin must be pending");
+        assert!(pending.snapshot.is_none());
+        assert!(!state.rollback_pending_minimum());
         assert!(state.pending_minimum.is_some());
+        assert!(!state.rejected_births.contains(&(IVec2::ZERO, 0)));
+    }
 
+    #[test]
+    fn failed_non_bootstrap_minimum_transaction_rolls_back_and_rejects_birth() {
+        let field = test_field(test_size(20.0, 40.0));
+        let mut state = SurfaceBiomeMapState::default();
+        let axis = DimensionBiomeSizeAxis {
+            min: 20.0,
+            max: 40.0,
+        };
+        let mut committed = SurfaceBiomeRegion::new(
+            0,
+            IVec2::ZERO,
+            axis,
+            axis,
+            Vec2::splat(10.0),
+            7,
+        );
+        committed.min_span = IVec2::ONE;
+        committed.target_span = IVec2::ONE;
+        committed.min_cells = 1;
+        committed.target_cells = 1;
+        state.regions.push(committed);
+        state.cells.insert(
+            IVec2::ZERO,
+            SurfaceBiomeCell {
+                biome_index: 0,
+                region_id: 0,
+            },
+        );
+        state.resolved_radius = 0;
+
+        let snapshot = state.snapshot();
+        assert!(spawn_region(&field, &mut state, &[IVec2::X], &snapshot));
         let pending_region = state.pending_minimum.as_ref().unwrap().region_id;
-        state.regions[pending_region].max_span = IVec2::ONE;
-        state.regions[pending_region].max_cells = 1;
-
-        assert!(!expand_ring(&field, &mut state, 1));
-        assert_eq!(state.resolved_radius, -1);
-        assert!(state.cells.is_empty());
-        assert!(state.regions.is_empty());
-        assert!(state.rejected_births.contains(&(IVec2::ZERO, 0)));
+        assert_eq!(pending_region, 1);
+        assert!(state.pending_minimum.as_ref().unwrap().snapshot.is_some());
+        assert!(state.rollback_pending_minimum());
+        assert_eq!(state.resolved_radius, 0);
+        assert_eq!(state.regions.len(), 1);
+        assert_eq!(state.cells.len(), 1);
+        assert!(state.rejected_births.contains(&(IVec2::X, 0)));
     }
 
     #[test]
