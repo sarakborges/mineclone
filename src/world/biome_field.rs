@@ -234,7 +234,7 @@ impl BiomeField {
         self.spawn_target_surface_biome = None;
     }
 
-    pub(crate) fn force_surface_biome(&mut self, biome_id: &str, _center: Vec2) {
+    pub(crate) fn set_spawn_target_surface_biome(&mut self, biome_id: &str) {
         let biome_index = self
             .surface_biomes
             .iter()
@@ -243,7 +243,7 @@ impl BiomeField {
         self.spawn_target_surface_biome = Some(biome_index);
     }
 
-    pub(crate) fn forced_surface_core_contains(&self, position: Vec2) -> bool {
+    pub(crate) fn spawn_target_contains(&self, position: Vec2) -> bool {
         self.spawn_target_surface_biome
             .is_some_and(|target| self.surface_biome_index_at(position) == target)
     }
