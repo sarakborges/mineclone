@@ -4,7 +4,9 @@ use crate::world::deterministic::hash_signed;
 
 use super::{
     BiomeField, BiomeFieldEntry, SurfaceBoundarySample,
-    spatial::{cell_hash, hash_unit, lerp, surface_value_noise, warp_surface_position},
+    spatial::{
+        cell_hash, hash_unit, lerp, smoothstep, surface_value_noise, warp_surface_position,
+    },
 };
 
 const LAND_SITE_JITTER_FRACTION: f32 = 0.28;
@@ -88,6 +90,7 @@ struct LandSiteCandidate {
 #[derive(Clone, Copy, Debug)]
 pub(super) struct SurfaceFieldSample {
     pub(super) primary_index: usize,
+    pub(super) primary_terrain_strength: f32,
     pub(super) boundary: Option<SurfaceBoundarySample>,
 }
 
@@ -112,12 +115,14 @@ impl BiomeField {
         if let Some(index) = self.single_surface_biome {
             return SurfaceFieldSample {
                 primary_index: index,
+                primary_terrain_strength: 1.0,
                 boundary: None,
             };
         }
 
         let warped = warp_surface_position(position, self.seed);
         let best_land = self.nearest_land_site(warped);
+        let best_land_strength = land_site_terrain_strength(best_land);
         let ocean = self
             .spawn_oceans
             .then_some(self.ocean_surface_index)
@@ -129,8 +134,10 @@ impl BiomeField {
         {
             return SurfaceFieldSample {
                 primary_index: ocean_index,
+                primary_terrain_strength: 1.0,
                 boundary: Some(SurfaceBoundarySample {
                     neighbor_surface_index: best_land.biome_index,
+                    neighbor_terrain_strength: best_land_strength,
                     distance: self.ocean_boundary_distance(warped, ocean_value),
                 }),
             };
@@ -142,6 +149,7 @@ impl BiomeField {
                 land_boundary_distance(warped, best_land, other).map(|distance| {
                     SurfaceBoundarySample {
                         neighbor_surface_index: other.biome_index,
+                        neighbor_terrain_strength: land_site_terrain_strength(other),
                         distance,
                     }
                 })
@@ -150,6 +158,7 @@ impl BiomeField {
         if let Some((ocean_index, ocean_value)) = ocean {
             let ocean_boundary = SurfaceBoundarySample {
                 neighbor_surface_index: ocean_index,
+                neighbor_terrain_strength: 1.0,
                 distance: self.ocean_boundary_distance(warped, ocean_value),
             };
             if boundary.is_none_or(|current| {
@@ -163,6 +172,7 @@ impl BiomeField {
 
         SurfaceFieldSample {
             primary_index: best_land.biome_index,
+            primary_terrain_strength: best_land_strength,
             boundary,
         }
     }
@@ -270,42 +280,54 @@ impl BiomeField {
 
     fn land_biome_for_cell(&self, cell: IVec2) -> usize {
         let raw = self
-            .weighted_land_biome_for_cell(cell, &[])
+            .weighted_land_biome_for_cell(cell, &[], &[])
             .unwrap_or(self.surface_field_config.first_land_index);
+        let mut excluded_indices = Vec::<usize>::new();
         let mut excluded_groups = Vec::<&str>::new();
 
         loop {
-            let candidate = self
-                .weighted_land_biome_for_cell(cell, &excluded_groups)
-                .unwrap_or(raw);
-            let Some(group) = self.surface_biomes[candidate]
-                .exclusive_neighbor_group
-                .as_deref()
+            let Some(candidate) =
+                self.weighted_land_biome_for_cell(cell, &excluded_indices, &excluded_groups)
             else {
-                return candidate;
+                return raw;
             };
 
-            if !self.exclusive_neighbor_conflict(cell, candidate, group) {
+            if !self.neighbor_conflict(cell, candidate) {
                 return candidate;
             }
 
-            if excluded_groups.contains(&group) {
+            if let Some(group) = self.surface_biomes[candidate]
+                .exclusive_neighbor_group
+                .as_deref()
+                && !excluded_groups.contains(&group)
+            {
+                excluded_groups.push(group);
+                continue;
+            }
+
+            if excluded_indices.contains(&candidate) {
                 return raw;
             }
-            excluded_groups.push(group);
+            excluded_indices.push(candidate);
         }
     }
 
-    fn weighted_land_biome_for_cell(&self, cell: IVec2, excluded_groups: &[&str]) -> Option<usize> {
+    fn weighted_land_biome_for_cell(
+        &self,
+        cell: IVec2,
+        excluded_indices: &[usize],
+        excluded_groups: &[&str],
+    ) -> Option<usize> {
         let allowed = |index: usize, biome: &BiomeFieldEntry| {
             Some(index) != self.ocean_surface_index
                 && biome.weight > 0.0
+                && !excluded_indices.contains(&index)
                 && biome
                     .exclusive_neighbor_group
                     .as_deref()
                     .is_none_or(|group| !excluded_groups.contains(&group))
         };
-        let total_weight = if excluded_groups.is_empty() {
+        let total_weight = if excluded_indices.is_empty() && excluded_groups.is_empty() {
             self.surface_field_config.land_total_weight
         } else {
             self.surface_biomes
@@ -336,25 +358,36 @@ impl BiomeField {
         fallback
     }
 
-    fn exclusive_neighbor_conflict(&self, cell: IVec2, candidate: usize, group: &str) -> bool {
+    fn neighbor_conflict(&self, cell: IVec2, candidate: usize) -> bool {
         for z in -1..=1 {
             for x in -1..=1 {
                 if x == 0 && z == 0 {
                     continue;
                 }
-                let Some(neighbor) =
-                    self.weighted_land_biome_for_cell(cell + IVec2::new(x, z), &[])
-                else {
+                let Some(neighbor) = self.weighted_land_biome_for_cell(
+                    cell + IVec2::new(x, z),
+                    &[],
+                    &[],
+                ) else {
                     continue;
                 };
                 if neighbor == candidate {
                     continue;
                 }
-                if self.surface_biomes[neighbor]
-                    .exclusive_neighbor_group
-                    .as_deref()
-                    == Some(group)
+
+                let candidate_biome = &self.surface_biomes[candidate];
+                let neighbor_biome = &self.surface_biomes[neighbor];
+                if candidate_biome.exclusive_neighbor_group.is_some()
+                    && candidate_biome.exclusive_neighbor_group
+                        == neighbor_biome.exclusive_neighbor_group
                 {
+                    return true;
+                }
+                if candidate_biome.neighbor_deny.as_ref().is_some_and(|selector| {
+                    selector.matches(&neighbor_biome.id, &neighbor_biome.tags)
+                }) || neighbor_biome.neighbor_deny.as_ref().is_some_and(|selector| {
+                    selector.matches(&candidate_biome.id, &candidate_biome.tags)
+                }) {
                     return true;
                 }
             }
@@ -366,6 +399,11 @@ impl BiomeField {
 fn candidate_precedes(candidate: LandSiteCandidate, current: LandSiteCandidate) -> bool {
     candidate.score < current.score
         || (candidate.score == current.score && candidate.tie_break < current.tie_break)
+}
+
+fn land_site_terrain_strength(candidate: LandSiteCandidate) -> f32 {
+    let normalized_distance = candidate.score.max(0.0).sqrt().clamp(0.0, 1.0);
+    1.0 - smoothstep(normalized_distance)
 }
 
 fn land_boundary_distance(
@@ -414,7 +452,7 @@ mod tests {
     use super::*;
     use crate::{
         content::{
-            biome::BiomeClimate,
+            biome::{BiomeClimate, SurfaceBiomeSelector},
             dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis},
         },
         world::macro_climate::MacroClimateField,
@@ -437,6 +475,7 @@ mod tests {
             size,
             weight,
             exclusive_neighbor_group: None,
+            neighbor_deny: None,
             climate: BiomeClimate::default(),
             vertical_range: None,
             priority: 0,
@@ -544,6 +583,30 @@ mod tests {
     }
 
     #[test]
+    fn terrain_strength_falls_from_site_center_to_authored_edge() {
+        let centered = LandSiteCandidate {
+            score: 0.0,
+            tie_break: 0,
+            biome_index: 0,
+            site: Vec2::ZERO,
+            scale: Vec2::ONE,
+        };
+        let midpoint = LandSiteCandidate {
+            score: 0.25,
+            ..centered
+        };
+        let edge = LandSiteCandidate {
+            score: 1.0,
+            ..centered
+        };
+
+        assert_eq!(land_site_terrain_strength(centered), 1.0);
+        assert!(land_site_terrain_strength(midpoint) > 0.0);
+        assert!(land_site_terrain_strength(midpoint) < 1.0);
+        assert_eq!(land_site_terrain_strength(edge), 0.0);
+    }
+
+    #[test]
     fn locate_sites_use_the_same_spacing_as_surface_ownership() {
         let field = field(42);
         let spacing = field.surface_field_config.land_spacing;
@@ -558,8 +621,10 @@ mod tests {
         let field = field(42);
         let sample = field.surface_field_sample_at(Vec2::new(128.0, -96.0));
         assert!(sample.primary_index < field.surface_biomes.len());
+        assert!((0.0..=1.0).contains(&sample.primary_terrain_strength));
         if let Some(boundary) = sample.boundary {
             assert!(boundary.neighbor_surface_index < field.surface_biomes.len());
+            assert!((0.0..=1.0).contains(&boundary.neighbor_terrain_strength));
             assert!(boundary.distance.is_finite() || boundary.distance == f32::INFINITY);
             assert!(boundary.distance >= 0.0);
         }
@@ -569,9 +634,9 @@ mod tests {
     fn exclusive_neighbor_groups_do_not_touch() {
         let plains = entry("test:plains", 1.0, size(120.0, 420.0));
         let mut alps = entry("test:alps", 1.0, size(120.0, 320.0));
-        alps.exclusive_neighbor_group = Some("test:extreme_peaks".to_owned());
+        alps.exclusive_neighbor_group = Some("test:mountains".to_owned());
         let mut volcano = entry("test:volcano", 1.0, size(120.0, 320.0));
-        volcano.exclusive_neighbor_group = Some("test:extreme_peaks".to_owned());
+        volcano.exclusive_neighbor_group = Some("test:mountains".to_owned());
         let surface_biomes = Arc::new(vec![plains, alps, volcano]);
         let config = SurfaceFieldConfig::from_biomes(&surface_biomes, None);
         let field = BiomeField {
@@ -614,5 +679,55 @@ mod tests {
         }
 
         assert!(saw_alps && saw_volcano);
+    }
+
+    #[test]
+    fn neighbor_deny_is_symmetric_for_ids_and_tags() {
+        let plains = entry("test:plains", 1.0, size(120.0, 420.0));
+        let mut swamp = entry("test:swamp", 1.0, size(120.0, 320.0));
+        swamp.neighbor_deny = Some(SurfaceBiomeSelector {
+            ids: Vec::new(),
+            tags: vec!["mountain".to_owned()],
+        });
+        let mut mountain = entry("test:mountain", 1.0, size(120.0, 320.0));
+        mountain.tags.push("mountain".to_owned());
+        let mut arctic = entry("test:arctic", 1.0, size(120.0, 320.0));
+        arctic.neighbor_deny = Some(SurfaceBiomeSelector {
+            ids: vec!["test:swamp".to_owned()],
+            tags: Vec::new(),
+        });
+        let surface_biomes = Arc::new(vec![plains, swamp, mountain, arctic]);
+        let config = SurfaceFieldConfig::from_biomes(&surface_biomes, None);
+        let field = BiomeField {
+            surface_biomes,
+            volume_biomes: Arc::new(Vec::new()),
+            surface_field_config: config,
+            volume_site_spacing: None,
+            climate: MacroClimateField::new(1337),
+            seed: 1337,
+            single_surface_biome: None,
+            ocean_surface_index: None,
+            spawn_oceans: true,
+            spawn_target_surface_biome: None,
+        };
+
+        for z in -32..=32 {
+            for x in -32..=32 {
+                let cell = IVec2::new(x, z);
+                let biome = field.land_biome_for_cell(cell);
+                for dz in -1..=1 {
+                    for dx in -1..=1 {
+                        if dx == 0 && dz == 0 {
+                            continue;
+                        }
+                        let neighbor = field.land_biome_for_cell(cell + IVec2::new(dx, dz));
+                        assert!(
+                            !matches!((biome, neighbor), (1, 2) | (2, 1) | (1, 3) | (3, 1)),
+                            "denied biomes touched at {cell:?}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
