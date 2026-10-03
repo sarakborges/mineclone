@@ -12,7 +12,10 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, VolumeSurfaceConstraints},
+    biome::{
+        BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange, SurfaceBiomeSelector,
+        VolumeSurfaceConstraints,
+    },
     biome_density::BiomeDensityModifier,
     biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
@@ -36,6 +39,7 @@ pub(super) struct BiomeFieldEntry {
     pub size: DimensionBiomeSize,
     pub weight: f32,
     pub exclusive_neighbor_group: Option<String>,
+    pub neighbor_deny: Option<SurfaceBiomeSelector>,
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
     pub priority: i32,
@@ -80,6 +84,7 @@ pub struct BiomeInfluence<'a> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SurfaceBoundarySample {
     pub(crate) neighbor_surface_index: usize,
+    pub(crate) neighbor_terrain_strength: f32,
     pub(crate) distance: f32,
 }
 
@@ -141,6 +146,7 @@ impl BiomeField {
                 size,
                 weight: dimension_biome.weight,
                 exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
+                neighbor_deny: dimension_biome.neighbor_deny.clone(),
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
                 priority: biome.priority,
