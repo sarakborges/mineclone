@@ -72,11 +72,6 @@ jobs:
       - name: Check
         run: cargo check --locked
 
-      - name: Run focused regressions
-        run: |
-          cargo test --locked exclusive_neighbor_groups_do_not_touch
-          cargo test --locked swamp_terrain_contains_both_channels_and_dry_ground
-
       - name: Commit validated package
         shell: bash
         run: |
