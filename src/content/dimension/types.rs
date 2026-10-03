@@ -34,10 +34,6 @@ pub struct DimensionBiome {
     pub spawn_weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
-    // Temporary read-only compatibility while all non-worldgen callers stop
-    // consulting the deleted adjacency solver contract. Removed in this PR.
-    #[serde(default)]
-    pub require_near: Vec<String>,
 }
 
 #[derive(Clone, Deserialize)]
