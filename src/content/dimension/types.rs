@@ -30,8 +30,6 @@ pub struct DimensionBiome {
     pub id: String,
     #[serde(default = "default_biome_weight")]
     pub weight: f32,
-    #[serde(default = "default_spawn_biome_weight")]
-    pub spawn_weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
     #[serde(default)]
@@ -61,7 +59,6 @@ pub struct DimensionDefinition {
 }
 
 fn default_max_entities() -> usize { 128 }
-fn default_spawn_biome_weight() -> f32 { 1.0 }
 fn default_biome_weight() -> f32 { 1.0 }
 fn default_sea_fluid() -> String { WATER_FLUID_ID.to_owned() }
 
