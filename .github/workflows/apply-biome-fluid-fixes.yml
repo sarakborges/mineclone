@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply requested fixes
-        run: python3 tools/apply_biome_fluid_fixes_once_v2.py
+        run: python3 tools/apply_biome_fluid_fixes_once_v3.py
 
       - name: Validate JSON
         shell: bash
@@ -55,6 +55,11 @@ jobs:
             libasound2-dev libfontconfig1-dev libudev-dev libwayland-dev
             libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
           version: ubuntu-24.04-bevy-0.19-v1
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       - name: Format
         run: |
