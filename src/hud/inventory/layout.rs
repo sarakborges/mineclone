@@ -8,7 +8,13 @@ use crate::{
     app::game_state::GameState,
     content::inventory_category::InventoryCategoryRegistry,
     gameplay::modal::GameplayModalState,
-    hud::character_info::spawn_character_info_panel,
+    hud::{
+        character_info::spawn_character_info_panel,
+        crafting::{
+            CRAFTING_PANEL_WIDTH, CURRENT_STATION_PANEL_WIDTH, SurvivalCraftingHost,
+            SurvivalCurrentStationHost,
+        },
+    },
     localization::UiLocalization,
     player::{
         game_mode::GameMode,
@@ -36,8 +42,6 @@ const INVENTORY_VIEW_TOGGLE_HEIGHT: f32 = 40.0;
 const INVENTORY_VIEW_TOGGLE_GAP: f32 = 8.0;
 const INVENTORY_VIEW_TOGGLE_TOP_MARGIN: f32 = 12.0;
 const INVENTORY_VIEW_TOGGLE_BORDER_WIDTH: f32 = 2.0;
-const SURVIVAL_CRAFTING_HEIGHT: f32 = 440.0;
-const SURVIVAL_STATION_WIDTH: f32 = 244.0;
 
 pub(super) struct InventoryLayoutState<'a> {
     pub(super) categories: &'a InventoryCategoryRegistry,
@@ -82,7 +86,6 @@ fn spawn_survival_inventory_row(
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
             column_gap: px(PANEL_GAP),
-            margin: UiRect::top(px(PANEL_GAP)),
             ..default()
         },
         Pickable::IGNORE,
@@ -92,21 +95,36 @@ fn spawn_survival_inventory_row(
 
         row.spawn((
             Node {
+                width: px(CRAFTING_PANEL_WIDTH),
+                min_width: px(CRAFTING_PANEL_WIDTH),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
-                margin: UiRect::top(px(SURVIVAL_CRAFTING_HEIGHT + PANEL_GAP)),
+                row_gap: px(PANEL_GAP),
                 ..default()
             },
             Pickable::IGNORE,
         ))
         .with_children(|main_column| {
+            main_column.spawn((
+                SurvivalCraftingHost,
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
             spawn_player_inventory_panel(main_column, state, items);
         });
 
         row.spawn((
+            SurvivalCurrentStationHost,
             Node {
-                width: px(SURVIVAL_STATION_WIDTH),
-                min_width: px(SURVIVAL_STATION_WIDTH),
+                width: px(CURRENT_STATION_PANEL_WIDTH),
+                min_width: px(CURRENT_STATION_PANEL_WIDTH),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
                 ..default()
             },
             Pickable::IGNORE,
@@ -249,6 +267,11 @@ pub(super) fn spawn_inventory_root(
                 top: px(0),
                 width: percent(100),
                 height: percent(100),
+                padding: if creative_inventory {
+                    UiRect::all(px(0))
+                } else {
+                    UiRect::all(px(PANEL_GAP))
+                },
                 flex_direction: FlexDirection::Row,
                 align_items: if creative_inventory {
                     AlignItems::Center
