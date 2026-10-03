@@ -9,113 +9,62 @@
     {
       "id": "asteria:overworld/plains",
       "weight": 1,
-      "size": {
-        "x": { "min": 120, "max": 420 },
-        "z": { "min": 120, "max": 420 },
-        "y": null
-      }
+      "size": { "x": { "min": 120, "max": 420 }, "z": { "min": 120, "max": 420 }, "y": null }
     },
     {
       "id": "asteria:overworld/wasteland",
       "weight": 1.3,
-      "size": {
-        "x": { "min": 120, "max": 420 },
-        "z": { "min": 120, "max": 420 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "inland_biomes"
+      "size": { "x": { "min": 120, "max": 420 }, "z": { "min": 120, "max": 420 }, "y": null }
     },
     {
       "id": "asteria:overworld/enchanted_forest",
       "weight": 1.25,
-      "size": {
-        "x": { "min": 140, "max": 460 },
-        "z": { "min": 140, "max": 460 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "inland_biomes"
+      "size": { "x": { "min": 140, "max": 460 }, "z": { "min": 140, "max": 460 }, "y": null }
     },
     {
       "id": "asteria:overworld/mountains",
       "weight": 0.85,
-      "size": {
-        "x": { "min": 90, "max": 260 },
-        "z": { "min": 90, "max": 260 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "mountain_terrain",
+      "size": { "x": { "min": 90, "max": 260 }, "z": { "min": 90, "max": 260 }, "y": null },
       "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/gorge",
       "weight": 1,
-      "size": {
-        "x": { "min": 80, "max": 180 },
-        "z": { "min": 140, "max": 360 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "mountain_terrain",
+      "size": { "x": { "min": 80, "max": 180 }, "z": { "min": 140, "max": 360 }, "y": null },
       "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/alps",
       "weight": 1,
-      "size": {
-        "x": { "min": 140, "max": 320 },
-        "z": { "min": 140, "max": 320 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "mountain_terrain",
+      "size": { "x": { "min": 140, "max": 320 }, "z": { "min": 140, "max": 320 }, "y": null },
       "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/mountain_belt",
       "weight": 1,
-      "size": {
-        "x": { "min": 160, "max": 380 },
-        "z": { "min": 160, "max": 380 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "mountain_terrain",
+      "size": { "x": { "min": 160, "max": 380 }, "z": { "min": 160, "max": 380 }, "y": null },
       "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/volcano",
       "weight": 1,
-      "size": {
-        "x": { "min": 120, "max": 260 },
-        "z": { "min": 120, "max": 260 },
-        "y": null
-      },
-      "exclusiveNeighborGroup": "mountain_terrain",
+      "size": { "x": { "min": 120, "max": 260 }, "z": { "min": 120, "max": 260 }, "y": null },
       "spawnWeight": 0.5
     },
     {
       "id": "asteria:overworld/caverns",
       "weight": 1,
-      "size": {
-        "x": { "min": 48, "max": 96 },
-        "z": { "min": 48, "max": 96 },
-        "y": { "min": 18, "max": 34 }
-      }
+      "size": { "x": { "min": 48, "max": 96 }, "z": { "min": 48, "max": 96 }, "y": { "min": 18, "max": 34 } }
     },
     {
       "id": "asteria:overworld/floating_islands",
       "weight": 0.25,
-      "size": {
-        "x": { "min": 84, "max": 120 },
-        "z": { "min": 84, "max": 120 },
-        "y": { "min": 24, "max": 36 }
-      }
+      "size": { "x": { "min": 84, "max": 120 }, "z": { "min": 84, "max": 120 }, "y": { "min": 24, "max": 36 } }
     },
     {
       "id": "asteria:overworld/ocean",
       "weight": 1,
-      "size": {
-        "x": { "min": 180, "max": 520 },
-        "z": { "min": 180, "max": 520 },
-        "y": null
-      }
+      "size": { "x": { "min": 180, "max": 520 }, "z": { "min": 180, "max": 520 }, "y": null }
     }
   ],
   "dayNightCycle": "asteria:overworld/day_night_cycle",
