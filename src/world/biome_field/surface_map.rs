@@ -42,21 +42,6 @@ impl Default for SurfaceBiomeMap {
 #[derive(Clone, Copy, Debug)]
 struct SurfaceBiomeCell {
     biome_index: usize,
-    region_id: usize,
-}
-
-#[derive(Clone, Debug)]
-struct SurfaceBiomeRegion {
-    biome_index: usize,
-    minimum: IVec2,
-    maximum: IVec2,
-    cell_count: usize,
-}
-
-impl SurfaceBiomeRegion {
-    fn span(&self) -> IVec2 {
-        self.maximum - self.minimum + IVec2::ONE
-    }
 }
 
 struct StampShape {
@@ -66,17 +51,10 @@ struct StampShape {
     maximum: IVec2,
 }
 
-impl StampShape {
-    fn span(&self) -> IVec2 {
-        self.maximum - self.minimum + IVec2::ONE
-    }
-}
-
 struct SurfaceBiomeMapState {
     planned_anchor_radius: i32,
     base_biome_index: Option<usize>,
     cells: HashMap<IVec2, SurfaceBiomeCell>,
-    regions: Vec<SurfaceBiomeRegion>,
     placed_counts: Vec<u32>,
     attempted_anchors: u64,
     painted_minimum: Option<IVec2>,
@@ -89,7 +67,6 @@ impl Default for SurfaceBiomeMapState {
             planned_anchor_radius: -1,
             base_biome_index: None,
             cells: HashMap::new(),
-            regions: Vec::new(),
             placed_counts: Vec::new(),
             attempted_anchors: 0,
             painted_minimum: None,
@@ -790,22 +767,9 @@ fn classify_base_component(
 }
 
 fn apply_region(state: &mut SurfaceBiomeMapState, biome_index: usize, shape: &StampShape) {
-    let region_id = state.regions.len();
     for &cell in &shape.cells {
-        state.cells.insert(
-            cell,
-            SurfaceBiomeCell {
-                biome_index,
-                region_id,
-            },
-        );
+        state.cells.insert(cell, SurfaceBiomeCell { biome_index });
     }
-    state.regions.push(SurfaceBiomeRegion {
-        biome_index,
-        minimum: shape.minimum,
-        maximum: shape.maximum,
-        cell_count: shape.cells.len(),
-    });
     if let Some(count) = state.placed_counts.get_mut(biome_index) {
         *count = count.saturating_add(1);
     }
@@ -897,7 +861,7 @@ mod tests {
         world::macro_climate::MacroClimateField,
     };
 
-    fn test_size(min: f32, max: f32) -> crate::content::dimension::DimensionBiomeSize {
+    fn test_size(min: f32, max: f32) -> DimensionBiomeSize {
         let axis = DimensionBiomeSizeAxis { min, max };
         DimensionBiomeSize {
             x: axis,
@@ -972,7 +936,7 @@ mod tests {
             .expect("fallback stamp must be constructible");
         let (min_x, max_x) = axis_cell_limits(field.surface_biomes[0].size.x, 8.0);
         let (min_z, max_z) = axis_cell_limits(field.surface_biomes[0].size.z, 8.0);
-        let span = shape.span();
+        let span = shape.maximum - shape.minimum + IVec2::ONE;
         assert!((min_x..=max_x).contains(&span.x));
         assert!((min_z..=max_z).contains(&span.y));
         assert!(shape_is_connected(&shape.membership, IVec2::ZERO));
@@ -1013,23 +977,19 @@ mod tests {
     }
 
     #[test]
-    fn painted_regions_are_complete_blobs_inside_authored_size() {
+    fn accepted_stamps_never_overwrite_existing_regions() {
         let field = test_field();
-        field.surface_map.ensure_planned_through(&field, 30);
-        let state = field
-            .surface_map
-            .state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = SurfaceBiomeMapState::default();
+        ensure_initialized(&field, &mut state);
+        let initial = state.cells.clone();
 
-        for region in &state.regions {
-            let biome = &field.surface_biomes[region.biome_index];
-            let (min_x, max_x) = axis_cell_limits(biome.size.x, 8.0);
-            let (min_z, max_z) = axis_cell_limits(biome.size.z, 8.0);
-            let span = region.span();
-            assert!((min_x..=max_x).contains(&span.x));
-            assert!((min_z..=max_z).contains(&span.y));
-            assert!(region.cell_count > 0);
-        }
+        plan_anchor_ring(&field, &mut state, 1);
+
+        assert!(initial.iter().all(|(cell, previous)| {
+            state
+                .cells
+                .get(cell)
+                .is_some_and(|current| current.biome_index == previous.biome_index)
+        }));
     }
 }
