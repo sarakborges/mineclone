@@ -5,11 +5,8 @@
   "locatable": false,
   "rotation": true,
   "priority": 4,
-  "conflictGroups": [
-    "surface_water_body"
-  ],
   "restrictions": {
-    "maxSlope": 0,
+    "maxSlope": 2,
     "requiresDryGround": true,
     "requiredBiomeCoverage": 0.7
   },
@@ -18,69 +15,17 @@
     "fluidPolicy": "displace",
     "reserveSpace": true
   },
-  "anchor": {
-    "x": 7,
-    "y": 0,
-    "z": 0
-  },
+  "anchor": {"x": 7, "y": 0, "z": 0},
   "groundAnchorY": 0,
-  "clearAbove": 4,
+  "clearAbove": 3,
   "palette": {
-    "S": {
-      "clear": true
-    },
-    "W": {
-      "fluid": "asteria:water"
-    },
-    "O": {
-      "fluid": "asteria:water",
-      "connector": {
-        "target": "asteria:river_segment",
-        "face": "back",
-        "strength": 1
-      }
-    }
+    "W": {"fluid": "asteria:water"},
+    "O": {"fluid": "asteria:water", "connector": {"target": "asteria:river_segment", "face": "back", "strength": 1}}
   },
   "layers": [
-    {
-      "y": -1,
-      "rows": [
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        ".......S.......",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "...............",
-        "..............."
-      ]
-    },
-    {
-      "y": 0,
-      "rows": [
-        "...............",
-        "...............",
-        "...............",
-        ".......O.......",
-        "...WWWWWWWW....",
-        "...WWWWWWWWW...",
-        "..WWWWWWWWWWW..",
-        "..WWWWWWWWWWW..",
-        "..WWWWWWWWWWWW.",
-        "..WWWWWWWWWWWW.",
-        "..WWWWWWWWWWW..",
-        "..WWWWWWWWWW...",
-        "....WWWWWW.....",
-        "...............",
-        "..............."
-      ]
-    }
-  ]
+    {"y": -2, "rows": ["...............","...............","...............","...............","...............",".......W.......","....WWWWWWW....","....WWWWWWW....","....WWWWWWWW...","....WWWWWWWW...","....WWWWWW.....","...............","...............","...............","..............."]},
+    {"y": -1, "rows": ["...............","...............","...............","...............",".......W.......","....WWWWWWW....","...WWWWWWWWW...","...WWWWWWWWW...","...WWWWWWWWWW..","...WWWWWWWWWW..","...WWWWWWWWW...","....WWWWWW.....","...............","...............","..............."]},
+    {"y": 0, "rows": ["...............","...............","...............",".......O.......","...WWWWWWWW....","...WWWWWWWWW...","..WWWWWWWWWWW..","..WWWWWWWWWWW..","..WWWWWWWWWWWW.","..WWWWWWWWWWWW.","..WWWWWWWWWWW..","..WWWWWWWWWW...","....WWWWWW.....","...............","..............."]}
+  ],
+  "conflictGroups": ["surface_water_body"]
 }
