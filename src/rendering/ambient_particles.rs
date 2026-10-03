@@ -10,6 +10,7 @@ use crate::{
         fluid::{FluidId, FluidRegistry},
     },
     player::camera::GameplayCamera,
+    rendering::wind::Wind,
     voxel::world::VoxelWorld,
     world::{biome::CurrentBiome, current_context::CurrentDimensionContext},
 };
@@ -110,6 +111,7 @@ fn spawn_ambient_particles(
     current_biome: Res<CurrentBiome>,
     registry: Res<AmbientParticleRegistry>,
     fluids: Res<FluidRegistry>,
+    wind: Res<Wind>,
     world: Res<VoxelWorld>,
     mut runtime: ResMut<AmbientParticleRuntime>,
     mut particle_assets: ResMut<AmbientParticleAssets>,
@@ -171,7 +173,8 @@ fn spawn_ambient_particles(
 
             let size = runtime.range(rule.particle.size);
             let lifetime = runtime.range(rule.particle.lifetime);
-            let velocity = runtime.jittered_velocity(&rule.particle);
+            let velocity = runtime.jittered_velocity(&rule.particle)
+                + wind.velocity(rule.particle.wind_influence);
             let phase = Vec3::new(
                 runtime.unit() * std::f32::consts::TAU,
                 runtime.unit() * std::f32::consts::TAU,
