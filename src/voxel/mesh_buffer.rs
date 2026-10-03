@@ -114,7 +114,7 @@ fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
     let base_index = material_code & TERRAIN_TEXTURE_INDEX_MASK;
     let overlay_index =
         (material_code >> TERRAIN_TEXTURE_INDEX_BITS) & TERRAIN_TEXTURE_INDEX_MASK;
-    let flags = (material_code >> TERRAIN_TEXTURE_FLAG_SHIFT) & 3;
+    let flags = (material_code >> TERRAIN_TEXTURE_FLAG_SHIFT) & 7;
     let base_and_flags = base_index | (flags << TERRAIN_TEXTURE_INDEX_BITS);
 
     // Split the material code across U and V. Even with 10-bit texture indices,
