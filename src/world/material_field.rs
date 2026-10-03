@@ -2,10 +2,15 @@ use bevy::prelude::*;
 
 use crate::content::{
     biome::{BiomeDefinition, BiomeRegistry},
+    biome_material::BiomeMaterialLayer,
     block_id::intern_block_id,
 };
 
-use super::biome_field::{BiomeField, VolumeBiomeSelection};
+use super::{
+    biome_field::{BiomeField, VolumeBiomeSelection},
+    deterministic::{hash_string, mix_seed},
+    noise::fractal_noise_2d,
+};
 
 #[derive(Clone, Copy)]
 struct ResolvedSurfaceInfluence<'a> {
@@ -94,11 +99,18 @@ pub(crate) fn solid_block_id(
     } else {
         surface.depth
     };
-    let base_material = strongest_surface_material(surface_materials, material_depth);
+    let base_material = strongest_surface_material(
+        surface_materials,
+        material_depth,
+        surface.position,
+        biome_field.seed(),
+    );
     let resolved_material = if !surface.steep && surface.depth > 0 {
         strongest_surface_material(
             surface_materials,
             irregular_layer_depth(surface.position, surface.depth, biome_field.seed()),
+            surface.position,
+            biome_field.seed(),
         )
         .or(base_material)
     } else {
@@ -116,6 +128,8 @@ pub(crate) fn solid_block_id(
 fn strongest_surface_material<'a>(
     surface_materials: &SurfaceMaterialColumn<'a>,
     depth: u32,
+    position: Vec3,
+    seed: u64,
 ) -> Option<&'a str> {
     if let Some(block_id) = surface_materials
         .margin
@@ -131,11 +145,37 @@ fn strongest_surface_material<'a>(
         .filter_map(|influence| {
             influence
                 .biome
-                .surface_block_at_depth(depth)
-                .map(|block_id| (block_id, influence.weight))
+                .surface_layer_at_depth(depth)
+                .map(|layer| (influence.biome, layer, influence.weight))
         })
-        .max_by(|(_, left), (_, right)| left.total_cmp(right))
-        .map(|(block_id, _)| block_id)
+        .max_by(|(_, _, left), (_, _, right)| left.total_cmp(right))
+        .map(|(biome, layer, _)| {
+            resolve_material_layer_block(biome.id.as_str(), layer, position.xz(), seed)
+        })
+}
+
+pub(crate) fn resolve_material_layer_block<'a>(
+    biome_id: &str,
+    layer: &'a BiomeMaterialLayer,
+    position: Vec2,
+    seed: u64,
+) -> &'a str {
+    if layer.alternates.is_empty() {
+        return layer.block.as_str();
+    }
+
+    let variant_count = layer.alternates.len() + 1;
+    let noise_seed = mix_seed(seed ^ hash_string(biome_id) ^ hash_string(&layer.block));
+    let normalized =
+        ((fractal_noise_2d(position * layer.patch_scale, noise_seed, 3) + 1.0) * 0.5)
+            .clamp(0.0, 1.0);
+    let index = ((normalized * variant_count as f32).floor() as usize).min(variant_count - 1);
+
+    if index == 0 {
+        layer.block.as_str()
+    } else {
+        layer.alternates[index - 1].as_str()
+    }
 }
 
 fn irregular_layer_depth(position: Vec3, surface_depth: u32, seed: u64) -> u32 {
@@ -178,5 +218,28 @@ mod tests {
         });
 
         assert!(reaches_surface);
+    }
+
+    #[test]
+    fn patchy_material_layer_uses_base_and_alternate_blocks() {
+        let layer = BiomeMaterialLayer {
+            block: "asteria:dirt".to_owned(),
+            alternates: vec!["asteria:mud".to_owned()],
+            patch_scale: 0.04,
+            depth: Some(1),
+        };
+        let blocks = (0..128)
+            .map(|index| {
+                resolve_material_layer_block(
+                    "asteria:overworld/swamp",
+                    &layer,
+                    Vec2::new(index as f32 * 4.0, index as f32 * 1.7),
+                    42,
+                )
+            })
+            .collect::<std::collections::HashSet<_>>();
+
+        assert!(blocks.contains("asteria:dirt"));
+        assert!(blocks.contains("asteria:mud"));
     }
 }
