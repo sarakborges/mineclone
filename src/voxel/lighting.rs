@@ -49,6 +49,7 @@ pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
     initial_relaxation_frontiers: HashMap<IVec3, Vec<IVec3>>,
+    seeded_chunks: HashSet<IVec3>,
     context: LightingContext,
     interactive_changed_chunks: HashSet<IVec3>,
     interactive_changed_positions: HashSet<IVec3>,
@@ -135,8 +136,16 @@ impl PendingLightingUpdates {
         self.context.forget_chunks(unloaded);
         for coord in unloaded {
             self.initial_relaxation_frontiers.remove(coord);
-            self.queue
-                .enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
+            self.seeded_chunks.remove(coord);
+        }
+
+        for coord in unloaded {
+            let origin = chunk_origin(*coord);
+            for direction in CARDINAL_NEIGHBORS {
+                if self.seeded_chunks.contains(&(*coord + direction)) {
+                    enqueue_chunk_boundary_neighbor_face(&mut self.queue, origin, direction);
+                }
+            }
         }
     }
 
@@ -190,6 +199,7 @@ impl PendingLightingUpdates {
             secondary_properties,
             &mut self.context,
         );
+        self.seeded_chunks.insert(coord);
         if result.requires_relaxation && world.chunk(coord).is_some_and(|chunk| !chunk.is_empty()) {
             self.initial_relaxation_frontiers.insert(
                 coord,
@@ -261,6 +271,43 @@ impl PendingLightingUpdates {
             }
 
             queue.enqueue_with_neighbors_priority(center);
+        }
+    }
+}
+
+fn enqueue_chunk_boundary_neighbor_face(
+    queue: &mut LightingQueue,
+    origin: IVec3,
+    direction: IVec3,
+) {
+    debug_assert!(CARDINAL_NEIGHBORS.contains(&direction));
+    let size = CHUNK_SIZE as i32;
+    let last = size - 1;
+
+    if direction.x != 0 {
+        let x = if direction.x < 0 { -1 } else { size };
+        for y in 0..=last {
+            for z in 0..=last {
+                queue.enqueue(origin + IVec3::new(x, y, z));
+            }
+        }
+        return;
+    }
+
+    if direction.z != 0 {
+        let z = if direction.z < 0 { -1 } else { size };
+        for y in 0..=last {
+            for x in 0..=last {
+                queue.enqueue(origin + IVec3::new(x, y, z));
+            }
+        }
+        return;
+    }
+
+    let y = if direction.y < 0 { -1 } else { size };
+    for z in 0..=last {
+        for x in 0..=last {
+            queue.enqueue(origin + IVec3::new(x, y, z));
         }
     }
 }
@@ -486,6 +533,7 @@ fn relight_after_chunk_unloads(
 ) {
     let secondary_properties = SecondaryPropertyRegistry::default();
     let mut pending = PendingLightingUpdates::default();
+    pending.seeded_chunks.extend(world.loaded_chunk_coords());
     pending.enqueue_chunk_unloads(unloaded);
     drop(relax(
         world,
