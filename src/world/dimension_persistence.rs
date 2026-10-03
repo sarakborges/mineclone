@@ -7,6 +7,7 @@ use crate::{
     creatures::{CreatureInstance, EntityMetaTags, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
     gameplay::storage_box::StorageBoxStorage,
+    player::PlayerEntity,
     voxel::world::VoxelWorld,
 };
 
@@ -132,6 +133,7 @@ type DimensionCreatureQuery<'w, 's> = Query<
         &'static EntityHealth,
         &'static EntityMetaTags,
     ),
+    Without<PlayerEntity>,
 >;
 
 #[derive(SystemParam)]
