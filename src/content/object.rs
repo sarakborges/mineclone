@@ -332,6 +332,8 @@ pub struct ObjectDefinition {
     pub icon: String,
     #[serde(default)]
     pub tint: BlockTint,
+    #[serde(default)]
+    pub wind_sway: bool,
     #[serde(default = "default_placement_faces")]
     pub placement_faces: Vec<ObjectPlacementFace>,
     #[serde(default)]
