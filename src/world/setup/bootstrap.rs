@@ -178,10 +178,7 @@ impl BootstrapWorldFields {
                 forced_spawn_biome.expect("single-biome world requires a selected surface biome");
             biome_field.set_single_surface_biome(biome_id);
         } else if let Some(biome_id) = forced_spawn_biome {
-            biome_field.force_surface_biome(
-                biome_id,
-                DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
-            );
+            biome_field.set_spawn_target_surface_biome(biome_id);
         }
 
         let feature_fields = WorldFeatureFields::new(seed).with_structure_field(structure_field);
@@ -573,7 +570,6 @@ fn random_spawn_biome_id<'a>(
         .iter()
         .filter(|entry| {
             entry.spawn_weight > f32::EPSILON
-                && entry.require_near.is_empty()
                 && ocean_biome != Some(entry.id.as_str())
                 && biomes
                     .get(&entry.id)
@@ -583,7 +579,7 @@ fn random_spawn_biome_id<'a>(
 
     assert!(
         !candidates.is_empty(),
-        "dimension {} must define at least one forceable non-ocean surface biome with positive spawnWeight for random spawn",
+        "dimension {} must define at least one non-ocean surface biome with positive spawnWeight for random spawn",
         dimension.id
     );
 
@@ -617,7 +613,6 @@ fn random_spawn_biome_id<'a>(
         .rev()
         .find(|entry| {
             entry.spawn_weight > f32::EPSILON
-                && entry.require_near.is_empty()
                 && ocean_biome != Some(entry.id.as_str())
                 && biomes
                     .get(&entry.id)
@@ -639,19 +634,10 @@ fn validate_forced_spawn_biome(
         biome.kind == BiomeKind::Surface,
         "requested spawn biome must be a surface biome: {biome_id}"
     );
-    let dimension_biome = dimension
-        .biomes
-        .iter()
-        .find(|entry| entry.id == biome_id)
-        .unwrap_or_else(|| {
-            panic!(
-                "requested spawn biome is not part of dimension {}: {biome_id}",
-                dimension.id
-            )
-        });
     assert!(
-        dimension_biome.require_near.is_empty(),
-        "requested spawn biome cannot be forced alone because it requires an adjacent biome: {biome_id}"
+        dimension.biomes.iter().any(|entry| entry.id == biome_id),
+        "requested spawn biome is not part of dimension {}: {biome_id}",
+        dimension.id
     );
 }
 
@@ -659,7 +645,7 @@ fn find_initial_spawn_column(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    restrict_to_forced_region: bool,
+    restrict_to_spawn_target: bool,
 ) -> IVec2 {
     find_map_square_rings(
         DEFAULT_SPAWN_COLUMN,
@@ -667,7 +653,7 @@ fn find_initial_spawn_column(
         SPAWN_SEARCH_STEP_BLOCKS,
         |candidate| {
             let position = candidate.as_vec2() + Vec2::splat(0.5);
-            if restrict_to_forced_region && !biome_field.forced_surface_core_contains(position) {
+            if restrict_to_spawn_target && !biome_field.spawn_target_contains(position) {
                 return None;
             }
 
@@ -681,8 +667,8 @@ fn find_initial_spawn_column(
         },
     )
     .unwrap_or_else(|| {
-        if restrict_to_forced_region {
-            panic!("could not find a fluid-free spawn column inside the forced initial biome region")
+        if restrict_to_spawn_target {
+            panic!("could not find a fluid-free spawn column in the selected spawn biome")
         }
         panic!(
             "could not find a fluid-free spawn column within {} blocks",
