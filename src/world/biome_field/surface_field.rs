@@ -7,7 +7,7 @@ use super::{
     spatial::{cell_hash, hash_unit, surface_value_noise, warp_surface_position},
 };
 
-const LAND_SITE_JITTER_FRACTION: f32 = 0.42;
+const LAND_SITE_JITTER_FRACTION: f32 = 0.28;
 const LAND_SITE_SEARCH_RADIUS: i32 = 2;
 const OCEAN_DOMAIN_SCALE_MULTIPLIER: f32 = 2.0;
 const OCEAN_DOMAIN_THRESHOLD: f32 = 0.18;
@@ -87,10 +87,7 @@ impl BiomeField {
 
     fn ocean_domain_contains(&self, warped: Vec2) -> bool {
         let scale = self.surface_field_config.ocean_scale.max(1.0);
-        let broad = surface_value_noise(
-            warped / scale,
-            self.seed ^ OCEAN_HASH_SALT,
-        );
+        let broad = surface_value_noise(warped / scale, self.seed ^ OCEAN_HASH_SALT);
         let detail = surface_value_noise(
             warped / (scale * OCEAN_DOMAIN_DETAIL_SCALE_MULTIPLIER).max(1.0)
                 + Vec2::new(29.0, -17.0),
@@ -176,7 +173,9 @@ impl BiomeField {
                     && self.surface_biome_is_enabled(*index)
             })
             .map(|(index, _)| index)
-            .or(self.ocean_surface_index.filter(|index| self.surface_biome_is_enabled(*index)))
+            .or(self
+                .ocean_surface_index
+                .filter(|index| self.surface_biome_is_enabled(*index)))
             .unwrap_or(0)
     }
 }
@@ -204,13 +203,20 @@ mod tests {
 
     use super::*;
     use crate::{
-        content::{biome::BiomeClimate, dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis}},
+        content::{
+            biome::BiomeClimate,
+            dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis},
+        },
         world::macro_climate::MacroClimateField,
     };
 
     fn size(min: f32, max: f32) -> DimensionBiomeSize {
         let axis = DimensionBiomeSizeAxis { min, max };
-        DimensionBiomeSize { x: axis, z: axis, y: None }
+        DimensionBiomeSize {
+            x: axis,
+            z: axis,
+            y: None,
+        }
     }
 
     fn entry(id: &str, weight: f32, size: DimensionBiomeSize) -> BiomeFieldEntry {
@@ -250,6 +256,7 @@ mod tests {
             single_surface_biome: None,
             ocean_surface_index: Some(2),
             spawn_oceans: true,
+            spawn_target_surface_biome: None,
         }
     }
 
