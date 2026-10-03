@@ -35,9 +35,12 @@ use super::{
     current_context::CurrentDimensionContext,
     day_night::DayNightClock,
     dimension::CurrentDimension,
-    game_rules::GameRules,
+    dimension_persistence::InactiveDimensionStates,
     fluid_updates::PendingFluidUpdates,
-    save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
+    game_rules::GameRules,
+    save_catalog::{
+        SaveRegistries, SavedDimensionState, SavedPlayer, SnapshotSource, WorldSnapshot, save_world,
+    },
     seed::WorldSeed,
     thumbnail::{
         WorldThumbnailCameraQuery, WorldThumbnailCapture, WorldThumbnailCompletion,
@@ -107,6 +110,7 @@ impl WorldSession {
         if let Err(error) = save_world(
             &captured,
             &snapshot.state.world,
+            &snapshot.state.inactive_dimensions,
             &snapshot.registries.fluids,
             snapshot.registries.for_validation(),
         ) {
@@ -143,6 +147,7 @@ struct WorldSnapshotState<'w> {
     inventory: Res<'w, PlayerHotbar>,
     storage_boxes: Res<'w, StorageBoxStorage>,
     world: Res<'w, VoxelWorld>,
+    inactive_dimensions: Res<'w, InactiveDimensionStates>,
     pending_fluids: Res<'w, PendingFluidUpdates>,
     world_ticks: Res<'w, WorldTickClock>,
 }
@@ -210,15 +215,19 @@ impl WorldSaveEntities<'_, '_> {
                     meta_tags: meta_tags.clone(),
                 }),
         );
-        creatures.sort_unstable_by(|left, right| {
-            left.definition_id
-                .cmp(&right.definition_id)
-                .then_with(|| left.position[0].total_cmp(&right.position[0]))
-                .then_with(|| left.position[1].total_cmp(&right.position[1]))
-                .then_with(|| left.position[2].total_cmp(&right.position[2]))
-        });
+        sort_saved_creatures(&mut creatures);
         creatures
     }
+}
+
+fn sort_saved_creatures(creatures: &mut [SavedCreature]) {
+    creatures.sort_unstable_by(|left, right| {
+        left.definition_id
+            .cmp(&right.definition_id)
+            .then_with(|| left.position[0].total_cmp(&right.position[0]))
+            .then_with(|| left.position[1].total_cmp(&right.position[1]))
+            .then_with(|| left.position[2].total_cmp(&right.position[2]))
+    });
 }
 
 #[derive(SystemParam)]
@@ -261,6 +270,23 @@ pub(crate) struct WorldSaveContext<'w, 's> {
 
 impl WorldSaveContext<'_, '_> {
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
+        let mut inactive_dimensions = self
+            .state
+            .inactive_dimensions
+            .iter()
+            .map(|(dimension_id, state)| {
+                let mut creatures = state.creatures().to_vec();
+                sort_saved_creatures(&mut creatures);
+                SavedDimensionState {
+                    dimension_id: dimension_id.to_owned(),
+                    storage_boxes: state.storage_boxes().saved_boxes(),
+                    fluid_updates: state.fluid_updates().clone(),
+                    creatures,
+                }
+            })
+            .collect::<Vec<_>>();
+        inactive_dimensions.sort_unstable_by(|left, right| left.dimension_id.cmp(&right.dimension_id));
+
         WorldSnapshot::capture(SnapshotSource {
             id,
             seed: self.state.seed.0,
@@ -281,6 +307,7 @@ impl WorldSaveContext<'_, '_> {
             pending_fluids: &self.state.pending_fluids,
             world_tick: self.state.world_ticks.current_tick(),
             creatures: self.entities.saved_creatures(),
+            inactive_dimensions,
         })
     }
 }

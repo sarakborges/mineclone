@@ -1,4 +1,4 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 use bevy::prelude::*;
 
@@ -14,6 +14,7 @@ use crate::{
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension,
+        dimension_persistence::{InactiveDimensionState, InactiveDimensionStates},
         fluid_updates::PendingFluidUpdates,
         game_rules::GameRules,
         save_catalog::{SaveRegistries, WorldDirectoryLock, WorldSnapshot},
@@ -33,6 +34,7 @@ pub(super) struct PreparedWorldActivation {
     session_lock: WorldDirectoryLock,
     pending_fluids: PendingFluidUpdates,
     pending_creatures: PendingCreatureRestores,
+    inactive_dimensions: InactiveDimensionStates,
     seed: WorldSeed,
     dimension: CurrentDimension,
     rules: GameRules,
@@ -45,6 +47,7 @@ impl PreparedWorldActivation {
         id: String,
         mut snapshot: WorldSnapshot,
         world: VoxelWorld,
+        mut inactive_worlds: HashMap<String, VoxelWorld>,
         session_lock: WorldDirectoryLock,
         registries: SaveRegistries<'_>,
     ) -> Result<Self, WorldActivationError> {
@@ -70,6 +73,40 @@ impl PreparedWorldActivation {
             registries.tools,
         )
         .map_err(WorldActivationError::Inventory)?;
+
+        let mut inactive_dimensions = InactiveDimensionStates::default();
+        for saved in std::mem::take(&mut snapshot.inactive_dimensions) {
+            let inactive_world = inactive_worlds.remove(&saved.dimension_id).ok_or_else(|| {
+                WorldActivationError::Load(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("saved dimension world is missing: {}", saved.dimension_id),
+                ))
+            })?;
+            let storage = StorageBoxStorage::from_saved_boxes(
+                &saved.storage_boxes,
+                registries.items,
+                registries.blocks,
+                registries.layers,
+                registries.objects,
+                registries.tools,
+            )
+            .map_err(WorldActivationError::Inventory)?;
+            inactive_dimensions.insert(
+                saved.dimension_id,
+                InactiveDimensionState::new(
+                    inactive_world,
+                    storage,
+                    saved.fluid_updates,
+                    saved.creatures,
+                ),
+            );
+        }
+        if !inactive_worlds.is_empty() {
+            return Err(WorldActivationError::Load(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "save loaded dimension worlds that are absent from snapshot metadata",
+            )));
+        }
 
         let seed = WorldSeed(snapshot.seed);
         let dimension_id = snapshot.dimension_id.clone();
@@ -113,6 +150,7 @@ impl PreparedWorldActivation {
             pending_creatures: PendingCreatureRestores::new(std::mem::take(
                 &mut snapshot.creatures,
             )),
+            inactive_dimensions,
             seed,
             dimension: CurrentDimension {
                 id: dimension_id.into(),
@@ -135,6 +173,7 @@ impl PreparedWorldActivation {
         commands.insert_resource(self.session_lock);
         commands.insert_resource(self.pending_fluids);
         commands.insert_resource(self.pending_creatures);
+        commands.insert_resource(self.inactive_dimensions);
         commands.insert_resource(self.seed);
         commands.insert_resource(self.dimension);
         commands.insert_resource(self.rules);
