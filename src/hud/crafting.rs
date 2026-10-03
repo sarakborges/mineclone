@@ -36,16 +36,16 @@ use super::inventory::{
 
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
 pub(super) const CRAFTING_PANEL_WIDTH: f32 = 482.0;
-const CRAFTING_RECIPE_LIST_WIDTH: f32 = 184.0;
+const CRAFTING_RECIPE_LIST_WIDTH: f32 = 218.0;
 const CRAFTING_RECIPE_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_INGREDIENT_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
 const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
 const CRAFTING_ICON_SIZE: f32 = 32.0;
 const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
-pub(super) const CURRENT_STATION_PANEL_WIDTH: f32 = 268.0;
-const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 196.0;
-const CURRENT_STATION_ICON_SIZE: f32 = 136.0;
+pub(super) const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
+const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 160.0;
+const CURRENT_STATION_ICON_SIZE: f32 = 112.0;
 const CURRENT_STATION_ICON: &str = "textures/creative_categories/crafting_materials.png";
 const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
 const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
@@ -316,6 +316,7 @@ fn spawn_crafting_panel(
             .with_children(|available| {
                 available.spawn((
                     typography::hud_heading("AVAILABLE RECIPES"),
+                    TextLayout::no_wrap(),
                     Pickable::IGNORE,
                 ));
                 spawn_recipe_list(available, recipes, session, content);
@@ -536,6 +537,7 @@ fn spawn_recipe_details(
 ) {
     parent.spawn((
         typography::hud_heading("SELECTED RECIPE"),
+        TextLayout::no_wrap(),
         Pickable::IGNORE,
     ));
 
