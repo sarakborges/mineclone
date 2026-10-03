@@ -3,12 +3,24 @@ use bevy::prelude::*;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
-    constants::BORDER_TRANSITION_WIDTH,
+    constants::{BORDER_TRANSITION_WIDTH, VISUAL_BLEND_WIDTH},
     spatial::{smoothstep, varied_surface_margin_width},
 };
 
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
+        self.sample_surface_with_transition_width(position, BORDER_TRANSITION_WIDTH)
+    }
+
+    pub(crate) fn sample_visual_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
+        self.sample_surface_with_transition_width(position, VISUAL_BLEND_WIDTH)
+    }
+
+    fn sample_surface_with_transition_width(
+        &self,
+        position: Vec2,
+        transition_width: f32,
+    ) -> BiomeFieldSample<'_> {
         if let Some(index) = self.single_surface_biome {
             return single_biome_sample(self, index);
         }
@@ -18,13 +30,13 @@ impl BiomeField {
         debug_assert!(self.surface_biome_is_enabled(primary_index));
         let regional_boundary = field_sample
             .boundary
-            .filter(|boundary| boundary.distance <= maximum_boundary_interest_radius(self));
+            .filter(|boundary| boundary.distance <= maximum_boundary_interest_radius(self, transition_width));
 
         let mut influences = ArrayVec::<BiomeInfluence<'_>, MAX_SURFACE_INFLUENCES>::new();
         let neighbor_weight = regional_boundary
-            .filter(|boundary| boundary.distance <= BORDER_TRANSITION_WIDTH)
+            .filter(|boundary| boundary.distance <= transition_width)
             .map(|boundary| {
-                let progress = 1.0 - (boundary.distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+                let progress = 1.0 - (boundary.distance / transition_width).clamp(0.0, 1.0);
                 (
                     boundary.neighbor_surface_index,
                     smoothstep(progress),
@@ -93,12 +105,12 @@ fn single_biome_sample(field: &BiomeField, index: usize) -> BiomeFieldSample<'_>
     }
 }
 
-fn maximum_boundary_interest_radius(field: &BiomeField) -> f32 {
+fn maximum_boundary_interest_radius(field: &BiomeField, transition_width: f32) -> f32 {
     field
         .surface_biomes
         .iter()
         .filter_map(|biome| biome.surface_margin)
         .map(|margin| margin.width + margin.width_variation.abs())
-        .fold(BORDER_TRANSITION_WIDTH, f32::max)
+        .fold(transition_width, f32::max)
         .max(0.0)
 }
