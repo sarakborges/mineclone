@@ -6,7 +6,7 @@ use super::BiomeField;
 
 impl BiomeField {
     pub fn grass_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Hsi {
-        let sample = self.sample_surface(position);
+        let sample = self.sample_visual_surface(position);
         Hsi::blend_weighted(sample.influences.into_iter().map(|influence| {
             let biome = biomes
                 .get(influence.id)
@@ -16,7 +16,7 @@ impl BiomeField {
     }
 
     pub fn leaf_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Hsi {
-        let sample = self.sample_surface(position);
+        let sample = self.sample_visual_surface(position);
         Hsi::blend_weighted(sample.influences.into_iter().map(|influence| {
             let biome = biomes
                 .get(influence.id)
@@ -26,7 +26,7 @@ impl BiomeField {
     }
 
     pub fn foliage_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Hsi {
-        let sample = self.sample_surface(position);
+        let sample = self.sample_visual_surface(position);
         Hsi::blend_weighted(sample.influences.into_iter().map(|influence| {
             let biome = biomes
                 .get(influence.id)
@@ -36,7 +36,7 @@ impl BiomeField {
     }
 
     pub fn water_color(&self, position: Vec2, biomes: &BiomeRegistry, fallback: Hsi) -> Hsi {
-        let sample = self.sample_surface(position);
+        let sample = self.sample_visual_surface(position);
         Hsi::blend_weighted(sample.influences.into_iter().map(|influence| {
             let biome = biomes
                 .get(influence.id)
