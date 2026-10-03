@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use bevy::prelude::*;
 
 use crate::{
-    content::block::{BlockDefinition, BlockRegistry, BlockTextureLayer},
+    content::block::{BlockDefinition, BlockRegistry, BlockTextureLayer, BlockTint},
     voxel::block_face::BlockFace,
 };
 
@@ -33,18 +33,22 @@ pub(crate) const TERRAIN_TEXTURE_FLAG_SHIFT: u32 =
     TERRAIN_TEXTURE_INDEX_BITS * 2;
 const TERRAIN_TEXTURE_BASE_DYABLE: u32 = 1;
 const TERRAIN_TEXTURE_OVERLAY_DYABLE: u32 = 2;
+const TERRAIN_TEXTURE_WIND_SWAY: u32 = 4;
 const MAX_TERRAIN_TEXTURES: usize = TERRAIN_TEXTURE_NONE_INDEX as usize - 1;
 
 #[derive(Clone, Default)]
 pub(crate) struct TerrainTextureTable {
     paths: Vec<String>,
     indices: HashMap<String, u16>,
+    wind_sway_indices: HashSet<u16>,
 }
 
 impl TerrainTextureTable {
     pub(crate) fn from_blocks(blocks: &BlockRegistry) -> Self {
         let mut unique = BTreeSet::<String>::new();
+        let mut wind_sway_paths = BTreeSet::<String>::new();
         for block in blocks.iter() {
+            let wind_sway = matches!(block.tint, BlockTint::Leaf | BlockTint::Foliage);
             for face in BlockFace::ALL {
                 let layers = block_face_texture_layers(face, block);
                 if layers.len() > 2 {
@@ -52,6 +56,9 @@ impl TerrainTextureTable {
                 }
                 for layer in layers {
                     unique.insert(layer.texture.clone());
+                    if wind_sway {
+                        wind_sway_paths.insert(layer.texture.clone());
+                    }
                 }
             }
         }
@@ -62,7 +69,7 @@ impl TerrainTextureTable {
         );
 
         let paths = unique.into_iter().collect::<Vec<_>>();
-        let indices = paths
+        let indices: HashMap<String, u16> = paths
             .iter()
             .enumerate()
             .map(|(index, path)| {
@@ -71,8 +78,20 @@ impl TerrainTextureTable {
                 (path.clone(), array_index)
             })
             .collect();
+        let wind_sway_indices = wind_sway_paths
+            .iter()
+            .map(|path| {
+                *indices.get(path).unwrap_or_else(|| {
+                    panic!("missing terrain wind-sway texture index for {path}")
+                })
+            })
+            .collect();
 
-        Self { paths, indices }
+        Self {
+            paths,
+            indices,
+            wind_sway_indices,
+        }
     }
 
     pub(crate) fn paths(&self) -> &[String] {
@@ -105,6 +124,13 @@ impl TerrainTextureTable {
         }
         if layers.get(1).is_some_and(|layer| layer.dyable) {
             flags |= TERRAIN_TEXTURE_OVERLAY_DYABLE;
+        }
+        if layers.iter().any(|layer| {
+            self.indices
+                .get(&layer.texture)
+                .is_some_and(|index| self.wind_sway_indices.contains(index))
+        }) {
+            flags |= TERRAIN_TEXTURE_WIND_SWAY;
         }
 
         let encoded = base
