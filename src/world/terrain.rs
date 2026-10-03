@@ -59,7 +59,7 @@ pub(crate) fn surface_height_from_sample(
 
 fn height_influence_policy(terrain: BiomeTerrain) -> HeightInfluencePolicy {
     match terrain {
-        BiomeTerrain::Ocean { .. } => HeightInfluencePolicy::LowerOnly,
+        BiomeTerrain::Ocean { .. } | BiomeTerrain::Swamp { .. } => HeightInfluencePolicy::LowerOnly,
         _ => HeightInfluencePolicy::Blend,
     }
 }
@@ -172,6 +172,23 @@ fn biome_surface_height(
             let broad = fractal_noise(position * scale, seed);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
             sea_level - depth + broad * amplitude + detail * detail_amplitude
+        }
+        BiomeTerrain::Swamp {
+            base_height,
+            depth,
+            amplitude,
+            scale,
+            detail_amplitude,
+            detail_scale,
+        } => {
+            let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
+            let broad = fractal_noise(position * scale, seed);
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
+            sea_level
+                + base_height
+                - depth * strength
+                + broad * amplitude
+                + detail * detail_amplitude
         }
         BiomeTerrain::Mountains {
             base_height,
@@ -406,13 +423,21 @@ mod tests {
     }
 
     #[test]
-    fn ocean_uses_lower_only_height_policy() {
+    fn ocean_and_swamp_use_lower_only_height_policy() {
         let ocean = BiomeTerrain::Ocean {
             depth: 18.0,
             amplitude: 6.0,
             scale: 0.006,
             detail_amplitude: 3.0,
             detail_scale: 0.026,
+        };
+        let swamp = BiomeTerrain::Swamp {
+            base_height: 1.5,
+            depth: 5.5,
+            amplitude: 1.5,
+            scale: 0.009,
+            detail_amplitude: 0.75,
+            detail_scale: 0.035,
         };
         let mountains = BiomeTerrain::Mountains {
             base_height: 10.0,
@@ -422,6 +447,7 @@ mod tests {
         };
 
         assert_eq!(height_influence_policy(ocean), HeightInfluencePolicy::LowerOnly);
+        assert_eq!(height_influence_policy(swamp), HeightInfluencePolicy::LowerOnly);
         assert_eq!(height_influence_policy(mountains), HeightInfluencePolicy::Blend);
     }
 }
