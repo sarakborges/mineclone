@@ -55,6 +55,16 @@ impl SavedCreature {
     }
 }
 
+pub(crate) fn sort_saved_creatures(creatures: &mut [SavedCreature]) {
+    creatures.sort_unstable_by(|left, right| {
+        left.definition_id
+            .cmp(&right.definition_id)
+            .then_with(|| left.position[0].total_cmp(&right.position[0]))
+            .then_with(|| left.position[1].total_cmp(&right.position[1]))
+            .then_with(|| left.position[2].total_cmp(&right.position[2]))
+    });
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct PendingCreatureRestores {
     creatures: Vec<SavedCreature>,
@@ -75,13 +85,7 @@ impl PendingCreatureRestores {
     ) -> Vec<SavedCreature> {
         let mut creatures = self.creatures.clone();
         creatures.extend(active);
-        creatures.sort_unstable_by(|left, right| {
-            left.definition_id
-                .cmp(&right.definition_id)
-                .then_with(|| left.position[0].total_cmp(&right.position[0]))
-                .then_with(|| left.position[1].total_cmp(&right.position[1]))
-                .then_with(|| left.position[2].total_cmp(&right.position[2]))
-        });
+        sort_saved_creatures(&mut creatures);
         creatures
     }
 
