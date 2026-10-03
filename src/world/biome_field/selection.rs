@@ -12,6 +12,8 @@ use super::{
     spatial::{cell_hash, hash_unit},
 };
 
+const SURFACE_FALLBACK_SOFT_WEIGHT_FLOOR: f32 = 0.05;
+
 impl BiomeField {
     pub(super) fn ranked_surface_biome_indices(&self, cell: IVec2, position: Vec2) -> Vec<usize> {
         let climate = self.climate.sample(position);
@@ -36,39 +38,51 @@ impl BiomeField {
         }
 
         let source_hash = cell_hash(cell, self.seed);
-        let mut candidates = self
-            .surface_biomes
-            .iter()
-            .enumerate()
-            .filter(|(index, biome)| biome.weight > 0.0 && self.surface_biome_is_enabled(*index))
-            .filter_map(|(index, biome)| {
-                let distribution = biome
-                    .distributions
-                    .iter()
-                    .copied()
-                    .map(|distribution| {
-                        distribution_strength(distribution, position, self.seed, biome.id.as_str())
-                    })
-                    .fold(0.0_f32, f32::max);
-                if distribution <= 0.0 {
-                    return None;
-                }
+        let mut preferred = Vec::new();
+        let mut fallback = Vec::new();
 
-                let climate_weight = climate_weight(climate, biome.climate);
-                if climate_weight <= 0.0 {
-                    return None;
-                }
+        for (index, biome) in self.surface_biomes.iter().enumerate() {
+            if biome.weight <= 0.0 || !self.surface_biome_is_enabled(index) {
+                continue;
+            }
 
-                Some(WeightedBiomeCandidate {
+            let distribution = biome
+                .distributions
+                .iter()
+                .copied()
+                .map(|distribution| {
+                    distribution_strength(distribution, position, self.seed, biome.id.as_str())
+                })
+                .fold(0.0_f32, f32::max);
+            let climate_weight = climate_weight(climate, biome.climate);
+
+            if distribution > 0.0 && climate_weight > 0.0 {
+                preferred.push(WeightedBiomeCandidate {
                     index,
                     weight: biome.weight * climate_weight * distribution,
-                })
-            })
-            .collect::<Vec<_>>();
+                });
+                continue;
+            }
 
-        sort_weighted_candidates(&mut candidates, source_hash, &self.surface_biomes);
-        candidates
+            // Climate and authored distributions decide preference, not whether
+            // the territorial map is allowed to exist. If every preferred
+            // candidate is rejected later by hard adjacency/size constraints,
+            // these candidates keep the frontier solvable without relaxing any
+            // authored territorial rule.
+            fallback.push(WeightedBiomeCandidate {
+                index,
+                weight: biome.weight
+                    * soft_surface_fallback_weight(climate_weight)
+                    * soft_surface_fallback_weight(distribution),
+            });
+        }
+
+        sort_weighted_candidates(&mut preferred, source_hash, &self.surface_biomes);
+        sort_weighted_candidates(&mut fallback, source_hash, &self.surface_biomes);
+
+        preferred
             .into_iter()
+            .chain(fallback)
             .map(|candidate| candidate.index)
             .collect()
     }
@@ -161,6 +175,11 @@ fn sort_weighted_candidates(
     });
 }
 
+fn soft_surface_fallback_weight(weight: f32) -> f32 {
+    SURFACE_FALLBACK_SOFT_WEIGHT_FLOOR
+        + (1.0 - SURFACE_FALLBACK_SOFT_WEIGHT_FLOOR) * weight.clamp(0.0, 1.0)
+}
+
 fn climate_axis_weight(value: f32, range: Option<BiomeClimateRange>) -> f32 {
     let Some(range) = range else {
         return 1.0;
@@ -201,6 +220,16 @@ mod tests {
         assert_eq!(climate_axis_weight(0.5, range), 1.0);
         assert!(climate_axis_weight(0.35, range) > 0.0);
         assert_eq!(climate_axis_weight(0.2, range), 0.0);
+    }
+
+    #[test]
+    fn surface_fallback_never_turns_soft_preferences_into_exclusion() {
+        assert_eq!(
+            soft_surface_fallback_weight(0.0),
+            SURFACE_FALLBACK_SOFT_WEIGHT_FLOOR
+        );
+        assert_eq!(soft_surface_fallback_weight(1.0), 1.0);
+        assert!(soft_surface_fallback_weight(0.5) > SURFACE_FALLBACK_SOFT_WEIGHT_FLOOR);
     }
 
     #[test]
