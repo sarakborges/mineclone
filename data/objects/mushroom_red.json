@@ -1,0 +1,37 @@
+{
+  "id": "asteria:mushroom_red",
+  "category": "foliage",
+  "icon": "textures/objects/mushroom_red.png",
+  "placementFaces": [
+    "top"
+  ],
+  "target": {
+    "size": [
+      0.72,
+      0.62,
+      0.72
+    ],
+    "centerOffset": [
+      0,
+      0.31,
+      0
+    ]
+  },
+  "unlit": true,
+  "castsShadow": false,
+  "receivesShadow": false,
+  "dropSelf": true,
+  "visual": {
+    "type": "crossedSprite",
+    "texture": "textures/objects/mushroom_red.png",
+    "width": 0.72,
+    "height": 0.62,
+    "planes": 3,
+    "alphaCutoff": 0.5
+  },
+  "interaction": "break",
+  "positionJitter": [
+    0.28,
+    0.28
+  ]
+}

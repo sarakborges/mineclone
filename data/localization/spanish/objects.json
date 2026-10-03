@@ -2,6 +2,27 @@
   "asteria:grass": {
     "/name": "Césped"
   },
+  "asteria:mushroom_blue": {
+    "/name": "Hongo Azul"
+  },
+  "asteria:mushroom_brown": {
+    "/name": "Hongo Marrón"
+  },
+  "asteria:mushroom_green": {
+    "/name": "Hongo Verde"
+  },
+  "asteria:mushroom_pink": {
+    "/name": "Hongo Rosa"
+  },
+  "asteria:mushroom_purple": {
+    "/name": "Hongo Morado"
+  },
+  "asteria:mushroom_red": {
+    "/name": "Hongo Rojo"
+  },
+  "asteria:mushroom_yellow": {
+    "/name": "Hongo Amarillo"
+  },
   "asteria:pebble": {
     "/name": "Guijarro"
   },

@@ -146,5 +146,19 @@
       "min": 0.36,
       "max": 1
     }
-  }
+  },
+  "objectSpawns": [
+    {
+      "object": "asteria:mushroom_brown",
+      "spacing": 34,
+      "chance": 0.5,
+      "jitter": 8,
+      "clusterMin": 2,
+      "clusterMax": 5,
+      "clusterRadius": 4,
+      "groundBlocks": [
+        "asteria:mud"
+      ]
+    }
+  ]
 }

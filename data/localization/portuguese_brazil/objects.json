@@ -2,6 +2,27 @@
   "asteria:grass": {
     "/name": "Grama"
   },
+  "asteria:mushroom_blue": {
+    "/name": "Cogumelo Azul"
+  },
+  "asteria:mushroom_brown": {
+    "/name": "Cogumelo Marrom"
+  },
+  "asteria:mushroom_green": {
+    "/name": "Cogumelo Verde"
+  },
+  "asteria:mushroom_pink": {
+    "/name": "Cogumelo Rosa"
+  },
+  "asteria:mushroom_purple": {
+    "/name": "Cogumelo Roxo"
+  },
+  "asteria:mushroom_red": {
+    "/name": "Cogumelo Vermelho"
+  },
+  "asteria:mushroom_yellow": {
+    "/name": "Cogumelo Amarelo"
+  },
   "asteria:pebble": {
     "/name": "Pedrinha"
   },

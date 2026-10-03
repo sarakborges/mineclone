@@ -2,6 +2,27 @@
   "asteria:grass": {
     "/name": "Grass"
   },
+  "asteria:mushroom_blue": {
+    "/name": "Blue Mushroom"
+  },
+  "asteria:mushroom_brown": {
+    "/name": "Brown Mushroom"
+  },
+  "asteria:mushroom_green": {
+    "/name": "Green Mushroom"
+  },
+  "asteria:mushroom_pink": {
+    "/name": "Pink Mushroom"
+  },
+  "asteria:mushroom_purple": {
+    "/name": "Purple Mushroom"
+  },
+  "asteria:mushroom_red": {
+    "/name": "Red Mushroom"
+  },
+  "asteria:mushroom_yellow": {
+    "/name": "Yellow Mushroom"
+  },
   "asteria:pebble": {
     "/name": "Pebble"
   },
