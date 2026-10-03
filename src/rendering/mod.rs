@@ -27,7 +27,7 @@ pub(crate) mod wind;
 
 use ambient_particles::AmbientParticlesPlugin;
 use asset_upload::AssetUploadPlugin;
-use bevy::prelude::*;
+use bevy::{prelude::*, render::storage::ShaderBuffer};
 use block_model::{setup_block_model_assets, sync_block_model_mesh_geometry};
 use block_model_material::BlockModelMaterial;
 use celestial::CelestialPlugin;
@@ -41,7 +41,7 @@ use mesh_allocator_diagnostics::MeshAllocatorDiagnosticsPlugin;
 use object_primitives::ObjectPrimitivesPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
-use terrain_material::TerrainMaterial;
+use terrain_material::{TerrainLightingBuffer, TerrainMaterial};
 use wind::Wind;
 
 pub(crate) use gameplay_asset_preload::GameplayAssetPreloads;
@@ -57,6 +57,7 @@ impl Plugin for RenderingPlugin {
                 MaterialPlugin::<BlockModelMaterial>::default(),
             ))
             .add_systems(Startup, setup_block_model_assets)
+            .add_systems(Update, sync_terrain_wind)
             .add_systems(PostUpdate, sync_block_model_mesh_geometry)
             .add_plugins((
                 AssetUploadPlugin,
@@ -74,4 +75,15 @@ impl Plugin for RenderingPlugin {
                 AmbientParticlesPlugin,
             ));
     }
+}
+
+fn sync_terrain_wind(
+    wind: Res<Wind>,
+    terrain_lighting: Option<ResMut<TerrainLightingBuffer>>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
+) {
+    let Some(mut terrain_lighting) = terrain_lighting else {
+        return;
+    };
+    terrain_lighting.set_wind_velocity(&mut buffers, wind.velocity(1.0));
 }
