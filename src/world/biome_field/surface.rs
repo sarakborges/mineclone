@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES, SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
-    spatial::{smoothstep, varied_surface_margin_width, warp_surface_position},
+    spatial::{smoothstep, surface_site_position, varied_surface_margin_width},
 };
 
 const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
@@ -14,85 +14,57 @@ const MAX_WEIGHT_ENTRIES: usize = MAX_SURFACE_INFLUENCES;
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
         if let Some(index) = self.single_surface_biome {
-            let biome = &self.surface_biomes[index];
-            let mut influences = ArrayVec::new();
-            influences.push(BiomeInfluence {
-                id: biome.id.as_str(),
-                weight: 1.0,
-                surface_index: index,
-                terrain_strength: 1.0,
-            });
-            return BiomeFieldSample {
-                primary_id: biome.id.as_str(),
-                primary_surface_index: index,
-                surface_margin_index: None,
-                identity_surface_index: index,
-                influences,
-            };
+            return single_biome_sample(self, index);
         }
 
-        let warped = warp_surface_position(position, self.seed);
+        let primary_index = self.surface_biome_index_at(position);
         let center = IVec2::new(
-            (warped.x / self.surface_site_spacing.x).round() as i32,
-            (warped.y / self.surface_site_spacing.y).round() as i32,
+            (position.x / self.surface_site_spacing.x).round() as i32,
+            (position.y / self.surface_site_spacing.y).round() as i32,
         );
-        self.surface_map.ensure_sample_window(self, center);
 
-        let mut sampled_sites = [(Vec2::ZERO, 0.0_f32, 0_usize); SITE_SAMPLE_COUNT];
+        let mut sampled_sites = [(Vec2::ZERO, 0_usize); SITE_SAMPLE_COUNT];
         let mut sample_count = 0;
-        {
-            let samples = self
-                .surface_map
-                .read_samples()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                    let cell = center + IVec2::new(x, z);
-                    let sample = samples.get(&cell).unwrap_or_else(|| {
-                        panic!("surface biome map sample missing resolved cell {cell:?}")
-                    });
-                    sampled_sites[sample_count] = (
-                        sample.position,
-                        warped.distance(sample.position),
-                        sample.biome_index,
-                    );
-                    sample_count += 1;
-                }
+        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+                let cell = center + IVec2::new(x, z);
+                let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
+                sampled_sites[sample_count] = (site, self.surface_biome_index_at(site));
+                sample_count += 1;
             }
         }
         debug_assert_eq!(sample_count, SITE_SAMPLE_COUNT);
 
-        let mut nearest_score = f32::INFINITY;
-        let mut nearest_site = Vec2::ZERO;
-        let mut nearest_sample_index = 0;
-        let mut primary_index = 0;
-        for (sample_index, (site, distance, candidate_index)) in
-            sampled_sites[..sample_count].iter().enumerate()
-        {
-            let score = distance * distance;
-            if score < nearest_score {
-                nearest_score = score;
-                nearest_site = *site;
-                nearest_sample_index = sample_index;
-                primary_index = *candidate_index;
-            }
-        }
+        let primary_site = sampled_sites[..sample_count]
+            .iter()
+            .filter(|(_, index)| *index == primary_index)
+            .min_by(|left, right| {
+                position
+                    .distance_squared(left.0)
+                    .total_cmp(&position.distance_squared(right.0))
+            })
+            .map(|(site, _)| *site)
+            .unwrap_or(position);
+
         let regional_boundary = nearest_surface_boundary(
-            nearest_sample_index,
-            nearest_score,
+            position,
+            primary_site,
+            primary_index,
             &sampled_sites[..sample_count],
         );
 
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
         let mut weight_count = 0;
-        for (site, distance, candidate_index) in &sampled_sites[..sample_count] {
-            let pair_distance = nearest_site.distance(*site);
-            let boundary_distance = if pair_distance <= f32::EPSILON {
-                0.0
-            } else {
-                let candidate_score = distance * distance;
-                ((candidate_score - nearest_score) / (2.0 * pair_distance)).max(0.0)
-            };
+        set_max_weight(&mut weights, &mut weight_count, primary_index, 1.0);
+
+        for (site, candidate_index) in &sampled_sites[..sample_count] {
+            if *candidate_index == primary_index {
+                continue;
+            }
+            let boundary_distance = bisector_distance(position, primary_site, *site);
+            if boundary_distance > BORDER_TRANSITION_WIDTH {
+                continue;
+            }
             let border_progress =
                 1.0 - (boundary_distance / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             set_max_weight(
@@ -103,33 +75,12 @@ impl BiomeField {
             );
         }
 
-        let regional_total: f32 = weights[..weight_count]
+        let total_weight = weights[..weight_count]
             .iter()
             .map(|(_, weight)| *weight)
-            .sum();
-        if regional_total > f32::EPSILON {
-            for (_, weight) in &mut weights[..weight_count] {
-                *weight /= regional_total;
-            }
-        }
-
-        if let Some((index, _)) = weights[..weight_count]
-            .iter()
-            .copied()
-            .max_by(|left, right| {
-                left.1
-                    .total_cmp(&right.1)
-                    .then_with(|| left.0.cmp(&right.0))
-            })
-        {
-            primary_index = index;
-        }
-
+            .sum::<f32>()
+            .max(f32::MIN_POSITIVE);
         weights[..weight_count].sort_unstable_by_key(|(index, _)| *index);
-        let total_weight: f32 = weights[..weight_count]
-            .iter()
-            .map(|(_, weight)| *weight)
-            .sum();
         let influences = weights[..weight_count]
             .iter()
             .filter(|(_, weight)| *weight > 0.0)
@@ -168,34 +119,53 @@ impl BiomeField {
     }
 }
 
-fn nearest_surface_boundary(
-    primary_sample_index: usize,
-    primary_score: f32,
-    sampled_sites: &[(Vec2, f32, usize)],
-) -> Option<SurfaceBoundarySample> {
-    let (primary_site, _, primary_index) = sampled_sites[primary_sample_index];
+fn single_biome_sample(field: &BiomeField, index: usize) -> BiomeFieldSample<'_> {
+    let biome = &field.surface_biomes[index];
+    let mut influences = ArrayVec::new();
+    influences.push(BiomeInfluence {
+        id: biome.id.as_str(),
+        weight: 1.0,
+        surface_index: index,
+        terrain_strength: 1.0,
+    });
+    BiomeFieldSample {
+        primary_id: biome.id.as_str(),
+        primary_surface_index: index,
+        surface_margin_index: None,
+        identity_surface_index: index,
+        influences,
+    }
+}
 
+fn nearest_surface_boundary(
+    position: Vec2,
+    primary_site: Vec2,
+    primary_index: usize,
+    sampled_sites: &[(Vec2, usize)],
+) -> Option<SurfaceBoundarySample> {
     sampled_sites
         .iter()
-        .filter_map(|(site, distance, candidate_index)| {
-            if *candidate_index == primary_index {
-                return None;
-            }
-
-            let pair_distance = primary_site.distance(*site);
-            if pair_distance <= f32::EPSILON {
-                return None;
-            }
-
-            let candidate_score = distance * distance;
-            let boundary_distance =
-                ((candidate_score - primary_score) / (2.0 * pair_distance)).max(0.0);
-            Some(SurfaceBoundarySample {
-                neighbor_surface_index: *candidate_index,
-                distance: boundary_distance,
-            })
+        .filter(|(_, candidate_index)| *candidate_index != primary_index)
+        .map(|(site, candidate_index)| SurfaceBoundarySample {
+            neighbor_surface_index: *candidate_index,
+            distance: bisector_distance(position, primary_site, *site),
         })
-        .min_by(|left, right| left.distance.total_cmp(&right.distance))
+        .min_by(|left, right| {
+            left.distance
+                .total_cmp(&right.distance)
+                .then_with(|| left.neighbor_surface_index.cmp(&right.neighbor_surface_index))
+        })
+}
+
+fn bisector_distance(position: Vec2, primary_site: Vec2, candidate_site: Vec2) -> f32 {
+    let pair_distance = primary_site.distance(candidate_site);
+    if pair_distance <= f32::EPSILON {
+        return f32::INFINITY;
+    }
+
+    let primary_score = position.distance_squared(primary_site);
+    let candidate_score = position.distance_squared(candidate_site);
+    ((candidate_score - primary_score).abs() / (2.0 * pair_distance)).max(0.0)
 }
 
 fn set_max_weight(
@@ -212,15 +182,6 @@ fn set_max_weight(
         return;
     }
 
-    push_weight(weights, weight_count, index, weight);
-}
-
-fn push_weight(
-    weights: &mut [(usize, f32); MAX_WEIGHT_ENTRIES],
-    weight_count: &mut usize,
-    index: usize,
-    weight: f32,
-) {
     debug_assert!(*weight_count < weights.len());
     weights[*weight_count] = (index, weight);
     *weight_count += 1;
@@ -247,18 +208,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_weight_ties_prefer_higher_biome_index_like_dense_iteration() {
-        let weights = [(2, 0.5_f32), (7, 0.5_f32), (4, 0.25_f32)];
-        let primary = weights
-            .iter()
-            .copied()
-            .max_by(|left, right| {
-                left.1
-                    .total_cmp(&right.1)
-                    .then_with(|| left.0.cmp(&right.0))
-            })
-            .map(|(index, _)| index);
-
-        assert_eq!(primary, Some(7));
+    fn far_neighbor_has_no_transition_weight() {
+        let distance = bisector_distance(Vec2::ZERO, Vec2::ZERO, Vec2::new(128.0, 0.0));
+        assert_eq!(distance, 64.0);
+        assert!(distance > BORDER_TRANSITION_WIDTH);
     }
 }
