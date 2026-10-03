@@ -2,12 +2,12 @@
   "id": "asteria:overworld/swamp",
   "terrain": {
     "type": "swamp",
-    "baseHeight": 1.5,
-    "depth": 5.5,
-    "amplitude": 1.5,
-    "scale": 0.009,
+    "baseHeight": 0.75,
+    "depth": 1.35,
+    "amplitude": 1.1,
+    "scale": 0.0065,
     "detailAmplitude": 0.75,
-    "detailScale": 0.035
+    "detailScale": 0.045
   },
   "surfaceLayers": [
     {
