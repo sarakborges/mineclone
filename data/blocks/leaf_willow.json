@@ -2,6 +2,7 @@
   "id": "asteria:leaf_willow",
   "category": "foliage",
   "tint": "leaf",
+  "windSway": true,
   "textures": {
     "top": [
       {
