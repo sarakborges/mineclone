@@ -1,0 +1,24 @@
+{
+  "id": "asteria:basalt",
+  "name": null,
+  "category": "stone_blocks",
+  "tags": [
+    "fragmentable"
+  ],
+  "textures": {
+    "top": "textures/blocks/basalt.png",
+    "bottom": "textures/blocks/basalt.png",
+    "left": "textures/blocks/basalt.png",
+    "right": "textures/blocks/basalt.png",
+    "front": "textures/blocks/basalt.png",
+    "back": "textures/blocks/basalt.png"
+  },
+  "lightDampening": 15,
+  "castsShadow": true,
+  "mining": {
+    "hardness": 2,
+    "requiredTools": [
+      "pickaxe"
+    ]
+  }
+}
