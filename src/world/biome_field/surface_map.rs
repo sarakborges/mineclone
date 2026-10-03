@@ -17,10 +17,11 @@ use super::{
 const BASE_HASH_SALT: u64 = 0x6a09_e667_f3bc_c909;
 const ANCHOR_HASH_SALT: u64 = 0xbb67_ae85_84ca_a73b;
 const SHAPE_HASH_SALT: u64 = 0x3c6e_f372_fe94_f82b;
-const STAMP_ANCHOR_STRIDE_CELLS: i32 = 8;
+const STAMP_ANCHOR_STRIDE_CELLS: i32 = 16;
 const STAMP_ANCHOR_JITTER_CELLS: i32 = 2;
 const STAMP_POSITION_OFFSET_CELLS: i32 = 2;
-const SHAPE_VARIANTS_PER_LEVEL: u64 = 2;
+const FORCED_SHAPE_VARIANTS_PER_LEVEL: u64 = 2;
+const MAX_BIOME_CANDIDATES_PER_ANCHOR: usize = 8;
 const SHAPE_ANGLE_SECTORS: i32 = 24;
 const SHAPE_IRREGULARITY_LEVELS: [f32; 5] = [0.34, 0.24, 0.14, 0.07, 0.0];
 
@@ -286,7 +287,7 @@ fn place_forced_region(field: &BiomeField, state: &mut SurfaceBiomeMapState) {
     );
 
     for (level_index, irregularity) in SHAPE_IRREGULARITY_LEVELS.into_iter().enumerate() {
-        for variant in 0..SHAPE_VARIANTS_PER_LEVEL {
+        for variant in 0..FORCED_SHAPE_VARIANTS_PER_LEVEL {
             let shape_seed = source_hash
                 ^ (level_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87)
                 ^ variant.wrapping_mul(0xd6e8_feb8_6659_fd93);
@@ -502,6 +503,7 @@ fn ranked_stamp_candidates(
             .then_with(|| left.cmp(right))
     });
 
+    candidates.truncate(MAX_BIOME_CANDIDATES_PER_ANCHOR);
     candidates
 }
 
@@ -512,64 +514,47 @@ fn try_stamp_candidates(
     sequence: u64,
     candidates: &[usize],
 ) -> bool {
-    for &biome_index in candidates {
-        let offsets = placement_offsets(
-            anchor,
-            field.seed
-                ^ (biome_index as u64).wrapping_mul(0xd6e8_feb8_6659_fd93)
-                ^ sequence.rotate_left(29),
-        );
-
-        for (level_index, irregularity) in SHAPE_IRREGULARITY_LEVELS.into_iter().enumerate() {
-            for variant in 0..SHAPE_VARIANTS_PER_LEVEL {
-                let shape_seed = cell_hash(
-                    anchor,
-                    field.seed
-                        ^ SHAPE_HASH_SALT
-                        ^ (biome_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87)
-                        ^ (level_index as u64).rotate_left(13)
-                        ^ variant.wrapping_mul(0xa24b_aed4_963e_e407)
-                        ^ sequence.rotate_left(7),
-                );
-
-                for &offset in &offsets {
-                    let center = anchor + offset;
-                    let Some(shape) = generate_stamp_shape(
-                        field,
-                        biome_index,
-                        center,
-                        shape_seed,
-                        irregularity,
-                    ) else {
-                        continue;
-                    };
-                    if !stamp_placement_is_valid(field, state, biome_index, &shape) {
-                        continue;
-                    }
-
-                    apply_region(state, biome_index, &shape);
-                    return true;
-                }
+    for (level_index, irregularity) in SHAPE_IRREGULARITY_LEVELS.into_iter().enumerate() {
+        for &biome_index in candidates {
+            let attempt_seed = field.seed
+                ^ SHAPE_HASH_SALT
+                ^ (biome_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87)
+                ^ (level_index as u64).rotate_left(13)
+                ^ sequence.rotate_left(7);
+            let shape_seed = cell_hash(anchor, attempt_seed);
+            let offset = placement_offset(
+                anchor,
+                attempt_seed
+                    ^ (biome_index as u64).wrapping_mul(0xd6e8_feb8_6659_fd93)
+                    ^ sequence.rotate_left(29),
+            );
+            let center = anchor + offset;
+            let Some(shape) = generate_stamp_shape(
+                field,
+                biome_index,
+                center,
+                shape_seed,
+                irregularity,
+            ) else {
+                continue;
+            };
+            if !stamp_placement_is_valid(field, state, biome_index, &shape) {
+                continue;
             }
+
+            apply_region(state, biome_index, &shape);
+            return true;
         }
     }
 
     false
 }
 
-fn placement_offsets(anchor: IVec2, seed: u64) -> Vec<IVec2> {
-    let d = STAMP_POSITION_OFFSET_CELLS;
-    let mut offsets = Vec::with_capacity(9);
-    for z in [-d, 0, d] {
-        for x in [-d, 0, d] {
-            offsets.push(IVec2::new(x, z));
-        }
-    }
-    offsets.sort_unstable_by_key(|offset| {
-        let cell = anchor + *offset;
-        (cell_hash(cell, seed), offset.y, offset.x)
-    });
-    offsets
+fn placement_offset(anchor: IVec2, seed: u64) -> IVec2 {
+    let slot = (cell_hash(anchor, seed) % 9) as i32;
+    let x = (slot % 3 - 1) * STAMP_POSITION_OFFSET_CELLS;
+    let z = (slot / 3 - 1) * STAMP_POSITION_OFFSET_CELLS;
+    IVec2::new(x, z)
 }
 
 fn generate_stamp_shape(
@@ -679,6 +664,7 @@ fn stamp_placement_is_valid(
     let candidate = &field.surface_biomes[biome_index];
     let base_index = state.base_biome_index.unwrap_or(biome_index);
     let mut neighbor_indices = Vec::new();
+    let mut touches_non_base_region = false;
 
     for &cell in &shape.cells {
         for neighbor in cardinal_neighbors(cell) {
@@ -697,6 +683,9 @@ fn stamp_placement_is_valid(
             if surface_biomes_conflict(candidate, &field.surface_biomes[neighbor_index]) {
                 return false;
             }
+            if neighbor_index != base_index {
+                touches_non_base_region = true;
+            }
             if !neighbor_indices.contains(&neighbor_index) {
                 neighbor_indices.push(neighbor_index);
             }
@@ -705,6 +694,10 @@ fn stamp_placement_is_valid(
 
     if !surface_requirement_satisfied(candidate, &neighbor_indices, &field.surface_biomes) {
         return false;
+    }
+
+    if !touches_non_base_region {
+        return true;
     }
 
     base_components_remain_valid(field, state, shape)
@@ -1089,5 +1082,15 @@ mod tests {
                 .get(cell)
                 .is_some_and(|resolved| resolved.biome_index == 1)
         }));
+    }
+
+    #[test]
+    fn candidate_search_is_bounded() {
+        let field = test_field();
+        let mut state = SurfaceBiomeMapState::default();
+        ensure_initialized(&field, &mut state);
+        let candidates = ranked_stamp_candidates(&field, &state, IVec2::ZERO, 0);
+        assert!(candidates.len() <= MAX_BIOME_CANDIDATES_PER_ANCHOR);
+        assert_eq!(STAMP_ANCHOR_STRIDE_CELLS, 16);
     }
 }
