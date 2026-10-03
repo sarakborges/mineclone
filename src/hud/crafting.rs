@@ -30,24 +30,21 @@ use crate::{
 };
 
 const INVENTORY_CRAFTING_ENVIRONMENT: &str = "inventory";
-const CRAFTING_PANEL_WIDTH: f32 = 482.0;
-const CRAFTING_PANEL_HEIGHT: f32 = 440.0;
-const CRAFTING_RECIPE_LIST_WIDTH: f32 = 174.0;
+pub(super) const CRAFTING_PANEL_WIDTH: f32 = 482.0;
+const CRAFTING_RECIPE_LIST_WIDTH: f32 = 196.0;
 const CRAFTING_PANEL_GAP: f32 = 14.0;
 const CRAFTING_INSET_GAP: f32 = 8.0;
 const CRAFTING_PANEL_PADDING: f32 = 18.0;
 const CRAFTING_PANEL_BORDER: f32 = 2.0;
-const CRAFTING_SCREEN_PADDING: f32 = 24.0;
 const CRAFTING_RECIPE_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_INGREDIENT_ROW_HEIGHT: f32 = 58.0;
 const CRAFTING_ICON_FRAME_SIZE: f32 = 42.0;
 const CRAFTING_RESULT_ICON_FRAME_SIZE: f32 = 72.0;
 const CRAFTING_ICON_SIZE: f32 = 32.0;
 const CRAFTING_RESULT_ICON_SIZE: f32 = 54.0;
-const CHARACTER_INFO_COLUMN_WIDTH: f32 = 480.0;
-const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
-const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 180.0;
-const CURRENT_STATION_ICON_SIZE: f32 = 128.0;
+pub(super) const CURRENT_STATION_PANEL_WIDTH: f32 = 244.0;
+const CURRENT_STATION_ICON_FRAME_SIZE: f32 = 160.0;
+const CURRENT_STATION_ICON_SIZE: f32 = 112.0;
 const CURRENT_STATION_ICON: &str = "textures/creative_categories/crafting_materials.png";
 const CRAFTING_READY_COLOR: Color = Color::srgb(0.34, 0.78, 0.42);
 const CRAFTING_MISSING_COLOR: Color = theme::DANGER;
@@ -57,6 +54,18 @@ struct CraftingSession {
     selected_recipe: Option<String>,
     rebuild_requested: bool,
 }
+
+#[derive(Component)]
+pub(super) struct SurvivalCraftingHost;
+
+#[derive(Component)]
+pub(super) struct SurvivalCurrentStationHost;
+
+#[derive(Component)]
+struct CraftingWorkspaceMounted;
+
+#[derive(Component)]
+struct CurrentStationMounted;
 
 #[derive(Component)]
 struct CraftingRoot;
@@ -165,18 +174,13 @@ impl Plugin for CraftingHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CraftingSession>()
             .add_systems(
-                OnEnter(GameplayModalState::Inventory),
-                spawn_crafting_screen
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(survival_mode),
-            )
-            .add_systems(
                 OnExit(GameplayModalState::Inventory),
                 reset_resource::<CraftingSession>,
             )
             .add_systems(
                 Update,
                 (
+                    mount_crafting_workspace,
                     select_crafting_recipe,
                     rebuild_crafting_screen,
                     handle_craft_clicks,
@@ -194,38 +198,19 @@ fn survival_mode(game_mode: Single<&GameMode, With<GameplayCamera>>) -> bool {
     **game_mode == GameMode::Survival
 }
 
-fn spawn_crafting_screen(
+fn mount_crafting_workspace(
     mut commands: Commands,
     content: CraftingContent,
     hotbar: Res<PlayerHotbar>,
     mut session: ResMut<CraftingSession>,
-) {
-    spawn_crafting_root(&mut commands, &content, &hotbar, &mut session);
-}
-
-fn rebuild_crafting_screen(
-    mut commands: Commands,
-    content: CraftingContent,
-    hotbar: Res<PlayerHotbar>,
-    mut session: ResMut<CraftingSession>,
-    roots: Query<Entity, With<CraftingRoot>>,
-) {
-    if !session.rebuild_requested {
-        return;
-    }
-    session.rebuild_requested = false;
-
-    for root in &roots {
-        commands.entity(root).despawn();
-    }
-    spawn_crafting_root(&mut commands, &content, &hotbar, &mut session);
-}
-
-fn spawn_crafting_root(
-    commands: &mut Commands,
-    content: &CraftingContent<'_>,
-    hotbar: &PlayerHotbar,
-    session: &mut CraftingSession,
+    crafting_hosts: Query<
+        Entity,
+        (With<SurvivalCraftingHost>, Without<CraftingWorkspaceMounted>),
+    >,
+    station_hosts: Query<
+        Entity,
+        (With<SurvivalCurrentStationHost>, Without<CurrentStationMounted>),
+    >,
 ) {
     let mut recipes = content
         .recipes
@@ -248,39 +233,49 @@ fn spawn_crafting_root(
             .find(|recipe| recipe.id == selected)
     });
 
-    commands
-        .spawn((
-            CraftingRoot,
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(0),
-                top: px(0),
-                width: percent(100),
-                height: percent(100),
-                padding: UiRect::all(px(CRAFTING_SCREEN_PADDING)),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::FlexStart,
-                justify_content: JustifyContent::Center,
-                column_gap: px(CRAFTING_SCREEN_PADDING),
-                ..default()
-            },
-            GlobalZIndex(100),
-            Pickable::IGNORE,
-            DespawnOnExit(GameplayModalState::Inventory),
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn((
-                Node {
-                    width: px(CHARACTER_INFO_COLUMN_WIDTH),
-                    min_width: px(CHARACTER_INFO_COLUMN_WIDTH),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
-            spawn_crafting_panel(root, &recipes, selected_recipe, session, content, hotbar);
-            spawn_current_station_panel(root, content);
-        });
+    for host in &crafting_hosts {
+        commands
+            .entity(host)
+            .insert(CraftingWorkspaceMounted)
+            .with_children(|root| {
+                spawn_crafting_panel(
+                    root,
+                    &recipes,
+                    selected_recipe,
+                    &session,
+                    &content,
+                    &hotbar,
+                );
+            });
+    }
+
+    for host in &station_hosts {
+        commands
+            .entity(host)
+            .insert(CurrentStationMounted)
+            .with_children(|root| {
+                spawn_current_station_panel(root, &content);
+            });
+    }
+}
+
+fn rebuild_crafting_screen(
+    mut commands: Commands,
+    mut session: ResMut<CraftingSession>,
+    roots: Query<Entity, With<CraftingRoot>>,
+    hosts: Query<Entity, With<SurvivalCraftingHost>>,
+) {
+    if !session.rebuild_requested {
+        return;
+    }
+    session.rebuild_requested = false;
+
+    for root in &roots {
+        commands.entity(root).despawn();
+    }
+    for host in &hosts {
+        commands.entity(host).remove::<CraftingWorkspaceMounted>();
+    }
 }
 
 fn spawn_crafting_panel(
@@ -292,69 +287,53 @@ fn spawn_crafting_panel(
     hotbar: &PlayerHotbar,
 ) {
     root.spawn((
+        CraftingRoot,
         surface::hud_container(Node {
             width: px(CRAFTING_PANEL_WIDTH),
-            height: px(CRAFTING_PANEL_HEIGHT),
             padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
             border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(CRAFTING_PANEL_GAP),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(CRAFTING_PANEL_GAP),
             ..default()
         }),
         Pickable::IGNORE,
     ))
-    .with_children(|crafting| {
-        crafting.spawn((typography::hud_heading("Crafting"), Pickable::IGNORE));
-
-        crafting
+    .with_children(|workspace| {
+        workspace
             .spawn((
                 Node {
-                    width: percent(100),
-                    flex_grow: 1.0,
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::FlexStart,
-                    column_gap: px(CRAFTING_PANEL_GAP),
+                    width: px(CRAFTING_RECIPE_LIST_WIDTH),
+                    min_width: px(CRAFTING_RECIPE_LIST_WIDTH),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(CRAFTING_PANEL_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
-            .with_children(|workspace| {
-                workspace
-                    .spawn((
-                        Node {
-                            width: px(CRAFTING_RECIPE_LIST_WIDTH),
-                            min_width: px(CRAFTING_RECIPE_LIST_WIDTH),
-                            flex_direction: FlexDirection::Column,
-                            align_items: AlignItems::Stretch,
-                            row_gap: px(CRAFTING_PANEL_GAP),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|available| {
-                        available.spawn((
-                            typography::hud_subheading("AVAILABLE RECIPES"),
-                            Pickable::IGNORE,
-                        ));
-                        spawn_recipe_list(available, recipes, session, content);
-                    });
+            .with_children(|available| {
+                available.spawn((
+                    typography::hud_heading("AVAILABLE RECIPES"),
+                    Pickable::IGNORE,
+                ));
+                spawn_recipe_list(available, recipes, session, content);
+            });
 
-                workspace
-                    .spawn((
-                        Node {
-                            min_width: px(0),
-                            flex_grow: 1.0,
-                            flex_direction: FlexDirection::Column,
-                            align_items: AlignItems::Stretch,
-                            row_gap: px(CRAFTING_PANEL_GAP),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|selected| {
-                        spawn_recipe_details(selected, selected_recipe, content, hotbar);
-                    });
+        workspace
+            .spawn((
+                Node {
+                    min_width: px(0),
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(CRAFTING_PANEL_GAP),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|selected| {
+                spawn_recipe_details(selected, selected_recipe, content, hotbar);
             });
     });
 }
@@ -367,7 +346,6 @@ fn spawn_current_station_panel(
         .spawn((
             surface::hud_container(Node {
                 width: px(CURRENT_STATION_PANEL_WIDTH),
-                height: percent(100),
                 padding: UiRect::all(px(CRAFTING_PANEL_PADDING)),
                 border: UiRect::all(px(CRAFTING_PANEL_BORDER)),
                 flex_direction: FlexDirection::Column,
@@ -555,7 +533,7 @@ fn spawn_recipe_details(
     hotbar: &PlayerHotbar,
 ) {
     parent.spawn((
-        typography::hud_subheading("SELECTED RECIPE"),
+        typography::hud_heading("SELECTED RECIPE"),
         Pickable::IGNORE,
     ));
 
