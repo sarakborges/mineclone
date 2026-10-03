@@ -16,6 +16,7 @@ pub(crate) mod day_night;
 mod density_sampling;
 pub(crate) mod deterministic;
 pub(crate) mod dimension;
+pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 pub(crate) mod generation;
@@ -82,6 +83,7 @@ use chunk_visibility::{
 };
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
+use dimension_persistence::InactiveDimensionStates;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
@@ -143,6 +145,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
+            .init_resource::<InactiveDimensionStates>()
             .init_resource::<WorldSession>()
             .init_resource::<NewWorldConfig>()
             .init_resource::<WorldGenerationSettings>()
@@ -168,7 +171,15 @@ impl Plugin for WorldPlugin {
             .init_resource::<MainFrameWorkSamples>()
             .init_resource::<MainWorldWorkSamples>()
             .add_plugins(DayNightPlugin)
-            .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
+            .add_systems(
+                OnEnter(GameState::StartingScreen),
+                (
+                    release_world_session,
+                    reset_resource::<PendingFluidUpdates>,
+                    reset_resource::<InactiveDimensionStates>,
+                )
+                    .chain(),
+            )
             .add_systems(
                 OnEnter(GameState::Loading),
                 (
@@ -179,7 +190,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
-                    reset_resource::<PendingFluidUpdates>,
                     reset_resource::<PendingWarp>,
                     reset_resource::<FrameTimeSamples>,
                     reset_resource::<MainFrameWorkSamples>,
@@ -225,7 +235,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
-                    reset_resource::<PendingFluidUpdates>,
                     reset_resource::<PendingWarp>,
                 ),
             )
@@ -347,9 +356,6 @@ fn prepare_world_session(
     }
 }
 
-/// Called only upon returning to the starting screen, after the Leave World
-/// action has successfully published the snapshot. Never drop this state in
-/// the error path: the player must be able to retry the save.
 fn release_world_session(
     mut commands: Commands,
     terrain_materials: Option<Res<TerrainMaterials>>,
