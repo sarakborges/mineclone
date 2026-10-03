@@ -19,7 +19,7 @@ use crate::{
 
 const MAX_ACTIVE_PARTICLES: usize = 512;
 const MAX_PARTICLE_DISTANCE: f32 = 64.0;
-const FLUID_SURFACE_ATTEMPTS: usize = 6;
+const FLUID_SURFACE_ATTEMPTS: usize = 10;
 const AMBIENT_POSITION_ATTEMPTS: usize = 4;
 
 pub(crate) struct AmbientParticlesPlugin;
@@ -47,6 +47,7 @@ struct AmbientParticle {
     base_scale: f32,
     wander_strength: f32,
     phase: Vec3,
+    pop_at_end: bool,
 }
 
 #[derive(Resource)]
@@ -209,6 +210,7 @@ fn spawn_ambient_particles(
                     base_scale: size,
                     wander_strength: rule.particle.wander_strength,
                     phase,
+                    pop_at_end: rule.particle.pop_at_end,
                 },
                 Mesh3d(mesh.clone()),
                 MeshMaterial3d(material.clone()),
@@ -343,7 +345,7 @@ fn find_fluid_surface_position(
             }
             return Some(Vec3::new(
                 x as f32 + runtime.unit(),
-                y as f32 + fluid.height() + 0.02,
+                y as f32 + (fluid.height() - 0.015).max(0.01),
                 z as f32 + runtime.unit(),
             ));
         }
@@ -387,15 +389,26 @@ fn update_ambient_particles(
         }
 
         let progress = particle.age / particle.lifetime;
-        let fade = if progress < 0.12 {
-            progress / 0.12
-        } else if progress > 0.82 {
-            (1.0 - progress) / 0.18
+        let scale_factor = if particle.pop_at_end && progress > 0.72 {
+            let pop = ((progress - 0.72) / 0.28).clamp(0.0, 1.0);
+            let burst = (pop * std::f32::consts::PI).sin();
+            let collapse = if pop > 0.78 {
+                ((1.0 - pop) / 0.22).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            (1.0 + burst * 1.7) * collapse
         } else {
-            1.0
-        }
-        .clamp(0.0, 1.0);
-        transform.scale = Vec3::splat(particle.base_scale * fade.max(0.05));
+            let fade = if progress < 0.12 {
+                progress / 0.12
+            } else if progress > 0.82 {
+                (1.0 - progress) / 0.18
+            } else {
+                1.0
+            };
+            fade.clamp(0.0, 1.0)
+        };
+        transform.scale = Vec3::splat(particle.base_scale * scale_factor.max(0.03));
     }
 }
 
