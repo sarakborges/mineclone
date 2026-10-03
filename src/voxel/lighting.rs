@@ -48,6 +48,7 @@ pub(crate) struct DirectLightingSeedResult {
 pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
+    initial_relaxation_frontiers: HashMap<IVec3, Vec<IVec3>>,
     context: LightingContext,
     interactive_changed_chunks: HashSet<IVec3>,
     interactive_changed_positions: HashSet<IVec3>,
@@ -133,6 +134,7 @@ impl PendingLightingUpdates {
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
         self.context.forget_chunks(unloaded);
         for coord in unloaded {
+            self.initial_relaxation_frontiers.remove(coord);
             self.queue
                 .enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
         }
@@ -140,7 +142,15 @@ impl PendingLightingUpdates {
 
     pub(crate) fn enqueue_chunk_relaxation(&mut self, coord: IVec3) {
         let origin = chunk_origin(coord);
-        self.queue.enqueue_chunk_voxels(origin);
+        if let Some(frontier) = self.initial_relaxation_frontiers.remove(&coord) {
+            for position in frontier {
+                self.queue.enqueue(position);
+            }
+        } else {
+            // Keep the full scan as a correctness fallback for callers that did
+            // not pass through direct-light seeding first.
+            self.queue.enqueue_chunk_voxels(origin);
+        }
         self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
@@ -157,6 +167,7 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn enqueue_empty_chunk_relaxation(&mut self, coord: IVec3) {
+        self.initial_relaxation_frontiers.remove(&coord);
         let origin = chunk_origin(coord);
         self.queue.enqueue_chunk_boundary_voxels(origin);
         self.queue.enqueue_chunk_boundary_neighbors(origin);
@@ -179,6 +190,14 @@ impl PendingLightingUpdates {
             secondary_properties,
             &mut self.context,
         );
+        if result.requires_relaxation && world.chunk(coord).is_some_and(|chunk| !chunk.is_empty()) {
+            self.initial_relaxation_frontiers.insert(
+                coord,
+                collect_initial_relaxation_frontier(world, coord, blocks, fluids),
+            );
+        } else {
+            self.initial_relaxation_frontiers.remove(&coord);
+        }
         let elapsed = started.elapsed();
         if elapsed >= SLOW_INITIAL_DIRECT_LIGHT_SEED_WARNING {
             warn!(
@@ -248,6 +267,64 @@ impl PendingLightingUpdates {
 
 fn emission_change_requires_full_volume(previous: BlockLight, current: BlockLight) -> bool {
     previous != current && previous.intensity() > 0 && current.intensity() > 0
+}
+
+fn collect_initial_relaxation_frontier(
+    world: &VoxelWorld,
+    coord: IVec3,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> Vec<IVec3> {
+    let Some(chunk) = world.chunk(coord) else {
+        return Vec::new();
+    };
+    let origin = chunk_origin(coord);
+    let mut frontier = Vec::new();
+
+    for y in 0..CHUNK_SIZE as i32 {
+        for z in 0..CHUNK_SIZE as i32 {
+            for x in 0..CHUNK_SIZE as i32 {
+                let local = IVec3::new(x, y, z);
+                let Some((cell, fluid, current)) = chunk.sample_local(x, y, z) else {
+                    continue;
+                };
+                let position = origin + local;
+
+                // Direct seeding writes block emission but fluid emission is
+                // resolved by propagation, so emissive fluid cells must always
+                // enter the initial frontier.
+                if fluid_emission_for_cell(fluid, fluids).intensity() > 0 {
+                    frontier.push(position);
+                    continue;
+                }
+
+                let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
+                if dampening >= VoxelLight::MAX_LEVEL {
+                    continue;
+                }
+                let attenuation = dampening.max(1);
+                let current_block = current.block_hsi();
+
+                let can_change = CARDINAL_NEIGHBORS.iter().copied().any(|offset| {
+                    let neighbor = world.light_at(position + offset);
+                    if neighbor.sky().saturating_sub(attenuation) > current.sky() {
+                        return true;
+                    }
+
+                    let incoming_block = neighbor.block_hsi().attenuated(attenuation);
+                    incoming_block.intensity() > current_block.intensity()
+                        || (incoming_block.intensity() > 0
+                            && incoming_block.intensity() == current_block.intensity()
+                            && incoming_block != current_block)
+                });
+                if can_change {
+                    frontier.push(position);
+                }
+            }
+        }
+    }
+
+    frontier
 }
 
 fn seed_chunk_direct_lighting(
