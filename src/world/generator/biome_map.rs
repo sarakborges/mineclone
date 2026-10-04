@@ -170,6 +170,10 @@ pub(crate) fn render_biome_map(
         "sampleOrigin": [origin_x, origin_z],
         "boundaries": config.show_boundaries,
         "influences": config.show_influences,
+        "layout": {
+            "geometry": "organicFormationField",
+            "seedSpacingBlocks": queries.formation_seed_spacing()
+        },
         "biomes": legend,
         "suppressedBiomes": suppressed,
     }))
@@ -289,6 +293,7 @@ mod tests {
         assert_eq!(first.legend_json(), second.legend_json());
         assert!(first.legend_json().contains("asteria:test/a"));
         assert!(first.legend_json().contains("regionSize"));
+        assert!(first.legend_json().contains("organicFormationField"));
     }
 
     #[test]
