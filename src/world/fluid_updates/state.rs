@@ -13,11 +13,9 @@ use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
         coordinates::chunk_coord_from_world, deduplicated_queue::DeduplicatedQueue,
-        neighbors::HORIZONTAL_NEIGHBORS, update_queue::VoxelUpdateQueue, world::VoxelWorld,
+        neighbors::HORIZONTAL_NEIGHBORS, update_queue::VoxelUpdateQueue,
     },
 };
-
-use super::frontier;
 
 const FLUID_CATCHUP_QUEUE_THRESHOLD: usize = 512;
 
@@ -51,20 +49,6 @@ impl ChunkFairFluidQueue {
         }
 
         self.len += 1;
-        self.active_chunks.enqueue(coord);
-    }
-
-    fn enqueue_front(&mut self, key: FluidTickKey) {
-        let coord = chunk_coord_from_world(key.position);
-        let queue = self.by_chunk.entry(coord).or_default();
-        let already_queued = queue.contains(key);
-        queue.enqueue_front(key);
-        if !already_queued {
-            self.len += 1;
-        }
-
-        // Priority is local to the chunk. Re-promoting an active chunk globally
-        // would let a busy fluid section starve every neighboring section.
         self.active_chunks.enqueue(coord);
     }
 
@@ -179,17 +163,14 @@ pub(crate) struct PendingFluidUpdates {
     // Runtime block edits are topology wake-ups. They are resolved against the
     // current world state and converted into scheduled fluid ticks.
     topology_queue: VoxelUpdateQueue,
-    // Generated/streamed fluid frontiers arrive here without a due time. The
-    // runtime scheduler assigns the authored fluid delay on the next update.
+    // Runtime frontier wakes have no due time until the scheduler assigns the
+    // authored fluid delay on the next update.
     wake_queue: ChunkFairFluidQueue,
     // Minecraft-style scheduled ticks: one due world tick per (fluid, voxel).
-    // Earlier reschedules replace later ones; stale bucket records are ignored.
-    // Equal-due work is round-robin by chunk so frame budgets cannot turn
-    // spatial iteration order into visible chunk-by-chunk propagation.
     scheduled: BTreeMap<u64, ScheduledFluidBucket>,
     scheduled_due: HashMap<FluidTickKey, u64>,
-    // Due work whose chunk is currently not resident. It is reactivated when
-    // streaming brings that chunk back instead of being silently discarded.
+    // Due work whose chunk is currently not resident. New streaming will call
+    // the explicit reactivation hook when residency returns.
     dormant_scheduled: HashMap<IVec3, HashSet<FluidTickKey>>,
 }
 
@@ -290,6 +271,9 @@ impl PendingFluidUpdates {
         Ok(pending)
     }
 
+    /// Preserved runtime scheduler hook. Phase 8 streaming will call this when
+    /// a previously unavailable chunk becomes resident again.
+    #[allow(dead_code)]
     pub(crate) fn reactivate_loaded_chunk(&mut self, coord: IVec3, current_tick: u64) {
         let Some(keys) = self.dormant_scheduled.remove(&coord) else {
             return;
@@ -304,23 +288,11 @@ impl PendingFluidUpdates {
         self.dormant_scheduled.entry(coord).or_default().insert(key);
     }
 
-    pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
-        frontier::enqueue_loaded_fluid_frontier(self, world, coord);
-    }
-
     pub(super) fn enqueue_fluid(&mut self, fluid_id: FluidId, position: IVec3) {
         if position.y < 0 {
             return;
         }
         self.wake_queue.enqueue(FluidTickKey { fluid_id, position });
-    }
-
-    pub(super) fn enqueue_fluid_priority(&mut self, fluid_id: FluidId, position: IVec3) {
-        if position.y < 0 {
-            return;
-        }
-        self.wake_queue
-            .enqueue_front(FluidTickKey { fluid_id, position });
     }
 
     pub(super) fn pop_wake(&mut self) -> Option<FluidTickKey> {
@@ -462,7 +434,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wake_queue_round_robins_chunks_and_keeps_local_priority() {
+    fn wake_queue_round_robins_chunks() {
         let mut queue = ChunkFairFluidQueue::default();
         let a1 = FluidTickKey {
             fluid_id: 0,
@@ -480,11 +452,10 @@ mod tests {
         queue.enqueue(a1);
         queue.enqueue(a2);
         queue.enqueue(b1);
-        queue.enqueue_front(a2);
 
-        assert_eq!(queue.pop(), Some(a2));
-        assert_eq!(queue.pop(), Some(b1));
         assert_eq!(queue.pop(), Some(a1));
+        assert_eq!(queue.pop(), Some(b1));
+        assert_eq!(queue.pop(), Some(a2));
         assert_eq!(queue.pop(), None);
     }
 
@@ -549,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn unloaded_due_tick_is_reactivated_by_chunk_residency() {
+    fn unloaded_due_tick_can_be_reactivated_by_residency() {
         let mut pending = PendingFluidUpdates::default();
         let key = FluidTickKey {
             fluid_id: 0,
