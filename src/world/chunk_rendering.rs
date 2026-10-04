@@ -25,7 +25,7 @@ pub(crate) use pool::{
     clear_chunk_render_pool, retire_chunk_render_allocation,
 };
 pub(crate) use refresh::{apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets};
-pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
+pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes};
 
 const MEBIBYTE: usize = 1024 * 1024;
 

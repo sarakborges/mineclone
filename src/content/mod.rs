@@ -51,7 +51,6 @@ pub(crate) mod world_recipe;
 
 use bevy::prelude::*;
 use loader::load_content;
-pub(crate) use loader::{LoadedContent, read_content};
 
 pub(crate) struct ContentPlugin;
 

@@ -5,6 +5,8 @@ use bevy::{platform::collections::HashMap, prelude::*};
 
 use self::{residency::ChunkResidencyState, selection_state::StreamingSelectionState};
 
+pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
+
 /// Streaming remains the runtime owner of interest/residency while generation
 /// is rebuilt. Phase 2+ will reconnect materialization to this boundary.
 #[derive(Resource, Default)]
@@ -108,4 +110,33 @@ impl ChunkStreamingState {
             StreamingPriorityScanDiagnostic::default(),
         )
     }
+}
+
+pub(super) fn chunk_load_priority(
+    coord: IVec3,
+    center: IVec3,
+    movement_direction: IVec2,
+) -> ChunkLoadPriority {
+    let dx = i64::from(coord.x) - i64::from(center.x);
+    let dy = i64::from(coord.y) - i64::from(center.y);
+    let dz = i64::from(coord.z) - i64::from(center.z);
+    let horizontal_distance = dx * dx + dz * dz;
+    let total_distance = horizontal_distance + dy * dy;
+    let forward = dx * i64::from(movement_direction.x) + dz * i64::from(movement_direction.y);
+    let directional_band = if movement_direction == IVec2::ZERO || forward == 0 {
+        1
+    } else if forward > 0 {
+        0
+    } else {
+        2
+    };
+
+    (
+        horizontal_distance,
+        total_distance,
+        directional_band,
+        coord.y,
+        coord.z,
+        coord.x,
+    )
 }

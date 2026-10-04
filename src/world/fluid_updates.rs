@@ -1,6 +1,5 @@
 mod diagnostics;
 mod frontier;
-mod settling;
 mod solver;
 mod state;
 
@@ -16,9 +15,6 @@ use crate::{
     },
 };
 
-pub(in crate::world) use self::settling::{
-    GeneratedFluidSettling, GeneratedFluidSettlingCompletion,
-};
 pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use self::{
     diagnostics::FluidPerformanceDiagnostics,
@@ -176,9 +172,6 @@ fn process_due_fluid_ticks(
                 .streaming
                 .generated_fluid_settling_owns_mutation(coord)
         {
-            // Generated chunks and any already-published chunks temporarily
-            // owned by the settling closure are worldgen-owned. Reuse dormant
-            // scheduling; publication/final reconciliation reactivates them.
             runtime.pending.defer_unloaded(scheduled);
             continue;
         }
@@ -435,9 +428,6 @@ mod tests {
         assert!(!fluid_tick_target_can_change(&world, source));
         assert!(!fluid_tick_target_can_change(&world, solid));
         assert!(!fluid_tick_target_can_change(&world, IVec3::new(0, -1, 0)));
-
-        // Keep unloaded targets schedulable so existing dormant-tick semantics
-        // still carry edge propagation across streaming boundaries.
         assert!(fluid_tick_target_can_change(&world, IVec3::new(32, 2, 0),));
     }
 }

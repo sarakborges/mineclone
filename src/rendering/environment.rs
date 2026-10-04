@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::color::Hsi,
-    world::{biome::track_current_biome, current_context::DayNightContext},
+    world::current_context::DayNightContext,
 };
 
 use super::biome_visuals::CurrentBiomeVisuals;
@@ -37,9 +37,7 @@ impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EnvironmentVisualState>().add_systems(
             Update,
-            update_environment_visuals
-                .after(track_current_biome)
-                .run_if(in_state(GameState::Gameplay)),
+            update_environment_visuals.run_if(in_state(GameState::Gameplay)),
         );
     }
 }
