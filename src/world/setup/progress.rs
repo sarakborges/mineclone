@@ -170,7 +170,7 @@ fn loading_phase_detail(
 ) -> String {
     match state.phase {
         WorldLoadingPhase::Generating => format!(
-            "generated={}/{} cursor={} generation_passes={generation_diagnostics:?}",
+            "generated={}/{} cursor={} generation_passes={generation_diagnostics}",
             state.generated,
             state.total(),
             state.generation_cursor
