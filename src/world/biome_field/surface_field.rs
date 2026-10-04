@@ -4,7 +4,6 @@ use crate::world::deterministic::hash_signed;
 
 use super::{
     BiomeField, BiomeFieldEntry, SurfaceBoundarySample,
-    constants::BORDER_TRANSITION_WIDTH,
     spatial::{
         cell_hash, hash_unit, lerp, smoothstep, surface_value_noise, warp_surface_position,
     },
@@ -99,7 +98,19 @@ pub(super) struct SurfaceFieldSample {
 
 impl BiomeField {
     pub(super) fn surface_biome_index_at(&self, position: Vec2) -> usize {
-        self.surface_field_sample_at(position).primary_index
+        if let Some(index) = self.single_surface_biome {
+            return index;
+        }
+
+        let warped = warp_surface_position(position, self.seed);
+        if self.spawn_oceans
+            && let Some(ocean_index) = self.ocean_surface_index
+            && self.ocean_domain_value(warped) > 0.0
+        {
+            return ocean_index;
+        }
+
+        self.nearest_land_site(warped).biome_index
     }
 
     pub(super) fn surface_field_sample_at(&self, position: Vec2) -> SurfaceFieldSample {
@@ -123,15 +134,15 @@ impl BiomeField {
         if let Some((ocean_index, ocean_value)) = ocean
             && ocean_value > 0.0
         {
-            return self.resolve_surface_adjacency(
-                ocean_index,
-                1.0,
-                Some(SurfaceBoundarySample {
+            return SurfaceFieldSample {
+                primary_index: ocean_index,
+                primary_terrain_strength: 1.0,
+                boundary: Some(SurfaceBoundarySample {
                     neighbor_surface_index: best_land.biome_index,
                     neighbor_terrain_strength: best_land_strength,
                     distance: self.ocean_boundary_distance(warped, ocean_value),
                 }),
-            );
+            };
         }
 
         let mut boundary = self
@@ -161,62 +172,10 @@ impl BiomeField {
             }
         }
 
-        self.resolve_surface_adjacency(best_land.biome_index, best_land_strength, boundary)
-    }
-
-    fn resolve_surface_adjacency(
-        &self,
-        primary_index: usize,
-        primary_terrain_strength: f32,
-        boundary: Option<SurfaceBoundarySample>,
-    ) -> SurfaceFieldSample {
-        let Some(boundary) = boundary else {
-            return SurfaceFieldSample {
-                primary_index,
-                primary_terrain_strength,
-                boundary: None,
-            };
-        };
-
-        if self.surface_biomes_can_neighbor(primary_index, boundary.neighbor_surface_index) {
-            return SurfaceFieldSample {
-                primary_index,
-                primary_terrain_strength,
-                boundary: Some(boundary),
-            };
-        }
-
-        let separator_index = self
-            .surface_boundary_separator(primary_index, boundary.neighbor_surface_index)
-            .unwrap_or_else(|| {
-                panic!(
-                    "surface biomes {} and {} deny adjacency but no compatible separator biome exists",
-                    self.surface_biomes[primary_index].id,
-                    self.surface_biomes[boundary.neighbor_surface_index].id,
-                )
-            });
-        let separator_width = BORDER_TRANSITION_WIDTH.max(f32::EPSILON);
-
-        if boundary.distance <= separator_width {
-            SurfaceFieldSample {
-                primary_index: separator_index,
-                primary_terrain_strength: 1.0,
-                boundary: Some(SurfaceBoundarySample {
-                    neighbor_surface_index: primary_index,
-                    neighbor_terrain_strength: primary_terrain_strength,
-                    distance: separator_width - boundary.distance,
-                }),
-            }
-        } else {
-            SurfaceFieldSample {
-                primary_index,
-                primary_terrain_strength,
-                boundary: Some(SurfaceBoundarySample {
-                    neighbor_surface_index: separator_index,
-                    neighbor_terrain_strength: 1.0,
-                    distance: boundary.distance - separator_width,
-                }),
-            }
+        SurfaceFieldSample {
+            primary_index: best_land.biome_index,
+            primary_terrain_strength: best_land_strength,
+            boundary,
         }
     }
 
@@ -250,7 +209,7 @@ impl BiomeField {
                 .is_some_and(|selector| selector.matches(&left_biome.id, &left_biome.tags))
     }
 
-    fn surface_boundary_separator(&self, left: usize, right: usize) -> Option<usize> {
+    pub(crate) fn surface_boundary_separator(&self, left: usize, right: usize) -> Option<usize> {
         self.surface_biomes
             .iter()
             .enumerate()
@@ -539,6 +498,24 @@ mod tests {
     }
 
     #[test]
+    fn query_order_does_not_change_results() {
+        let a = field(77);
+        let b = field(77);
+        let points = [
+            Vec2::new(-900.0, 120.0),
+            Vec2::new(3_000.0, 4_000.0),
+            Vec2::new(64.0, -128.0),
+        ];
+        let forward = points.map(|point| a.surface_biome_index_at(point));
+        let mut reverse = points;
+        reverse.reverse();
+        for point in reverse {
+            let _ = b.surface_biome_index_at(point);
+        }
+        assert_eq!(forward, points.map(|point| b.surface_biome_index_at(point)));
+    }
+
+    #[test]
     fn different_seeds_change_the_field() {
         let a = field(1);
         let b = field(2);
@@ -621,47 +598,7 @@ mod tests {
         assert!(!field.surface_biomes_can_neighbor(2, 3));
         assert!(!field.surface_biomes_can_neighbor(3, 2));
         assert!(field.surface_biomes_can_neighbor(0, 4));
-    }
-
-    #[test]
-    fn denied_boundary_uses_compatible_separator_band() {
-        let plains = entry("test:plains", 1.0, size(120.0, 420.0));
-        let mut wasteland = entry("test:wasteland", 1.0, size(120.0, 320.0));
-        wasteland.neighbor_deny = Some(SurfaceBiomeSelector {
-            ids: vec!["test:ocean".to_owned()],
-            tags: Vec::new(),
-        });
-        let ocean = entry("test:ocean", 1.0, size(180.0, 520.0));
-        let surface_biomes = Arc::new(vec![plains, wasteland, ocean]);
-        let config = SurfaceFieldConfig::from_biomes(&surface_biomes, Some(2));
-        let field = BiomeField {
-            surface_biomes,
-            volume_biomes: Arc::new(Vec::new()),
-            surface_field_config: config,
-            volume_site_spacing: None,
-            climate: MacroClimateField::new(404),
-            seed: 404,
-            single_surface_biome: None,
-            ocean_surface_index: Some(2),
-            spawn_oceans: true,
-            spawn_target_surface_biome: None,
-        };
-
-        let resolved = field.resolve_surface_adjacency(
-            1,
-            0.8,
-            Some(SurfaceBoundarySample {
-                neighbor_surface_index: 2,
-                neighbor_terrain_strength: 1.0,
-                distance: 8.0,
-            }),
-        );
-
-        assert_eq!(resolved.primary_index, 0);
-        assert_eq!(resolved.primary_terrain_strength, 1.0);
-        let boundary = resolved.boundary.unwrap();
-        assert_eq!(boundary.neighbor_surface_index, 1);
-        assert_eq!(boundary.distance, BORDER_TRANSITION_WIDTH - 8.0);
+        assert_eq!(field.surface_boundary_separator(1, 4), Some(0));
     }
 
     #[test]
@@ -690,6 +627,12 @@ mod tests {
     }
 
     #[test]
+    fn stabilized_scale_limits_extreme_cell_competition() {
+        assert_eq!(stabilized_axis_scale(0.0, 80.0, 420.0, 250.0), 162.5);
+        assert_eq!(stabilized_axis_scale(1.0, 80.0, 420.0, 250.0), 337.5);
+    }
+
+    #[test]
     fn terrain_strength_falls_from_site_center_to_authored_edge() {
         let centered = LandSiteCandidate {
             score: 0.0,
@@ -711,5 +654,29 @@ mod tests {
         assert!(land_site_terrain_strength(midpoint) > 0.0);
         assert!(land_site_terrain_strength(midpoint) < 1.0);
         assert_eq!(land_site_terrain_strength(edge), 0.0);
+    }
+
+    #[test]
+    fn locate_sites_use_the_same_spacing_as_surface_ownership() {
+        let field = field(42);
+        let spacing = field.surface_field_config.land_spacing;
+        let site = land_site_position(IVec2::new(3, -2), spacing, field.seed);
+        let cell_center = (IVec2::new(3, -2).as_vec2() + Vec2::splat(0.5)) * spacing;
+        assert!((site.x - cell_center.x).abs() <= spacing.x * LAND_SITE_JITTER_FRACTION);
+        assert!((site.y - cell_center.y).abs() <= spacing.y * LAND_SITE_JITTER_FRACTION);
+    }
+
+    #[test]
+    fn boundary_sampling_reuses_the_cell_field() {
+        let field = field(42);
+        let sample = field.surface_field_sample_at(Vec2::new(128.0, -96.0));
+        assert!(sample.primary_index < field.surface_biomes.len());
+        assert!((0.0..=1.0).contains(&sample.primary_terrain_strength));
+        if let Some(boundary) = sample.boundary {
+            assert!(boundary.neighbor_surface_index < field.surface_biomes.len());
+            assert!((0.0..=1.0).contains(&boundary.neighbor_terrain_strength));
+            assert!(boundary.distance.is_finite() || boundary.distance == f32::INFINITY);
+            assert!(boundary.distance >= 0.0);
+        }
     }
 }
