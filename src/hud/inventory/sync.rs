@@ -99,7 +99,7 @@ pub(super) struct InventoryItemContent<'w> {
 impl InventoryItemContent<'_> {
     pub(super) fn view<'a>(
         &'a self,
-        player_position: Vec2,
+        _player_position: Vec2,
         icon_materials: &'a mut Assets<BlockIconMaterial>,
     ) -> InventoryItemView<'a> {
         InventoryItemView {
@@ -111,9 +111,6 @@ impl InventoryItemContent<'_> {
             tools: &self.tools,
             dyes: &self.dyes,
             brush_mode: &self.brush_mode,
-            biomes: &self.visual.biomes,
-            biome_field: &self.visual.biome_field,
-            player_position,
             language: self.language.get(),
             icon_materials,
         }
