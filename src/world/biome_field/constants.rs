@@ -1,5 +1,4 @@
 pub(super) const BORDER_TRANSITION_WIDTH: f32 = 32.0;
-pub(super) const VISUAL_BLEND_WIDTH: f32 = 160.0;
 pub(super) const BORDER_WARP_BROAD_AMPLITUDE: f32 = 17.0;
 pub(super) const BORDER_WARP_BROAD_SCALE: f32 = 0.014;
 pub(super) const BORDER_WARP_DETAIL_AMPLITUDE: f32 = 7.0;
