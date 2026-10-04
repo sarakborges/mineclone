@@ -241,12 +241,16 @@ struct BiomeRule {
 
 impl BiomeRule {
     fn from_definition(definition: &BiomeDefinition) -> Self {
+        let surface = definition
+            .surface_layout
+            .as_ref()
+            .expect("surface biome rule requires authored surfaceLayout");
         Self {
             id: BiomeId::new(Arc::<str>::from(definition.id.as_str())),
-            weight_units: quantize_weight(definition.weight),
-            region_min: definition.region_size.min,
-            region_max: definition.region_size.max,
-            cannot_border: definition
+            weight_units: quantize_weight(surface.weight),
+            region_min: surface.region_size.min,
+            region_max: surface.region_size.max,
+            cannot_border: surface
                 .cannot_border
                 .iter()
                 .map(|id| BiomeId::new(Arc::<str>::from(id.as_str())))
@@ -304,11 +308,13 @@ struct FormationSeed {
 impl BiomeLayout {
     pub(super) fn new(snapshot: &GenerationSnapshot, registry: &BiomeRegistry) -> Self {
         let dimension_id = snapshot.dimension().id();
-        let mut definitions = registry.for_dimension(dimension_id).collect::<Vec<_>>();
+        let mut definitions = registry
+            .surface_for_dimension(dimension_id)
+            .collect::<Vec<_>>();
         definitions.sort_by(|left, right| left.id.cmp(&right.id));
         assert!(
             !definitions.is_empty(),
-            "dimension {dimension_id} has no authored biomes"
+            "dimension {dimension_id} has no authored surface biomes"
         );
         for definition in &definitions {
             definition.validate_references(registry);
@@ -923,9 +929,11 @@ mod tests {
                 "portuguese_brazil": id,
                 "spanish": id
             },
-            "weight": weight,
-            "regionSize": { "min": min, "max": max },
-            "cannotBorder": cannot_border
+            "surfaceLayout": {
+                "weight": weight,
+                "regionSize": { "min": min, "max": max },
+                "cannotBorder": cannot_border
+            }
         }))
         .expect("test biome definition must deserialize")
     }
