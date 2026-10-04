@@ -24,7 +24,6 @@ impl Default for SettingsSectionSelection {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SettingsSection {
     WorldSettings,
-    WorldGeneration,
     GameRules,
     Graphics,
     Keybinds,
@@ -36,7 +35,6 @@ impl SettingsSection {
     pub(super) const fn localization_key(self) -> &'static str {
         match self {
             Self::WorldSettings => "settings.section.worldSettings",
-            Self::WorldGeneration => "newWorld.section.worldGeneration",
             Self::GameRules => "settings.section.gameRules",
             Self::Graphics => "settings.section.graphics",
             Self::Keybinds => "settings.section.keybinds",
@@ -89,9 +87,7 @@ pub(super) fn apply_pending_section_scroll(
         return;
     };
     if scroll_to_section(pending.0, &mut scroll, computed, transform, &panels) {
-        commands
-            .entity(entity)
-            .remove::<SettingsPendingSectionScroll>();
+        commands.entity(entity).remove::<SettingsPendingSectionScroll>();
     }
 }
 
@@ -163,8 +159,7 @@ pub(super) fn sync_section_ui(
             if panel_computed.size().y <= 0.5 {
                 continue;
             }
-            let offset =
-                section_scroll_offset(computed, transform, panel_computed, panel_transform);
+            let offset = section_scroll_offset(computed, transform, panel_computed, panel_transform);
 
             if first.is_none_or(|(_, first_offset)| offset < first_offset) {
                 first = Some((panel.0, offset));
