@@ -3,7 +3,6 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        biome::BiomeRegistry,
         block::BlockRegistry,
         builtin_ids::BUCKET_FLUID_METADATA_KEY,
         item::{ItemRegistry, display_name},
@@ -19,7 +18,6 @@ use crate::{
     },
     localization::ActiveLanguage,
     player::{
-        camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
         item_stack::ItemStack,
     },
@@ -27,7 +25,6 @@ use crate::{
     targeting::{PlacementOrientation, block::BlockTargetingSet},
     tools::BrushMode,
     ui::{selectable, typography},
-    world::biome_field::BiomeField,
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -47,10 +44,6 @@ fn stack_display_name(stack: &ItemStack, base_name: &str) -> String {
     format!("{base_name} ({variant})")
 }
 
-fn player_position(player: &Transform) -> Vec2 {
-    Vec2::new(player.translation.x, player.translation.z)
-}
-
 #[derive(Component)]
 struct HotbarHudRoot;
 
@@ -65,11 +58,6 @@ struct HotbarSlot {
     image_override: Option<String>,
 }
 
-#[derive(Default)]
-struct HotbarVisualCache {
-    tint_cell: Option<IVec2>,
-}
-
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -80,15 +68,12 @@ struct HotbarHudContent<'w> {
     tools: Res<'w, ToolRegistry>,
     dyes: Res<'w, SecondaryPropertyRegistry>,
     brush_mode: Res<'w, BrushMode>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
     hotbar: Res<'w, PlayerHotbar>,
     language: Res<'w, ActiveLanguage>,
 }
 
 #[derive(SystemParam)]
-struct HotbarVisualState<'w, 's> {
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+struct HotbarVisualState<'w> {
     placement_orientation: Res<'w, PlacementOrientation>,
     hotbar: Res<'w, PlayerHotbar>,
 }
@@ -128,7 +113,6 @@ impl Plugin for HotbarHudPlugin {
 fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
-    player: Single<&Transform, With<GameplayCamera>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
@@ -160,9 +144,6 @@ fn spawn_hotbar(
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
-        biomes: &content.biomes,
-        biome_field: &content.biome_field,
-        player_position: player_position(&player),
         language,
         icon_materials: &mut icon_materials,
     };
@@ -276,7 +257,6 @@ fn sync_hotbar_visibility(
 fn sync_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
-    player: Single<&Transform, With<GameplayCamera>>,
     mut selected_name: Single<&mut Text, With<HotbarSelectedName>>,
     mut slots: Query<(
         Entity,
@@ -322,9 +302,6 @@ fn sync_hotbar(
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
-        biomes: &content.biomes,
-        biome_field: &content.biome_field,
-        player_position: player_position(&player),
         language,
         icon_materials: &mut icon_materials,
     };
@@ -375,24 +352,16 @@ fn sync_hotbar(
 fn update_hotbar_item_visuals(
     state: HotbarVisualState,
     content: BlockVisualContent,
-    mut cache: Local<HotbarVisualCache>,
     view: HotbarVisualView,
 ) {
     let HotbarVisualView {
         mut icons,
         mut materials,
     } = view;
-    let tint_cell = IVec2::new(
-        state.player.translation.x.floor() as i32,
-        state.player.translation.z.floor() as i32,
-    );
     let block_definitions_changed = content.block_definitions_changed();
-    let global_refresh = cache.tint_cell != Some(tint_cell)
-        || state.hotbar.is_changed()
+    let global_refresh = state.hotbar.is_changed()
         || state.placement_orientation.is_changed()
         || content.inputs_changed();
-    cache.tint_cell = Some(tint_cell);
-    let position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
     for (model, mut icon, material_handle) in &mut icons {
         if !global_refresh && !icon.is_added() {
@@ -410,7 +379,7 @@ fn update_hotbar_item_visuals(
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
         let orientation = state.placement_orientation.for_block(index, block);
-        let tint = content.tint_at(block_id, position).unwrap_or(Color::WHITE);
+        let tint = content.tint_at(block_id, Vec2::ZERO).unwrap_or(Color::WHITE);
         let orientation_changed = icon.orientation != orientation;
         let textures_changed = orientation_changed || block_definitions_changed;
         let tint_changed = materials
