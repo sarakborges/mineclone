@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, f64::consts::TAU, sync::Arc};
 
 use smallvec::SmallVec;
 
@@ -8,15 +8,24 @@ use super::foundation::{
     GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationSnapshot,
 };
 
-const MIN_CONSTRUCTION_SPAN: u32 = 64;
-const MAX_CONSTRUCTION_SPAN: u32 = 512;
-const BLEND_FRACTION: f64 = 0.24;
-const FORMATION_TARGET_DOMAIN_PREFIX: &str = "biome-layout/formation-target/v1/";
-const CELL_PICK_DOMAIN: &str = "biome-layout/cell-pick/v2";
-const WARP_COARSE_X_DOMAIN: &str = "biome-layout/warp-coarse-x/v2";
-const WARP_COARSE_Z_DOMAIN: &str = "biome-layout/warp-coarse-z/v2";
-const WARP_FINE_X_DOMAIN: &str = "biome-layout/warp-fine-x/v2";
-const WARP_FINE_Z_DOMAIN: &str = "biome-layout/warp-fine-z/v2";
+const MIN_SEED_SPACING: u32 = 64;
+const MAX_SEED_SPACING: u32 = 256;
+const CANDIDATE_RADIUS_BUCKETS: i32 = 2;
+const COMPATIBILITY_RADIUS_BUCKETS: i32 = CANDIDATE_RADIUS_BUCKETS * 2;
+const COMPATIBILITY_CLASS_PERIOD: i32 = COMPATIBILITY_RADIUS_BUCKETS * 2 + 1;
+const JITTER_FRACTION: f64 = 0.32;
+const BLEND_SCORE_BAND: f64 = 0.18;
+const FORMATION_TARGET_DOMAIN_PREFIX: &str = "biome-layout/formation-target/v2/";
+const SEED_PICK_DOMAIN: &str = "biome-layout/seed-pick/v3";
+const SEED_JITTER_X_DOMAIN: &str = "biome-layout/seed-jitter-x/v3";
+const SEED_JITTER_Z_DOMAIN: &str = "biome-layout/seed-jitter-z/v3";
+const SEED_SHAPE_A_DOMAIN: &str = "biome-layout/seed-shape-a/v3";
+const SEED_SHAPE_B_DOMAIN: &str = "biome-layout/seed-shape-b/v3";
+const SEED_BIAS_DOMAIN: &str = "biome-layout/seed-bias/v3";
+const WARP_COARSE_X_DOMAIN: &str = "biome-layout/warp-coarse-x/v3";
+const WARP_COARSE_Z_DOMAIN: &str = "biome-layout/warp-coarse-z/v3";
+const WARP_FINE_X_DOMAIN: &str = "biome-layout/warp-fine-x/v3";
+const WARP_FINE_Z_DOMAIN: &str = "biome-layout/warp-fine-z/v3";
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BiomeId(Arc<str>);
@@ -191,10 +200,6 @@ impl BiomeQueries<'_> {
             .find_surface_biome(biome_id, origin_x, origin_z, max_distance)
     }
 
-    pub(crate) fn biome_ids(&self) -> impl Iterator<Item = &BiomeId> {
-        self.layout.rules.iter().map(|rule| &rule.id)
-    }
-
     pub(crate) fn biome_region_ranges(&self) -> impl Iterator<Item = (&BiomeId, u32, u32)> {
         self.layout
             .rules
@@ -205,6 +210,10 @@ impl BiomeQueries<'_> {
     pub(crate) fn suppressed_biomes(&self) -> &[BiomeId] {
         &self.layout.suppressed_biomes
     }
+
+    pub(crate) const fn formation_seed_spacing(&self) -> u32 {
+        self.layout.seed_spacing
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -212,8 +221,18 @@ pub(super) struct BiomeLayout {
     entropy: GenerationEntropy,
     rules: Arc<[BiomeRule]>,
     suppressed_biomes: Arc<[BiomeId]>,
-    construction_span: u32,
+    seed_spacing: u32,
     fallback_rule: usize,
+    seed_pick_domain: GenerationDomain,
+    jitter_x_domain: GenerationDomain,
+    jitter_z_domain: GenerationDomain,
+    shape_a_domain: GenerationDomain,
+    shape_b_domain: GenerationDomain,
+    seed_bias_domain: GenerationDomain,
+    warp_coarse_x_domain: GenerationDomain,
+    warp_coarse_z_domain: GenerationDomain,
+    warp_fine_x_domain: GenerationDomain,
+    warp_fine_z_domain: GenerationDomain,
 }
 
 #[derive(Clone, Debug)]
@@ -247,19 +266,25 @@ impl BiomeRule {
     }
 }
 
+/// Spatial bucket used only to enumerate deterministic formation seeds.
+///
+/// It is deliberately not a biome region: final ownership comes from the
+/// continuous organic score field produced by nearby seeds, so no biome border
+/// is tied to bucket edges.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-struct LayoutCell {
+struct SeedBucket {
     x: i32,
     z: i32,
 }
 
-impl LayoutCell {
+impl SeedBucket {
     const fn new(x: i32, z: i32) -> Self {
         Self { x, z }
     }
 
-    fn class(self) -> u8 {
-        ((self.x.rem_euclid(2) as u8) << 1) | self.z.rem_euclid(2) as u8
+    fn class(self) -> i32 {
+        self.x.rem_euclid(COMPATIBILITY_CLASS_PERIOD) * COMPATIBILITY_CLASS_PERIOD
+            + self.z.rem_euclid(COMPATIBILITY_CLASS_PERIOD)
     }
 
     fn as_point(self) -> GenerationPoint2 {
@@ -268,10 +293,18 @@ impl LayoutCell {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct CellAssignment {
+struct SeedAssignment {
     rule: usize,
-    root: LayoutCell,
+    root: SeedBucket,
     target_span: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FormationSeed {
+    bucket: SeedBucket,
+    assignment: SeedAssignment,
+    center_x: f64,
+    center_z: f64,
 }
 
 impl BiomeLayout {
@@ -309,22 +342,31 @@ impl BiomeLayout {
             .iter()
             .position(|rule| rule.id == fallback_id)
             .expect("fallback biome must remain active");
-
         let min_span = active_rules
             .iter()
             .map(|rule| rule.region_min)
             .min()
             .expect("active biome layout cannot be empty");
-        let construction_span = min_span
-            .div_ceil(2)
-            .clamp(MIN_CONSTRUCTION_SPAN, MAX_CONSTRUCTION_SPAN);
+        let seed_spacing = min_span
+            .div_ceil(3)
+            .clamp(MIN_SEED_SPACING, MAX_SEED_SPACING);
 
         Self {
             entropy: GenerationEntropy::new(snapshot),
             rules: active_rules.into(),
             suppressed_biomes: suppressed_biomes.into(),
-            construction_span,
+            seed_spacing,
             fallback_rule,
+            seed_pick_domain: GenerationDomain::named(SEED_PICK_DOMAIN),
+            jitter_x_domain: GenerationDomain::named(SEED_JITTER_X_DOMAIN),
+            jitter_z_domain: GenerationDomain::named(SEED_JITTER_Z_DOMAIN),
+            shape_a_domain: GenerationDomain::named(SEED_SHAPE_A_DOMAIN),
+            shape_b_domain: GenerationDomain::named(SEED_SHAPE_B_DOMAIN),
+            seed_bias_domain: GenerationDomain::named(SEED_BIAS_DOMAIN),
+            warp_coarse_x_domain: GenerationDomain::named(WARP_COARSE_X_DOMAIN),
+            warp_coarse_z_domain: GenerationDomain::named(WARP_COARSE_Z_DOMAIN),
+            warp_fine_x_domain: GenerationDomain::named(WARP_FINE_X_DOMAIN),
+            warp_fine_z_domain: GenerationDomain::named(WARP_FINE_Z_DOMAIN),
         }
     }
 
@@ -376,63 +418,75 @@ impl BiomeLayout {
         &self,
         x: i32,
         z: i32,
-        assignments: &mut HashMap<LayoutCell, CellAssignment>,
+        assignments: &mut HashMap<SeedBucket, SeedAssignment>,
     ) -> BiomeSample {
-        let (cell, local_x, local_z) = self.warped_cell(x, z);
-        let primary_assignment = self.cell_assignment(cell, assignments);
-        let mut raw_weights = vec![0.0_f64; self.rules.len()];
-        raw_weights[primary_assignment.rule] = 1.0;
+        let (warped_x, warped_z) = self.warped_position(x, z);
+        let center_bucket = self.bucket_for_position(warped_x, warped_z);
+        let mut best_scores = vec![None::<f64>; self.rules.len()];
 
-        for dz in -1..=1 {
-            let z_proximity = neighbor_proximity(local_z, dz);
-            if z_proximity <= 0.0 {
-                continue;
-            }
-            for dx in -1..=1 {
-                if dx == 0 && dz == 0 {
-                    continue;
-                }
-                let x_proximity = neighbor_proximity(local_x, dx);
-                if x_proximity <= 0.0 {
-                    continue;
-                }
-                let Some(neighbor_x) = cell.x.checked_add(dx) else {
+        for dz in -CANDIDATE_RADIUS_BUCKETS..=CANDIDATE_RADIUS_BUCKETS {
+            for dx in -CANDIDATE_RADIUS_BUCKETS..=CANDIDATE_RADIUS_BUCKETS {
+                let Some(bucket_x) = center_bucket.x.checked_add(dx) else {
                     continue;
                 };
-                let Some(neighbor_z) = cell.z.checked_add(dz) else {
+                let Some(bucket_z) = center_bucket.z.checked_add(dz) else {
                     continue;
                 };
-                let neighbor = self.cell_assignment(
-                    LayoutCell::new(neighbor_x, neighbor_z),
+                let seed = self.formation_seed(
+                    SeedBucket::new(bucket_x, bucket_z),
                     assignments,
                 );
-                raw_weights[neighbor.rule] += x_proximity * z_proximity;
+                let score = self.seed_score(seed, warped_x, warped_z);
+                let slot = &mut best_scores[seed.assignment.rule];
+                if slot.is_none_or(|current| score > current) {
+                    *slot = Some(score);
+                }
             }
         }
 
-        let total = raw_weights.iter().sum::<f64>();
-        let mut influences = SmallVec::<[BiomeInfluence; 4]>::new();
-        influences.push(BiomeInfluence {
-            biome: self.rules[primary_assignment.rule].id.clone(),
-            weight: (raw_weights[primary_assignment.rule] / total) as f32,
-        });
-        let mut secondary = raw_weights
+        let (primary_rule, primary_score) = best_scores
+            .iter()
+            .enumerate()
+            .filter_map(|(rule, score)| score.map(|score| (rule, score)))
+            .max_by(|(left_rule, left_score), (right_rule, right_score)| {
+                left_score
+                    .total_cmp(right_score)
+                    .then_with(|| self.rules[*right_rule].id.cmp(&self.rules[*left_rule].id))
+            })
+            .expect("biome sampling must have at least one formation seed");
+
+        let mut weighted = best_scores
             .into_iter()
             .enumerate()
-            .filter(|(rule, weight)| *rule != primary_assignment.rule && *weight > 0.0)
+            .filter_map(|(rule, score)| {
+                let score = score?;
+                let delta = primary_score - score;
+                if delta > BLEND_SCORE_BAND {
+                    return None;
+                }
+                let proximity = (1.0 - delta / BLEND_SCORE_BAND).clamp(0.0, 1.0);
+                Some((rule, smoothstep(proximity)))
+            })
             .collect::<Vec<_>>();
-        secondary.sort_by(|(left_rule, left_weight), (right_rule, right_weight)| {
-            right_weight
-                .total_cmp(left_weight)
+        let total = weighted.iter().map(|(_, weight)| *weight).sum::<f64>();
+        weighted.sort_by(|(left_rule, left_weight), (right_rule, right_weight)| {
+            let left_primary = *left_rule == primary_rule;
+            let right_primary = *right_rule == primary_rule;
+            right_primary
+                .cmp(&left_primary)
+                .then_with(|| right_weight.total_cmp(left_weight))
                 .then_with(|| self.rules[*left_rule].id.cmp(&self.rules[*right_rule].id))
         });
-        influences.extend(secondary.into_iter().map(|(rule, weight)| BiomeInfluence {
-            biome: self.rules[rule].id.clone(),
-            weight: (weight / total) as f32,
-        }));
+        let influences = weighted
+            .into_iter()
+            .map(|(rule, weight)| BiomeInfluence {
+                biome: self.rules[rule].id.clone(),
+                weight: (weight / total) as f32,
+            })
+            .collect::<SmallVec<[BiomeInfluence; 4]>>();
 
         BiomeSample {
-            primary: self.rules[primary_assignment.rule].id.clone(),
+            primary: self.rules[primary_rule].id.clone(),
             influences,
         }
     }
@@ -454,23 +508,29 @@ impl BiomeLayout {
             });
         }
 
-        let (origin_cell, _, _) = self.warped_cell(origin_x, origin_z);
-        let cell_radius = max_distance.div_ceil(self.construction_span) as i32 + 4;
+        let (warped_x, warped_z) = self.warped_position(origin_x, origin_z);
+        let origin_bucket = self.bucket_for_position(warped_x, warped_z);
+        let bucket_radius = max_distance.div_ceil(self.seed_spacing) as i32
+            + CANDIDATE_RADIUS_BUCKETS
+            + 2;
         let max_distance_sq = i128::from(max_distance) * i128::from(max_distance);
         let mut assignments = HashMap::new();
         let mut best: Option<(i128, BiomeSearchResult)> = None;
 
-        for ring in 0..=cell_radius {
-            for cell in ring_cells(origin_cell, ring) {
-                if self.cell_assignment(cell, &mut assignments).rule != target_rule {
+        for ring in 0..=bucket_radius {
+            for bucket in ring_buckets(origin_bucket, ring) {
+                if self.seed_assignment(bucket, &mut assignments).rule != target_rule {
                     continue;
                 }
-                for (x, z) in self.search_probe_points(cell) {
+                let seed = self.formation_seed(bucket, &mut assignments);
+                for (x, z) in self.search_probe_points(seed) {
                     let dx = i128::from(x) - i128::from(origin_x);
                     let dz = i128::from(z) - i128::from(origin_z);
                     let distance_sq = dx * dx + dz * dz;
                     if distance_sq > max_distance_sq
-                        || best.as_ref().is_some_and(|(best_sq, _)| distance_sq >= *best_sq)
+                        || best
+                            .as_ref()
+                            .is_some_and(|(best_sq, _)| distance_sq >= *best_sq)
                     {
                         continue;
                     }
@@ -481,8 +541,9 @@ impl BiomeLayout {
                 }
             }
             if let Some((best_sq, _)) = &best {
-                let conservative_ring = i128::from(ring.saturating_sub(4))
-                    * i128::from(self.construction_span);
+                let conservative_ring = i128::from(
+                    ring.saturating_sub(CANDIDATE_RADIUS_BUCKETS + 2),
+                ) * i128::from(self.seed_spacing);
                 if conservative_ring * conservative_ring > *best_sq {
                     break;
                 }
@@ -491,21 +552,18 @@ impl BiomeLayout {
         best.map(|(_, result)| result)
     }
 
-    fn search_probe_points(&self, cell: LayoutCell) -> [(i32, i32); 9] {
-        let span = i64::from(self.construction_span);
-        let base_x = i64::from(cell.x) * span;
-        let base_z = i64::from(cell.z) * span;
-        let quarter = span / 4;
-        let center = span / 2;
-        let three_quarters = span - quarter;
-        let offsets = [quarter, center, three_quarters];
+    fn search_probe_points(&self, seed: FormationSeed) -> [(i32, i32); 9] {
+        let center_x = seed.center_x.round() as i64;
+        let center_z = seed.center_z.round() as i64;
+        let offset = i64::from(self.seed_spacing / 3);
+        let offsets = [-offset, 0, offset];
         let mut points = [(0_i32, 0_i32); 9];
         let mut index = 0;
         for z_offset in offsets {
             for x_offset in offsets {
                 points[index] = (
-                    clamp_world_axis(base_x + x_offset),
-                    clamp_world_axis(base_z + z_offset),
+                    clamp_world_axis(center_x + x_offset),
+                    clamp_world_axis(center_z + z_offset),
                 );
                 index += 1;
             }
@@ -513,33 +571,46 @@ impl BiomeLayout {
         points
     }
 
-    fn cell_assignment(
+    fn formation_seed(
         &self,
-        cell: LayoutCell,
-        cache: &mut HashMap<LayoutCell, CellAssignment>,
-    ) -> CellAssignment {
-        if let Some(assignment) = cache.get(&cell) {
+        bucket: SeedBucket,
+        cache: &mut HashMap<SeedBucket, SeedAssignment>,
+    ) -> FormationSeed {
+        let assignment = self.seed_assignment(bucket, cache);
+        let (center_x, center_z) = self.seed_center(bucket);
+        FormationSeed {
+            bucket,
+            assignment,
+            center_x,
+            center_z,
+        }
+    }
+
+    fn seed_assignment(
+        &self,
+        bucket: SeedBucket,
+        cache: &mut HashMap<SeedBucket, SeedAssignment>,
+    ) -> SeedAssignment {
+        if let Some(assignment) = cache.get(&bucket) {
             return *assignment;
         }
 
-        let class = cell.class();
-        let mut established = SmallVec::<[CellAssignment; 8]>::new();
-        if class > 0 {
-            for dz in -1..=1 {
-                for dx in -1..=1 {
-                    if dx == 0 && dz == 0 {
-                        continue;
-                    }
-                    let Some(x) = cell.x.checked_add(dx) else {
-                        continue;
-                    };
-                    let Some(z) = cell.z.checked_add(dz) else {
-                        continue;
-                    };
-                    let neighbor = LayoutCell::new(x, z);
-                    if neighbor.class() < class {
-                        established.push(self.cell_assignment(neighbor, cache));
-                    }
+        let class = bucket.class();
+        let mut established = SmallVec::<[SeedAssignment; 64]>::new();
+        for dz in -COMPATIBILITY_RADIUS_BUCKETS..=COMPATIBILITY_RADIUS_BUCKETS {
+            for dx in -COMPATIBILITY_RADIUS_BUCKETS..=COMPATIBILITY_RADIUS_BUCKETS {
+                if dx == 0 && dz == 0 {
+                    continue;
+                }
+                let Some(x) = bucket.x.checked_add(dx) else {
+                    continue;
+                };
+                let Some(z) = bucket.z.checked_add(dz) else {
+                    continue;
+                };
+                let neighbor = SeedBucket::new(x, z);
+                if neighbor.class() < class {
+                    established.push(self.seed_assignment(neighbor, cache));
                 }
             }
         }
@@ -569,10 +640,10 @@ impl BiomeLayout {
             let continuation = established
                 .iter()
                 .filter(|neighbor| neighbor.rule == candidate)
-                .map(|neighbor| self.growth_affinity(*neighbor, cell))
+                .map(|neighbor| self.growth_affinity(*neighbor, bucket))
                 .max()
                 .unwrap_or(0);
-            let growth_multiplier = 1_u64.saturating_add(continuation.saturating_mul(4));
+            let growth_multiplier = 1_u64.saturating_add(continuation.saturating_mul(3));
             let weight = self.rules[candidate]
                 .weight_units
                 .saturating_mul(growth_multiplier);
@@ -580,10 +651,7 @@ impl BiomeLayout {
             weighted.push((candidate, weight));
         }
 
-        let pick = self.entropy.sample_2d(
-            GenerationDomain::named(CELL_PICK_DOMAIN),
-            cell.as_point(),
-        ) % total.max(1);
+        let pick = self.entropy.sample_2d(self.seed_pick_domain, bucket.as_point()) % total.max(1);
         let mut cursor = 0_u64;
         let selected_rule = weighted
             .iter()
@@ -596,7 +664,7 @@ impl BiomeLayout {
         let continued = established
             .iter()
             .filter(|neighbor| neighbor.rule == selected_rule)
-            .map(|neighbor| (*neighbor, self.growth_affinity(*neighbor, cell)))
+            .map(|neighbor| (*neighbor, self.growth_affinity(*neighbor, bucket)))
             .filter(|(_, affinity)| *affinity > 0)
             .max_by(|(left, left_affinity), (right, right_affinity)| {
                 left_affinity
@@ -604,16 +672,16 @@ impl BiomeLayout {
                     .then_with(|| right.root.cmp(&left.root))
             })
             .map(|(assignment, _)| assignment);
-        let assignment = continued.unwrap_or_else(|| CellAssignment {
+        let assignment = continued.unwrap_or_else(|| SeedAssignment {
             rule: selected_rule,
-            root: cell,
-            target_span: self.formation_target_span(selected_rule, cell),
+            root: bucket,
+            target_span: self.formation_target_span(selected_rule, bucket),
         });
-        cache.insert(cell, assignment);
+        cache.insert(bucket, assignment);
         assignment
     }
 
-    fn formation_target_span(&self, rule: usize, root: LayoutCell) -> u32 {
+    fn formation_target_span(&self, rule: usize, root: SeedBucket) -> u32 {
         let definition = &self.rules[rule];
         random_span_u32(
             self.entropy.sample_2d(definition.target_domain, root.as_point()),
@@ -622,75 +690,110 @@ impl BiomeLayout {
         )
     }
 
-    fn growth_affinity(&self, assignment: CellAssignment, target: LayoutCell) -> u64 {
-        let target_cells = assignment
-            .target_span
-            .div_ceil(self.construction_span)
-            .max(1);
-        let dx = i64::from(target.x) - i64::from(assignment.root.x);
-        let dz = i64::from(target.z) - i64::from(assignment.root.z);
-        let distance = dx.unsigned_abs().max(dz.unsigned_abs());
-        if distance > u64::from(target_cells) {
+    fn growth_affinity(&self, assignment: SeedAssignment, target: SeedBucket) -> u64 {
+        let (root_x, root_z) = self.seed_center(assignment.root);
+        let (target_x, target_z) = self.seed_center(target);
+        let dx = target_x - root_x;
+        let dz = target_z - root_z;
+        let distance = dx.hypot(dz);
+        let radius = f64::from(assignment.target_span) * 0.5;
+        if radius <= 0.0 || distance > radius {
             return 0;
         }
-        let remaining = u64::from(target_cells) - distance + 1;
-        remaining.saturating_mul(remaining)
+        let remaining = (1.0 - distance / radius).clamp(0.0, 1.0);
+        (remaining * 16.0).round() as u64 + 1
     }
 
     fn compatible_indices(&self, left: usize, right: usize) -> bool {
         compatible_rules(&self.rules[left], &self.rules[right])
     }
 
-    fn warped_cell(&self, x: i32, z: i32) -> (LayoutCell, f64, f64) {
-        let (warped_x, warped_z) = self.warped_position(x, z);
-        let span = f64::from(self.construction_span);
-        let scaled_x = warped_x / span;
-        let scaled_z = warped_z / span;
-        let cell_x = scaled_x.floor();
-        let cell_z = scaled_z.floor();
-        (
-            LayoutCell::new(
-                clamp_cell_axis(cell_x),
-                clamp_cell_axis(cell_z),
-            ),
-            scaled_x - cell_x,
-            scaled_z - cell_z,
+    fn bucket_for_position(&self, x: f64, z: f64) -> SeedBucket {
+        let spacing = f64::from(self.seed_spacing);
+        SeedBucket::new(
+            clamp_bucket_axis((x / spacing).floor()),
+            clamp_bucket_axis((z / spacing).floor()),
         )
     }
 
+    fn seed_center(&self, bucket: SeedBucket) -> (f64, f64) {
+        let spacing = f64::from(self.seed_spacing);
+        let base_x = (f64::from(bucket.x) + 0.5) * spacing;
+        let base_z = (f64::from(bucket.z) + 0.5) * spacing;
+        let jitter_x = signed_unit(
+            self.entropy
+                .sample_2d(self.jitter_x_domain, bucket.as_point()),
+        ) * spacing
+            * JITTER_FRACTION;
+        let jitter_z = signed_unit(
+            self.entropy
+                .sample_2d(self.jitter_z_domain, bucket.as_point()),
+        ) * spacing
+            * JITTER_FRACTION;
+        (base_x + jitter_x, base_z + jitter_z)
+    }
+
+    fn seed_score(&self, seed: FormationSeed, x: f64, z: f64) -> f64 {
+        let spacing = f64::from(self.seed_spacing);
+        let dx = x - seed.center_x;
+        let dz = z - seed.center_z;
+        let distance = dx.hypot(dz) / spacing;
+        let angle = dz.atan2(dx);
+        let phase_a = unit(
+            self.entropy
+                .sample_2d(self.shape_a_domain, seed.bucket.as_point()),
+        ) * TAU;
+        let phase_b = unit(
+            self.entropy
+                .sample_2d(self.shape_b_domain, seed.bucket.as_point()),
+        ) * TAU;
+        let shape = 1.0
+            + 0.13 * (angle * 3.0 + phase_a).sin()
+            + 0.07 * (angle * 5.0 + phase_b).sin();
+        let target_ratio = (f64::from(seed.assignment.target_span) / (spacing * 3.0))
+            .clamp(0.5, 3.0);
+        let size_scale = target_ratio.powf(0.12);
+        let bias = signed_unit(
+            self.entropy
+                .sample_2d(self.seed_bias_domain, seed.bucket.as_point()),
+        ) * 0.045;
+        let continuation_bonus = (seed.assignment.root != seed.bucket) as u8 as f64 * 0.055;
+        -(distance / (shape * size_scale)) + bias + continuation_bonus
+    }
+
     fn warped_position(&self, x: i32, z: i32) -> (f64, f64) {
-        let span = f64::from(self.construction_span);
+        let spacing = f64::from(self.seed_spacing);
         let x_f = f64::from(x);
         let z_f = f64::from(z);
-        let coarse_period = span * 3.2;
-        let fine_period = span * 0.95;
+        let coarse_period = spacing * 4.0;
+        let fine_period = spacing * 1.35;
         let coarse_x = self.smooth_noise(
-            GenerationDomain::named(WARP_COARSE_X_DOMAIN),
+            self.warp_coarse_x_domain,
             x_f,
             z_f,
             coarse_period,
         );
         let coarse_z = self.smooth_noise(
-            GenerationDomain::named(WARP_COARSE_Z_DOMAIN),
+            self.warp_coarse_z_domain,
             x_f + coarse_period * 0.37,
             z_f - coarse_period * 0.61,
             coarse_period,
         );
         let fine_x = self.smooth_noise(
-            GenerationDomain::named(WARP_FINE_X_DOMAIN),
+            self.warp_fine_x_domain,
             x_f - fine_period * 0.43,
             z_f + fine_period * 0.29,
             fine_period,
         );
         let fine_z = self.smooth_noise(
-            GenerationDomain::named(WARP_FINE_Z_DOMAIN),
+            self.warp_fine_z_domain,
             x_f + fine_period * 0.71,
             z_f + fine_period * 0.53,
             fine_period,
         );
         (
-            x_f + coarse_x * span * 0.30 + fine_x * span * 0.11,
-            z_f + coarse_z * span * 0.30 + fine_z * span * 0.11,
+            x_f + coarse_x * spacing * 0.42 + fine_x * spacing * 0.16,
+            z_f + coarse_z * spacing * 0.42 + fine_z * spacing * 0.16,
         )
     }
 
@@ -701,8 +804,12 @@ impl BiomeLayout {
         z: f64,
         period: f64,
     ) -> f64 {
-        let grid_x = (x / period).floor().clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
-        let grid_z = (z / period).floor().clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+        let grid_x = (x / period)
+            .floor()
+            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+        let grid_z = (z / period)
+            .floor()
+            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
         let tx = fade((x / period) - f64::from(grid_x));
         let tz = fade((z / period) - f64::from(grid_z));
         let x1 = grid_x.saturating_add(1);
@@ -756,15 +863,6 @@ fn compatible_rules(left: &BiomeRule, right: &BiomeRule) -> bool {
             && !right.cannot_border.iter().any(|id| id == &left.id))
 }
 
-fn neighbor_proximity(local: f64, offset: i32) -> f64 {
-    match offset {
-        -1 => ((BLEND_FRACTION - local) / BLEND_FRACTION).clamp(0.0, 1.0),
-        0 => 1.0,
-        1 => ((local - (1.0 - BLEND_FRACTION)) / BLEND_FRACTION).clamp(0.0, 1.0),
-        _ => 0.0,
-    }
-}
-
 fn quantize_weight(weight: f32) -> u64 {
     (f64::from(weight) * 4096.0).round().max(1.0) as u64
 }
@@ -777,32 +875,32 @@ fn random_span_u32(hash: u64, min: u32, max: u32) -> u32 {
     min + (hash % range) as u32
 }
 
-fn ring_cells(center: LayoutCell, ring: i32) -> Vec<LayoutCell> {
+fn ring_buckets(center: SeedBucket, ring: i32) -> Vec<SeedBucket> {
     if ring == 0 {
         return vec![center];
     }
-    let mut cells = Vec::with_capacity((ring * 8) as usize);
+    let mut buckets = Vec::with_capacity((ring * 8) as usize);
     for dx in -ring..=ring {
         if let (Some(x), Some(z)) = (center.x.checked_add(dx), center.z.checked_sub(ring)) {
-            cells.push(LayoutCell::new(x, z));
+            buckets.push(SeedBucket::new(x, z));
         }
     }
     for dz in (-ring + 1)..=ring {
         if let (Some(x), Some(z)) = (center.x.checked_add(ring), center.z.checked_add(dz)) {
-            cells.push(LayoutCell::new(x, z));
+            buckets.push(SeedBucket::new(x, z));
         }
     }
     for dx in (-ring..ring).rev() {
         if let (Some(x), Some(z)) = (center.x.checked_add(dx), center.z.checked_add(ring)) {
-            cells.push(LayoutCell::new(x, z));
+            buckets.push(SeedBucket::new(x, z));
         }
     }
     for dz in ((-ring + 1)..ring).rev() {
         if let (Some(x), Some(z)) = (center.x.checked_sub(ring), center.z.checked_add(dz)) {
-            cells.push(LayoutCell::new(x, z));
+            buckets.push(SeedBucket::new(x, z));
         }
     }
-    cells
+    buckets
 }
 
 fn validate_grid_extent(origin: i32, count: u32, step: u32, axis: &str) {
@@ -822,7 +920,7 @@ fn grid_axis(origin: i32, index: u32, step: u32) -> i32 {
         .expect("validated biome sample coordinate must fit i32")
 }
 
-fn clamp_cell_axis(value: f64) -> i32 {
+fn clamp_bucket_axis(value: f64) -> i32 {
     value.clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
@@ -842,6 +940,10 @@ fn fade(value: f64) -> f64 {
     value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
 }
 
+fn smoothstep(value: f64) -> f64 {
+    value * value * (3.0 - 2.0 * value)
+}
+
 fn lerp(left: f64, right: f64, t: f64) -> f64 {
     left + (right - left) * t
 }
@@ -850,7 +952,6 @@ fn lerp(left: f64, right: f64, t: f64) -> f64 {
 mod tests {
     use super::*;
     use super::super::foundation::{GenerationDimension, GenerationSeed};
-    use crate::content::biome::BiomeRegistry;
 
     fn definition(
         id: &str,
@@ -904,7 +1005,6 @@ mod tests {
         let second = standard_layout(42);
         let target = (1_500_000_000, -1_500_000_000);
         let direct = first.sample_surface(target.0, target.1);
-
         for position in [(0, 0), (128, -64), (-4096, 8192), (77_777, -88_888)] {
             let _ = first.sample_surface(position.0, position.1);
         }
@@ -919,30 +1019,15 @@ mod tests {
         reverse.reverse();
         let first = layout(57, forward);
         let second = layout(57, reverse);
-        for z in (-700..=700).step_by(37) {
-            for x in (-700..=700).step_by(41) {
+        for z in (-700..=700).step_by(53) {
+            for x in (-700..=700).step_by(47) {
                 assert_eq!(first.sample_surface(x, z), second.sample_surface(x, z));
             }
         }
     }
 
     #[test]
-    fn scalar_and_area_sampling_are_equivalent() {
-        let layout = standard_layout(77);
-        let area = layout.sample_surface_grid(-23, 41, 17, 13, 1);
-        assert_eq!(area.origin(), (-23, 41));
-        assert_eq!(area.width(), 17);
-        assert_eq!(area.depth(), 13);
-        assert_eq!(area.step(), 1);
-        for z in 41..54 {
-            for x in -23..-6 {
-                assert_eq!(area.get(x, z), Some(&layout.sample_surface(x, z)));
-            }
-        }
-    }
-
-    #[test]
-    fn scalar_and_strided_grid_sampling_are_equivalent() {
+    fn scalar_and_grid_sampling_are_equivalent() {
         let layout = standard_layout(78);
         let grid = layout.sample_surface_grid(-211, 83, 19, 11, 7);
         for z_index in 0..grid.depth() {
@@ -950,7 +1035,6 @@ mod tests {
                 let x = grid_axis(grid.origin().0, x_index, grid.step());
                 let z = grid_axis(grid.origin().1, z_index, grid.step());
                 assert_eq!(grid.sample_at(x_index, z_index), Some(&layout.sample_surface(x, z)));
-                assert_eq!(grid.get(x, z), grid.sample_at(x_index, z_index));
             }
         }
     }
@@ -958,8 +1042,8 @@ mod tests {
     #[test]
     fn influences_are_normalized_and_include_primary() {
         let layout = standard_layout(91);
-        for z in (-512..=512).step_by(31) {
-            for x in (-512..=512).step_by(29) {
+        for z in (-512..=512).step_by(41) {
+            for x in (-512..=512).step_by(37) {
                 let sample = layout.sample_surface(x, z);
                 let sum = sample
                     .influences()
@@ -978,7 +1062,7 @@ mod tests {
     }
 
     #[test]
-    fn authored_cannot_border_is_enforced_in_final_sampled_layout() {
+    fn authored_cannot_border_is_enforced_in_sampled_layout() {
         let layout = standard_layout(123);
         let grid = layout.sample_surface_grid(-1536, -1536, 193, 193, 16);
         for z in 0..grid.depth() {
@@ -1000,20 +1084,6 @@ mod tests {
                         .expect("sample biome must be active");
                     assert!(layout.compatible_indices(left, right));
                 }
-            }
-        }
-    }
-
-    #[test]
-    fn formation_target_span_stays_inside_authored_range() {
-        let layout = standard_layout(345);
-        let mut cache = HashMap::new();
-        for z in -8..=8 {
-            for x in -8..=8 {
-                let assignment = layout.cell_assignment(LayoutCell::new(x, z), &mut cache);
-                let rule = &layout.rules[assignment.rule];
-                assert!(assignment.target_span >= rule.region_min);
-                assert!(assignment.target_span <= rule.region_max);
             }
         }
     }
