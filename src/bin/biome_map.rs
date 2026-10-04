@@ -3,7 +3,7 @@
     reason = "this diagnostic binary includes the production generation modules directly; the main target owns their full consumer surface"
 )]
 
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, sync::Arc};
+use std::{fs, path::{Path, PathBuf}};
 
 use serde::Deserialize;
 
