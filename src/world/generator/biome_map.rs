@@ -256,7 +256,9 @@ mod tests {
                     "portuguese_brazil": id,
                     "spanish": id
                 },
-                "regionSize": { "min": 128, "max": 256 }
+                "surfaceLayout": {
+                    "regionSize": { "min": 128, "max": 256 }
+                }
             }))
             .expect("test biome must deserialize");
             registry.insert(definition);
