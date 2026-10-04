@@ -39,8 +39,10 @@ pub(crate) struct StructureCandidate<'a> {
 //
 // Collector contract: every call must append all candidates whose full placement
 // bounds intersect the requested rectangle. The resolver first collects candidates
-// intersecting the target, then asks again over each direct candidate's full bounds
-// so cross-boundary reservations participate in the decision.
+// intersecting the target, then performs one enclosing competitor query spanning
+// every direct candidate's full bounds. Candidates returned only because they
+// intersect that enclosing rectangle are filtered against the exact direct bounds,
+// so the result is equivalent to querying every direct placement separately.
 //
 // Ranking is deterministic: priority descending, then placement id, biome id,
 // placement anchor X/Z, and placement Y ascending. `reserve_space` is directional:
@@ -63,17 +65,33 @@ pub(crate) fn resolve_structure_placements<'a>(
         .iter()
         .map(candidate_identity)
         .collect::<HashSet<_>>();
-    for direct in direct_candidates.iter().copied() {
-        let mut overlapping = Vec::new();
-        collect_candidates(direct.minimum, direct.maximum, &mut overlapping);
-        for candidate in overlapping {
-            if candidate.priority < direct.priority || !candidates_may_conflict(&candidate, &direct)
-            {
-                continue;
-            }
-            if seen.insert(candidate_identity(&candidate)) {
-                competitors.push(candidate);
-            }
+    let competitor_minimum = direct_candidates
+        .iter()
+        .fold(IVec2::splat(i32::MAX), |minimum, candidate| {
+            minimum.min(candidate.minimum)
+        });
+    let competitor_maximum = direct_candidates
+        .iter()
+        .fold(IVec2::splat(i32::MIN), |maximum, candidate| {
+            maximum.max(candidate.maximum)
+        });
+    let mut overlapping = Vec::new();
+    collect_candidates(
+        competitor_minimum,
+        competitor_maximum,
+        &mut overlapping,
+    );
+    for candidate in overlapping {
+        let blocks_direct_candidate = direct_candidates.iter().any(|direct| {
+            !same_candidate(&candidate, direct)
+                && candidate_outranks(&candidate, direct)
+                && candidates_conflict(&candidate, direct)
+        });
+        if !blocks_direct_candidate {
+            continue;
+        }
+        if seen.insert(candidate_identity(&candidate)) {
+            competitors.push(candidate);
         }
     }
 
@@ -207,6 +225,8 @@ fn candidates_conflict(higher: &StructureCandidate<'_>, lower: &StructureCandida
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use serde_json::json;
 
     use super::*;
@@ -214,11 +234,6 @@ mod tests {
     fn structure_definition(id: &str) -> StructureDefinition {
         serde_json::from_value(json!({
             "id": id,
-            "name": {
-                "english": id,
-                "portuguese_brazil": id,
-                "spanish": id
-            },
             "locatable": false,
             "rotation": false,
             "anchor": {"x": 0, "y": 0, "z": 0},
@@ -413,5 +428,54 @@ mod tests {
         let resolved = resolve_from_candidates(IVec2::ZERO, IVec2::new(15, 15), &candidates);
 
         assert!(resolved.is_empty());
+    }
+
+    #[test]
+    fn competitor_collection_runs_once_for_all_direct_candidates() {
+        let first = structure_definition("test:first");
+        let second = structure_definition("test:second");
+        let blocker = structure_definition("test:blocker");
+        let candidates = [
+            candidate(
+                "test:first-placement",
+                &first,
+                1,
+                false,
+                &[],
+                (IVec2::new(14, 0), IVec2::new(17, 3)),
+            ),
+            candidate(
+                "test:second-placement",
+                &second,
+                1,
+                false,
+                &[],
+                (IVec2::new(0, 14), IVec2::new(3, 17)),
+            ),
+            candidate(
+                "test:blocker-placement",
+                &blocker,
+                10,
+                true,
+                &[],
+                (IVec2::new(16, 0), IVec2::new(19, 3)),
+            ),
+        ];
+        let collector_calls = Cell::new(0_usize);
+
+        let resolved = resolve_structure_placements(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            |minimum, maximum, found| {
+                collector_calls.set(collector_calls.get() + 1);
+                found.extend(candidates.iter().copied().filter(|candidate| {
+                    rectangles_overlap(candidate.minimum, candidate.maximum, minimum, maximum)
+                }));
+            },
+        );
+
+        assert_eq!(collector_calls.get(), 2);
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].placement_id, "test:second-placement");
     }
 }
