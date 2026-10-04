@@ -8,6 +8,7 @@ mod chunk_async_work;
 mod chunk_generation_tasks;
 #[allow(dead_code)]
 mod chunk_mesh_tasks;
+#[allow(dead_code)]
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
 #[allow(dead_code)]
@@ -26,6 +27,7 @@ pub(crate) mod deterministic;
 #[allow(dead_code)]
 pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
+#[allow(dead_code)]
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 mod lighting_updates;
