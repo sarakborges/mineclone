@@ -47,6 +47,9 @@ impl PortalDefinition {
             "portal {} destination.arrivalStructure cannot be empty",
             self.id
         );
+
+        // Exact X/Y/Z mapping is the only authored travel policy prepared so far.
+        let PortalCoordinateMapping::Exact = self.destination.coordinate_mapping;
     }
 
     pub(crate) fn validate_references(
