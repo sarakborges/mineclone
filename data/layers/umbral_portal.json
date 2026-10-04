@@ -1,0 +1,15 @@
+{
+  "id": "asteria:umbral_portal",
+  "category": "crafted_blocks",
+  "texture": "textures/layers/umbral_portal.png",
+  "creativeVisible": false,
+  "faces": [
+    "right",
+    "top",
+    "front"
+  ],
+  "anchor": "center",
+  "offset": 0.0,
+  "alphaBlend": true,
+  "castsShadow": false
+}
