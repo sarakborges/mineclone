@@ -1,16 +1,13 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    content::dimension::DimensionRegistry,
     localization::{ActiveLanguage, Language},
-    world::{biome::CurrentBiome, dimension::CurrentDimension},
+    world::dimension::CurrentDimension,
 };
 
 #[derive(Component)]
 pub(super) struct DimensionHudText;
-
-#[derive(Component)]
-pub(super) struct BiomeHudText;
 
 pub(super) trait LocalizedHudSource<R>: Resource
 where
@@ -32,22 +29,6 @@ impl LocalizedHudSource<DimensionRegistry> for CurrentDimension {
     ) -> Option<&'a str> {
         registry
             .get(self.id.as_str())
-            .map(|definition| definition.name.text(language))
-    }
-}
-
-impl LocalizedHudSource<BiomeRegistry> for CurrentBiome {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn localized_name<'a>(
-        &'a self,
-        registry: &'a BiomeRegistry,
-        language: Language,
-    ) -> Option<&'a str> {
-        registry
-            .get(&self.id)
             .map(|definition| definition.name.text(language))
     }
 }
