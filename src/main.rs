@@ -136,6 +136,7 @@ fn run_game() {
             HudPlugin,
         ))
         .add_plugins(BiomeTintInteractionPlugin)
+        .add_plugins(targeting::portal_activation_plugin())
         .run();
 }
 

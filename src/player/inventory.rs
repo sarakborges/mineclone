@@ -1,6 +1,13 @@
 use bevy::prelude::*;
 
-use crate::{app::resource_systems::reset_resource, gameplay::modal::GameplayModalState};
+use crate::{
+    app::resource_systems::reset_resource,
+    content::builtin_ids::{
+        DIMENSIONAL_SLICER_ITEM_ID, DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY,
+        UMBRAL_DIMENSION_ID,
+    },
+    gameplay::modal::GameplayModalState,
+};
 
 use super::{
     hotbar::PlayerHotbar,
@@ -55,6 +62,12 @@ impl InventoryCursor {
         metadata: Option<(&'static str, &'static str)>,
         fill_stack: bool,
     ) {
+        let metadata = metadata.or_else(|| {
+            (item == DIMENSIONAL_SLICER_ITEM_ID).then_some((
+                DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY,
+                UMBRAL_DIMENSION_ID,
+            ))
+        });
         let mut creative_stack = ItemStack::new(item);
         if let Some((key, value)) = metadata {
             creative_stack = creative_stack.with_metadata(key, value);
@@ -159,6 +172,45 @@ mod tests {
         );
 
         assert!(cursor.stack().is_none());
+    }
+
+    #[test]
+    fn creative_dimensional_slicer_defaults_to_umbral_target() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item(DIMENSIONAL_SLICER_ITEM_ID, None, false);
+
+        assert_eq!(
+            cursor
+                .stack()
+                .unwrap()
+                .metadata()
+                .get(DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY),
+            Some(UMBRAL_DIMENSION_ID)
+        );
+    }
+
+    #[test]
+    fn explicit_dimensional_slicer_target_overrides_creative_default() {
+        let mut cursor = InventoryCursor::default();
+
+        cursor.pick_creative_item(
+            DIMENSIONAL_SLICER_ITEM_ID,
+            Some((
+                DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY,
+                "asteria:overworld",
+            )),
+            false,
+        );
+
+        assert_eq!(
+            cursor
+                .stack()
+                .unwrap()
+                .metadata()
+                .get(DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY),
+            Some("asteria:overworld")
+        );
     }
 
     #[test]

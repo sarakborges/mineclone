@@ -388,6 +388,7 @@ impl VoxelChunkStructureMut<'_> {
             self.blocks,
             self.layers,
             self.layer_count,
+            true,
             x,
             y,
             z,
@@ -1055,6 +1056,29 @@ impl VoxelChunk {
             self.blocks.as_ref(),
             layers,
             &mut self.layer_count,
+            true,
+            x,
+            y,
+            z,
+            face,
+            layer,
+        )
+    }
+
+    pub(crate) fn add_layer_without_support(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        face: LayerFace,
+        layer: LayerCell,
+    ) -> bool {
+        let layers = Arc::make_mut(&mut self.layers);
+        add_layer_in_storage(
+            self.blocks.as_ref(),
+            layers,
+            &mut self.layer_count,
+            false,
             x,
             y,
             z,
@@ -1154,10 +1178,8 @@ impl VoxelChunk {
     }
 
     pub(crate) fn rebuild_empty_light_columns(&mut self, sky_by_column: &[u8; CHUNK_AREA]) {
-        debug_assert!(
-            self.is_empty(),
-            "empty light rebuild requires an empty chunk"
-        );
+        debug_assert_eq!(self.block_count, 0, "empty light rebuild requires no blocks");
+        debug_assert_eq!(self.fluid_count, 0, "empty light rebuild requires no fluids");
 
         if let Some(&sky) = sky_by_column.first()
             && sky_by_column.iter().all(|&candidate| candidate == sky)
@@ -1241,6 +1263,7 @@ fn add_layer_in_storage(
     blocks: &BlockStorage,
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     layer_count: &mut usize,
+    requires_support: bool,
     x: usize,
     y: usize,
     z: usize,
@@ -1248,7 +1271,7 @@ fn add_layer_in_storage(
     layer: LayerCell,
 ) -> bool {
     let index = index(x, y, z);
-    if blocks.get(index).is_none() {
+    if requires_support && blocks.get(index).is_none() {
         return false;
     }
 
@@ -1701,6 +1724,17 @@ mod tests {
             LayerFace::Top,
             LayerCell::new("asteria:moss", Default::default()),
         ));
+    }
+
+    #[test]
+    fn explicit_supportless_layers_can_occupy_air() {
+        let mut chunk = VoxelChunk::empty();
+        let portal = LayerCell::new("asteria:umbral_portal", Default::default());
+
+        assert!(chunk.add_layer_without_support(2, 3, 4, LayerFace::Front, portal));
+        assert_eq!(chunk.layers_at(2, 3, 4).len(), 1);
+        assert!(chunk.has_terrain_content());
+        assert!(!chunk.is_empty());
     }
 
     #[test]
