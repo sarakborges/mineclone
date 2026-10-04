@@ -78,14 +78,6 @@
         "chance": 0.07,
         "jitter": 43
       }
-    },
-    {
-      "id": "asteria:lake",
-      "placement": {
-        "spacing": 112,
-        "chance": 0.42,
-        "jitter": 32
-      }
     }
   ],
   "visuals": {
