@@ -79,6 +79,7 @@ pub fn track_current_biome(
 
     let horizontal = Vec2::new(position.x, position.z);
     let surface = biome_field.sample_surface(horizontal);
+    let visual_surface = biome_field.sample_visual_surface(horizontal);
     let volume = feature_fields.as_ref().and_then(|fields| {
         let chunk_coord = chunk_coord_from_position(position);
         let region_coord = generation_region_coord(chunk_coord);
@@ -95,7 +96,9 @@ pub fn track_current_biome(
     });
     let next = &mut *next_biome;
     replace_string(&mut next.surface_id, surface.primary_id);
-    replace_influences(&mut next.surface_influences, &surface.influences);
+    // Identity and terrain keep the narrow authored transition. Visual state uses
+    // a wider blend so sky/fog/tints transition before crossing the biome edge.
+    replace_influences(&mut next.surface_influences, &visual_surface.influences);
 
     let resolved_surface_count = resolve_surface_identity(&surface, &mut next.influences);
     apply_volume_identity(

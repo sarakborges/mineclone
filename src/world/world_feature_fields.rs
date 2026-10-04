@@ -89,10 +89,10 @@ impl WorldFeatureFields {
 
     pub(crate) fn volume_biome_region(
         &self,
-        chunk_coord: IVec3,
+        coord: IVec3,
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
-        self.caches.volume_biome_region(chunk_coord, factory)
+        self.caches.volume_biome_region(coord, factory)
     }
 
     pub(crate) fn structure_top_y(&self, coord: IVec2, factory: impl FnOnce() -> i32) -> i32 {
@@ -180,7 +180,7 @@ impl WorldFeatureFields {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::chunk::CHUNK_SIZE;
+    use crate::{voxel::chunk::CHUNK_SIZE, world::generation_region::generation_region_coord};
 
     fn test_fields() -> WorldFeatureFields {
         WorldFeatureFields::new(42)
@@ -217,12 +217,12 @@ mod tests {
     }
 
     #[test]
-    fn volume_biome_cache_reuses_the_same_chunk_result() {
+    fn volume_biome_cache_reuses_the_same_generation_region_result() {
         let fields = test_fields();
         let coord = IVec3::new(1, 2, 3);
         let first = fields.volume_biome_region(coord, VolumeBiomeRegion::default);
         let second = fields.volume_biome_region(coord, || {
-            panic!("cached volume biome chunk should not rebuild")
+            panic!("cached volume biome region should not rebuild")
         });
 
         assert!(Arc::ptr_eq(&first, &second));
@@ -279,11 +279,13 @@ mod tests {
         let fields = test_fields();
         let near_chunk = IVec3::ZERO;
         let far_chunk = IVec3::new(32, 0, 0);
+        let near_region = generation_region_coord(near_chunk);
+        let far_region = generation_region_coord(far_chunk);
 
         fields.generation_columns(near_chunk.xz(), Vec::new);
         fields.generation_columns(far_chunk.xz(), Vec::new);
-        fields.volume_biome_region(near_chunk, VolumeBiomeRegion::default);
-        fields.volume_biome_region(far_chunk, VolumeBiomeRegion::default);
+        fields.volume_biome_region(near_region, VolumeBiomeRegion::default);
+        fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
         fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || {
             Some(64)
         });

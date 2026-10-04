@@ -12,11 +12,11 @@ use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
 use super::super::{
     biome_field::VolumeBiomeRegion, generation::GenerationColumnSample,
-    structure_metadata::ResolvedStructurePlacement,
+    generation_region::GenerationRegionCoord, structure_metadata::ResolvedStructurePlacement,
 };
 use super::CachedStructureForest;
 
-const CACHE_CHUNK_MARGIN: i32 = 1;
+const CACHE_REGION_MARGIN: i32 = 1;
 
 type StructureOriginEntry = Arc<OnceLock<Option<i32>>>;
 type StructureOriginAnchors = HashMap<(IVec2, StructureRotation), StructureOriginEntry>;
@@ -171,13 +171,13 @@ impl StructureOriginCache {
 #[derive(Default)]
 struct RetentionScratch {
     horizontal_chunks: HashSet<IVec2>,
-    retained_horizontal_chunks: HashSet<IVec2>,
-    retained_chunks: HashSet<IVec3>,
+    generation_regions: HashSet<GenerationRegionCoord>,
+    retained_regions: HashSet<GenerationRegionCoord>,
 }
 
 pub(super) struct FeatureCaches {
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
-    volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
+    volume_biomes: ConcurrentCache<GenerationRegionCoord, Arc<VolumeBiomeRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
     structure_placements: ConcurrentCache<IVec2, Arc<Vec<ResolvedStructurePlacement>>>,
     surface_structure_placements:
@@ -218,11 +218,13 @@ impl FeatureCaches {
 
     pub(super) fn volume_biome_region(
         &self,
-        chunk_coord: IVec3,
+        coord: IVec3,
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
         self.volume_biomes
-            .get_or_insert_with(chunk_coord, || Arc::new(factory()))
+            .get_or_insert_with(GenerationRegionCoord::from_region_coord(coord), || {
+                Arc::new(factory())
+            })
     }
 
     pub(super) fn structure_top_y(&self, coord: IVec2, factory: impl FnOnce() -> i32) -> i32 {
@@ -292,27 +294,28 @@ impl FeatureCaches {
             .expect("feature cache retention scratch lock was poisoned");
         let RetentionScratch {
             horizontal_chunks,
-            retained_horizontal_chunks,
-            retained_chunks,
+            generation_regions,
+            retained_regions,
         } = &mut *scratch;
 
         horizontal_chunks.clear();
-        retained_horizontal_chunks.clear();
-        retained_chunks.clear();
-
+        generation_regions.clear();
         for &coord in desired {
             horizontal_chunks.insert(coord.xz());
+            generation_regions.insert(GenerationRegionCoord::from_chunk_coord(coord));
+        }
 
-            for z in (coord.z - CACHE_CHUNK_MARGIN)..=(coord.z + CACHE_CHUNK_MARGIN) {
-                for x in (coord.x - CACHE_CHUNK_MARGIN)..=(coord.x + CACHE_CHUNK_MARGIN) {
-                    retained_horizontal_chunks.insert(IVec2::new(x, z));
-                }
-            }
-
-            for y in (coord.y - CACHE_CHUNK_MARGIN).max(0)..=(coord.y + CACHE_CHUNK_MARGIN) {
-                for z in (coord.z - CACHE_CHUNK_MARGIN)..=(coord.z + CACHE_CHUNK_MARGIN) {
-                    for x in (coord.x - CACHE_CHUNK_MARGIN)..=(coord.x + CACHE_CHUNK_MARGIN) {
-                        retained_chunks.insert(IVec3::new(x, y, z));
+        retained_regions.clear();
+        // Many desired chunks share one 8x8x8 generation region. Expand the
+        // cache margin once per unique region rather than once per chunk.
+        for region in generation_regions.drain() {
+            let region = region.as_ivec3();
+            for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
+                for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
+                    for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
+                        retained_regions.insert(GenerationRegionCoord::from_region_coord(
+                            IVec3::new(x, y, z),
+                        ));
                     }
                 }
             }
@@ -326,23 +329,25 @@ impl FeatureCaches {
             .retain(|coord| horizontal_chunks.contains(coord));
         self.surface_structure_placements.retain(|(_, _, anchor)| {
             let chunk_size = CHUNK_SIZE as i32;
-            let chunk = IVec2::new(
+            let chunk = IVec3::new(
                 anchor.x.div_euclid(chunk_size),
+                0,
                 anchor.y.div_euclid(chunk_size),
             );
-            retained_horizontal_chunks.contains(&chunk)
+            retained_regions.contains(&GenerationRegionCoord::from_chunk_coord(chunk))
         });
-        self.connected_structure_forests.retain(|(_, _, _, origin)| {
-            let chunk_size = CHUNK_SIZE as i32;
-            let chunk = IVec3::new(
-                origin.x.div_euclid(chunk_size),
-                origin.y.div_euclid(chunk_size),
-                origin.z.div_euclid(chunk_size),
-            );
-            retained_chunks.contains(&chunk)
-        });
+        self.connected_structure_forests
+            .retain(|(_, _, _, origin)| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec3::new(
+                    origin.x.div_euclid(chunk_size),
+                    origin.y.div_euclid(chunk_size),
+                    origin.z.div_euclid(chunk_size),
+                );
+                retained_regions.contains(&GenerationRegionCoord::from_chunk_coord(chunk))
+            });
         self.volume_biomes
-            .retain(|coord| retained_chunks.contains(coord));
+            .retain(|coord| retained_regions.contains(coord));
         self.structure_origins.retain(|anchor| {
             let chunk_size = CHUNK_SIZE as i32;
             let chunk = IVec2::new(

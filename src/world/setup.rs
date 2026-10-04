@@ -36,7 +36,15 @@ impl WorldLoadingPhase {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorldLoadingStep {
-    Generating,
+    BiomeMap,
+    TerrainColumns,
+    VolumeBiomes,
+    DensityField,
+    Materials,
+    InitialFluids,
+    Structures,
+    SurfaceObjects,
+    ChunkIntegration,
     SettlingFluids,
     Lighting,
     Meshing,
@@ -46,8 +54,16 @@ pub(crate) enum WorldLoadingStep {
 }
 
 impl WorldLoadingStep {
-    pub(crate) const ALL: [Self; 7] = [
-        Self::Generating,
+    pub(crate) const ALL: [Self; 15] = [
+        Self::BiomeMap,
+        Self::TerrainColumns,
+        Self::VolumeBiomes,
+        Self::DensityField,
+        Self::Materials,
+        Self::InitialFluids,
+        Self::Structures,
+        Self::SurfaceObjects,
+        Self::ChunkIntegration,
         Self::SettlingFluids,
         Self::Lighting,
         Self::Meshing,
@@ -58,19 +74,35 @@ impl WorldLoadingStep {
 
     pub(crate) fn ordinal(self) -> usize {
         match self {
-            Self::Generating => 0,
-            Self::SettlingFluids => 1,
-            Self::Lighting => 2,
-            Self::Meshing => 3,
-            Self::Assets => 4,
-            Self::Finalizing => 5,
-            Self::Spawning => 6,
+            Self::BiomeMap => 0,
+            Self::TerrainColumns => 1,
+            Self::VolumeBiomes => 2,
+            Self::DensityField => 3,
+            Self::Materials => 4,
+            Self::InitialFluids => 5,
+            Self::Structures => 6,
+            Self::SurfaceObjects => 7,
+            Self::ChunkIntegration => 8,
+            Self::SettlingFluids => 9,
+            Self::Lighting => 10,
+            Self::Meshing => 11,
+            Self::Assets => 12,
+            Self::Finalizing => 13,
+            Self::Spawning => 14,
         }
     }
 
     fn phase(self) -> WorldLoadingPhase {
         match self {
-            Self::Generating => WorldLoadingPhase::Generating,
+            Self::BiomeMap
+            | Self::TerrainColumns
+            | Self::VolumeBiomes
+            | Self::DensityField
+            | Self::Materials
+            | Self::InitialFluids
+            | Self::Structures
+            | Self::SurfaceObjects
+            | Self::ChunkIntegration => WorldLoadingPhase::Generating,
             Self::SettlingFluids => WorldLoadingPhase::SettlingFluids,
             Self::Lighting => WorldLoadingPhase::Lighting,
             Self::Meshing => WorldLoadingPhase::Meshing,
