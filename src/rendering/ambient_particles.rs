@@ -14,7 +14,7 @@ use crate::{
     player::camera::GameplayCamera,
     rendering::wind::Wind,
     voxel::world::VoxelWorld,
-    world::{biome::CurrentBiome, current_context::CurrentDimensionContext},
+    world::current_context::CurrentDimensionContext,
 };
 
 const MAX_ACTIVE_PARTICLES: usize = 512;
@@ -109,7 +109,6 @@ struct AmbientParticleAssets {
 #[derive(SystemParam)]
 struct AmbientParticleSpawnContext<'w, 's> {
     dimension: CurrentDimensionContext<'w>,
-    current_biome: Res<'w, CurrentBiome>,
     registry: Res<'w, AmbientParticleRegistry>,
     fluids: Res<'w, FluidRegistry>,
     wind: Res<'w, Wind>,
@@ -152,12 +151,7 @@ fn spawn_ambient_particles(
             break;
         }
 
-        let Some(source) = active_source(
-            rule,
-            &context.dimension,
-            &context.current_biome,
-            &context.fluids,
-        ) else {
+        let Some(source) = active_source(rule, &context.dimension, &context.fluids) else {
             continue;
         };
         let requested = runtime.take_emissions(
@@ -229,7 +223,6 @@ struct ActiveParticleSource {
 fn active_source(
     rule: &AmbientParticleRule,
     dimension: &CurrentDimensionContext<'_>,
-    current_biome: &CurrentBiome,
     fluids: &FluidRegistry,
 ) -> Option<ActiveParticleSource> {
     match &rule.source {
@@ -239,14 +232,10 @@ fn active_source(
                 fluid_id: None,
             })
         }
-        AmbientParticleSource::Biome { id } => current_biome
-            .influences
-            .iter()
-            .find(|influence| influence.id == *id && influence.weight > 0.0)
-            .map(|influence| ActiveParticleSource {
-                weight: influence.weight,
-                fluid_id: None,
-            }),
+        // Biome-scoped presentation is intentionally unavailable during the
+        // Phase-1 teardown. These rules resume only through the replacement
+        // biome query/presentation contract.
+        AmbientParticleSource::Biome { .. } => None,
         AmbientParticleSource::FluidSurface { id } => {
             fluids.id_of(id).map(|fluid_id| ActiveParticleSource {
                 weight: 1.0,
