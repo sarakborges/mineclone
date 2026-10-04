@@ -29,6 +29,8 @@ mod world_objects;
 )]
 use bevy_dylib;
 
+use std::path::PathBuf;
+
 use app::{
     controls_state::ControlsState,
     crash_log::{install_crash_logger, log_system_event, mark_clean_shutdown, write_caught_panic},
@@ -48,7 +50,7 @@ use bevy::{
     prelude::*,
     window::PresentMode,
 };
-use content::ContentPlugin;
+use content::{ContentPlugin, builtin_ids::OVERWORLD_DIMENSION_ID};
 use creatures::CreaturesPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
@@ -59,7 +61,10 @@ use targeting::{biome_tint::BiomeTintInteractionPlugin, block::BlockTargetingPlu
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
 use voxel::block_gravity::BlockGravityPlugin;
-use world::WorldPlugin;
+use world::{
+    WorldPlugin,
+    generator::{BiomeMapConfig, WorldGenerator, render_biome_map},
+};
 use world_items::WorldItemsPlugin;
 use world_objects::WorldObjectsPlugin;
 
@@ -77,6 +82,9 @@ fn main() {
 
 fn run_game() {
     prepare_runtime_directory();
+    if run_biome_map_cli() {
+        return;
+    }
     log_system_event(format!(
         "app.start debug={} backend_override={} present_mode={:?} io_pool_percent=0.10 io_pool_max_threads=2 async_compute_percent=0.50 async_compute_max_threads=8",
         cfg!(debug_assertions),
@@ -138,6 +146,93 @@ fn run_game() {
         .add_plugins(BiomeTintInteractionPlugin)
         .add_plugins(targeting::portal_activation_plugin())
         .run();
+}
+
+fn run_biome_map_cli() -> bool {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if !arguments.iter().any(|argument| argument == "--biome-map") {
+        return false;
+    }
+
+    let mut seed = 0_u64;
+    let mut dimension_id = OVERWORLD_DIMENSION_ID.to_owned();
+    let mut output = PathBuf::from("biome-map.png");
+    let mut config = BiomeMapConfig::default();
+    let mut index = 0;
+    while index < arguments.len() {
+        match arguments[index].as_str() {
+            "--biome-map" => {}
+            "--seed" => {
+                index += 1;
+                seed = parse_cli_value(&arguments, index, "--seed");
+            }
+            "--dimension" => {
+                index += 1;
+                dimension_id = cli_value(&arguments, index, "--dimension").to_owned();
+            }
+            "--output" => {
+                index += 1;
+                output = PathBuf::from(cli_value(&arguments, index, "--output"));
+            }
+            "--center-x" => {
+                index += 1;
+                config.center_x = parse_cli_value(&arguments, index, "--center-x");
+            }
+            "--center-z" => {
+                index += 1;
+                config.center_z = parse_cli_value(&arguments, index, "--center-z");
+            }
+            "--scale" => {
+                index += 1;
+                config.blocks_per_pixel = parse_cli_value(&arguments, index, "--scale");
+            }
+            "--width" => {
+                index += 1;
+                config.width = parse_cli_value(&arguments, index, "--width");
+            }
+            "--height" => {
+                index += 1;
+                config.height = parse_cli_value(&arguments, index, "--height");
+            }
+            "--no-boundaries" => config.show_boundaries = false,
+            "--no-influences" => config.show_influences = false,
+            unknown => panic!("unknown biome-map argument {unknown}"),
+        }
+        index += 1;
+    }
+
+    let loaded = content::read_content();
+    let dimension = loaded.dimensions.get(&dimension_id).unwrap_or_else(|| {
+        panic!("biome map references missing dimension {dimension_id}")
+    });
+    let generator = WorldGenerator::new(seed, dimension, &loaded.biomes);
+    let render = render_biome_map(generator.biomes(), &config);
+    render
+        .save(&output)
+        .unwrap_or_else(|error| panic!("{error}"));
+    println!(
+        "biome map saved: {} (legend: {})",
+        output.display(),
+        output.with_extension("legend.json").display()
+    );
+    true
+}
+
+fn cli_value<'a>(arguments: &'a [String], index: usize, flag: &str) -> &'a str {
+    arguments
+        .get(index)
+        .unwrap_or_else(|| panic!("{flag} requires a value"))
+}
+
+fn parse_cli_value<T>(arguments: &[String], index: usize, flag: &str) -> T
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    let value = cli_value(arguments, index, flag);
+    value
+        .parse::<T>()
+        .unwrap_or_else(|error| panic!("invalid {flag} value {value}: {error}"))
 }
 
 fn log_game_state(state: Res<State<GameState>>) {
