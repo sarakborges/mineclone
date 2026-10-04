@@ -1,17 +1,15 @@
 mod residency;
-mod selection_state;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use self::{residency::ChunkResidencyState, selection_state::StreamingSelectionState};
+use self::residency::ChunkResidencyState;
 
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
-/// Streaming remains the runtime owner of interest/residency while generation
-/// is rebuilt. Phase 2+ will reconnect materialization to this boundary.
+/// Streaming remains the runtime owner of residency while generation and
+/// selection are rebuilt. Phase 8 will add the new interest-selection policy.
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
-    selection_state: StreamingSelectionState,
     residency: ChunkResidencyState,
     pressure_evicted_meshes: HashMap<IVec3, usize>,
 }
@@ -26,15 +24,15 @@ pub(super) struct StreamingPriorityScanDiagnostic {
 
 impl ChunkStreamingState {
     pub(super) fn center(&self) -> Option<IVec3> {
-        self.selection_state.center()
+        None
     }
 
     pub(super) fn movement_direction(&self) -> IVec2 {
-        self.selection_state.movement_direction()
+        IVec2::ZERO
     }
 
     pub(super) fn selection_revision(&self) -> u64 {
-        self.residency.revision()
+        0
     }
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
