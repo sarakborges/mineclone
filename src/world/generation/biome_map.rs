@@ -32,6 +32,55 @@ pub(crate) struct BiomeMapSample {
 }
 
 impl BiomeMapSample {
+    fn from_field_sample(surface: &BiomeFieldSample<'_>, biome_field: &BiomeField) -> Self {
+        let primary = surface.primary_surface_index;
+        let incompatible_neighbor = surface
+            .influences
+            .iter()
+            .map(|influence| influence.surface_index)
+            .chain(surface.surface_margin_index)
+            .find(|&neighbor| {
+                neighbor != primary && !biome_field.surface_biomes_can_neighbor(primary, neighbor)
+            });
+
+        if let Some(neighbor) = incompatible_neighbor {
+            let separator = biome_field
+                .surface_boundary_separator(primary, neighbor)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "surface biomes {} and {} deny adjacency but no compatible separator biome exists",
+                        biome_field.surface_biome_id(primary),
+                        biome_field.surface_biome_id(neighbor),
+                    )
+                });
+            let mut influences = SmallVec::new();
+            influences.push(BiomeMapInfluence {
+                surface_index: separator,
+                weight: 1.0,
+                terrain_strength: 1.0,
+            });
+            return Self {
+                primary_surface_index: separator,
+                surface_margin_index: None,
+                influences,
+            };
+        }
+
+        Self {
+            primary_surface_index: primary,
+            surface_margin_index: surface.surface_margin_index,
+            influences: surface
+                .influences
+                .iter()
+                .map(|influence| BiomeMapInfluence {
+                    surface_index: influence.surface_index,
+                    weight: influence.weight,
+                    terrain_strength: influence.terrain_strength,
+                })
+                .collect(),
+        }
+    }
+
     pub(crate) fn primary_terrain_strength(&self) -> f32 {
         self.influences
             .iter()
@@ -63,11 +112,13 @@ impl BiomeMapSample {
     }
 }
 
-/// Immutable surface-biome map for one horizontal chunk plus a one-block halo.
+/// Immutable authoritative surface-biome map for one horizontal chunk plus a
+/// one-block halo.
 ///
-/// Chunk voxelization consumes this map instead of querying `BiomeField` on
-/// demand. The halo makes slope and margin decisions deterministic at chunk
-/// boundaries without rebuilding neighboring biome samples.
+/// `BiomeField` only provides the raw deterministic surface selection. Authored
+/// adjacency constraints are normalized here, once, before terrain and feature
+/// generation consume the map. Ocean therefore participates as an ordinary
+/// surface biome instead of having a separate adjacency path.
 pub(crate) struct BiomeMapTile {
     samples: Vec<BiomeMapSample>,
 }
@@ -82,21 +133,7 @@ impl BiomeMapTile {
                 let world_position = chunk_origin + IVec2::new(local_x, local_z);
                 let surface =
                     biome_field.sample_surface(world_position.as_vec2() + Vec2::splat(0.5));
-                let influences = surface
-                    .influences
-                    .iter()
-                    .map(|influence| BiomeMapInfluence {
-                        surface_index: influence.surface_index,
-                        weight: influence.weight,
-                        terrain_strength: influence.terrain_strength,
-                    })
-                    .collect();
-
-                samples.push(BiomeMapSample {
-                    primary_surface_index: surface.primary_surface_index,
-                    surface_margin_index: surface.surface_margin_index,
-                    influences,
-                });
+                samples.push(BiomeMapSample::from_field_sample(&surface, biome_field));
             }
         }
 
