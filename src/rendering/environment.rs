@@ -6,8 +6,6 @@ use crate::{
     world::current_context::DayNightContext,
 };
 
-use super::biome_visuals::CurrentBiomeVisuals;
-
 #[derive(Resource, PartialEq)]
 pub struct EnvironmentVisualState {
     pub sky_color: Hsi,
@@ -28,7 +26,6 @@ impl Default for EnvironmentVisualState {
 #[derive(SystemParam)]
 struct EnvironmentScene<'w> {
     day_night: DayNightContext<'w>,
-    biome_visuals: CurrentBiomeVisuals<'w>,
 }
 
 pub struct EnvironmentPlugin;
@@ -46,7 +43,7 @@ fn update_environment_visuals(
     scene: EnvironmentScene,
     mut visuals: ResMut<EnvironmentVisualState>,
 ) {
-    if !scene.day_night.inputs_changed() && !scene.biome_visuals.inputs_changed() {
+    if !scene.day_night.inputs_changed() {
         return;
     }
 
@@ -54,22 +51,13 @@ fn update_environment_visuals(
         return;
     };
 
-    // Sky and fog are independent authored palettes for each biome and day
-    // phase. Do not replace the sky with a sky/fog average: a flat ClearColor
-    // and the terminal fog must agree until a sky-gradient renderer exists.
+    // Biome-authored environment visuals were part of the deleted generator
+    // stack. Keep presentation neutral until the new biome query/presentation
+    // contract is introduced in Phase 3.
+    let defaults = EnvironmentVisualState::default();
     let next = EnvironmentVisualState {
-        sky_color: scene.biome_visuals.blend_hsi(|biome| {
-            biome.visuals().sky_color.get(sample.phase).lerp(
-                *biome.visuals().sky_color.get(sample.next_phase),
-                sample.transition,
-            )
-        }),
-        fog_color: scene.biome_visuals.blend_hsi(|biome| {
-            biome.visuals().fog_color.get(sample.phase).lerp(
-                *biome.visuals().fog_color.get(sample.next_phase),
-                sample.transition,
-            )
-        }),
+        sky_color: defaults.sky_color,
+        fog_color: defaults.fog_color,
         sky_light_factor: sample.sky_light_factor,
     };
 
