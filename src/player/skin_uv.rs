@@ -267,14 +267,14 @@ fn map_player_skin_meshes(
             continue;
         };
 
-        let Some(source_mesh) = meshes.get_mut(mesh_handle.id()) else {
+        let Some(mut source_mesh) = meshes.get_mut(mesh_handle.id()) else {
             warn!(
                 "player skin UV mapping skipped for {}: source mesh is unavailable",
                 name.as_str()
             );
             continue;
         };
-        if !remap_mesh_uvs(source_mesh, spec.base_layout) {
+        if !remap_mesh_uvs(&mut source_mesh, spec.base_layout) {
             warn!(
                 "player skin UV mapping skipped for {}: source mesh has unexpected vertex data",
                 name.as_str()
@@ -286,7 +286,8 @@ fn map_player_skin_meshes(
             continue;
         };
 
-        let mut outer_mesh = source_mesh.clone();
+        let mut outer_mesh = (*source_mesh).clone();
+        drop(source_mesh);
         if !remap_mesh_uvs(&mut outer_mesh, outer_spec.layout) {
             warn!(
                 "player skin outer layer {} skipped: source mesh has unexpected vertex data",
