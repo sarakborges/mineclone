@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
@@ -16,10 +16,7 @@ use crate::{
     },
 };
 
-use super::{
-    biome_field::BiomeField, chunk_rendering::ChunkMeshBuildContext,
-    chunk_system_params::ChunkContent,
-};
+use super::{chunk_rendering::ChunkMeshBuildContext, chunk_system_params::ChunkContent};
 
 /// Immutable world-content identity captured by a remesh job.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -116,9 +113,7 @@ pub(crate) struct PresentationContentSnapshot {
     blocks: BlockRegistry,
     layers: LayerRegistry,
     fluids: FluidRegistry,
-    biomes: BiomeRegistry,
     secondary_properties: SecondaryPropertyRegistry,
-    biome_field: BiomeField,
     texture_table: TerrainTextureTable,
 }
 
@@ -128,9 +123,7 @@ impl PresentationContentSnapshot {
             blocks: content.blocks().clone(),
             layers: content.layers().clone(),
             fluids: content.fluids().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
             secondary_properties: content.secondary_properties().clone(),
-            biome_field: content.biome_field.as_ref().clone(),
             texture_table: TerrainTextureTable::from_blocks(content.blocks()),
         }
     }
@@ -144,9 +137,7 @@ impl PresentationContentSnapshot {
             blocks: &self.blocks,
             layers: &self.layers,
             fluids: &self.fluids,
-            biomes: &self.biomes,
             secondary_properties: &self.secondary_properties,
-            biome_field: &self.biome_field,
             texture_table: &self.texture_table,
         }
     }
