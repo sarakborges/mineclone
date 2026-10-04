@@ -51,7 +51,7 @@ struct GenerationReadContext<'a> {
 }
 
 impl GenerationReadContext<'_> {
-    fn snapshot(self) -> &GenerationSnapshot {
+    fn snapshot(&self) -> &GenerationSnapshot {
         self.snapshot
     }
 
@@ -110,7 +110,8 @@ mod tests {
     #[test]
     fn generation_snapshot_freezes_dimension_inputs() {
         let generator = test_generator(123, "asteria:frozen");
-        let snapshot = generator.read_context().snapshot();
+        let context = generator.read_context();
+        let snapshot = context.snapshot();
 
         assert_eq!(snapshot.dimension().id(), "asteria:frozen");
         assert_eq!(snapshot.dimension().sea_level(), 64);
