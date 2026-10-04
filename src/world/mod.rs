@@ -1,33 +1,20 @@
 pub(crate) mod biome;
 pub(crate) mod biome_field;
-// Phase 1 has deliberately removed the world generator and materialization
-// pipeline. These modules are generic runtime infrastructure retained for the
-// replacement pipeline; allow only their temporarily unreachable capabilities.
-#[allow(dead_code)]
 mod chunk_async_work;
 mod chunk_generation_tasks;
-#[allow(dead_code)]
 mod chunk_mesh_tasks;
-#[allow(dead_code)]
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
-#[allow(dead_code)]
 pub(crate) mod chunk_rendering;
 mod chunk_storage;
 pub(crate) mod chunk_system_params;
-#[allow(dead_code)]
 mod chunk_task_queue;
 mod chunk_unloading;
-#[allow(dead_code)]
 mod chunk_visibility;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
-#[allow(dead_code)]
-pub(crate) mod deterministic;
-#[allow(dead_code)]
 pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
-#[allow(dead_code)]
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
 // Phase 2 foundation is intentionally not wired into Loading yet. It is a pure,
@@ -35,31 +22,23 @@ pub(crate) mod game_rules;
 #[allow(dead_code)]
 pub(crate) mod generator;
 mod lighting_updates;
-#[allow(dead_code)]
 mod main_world_diagnostics;
-#[allow(dead_code)]
 pub(crate) mod math;
 pub(crate) mod new_world;
-#[allow(dead_code)]
 mod presentation_snapshot;
 mod render_diagnostics;
-#[allow(dead_code)]
 pub(crate) mod render_distance;
 mod render_prepare_diagnostics;
-#[allow(dead_code)]
 mod render_work_diagnostics;
 mod revision;
-#[allow(dead_code)]
 mod save;
 pub(crate) mod save_catalog;
 pub(crate) mod save_session;
 mod seed;
 mod storage_durability;
-#[allow(dead_code)]
 mod streaming;
 pub(crate) mod thumbnail;
 pub(crate) mod tick;
-#[allow(dead_code)]
 pub(crate) mod warp;
 mod work_budget;
 pub(crate) mod world_names;
