@@ -10,13 +10,12 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         creature::CreatureRegistry,
-        dimension::{DimensionDefinition, DimensionRegistry},
+        dimension::DimensionRegistry,
         structure::StructureRegistry,
         structure_set::StructureSetRegistry,
     },
     localization::ActiveLanguage,
     player::{PLAYER_EYE_HEIGHT, PlayerEntity},
-    world::current_context::CurrentDimensionContext,
 };
 
 use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
@@ -229,7 +228,6 @@ fn coordinate_suggestions(value: Option<i32>, axis: &str, prefix: &str) -> Vec<S
 struct AutocompleteCatalog<'a> {
     creatures: &'a CreatureRegistry,
     biomes: &'a BiomeRegistry,
-    current_dimension: &'a DimensionDefinition,
     structures: &'a StructureRegistry,
     structure_sets: &'a StructureSetRegistry,
     dimensions: &'a DimensionRegistry,
@@ -275,11 +273,9 @@ impl AutocompleteCatalog<'_> {
     }
 
     fn biome_suggestions(&self, prefix: &str) -> Vec<Suggestion> {
-        self.current_dimension
-            .biomes
+        self.biomes
             .iter()
-            .filter(|placement| id_matches_query(&placement.id, prefix))
-            .filter_map(|placement| self.biomes.get(&placement.id))
+            .filter(|biome| id_matches_query(&biome.id, prefix))
             .map(|biome| Suggestion {
                 value: biome.id.clone(),
                 description: biome.name.text(self.language.get()).to_owned(),
@@ -425,21 +421,19 @@ pub(super) struct AutocompleteContent<'w> {
     structures: Res<'w, StructureRegistry>,
     structure_sets: Res<'w, StructureSetRegistry>,
     dimensions: Res<'w, DimensionRegistry>,
-    dimension: CurrentDimensionContext<'w>,
     language: Res<'w, ActiveLanguage>,
 }
 
 impl AutocompleteContent<'_> {
-    fn catalog(&self) -> Option<AutocompleteCatalog<'_>> {
-        Some(AutocompleteCatalog {
+    fn catalog(&self) -> AutocompleteCatalog<'_> {
+        AutocompleteCatalog {
             creatures: &self.creatures,
             biomes: &self.biomes,
-            current_dimension: self.dimension.definition()?,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
             dimensions: &self.dimensions,
             language: &self.language,
-        })
+        }
     }
 }
 
@@ -458,10 +452,7 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    let Some(catalog) = content.catalog() else {
-        autocomplete.set_suggestions(0..0, Vec::new());
-        return;
-    };
+    let catalog = content.catalog();
     let player_position = player.single().ok().map(|transform| {
         (transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT)
             .floor()
