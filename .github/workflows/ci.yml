@@ -71,22 +71,21 @@ jobs:
       - name: Check
         run: cargo check --locked
 
-      # The diagnostic target includes the authoritative foundation/biome/map
-      # modules directly, but does not link the gameplay/rendering application.
+      # Build the actual game binary because its --biome-map path uses the same
+      # content loader, WorldGenerator and BiomeQueries as runtime gameplay.
       - name: Build biome map CLI
-        run: cargo build --locked --bin biome_map
+        run: cargo build --locked --bin asteria
 
-      # Phase 3 visual fixtures use the same biome-layout and biome-map source
-      # as the runtime generator. These are executable smoke renders, not
-      # `cargo test`; the PNG/legend artifacts are reviewed before terrain work.
+      # Phase 3 visual fixtures are produced by the game's authoritative
+      # biome-map path. These are executable smoke renders, not `cargo test`.
       - name: Render biome map fixtures
         timeout-minutes: 2
         run: |
           mkdir -p target/biome-maps
-          /usr/bin/time -f 'overworld seed 0: %e s' target/debug/biome_map --seed 0 --dimension asteria:overworld --output target/biome-maps/overworld-seed-0.png --scale 8 --width 256 --height 256
-          /usr/bin/time -f 'overworld seed 1337: %e s' target/debug/biome_map --seed 1337 --dimension asteria:overworld --output target/biome-maps/overworld-seed-1337.png --scale 8 --width 256 --height 256
-          /usr/bin/time -f 'umbral seed 0: %e s' target/debug/biome_map --seed 0 --dimension asteria:umbral --output target/biome-maps/umbral-seed-0.png --scale 8 --width 256 --height 256
-          /usr/bin/time -f 'umbral seed 1337: %e s' target/debug/biome_map --seed 1337 --dimension asteria:umbral --output target/biome-maps/umbral-seed-1337.png --scale 8 --width 256 --height 256
+          /usr/bin/time -f 'overworld seed 0: %e s' target/debug/asteria --biome-map --seed 0 --dimension asteria:overworld --output target/biome-maps/overworld-seed-0.png --scale 8 --width 256 --height 256
+          /usr/bin/time -f 'overworld seed 1337: %e s' target/debug/asteria --biome-map --seed 1337 --dimension asteria:overworld --output target/biome-maps/overworld-seed-1337.png --scale 8 --width 256 --height 256
+          /usr/bin/time -f 'umbral seed 0: %e s' target/debug/asteria --biome-map --seed 0 --dimension asteria:umbral --output target/biome-maps/umbral-seed-0.png --scale 8 --width 256 --height 256
+          /usr/bin/time -f 'umbral seed 1337: %e s' target/debug/asteria --biome-map --seed 1337 --dimension asteria:umbral --output target/biome-maps/umbral-seed-1337.png --scale 8 --width 256 --height 256
 
       - name: Upload biome map fixtures
         uses: actions/upload-artifact@v4
