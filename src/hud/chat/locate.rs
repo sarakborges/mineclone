@@ -223,11 +223,7 @@ impl ChatLocateContext<'_> {
                         return format!("Structure is not generated in this dimension: {id}");
                     }
 
-                    (
-                        LocateTargetKind::Structure,
-                        structure.name.text(self.language.get()).to_owned(),
-                        search_id,
-                    )
+                    (LocateTargetKind::Structure, structure.id.clone(), search_id)
                 }
             }
             _ => {
