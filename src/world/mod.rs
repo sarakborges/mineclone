@@ -1,5 +1,4 @@
 pub(crate) mod biome;
-pub(crate) mod biome_field;
 mod chunk_async_work;
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
@@ -50,7 +49,6 @@ use crate::{
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
 use biome::CurrentBiome;
-use biome_field::BiomeField;
 use chunk_async_work::{ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work};
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
 use chunk_remesh_tasks::ChunkRemeshTasks;
@@ -115,7 +113,6 @@ impl Plugin for WorldPlugin {
 
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
-            .init_resource::<BiomeField>()
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
