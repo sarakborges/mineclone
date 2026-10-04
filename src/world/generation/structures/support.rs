@@ -2,10 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::structure::{StructureDefinition, StructureRotation},
-    world::{new_world::WorldGenerationMode, terrain::surface_height_from_sample},
+    world::new_world::WorldGenerationMode,
 };
 
-use super::super::{ChunkGenerationContext, flat_surface_height};
+use super::super::{ChunkGenerationContext, flat_surface_height, generation_surface_height};
 
 /// Both world generation and /place use the exact same support footprint
 /// and maximum terrain-variation rule. World generation may additionally apply
@@ -107,21 +107,9 @@ pub(super) fn compute_structure_origin_y(
             {
                 return None;
             }
-            supported_surface_ground_y(position, context)
+            Some(generation_surface_height(position, context) - 1)
         },
     )
-}
-
-fn supported_surface_ground_y(
-    position: IVec2,
-    context: &ChunkGenerationContext<'_>,
-) -> Option<i32> {
-    let horizontal = position.as_vec2() + Vec2::splat(0.5);
-    let surface = context.biome_field.sample_surface(horizontal);
-    let surface_height =
-        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
-
-    Some(surface_height - 1)
 }
 
 #[cfg(test)]
