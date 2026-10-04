@@ -4,7 +4,11 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{crash_log::append_runtime_diagnostic, game_state::GameState},
-    rendering::terrain_material::TerrainMaterial,
+    rendering::{
+        extruded_sprite::{ExtrudedSpriteMaterialCache, ExtrudedSpriteMeshCache},
+        terrain_material::TerrainMaterial,
+    },
+    world_objects::ObjectMaterialCache,
 };
 
 use super::{
@@ -218,6 +222,9 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     images: Res<'w, Assets<Image>>,
     standard_materials: Res<'w, Assets<StandardMaterial>>,
     terrain_materials: Res<'w, Assets<TerrainMaterial>>,
+    object_materials: Res<'w, ObjectMaterialCache>,
+    extruded_sprite_meshes: Res<'w, ExtrudedSpriteMeshCache>,
+    extruded_sprite_materials: Res<'w, ExtrudedSpriteMaterialCache>,
     frame_times: ResMut<'w, FrameTimeSamples>,
     main_frame_work: ResMut<'w, MainFrameWorkSamples>,
 }
@@ -262,7 +269,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     let diagnostic = format!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} pooled_mesh_bytes={pooled_mesh_bytes} stream_retired={stream_retired} pressure_evicted_meshes={pressure_evicted_meshes} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} main_work_avg_us={} main_work_p50_us={} main_work_p95_us={} main_work_p99_us={} main_work_max_us={} slow_frames={slow_frames:?} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_chunk_base_limit={async_chunk_work_base_limit} async_remesh={async_remesh:?} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} standard_materials={} terrain_materials={} deltas={deltas:?}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} pooled_mesh_bytes={pooled_mesh_bytes} stream_retired={stream_retired} pressure_evicted_meshes={pressure_evicted_meshes} frame_samples={} frame_avg_us={} frame_avg_fps={:.1} frame_p50_us={} frame_p95_us={} frame_p99_us={} frame_max_us={} main_work_avg_us={} main_work_p50_us={} main_work_p95_us={} main_work_p99_us={} main_work_max_us={} slow_frames={slow_frames:?} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} async_chunk_base_limit={async_chunk_work_base_limit} async_remesh_count={} async_remesh_avg_us={} async_remesh_max_us={} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} standard_materials={} terrain_materials={} object_material_cache={} extruded_sprite_mesh_cache={} extruded_sprite_material_cache={} deltas={deltas:?}",
         assets.state.get(),
         frame_times.count,
         frame_times.average_micros,
@@ -276,8 +283,14 @@ pub(super) fn log_render_asset_pressure(
         main_frame_work.p95_micros,
         main_frame_work.p99_micros,
         main_frame_work.max_micros,
+        async_remesh.count,
+        async_remesh.average_micros,
+        async_remesh.max_micros,
         assets.standard_materials.len(),
         assets.terrain_materials.len(),
+        assets.object_materials.len(),
+        assets.extruded_sprite_meshes.len(),
+        assets.extruded_sprite_materials.len(),
     );
     info!("{diagnostic}");
     let _ = append_runtime_diagnostic(&diagnostic);
