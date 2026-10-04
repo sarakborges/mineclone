@@ -419,6 +419,27 @@ Responsibilities include:
 - terrain blending driven by the biome boundary/influence representation;
 - efficient surface/column queries for consumers such as spawn and warp.
 
+#### Ocean and sea-level semantics
+
+`seaLevel` is a dimension-level vertical reference, not a global rule that fills every empty voxel below that Y with water. It may be used by authored terrain profiles, ocean-floor depth, coast shaping, altitude-relative rules, and similar generation logic, but it does not itself create fluid.
+
+Ocean remains an ordinary surface biome identity selected by the same authoritative biome layout as every other surface biome. There is no parallel ocean mask, land/ocean ownership split, or Coast biome.
+
+The semantics are binding:
+
+- surface ownership determines where the generated ocean body exists: a column whose authoritative primary surface biome is Ocean belongs to the ocean body; a non-Ocean column does not become ocean merely because its terrain falls below `seaLevel`;
+- Ocean terrain generates its own floor/shape, and generated ocean fluid fills only the exposed water volume between that generated floor and `seaLevel`;
+- ocean generation must not treat every empty voxel in an Ocean X/Z column below `seaLevel` as water. Enclosed or isolated empty volume beneath the generated ocean floor, including caves and overhang voids, remains dry unless another explicit generation feature places fluid there;
+- generated ocean fill therefore follows the exposed top-side terrain/body-of-water volume rather than performing a blind vertical or flood fill through arbitrary subterranean emptiness;
+- land/Ocean transitions use the same authoritative biome boundary/influence information to shape a coherent coast. Terrain may blend toward the ocean profile near the border, but blend weights do not become a second ocean-ownership threshold;
+- in particular, do not decide ocean membership with rules such as `ocean_weight > threshold`; discrete Ocean ownership remains the source of truth while continuous influence data shapes terrain/material transitions;
+- the coast is a terrain consequence of the land/Ocean boundary, not a separate biome identity or hydrology subsystem;
+- non-Ocean terrain is not globally clamped above `seaLevel`; depressions below sea level may exist where authored. The specific land/Ocean boundary logic is responsible for producing a coherent shoreline where the two meet;
+- lakes, swamp puddles, shallow pools, and other local generated water are terrain/material/fluid features of their owning biome/feature and do not replace surface biome ownership with Ocean;
+- generated ocean/lake/puddle fluid is initial generated world state. Generation does not bulk-enqueue every generated fluid voxel for runtime propagation; the runtime fluid owner reacts through its explicit generated-fluid frontier/topology boundary.
+
+This produces ordinary authored ocean terrain and local water bodies without reintroducing hydrology ownership or the old failure mode where caves beneath oceans acquire ceiling water source blocks.
+
 **Gate:** terrain is deterministic across chunk seams and generation order, with visual/debug validation available before materials/features are layered on top.
 
 ### Phase 5 — Surface, materials, and generated natural fluids
@@ -642,18 +663,23 @@ Surface biome ownership is an authoritative 2D X/Z layout. Volume biome ownershi
 
 At a queried XYZ position, an occupying volume biome supplies the effective biome sample; otherwise the position inherits the surface biome sample for that X/Z column. Volume layout may consume surface layout as an eligibility/input signal but never mutates or replaces the underlying surface ownership. Surface and volume use the same `BiomeId` definition universe rather than separate biome type hierarchies, and each field owns its own boundary/influence sample instead of automatically mixing surface and volume influence vectors.
 
+#### Ocean and sea-level semantics — resolved 2026-10-04
+
+`seaLevel` is a dimension-level vertical reference only; it does not globally fill empty space below that height. Ocean is an ordinary surface biome selected by the same biome layout as every other surface biome, and discrete Ocean ownership determines where the generated ocean body exists.
+
+Ocean terrain owns its floor/profile, and generation fills only the exposed water volume from that floor up to `seaLevel`. Enclosed or isolated voids beneath the floor, including caves under oceans, stay dry unless another explicit feature places fluid there. Land/Ocean boundaries use the shared biome boundary/influence data to shape coast terrain, but influence weight never becomes a second ocean mask or threshold. Coast is not a biome. Lakes, swamp puddles, and similar water bodies remain local terrain/material/fluid generation features of their owning biome or feature, and generated fluids enter runtime simulation only through the explicit generated-fluid frontier/topology boundary rather than bulk scheduling every generated voxel.
+
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. ocean/sea-level terrain semantics without a hydrology subsystem;
-2. terrain representation and cross-chunk sampling strategy;
-3. structure planning/index/query contract;
-4. safe spawn/warp destination query strategy;
-5. generated vs persisted chunk/delta representation;
-6. persistence format boundaries;
-7. loading phase hierarchy and progress aggregation;
-8. benchmark budgets and fixed-seed visual/performance fixtures.
+1. terrain representation and cross-chunk sampling strategy;
+2. structure planning/index/query contract;
+3. safe spawn/warp destination query strategy;
+4. generated vs persisted chunk/delta representation;
+5. persistence format boundaries;
+6. loading phase hierarchy and progress aggregation;
+7. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
