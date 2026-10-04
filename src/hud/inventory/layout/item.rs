@@ -88,15 +88,6 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
     });
 }
 
-pub(in crate::hud::inventory) fn spawn_cursor_icon(
-    root: &mut ChildSpawnerCommands,
-    item_id: &'static str,
-    position: Vec2,
-    items: &mut InventoryItemView<'_>,
-) {
-    spawn_cursor_icon_with_override(root, item_id, position, items, None);
-}
-
 pub(in crate::hud::inventory) fn spawn_cursor_icon_with_override(
     root: &mut ChildSpawnerCommands,
     item_id: &'static str,
@@ -154,14 +145,6 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
     .with_children(|overlay| {
         spawn_item_stack_count(overlay, quantity);
     });
-}
-
-pub(in crate::hud::inventory) fn spawn_inventory_item(
-    slot: &mut ChildSpawnerCommands,
-    item_id: &'static str,
-    items: &mut InventoryItemView<'_>,
-) {
-    spawn_inventory_item_with_override(slot, item_id, items, None);
 }
 
 pub(in crate::hud::inventory) fn spawn_inventory_item_with_override(
