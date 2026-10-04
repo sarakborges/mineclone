@@ -1,5 +1,4 @@
 mod diagnostics;
-mod frontier;
 mod solver;
 mod state;
 
