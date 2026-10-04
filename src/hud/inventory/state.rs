@@ -40,6 +40,7 @@ pub(super) struct InventorySlot {
     pub(super) index: usize,
     pub(super) item: Option<&'static str>,
     pub(super) quantity: u32,
+    pub(super) image_override: Option<String>,
 }
 
 #[derive(Component)]

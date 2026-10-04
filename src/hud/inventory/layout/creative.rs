@@ -7,7 +7,10 @@ use crate::{
     content::{
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
-        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
+        builtin_ids::{
+            BUCKET_FLUID_METADATA_KEY, DIMENSIONAL_SLICER_ITEM_ID,
+            DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY, UMBRAL_DIMENSION_ID, WATER_FLUID_ID,
+        },
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
         item::{ItemDefinition, ItemRegistry},
         item_id::intern_item_id,
@@ -28,12 +31,12 @@ use super::{
         CREATIVE_CATEGORY_HEIGHT, CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT,
         CreativeCatalogScrollArea, CreativeCatalogScrollbar, CreativeCategoryButton,
         CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
-        CreativeInventoryView, CreativeSearchBar, CreativeSearchText, ITEM_ICON_SIZE,
-        PANEL_BORDER_WIDTH, PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH,
-        SCROLLBAR_TOTAL_WIDTH, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
+        CreativeInventoryView, CreativeSearchBar, CreativeSearchText, PANEL_BORDER_WIDTH,
+        PANEL_PADDING, PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SCROLLBAR_TOTAL_WIDTH, SEARCH_HEIGHT,
+        SECTION_GAP, SLOT_GAP, SLOT_SIZE,
     },
+    item::spawn_inventory_item_with_override,
     InventoryItemView, InventoryLayoutState,
-    item::spawn_inventory_item,
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
@@ -131,13 +134,20 @@ impl<'a> CreativeCatalogItem<'a> {
 
     fn metadata(self) -> Option<(&'static str, &'static str)> {
         match self {
+            Self::Item(item) if item.id == DIMENSIONAL_SLICER_ITEM_ID => Some((
+                DIMENSIONAL_SLICER_TARGET_DIMENSION_METADATA_KEY,
+                UMBRAL_DIMENSION_ID,
+            )),
             Self::Bucket(_, variant) => variant.metadata(),
             _ => None,
         }
     }
 
-    fn bucket_icon(self) -> Option<&'static str> {
+    fn image_override(self) -> Option<&'a str> {
         match self {
+            Self::Item(item) => self
+                .metadata()
+                .and_then(|(key, value)| item.icon_variant(key, value)),
             Self::Bucket(_, variant) => Some(variant.icon()),
             _ => None,
         }
@@ -525,18 +535,13 @@ fn spawn_creative_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            if let Some(icon) = item.and_then(CreativeCatalogItem::bucket_icon) {
-                slot.spawn((
-                    ImageNode::new(items.asset_server.load(icon)),
-                    Node {
-                        width: px(ITEM_ICON_SIZE),
-                        height: px(ITEM_ICON_SIZE),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-            } else if let Some(item_id) = item_id {
-                spawn_inventory_item(slot, item_id, items);
+            if let Some(item_id) = item_id {
+                spawn_inventory_item_with_override(
+                    slot,
+                    item_id,
+                    items,
+                    item.and_then(CreativeCatalogItem::image_override),
+                );
             }
         });
 }

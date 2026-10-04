@@ -371,7 +371,7 @@ fn spawn_world_item_visual(
     let icon = content
         .items
         .get(item_id)
-        .map(|definition| definition.icon.as_str())
+        .map(|definition| definition.icon_for_metadata(request.stack.metadata().iter()))
         .or_else(|| {
             content
                 .layers

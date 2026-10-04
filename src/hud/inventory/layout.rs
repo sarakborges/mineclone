@@ -14,6 +14,7 @@ use crate::{
             CRAFTING_PANEL_WIDTH, CURRENT_STATION_PANEL_WIDTH, SurvivalCraftingHost,
             SurvivalCurrentStationHost,
         },
+        item_icon::stack_image_override,
     },
     localization::UiLocalization,
     player::{game_mode::GameMode, hotbar::PlayerHotbar, inventory::InventoryCursor},
@@ -24,7 +25,10 @@ pub(super) use crate::hud::item_icon::HudItemIconView as InventoryItemView;
 
 pub(super) use self::{
     creative::spawn_creative_catalog_rows,
-    item::{spawn_cursor_icon, spawn_cursor_stack_count, spawn_inventory_item, spawn_item_tooltip},
+    item::{
+        spawn_cursor_icon_with_override, spawn_cursor_stack_count,
+        spawn_inventory_item_with_override, spawn_item_tooltip,
+    },
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
 use super::state::{InventoryHudRoot, InventoryViewPane, InventoryViewToggleButton, PANEL_GAP};
@@ -228,19 +232,19 @@ fn spawn_inventory_overlay(
 ) {
     spawn_item_tooltip(root);
 
-    let Some(item_id) = state.cursor.item() else {
+    let Some(stack) = state.cursor.stack() else {
         return;
     };
     let position = state.cursor_position.unwrap_or(Vec2::ZERO);
-    spawn_cursor_icon(root, item_id, position, items);
-    spawn_cursor_stack_count(
+    let image_override = stack_image_override(stack, items.items);
+    spawn_cursor_icon_with_override(
         root,
-        state
-            .cursor
-            .stack()
-            .map_or(0, crate::player::item_stack::ItemStack::quantity),
+        stack.id(),
         position,
+        items,
+        image_override,
     );
+    spawn_cursor_stack_count(root, stack.quantity(), position);
 }
 
 pub(super) fn spawn_inventory_root(
