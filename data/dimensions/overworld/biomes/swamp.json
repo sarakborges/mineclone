@@ -45,9 +45,9 @@
     {
       "id": "asteria:tree_willow",
       "placement": {
-        "spacing": 18,
-        "chance": 0.78,
-        "jitter": 5
+        "spacing": 9,
+        "chance": 0.9,
+        "jitter": 3
       }
     },
     {

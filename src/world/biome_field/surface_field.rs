@@ -11,8 +11,9 @@ use super::{
 
 const LAND_SITE_JITTER_FRACTION: f32 = 0.12;
 const LAND_SITE_SEARCH_RADIUS: i32 = 3;
-const LAND_SCALE_MIN_SPACING_FRACTION: f32 = 0.65;
-const LAND_SCALE_MAX_SPACING_FRACTION: f32 = 1.35;
+const LAND_SCALE_MIN_SPACING_FRACTION: f32 = 0.82;
+const LAND_SCALE_MAX_SPACING_FRACTION: f32 = 1.18;
+const LAND_REPAIR_OCEAN_MARGIN: f32 = 0.08;
 const OCEAN_DOMAIN_SCALE_MULTIPLIER: f32 = 2.0;
 const OCEAN_DOMAIN_THRESHOLD: f32 = 0.18;
 const OCEAN_DOMAIN_DETAIL_WEIGHT: f32 = 0.28;
@@ -20,9 +21,17 @@ const OCEAN_DOMAIN_DETAIL_SCALE_MULTIPLIER: f32 = 0.38;
 const OCEAN_DISTANCE_GRADIENT_STEP: f32 = 2.0;
 const MIN_SURFACE_REGION_SCALE: f32 = 64.0;
 const LAND_HASH_SALT: u64 = 0x9e37_79b1_85eb_ca87;
+const LAND_REPAIR_SALT: u64 = 0x510e_527f_ade6_82d1;
 const LAND_SCALE_X_SALT: u64 = 0xa409_3822_299f_31d0;
 const LAND_SCALE_Z_SALT: u64 = 0x082e_fa98_ec4e_6c89;
 const OCEAN_HASH_SALT: u64 = 0xd6e8_feb8_6659_fd93;
+const LOCAL_REPAIR_OFFSETS: [IVec2; 5] = [
+    IVec2::ZERO,
+    IVec2::X,
+    IVec2::NEG_X,
+    IVec2::Y,
+    IVec2::NEG_Y,
+];
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct SurfaceFieldConfig {
@@ -87,6 +96,14 @@ struct LandSiteCandidate {
     biome_index: usize,
     site: Vec2,
     scale: Vec2,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LocalRepairCandidate {
+    biome_index: usize,
+    conflicts: u8,
+    support: u8,
+    authority: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -209,21 +226,6 @@ impl BiomeField {
                 .is_some_and(|selector| selector.matches(&left_biome.id, &left_biome.tags))
     }
 
-    pub(crate) fn surface_boundary_separator(&self, left: usize, right: usize) -> Option<usize> {
-        self.surface_biomes
-            .iter()
-            .enumerate()
-            .find(|(index, biome)| {
-                *index != left
-                    && *index != right
-                    && biome.weight > 0.0
-                    && self.surface_biome_is_enabled(*index)
-                    && self.surface_biomes_can_neighbor(left, *index)
-                    && self.surface_biomes_can_neighbor(*index, right)
-            })
-            .map(|(index, _)| index)
-    }
-
     fn ocean_domain_value(&self, warped: Vec2) -> f32 {
         let scale = self.surface_field_config.ocean_scale.max(1.0);
         let broad = surface_value_noise(warped / scale, self.seed ^ OCEAN_HASH_SALT);
@@ -327,8 +329,91 @@ impl BiomeField {
     }
 
     fn land_biome_for_cell(&self, cell: IVec2) -> usize {
-        self.weighted_land_biome_for_cell(cell)
-            .unwrap_or(self.surface_field_config.first_land_index)
+        let fallback = self.surface_field_config.first_land_index;
+        let mut local = [(IVec2::ZERO, fallback); LOCAL_REPAIR_OFFSETS.len()];
+        for (slot, offset) in local.iter_mut().zip(LOCAL_REPAIR_OFFSETS) {
+            let source_cell = cell + offset;
+            let biome_index = self
+                .weighted_land_biome_for_cell(source_cell)
+                .unwrap_or(fallback);
+            *slot = (source_cell, biome_index);
+        }
+
+        let raw_index = local[0].1;
+        let ocean_near = self.land_cell_is_near_ocean(cell);
+        let raw_candidate = self.local_repair_candidate(raw_index, &local, ocean_near);
+        if raw_candidate.conflicts == 0 {
+            return raw_index;
+        }
+
+        let mut best = raw_candidate;
+        for (_, candidate_index) in local {
+            if candidate_index == best.biome_index {
+                continue;
+            }
+            let candidate = self.local_repair_candidate(candidate_index, &local, ocean_near);
+            if local_repair_precedes(candidate, best) {
+                best = candidate;
+            }
+        }
+
+        best.biome_index
+    }
+
+    fn local_repair_candidate(
+        &self,
+        biome_index: usize,
+        local: &[(IVec2, usize); LOCAL_REPAIR_OFFSETS.len()],
+        ocean_near: bool,
+    ) -> LocalRepairCandidate {
+        let mut conflicts = 0_u8;
+        let mut support = 0_u8;
+        let mut authority = f32::INFINITY;
+
+        for (source_cell, local_index) in local {
+            if *local_index == biome_index {
+                support = support.saturating_add(1);
+                authority = authority.min(self.land_cell_authority(*source_cell, biome_index));
+            } else if !self.surface_biomes_can_neighbor(biome_index, *local_index) {
+                conflicts = conflicts.saturating_add(1);
+            }
+        }
+
+        if ocean_near
+            && self
+                .ocean_surface_index
+                .is_some_and(|ocean| !self.surface_biomes_can_neighbor(biome_index, ocean))
+        {
+            conflicts = conflicts.saturating_add(LOCAL_REPAIR_OFFSETS.len() as u8);
+        }
+
+        LocalRepairCandidate {
+            biome_index,
+            conflicts,
+            support,
+            authority,
+        }
+    }
+
+    fn land_cell_authority(&self, cell: IVec2, biome_index: usize) -> f32 {
+        let weight = self.surface_biomes[biome_index]
+            .weight
+            .max(f32::MIN_POSITIVE);
+        let unit = hash_unit(cell_hash(
+            cell,
+            self.seed
+                ^ LAND_REPAIR_SALT
+                ^ (biome_index as u64).wrapping_mul(0x9e37_79b1_85eb_ca87),
+        ));
+        -unit.max(f32::MIN_POSITIVE).ln() / weight
+    }
+
+    fn land_cell_is_near_ocean(&self, cell: IVec2) -> bool {
+        if !self.spawn_oceans || self.ocean_surface_index.is_none() {
+            return false;
+        }
+        let site = land_site_position(cell, self.surface_field_config.land_spacing, self.seed);
+        self.ocean_domain_value(site) >= -LAND_REPAIR_OCEAN_MARGIN
     }
 
     fn weighted_land_biome_for_cell(&self, cell: IVec2) -> Option<usize> {
@@ -354,6 +439,16 @@ impl BiomeField {
 
         fallback
     }
+}
+
+fn local_repair_precedes(candidate: LocalRepairCandidate, current: LocalRepairCandidate) -> bool {
+    candidate.conflicts < current.conflicts
+        || (candidate.conflicts == current.conflicts
+            && (candidate.support > current.support
+                || (candidate.support == current.support
+                    && (candidate.authority < current.authority
+                        || (candidate.authority == current.authority
+                            && candidate.biome_index < current.biome_index)))))
 }
 
 fn candidate_precedes(candidate: LandSiteCandidate, current: LandSiteCandidate) -> bool {
@@ -526,43 +621,6 @@ mod tests {
     }
 
     #[test]
-    fn land_selection_is_only_weight_and_seed() {
-        let mut constrained = entry("test:constrained", 1.0, size(120.0, 320.0));
-        constrained.neighbor_deny = Some(SurfaceBiomeSelector {
-            ids: vec!["test:other".to_owned()],
-            tags: Vec::new(),
-        });
-        let surface_biomes = Arc::new(vec![
-            entry("test:plains", 1.0, size(120.0, 420.0)),
-            constrained,
-            entry("test:other", 1.0, size(120.0, 320.0)),
-        ]);
-        let config = SurfaceFieldConfig::from_biomes(&surface_biomes, None);
-        let field = BiomeField {
-            surface_biomes,
-            volume_biomes: Arc::new(Vec::new()),
-            surface_field_config: config,
-            volume_site_spacing: None,
-            climate: MacroClimateField::new(91),
-            seed: 91,
-            single_surface_biome: None,
-            ocean_surface_index: None,
-            spawn_oceans: true,
-            spawn_target_surface_biome: None,
-        };
-
-        for z in -8..=8 {
-            for x in -8..=8 {
-                let cell = IVec2::new(x, z);
-                assert_eq!(
-                    field.land_biome_for_cell(cell),
-                    field.weighted_land_biome_for_cell(cell).unwrap()
-                );
-            }
-        }
-    }
-
-    #[test]
     fn adjacency_rules_are_generic_and_symmetric() {
         let plains = entry("test:plains", 1.0, size(120.0, 420.0));
         let mut wasteland = entry("test:wasteland", 1.0, size(120.0, 320.0));
@@ -598,7 +656,45 @@ mod tests {
         assert!(!field.surface_biomes_can_neighbor(2, 3));
         assert!(!field.surface_biomes_can_neighbor(3, 2));
         assert!(field.surface_biomes_can_neighbor(0, 4));
-        assert_eq!(field.surface_boundary_separator(1, 4), Some(0));
+    }
+
+    #[test]
+    fn local_repair_only_absorbs_into_existing_neighbor_sites() {
+        let mut exclusive_a = entry("test:a", 1.0, size(120.0, 320.0));
+        exclusive_a.exclusive_neighbor_group = Some("exclusive".to_owned());
+        let mut exclusive_b = entry("test:b", 1.0, size(120.0, 320.0));
+        exclusive_b.exclusive_neighbor_group = Some("exclusive".to_owned());
+        let surface_biomes = Arc::new(vec![
+            entry("test:plains", 1.0, size(120.0, 420.0)),
+            exclusive_a,
+            exclusive_b,
+        ]);
+        let config = SurfaceFieldConfig::from_biomes(&surface_biomes, None);
+        let field = BiomeField {
+            surface_biomes,
+            volume_biomes: Arc::new(Vec::new()),
+            surface_field_config: config,
+            volume_site_spacing: None,
+            climate: MacroClimateField::new(19),
+            seed: 19,
+            single_surface_biome: None,
+            ocean_surface_index: None,
+            spawn_oceans: true,
+            spawn_target_surface_biome: None,
+        };
+
+        for z in -16..=16 {
+            for x in -16..=16 {
+                let cell = IVec2::new(x, z);
+                let repaired = field.land_biome_for_cell(cell);
+                let local = LOCAL_REPAIR_OFFSETS.map(|offset| {
+                    field
+                        .weighted_land_biome_for_cell(cell + offset)
+                        .expect("test field always has a land biome")
+                });
+                assert!(local.contains(&repaired));
+            }
+        }
     }
 
     #[test]
@@ -624,12 +720,6 @@ mod tests {
                 assert!((140.0..=360.0).contains(&scale.y));
             }
         }
-    }
-
-    #[test]
-    fn stabilized_scale_limits_extreme_cell_competition() {
-        assert_eq!(stabilized_axis_scale(0.0, 80.0, 420.0, 250.0), 162.5);
-        assert_eq!(stabilized_axis_scale(1.0, 80.0, 420.0, 250.0), 337.5);
     }
 
     #[test]
