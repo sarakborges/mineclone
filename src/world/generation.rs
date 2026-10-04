@@ -7,6 +7,8 @@ mod materials;
 mod structures;
 mod surface_objects;
 
+use std::time::{Duration, Instant};
+
 use bevy::prelude::*;
 
 use crate::{
@@ -52,6 +54,29 @@ pub(crate) use self::{
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ChunkGenerationPassTimings {
+    pub(crate) biome_map: Option<Duration>,
+    pub(crate) structure_extent: Option<Duration>,
+    pub(crate) terrain_columns: Option<Duration>,
+    pub(crate) volume_biomes: Option<Duration>,
+    pub(crate) density_field: Option<Duration>,
+    pub(crate) materials: Option<Duration>,
+    pub(crate) initial_fluids: Option<Duration>,
+    pub(crate) structures: Option<Duration>,
+    pub(crate) surface_objects: Option<Duration>,
+}
+
+fn measure_generation_pass<T>(
+    slot: &mut Option<Duration>,
+    operation: impl FnOnce() -> T,
+) -> T {
+    let started = Instant::now();
+    let result = operation();
+    *slot = Some(started.elapsed());
+    result
+}
+
 pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) fluids: &'a FluidRegistry,
@@ -68,6 +93,23 @@ pub(crate) fn generate_chunk(
     chunk_coord: IVec3,
     context: &ChunkGenerationContext<'_>,
 ) -> VoxelChunk {
+    generate_chunk_profiled(chunk_coord, context).0
+}
+
+pub(crate) fn generate_chunk_profiled(
+    chunk_coord: IVec3,
+    context: &ChunkGenerationContext<'_>,
+) -> (VoxelChunk, ChunkGenerationPassTimings) {
+    let mut timings = ChunkGenerationPassTimings::default();
+    let chunk = generate_chunk_inner(chunk_coord, context, &mut timings);
+    (chunk, timings)
+}
+
+fn generate_chunk_inner(
+    chunk_coord: IVec3,
+    context: &ChunkGenerationContext<'_>,
+    timings: &mut ChunkGenerationPassTimings,
+) -> VoxelChunk {
     if chunk_coord.y < 0 {
         return VoxelChunk::empty();
     }
@@ -79,14 +121,21 @@ pub(crate) fn generate_chunk(
     // Stage 1: resolve the horizontal biome map once. Every vertical chunk at
     // this X/Z reuses the same immutable map and one-block neighbor halo.
     let horizontal_chunk = chunk_coord.xz();
-    let biome_map = context
-        .feature_fields
-        .surface_biome_map(horizontal_chunk, || {
-            BiomeMapTile::sample(horizontal_chunk, context.biome_field)
-        });
+    let biome_map = measure_generation_pass(&mut timings.biome_map, || {
+        context
+            .feature_fields
+            .surface_biome_map(horizontal_chunk, || {
+                BiomeMapTile::sample(horizontal_chunk, context.biome_field)
+            })
+    });
 
-    let structure_top_chunk =
-        maximum_structure_top_chunk_for_horizontal_chunk(horizontal_chunk, context);
+    // Structure reach is resolved before terrain columns so sections above the
+    // terrain surface can still be retained when authored structures reach into
+    // them. Keep this separate from the later structure raster pass because it
+    // may resolve/cache substantial connected-structure metadata on its own.
+    let structure_top_chunk = measure_generation_pass(&mut timings.structure_extent, || {
+        maximum_structure_top_chunk_for_horizontal_chunk(horizontal_chunk, context)
+    });
     let maximum_surface_chunk_y = match context.world_generation.mode() {
         WorldGenerationMode::Normal => chunk_y_bounds(context.dimension, context.biomes).1,
         WorldGenerationMode::Flat => {
@@ -111,29 +160,33 @@ pub(crate) fn generate_chunk(
     // Stage 2: convert biome-map samples into terrain columns. This is still a
     // horizontal artifact and is reused by every vertical chunk section.
     let chunk_origin = chunk_origin(chunk_coord);
-    let columns = context
-        .feature_fields
-        .generation_columns(horizontal_chunk, || match context.world_generation.mode() {
-            WorldGenerationMode::Normal => sample_generation_columns_from_map(
-                horizontal_chunk,
-                context.dimension,
-                context.biomes,
-                context.biome_field,
-                biome_map.as_ref(),
-            ),
-            WorldGenerationMode::Flat => sample_flat_generation_columns_from_map(
-                flat_surface_height(context.dimension),
-                biome_map.as_ref(),
-            ),
-            WorldGenerationMode::Void => unreachable!(),
+    let (columns, local_surface_chunk) =
+        measure_generation_pass(&mut timings.terrain_columns, || {
+            let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
+                match context.world_generation.mode() {
+                    WorldGenerationMode::Normal => sample_generation_columns_from_map(
+                        horizontal_chunk,
+                        context.dimension,
+                        context.biomes,
+                        context.biome_field,
+                        biome_map.as_ref(),
+                    ),
+                    WorldGenerationMode::Flat => sample_flat_generation_columns_from_map(
+                        flat_surface_height(context.dimension),
+                        biome_map.as_ref(),
+                    ),
+                    WorldGenerationMode::Void => unreachable!(),
+                }
+            });
+            let local_surface_chunk = columns
+                .iter()
+                .map(|column| column.surface_height)
+                .max()
+                .unwrap_or(1)
+                .max(context.dimension.sea_level)
+                .div_euclid(CHUNK_SIZE as i32);
+            (columns, local_surface_chunk)
         });
-    let local_surface_chunk = columns
-        .iter()
-        .map(|column| column.surface_height)
-        .max()
-        .unwrap_or(1)
-        .max(context.dimension.sea_level)
-        .div_euclid(CHUNK_SIZE as i32);
 
     // Most volume modifiers only carve existing terrain. Avoid constructing a
     // cave/volume region for chunks that are well above any local surface,
@@ -147,62 +200,74 @@ pub(crate) fn generate_chunk(
     }
 
     // Stage 3: resolve 3D/volume biomes for this generation region.
-    let region_coord = generation_region_coord(chunk_coord);
-    let volume_region = context
-        .feature_fields
-        .volume_biome_region(region_coord, || {
-            let (minimum, maximum) = generation_region_world_bounds(region_coord);
-            context
-                .biome_field
-                .volume_region_in_bounds(minimum, maximum)
-        });
-    let chunk_minimum = chunk_origin.as_vec3();
-    let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
-    let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
+    let chunk_volume_region = measure_generation_pass(&mut timings.volume_biomes, || {
+        let region_coord = generation_region_coord(chunk_coord);
+        let volume_region = context
+            .feature_fields
+            .volume_biome_region(region_coord, || {
+                let (minimum, maximum) = generation_region_world_bounds(region_coord);
+                context
+                    .biome_field
+                    .volume_region_in_bounds(minimum, maximum)
+            });
+        let chunk_minimum = chunk_origin.as_vec3();
+        let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
+        volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum)
+    });
 
     // Stage 4: turn terrain columns + volume biomes into a density field.
-    let density = sample_density_field(
-        chunk_origin,
-        columns.as_ref(),
-        &DensityPassContext {
-            volume_region: &chunk_volume_region,
-            biome_field: context.biome_field,
-            allow_caverns: context.world_generation.spawn_caves(),
-            allow_solid_volume,
-        },
-    );
+    let density = measure_generation_pass(&mut timings.density_field, || {
+        sample_density_field(
+            chunk_origin,
+            columns.as_ref(),
+            &DensityPassContext {
+                volume_region: &chunk_volume_region,
+                biome_field: context.biome_field,
+                allow_caverns: context.world_generation.spawn_caves(),
+                allow_solid_volume,
+            },
+        )
+    });
     let mut chunk = VoxelChunk::empty();
 
     // Stages 5-8: authoritative voxel content. Rendering consumes the result
     // later and is intentionally absent from this pipeline.
-    rasterize_material_pass(
-        &mut chunk,
-        chunk_origin,
-        columns.as_ref(),
-        &density,
-        &MaterialPassContext {
-            blocks: context.blocks,
-            biomes: context.biomes,
-            biome_field: context.biome_field,
-        },
-    );
-    rasterize_fluid_pass(
-        &mut chunk,
-        chunk_origin,
-        columns.as_ref(),
-        &density.values,
-        &FluidPassContext {
-            fluids: context.fluids,
-            biomes: context.biomes,
-            biome_field: context.biome_field,
-            sea_level: context.dimension.sea_level,
-            sea_fluid: &context.dimension.sea_fluid,
-        },
-    );
+    measure_generation_pass(&mut timings.materials, || {
+        rasterize_material_pass(
+            &mut chunk,
+            chunk_origin,
+            columns.as_ref(),
+            &density,
+            &MaterialPassContext {
+                blocks: context.blocks,
+                biomes: context.biomes,
+                biome_field: context.biome_field,
+            },
+        );
+    });
+    measure_generation_pass(&mut timings.initial_fluids, || {
+        rasterize_fluid_pass(
+            &mut chunk,
+            chunk_origin,
+            columns.as_ref(),
+            &density.values,
+            &FluidPassContext {
+                fluids: context.fluids,
+                biomes: context.biomes,
+                biome_field: context.biome_field,
+                sea_level: context.dimension.sea_level,
+                sea_fluid: &context.dimension.sea_fluid,
+            },
+        );
+    });
     if context.world_generation.spawn_structures() {
-        rasterize_structures(&mut chunk, chunk_origin, context);
+        measure_generation_pass(&mut timings.structures, || {
+            rasterize_structures(&mut chunk, chunk_origin, context);
+        });
     }
-    rasterize_surface_objects(&mut chunk, chunk_origin, columns.as_ref(), context);
+    measure_generation_pass(&mut timings.surface_objects, || {
+        rasterize_surface_objects(&mut chunk, chunk_origin, columns.as_ref(), context);
+    });
 
     chunk
 }
