@@ -469,7 +469,7 @@ pub(crate) fn sync_held_object_models(
         if marker.object_id != object_id {
             continue;
         }
-        if let Some(material) = view.materials.get_mut(&handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&handle.0) {
             material.base_color = tint;
             material.unlit = object.unlit;
         }
@@ -523,7 +523,7 @@ pub(crate) fn sync_held_sprites(content: HeldSpriteContent, mut view: HeldSprite
         if *transform != base_transform {
             *transform = base_transform;
         }
-        if let Some(material) = view.materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = Color::WHITE;
             material.base_color_texture = Some(content.asset_server.load(visual.icon.to_owned()));
         }
@@ -542,7 +542,7 @@ pub(crate) fn sync_held_sprites(content: HeldSpriteContent, mut view: HeldSprite
         if *visibility != tint_visibility {
             *visibility = tint_visibility;
         }
-        if let Some(material) = view.materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = view.materials.get_mut(&material_handle.0) {
             material.base_color = visual.tint.unwrap_or(Color::WHITE);
             material.base_color_texture = visual
                 .tint_icon
