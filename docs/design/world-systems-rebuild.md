@@ -347,6 +347,46 @@ The September 8 gradual-biome implementation is a behavioral reference for the s
 
 Exact transition width/falloff is a Phase 3 implementation/tuning concern. It must be deterministic, derived consistently from the authoritative boundaries, and validated through the required biome map viewer rather than becoming a second ownership model.
 
+#### Surface and volume biome relationship
+
+Biome layout has two related but distinct spatial ownership layers:
+
+- the **surface biome field** is authoritative in two dimensions and maps world `(x, z)` to the surface layout sample for that column;
+- the optional **volume biome field** is authoritative in three dimensions and may map any world `(x, y, z)` to a volume biome sample.
+
+A volume biome is not synonymous with an underground biome. Volume formations may exist at any Y, including entirely below terrain, intersecting the generated surface, extending through terrain into open air, or existing entirely above the terrain in regions such as floating formations or atmospheric/magical volumes.
+
+Conceptually the biome capability exposes equivalent facts to:
+
+```text
+surface_biome_at(x, z) -> BiomeSample
+volume_biome_at(x, y, z) -> optional BiomeSample
+effective_biome_at(x, y, z) -> BiomeSample
+```
+
+The effective biome rule is simple:
+
+```text
+if a volume biome occupies (x, y, z)
+    use that volume biome sample
+otherwise
+    inherit the surface biome sample for (x, z)
+```
+
+The semantics are binding:
+
+- surface ownership remains an authoritative 2D fact even when a volume biome overlaps that column;
+- a volume biome overrides only the effective biome at the XYZ positions it occupies; it does not mutate, split, or replace the underlying surface layout;
+- volume placement may consume the surface layout as an eligibility/input signal, but dependency is one-way: volume layout does not rewrite surface ownership;
+- surface and volume biomes use the same `BiomeId` definition universe; do not create parallel `SurfaceBiome` and `UndergroundBiome` type hierarchies merely because their placement fields have different dimensionality;
+- the initial world may contain zero authored volume biomes without changing the contract;
+- a volume biome may influence 3D generation behavior where its authored rules require it, including density/shape, carving/additive mass, materials, structures, vegetation, or environment behavior; it is not restricted to cave decoration;
+- consumers asking for biome identity at an XYZ position use the effective biome rather than assuming the surface biome extends infinitely through Y;
+- surface and volume fields each own their own boundary/influence sampling. Their influence vectors are not automatically merged into one mixed surface/volume vector; the effective resolver selects the active field's sample at that point;
+- scalar and bounded-area/volume query forms must remain semantically equivalent and generation-order independent.
+
+This keeps the 2D surface layout stable and inspectable while allowing true 3D biome volumes anywhere in world space.
+
 #### Required biome map viewer
 
 This phase is not complete without a real 2D biome-map visualization tool.
@@ -596,19 +636,24 @@ Each position has exactly one authoritative primary biome plus a variable normal
 
 Continuous consumers may combine all influence weights, while discrete identity remains governed by `primary` unless a domain explicitly defines another discrete selection rule. Influences come from the authoritative new layout geometry/boundaries rather than restoring the September site's distance/Voronoi implementation. The successful September 8 move from primary/secondary to weighted multi-biome influence collections is retained as behavioral precedent only. Internal compact storage/batching is allowed, but it must not change the influence contract or make scalar and batch sampling disagree.
 
+#### Surface and volume biome relationship — resolved 2026-10-04
+
+Surface biome ownership is an authoritative 2D X/Z layout. Volume biome ownership is an optional authoritative 3D field and may exist at any Y: below terrain, intersecting the terrain surface, crossing into open air, or entirely above terrain.
+
+At a queried XYZ position, an occupying volume biome supplies the effective biome sample; otherwise the position inherits the surface biome sample for that X/Z column. Volume layout may consume surface layout as an eligibility/input signal but never mutates or replaces the underlying surface ownership. Surface and volume use the same `BiomeId` definition universe rather than separate biome type hierarchies, and each field owns its own boundary/influence sample instead of automatically mixing surface and volume influence vectors.
+
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. surface/volume biome relationship model;
-2. ocean/sea-level terrain semantics without a hydrology subsystem;
-3. terrain representation and cross-chunk sampling strategy;
-4. structure planning/index/query contract;
-5. safe spawn/warp destination query strategy;
-6. generated vs persisted chunk/delta representation;
-7. persistence format boundaries;
-8. loading phase hierarchy and progress aggregation;
-9. benchmark budgets and fixed-seed visual/performance fixtures.
+1. ocean/sea-level terrain semantics without a hydrology subsystem;
+2. terrain representation and cross-chunk sampling strategy;
+3. structure planning/index/query contract;
+4. safe spawn/warp destination query strategy;
+5. generated vs persisted chunk/delta representation;
+6. persistence format boundaries;
+7. loading phase hierarchy and progress aggregation;
+8. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
