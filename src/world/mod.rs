@@ -24,7 +24,6 @@ pub(crate) mod game_rules;
 pub(crate) mod generator;
 mod lighting_updates;
 mod main_world_diagnostics;
-pub(crate) mod math;
 pub(crate) mod new_world;
 mod presentation_snapshot;
 mod render_diagnostics;
@@ -71,7 +70,7 @@ use chunk_visibility::{
     ChunkPresentationSelection, sync_chunk_visibility, sync_new_chunk_visibility,
 };
 use day_night::DayNightPlugin;
-use dimension::{CurrentDimension, DimensionEntityCounts};
+use dimension::CurrentDimension;
 use dimension_persistence::InactiveDimensionStates;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
@@ -123,7 +122,6 @@ impl Plugin for WorldPlugin {
         install_render_prepare_diagnostics(app);
 
         app.init_resource::<CurrentDimension>()
-            .init_resource::<DimensionEntityCounts>()
             .init_resource::<CurrentBiome>()
             .init_resource::<BiomeField>()
             .init_resource::<WorldSeed>()
