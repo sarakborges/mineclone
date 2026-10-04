@@ -6,13 +6,10 @@ use std::{
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use crate::{
-    localization::LocalizedText,
-    voxel::{
-        chunk::MAX_OBJECTS_PER_VOXEL,
-        object::{ObjectCell, ObjectTransform},
-        texture_rotation::TextureRotation,
-    },
+use crate::voxel::{
+    chunk::MAX_OBJECTS_PER_VOXEL,
+    object::{ObjectCell, ObjectTransform},
+    texture_rotation::TextureRotation,
 };
 
 use super::{
@@ -270,10 +267,9 @@ struct StructureRuntime {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StructureDefinition {
     pub id: String,
-    pub name: LocalizedText,
     pub locatable: bool,
     pub rotation: bool,
     #[serde(default, rename = "group_id")]
@@ -803,7 +799,6 @@ impl StructureDefinition {
 
     fn validate_layout(&self) {
         assert!(!self.id.trim().is_empty(), "structure id cannot be empty");
-        self.name.validate(&format!("structure {} name", self.id));
         if let Some(group_id) = self.group_id.as_deref() {
             assert!(
                 !group_id.trim().is_empty(),
@@ -1323,4 +1318,52 @@ fn default_connector_strength_loss() -> f32 {
 
 fn default_surface_layer_chance() -> f32 {
     1.0
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::StructureDefinition;
+
+    #[test]
+    fn structure_definition_does_not_require_name() {
+        let definition: StructureDefinition = serde_json::from_value(json!({
+            "id": "asteria:test_structure",
+            "locatable": false,
+            "rotation": false,
+            "palette": {
+                "S": { "block": "asteria:stone" }
+            },
+            "layers": [
+                { "y": 0, "rows": ["S"] }
+            ]
+        }))
+        .expect("structure definition should deserialize without name");
+
+        assert_eq!(definition.id, "asteria:test_structure");
+    }
+
+    #[test]
+    fn legacy_structure_name_is_rejected() {
+        let error = serde_json::from_value::<StructureDefinition>(json!({
+            "id": "asteria:test_structure",
+            "name": {
+                "english": "Legacy",
+                "portuguese_brazil": "Legacy",
+                "spanish": "Legacy"
+            },
+            "locatable": false,
+            "rotation": false,
+            "palette": {
+                "S": { "block": "asteria:stone" }
+            },
+            "layers": [
+                { "y": 0, "rows": ["S"] }
+            ]
+        }))
+        .expect_err("structure name should no longer be part of the schema");
+
+        assert!(error.to_string().contains("unknown field `name`"));
+    }
 }
