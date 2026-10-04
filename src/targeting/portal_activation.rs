@@ -14,10 +14,7 @@ use crate::{
         layer::LayerFace,
     },
     gameplay::availability::world_interaction_available,
-    player::{
-        hotbar::PlayerHotbar,
-        viewmodel::ViewModelAnimation,
-    },
+    player::{hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
         edit::VoxelTopologyRuntime, layer::LayerCell, read::VoxelRead,
         texture_rotation::TextureRotation,
@@ -28,6 +25,7 @@ use super::block::{BlockTargetingSet, TargetedBlock};
 
 const PORTAL_FRAME_TAG: &str = "is_portal_frame";
 const ACCEPT_DIMENSION_TAG_PREFIX: &str = "accept_dimension:";
+const MAX_PORTAL_FRAME_VOXELS: usize = 4096;
 const MAX_PORTAL_INTERIOR_VOXELS: usize = 4096;
 const MAX_PORTAL_SPAN: i32 = 64;
 
@@ -243,15 +241,48 @@ fn find_plane_interior(
     plane: PortalPlane,
     mut classify: impl FnMut(IVec3) -> PortalCell,
 ) -> Option<Vec<IVec3>> {
-    for seed in plane_neighbors(clicked_frame, plane) {
-        if classify(seed) != PortalCell::Empty {
-            continue;
-        }
-        if let Some(interior) = flood_closed_interior(seed, plane, &mut classify) {
-            return Some(interior);
+    let frame = collect_connected_frame(clicked_frame, plane, &mut classify)?;
+    let mut attempted_seeds = HashSet::new();
+
+    for frame_voxel in frame {
+        for seed in plane_neighbors(frame_voxel, plane) {
+            if !attempted_seeds.insert(seed) || classify(seed) != PortalCell::Empty {
+                continue;
+            }
+            if let Some(interior) = flood_closed_interior(seed, plane, &mut classify) {
+                return Some(interior);
+            }
         }
     }
     None
+}
+
+fn collect_connected_frame(
+    clicked_frame: IVec3,
+    plane: PortalPlane,
+    classify: &mut impl FnMut(IVec3) -> PortalCell,
+) -> Option<Vec<IVec3>> {
+    if classify(clicked_frame) != PortalCell::Frame {
+        return None;
+    }
+
+    let mut queue = VecDeque::from([clicked_frame]);
+    let mut visited = HashSet::from([clicked_frame]);
+
+    while let Some(voxel) = queue.pop_front() {
+        if visited.len() > MAX_PORTAL_FRAME_VOXELS || exceeds_portal_span(clicked_frame, voxel) {
+            return None;
+        }
+        for neighbor in plane_neighbors(voxel, plane) {
+            if classify(neighbor) == PortalCell::Frame && visited.insert(neighbor) {
+                queue.push_back(neighbor);
+            }
+        }
+    }
+
+    let mut frame = visited.into_iter().collect::<Vec<_>>();
+    frame.sort_by_key(|voxel| (voxel.x, voxel.y, voxel.z));
+    Some(frame)
 }
 
 fn flood_closed_interior(
@@ -321,25 +352,57 @@ mod tests {
         frame
     }
 
+    fn classify_test_frame(
+        frame: &HashSet<IVec3>,
+        plane: PortalPlane,
+        origin: IVec3,
+        voxel: IVec3,
+    ) -> PortalCell {
+        if frame.contains(&voxel) {
+            PortalCell::Frame
+        } else {
+            let normal = match plane.face {
+                LayerFace::Right => IVec3::X,
+                LayerFace::Top => IVec3::Y,
+                LayerFace::Front => IVec3::Z,
+                _ => unreachable!("portal test planes only use canonical positive faces"),
+            };
+            if (voxel - origin).dot(normal).abs() > 0 {
+                PortalCell::Unloaded
+            } else if (voxel - origin).abs().max_element() > 8 {
+                PortalCell::Unloaded
+            } else {
+                PortalCell::Empty
+            }
+        }
+    }
+
     #[test]
-    fn closed_frame_resolves_interior_and_plane() {
+    fn closed_frame_resolves_interior_from_edge_block() {
         let plane = PORTAL_PLANES[2];
         let origin = IVec3::new(10, 20, 30);
         let frame = rectangle_frame(plane, origin, 5, 4);
         let clicked = origin + plane.axis_u;
         let interior = find_plane_interior(clicked, plane, |voxel| {
-            if frame.contains(&voxel) {
-                PortalCell::Frame
-            } else if (voxel.z - origin.z).abs() > 0 {
-                PortalCell::Unloaded
-            } else {
-                PortalCell::Empty
-            }
+            classify_test_frame(&frame, plane, origin, voxel)
         })
         .expect("closed frame should have an interior");
 
         assert_eq!(interior.len(), 6);
         assert!(interior.contains(&(origin + plane.axis_u + plane.axis_v)));
+    }
+
+    #[test]
+    fn closed_frame_resolves_interior_from_corner_block() {
+        let plane = PORTAL_PLANES[2];
+        let origin = IVec3::new(10, 20, 30);
+        let frame = rectangle_frame(plane, origin, 5, 4);
+        let interior = find_plane_interior(origin, plane, |voxel| {
+            classify_test_frame(&frame, plane, origin, voxel)
+        })
+        .expect("clicking a frame corner should still resolve the enclosed interior");
+
+        assert_eq!(interior.len(), 6);
     }
 
     #[test]
@@ -351,13 +414,7 @@ mod tests {
         let clicked = origin + plane.axis_u;
 
         let interior = find_plane_interior(clicked, plane, |voxel| {
-            if frame.contains(&voxel) {
-                PortalCell::Frame
-            } else if (voxel - origin).abs().max_element() > 8 {
-                PortalCell::Unloaded
-            } else {
-                PortalCell::Empty
-            }
+            classify_test_frame(&frame, plane, origin, voxel)
         });
 
         assert!(interior.is_none());
