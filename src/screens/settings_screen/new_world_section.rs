@@ -43,6 +43,16 @@ pub(super) struct RandomSeedButton;
 pub(super) struct SeedInputKind;
 pub(super) type SeedInputState = NumericInputState<SeedInputKind>;
 
+type NewWorldSettingsControlInteractions<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (
+        Changed<Interaction>,
+        Or<(With<RandomSeedButton>, With<GameModeButton>)>,
+    ),
+>;
+
 #[derive(Component, Clone, Copy)]
 pub(super) enum NewWorldFooterAction {
     MainMenu,
@@ -208,13 +218,7 @@ fn new_world_footer_label(language: Language, action: NewWorldFooterAction) -> &
 }
 
 pub(super) fn handle_new_world_settings_control_focus(
-    interactions: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            Or<(With<RandomSeedButton>, With<GameModeButton>)>,
-        ),
-    >,
+    interactions: NewWorldSettingsControlInteractions,
     mut seed_input: ResMut<SeedInputState>,
 ) {
     if interactions
