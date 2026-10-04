@@ -12,7 +12,7 @@ use clouds::{
     cloud_presentation_needs_sync, spawn_clouds, sync_cloud_presentation, update_cloud_positions,
 };
 use stars::{spawn_stars, update_stars};
-use state::{SkyLayerVisualState, update_sky_layer_visuals};
+use state::SkyLayerVisualState;
 
 pub struct SkyLayersPlugin;
 
@@ -21,10 +21,6 @@ impl Plugin for SkyLayersPlugin {
         app.init_resource::<SkyLayerVisualState>()
             .add_systems(Startup, setup_sky_layer_assets)
             .add_systems(OnEnter(GameState::Gameplay), (spawn_stars, spawn_clouds))
-            .add_systems(
-                Update,
-                update_sky_layer_visuals.run_if(in_state(GameState::Gameplay)),
-            )
             .add_systems(
                 PostUpdate,
                 (
