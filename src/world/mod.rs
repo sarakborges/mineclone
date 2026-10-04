@@ -14,8 +14,9 @@ pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
-// Phase 2 foundation is intentionally not wired into Loading yet. It is a pure,
-// immutable query root until later phases add biome/terrain/structure owners.
+// Phase 2 foundation is intentionally not wired into generated content yet. It
+// owns only the immutable query root until later phases add biome/terrain/
+// structure capabilities.
 #[allow(dead_code)]
 pub(crate) mod generator;
 mod lighting_updates;
@@ -43,6 +44,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
+    content::dimension::DimensionRegistry,
     player::hotbar::PlayerHotbar,
     rendering::terrain_material::TerrainLightingBuffer,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
@@ -66,6 +68,7 @@ use dimension::CurrentDimension;
 use dimension_persistence::InactiveDimensionStates;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
+use generator::WorldGenerator;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 use main_world_diagnostics::{
     MainWorldWorkSamples, begin_deferred_mesh_retirement_work, begin_fluid_work,
@@ -162,6 +165,7 @@ impl Plugin for WorldPlugin {
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
+                    install_world_generator,
                 )
                     .chain(),
             )
@@ -292,6 +296,24 @@ impl Plugin for WorldPlugin {
     }
 }
 
+fn install_world_generator(
+    mut commands: Commands,
+    seed: Res<WorldSeed>,
+    current_dimension: Res<CurrentDimension>,
+    dimensions: Res<DimensionRegistry>,
+) {
+    let definition = dimensions
+        .get(current_dimension.id.as_str())
+        .unwrap_or_else(|| {
+            panic!(
+                "cannot install world generator: current dimension {} is missing from the registry",
+                current_dimension.id
+            )
+        });
+
+    commands.insert_resource(WorldGenerator::new(seed.0, definition));
+}
+
 fn prepare_world_session(
     mut session: ResMut<WorldSession>,
     mode: Res<WorldLoadMode>,
@@ -311,6 +333,7 @@ fn release_world_session(
         let _ = images.remove(&terrain_materials.texture_array_handle());
     }
 
+    commands.remove_resource::<WorldGenerator>();
     commands.remove_resource::<VoxelWorld>();
     commands.remove_resource::<TerrainLightingBuffer>();
     commands.remove_resource::<TerrainMaterials>();
