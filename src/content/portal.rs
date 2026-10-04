@@ -80,10 +80,6 @@ impl PortalRegistry {
         self.definitions.insert(definition.id.clone(), definition);
     }
 
-    pub(crate) fn get(&self, id: &str) -> Option<&PortalDefinition> {
-        self.definitions.get(id)
-    }
-
     pub(crate) fn iter(&self) -> impl Iterator<Item = &PortalDefinition> {
         self.definitions.values()
     }
