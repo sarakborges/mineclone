@@ -42,12 +42,18 @@ impl BiomeMapConfig {
             self.width <= MAX_MAP_RESOLUTION && self.height <= MAX_MAP_RESOLUTION,
             "biome map resolution cannot exceed {MAX_MAP_RESOLUTION} pixels per axis"
         );
-        let _ = u64::from(self.width)
-            .checked_mul(u64::from(self.blocks_per_pixel))
-            .expect("biome map horizontal span is too large");
-        let _ = u64::from(self.height)
-            .checked_mul(u64::from(self.blocks_per_pixel))
-            .expect("biome map vertical span is too large");
+        let _ = sample_origin(
+            self.center_x,
+            self.width,
+            self.blocks_per_pixel,
+            "horizontal",
+        );
+        let _ = sample_origin(
+            self.center_z,
+            self.height,
+            self.blocks_per_pixel,
+            "vertical",
+        );
     }
 }
 
@@ -86,53 +92,69 @@ pub(crate) fn render_biome_map(
     config: &BiomeMapConfig,
 ) -> BiomeMapRender {
     config.validate();
-    let pixel_count = usize::try_from(u64::from(config.width) * u64::from(config.height))
-        .expect("validated biome map pixel count must fit usize");
-    let mut samples = Vec::with_capacity(pixel_count);
-    let half_width = i64::from(config.width) * i64::from(config.blocks_per_pixel) / 2;
-    let half_height = i64::from(config.height) * i64::from(config.blocks_per_pixel) / 2;
-    let origin_x = i64::from(config.center_x) - half_width;
-    let origin_z = i64::from(config.center_z) - half_height;
+    let origin_x = sample_origin(
+        config.center_x,
+        config.width,
+        config.blocks_per_pixel,
+        "horizontal",
+    );
+    let origin_z = sample_origin(
+        config.center_z,
+        config.height,
+        config.blocks_per_pixel,
+        "vertical",
+    );
+    let samples = queries.sample_surface_grid(
+        origin_x,
+        origin_z,
+        config.width,
+        config.height,
+        config.blocks_per_pixel,
+    );
 
-    for py in 0..config.height {
-        let z = sample_axis(origin_z, py, config.blocks_per_pixel);
-        for px in 0..config.width {
-            let x = sample_axis(origin_x, px, config.blocks_per_pixel);
-            samples.push(queries.surface_biome_at(x, z));
-        }
-    }
-
-    let colors = queries
-        .biome_ids()
-        .map(|id| (id.as_str().to_owned(), stable_biome_color(id.as_str())))
+    let region_ranges = queries
+        .biome_region_ranges()
+        .map(|(id, min, max)| (id.as_str().to_owned(), min, max))
+        .collect::<Vec<_>>();
+    let colors = region_ranges
+        .iter()
+        .map(|(id, _, _)| (id.clone(), stable_biome_color(id)))
         .collect::<BTreeMap<_, _>>();
     let mut image = RgbaImage::new(config.width, config.height);
     for py in 0..config.height {
         for px in 0..config.width {
-            let index = py as usize * config.width as usize + px as usize;
-            let sample = &samples[index];
+            let sample = samples
+                .sample_at(px, py)
+                .expect("validated biome map sample must exist");
             let mut color = colors[sample.primary().as_str()];
             if config.show_influences {
                 color = blend_toward_white(color, 1.0 - sample.primary_weight());
             }
-            if config.show_boundaries
-                && ((px > 0
-                    && samples[index - 1].primary() != sample.primary())
-                    || (py > 0
-                        && samples[index - config.width as usize].primary() != sample.primary()))
-            {
+            let left_boundary = px > 0
+                && samples
+                    .sample_at(px - 1, py)
+                    .is_some_and(|left| left.primary() != sample.primary());
+            let top_boundary = py > 0
+                && samples
+                    .sample_at(px, py - 1)
+                    .is_some_and(|top| top.primary() != sample.primary());
+            if config.show_boundaries && (left_boundary || top_boundary) {
                 color = [18, 18, 18];
             }
             image.put_pixel(px, py, Rgba([color[0], color[1], color[2], 255]));
         }
     }
 
-    let legend = colors
+    let legend = region_ranges
         .iter()
-        .map(|(id, color)| {
+        .map(|(id, min, max)| {
             serde_json::json!({
                 "id": id,
-                "rgb": color,
+                "rgb": colors[id],
+                "regionSize": {
+                    "min": min,
+                    "max": max
+                }
             })
         })
         .collect::<Vec<_>>();
@@ -145,7 +167,7 @@ pub(crate) fn render_biome_map(
         "center": [config.center_x, config.center_z],
         "blocksPerPixel": config.blocks_per_pixel,
         "resolution": [config.width, config.height],
-        "layoutCellSpan": queries.layout_cell_span(),
+        "sampleOrigin": [origin_x, origin_z],
         "boundaries": config.show_boundaries,
         "influences": config.show_influences,
         "biomes": legend,
@@ -156,10 +178,20 @@ pub(crate) fn render_biome_map(
     BiomeMapRender { image, legend_json }
 }
 
-fn sample_axis(origin: i64, pixel: u32, blocks_per_pixel: u32) -> i32 {
-    let offset = i64::from(pixel) * i64::from(blocks_per_pixel)
-        + i64::from(blocks_per_pixel) / 2;
-    (origin + offset).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+fn sample_origin(center: i32, pixel_count: u32, blocks_per_pixel: u32, axis: &str) -> i32 {
+    let span = i64::from(pixel_count)
+        .checked_mul(i64::from(blocks_per_pixel))
+        .expect("biome map span is too large");
+    let first = i64::from(center) - span / 2 + i64::from(blocks_per_pixel) / 2;
+    let last = first
+        + i64::from(pixel_count - 1)
+            .checked_mul(i64::from(blocks_per_pixel))
+            .expect("biome map span is too large");
+    assert!(
+        first >= i64::from(i32::MIN) && last <= i64::from(i32::MAX),
+        "biome map {axis} span exceeds world coordinate range"
+    );
+    first as i32
 }
 
 fn stable_biome_color(id: &str) -> [u8; 3] {
@@ -209,9 +241,10 @@ fn hash_text(value: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        content::biome::{BiomeDefinition, BiomeRegistry},
-        world::generator::{WorldGenerator, foundation::{GenerationDimension, GenerationSeed, GenerationSnapshot}},
+    use crate::content::biome::{BiomeDefinition, BiomeRegistry};
+    use crate::world::generator::{
+        WorldGenerator,
+        foundation::{GenerationDimension, GenerationSeed, GenerationSnapshot},
     };
 
     fn generator(seed: u64) -> WorldGenerator {
@@ -255,6 +288,7 @@ mod tests {
         assert_eq!(first.image().as_raw(), second.image().as_raw());
         assert_eq!(first.legend_json(), second.legend_json());
         assert!(first.legend_json().contains("asteria:test/a"));
+        assert!(first.legend_json().contains("regionSize"));
     }
 
     #[test]
