@@ -27,8 +27,7 @@ use crate::{
         player_id::LOCAL_PLAYER_ID,
     },
     voxel::{
-        chunk::CHUNK_SIZE, collision::collides_aabb, coordinates::chunk_coord_from_world,
-        world::VoxelWorld,
+        collision::collides_aabb, coordinates::chunk_coord_from_world, world::VoxelWorld,
     },
 };
 
@@ -42,7 +41,6 @@ const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
 const WARP_SEARCH_DIAMETER: usize = (WARP_SEARCH_RADIUS_BLOCKS * 2 + 1) as usize;
 const WARP_SEARCH_VOLUME: usize =
     WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER;
-const WARP_STREAMING_MIN_RADIUS_CHUNKS: i32 = 1;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
 const SLOW_WARP_SEARCH_WARNING: Duration = Duration::from_millis(4);
@@ -167,19 +165,6 @@ impl PendingWarp {
         })
     }
 
-    pub(super) fn streaming_radii(&self) -> Option<(i32, i32)> {
-        if self.dimension.is_some() {
-            return None;
-        }
-        self.target.map(|_| {
-            let chunk_size = CHUNK_SIZE as i32;
-            let search_radius_blocks = self.search.radius.max(0);
-            let search_radius_chunks = ((search_radius_blocks + chunk_size - 1) / chunk_size)
-                .max(WARP_STREAMING_MIN_RADIUS_CHUNKS);
-            (search_radius_chunks, search_radius_chunks)
-        })
-    }
-
     fn fail(&mut self) {
         self.target = None;
         self.dimension = None;
@@ -188,14 +173,8 @@ impl PendingWarp {
     }
 }
 
-#[derive(Resource)]
-pub(crate) struct PendingDimensionWarp {
-    target: IVec3,
-}
-
 #[derive(SystemParam)]
 pub(super) struct DimensionWarpContext<'w, 's> {
-    commands: Commands<'w, 's>,
     dimensions: Res<'w, DimensionRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     current_dimension: ResMut<'w, CurrentDimension>,
@@ -318,9 +297,6 @@ pub(super) fn resolve_pending_warp(
             let previous_dimension_text = previous_dimension.to_string();
             dimension.current_dimension.id = DimensionId::from(requested_dimension.clone());
             *dimension.load_mode = WorldLoadMode::Load;
-            dimension
-                .commands
-                .insert_resource(PendingDimensionWarp { target });
             dimension.next_game_state.set(GameState::Loading);
             log_gameplay_event(format!(
                 "warp.dimension_transition from={} to={} target={:?} next_state=Loading",
@@ -393,22 +369,6 @@ pub(super) fn resolve_pending_warp(
             *slow_search_warned = false;
         }
     }
-}
-
-pub(super) fn resume_dimension_warp(
-    mut commands: Commands,
-    dimension_warp: Option<Res<PendingDimensionWarp>>,
-    mut pending: ResMut<PendingWarp>,
-) {
-    let Some(dimension_warp) = dimension_warp else {
-        return;
-    };
-    let target = dimension_warp.target;
-    log_gameplay_event(format!(
-        "warp.dimension_transition loaded=true target={target:?} resume_safe_search=true"
-    ));
-    pending.request(target, None);
-    commands.remove_resource::<PendingDimensionWarp>();
 }
 
 fn dimension_warp_spawn_biome(
@@ -593,26 +553,11 @@ mod tests {
     }
 
     #[test]
-    fn warp_streaming_radius_grows_only_when_search_crosses_a_chunk() {
-        let mut pending = PendingWarp::default();
-        pending.request(IVec3::new(15, 64, 15), None);
-
-        assert_eq!(pending.streaming_radii(), Some((1, 1)));
-
-        pending.search.radius = CHUNK_SIZE as i32;
-        assert_eq!(pending.streaming_radii(), Some((1, 1)));
-
-        pending.search.radius = CHUNK_SIZE as i32 + 1;
-        assert_eq!(pending.streaming_radii(), Some((2, 2)));
-    }
-
-    #[test]
     fn dimension_warp_does_not_stream_the_old_dimension() {
         let mut pending = PendingWarp::default();
         pending.request(IVec3::new(15, 64, 15), Some("asteria:umbral"));
 
         assert_eq!(pending.streaming_center(), None);
-        assert_eq!(pending.streaming_radii(), None);
     }
 
     #[test]
