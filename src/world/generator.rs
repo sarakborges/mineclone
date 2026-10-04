@@ -3,12 +3,9 @@ mod foundation;
 use std::sync::Arc;
 
 use crate::content::dimension::DimensionDefinition;
-
-pub(crate) use foundation::{
-    GenerationDimension, GenerationDomain, GenerationPoint2, GenerationPoint3, GenerationSeed,
-    GenerationSnapshot, SampleArea2d, SampleGrid2d,
+use foundation::{
+    GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot,
 };
-use foundation::GenerationEntropy;
 
 /// Immutable entry point for deterministic generated-world queries.
 ///
@@ -41,7 +38,7 @@ impl WorldGenerator {
 
     /// Foundation-only deterministic entropy. Later biome/terrain/structure
     /// owners consume this internally; gameplay consumers never do.
-    pub(super) fn entropy(&self) -> &GenerationEntropy {
+    fn entropy(&self) -> &GenerationEntropy {
         &self.entropy
     }
 }
@@ -49,6 +46,7 @@ impl WorldGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::foundation::{GenerationDomain, GenerationPoint2};
 
     fn test_generator(seed: u64, dimension_id: &str) -> WorldGenerator {
         WorldGenerator::from_snapshot(GenerationSnapshot::new(
