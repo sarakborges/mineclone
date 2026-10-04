@@ -30,6 +30,10 @@ pub(crate) mod dimension_persistence;
 #[allow(dead_code)]
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
+// Phase 2 foundation is intentionally not wired into Loading yet. It is a pure,
+// immutable query root until later phases add biome/terrain/structure owners.
+#[allow(dead_code)]
+pub(crate) mod generator;
 mod lighting_updates;
 #[allow(dead_code)]
 mod main_world_diagnostics;

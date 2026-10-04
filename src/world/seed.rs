@@ -2,6 +2,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bevy::prelude::*;
 
+use super::deterministic::mix_seed;
+
 #[derive(Resource, Clone, Copy, Debug)]
 pub struct WorldSeed(pub u64);
 
@@ -22,13 +24,4 @@ impl Default for WorldSeed {
     fn default() -> Self {
         Self::fresh()
     }
-}
-
-fn mix_seed(mut seed: u64) -> u64 {
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
-    seed ^= seed >> 33;
-    seed
 }
