@@ -20,6 +20,7 @@ The active implementation branch is `main`. Branch/tool/Git execution rules are 
 ### Design
 
 - [`design/worldgen-coherence.md`](design/worldgen-coherence.md) — worldgen coherence package: biome relationships, ocean margins, volume biomes, surface indicators, and floating islands.
+- [`design/portal-travel.md`](design/portal-travel.md) — prepared data-driven inter-dimensional travel contract: exact-coordinate destination plus generic connected-Structure arrival carving.
 
 ### Features
 
