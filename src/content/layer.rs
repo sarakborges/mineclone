@@ -69,6 +69,14 @@ impl LayerFace {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum LayerAnchor {
+    #[default]
+    Surface,
+    Center,
+}
+
 fn default_faces() -> Vec<LayerFace> {
     LayerFace::ALL.to_vec()
 }
@@ -94,6 +102,8 @@ pub struct LayerDefinition {
     pub tint: BlockTint,
     #[serde(default = "default_faces")]
     pub faces: Vec<LayerFace>,
+    #[serde(default)]
+    pub anchor: LayerAnchor,
     #[serde(default = "default_offset")]
     pub offset: f32,
     #[serde(default)]
@@ -145,6 +155,11 @@ impl LayerRegistry {
         assert!(
             definition.offset.is_finite() && (0.0..=MAX_LAYER_OFFSET).contains(&definition.offset),
             "layer {} offset must be finite and between 0 and {MAX_LAYER_OFFSET}",
+            definition.id
+        );
+        assert!(
+            definition.anchor != LayerAnchor::Center || definition.offset == 0.0,
+            "centered layer {} must use offset 0",
             definition.id
         );
         assert!(
@@ -203,6 +218,7 @@ mod tests {
             creative_visible: true,
             tint: BlockTint::None,
             faces: vec![LayerFace::Top, LayerFace::Front],
+            anchor: LayerAnchor::Surface,
             offset: DEFAULT_LAYER_OFFSET,
             alpha_cutoff: Some(0.5),
             alpha_blend: false,
@@ -213,5 +229,11 @@ mod tests {
         assert!(layer.supports_face(LayerFace::Top));
         assert!(layer.supports_face(LayerFace::Front));
         assert!(!layer.supports_face(LayerFace::Bottom));
+    }
+
+    #[test]
+    fn layer_anchor_deserializes_center() {
+        let anchor: LayerAnchor = serde_json::from_str(r#""center""#).unwrap();
+        assert_eq!(anchor, LayerAnchor::Center);
     }
 }
