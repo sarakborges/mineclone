@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -35,6 +36,16 @@ pub(crate) struct GenerationStageDiagnostic {
     count: u64,
     average_micros: u64,
     max_micros: u64,
+}
+
+impl fmt::Display for GenerationStageDiagnostic {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "count:{} avg_us:{} max_us:{}",
+            self.count, self.average_micros, self.max_micros
+        )
+    }
 }
 
 impl GenerationStageMetrics {
@@ -85,6 +96,24 @@ pub(crate) struct GenerationPipelineDiagnostic {
     initial_fluids: GenerationStageDiagnostic,
     structures: GenerationStageDiagnostic,
     surface_objects: GenerationStageDiagnostic,
+}
+
+impl fmt::Display for GenerationPipelineDiagnostic {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "biome_map[{}] structure_extent[{}] terrain_columns[{}] volume_biomes[{}] density_field[{}] materials[{}] initial_fluids[{}] structures[{}] surface_objects[{}]",
+            self.biome_map,
+            self.structure_extent,
+            self.terrain_columns,
+            self.volume_biomes,
+            self.density_field,
+            self.materials,
+            self.initial_fluids,
+            self.structures,
+            self.surface_objects,
+        )
+    }
 }
 
 impl GenerationPipelineMetrics {
@@ -271,12 +300,12 @@ mod tests {
         metrics.record(ChunkGenerationPassTimings {
             biome_map: Some(Duration::from_micros(10)),
             density_field: Some(Duration::from_micros(30)),
-            ..default()
+            ..ChunkGenerationPassTimings::default()
         });
         metrics.record(ChunkGenerationPassTimings {
             biome_map: Some(Duration::from_micros(20)),
             density_field: Some(Duration::from_micros(50)),
-            ..default()
+            ..ChunkGenerationPassTimings::default()
         });
 
         let diagnostic = metrics.diagnostic();
