@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
-    constants::{BORDER_TRANSITION_WIDTH, VISUAL_BLEND_WIDTH},
+    constants::BORDER_TRANSITION_WIDTH,
     spatial::{smoothstep, varied_surface_margin_width},
 };
 
@@ -25,10 +25,6 @@ struct SurfaceBoundaryBlend {
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
         self.sample_surface_with_transition_width(position, BORDER_TRANSITION_WIDTH)
-    }
-
-    pub(crate) fn sample_visual_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
-        self.sample_surface_with_transition_width(position, VISUAL_BLEND_WIDTH)
     }
 
     fn sample_surface_with_transition_width(
