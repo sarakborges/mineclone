@@ -10,6 +10,9 @@ use crate::content::structure::{StructureDefinition, StructureRotation};
 use super::super::{ResolvedStructurePlacement, ResolvedStructurePlan, ResolvedStructurePlanPiece};
 use super::geometry::rectangles_overlap;
 
+const MIN_COMPETITOR_QUERY_BATCH: usize = 4;
+const MAX_COMPETITOR_QUERY_AREA_INFLATION: u128 = 4;
+
 #[derive(Clone, Copy)]
 pub(crate) struct StructureCandidate<'a> {
     pub(crate) biome_id: &'a str,
@@ -39,10 +42,12 @@ pub(crate) struct StructureCandidate<'a> {
 //
 // Collector contract: every call must append all candidates whose full placement
 // bounds intersect the requested rectangle. The resolver first collects candidates
-// intersecting the target, then performs one enclosing competitor query spanning
-// every direct candidate's full bounds. Candidates returned only because they
-// intersect that enclosing rectangle are filtered against the exact direct bounds,
-// so the result is equivalent to querying every direct placement separately.
+// intersecting the target, then batches the direct candidates spatially for
+// competitor queries. Dense/overlapping bounds stay in one query; sparse bounds
+// are split until each query is compact or contains only a small bounded batch.
+// Each direct candidate's complete bounds are still covered by exactly one query,
+// so cross-boundary blockers are preserved without scanning one enormous empty
+// enclosing rectangle or returning to one collector call per candidate.
 //
 // Ranking is deterministic: priority descending, then placement id, biome id,
 // placement anchor X/Z, and placement Y ascending. `reserve_space` is directional:
@@ -65,33 +70,28 @@ pub(crate) fn resolve_structure_placements<'a>(
         .iter()
         .map(candidate_identity)
         .collect::<HashSet<_>>();
-    let competitor_minimum = direct_candidates
-        .iter()
-        .fold(IVec2::splat(i32::MAX), |minimum, candidate| {
-            minimum.min(candidate.minimum)
-        });
-    let competitor_maximum = direct_candidates
-        .iter()
-        .fold(IVec2::splat(i32::MIN), |maximum, candidate| {
-            maximum.max(candidate.maximum)
-        });
-    let mut overlapping = Vec::new();
-    collect_candidates(
-        competitor_minimum,
-        competitor_maximum,
-        &mut overlapping,
-    );
-    for candidate in overlapping {
-        let blocks_direct_candidate = direct_candidates.iter().any(|direct| {
-            !same_candidate(&candidate, direct)
-                && candidate_outranks(&candidate, direct)
-                && candidates_conflict(&candidate, direct)
-        });
-        if !blocks_direct_candidate {
-            continue;
-        }
-        if seen.insert(candidate_identity(&candidate)) {
-            competitors.push(candidate);
+
+    for (competitor_minimum, competitor_maximum) in
+        competitor_query_bounds(&direct_candidates)
+    {
+        let mut overlapping = Vec::new();
+        collect_candidates(
+            competitor_minimum,
+            competitor_maximum,
+            &mut overlapping,
+        );
+        for candidate in overlapping {
+            let blocks_direct_candidate = direct_candidates.iter().any(|direct| {
+                !same_candidate(&candidate, direct)
+                    && candidate_outranks(&candidate, direct)
+                    && candidates_conflict(&candidate, direct)
+            });
+            if !blocks_direct_candidate {
+                continue;
+            }
+            if seen.insert(candidate_identity(&candidate)) {
+                competitors.push(candidate);
+            }
         }
     }
 
@@ -108,6 +108,94 @@ pub(crate) fn resolve_structure_placements<'a>(
     accepted.sort_by(candidate_order);
 
     group_accepted_candidates(accepted)
+}
+
+fn competitor_query_bounds(
+    direct_candidates: &[StructureCandidate<'_>],
+) -> Vec<(IVec2, IVec2)> {
+    let mut candidates = direct_candidates.to_vec();
+    let mut queries = Vec::new();
+    split_competitor_query_bounds(&mut candidates, &mut queries);
+    queries
+}
+
+fn split_competitor_query_bounds(
+    candidates: &mut [StructureCandidate<'_>],
+    queries: &mut Vec<(IVec2, IVec2)>,
+) {
+    let (minimum, maximum, summed_area) = candidate_bounds_and_area(candidates);
+    let enclosing_area = rectangle_area(minimum, maximum);
+    if candidates.len() <= MIN_COMPETITOR_QUERY_BATCH
+        || enclosing_area
+            <= summed_area.saturating_mul(MAX_COMPETITOR_QUERY_AREA_INFLATION)
+    {
+        queries.push((minimum, maximum));
+        return;
+    }
+
+    let span = maximum - minimum;
+    let split_x = span.x >= span.y;
+    candidates.sort_unstable_by(|left, right| spatial_candidate_order(left, right, split_x));
+    let middle = candidates.len() / 2;
+    let (left, right) = candidates.split_at_mut(middle);
+    split_competitor_query_bounds(left, queries);
+    split_competitor_query_bounds(right, queries);
+}
+
+fn candidate_bounds_and_area(
+    candidates: &[StructureCandidate<'_>],
+) -> (IVec2, IVec2, u128) {
+    candidates.iter().fold(
+        (IVec2::splat(i32::MAX), IVec2::splat(i32::MIN), 0_u128),
+        |(minimum, maximum, area), candidate| {
+            (
+                minimum.min(candidate.minimum),
+                maximum.max(candidate.maximum),
+                area.saturating_add(rectangle_area(candidate.minimum, candidate.maximum)),
+            )
+        },
+    )
+}
+
+fn rectangle_area(minimum: IVec2, maximum: IVec2) -> u128 {
+    let width = i64::from(maximum.x) - i64::from(minimum.x) + 1;
+    let height = i64::from(maximum.y) - i64::from(minimum.y) + 1;
+    debug_assert!(width > 0 && height > 0);
+    (width.max(0) as u128).saturating_mul(height.max(0) as u128)
+}
+
+fn spatial_candidate_order(
+    left: &StructureCandidate<'_>,
+    right: &StructureCandidate<'_>,
+    split_x: bool,
+) -> Ordering {
+    let left_x = i64::from(left.minimum.x) + i64::from(left.maximum.x);
+    let left_y = i64::from(left.minimum.y) + i64::from(left.maximum.y);
+    let right_x = i64::from(right.minimum.x) + i64::from(right.maximum.x);
+    let right_y = i64::from(right.minimum.y) + i64::from(right.maximum.y);
+    let (left_primary, left_secondary, right_primary, right_secondary) = if split_x {
+        (left_x, left_y, right_x, right_y)
+    } else {
+        (left_y, left_x, right_y, right_x)
+    };
+
+    left_primary
+        .cmp(&right_primary)
+        .then_with(|| left_secondary.cmp(&right_secondary))
+        .then_with(|| candidate_order(left, right))
+        .then_with(|| left.structure.id.cmp(&right.structure.id))
+        .then_with(|| left.anchor.x.cmp(&right.anchor.x))
+        .then_with(|| left.anchor.y.cmp(&right.anchor.y))
+        .then_with(|| rotation_index(left.rotation).cmp(&rotation_index(right.rotation)))
+}
+
+fn rotation_index(rotation: StructureRotation) -> u8 {
+    match rotation {
+        StructureRotation::Degrees0 => 0,
+        StructureRotation::Degrees90 => 1,
+        StructureRotation::Degrees180 => 2,
+        StructureRotation::Degrees270 => 3,
+    }
 }
 
 fn group_accepted_candidates(
@@ -431,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn competitor_collection_runs_once_for_all_direct_candidates() {
+    fn compact_competitor_collection_uses_one_query_for_all_direct_candidates() {
         let first = structure_definition("test:first");
         let second = structure_definition("test:second");
         let blocker = structure_definition("test:blocker");
@@ -477,5 +565,91 @@ mod tests {
         assert_eq!(collector_calls.get(), 2);
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].placement_id, "test:second-placement");
+    }
+
+    #[test]
+    fn sparse_direct_candidates_split_competitor_queries_without_per_candidate_scans() {
+        let structure = structure_definition("test:structure");
+        let candidates = [
+            candidate(
+                "test:left-1",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(-1000, 0), IVec2::new(0, 0)),
+            ),
+            candidate(
+                "test:left-2",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(-900, 2), IVec2::new(0, 2)),
+            ),
+            candidate(
+                "test:left-3",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(-800, 4), IVec2::new(0, 4)),
+            ),
+            candidate(
+                "test:left-4",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(-700, 6), IVec2::new(0, 6)),
+            ),
+            candidate(
+                "test:right-1",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(15, 8), IVec2::new(700, 8)),
+            ),
+            candidate(
+                "test:right-2",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(15, 10), IVec2::new(800, 10)),
+            ),
+            candidate(
+                "test:right-3",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(15, 12), IVec2::new(900, 12)),
+            ),
+            candidate(
+                "test:right-4",
+                &structure,
+                1,
+                false,
+                &[],
+                (IVec2::new(15, 14), IVec2::new(1000, 14)),
+            ),
+        ];
+        let collector_calls = Cell::new(0_usize);
+
+        let resolved = resolve_structure_placements(
+            IVec2::ZERO,
+            IVec2::new(15, 15),
+            |minimum, maximum, found| {
+                collector_calls.set(collector_calls.get() + 1);
+                found.extend(candidates.iter().copied().filter(|candidate| {
+                    rectangles_overlap(candidate.minimum, candidate.maximum, minimum, maximum)
+                }));
+            },
+        );
+
+        assert_eq!(collector_calls.get(), 3);
+        assert_eq!(resolved.len(), candidates.len());
     }
 }
