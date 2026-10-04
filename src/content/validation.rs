@@ -164,6 +164,10 @@ pub(super) fn validate_content(content: &LoadedContent) {
         structure_set.validate_references(&content.structures);
     }
 
+    for biome in content.biomes.iter() {
+        biome.validate_references(&content.biomes);
+    }
+
     for dimension in content.dimensions.iter() {
         assert!(
             content
