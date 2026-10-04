@@ -145,7 +145,6 @@ struct WorldSelectionScanUi<'w, 's> {
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
     dimensions: Res<'w, DimensionRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
     images: ResMut<'w, Assets<Image>>,
 }
 
@@ -199,7 +198,6 @@ fn poll_world_scan(
                             &context.localization,
                             context.language.get(),
                             &context.dimensions,
-                            &context.biomes,
                             thumbnail.clone(),
                         );
                     }
