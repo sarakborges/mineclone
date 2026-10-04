@@ -437,7 +437,10 @@ impl AutocompleteContent<'_> {
         AutocompleteCatalog {
             creatures: &self.creatures,
             biomes: &self.biomes,
-            current_dimension: self.dimension.definition(),
+            current_dimension: self
+                .dimension
+                .definition()
+                .expect("current dimension definition must exist during gameplay"),
             structures: &self.structures,
             structure_sets: &self.structure_sets,
             dimensions: &self.dimensions,
