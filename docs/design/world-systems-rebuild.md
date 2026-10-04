@@ -314,6 +314,39 @@ eligible biome pool
 
 This rule is intentionally simple: incompatible biome borders are prevented by candidate filtering at construction time, not by distance fields, penalties, separators, post-generation repair, or a second exclusivity subsystem.
 
+#### Biome blend and influence semantics
+
+Biome ownership remains discrete even where continuous properties blend. Every sampled world position has exactly one authoritative primary biome, while the same sample may also expose a variable collection of weighted biome influences for continuous transition behavior.
+
+Conceptually:
+
+```text
+BiomeSample
+  |- primary: BiomeId
+  `- influences:
+       |- BiomeId + normalized weight
+       |- BiomeId + normalized weight
+       `- ...
+```
+
+The semantics are binding:
+
+- `primary` answers biome identity and is not redefined by visual/terrain interpolation;
+- `influences` contains every locally relevant biome participating meaningfully in the transition at that sampled position;
+- there is no semantic maximum of two or three influences; multi-biome junctions are represented directly instead of discarding an otherwise relevant biome to fit a fixed pair/triple;
+- influence weights are normalized and sum to `1.0` subject only to normal floating-point tolerance;
+- an interior position normally resolves to one influence with weight `1.0`; an ordinary border normally has two; a genuine multi-region junction may have more;
+- influence membership and weights are derived from the authoritative new Biome Layout geometry/boundaries, not from restoring the old site-distance/Voronoi implementation;
+- a biome that is merely nearby but does not participate in the local boundary/transition topology must not appear as an influence simply because its region is within some search radius;
+- continuous properties such as terrain shape and biome-driven visual colors may combine all returned influences according to their normalized weights;
+- discrete properties remain domain-owned: biome identity, `/locate biome`, `cannotBorder`, and other identity rules use the authoritative primary biome unless that consumer explicitly defines another discrete choice rule;
+- consumers must not independently recompute a different influence set from raw distances or neighboring chunks;
+- the implementation may use compact inline storage, reusable buffers, area sampling, or other allocation-avoidance strategies, but those optimizations must not impose an externally visible arbitrary influence-count cap or make scalar and batch samples disagree.
+
+The September 8 gradual-biome implementation is a behavioral reference for the successful weighted multi-biome contract: it evolved from primary/secondary blending to normalized weighted influence collections specifically to handle shared borders and multi-biome intersections. Its old site grid, distance search, sinusoidal warp, and Voronoi-like ownership are not architecture to restore.
+
+Exact transition width/falloff is a Phase 3 implementation/tuning concern. It must be deterministic, derived consistently from the authoritative boundaries, and validated through the required biome map viewer rather than becoming a second ownership model.
+
 #### Required biome map viewer
 
 This phase is not complete without a real 2D biome-map visualization tool.
@@ -557,20 +590,25 @@ The rebuild replaces distance-like `avoidNear` behavior and any separate exclusi
 
 A new biome formation is selected only from candidates compatible with every adjacent established formation. Compatibility filtering happens before weights/deterministic selection. If either side forbids the border, that candidate is excluded. The generator does not first select an incompatible biome and repair it, does not insert a separator biome, and does not run a second exclusivity subsystem. If the filtered pool is empty, no new formation is created at that point; remaining space is handled through deterministic growth/absorption by a compatible existing neighbor. This rule must never cause runtime `no valid biome` failure or panic.
 
+#### Biome blend and influence representation — resolved 2026-10-04
+
+Each position has exactly one authoritative primary biome plus a variable normalized collection of locally relevant biome influences. There is no semantic two- or three-influence cap. Interior positions normally have one influence, ordinary borders normally have two, and genuine multi-biome junctions may expose more.
+
+Continuous consumers may combine all influence weights, while discrete identity remains governed by `primary` unless a domain explicitly defines another discrete selection rule. Influences come from the authoritative new layout geometry/boundaries rather than restoring the September site's distance/Voronoi implementation. The successful September 8 move from primary/secondary to weighted multi-biome influence collections is retained as behavioral precedent only. Internal compact storage/batching is allowed, but it must not change the influence contract or make scalar and batch sampling disagree.
+
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. biome blend representation and number of influences;
-2. surface/volume biome relationship model;
-3. ocean/sea-level terrain semantics without a hydrology subsystem;
-4. terrain representation and cross-chunk sampling strategy;
-5. structure planning/index/query contract;
-6. safe spawn/warp destination query strategy;
-7. generated vs persisted chunk/delta representation;
-8. persistence format boundaries;
-9. loading phase hierarchy and progress aggregation;
-10. benchmark budgets and fixed-seed visual/performance fixtures.
+1. surface/volume biome relationship model;
+2. ocean/sea-level terrain semantics without a hydrology subsystem;
+3. terrain representation and cross-chunk sampling strategy;
+4. structure planning/index/query contract;
+5. safe spawn/warp destination query strategy;
+6. generated vs persisted chunk/delta representation;
+7. persistence format boundaries;
+8. loading phase hierarchy and progress aggregation;
+9. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
