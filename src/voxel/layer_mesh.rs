@@ -70,19 +70,14 @@ where
             continue;
         }
         let (support_cell, _, support_light) = chunk.sample_local_at(x, y, z);
-        let Some(support_cell) = support_cell else {
-            continue;
-        };
-
-        let support = block_lookup.get(support_cell.block_id);
-        let support_is_transparent = support.alpha_blend || support.alpha_cutoff.is_some();
+        let support = support_cell.map(|cell| block_lookup.get(cell.block_id));
         let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let source_block_srgb = surface_block_srgb_with_cache(
             lighting_cache,
             world_voxel,
             support_light,
-            support.light_emission > 0,
+            support.is_some_and(|definition| definition.light_emission > 0),
         );
         let mut lighting_by_face = [None; 6];
         let mut exposure_by_face = [None; 6];
@@ -125,6 +120,13 @@ where
                 continue;
             }
 
+            let Some(support_cell) = support_cell else {
+                continue;
+            };
+            let Some(support) = support else {
+                continue;
+            };
+            let support_is_transparent = support.alpha_blend || support.alpha_cutoff.is_some();
             let stack_index = attached_layers[..order]
                 .iter()
                 .filter(|earlier| earlier.face == attached.face)
