@@ -89,11 +89,33 @@ The generator must expose side-effect-free queries for information that does not
 
 Exact APIs are decided during the foundation phase. Query calls must not silently mutate persistence, streaming, or chunk residency.
 
-### 5.3 Performance is a contract
+### 5.3 Query-based world model is authoritative
+
+When working on this rebuild, implement the generated world as deterministic spatial fields that can be queried directly by world coordinate or bounded area. Do not introduce a fixed logical generation region, generation tile, or region ownership boundary into world semantics.
+
+The runtime `VoxelChunk` remains a materialization/storage/rendering unit. It is not the semantic unit from which biome, terrain, or structure truth is derived.
+
+Performance mechanisms are explicitly allowed and expected, but they must stay internal to the subsystem that owns the expensive query:
+
+- bulk/area sampling;
+- reusable per-request sample grids or snapshots;
+- cache tiles;
+- bounded LRU caches;
+- spatial indexes;
+- precomputed immutable metadata;
+- batched noise/field evaluation.
+
+Those mechanisms are implementation details only. Their dimensions, eviction order, task scheduling, cache warmth, or presence must never change generated output. A caller must not need to know that a cache tile or internal batch exists.
+
+Do not implement the query-based contract naively by repeatedly invoking expensive scalar queries for every voxel when a chunk/area request can evaluate shared data once and reuse it across biome, terrain, material, and feature work. Query-based describes the ownership and external contract, not permission for redundant computation.
+
+Changing an internal tile size, cache strategy, batching strategy, or execution order must preserve identical world results for the same seed, definitions, dimension, and coordinates.
+
+### 5.4 Performance is a contract
 
 Hot paths must be measurable. Expensive neighborhood searches, recursive repair, repeated noise evaluation, unbounded scans, and per-voxel rediscovery of large-scale fields require explicit justification and benchmarks.
 
-### 5.4 Parallelism must not leak into semantics
+### 5.5 Parallelism must not leak into semantics
 
 Independent work may execute concurrently, but result order must not affect generated output or loading state correctness.
 
@@ -111,7 +133,7 @@ Known consumers to audit include:
 - `/warp`;
 - spawn selection and respawn;
 - portal/dimension travel, including the Dimensional Slicer path;
-- chunk streaming and far-region requests;
+- chunk streaming and far-coordinate requests;
 - biome visuals/tint consumers;
 - world selection/new-world creation;
 - persistence/save catalog/session reconstruction;
@@ -150,16 +172,16 @@ Responsibilities include:
 
 - world seed and deterministic random/noise primitives;
 - dimension generation context;
-- world/chunk/region coordinate semantics;
-- generation unit/granularity contract;
+- world/chunk coordinate semantics;
+- the query-based spatial contract defined in section 5.3;
 - immutable generation snapshots/definitions;
-- pure query boundary;
-- generation result boundary;
-- explicit cache ownership where measurement proves it is useful.
+- pure scalar and bounded-area query boundaries where each is appropriate;
+- generation result/materialization boundary;
+- explicit cache/batch ownership where measurement proves it is useful.
 
-This phase must also define the rule for direct far-coordinate generation: requesting region B must never require materializing the path from region A to B.
+This phase must prove direct far-coordinate access: requesting data at B must never require materializing or traversing the path from A to B.
 
-**Gate:** deterministic foundation tests and direct-coordinate query tests are green.
+**Gate:** deterministic foundation tests, direct-coordinate query tests, and equivalence tests across different internal batching/cache conditions are green.
 
 ### Phase 3 — Biome Layout
 
@@ -272,11 +294,11 @@ Must query deterministic structure-placement data without requiring full chunk m
 
 #### `/warp`
 
-Warp is destination-region relocation, not navigation through the world.
+Warp is destination relocation, not navigation through the world.
 
 A warp must:
 
-1. switch interest to the destination region directly;
+1. switch interest directly to the destination coordinates;
 2. load/generate only the required destination neighborhood;
 3. resolve a safe destination using the cheapest authoritative terrain/world information available;
 4. never generate the spatial path between source and destination.
@@ -285,11 +307,11 @@ The current implementation already redirects streaming to the target instead of 
 
 #### Spawn and respawn
 
-Spawn selection must use generation queries and intentionally request only the region needed to enter gameplay. It must not rely on generating a huge area and then discovering a safe position.
+Spawn selection must use generation queries and intentionally request only the neighborhood needed to enter gameplay. It must not rely on generating a huge area and then discovering a safe position.
 
 #### Portals and dimension travel
 
-Portal travel, Dimensional Slicer travel, cross-dimension warp, and similar systems should share the direct destination-region loading contract rather than each inventing a different transition mechanism.
+Portal travel, Dimensional Slicer travel, cross-dimension warp, and similar systems should share the direct destination-loading contract rather than each inventing a different transition mechanism.
 
 #### Streaming
 
@@ -327,7 +349,7 @@ The pipeline must:
 - support cancellation/stale-result rejection where relevant;
 - avoid turning implementation workers into user-visible top-level phases.
 
-**Gate:** initial world entry, load-from-save, dimension transition, and destination-region preparation use the same coherent progress model where appropriate.
+**Gate:** initial world entry, load-from-save, dimension transition, and destination preparation use the same coherent progress model where appropriate.
 
 ### Phase 11 — Loading screen
 
@@ -340,7 +362,7 @@ Example shape:
 ```text
 Preparing World
 
-Generating Initial Region
+Generating Initial Area
   Terrain        82%
   Structures     61%
   Finalization   74%
@@ -364,7 +386,7 @@ Required performance coverage includes at least:
 - biome-map generation cost;
 - terrain query/generation cost;
 - chunk synthesis cost;
-- initial playable-region time;
+- initial playable-area time;
 - far-coordinate warp preparation;
 - locate queries;
 - peak temporary memory and cache growth where relevant.
@@ -380,9 +402,9 @@ This list is intentionally explicit so cleanup does not accidentally delete a co
 | Structures/connectors | preserve generic primitives, replace old worldgen coupling |
 | Chat `/locate biome` | migrate to biome query/search API |
 | Chat `/locate structure` | migrate to deterministic structure query API |
-| Chat `/warp` | migrate to direct destination-region preparation + cheap safe-position query |
+| Chat `/warp` | migrate to direct destination preparation + cheap safe-position query |
 | Spawn/respawn | migrate to generation query API |
-| Portals/Dimensional Slicer | use common direct destination-region loading contract |
+| Portals/Dimensional Slicer | use common direct destination-loading contract |
 | Streaming | preserve residency/selection infrastructure; replace generator interface |
 | Rendering/biome visuals | consume new biome influence/blend data; do not resolve biome ownership |
 | Runtime lighting | preserve solver; adapt initial generated-content boundary only if required |
@@ -395,23 +417,32 @@ Phase 0 must expand or correct this table from current code before destructive c
 
 ## 8. Decisions to settle incrementally
 
+### Resolved decisions
+
+#### Spatial generation model — resolved 2026-10-04
+
+The rebuild uses the query-based world model defined in section 5.3.
+
+There is no fixed logical generation region. Generated facts are deterministic functions/fields of seed, definitions, dimension, and world coordinates. `VoxelChunk` remains the runtime materialization unit only. Internal cache tiles, batches, sample grids, and spatial indexes are allowed solely as bounded performance mechanisms and may not affect semantics or become visible dependencies of consumers.
+
+### Open decisions
+
 We will resolve these one at a time and update this document as decisions become authoritative:
 
-1. exact generation granularity (chunk, column, region, or layered combination);
-2. exact pure query API and ownership;
-3. biome min/max-size semantics;
-4. `avoidNear` semantics and priority;
-5. exclusive-neighbor semantics and conflict resolution;
-6. biome blend representation and number of influences;
-7. surface/volume biome relationship model;
-8. ocean/sea-level terrain semantics without a hydrology subsystem;
-9. terrain representation and cross-chunk sampling strategy;
-10. structure planning/index/query contract;
-11. safe spawn/warp destination query strategy;
-12. generated vs persisted chunk/delta representation;
-13. persistence format boundaries;
-14. loading phase hierarchy and progress aggregation;
-15. benchmark budgets and fixed-seed visual/performance fixtures.
+1. exact pure query API and ownership;
+2. biome min/max-size semantics;
+3. `avoidNear` semantics and priority;
+4. exclusive-neighbor semantics and conflict resolution;
+5. biome blend representation and number of influences;
+6. surface/volume biome relationship model;
+7. ocean/sea-level terrain semantics without a hydrology subsystem;
+8. terrain representation and cross-chunk sampling strategy;
+9. structure planning/index/query contract;
+10. safe spawn/warp destination query strategy;
+11. generated vs persisted chunk/delta representation;
+12. persistence format boundaries;
+13. loading phase hierarchy and progress aggregation;
+14. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
