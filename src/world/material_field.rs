@@ -12,6 +12,9 @@ use super::{
     noise::fractal_noise_2d,
 };
 
+const BIOME_MATERIAL_BLEND_SCALE: f32 = 0.07;
+const BIOME_MATERIAL_BLEND_SALT: u64 = 0x6a09_e667_f3bc_c909;
+
 #[derive(Clone, Copy)]
 struct ResolvedSurfaceInfluence<'a> {
     biome: &'a BiomeDefinition,
@@ -114,14 +117,14 @@ pub(crate) fn surface_material_id<'a>(
     } else {
         surface.depth
     };
-    let base_material = strongest_surface_material(
+    let base_material = blended_surface_material(
         surface_materials,
         material_depth,
         surface.position,
         seed,
     );
     if !surface.steep && surface.depth > 0 {
-        strongest_surface_material(
+        blended_surface_material(
             surface_materials,
             irregular_layer_depth(surface.position, surface.depth, seed),
             surface.position,
@@ -133,7 +136,7 @@ pub(crate) fn surface_material_id<'a>(
     }
 }
 
-fn strongest_surface_material<'a>(
+fn blended_surface_material<'a>(
     surface_materials: &SurfaceMaterialColumn<'a>,
     depth: u32,
     position: Vec3,
@@ -147,19 +150,45 @@ fn strongest_surface_material<'a>(
         return Some(block_id);
     }
 
-    surface_materials
-        .influences
-        .iter()
-        .filter_map(|influence| {
-            influence
-                .biome
-                .surface_layer_at_depth(depth)
-                .map(|layer| (influence.biome, layer, influence.weight))
-        })
-        .max_by(|(_, _, left), (_, _, right)| left.total_cmp(right))
-        .map(|(biome, layer, _)| {
-            resolve_material_layer_block(biome.id.as_str(), layer, position.xz(), seed)
-        })
+    let mut selected = None::<(&BiomeDefinition, &BiomeMaterialLayer, f32)>;
+    for influence in &surface_materials.influences {
+        if influence.weight <= f32::EPSILON {
+            continue;
+        }
+        let Some(layer) = influence.biome.surface_layer_at_depth(depth) else {
+            continue;
+        };
+        let score = surface_material_transition_score(
+            position.xz(),
+            seed,
+            influence.biome.id.as_str(),
+            influence.weight,
+        );
+        if selected.is_none_or(|(selected_biome, _, selected_score)| {
+            score < selected_score
+                || (score == selected_score
+                    && influence.biome.id.as_str() < selected_biome.id.as_str())
+        }) {
+            selected = Some((influence.biome, layer, score));
+        }
+    }
+
+    selected.map(|(biome, layer, _)| {
+        resolve_material_layer_block(biome.id.as_str(), layer, position.xz(), seed)
+    })
+}
+
+fn surface_material_transition_score(
+    position: Vec2,
+    seed: u64,
+    biome_id: &str,
+    weight: f32,
+) -> f32 {
+    let noise_seed = mix_seed(seed ^ BIOME_MATERIAL_BLEND_SALT ^ hash_string(biome_id));
+    let unit = ((fractal_noise_2d(position * BIOME_MATERIAL_BLEND_SCALE, noise_seed, 3) + 1.0)
+        * 0.5)
+        .clamp(f32::MIN_POSITIVE, 1.0);
+    -unit.ln() / weight.max(f32::MIN_POSITIVE)
 }
 
 pub(crate) fn resolve_material_layer_block<'a>(
@@ -196,8 +225,16 @@ fn irregular_layer_depth(position: Vec3, surface_depth: u32, seed: u64) -> u32 {
         + (position.x * 0.13 - position.y * 0.29 + position.z * 0.21 - phase * 1.7).cos())
         * 0.38;
     let offset = broad + detail;
+    let varied_depth = (surface_depth as f32 + offset).round().max(0.0) as u32;
 
-    (surface_depth as f32 + offset).round().max(0.0) as u32
+    if surface_depth == 0 {
+        0
+    } else {
+        // The authored top layer is top-only. Irregular subsurface boundaries
+        // may move between deeper layers, but must never pull grass, fluid, or
+        // any other depth-zero material down into the terrain column.
+        varied_depth.max(1)
+    }
 }
 
 #[cfg(test)]
@@ -220,12 +257,21 @@ mod tests {
     }
 
     #[test]
-    fn irregular_layer_depth_can_reach_the_surface_layer_below_depth_zero() {
-        let reaches_surface = (-64..=64).any(|index| {
-            irregular_layer_depth(Vec3::new(index as f32, 60.0, index as f32 * 0.37), 1, 42) == 0
+    fn irregular_layer_depth_never_promotes_subsurface_into_top_layer() {
+        let stays_below_surface = (-64..=64).all(|index| {
+            irregular_layer_depth(Vec3::new(index as f32, 60.0, index as f32 * 0.37), 1, 42) >= 1
         });
 
-        assert!(reaches_surface);
+        assert!(stays_below_surface);
+    }
+
+    #[test]
+    fn material_transition_score_respects_influence_weight() {
+        let position = Vec2::new(37.0, -19.0);
+        let low = surface_material_transition_score(position, 42, "test:plains", 0.25);
+        let high = surface_material_transition_score(position, 42, "test:plains", 0.75);
+
+        assert!(high < low);
     }
 
     #[test]
