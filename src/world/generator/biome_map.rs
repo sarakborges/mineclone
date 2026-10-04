@@ -158,11 +158,6 @@ pub(crate) fn render_biome_map(
             })
         })
         .collect::<Vec<_>>();
-    let suppressed = queries
-        .suppressed_biomes()
-        .iter()
-        .map(|id| id.as_str())
-        .collect::<Vec<_>>();
     let legend_json = serde_json::to_string_pretty(&serde_json::json!({
         "center": [config.center_x, config.center_z],
         "blocksPerPixel": config.blocks_per_pixel,
@@ -175,7 +170,6 @@ pub(crate) fn render_biome_map(
             "seedSpacingBlocks": queries.formation_seed_spacing()
         },
         "biomes": legend,
-        "suppressedBiomes": suppressed,
     }))
     .expect("biome map legend must serialize");
 
