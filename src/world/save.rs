@@ -4,9 +4,7 @@ use bevy::prelude::*;
 
 use crate::player::{game_mode::GameMode, player_id::PlayerId, save::PlayerSaveData};
 
-use super::{
-    DEFAULT_BIOME_SIZE_MULTIPLIER, WorldGenerationSettings, game_rules::GameRules, seed::WorldSeed,
-};
+use super::{game_rules::GameRules, seed::WorldSeed};
 
 #[derive(Debug, Resource, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WorldLoadMode {
@@ -19,9 +17,6 @@ pub enum WorldLoadMode {
 pub struct InMemoryWorldSave {
     seed: Option<u64>,
     dimension_id: Option<String>,
-    spawn_biome: Option<String>,
-    biome_size_multiplier: Option<f32>,
-    world_generation: WorldGenerationSettings,
     game_rules: GameRules,
     players: HashMap<PlayerId, PlayerSaveData>,
 }
@@ -31,41 +26,21 @@ impl InMemoryWorldSave {
         self.seed.is_some() && self.dimension_id.is_some()
     }
 
-    pub(crate) fn spawn_biome(&self) -> Option<&str> {
-        self.spawn_biome.as_deref()
-    }
-
-    pub(crate) fn biome_size_multiplier(&self) -> f32 {
-        self.biome_size_multiplier
-            .unwrap_or(DEFAULT_BIOME_SIZE_MULTIPLIER)
-    }
-
-    pub(crate) const fn world_generation(&self) -> WorldGenerationSettings {
-        self.world_generation
-    }
-
     pub fn begin_new_world(
         &mut self,
         seed: WorldSeed,
         dimension_id: &str,
         game_rules: GameRules,
-        spawn_biome: Option<&str>,
-        biome_size_multiplier: f32,
-        world_generation: WorldGenerationSettings,
     ) {
         self.seed = Some(seed.0);
         self.dimension_id = Some(dimension_id.to_owned());
-        self.spawn_biome = spawn_biome.map(str::to_owned);
-        self.biome_size_multiplier = Some(biome_size_multiplier);
-        self.world_generation = world_generation;
         self.game_rules = game_rules;
         self.players.clear();
     }
 
-    pub(crate) fn prepare_dimension_warp(&mut self, dimension_id: &str, spawn_biome: Option<&str>) {
+    pub(crate) fn prepare_dimension_warp(&mut self, dimension_id: &str) {
         assert!(self.has_world(), "dimension warp requires an active world");
         self.dimension_id = Some(dimension_id.to_owned());
-        self.spawn_biome = spawn_biome.map(str::to_owned);
     }
 
     pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
