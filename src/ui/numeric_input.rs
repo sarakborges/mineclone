@@ -140,21 +140,6 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
     )
 }
 
-pub(crate) fn decimal_numeric_input_field<I: Component, L: Component>(
-    value: impl Into<String>,
-    input_marker: I,
-    label_marker: L,
-    sizing: NumericInputSizing,
-) -> impl Bundle {
-    numeric_input_field_with_filter(
-        value,
-        input_marker,
-        label_marker,
-        sizing,
-        decimal_input_character,
-    )
-}
-
 fn numeric_input_field_with_filter<I: Component, L: Component>(
     value: impl Into<String>,
     input_marker: I,
@@ -208,10 +193,6 @@ fn integer_input_character(character: char) -> bool {
     character.is_ascii_digit()
 }
 
-fn decimal_input_character(character: char) -> bool {
-    character.is_ascii_digit() || character == '.'
-}
-
 pub(crate) fn sync_numeric_input_view<M, I, L>(
     state: &NumericInputState<M>,
     value: impl Display,
@@ -253,13 +234,5 @@ mod tests {
         assert_eq!(editor.buffer(), "123");
         editor.reset();
         assert_eq!(editor.buffer(), "");
-    }
-
-    #[test]
-    fn decimal_filter_accepts_digits_and_decimal_point_only() {
-        assert!(decimal_input_character('0'));
-        assert!(decimal_input_character('.'));
-        assert!(!decimal_input_character('-'));
-        assert!(!decimal_input_character('x'));
     }
 }
