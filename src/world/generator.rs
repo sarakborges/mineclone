@@ -74,6 +74,26 @@ mod tests {
         ))
     }
 
+    fn test_dimension_definition(
+        id: &str,
+        sea_level: i32,
+        gravity_strength: f32,
+    ) -> DimensionDefinition {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": {
+                "english": "Test Dimension",
+                "portuguese_brazil": "Test Dimension",
+                "spanish": "Test Dimension"
+            },
+            "dayNightCycle": "asteria:test/cycle",
+            "sky": "asteria:test/sky",
+            "seaLevel": sea_level,
+            "gravityStrength": gravity_strength
+        }))
+        .expect("test dimension definition must deserialize")
+    }
+
     #[test]
     fn world_generator_is_immutable_send_sync_query_state() {
         fn assert_send_sync<T: Send + Sync>() {}
@@ -118,5 +138,22 @@ mod tests {
         assert_eq!(snapshot.dimension().id(), "asteria:frozen");
         assert_eq!(snapshot.dimension().sea_level(), 64);
         assert_eq!(snapshot.dimension().gravity_strength(), 1.0);
+    }
+
+    #[test]
+    fn world_generator_copies_authored_dimension_inputs() {
+        let mut definition = test_dimension_definition("asteria:authored", 72, 0.85);
+        let generator = WorldGenerator::new(991, &definition);
+
+        definition.id = "asteria:mutated".to_owned();
+        definition.sea_level = -10;
+        definition.gravity_strength = 3.0;
+
+        let context = generator.read_context();
+        let snapshot = context.snapshot();
+        assert_eq!(snapshot.seed(), GenerationSeed::new(991));
+        assert_eq!(snapshot.dimension().id(), "asteria:authored");
+        assert_eq!(snapshot.dimension().sea_level(), 72);
+        assert_eq!(snapshot.dimension().gravity_strength(), 0.85);
     }
 }
