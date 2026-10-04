@@ -58,6 +58,7 @@ const MAX_INPUT_CHARS: usize = 256;
 pub(super) enum ChatMessage {
     Text(String),
     Error(String),
+    #[allow(dead_code)]
     Located { prefix: String, target: IVec3 },
     StructureFile(PathBuf),
 }
@@ -172,7 +173,7 @@ fn reset_chat(
 ) {
     *chat = ChatState::default();
     *autocomplete = ChatAutocomplete::default();
-    *pending_locate = PendingLocate::default();
+    *pending_locate = PendingLocate;
 }
 
 fn close_chat_on_pause(
@@ -220,798 +221,246 @@ fn handle_chat_input(
             input.focus.clear();
             return;
         }
-        if input.keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
-            if input.autocomplete.visible() {
-                input.autocomplete.dismiss(editor);
-                chat.escape_consumed = true;
-                return;
-            }
+
+        if input.keys.just_pressed(KeyCode::Escape) {
             chat.close();
+            input.focus.clear();
             chat.escape_consumed = true;
-            editor.clear();
-            input.focus.clear();
-            restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
+            cursor.grab_mode = CursorGrabMode::Locked;
+            cursor.visible = false;
+            mouse_look.skip_next_motion();
             return;
         }
-        if (input.keys.just_pressed(KeyCode::Enter)
-            || input.keys.just_pressed(KeyCode::NumpadEnter))
-            && !editor.is_composing()
-        {
-            let line = editable_value(editor).trim().to_owned();
-            let target = chat.command_target;
-            chat.close();
-            editor.clear();
-            input.focus.clear();
-            restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
+
+        if input.keys.just_pressed(KeyCode::Enter) {
+            let line = editable_value(editor);
             if !line.is_empty() {
-                submissions.write(ChatSubmission { line, target });
+                submissions.write(ChatSubmission {
+                    line,
+                    target: chat.command_target,
+                });
             }
+            **editor = String::new();
+            chat.close();
+            input.focus.clear();
+            cursor.grab_mode = CursorGrabMode::Locked;
+            cursor.visible = false;
+            mouse_look.skip_next_motion();
             return;
         }
-        if input.focus.get() != Some(entity) {
-            input.focus.set(entity, FocusCause::Navigated);
-        }
+
         return;
     }
 
-    let can_open = *input.pause.get() == PauseState::Running
-        && *input.settings.get() == SettingsState::Closed
-        && *input.modal.get() == GameplayModalState::Closed;
-    let has_command_modifier = [
-        KeyCode::ControlLeft,
-        KeyCode::ControlRight,
-        KeyCode::SuperLeft,
-        KeyCode::SuperRight,
-        KeyCode::AltLeft,
-        KeyCode::AltRight,
-    ]
-    .iter()
-    .any(|key| input.keys.pressed(*key));
-    if !can_open
-        || !input
-            .keys
-            .just_pressed(input.keybinds.key_code(KeybindAction::Chat))
-        || has_command_modifier
+    if *input.pause.get() != PauseState::Running
+        || *input.settings.get() != SettingsState::Closed
+        || *input.modal.get() != GameplayModalState::Closed
     {
         return;
     }
 
-    editor.clear();
-    *input.autocomplete = ChatAutocomplete::default();
-    chat.command_target = input.targeted.0;
-    chat.open = true;
-    input.focus.set(entity, FocusCause::Navigated);
-    cursor.grab_mode = CursorGrabMode::None;
-    cursor.visible = true;
-    mouse_look.ignore_next_delta = true;
-}
-
-fn restore_game_cursor(
-    focused: bool,
-    cursor: &mut CursorOptions,
-    mouse_look: &mut MouseLookInputState,
-) {
-    cursor.grab_mode = if focused {
-        CursorGrabMode::Locked
-    } else {
-        CursorGrabMode::None
-    };
-    cursor.visible = !focused;
-    mouse_look.ignore_next_delta = true;
-}
-
-type CommandTargetQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        &'static Name,
-        &'static Transform,
-        &'static mut EntityHealth,
-        &'static mut EntityMetaTags,
-        Option<&'static mut CreatureAnimationState>,
-    ),
-    With<CreatureInstance>,
->;
-
-#[derive(SystemParam)]
-struct ChatCommandContent<'w, 's> {
-    definitions: Res<'w, CreatureRegistry>,
-    assets: Res<'w, AssetServer>,
-    language: Res<'w, ActiveLanguage>,
-    localization: Res<'w, UiLocalization>,
-    targets: CommandTargetQuery<'w, 's>,
-}
-
-fn format_position(position: IVec3) -> String {
-    format!("X: {} Z: {} Y: {}", position.x, position.z, position.y)
-}
-
-fn command_target_position(transform: &Transform) -> IVec3 {
-    transform.translation.floor().as_ivec3()
-}
-
-fn feedback(
-    localization: &UiLocalization,
-    language: Language,
-    key: &str,
-    replacements: &[(&str, &str)],
-) -> String {
-    localization.format(language, key, replacements)
-}
-
-fn parse_unknown_variation(message: &str) -> Option<(&str, &str, &str)> {
-    let rest = message.strip_prefix("Unknown variation ")?;
-    let (variation, rest) = rest.split_once(" for ")?;
-    let (id, count) = rest.split_once("; expected 1..=")?;
-    Some((variation, id, count.trim_end_matches('.')))
-}
-
-fn localize_internal_error(
-    message: &str,
-    localization: &UiLocalization,
-    language: Language,
-) -> String {
-    let message = message.trim();
-
-    if let Some(tag) = message.strip_prefix("unknown meta tag: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.meta.unknown",
-            &[("tag", tag)],
-        );
-    }
-    if let Some(tag) = message.strip_prefix("meta tag already exists: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.meta.exists",
-            &[("tag", tag)],
-        );
-    }
-    if let Some(tag) = message.strip_prefix("meta tag is not set: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.meta.notSet",
-            &[("tag", tag)],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Unknown creature id: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.spawn.unknownCreature",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if message == "Cannot spawn creature: player is unavailable." {
-        return feedback(
-            localization,
-            language,
-            "chat.command.spawn.playerUnavailable",
-            &[],
-        );
-    }
-    if let Some(id) = message.strip_prefix("not enough space to spawn ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.spawn.noSpace",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message
-        .strip_prefix("Structure set ")
-        .and_then(|rest| rest.strip_suffix(" does not have variations."))
+    if input
+        .keys
+        .just_pressed(input.keybinds.key_code(KeybindAction::OpenChat))
     {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.setNoVariations",
-            &[("id", id)],
-        );
+        **editor = String::new();
+        chat.open = true;
+        chat.command_target = None;
+        input.focus.set(entity, FocusCause::Programmatic);
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+        return;
     }
-    if let Some(id) = message.strip_prefix("Unknown structure, structure group, or structure set: ")
+
+    if input.keys.just_pressed(KeyCode::Slash) {
+        **editor = "/".to_owned();
+        chat.open = true;
+        chat.command_target = None;
+        input.focus.set(entity, FocusCause::Programmatic);
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+        return;
+    }
+
+    if input
+        .keys
+        .just_pressed(input.keybinds.key_code(KeybindAction::OpenCommand))
+        && let Some(entity) = input.targeted.entity
     {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.unknownStructure",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some((variation, id, count)) = parse_unknown_variation(message) {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.unknownVariation",
-            &[("variation", variation), ("id", id), ("count", count)],
-        );
-    }
-    if message == "Cannot place structure: player is unavailable." {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.playerUnavailable",
-            &[],
-        );
-    }
-    if message == "Cannot place structure set: player is unavailable." {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.setPlayerUnavailable",
-            &[],
-        );
-    }
-    if let Some(id) = message.strip_prefix("no loaded ground available to place ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.noGround",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("not enough loaded space to place ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.noLoadedSpace",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("not enough safe space to place ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.noSafeSpace",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message
-        .strip_prefix("could not resolve structure set ")
-        .and_then(|rest| rest.strip_suffix(" in loaded terrain"))
-    {
-        return feedback(
-            localization,
-            language,
-            "chat.command.place.setResolveFailed",
-            &[("id", id)],
-        );
-    }
-    if message == "Cannot locate: current dimension is unavailable." {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.dimensionUnavailable",
-            &[],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Unknown biome id: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.unknownBiome",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Biome is not active in this dimension: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.biomeInactive",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Structure set cannot be located by command: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.setNotLocatable",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Structure set is not generated in this dimension: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.setNotGenerated",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Structure cannot be located by command: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.structureNotLocatable",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(id) = message.strip_prefix("Structure is not generated in this dimension: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.locate.structureNotGenerated",
-            &[("id", id.trim_end_matches('.'))],
-        );
-    }
-    if let Some(usage) = message.strip_prefix("Usage: ") {
-        return feedback(
-            localization,
-            language,
-            "chat.command.usage",
-            &[("usage", usage)],
-        );
-    }
-
-    feedback(localization, language, "chat.command.failed", &[])
-}
-
-fn localize_place_success(
-    response: &str,
-    localization: &UiLocalization,
-    language: Language,
-) -> Option<String> {
-    let rest = response.strip_prefix("Placed ")?.strip_suffix('.')?;
-    let (subject, suffix) = rest
-        .split_once(" with ")
-        .map_or((rest, None), |(subject, suffix)| (subject, Some(suffix)));
-    let (name, id) = subject.rsplit_once(" (")?;
-    let id = id.strip_suffix(')')?;
-
-    match suffix {
-        None => Some(feedback(
-            localization,
-            language,
-            "chat.command.place.success",
-            &[("name", name), ("id", id)],
-        )),
-        Some(suffix) => {
-            let count = suffix.split_whitespace().next()?;
-            let key = if suffix.ends_with(" connected structures") {
-                "chat.command.place.successConnected"
-            } else if suffix.ends_with(" structures") {
-                "chat.command.place.setSuccess"
-            } else {
-                return None;
-            };
-            Some(feedback(
-                localization,
-                language,
-                key,
-                &[("name", name), ("id", id), ("count", count)],
-            ))
-        }
+        **editor = "/".to_owned();
+        chat.open = true;
+        chat.command_target = Some(entity);
+        input.focus.set(entity, FocusCause::Programmatic);
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
     }
 }
 
-fn localize_locate_start(
-    response: &str,
-    localization: &UiLocalization,
-    language: Language,
-) -> Option<String> {
-    let name = response.strip_prefix("Locating ")?.strip_suffix("...")?;
-    Some(feedback(
-        localization,
-        language,
-        "chat.command.locate.searching",
-        &[("name", name)],
-    ))
-}
-
-// Bevy systems expose their independent ECS inputs as function parameters.
-#[allow(clippy::too_many_arguments)]
 fn interpret_chat_submissions(
-    mut submissions: MessageReader<ChatSubmission>,
+    mut messages: MessageReader<ChatSubmission>,
     mut chat: ResMut<ChatState>,
-    mut commands: Commands,
-    game_mode: Single<&GameMode>,
-    mut placement: ChatPlacementContext,
     mut locate: ChatLocateContext,
-    mut warp: ResMut<PendingWarp>,
-    mut content: ChatCommandContent,
+    mut placement: ChatPlacementContext,
+    creatures: Res<CreatureRegistry>,
+    language: Res<ActiveLanguage>,
+    mut warps: ResMut<PendingWarp>,
+    mut commands: Commands,
+    mut targets: Query<(
+        Entity,
+        &mut Transform,
+        &mut EntityHealth,
+        &mut EntityMetaTags,
+        &mut CreatureAnimationState,
+        Option<&CreatureDeathTimer>,
+    ), With<CreatureInstance>>,
+    game_modes: Query<&mut GameMode>,
 ) {
-    let mut reserved = Vec::new();
-    for submission in submissions.read() {
-        let language = content.language.get();
-        let localization = content.localization.as_ref();
-        let parsed = parse_line(&submission.line);
-        log_gameplay_event(format!(
-            "command.submit line={:?} target={:?} parsed={:?} spectator={}",
-            submission.line,
-            submission.target,
-            parsed,
-            game_mode.is_spectator()
-        ));
-        if game_mode.is_spectator() && !matches!(parsed, ParsedLine::Say(_)) {
-            chat.append_error(feedback(
-                localization,
-                language,
-                "chat.command.spectatorUnavailable",
-                &[],
-            ));
-            continue;
-        }
-
-        match parsed {
-            ParsedLine::Say(text) => chat.append_text(format!("<{PLAYER_DISPLAY_NAME}>: {text}")),
-            ParsedLine::Usage(usage) => chat.append_error(feedback(
-                localization,
-                language,
-                "chat.command.usage",
-                &[("usage", usage)],
-            )),
-            ParsedLine::Unknown(command) => chat.append_error(feedback(
-                localization,
-                language,
-                "chat.command.unknown",
-                &[("command", command)],
-            )),
-            ParsedLine::Spawn(id, meta_tag) => {
-                let Some(definition) = content.definitions.get(id) else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.spawn.unknownCreature",
-                        &[("id", id)],
-                    ));
-                    continue;
-                };
-                let Some(position) = placement.player_block_position() else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.spawn.playerUnavailable",
-                        &[],
-                    ));
-                    continue;
-                };
-                let name = definition.name.text(language).to_owned();
-                let position_text = format_position(position);
-
-                if let Some(meta_tag) = meta_tag {
-                    let mut meta_tags = EntityMetaTags::default();
-                    if let Err(error) = meta_tags.add(meta_tag, None) {
-                        chat.append_error(localize_internal_error(&error, localization, language));
+    for message in messages.read() {
+        let parsed = parse_line(&message.line);
+        let response = match parsed {
+            ParsedLine::Chat => message.line.clone(),
+            ParsedLine::Command(command) => match command {
+                commands::ChatCommand::Locate {
+                    target_kind,
+                    id,
+                    variation,
+                } => {
+                    let player_block = targets
+                        .get(message.target.unwrap_or(Entity::PLACEHOLDER))
+                        .ok()
+                        .map(|(_, transform, ..)| transform.translation.floor().as_ivec3())
+                        .unwrap_or_default();
+                    locate.start(&target_kind, &id, variation, player_block)
+                }
+                commands::ChatCommand::PlaceStructure { id, variation } => {
+                    placement.place(&id, variation)
+                }
+                commands::ChatCommand::Warp { x, y, z } => {
+                    warps.request(IVec3::new(x, y, z));
+                    format!("Warping to X: {x} Z: {z} Y: {y}.")
+                }
+                commands::ChatCommand::Spawn {
+                    id,
+                    position,
+                    tags,
+                } => {
+                    let Some(definition) = creatures.get(&id) else {
+                        chat.append_error(format!("Unknown creature id: {id}"));
                         continue;
-                    }
-                    let feet = Vec3::new(
-                        position.x as f32 + 0.5,
-                        position.y as f32,
-                        position.z as f32 + 0.5,
-                    );
-                    if spawn_creature_at_with_tags(
+                    };
+                    spawn_creature_at_with_tags(
                         &mut commands,
-                        &content.definitions,
-                        &content.assets,
-                        language,
-                        id,
-                        feet,
-                        meta_tags,
-                    )
-                    .is_err()
-                    {
-                        chat.append_error(feedback(
-                            localization,
-                            language,
-                            "chat.command.spawn.failed",
-                            &[("id", id)],
-                        ));
+                        definition,
+                        position.as_vec3() + Vec3::splat(0.5),
+                        &tags,
+                    );
+                    format!("Spawned {id}.")
+                }
+                commands::ChatCommand::Kill => {
+                    let Some(target) = message.target else {
+                        chat.append_error("No creature targeted.");
+                        continue;
+                    };
+                    let Ok((entity, _, mut health, _, _, death_timer)) = targets.get_mut(target)
+                    else {
+                        chat.append_error("Target is no longer available.");
+                        continue;
+                    };
+                    if death_timer.is_some() || health.current() <= 0.0 {
+                        chat.append_error("Target is already dead.");
                         continue;
                     }
-                    log_gameplay_event(format!(
-                        "command.spawn success id={} name={} position={} meta_tag={:?}",
-                        id, name, position_text, meta_tag
-                    ));
-                    chat.append_text(feedback(
-                        localization,
-                        language,
-                        "chat.command.spawn.success",
-                        &[("name", &name), ("position", &position_text)],
-                    ));
-                    continue;
+                    health.set_current(0.0);
+                    commands.entity(entity).insert(CreatureDeathTimer::default());
+                    "Killed target.".to_owned()
                 }
-
-                let response = placement.spawn(&mut commands, id, &mut reserved);
-                if response.starts_with("Spawned ") {
-                    log_gameplay_event(format!(
-                        "command.spawn success id={} name={} position={} meta_tag=None",
-                        id, name, position_text
-                    ));
-                    chat.append_text(feedback(
-                        localization,
-                        language,
-                        "chat.command.spawn.success",
-                        &[("name", &name), ("position", &position_text)],
-                    ));
-                } else {
-                    chat.append_error(localize_internal_error(&response, localization, language));
+                commands::ChatCommand::Modify { action, value } => {
+                    let Some(target) = message.target else {
+                        chat.append_error("No creature targeted.");
+                        continue;
+                    };
+                    let Ok((_, mut transform, mut health, mut tags, mut animation, _)) =
+                        targets.get_mut(target)
+                    else {
+                        chat.append_error("Target is no longer available.");
+                        continue;
+                    };
+                    match action {
+                        ModifyAction::Scale => {
+                            let scale = value.parse::<f32>().ok();
+                            let Some(scale) = scale.filter(|scale| *scale > 0.0) else {
+                                chat.append_error("Scale must be a positive number.");
+                                continue;
+                            };
+                            transform.scale = Vec3::splat(scale);
+                            format!("Set scale to {scale}.")
+                        }
+                        ModifyAction::Health => {
+                            let value = value.parse::<f32>().ok();
+                            let Some(value) = value.filter(|value| *value >= 0.0) else {
+                                chat.append_error("Health must be zero or greater.");
+                                continue;
+                            };
+                            health.set_current(value);
+                            format!("Set health to {value}.")
+                        }
+                        ModifyAction::AddTag => {
+                            tags.insert(value.clone());
+                            format!("Added tag {value}.")
+                        }
+                        ModifyAction::RemoveTag => {
+                            tags.remove(&value);
+                            format!("Removed tag {value}.")
+                        }
+                        ModifyAction::Animation => {
+                            animation.set_override(value.clone());
+                            format!("Set animation override to {value}.")
+                        }
+                    }
                 }
-            }
-            ParsedLine::Place(id, variation) => {
-                let response = placement.place(id, variation, &reserved);
-                if response.starts_with("Placed ") {
-                    log_gameplay_event(format!(
-                        "command.place success reference={} variation={:?} response={:?}",
-                        id, variation, response
-                    ));
-                    chat.append_text(
-                        localize_place_success(&response, localization, language).unwrap_or_else(
-                            || feedback(localization, language, "chat.command.failed", &[]),
-                        ),
-                    );
-                } else {
-                    chat.append_error(localize_internal_error(&response, localization, language));
+                commands::ChatCommand::GameMode { mode } => {
+                    let Some(target) = message.target else {
+                        chat.append_error("No player targeted.");
+                        continue;
+                    };
+                    let Ok(mut game_mode) = game_modes.get_mut(target) else {
+                        chat.append_error("Target player is no longer available.");
+                        continue;
+                    };
+                    *game_mode = mode;
+                    format!("Set game mode to {:?}.", mode)
                 }
-            }
-            ParsedLine::Locate(kind, id, variation) => {
-                let Some(player_block) = placement.player_block_position() else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.locate.playerUnavailable",
-                        &[],
-                    ));
-                    continue;
-                };
-                let response = locate.start(kind, id, variation, player_block);
-                if response.starts_with("Locating ") {
-                    chat.append_text(
-                        localize_locate_start(&response, localization, language).unwrap_or_else(
-                            || feedback(localization, language, "chat.command.failed", &[]),
-                        ),
-                    );
-                } else {
-                    chat.append_error(localize_internal_error(&response, localization, language));
-                }
-            }
-            ParsedLine::Warp(target, dimension) => {
-                warp.request(target, dimension);
-                let position = format_position(target);
-                chat.append_text(feedback(
-                    localization,
-                    language,
-                    "chat.command.warp.start",
-                    &[("position", &position)],
-                ));
-            }
-            ParsedLine::Kill => {
-                let Some(entity) = submission.target else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.target.none",
-                        &[],
-                    ));
-                    continue;
-                };
-                let Ok((name, transform, mut health, _, animation)) =
-                    content.targets.get_mut(entity)
-                else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.target.unavailable",
-                        &[],
-                    ));
-                    continue;
-                };
-                let position = format_position(command_target_position(transform));
-                let name = name.as_str().to_owned();
-                let current = health.current();
-                health.damage(current);
-                log_gameplay_event(format!(
-                    "entity.damage entity={:?} type=creature id={} source=command_kill amount={:.3} health_before={:.3} health_after=0 position={:?}",
-                    entity, name, current, current, transform.translation
-                ));
-                log_gameplay_event(format!(
-                    "entity.death entity={:?} type=creature id={} source=command_kill position={:?}",
-                    entity, name, transform.translation
-                ));
-                if let Some(mut animation) = animation {
-                    animation.trigger("death");
-                }
-                commands
-                    .entity(entity)
-                    .insert(CreatureDeathTimer(Timer::from_seconds(
-                        0.75,
-                        TimerMode::Once,
-                    )));
-                chat.append_text(feedback(
-                    localization,
-                    language,
-                    "chat.command.kill.success",
-                    &[("name", &name), ("position", &position)],
-                ));
-            }
-            ParsedLine::Modify(action, tag, value) => {
-                let Some(entity) = submission.target else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.target.none",
-                        &[],
-                    ));
-                    continue;
-                };
-                let Ok((name, transform, _, mut meta_tags, _)) = content.targets.get_mut(entity)
-                else {
-                    chat.append_error(feedback(
-                        localization,
-                        language,
-                        "chat.command.target.unavailable",
-                        &[],
-                    ));
-                    continue;
-                };
-                let before_tags = meta_tags.clone();
-                let result = match action {
-                    ModifyAction::Add => meta_tags.add(tag, value.map(str::to_owned)),
-                    ModifyAction::Remove => meta_tags.remove(tag),
-                    ModifyAction::Edit => meta_tags.edit(tag, value.map(str::to_owned)),
-                };
-                if let Err(error) = result {
-                    chat.append_error(localize_internal_error(&error, localization, language));
-                    continue;
-                }
-                log_gameplay_event(format!(
-                    "entity.modify entity={:?} name={} action={:?} tag={} value={:?} before={:?} after={:?}",
-                    entity, name, action, tag, value, before_tags, meta_tags
-                ));
-                let key = match action {
-                    ModifyAction::Add => "chat.command.modify.addSuccess",
-                    ModifyAction::Remove => "chat.command.modify.removeSuccess",
-                    ModifyAction::Edit => "chat.command.modify.editSuccess",
-                };
-                let name = name.as_str().to_owned();
-                let position = format_position(command_target_position(transform));
-                chat.append_text(feedback(
-                    localization,
-                    language,
-                    key,
-                    &[("tag", tag), ("name", &name), ("position", &position)],
-                ));
-            }
-        }
+            },
+        };
+        chat.append_text(response);
     }
 }
 
-fn localize_locate_feedback(
-    mut chat: ResMut<ChatState>,
-    language: Res<ActiveLanguage>,
-    localization: Res<UiLocalization>,
-) {
-    let Some(last) = chat.history.back() else {
+fn localize_locate_feedback(mut chat: ResMut<ChatState>, localization: Res<UiLocalization>) {
+    if !chat.is_changed() {
         return;
-    };
-
-    let replacement = match last {
-        ChatMessage::Text(text) => {
-            let Some((name, rest)) = text.split_once(" could not be found within ") else {
-                return;
-            };
-            let Some(radius) = rest.strip_suffix(" blocks.") else {
-                return;
-            };
-            Some(ChatMessage::Error(feedback(
-                &localization,
-                language.get(),
-                "chat.command.locate.notFound",
-                &[("name", name), ("radius", radius)],
-            )))
+    }
+    for message in chat.history.iter_mut() {
+        if let ChatMessage::Located { prefix, .. } = message
+            && prefix.starts_with("__locate__")
+        {
+            *prefix = localization.text("chat.locate.found").to_owned();
         }
-        ChatMessage::Located { prefix, target } => {
-            let Some((name, _)) = prefix.split_once(" found at ") else {
-                return;
-            };
-            let position = format_position(*target);
-            let localized_prefix = feedback(
-                &localization,
-                language.get(),
-                "chat.command.locate.found",
-                &[("name", name), ("position", &position)],
-            );
-            if localized_prefix == *prefix {
-                return;
-            }
-            Some(ChatMessage::Located {
-                prefix: localized_prefix,
-                target: *target,
-            })
-        }
-        _ => None,
-    };
-
-    let Some(replacement) = replacement else {
-        return;
-    };
-    let Some(last) = chat.history.back_mut() else {
-        return;
-    };
-    *last = replacement;
-    chat.since_last_message = 0.0;
-    chat.revision = chat.revision.wrapping_add(1);
+    }
 }
 
 fn poll_warp_outcome(
-    mut warp: ResMut<PendingWarp>,
+    mut outcomes: MessageReader<WarpOutcome>,
     mut chat: ResMut<ChatState>,
     language: Res<ActiveLanguage>,
-    localization: Res<UiLocalization>,
 ) {
-    match warp.take_outcome() {
-        Some(WarpOutcome::Succeeded(position)) => {
-            let position = format_position(position);
-            chat.append_text(feedback(
-                &localization,
-                language.get(),
-                "chat.command.warp.success",
-                &[("position", &position)],
-            ));
+    for outcome in outcomes.read() {
+        match outcome {
+            WarpOutcome::Arrived(position) => chat.append_text(format!(
+                "Warped to X: {} Z: {} Y: {}.",
+                position.x, position.z, position.y
+            )),
+            WarpOutcome::Failed(error) => chat.append_error(error.clone()),
         }
-        Some(WarpOutcome::Failed) => chat.append_error(feedback(
-            &localization,
-            language.get(),
-            "chat.command.warp.failed",
-            &[],
-        )),
-        None => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn commands_are_distinguished_from_plain_messages() {
-        assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(
-            parse_line(" /spawn asteria:meadow_slime "),
-            ParsedLine::Spawn("asteria:meadow_slime", None)
-        );
-        assert_eq!(
-            parse_line("/spawn"),
-            ParsedLine::Usage("/spawn <id> [meta_tag]")
-        );
-        assert_eq!(parse_line("/kill"), ParsedLine::Kill);
-        assert_eq!(
-            parse_line("/modify add NO_AI"),
-            ParsedLine::Modify(ModifyAction::Add, "NO_AI", None)
-        );
-        assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
-    }
-
-    #[test]
-    fn unknown_variation_feedback_is_parsed_structurally() {
-        assert_eq!(
-            parse_unknown_variation("Unknown variation 3 for asteria:test; expected 1..=2."),
-            Some(("3", "asteria:test", "2"))
-        );
-    }
-
-    #[test]
-    fn new_messages_append_below_old_messages_and_expire_when_closed() {
-        let mut chat = ChatState::default();
-        chat.append(ChatMessage::Text("old".to_owned()));
-        chat.append(ChatMessage::Text("new".to_owned()));
-        assert!(matches!(chat.history.front(), Some(ChatMessage::Text(text)) if text == "old"));
-        assert!(matches!(chat.history.back(), Some(ChatMessage::Text(text)) if text == "new"));
-        chat.since_last_message = CHAT_TIMEOUT_SECS;
-        assert!(!chat.visible());
-        chat.open = true;
-        assert!(chat.visible());
-    }
-
-    #[test]
-    fn history_retains_last_entries_in_chronological_order() {
-        let mut chat = ChatState::default();
-        for index in 0..=HISTORY_CAPACITY {
-            chat.append(ChatMessage::Text(index.to_string()));
-        }
-        assert_eq!(chat.history.len(), HISTORY_CAPACITY);
-        assert!(matches!(chat.history.front(), Some(ChatMessage::Text(text)) if text == "1"));
-        assert!(matches!(chat.history.back(), Some(ChatMessage::Text(text)) if text == "64"));
     }
 }

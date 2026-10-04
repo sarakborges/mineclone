@@ -1,3 +1,7 @@
+// Player restore/spawn entry points are temporarily dormant while Phase 1 has
+// no world activation path. The gameplay implementations remain intact for the
+// query-first spawn/warp integration instead of being replaced with legacy shims.
+#[allow(dead_code)]
 pub(crate) mod camera;
 pub(crate) mod character_info;
 pub(crate) mod game_mode;
@@ -7,8 +11,10 @@ pub(crate) mod inventory;
 pub(crate) mod item_stack;
 mod material;
 pub(crate) mod model;
+#[allow(dead_code)]
 pub(crate) mod movement;
 pub(crate) mod player_id;
+#[allow(dead_code)]
 pub(crate) mod save;
 pub(crate) mod skin_uv;
 pub(crate) mod viewmodel;
@@ -43,8 +49,10 @@ pub(crate) const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
 #[derive(Component, Default)]
 pub(crate) struct PlayerEntity;
 
+#[allow(dead_code)]
 const SPAWN_SEARCH_RADIUS_BLOCKS: i32 = 64;
 
+#[allow(dead_code)]
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     translation: Vec3,
@@ -106,6 +114,7 @@ pub(crate) fn spawn_player_entity(
         });
 }
 
+#[allow(dead_code)]
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
     let feet = translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let feet_voxel = feet.floor().as_ivec3();
@@ -119,6 +128,7 @@ pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) ->
         && world.fluid_at(head_voxel).is_none()
 }
 
+#[allow(dead_code)]
 pub(crate) fn find_safe_spawn_position(
     world: &VoxelWorld,
     preferred_column: IVec2,
@@ -138,6 +148,7 @@ pub(crate) fn find_safe_spawn_position(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -> Vec3 {
     find_safe_spawn_position(world, preferred_column, |_| true).unwrap_or_else(|| {
         panic!(
@@ -147,6 +158,7 @@ pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -
     })
 }
 
+#[allow(dead_code)]
 fn safe_surface_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
     let highest_y = world.highest_loaded_world_y_in_column(column.x, column.y)?;
 
