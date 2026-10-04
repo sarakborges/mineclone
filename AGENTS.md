@@ -123,21 +123,35 @@ Before publishing a change:
 - Do not claim that behavior works merely because code compiles.
 - Do not claim CI is green until the relevant workflow/status has actually been observed as successful for the delivered commit.
 
+### CI completion is mandatory
+
+> **AN IMPLEMENTATION TASK IS NOT COMPLETE UNTIL THE CI FOR THE DELIVERED COMMIT HAS FINISHED AND EVERY REQUIRED CHECK IS GREEN.**
+
+For every implementation task in a repository with CI:
+
+- After publishing the delivered commit, locate the CI/workflow run for that exact commit SHA and follow it through completion.
+- A queued, waiting, requested, pending, or in-progress CI run means the task is still incomplete. Never report the task as ready, done, finished, delivered, fixed, or equivalent while CI has not completed.
+- If any required job/check fails, inspect the failing logs, correct the underlying issue, publish a new commit, and repeat the CI cycle. Do not stop at the first fix if a later CI stage exposes another failure.
+- Continue until the CI run associated with the final delivered commit completes successfully with every required job/check green.
+- If CI cannot run or cannot be observed because of an external infrastructure failure, service outage, or missing permission, report the task as blocked/incomplete and identify the blocker. Do not reinterpret unavailable CI as success.
+- Never use a successful CI run from an older commit, another branch, or an earlier attempt as evidence for the final delivered commit.
+
 ## Git delivery and completion criteria
 
-> **ASSISTANT TEXT IS NOT DELIVERY EVIDENCE. THE TARGET REMOTE BRANCH IS THE SOURCE OF TRUTH.**
+> **ASSISTANT TEXT IS NOT DELIVERY EVIDENCE. THE TARGET REMOTE BRANCH AND ITS COMPLETED GREEN CI ARE THE SOURCE OF TRUTH.**
 
 A task may be reported as complete only after this chain is satisfied:
 
-`complete requirement coverage -> final diff/state review -> relevant validation -> commit(s) -> publish to target branch -> verify remote SHA/reachability`
+`complete requirement coverage -> final diff/state review -> relevant validation -> commit(s) -> publish to target branch -> verify remote SHA/reachability -> CI for delivered SHA completed successfully with every required check green`
 
 Concretely:
 
-- Do not say "done", "applied", "pushed", or equivalent when changes only exist in an editor, local state, a temporary branch, or an unverified commit.
+- Do not say "done", "applied", "pushed", "ready", "finished", or equivalent when changes only exist in an editor, local state, a temporary branch, an unverified commit, or a commit whose CI has not completed successfully.
 - If publication fails, the task is not complete.
 - If the target branch moved and the expected commit is not reachable from its new HEAD, the task is not complete.
-- If validation or CI fails, state that failure explicitly; do not convert it into a success claim.
-- At the end of an implementation task, report the target branch, delivered commit SHA(s), and validation/CI status that was actually verified.
+- If validation or CI fails, state that failure explicitly; fix it and rerun the delivery cycle instead of converting it into a success claim.
+- If CI is queued, pending, or in progress, the task remains incomplete.
+- At the end of an implementation task, report the target branch, delivered commit SHA(s), and the completed CI run/check status actually verified for the final delivered SHA.
 - When a task uses several commits, verify the remote contains the entire required sequence, not merely the last commit created by the agent.
 
 ## Forward-only feature policy
