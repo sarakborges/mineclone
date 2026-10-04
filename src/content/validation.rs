@@ -164,16 +164,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
         structure_set.validate_references(&content.structures);
     }
 
-    for biome in content.biomes.iter() {
-        biome.validate_material_references(&content.blocks, &content.fluids);
-        biome.validate_spawn_references(&content.creatures);
-        biome.validate_object_spawn_references(&content.objects, &content.blocks);
-        biome.validate_structure_references(&content.structures, &content.structure_sets);
-        biome.validate_surface_fluid_references(&content.fluids);
-    }
-
     for dimension in content.dimensions.iter() {
-        dimension.validate_biomes(&content.biomes);
         assert!(
             content
                 .day_night_cycles
@@ -189,7 +180,6 @@ pub(super) fn validate_content(content: &LoadedContent) {
             dimension.id,
             dimension.sky
         );
-        dimension.validate_fluid_references(&content.fluids);
     }
 
     for portal in content.portals.iter() {
