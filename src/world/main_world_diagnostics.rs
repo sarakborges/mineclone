@@ -74,14 +74,12 @@ fn percentile_micros(sorted: &[u64], percentile: usize) -> u64 {
 
 #[derive(Resource, Default)]
 pub(super) struct MainWorldWorkSamples {
-    streaming: StageTimingSamples,
     retirement: StageTimingSamples,
     fluid: StageTimingSamples,
     lighting: StageTimingSamples,
     remesh: StageTimingSamples,
     residency: StageTimingSamples,
     visibility: StageTimingSamples,
-    generation_refill: StageTimingSamples,
     deferred_mesh_retirement: StageTimingSamples,
 }
 
@@ -97,7 +95,6 @@ macro_rules! stage_markers {
     };
 }
 
-stage_markers!(begin_streaming_work, finish_streaming_work, streaming);
 stage_markers!(begin_retirement_work, finish_retirement_work, retirement);
 stage_markers!(begin_fluid_work, finish_fluid_work, fluid);
 stage_markers!(begin_lighting_work, finish_lighting_work, lighting);
@@ -105,34 +102,22 @@ stage_markers!(begin_remesh_work, finish_remesh_work, remesh);
 stage_markers!(begin_residency_work, finish_residency_work, residency);
 stage_markers!(begin_visibility_work, finish_visibility_work, visibility);
 stage_markers!(
-    begin_generation_refill_work,
-    finish_generation_refill_work,
-    generation_refill
-);
-stage_markers!(
     begin_deferred_mesh_retirement_work,
     finish_deferred_mesh_retirement_work,
     deferred_mesh_retirement
 );
 
 pub(super) fn log_main_world_work(mut samples: ResMut<MainWorldWorkSamples>) {
-    let streaming = samples.streaming.take_diagnostic();
     let retirement = samples.retirement.take_diagnostic();
     let fluid = samples.fluid.take_diagnostic();
     let lighting = samples.lighting.take_diagnostic();
     let remesh = samples.remesh.take_diagnostic();
     let residency = samples.residency.take_diagnostic();
     let visibility = samples.visibility.take_diagnostic();
-    let generation_refill = samples.generation_refill.take_diagnostic();
     let deferred_mesh_retirement = samples.deferred_mesh_retirement.take_diagnostic();
 
     let diagnostic = format!(
-        "main world stages: streaming_count={} streaming_avg_us={} streaming_p95_us={} streaming_p99_us={} streaming_max_us={} retirement_count={} retirement_avg_us={} retirement_p95_us={} retirement_p99_us={} retirement_max_us={} fluid_count={} fluid_avg_us={} fluid_p95_us={} fluid_p99_us={} fluid_max_us={} lighting_count={} lighting_avg_us={} lighting_p95_us={} lighting_p99_us={} lighting_max_us={} remesh_count={} remesh_avg_us={} remesh_p95_us={} remesh_p99_us={} remesh_max_us={} residency_count={} residency_avg_us={} residency_p95_us={} residency_p99_us={} residency_max_us={} visibility_count={} visibility_avg_us={} visibility_p95_us={} visibility_p99_us={} visibility_max_us={} generation_refill_count={} generation_refill_avg_us={} generation_refill_p95_us={} generation_refill_p99_us={} generation_refill_max_us={} deferred_mesh_retirement_count={} deferred_mesh_retirement_avg_us={} deferred_mesh_retirement_p95_us={} deferred_mesh_retirement_p99_us={} deferred_mesh_retirement_max_us={}",
-        streaming.count,
-        streaming.average_micros,
-        streaming.p95_micros,
-        streaming.p99_micros,
-        streaming.max_micros,
+        "main world stages: retirement_count={} retirement_avg_us={} retirement_p95_us={} retirement_p99_us={} retirement_max_us={} fluid_count={} fluid_avg_us={} fluid_p95_us={} fluid_p99_us={} fluid_max_us={} lighting_count={} lighting_avg_us={} lighting_p95_us={} lighting_p99_us={} lighting_max_us={} remesh_count={} remesh_avg_us={} remesh_p95_us={} remesh_p99_us={} remesh_max_us={} residency_count={} residency_avg_us={} residency_p95_us={} residency_p99_us={} residency_max_us={} visibility_count={} visibility_avg_us={} visibility_p95_us={} visibility_p99_us={} visibility_max_us={} deferred_mesh_retirement_count={} deferred_mesh_retirement_avg_us={} deferred_mesh_retirement_p95_us={} deferred_mesh_retirement_p99_us={} deferred_mesh_retirement_max_us={}",
         retirement.count,
         retirement.average_micros,
         retirement.p95_micros,
@@ -163,11 +148,6 @@ pub(super) fn log_main_world_work(mut samples: ResMut<MainWorldWorkSamples>) {
         visibility.p95_micros,
         visibility.p99_micros,
         visibility.max_micros,
-        generation_refill.count,
-        generation_refill.average_micros,
-        generation_refill.p95_micros,
-        generation_refill.p99_micros,
-        generation_refill.max_micros,
         deferred_mesh_retirement.count,
         deferred_mesh_retirement.average_micros,
         deferred_mesh_retirement.p95_micros,
