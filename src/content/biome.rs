@@ -10,21 +10,41 @@ const DEFAULT_REGION_MIN: u32 = 384;
 const DEFAULT_REGION_MAX: u32 = 768;
 const MAX_REGION_SPAN: u32 = 16_384;
 
-/// Authored surface-biome layout inputs.
+/// One biome identity in the shared biome universe.
 ///
-/// Terrain, materials, Structures, visuals, and other later phases deliberately
-/// do not live here. Phase 3 owns only spatial biome-layout semantics.
+/// Spatial placement is capability-owned. A biome participates in the 2D
+/// surface field only when `surfaceLayout` is authored. Future volume-layout
+/// authoring extends this same identity instead of creating a parallel biome
+/// type hierarchy.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
     pub name: LocalizedText,
+    #[serde(default)]
+    pub surface_layout: Option<SurfaceBiomeLayoutDefinition>,
+}
+
+/// Authored inputs owned exclusively by the 2D surface biome layout.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceBiomeLayoutDefinition {
     #[serde(default = "default_biome_weight")]
     pub weight: f32,
     #[serde(default)]
     pub region_size: BiomeRegionSize,
     #[serde(default)]
     pub cannot_border: Vec<String>,
+}
+
+impl Default for SurfaceBiomeLayoutDefinition {
+    fn default() -> Self {
+        Self {
+            weight: default_biome_weight(),
+            region_size: BiomeRegionSize::default(),
+            cannot_border: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -55,9 +75,12 @@ impl BiomeDefinition {
     }
 
     pub fn validate_references(&self, biomes: &BiomeRegistry) {
+        let Some(surface) = &self.surface_layout else {
+            return;
+        };
         let own_dimension = biome_dimension_components(&self.id)
             .expect("validated biome id must contain a dimension");
-        for forbidden in &self.cannot_border {
+        for forbidden in &surface.cannot_border {
             assert!(
                 forbidden != &self.id,
                 "biome {} cannot forbid bordering itself",
@@ -65,7 +88,7 @@ impl BiomeDefinition {
             );
             let target = biomes.get(forbidden).unwrap_or_else(|| {
                 panic!(
-                    "biome {} cannotBorder references missing biome {}",
+                    "biome {} surfaceLayout.cannotBorder references missing biome {}",
                     self.id, forbidden
                 )
             });
@@ -73,8 +96,14 @@ impl BiomeDefinition {
                 .expect("validated biome id must contain a dimension");
             assert_eq!(
                 target_dimension, own_dimension,
-                "biome {} cannotBorder target {} belongs to a different dimension",
+                "biome {} surfaceLayout.cannotBorder target {} belongs to a different dimension",
                 self.id, forbidden
+            );
+            assert!(
+                target.surface_layout.is_some(),
+                "biome {} surfaceLayout.cannotBorder target {} does not participate in the surface layout",
+                self.id,
+                forbidden
             );
         }
     }
@@ -82,26 +111,29 @@ impl BiomeDefinition {
     fn validate(&self) {
         assert_valid_biome_id(&self.id);
         self.name.validate(&format!("biome {} name", self.id));
+        if let Some(surface) = &self.surface_layout {
+            surface.validate(&self.id);
+        }
+    }
+}
+
+impl SurfaceBiomeLayoutDefinition {
+    fn validate(&self, biome_id: &str) {
         assert!(
             self.weight.is_finite() && self.weight > 0.0,
-            "biome {} weight must be finite and positive",
-            self.id
+            "biome {biome_id} surfaceLayout.weight must be finite and positive"
         );
         assert!(
             self.region_size.min > 0,
-            "biome {} regionSize.min must be positive",
-            self.id
+            "biome {biome_id} surfaceLayout.regionSize.min must be positive"
         );
         assert!(
             self.region_size.max >= self.region_size.min,
-            "biome {} regionSize.max must be greater than or equal to min",
-            self.id
+            "biome {biome_id} surfaceLayout.regionSize.max must be greater than or equal to min"
         );
         assert!(
             self.region_size.max <= MAX_REGION_SPAN,
-            "biome {} regionSize.max must not exceed {} blocks",
-            self.id,
-            MAX_REGION_SPAN
+            "biome {biome_id} surfaceLayout.regionSize.max must not exceed {MAX_REGION_SPAN} blocks"
         );
         for forbidden in &self.cannot_border {
             assert_valid_biome_id(forbidden);
@@ -128,12 +160,13 @@ impl BiomeRegistry {
         self.definitions.values()
     }
 
-    pub fn for_dimension<'a>(
+    pub fn surface_for_dimension<'a>(
         &'a self,
         dimension_id: &'a str,
     ) -> impl Iterator<Item = &'a BiomeDefinition> + 'a {
-        self.iter()
-            .filter(move |definition| definition.belongs_to_dimension(dimension_id))
+        self.iter().filter(move |definition| {
+            definition.surface_layout.is_some() && definition.belongs_to_dimension(dimension_id)
+        })
     }
 }
 
@@ -170,38 +203,49 @@ fn dimension_components(id: &str) -> Option<(&str, &str)> {
 mod tests {
     use super::*;
 
-    fn definition(id: &str) -> BiomeDefinition {
-        serde_json::from_value(serde_json::json!({
+    fn definition(id: &str, surface: bool) -> BiomeDefinition {
+        let mut value = serde_json::json!({
             "id": id,
             "name": {
                 "english": "Biome",
                 "portuguese_brazil": "Biome",
                 "spanish": "Biome"
             }
-        }))
-        .expect("biome definition must deserialize")
+        });
+        if surface {
+            value["surfaceLayout"] = serde_json::json!({});
+        }
+        serde_json::from_value(value).expect("biome definition must deserialize")
     }
 
     #[test]
-    fn layout_defaults_are_forward_only_and_valid() {
-        let definition = definition("asteria:overworld/plains");
-        assert_eq!(definition.weight, 1.0);
-        assert_eq!(definition.region_size, BiomeRegionSize::default());
-        assert!(definition.cannot_border.is_empty());
+    fn surface_layout_is_explicit_and_uses_forward_only_defaults() {
+        let identity_only = definition("asteria:overworld/caverns", false);
+        assert!(identity_only.surface_layout.is_none());
+
+        let definition = definition("asteria:overworld/plains", true);
+        let surface = definition
+            .surface_layout
+            .as_ref()
+            .expect("surface layout must exist");
+        assert_eq!(surface.weight, 1.0);
+        assert_eq!(surface.region_size, BiomeRegionSize::default());
+        assert!(surface.cannot_border.is_empty());
         assert!(definition.belongs_to_dimension("asteria:overworld"));
         assert!(!definition.belongs_to_dimension("asteria:umbral"));
     }
 
     #[test]
-    fn dimension_filter_uses_biome_identity_namespace() {
+    fn surface_dimension_filter_excludes_identity_only_biomes() {
         let mut registry = BiomeRegistry::default();
-        registry.insert(definition("asteria:overworld/plains"));
-        registry.insert(definition("asteria:umbral/wraith_grove"));
+        registry.insert(definition("asteria:overworld/caverns", false));
+        registry.insert(definition("asteria:overworld/plains", true));
+        registry.insert(definition("asteria:umbral/wraith_grove", true));
 
         let ids = registry
-            .for_dimension("asteria:umbral")
+            .surface_for_dimension("asteria:overworld")
             .map(|definition| definition.id.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(ids, vec!["asteria:umbral/wraith_grove"]);
+        assert_eq!(ids, vec!["asteria:overworld/plains"]);
     }
 }
