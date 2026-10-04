@@ -126,10 +126,18 @@ pub(crate) fn render_biome_map(
             let sample = samples
                 .sample_at(px, py)
                 .expect("validated biome map sample must exist");
-            let mut color = colors[sample.primary().as_str()];
-            if config.show_influences {
-                color = blend_toward_white(color, 1.0 - sample.primary_weight());
-            }
+            let mut color = if config.show_influences {
+                let mut mixed = [0.0_f32; 3];
+                for influence in sample.influences() {
+                    let source = colors[influence.biome().as_str()];
+                    for channel in 0..3 {
+                        mixed[channel] += f32::from(source[channel]) * influence.weight();
+                    }
+                }
+                mixed.map(|channel| channel.round().clamp(0.0, 255.0) as u8)
+            } else {
+                colors[sample.primary().as_str()]
+            };
             let left_boundary = px > 0
                 && samples
                     .sample_at(px - 1, py)
@@ -218,13 +226,6 @@ fn hsv_to_rgb(hue: f64, saturation: f64, value: f64) -> [u8; 3] {
         ((g + m) * 255.0).round() as u8,
         ((b + m) * 255.0).round() as u8,
     ]
-}
-
-fn blend_toward_white(color: [u8; 3], transition_strength: f32) -> [u8; 3] {
-    let amount = (transition_strength * 0.72).clamp(0.0, 0.72);
-    color.map(|channel| {
-        (f32::from(channel) + (255.0 - f32::from(channel)) * amount).round() as u8
-    })
 }
 
 fn hash_text(value: &str) -> u64 {
