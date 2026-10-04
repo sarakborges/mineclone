@@ -24,10 +24,6 @@ pub struct FluidDefinition {
     pub color: Hsi,
     #[serde(default)]
     pub light_color: Option<Hsi>,
-    #[serde(default)]
-    pub biome_tint: bool,
-    #[serde(default)]
-    pub biome_immersion_tint: bool,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]
@@ -135,12 +131,5 @@ impl FluidRegistry {
 
     pub fn get(&self, fluid_id: FluidId) -> Option<&FluidDefinition> {
         self.definitions.get(fluid_id as usize)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (FluidId, &FluidDefinition)> {
-        self.definitions
-            .iter()
-            .enumerate()
-            .map(|(index, definition)| (index as FluidId, definition))
     }
 }
