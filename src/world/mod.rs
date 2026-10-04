@@ -78,11 +78,7 @@ use main_world_diagnostics::{
     finish_lighting_work, finish_remesh_work, finish_residency_work, finish_retirement_work,
     finish_visibility_work, log_main_world_work,
 };
-pub(crate) use new_world::{
-    DEFAULT_BIOME_SIZE_MULTIPLIER, MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER,
-    NewWorldConfig, WorldGenerationMode, WorldGenerationSettings, is_valid_biome_size_multiplier,
-    snap_biome_size_multiplier,
-};
+pub(crate) use new_world::NewWorldConfig;
 use presentation_snapshot::PresentationLightingRevisions;
 use render_diagnostics::{
     FrameTimeSamples, MainFrameWorkSamples, begin_main_frame_work, log_render_asset_pressure,
@@ -126,7 +122,6 @@ impl Plugin for WorldPlugin {
             .init_resource::<InactiveDimensionStates>()
             .init_resource::<WorldSession>()
             .init_resource::<NewWorldConfig>()
-            .init_resource::<WorldGenerationSettings>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
