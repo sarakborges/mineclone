@@ -8,8 +8,6 @@ use std::{
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
-const LOADING_QUEUE_DEPTH_PER_WORKER: usize = 4;
-
 #[derive(Resource, Clone, Default)]
 pub(crate) struct ChunkAsyncWorkLimiter {
     in_flight: Arc<AtomicUsize>,
@@ -19,8 +17,6 @@ pub(crate) struct ChunkAsyncWorkLimiter {
 
 #[derive(Default)]
 struct ChunkAsyncWorkMetrics {
-    generation: ChunkAsyncStageMetrics,
-    initial_mesh: ChunkAsyncStageMetrics,
     remesh: ChunkAsyncStageMetrics,
 }
 
@@ -31,7 +27,6 @@ struct ChunkAsyncStageMetrics {
     max_nanos: AtomicU64,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ChunkAsyncStageDiagnostic {
     pub(crate) count: u64,
@@ -41,48 +36,15 @@ pub(crate) struct ChunkAsyncStageDiagnostic {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ChunkAsyncWorkDiagnostics {
-    pub(crate) generation: ChunkAsyncStageDiagnostic,
-    pub(crate) initial_mesh: ChunkAsyncStageDiagnostic,
     pub(crate) remesh: ChunkAsyncStageDiagnostic,
 }
 
-#[derive(Clone, Copy)]
-enum ChunkAsyncStage {
-    Generation,
-    InitialMesh,
-    Remesh,
-}
-
 impl ChunkAsyncWorkLimiter {
-    pub(crate) fn try_acquire_generation(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::Generation)
-    }
-
-    pub(crate) fn try_acquire_loading_generation(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.loading_queue_limit(), ChunkAsyncStage::Generation)
-    }
-
-    pub(crate) fn try_acquire_initial_mesh(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::InitialMesh)
-    }
-
-    pub(crate) fn try_acquire_loading_initial_mesh(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.loading_queue_limit(), ChunkAsyncStage::InitialMesh)
-    }
-
-    pub(crate) fn loading_queue_limit(&self) -> usize {
-        loading_queue_limit_for_workers(AsyncComputeTaskPool::get().thread_num().max(1))
-    }
-
     pub(crate) fn try_acquire_remesh(&self) -> Option<ChunkAsyncWorkPermit> {
-        self.try_acquire_with_limit(self.limit(), ChunkAsyncStage::Remesh)
+        self.try_acquire_with_limit(self.limit())
     }
 
-    fn try_acquire_with_limit(
-        &self,
-        limit: usize,
-        stage: ChunkAsyncStage,
-    ) -> Option<ChunkAsyncWorkPermit> {
+    fn try_acquire_with_limit(&self, limit: usize) -> Option<ChunkAsyncWorkPermit> {
         let mut current = self.in_flight.load(Ordering::Acquire);
 
         loop {
@@ -100,7 +62,6 @@ impl ChunkAsyncWorkLimiter {
                     return Some(ChunkAsyncWorkPermit {
                         in_flight: Arc::clone(&self.in_flight),
                         metrics: Arc::clone(&self.metrics),
-                        stage,
                         started: Instant::now(),
                     });
                 }
@@ -142,8 +103,6 @@ impl ChunkAsyncWorkLimiter {
 
     pub(crate) fn take_diagnostics(&self) -> ChunkAsyncWorkDiagnostics {
         ChunkAsyncWorkDiagnostics {
-            generation: self.metrics.generation.take(),
-            initial_mesh: self.metrics.initial_mesh.take(),
             remesh: self.metrics.remesh.take(),
         }
     }
@@ -177,16 +136,9 @@ const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 55.0;
 const ASYNC_SLOW_FRAMES: u16 = 8;
 const ASYNC_RECOVERY_FRAMES: u16 = 30;
 
-fn loading_queue_limit_for_workers(workers: usize) -> usize {
-    workers
-        .max(1)
-        .saturating_mul(LOADING_QUEUE_DEPTH_PER_WORKER)
-}
-
 fn base_async_limit_for_workers(workers: usize) -> usize {
-    // Chunk generation/meshing is sustained CPU work. Keep roughly 40% of the
-    // async pool free so renderer support work and unrelated async systems are
-    // not starved while streaming is active.
+    // Chunk remeshing is sustained CPU work. Keep roughly 40% of the async pool
+    // free so renderer support work and unrelated async systems are not starved.
     (workers.max(1) * 3).div_ceil(5).max(1)
 }
 
@@ -252,18 +204,13 @@ pub(crate) fn tune_chunk_async_work(
 pub(crate) struct ChunkAsyncWorkPermit {
     in_flight: Arc<AtomicUsize>,
     metrics: Arc<ChunkAsyncWorkMetrics>,
-    stage: ChunkAsyncStage,
     started: Instant,
 }
 
 impl Drop for ChunkAsyncWorkPermit {
     fn drop(&mut self) {
         let elapsed_nanos = self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
-        match self.stage {
-            ChunkAsyncStage::Generation => self.metrics.generation.record(elapsed_nanos),
-            ChunkAsyncStage::InitialMesh => self.metrics.initial_mesh.record(elapsed_nanos),
-            ChunkAsyncStage::Remesh => self.metrics.remesh.record(elapsed_nanos),
-        }
+        self.metrics.remesh.record(elapsed_nanos);
 
         let previous = self.in_flight.fetch_sub(1, Ordering::AcqRel);
         debug_assert!(previous > 0, "chunk async work limiter cannot underflow");
@@ -274,15 +221,8 @@ impl Drop for ChunkAsyncWorkPermit {
 mod tests {
     use super::{
         ASYNC_RECOVERY_FRAMES, ASYNC_SLOW_FRAMES, ChunkAsyncAdaptationState, adaptive_limit_floor,
-        base_async_limit_for_workers, loading_queue_limit_for_workers,
+        base_async_limit_for_workers,
     };
-
-    #[test]
-    fn loading_queue_keeps_multiple_batches_ready_per_worker() {
-        assert_eq!(loading_queue_limit_for_workers(1), 4);
-        assert_eq!(loading_queue_limit_for_workers(4), 16);
-        assert_eq!(loading_queue_limit_for_workers(8), 32);
-    }
 
     #[test]
     fn base_limit_reserves_headroom_for_non_chunk_work() {
