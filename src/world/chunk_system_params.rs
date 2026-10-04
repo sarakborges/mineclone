@@ -1,14 +1,11 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::content::{
-    biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
     secondary_property::SecondaryPropertyRegistry,
 };
 
-use super::{
-    biome_field::BiomeField,
-    chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials},
-};
+use super::chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials};
 
 #[derive(SystemParam)]
 pub(crate) struct VoxelContent<'w> {
@@ -21,8 +18,6 @@ pub(crate) struct VoxelContent<'w> {
 #[derive(SystemParam)]
 pub(crate) struct ChunkContent<'w> {
     voxel: VoxelContent<'w>,
-    pub(crate) biomes: Res<'w, BiomeRegistry>,
-    pub(crate) biome_field: Res<'w, BiomeField>,
 }
 
 impl ChunkContent<'_> {
@@ -47,8 +42,6 @@ impl ChunkContent<'_> {
             || self.voxel.layers.is_changed()
             || self.voxel.fluids.is_changed()
             || self.voxel.secondary_properties.is_changed()
-            || self.biomes.is_changed()
-            || self.biome_field.is_changed()
     }
 
     pub(crate) fn render_context<'a>(
@@ -62,9 +55,7 @@ impl ChunkContent<'_> {
             blocks: self.blocks(),
             layers: self.layers(),
             fluids: self.fluids(),
-            biomes: &self.biomes,
             secondary_properties: self.secondary_properties(),
-            biome_field: &self.biome_field,
             terrain_materials,
             fluid_materials,
         }
