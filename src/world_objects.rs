@@ -194,8 +194,6 @@ impl ObjectMaterialCache {
 struct WorldObjectSceneContent<'w> {
     world: Res<'w, VoxelWorld>,
     objects: Res<'w, ObjectRegistry>,
-    biomes: Res<'w, crate::content::biome::BiomeRegistry>,
-    biome_field: Res<'w, crate::world::biome_field::BiomeField>,
     asset_server: Res<'w, AssetServer>,
 }
 
