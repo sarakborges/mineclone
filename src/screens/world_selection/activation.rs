@@ -91,7 +91,6 @@ impl PreparedWorldActivation {
                 saved.dimension_id,
                 InactiveDimensionState::new(
                     inactive_world,
-                    saved.spawn_biome,
                     storage,
                     saved.fluid_updates,
                     saved.creatures,
@@ -112,14 +111,7 @@ impl PreparedWorldActivation {
         rules.set_spawn_creatures(snapshot.spawn_creatures);
 
         let mut save = InMemoryWorldSave::default();
-        save.begin_new_world(
-            seed,
-            &dimension_id,
-            rules,
-            snapshot.spawn_biome.as_deref(),
-            snapshot.biome_size_multiplier,
-            snapshot.world_generation,
-        );
+        save.begin_new_world(seed, &dimension_id, rules);
         if let Some(player) = snapshot.player {
             let game_mode = if player.spectator {
                 GameMode::Spectator
