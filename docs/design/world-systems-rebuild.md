@@ -237,7 +237,7 @@ It owns:
 - coherent biome region shapes;
 - region sizing behavior;
 - weights;
-- border compatibility and exclusivity semantics;
+- biome border compatibility semantics;
 - conflict handling without generation failure;
 - boundary representation;
 - blend/influence information consumed by later systems;
@@ -272,11 +272,11 @@ The exact serialized names may be finalized with the biome definition rewrite, b
 
 Treat these values as layout objectives with deterministic conflict handling, not as constraints that must be proven globally by flood-filling the generated world.
 
-Exclusivity remains a separate relationship rule and is resolved independently below before Biome Layout implementation begins.
+There is no separate exclusivity relationship in the rebuild. Any former exclusivity rule is represented by `cannotBorder` and follows the border-compatibility contract below.
 
 #### Biome border compatibility semantics
 
-The old `avoidNear` concept is superseded in the rebuild. There is no distance-based avoidance rule. The authored relationship describes only whether two biome formations are allowed to share a border.
+The old `avoidNear` and separate exclusivity concepts are superseded in the rebuild. There is no distance-based avoidance rule and no second exclusivity mechanism. The authored relationship describes only whether two biome formations are allowed to share a border.
 
 Use a forward-only data shape conceptually equivalent to:
 
@@ -295,6 +295,7 @@ The exact selector representation may later support IDs/tags as needed, but the 
 - if either side declares that it `cannotBorder` the other, the pair is incompatible; border validity is therefore symmetric even if authored from only one side;
 - only after compatibility filtering are normal biome weights and deterministic selection applied;
 - `regionSize` objectives never make an incompatible candidate eligible;
+- there is no separate `exclusive`, `exclusiveNeighbor`, or equivalent runtime rule; all such intent is expressed by `cannotBorder`;
 - an incompatible biome must never be selected with the intention of fixing the border later;
 - do not insert a third/separator biome merely to separate two incompatible biomes;
 - do not create a global adjacency-repair pass for this rule;
@@ -311,7 +312,7 @@ eligible biome pool
             -> deterministic selection
 ```
 
-This rule is intentionally simple: incompatible biome borders are prevented by candidate filtering at construction time, not by distance fields, penalties, separators, or post-generation repair.
+This rule is intentionally simple: incompatible biome borders are prevented by candidate filtering at construction time, not by distance fields, penalties, separators, post-generation repair, or a second exclusivity subsystem.
 
 #### Required biome map viewer
 
@@ -552,25 +553,24 @@ Biome `regionSize.min/max` describe the preferred characteristic linear span of 
 
 #### Biome border compatibility — resolved 2026-10-04
 
-The rebuild replaces distance-like `avoidNear` behavior with direct border incompatibility, conceptually authored as `cannotBorder`.
+The rebuild replaces distance-like `avoidNear` behavior and any separate exclusivity behavior with one direct border-incompatibility rule, conceptually authored as `cannotBorder`.
 
-A new biome formation is selected only from candidates compatible with every adjacent established formation. Compatibility filtering happens before weights/deterministic selection. If either side forbids the border, that candidate is excluded. The generator does not first select an incompatible biome and repair it, and it does not insert a separator biome. If the filtered pool is empty, no new formation is created at that point; remaining space is handled through deterministic growth/absorption by a compatible existing neighbor. This rule must never cause runtime `no valid biome` failure or panic.
+A new biome formation is selected only from candidates compatible with every adjacent established formation. Compatibility filtering happens before weights/deterministic selection. If either side forbids the border, that candidate is excluded. The generator does not first select an incompatible biome and repair it, does not insert a separator biome, and does not run a second exclusivity subsystem. If the filtered pool is empty, no new formation is created at that point; remaining space is handled through deterministic growth/absorption by a compatible existing neighbor. This rule must never cause runtime `no valid biome` failure or panic.
 
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. exclusive-neighbor semantics and conflict resolution;
-2. biome blend representation and number of influences;
-3. surface/volume biome relationship model;
-4. ocean/sea-level terrain semantics without a hydrology subsystem;
-5. terrain representation and cross-chunk sampling strategy;
-6. structure planning/index/query contract;
-7. safe spawn/warp destination query strategy;
-8. generated vs persisted chunk/delta representation;
-9. persistence format boundaries;
-10. loading phase hierarchy and progress aggregation;
-11. benchmark budgets and fixed-seed visual/performance fixtures.
+1. biome blend representation and number of influences;
+2. surface/volume biome relationship model;
+3. ocean/sea-level terrain semantics without a hydrology subsystem;
+4. terrain representation and cross-chunk sampling strategy;
+5. structure planning/index/query contract;
+6. safe spawn/warp destination query strategy;
+7. generated vs persisted chunk/delta representation;
+8. persistence format boundaries;
+9. loading phase hierarchy and progress aggregation;
+10. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
