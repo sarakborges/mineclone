@@ -1,6 +1,11 @@
 {
   "id": "asteria:glass",
   "category": "crafted_blocks",
+  "tags": [
+    "is_portal_frame",
+    "accept_dimension:asteria:overworld",
+    "accept_dimension:asteria:umbral"
+  ],
   "secondaryProperties": [
     "dyed"
   ],
