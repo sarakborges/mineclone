@@ -11,10 +11,7 @@ use crate::{
         crash_log::{log_gameplay_event, log_gameplay_warn},
         game_state::GameState,
     },
-    content::{
-        biome::{BiomeKind, BiomeRegistry},
-        dimension::{DimensionDefinition, DimensionRegistry},
-    },
+    content::dimension::DimensionRegistry,
     entity::EntityHealth,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity,
@@ -176,7 +173,6 @@ impl PendingWarp {
 #[derive(SystemParam)]
 pub(super) struct DimensionWarpContext<'w, 's> {
     dimensions: Res<'w, DimensionRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
     current_dimension: ResMut<'w, CurrentDimension>,
     load_mode: ResMut<'w, WorldLoadMode>,
     save: ResMut<'w, InMemoryWorldSave>,
@@ -227,34 +223,14 @@ pub(super) fn resolve_pending_warp(
         if requested_dimension == dimension.current_dimension.id.as_str() {
             pending.dimension = None;
         } else {
-            let Some(definition) = dimension.dimensions.get(&requested_dimension) else {
+            if dimension.dimensions.get(&requested_dimension).is_none() {
                 log_gameplay_warn(format!(
                     "warp.failed target={target:?} dimension={requested_dimension} reason=unknown_dimension"
                 ));
                 pending.fail();
                 *slow_search_warned = false;
                 return;
-            };
-
-            let spawn_biome = if let Some(saved) = dimension
-                .runtime
-                .inactive_spawn_biome(&requested_dimension)
-                .map(|spawn_biome| spawn_biome.map(str::to_owned))
-            {
-                saved
-            } else {
-                match dimension_warp_spawn_biome(definition, &dimension.biomes, &dimension.save) {
-                    Ok(spawn_biome) => spawn_biome,
-                    Err(()) => {
-                        log_gameplay_warn(format!(
-                            "warp.failed target={target:?} dimension={requested_dimension} reason=no_single_biome_candidate"
-                        ));
-                        pending.fail();
-                        *slow_search_warned = false;
-                        return;
-                    }
-                }
-            };
+            }
 
             let (_, _, flight, _, _, game_mode, health, camera) = &mut *player;
             let requested_eye = Vec3::new(
@@ -264,27 +240,19 @@ pub(super) fn resolve_pending_warp(
             );
 
             let previous_dimension = dimension.current_dimension.id.clone();
-            let previous_spawn_biome = dimension.save.spawn_biome().map(str::to_owned);
-            let active_spawn_biome = match dimension.runtime.swap_to(
-                &previous_dimension,
-                previous_spawn_biome,
-                &requested_dimension,
-                spawn_biome,
-            ) {
-                Ok(spawn_biome) => spawn_biome,
-                Err(error) => {
-                    log_gameplay_warn(format!(
-                        "warp.failed target={target:?} dimension={requested_dimension} reason=dimension_state error={error}"
-                    ));
-                    pending.fail();
-                    *slow_search_warned = false;
-                    return;
-                }
-            };
+            if let Err(error) = dimension
+                .runtime
+                .swap_to(&previous_dimension, &requested_dimension)
+            {
+                log_gameplay_warn(format!(
+                    "warp.failed target={target:?} dimension={requested_dimension} reason=dimension_state error={error}"
+                ));
+                pending.fail();
+                *slow_search_warned = false;
+                return;
+            }
 
-            dimension
-                .save
-                .prepare_dimension_warp(&requested_dimension, active_spawn_biome.as_deref());
+            dimension.save.prepare_dimension_warp(&requested_dimension);
             dimension.save.save_player_state_with_health(
                 LOCAL_PLAYER_ID,
                 requested_eye,
@@ -369,37 +337,6 @@ pub(super) fn resolve_pending_warp(
             *slow_search_warned = false;
         }
     }
-}
-
-fn dimension_warp_spawn_biome(
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    save: &InMemoryWorldSave,
-) -> Result<Option<String>, ()> {
-    if !save.world_generation().single_biome() {
-        return Ok(None);
-    }
-
-    let is_valid = |id: &str| {
-        dimension.biomes.iter().any(|entry| {
-            entry.id == id
-                && entry.weight > f32::EPSILON
-                && biomes
-                    .get(id)
-                    .is_some_and(|biome| biome.kind == BiomeKind::Surface)
-        })
-    };
-
-    if let Some(id) = save.spawn_biome().filter(|id| is_valid(id)) {
-        return Ok(Some(id.to_owned()));
-    }
-
-    dimension
-        .biomes
-        .iter()
-        .find(|entry| is_valid(&entry.id))
-        .map(|entry| Some(entry.id.clone()))
-        .ok_or(())
 }
 
 fn advance_safe_eye_position_search(
