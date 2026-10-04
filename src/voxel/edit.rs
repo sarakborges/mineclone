@@ -4,7 +4,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         block_shape::is_stackable_layer,
-        layer::{LayerFace, LayerRegistry},
+        layer::{LayerAnchor, LayerFace, LayerRegistry},
     },
     world::{
         chunk_remesh::{ChunkRemeshQueue, prune_absent_remesh_halo},
@@ -13,9 +13,15 @@ use crate::{
 };
 
 use super::{
-    block_gravity::PendingBlockGravityUpdates, cell::VoxelCell, chunk::ObjectCells,
-    coordinates::ChunkCoord, fluid::FluidCell, layer::LayerCell, lighting::PendingLightingUpdates,
-    read::VoxelTopologyReader, world::VoxelWorld,
+    block_gravity::PendingBlockGravityUpdates,
+    cell::VoxelCell,
+    chunk::{MAX_LAYERS_PER_VOXEL, ObjectCells},
+    coordinates::ChunkCoord,
+    fluid::FluidCell,
+    layer::LayerCell,
+    lighting::PendingLightingUpdates,
+    read::VoxelTopologyReader,
+    world::VoxelWorld,
 };
 
 #[derive(Clone, Debug)]
@@ -43,6 +49,29 @@ impl VoxelMutationRuntime<'_> {
 
     pub(crate) fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         self.world.cell_at(world_position)
+    }
+
+    pub(crate) fn can_add_layer(
+        &self,
+        world_position: IVec3,
+        face: LayerFace,
+        layer_id: &str,
+    ) -> bool {
+        let Some(definition) = self.layers.get(layer_id) else {
+            return false;
+        };
+        if !definition.supports_face(face) || !self.world.is_loaded_at(world_position) {
+            return false;
+        }
+        if definition.anchor != LayerAnchor::Center && self.world.cell_at(world_position).is_none() {
+            return false;
+        }
+
+        let existing = self.world.layers_at(world_position);
+        existing.len() < MAX_LAYERS_PER_VOXEL
+            && !existing
+                .iter()
+                .any(|attached| attached.face == face && attached.cell.layer_id == layer_id)
     }
 
     pub(crate) fn add_layer(
@@ -140,6 +169,16 @@ pub(crate) struct VoxelTopologyRuntime<'w> {
 impl VoxelTopologyRuntime<'_> {
     pub(crate) fn read(&self) -> VoxelTopologyReader<'_> {
         self.mutation.read()
+    }
+
+    pub(crate) fn can_add_layer(
+        &self,
+        world_position: IVec3,
+        face: LayerFace,
+        layer_id: &str,
+    ) -> bool {
+        self.mutation
+            .can_add_layer(world_position, face, layer_id)
     }
 
     pub(crate) fn add_layer(
