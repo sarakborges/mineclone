@@ -88,11 +88,12 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
     });
 }
 
-pub(in crate::hud::inventory) fn spawn_cursor_icon(
+pub(in crate::hud::inventory) fn spawn_cursor_icon_with_override(
     root: &mut ChildSpawnerCommands,
     item_id: &'static str,
     position: Vec2,
     items: &mut InventoryItemView<'_>,
+    image_override: Option<&str>,
 ) {
     root.spawn((
         InventoryCursorIcon,
@@ -109,7 +110,14 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
         Pickable::IGNORE,
     ))
     .with_children(|cursor| {
-        spawn_hud_item_icon(cursor, item_id, items, ITEM_ICON_SIZE, None, None);
+        spawn_hud_item_icon(
+            cursor,
+            item_id,
+            items,
+            ITEM_ICON_SIZE,
+            image_override,
+            None,
+        );
     });
 }
 
@@ -139,10 +147,18 @@ pub(in crate::hud::inventory) fn spawn_cursor_stack_count(
     });
 }
 
-pub(in crate::hud::inventory) fn spawn_inventory_item(
+pub(in crate::hud::inventory) fn spawn_inventory_item_with_override(
     slot: &mut ChildSpawnerCommands,
     item_id: &'static str,
     items: &mut InventoryItemView<'_>,
+    image_override: Option<&str>,
 ) {
-    spawn_hud_item_icon(slot, item_id, items, ITEM_ICON_SIZE, None, None);
+    spawn_hud_item_icon(
+        slot,
+        item_id,
+        items,
+        ITEM_ICON_SIZE,
+        image_override,
+        None,
+    );
 }

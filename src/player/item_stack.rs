@@ -14,6 +14,12 @@ impl ItemMetadata {
         self.values.get(key).map(String::as_str)
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.values
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+    }
+
     pub(crate) fn set(&mut self, key: impl Into<String>, value: impl Into<String>) {
         let key = key.into();
         let value = value.into();

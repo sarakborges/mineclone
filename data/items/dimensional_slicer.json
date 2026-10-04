@@ -1,5 +1,12 @@
 {
   "id": "asteria:dimensional_slicer",
   "category": "tools",
-  "icon": "textures/items/dimensional_slicer.png"
+  "icon": "textures/items/dimensional_slicer.png",
+  "iconVariants": [
+    {
+      "metadataKey": "target_dimension",
+      "metadataValue": "asteria:umbral",
+      "icon": "textures/items/dimensional_slicer_umbral.png"
+    }
+  ]
 }

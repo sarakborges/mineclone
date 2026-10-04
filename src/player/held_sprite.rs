@@ -104,7 +104,7 @@ impl HeldSpriteContent<'_> {
 
         if let Some(item) = self.items.get(item_id) {
             return Some(HeldSpriteVisual {
-                icon: &item.icon,
+                icon: item.icon_for_metadata(stack.metadata().iter()),
                 tint_icon: None,
                 tint: None,
                 kind: HeldSpriteKind::Item,

@@ -5,6 +5,7 @@ use crate::{
         biome::BiomeRegistry,
         block::{BlockRegistry, BlockTint},
         block_orientation::BlockOrientation,
+        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
         item::ItemRegistry,
         layer::LayerRegistry,
         object::ObjectRegistry,
@@ -12,13 +13,19 @@ use crate::{
         tool::ToolRegistry,
     },
     localization::Language,
-    player::camera::GameplayCamera,
+    player::{camera::GameplayCamera, item_stack::ItemStack},
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     tools::BrushMode,
     world::biome_field::BiomeField,
 };
 
 use super::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon};
+
+const BUCKET_TOOL_ID: &str = "asteria:bucket";
+const LAVA_FLUID_ID: &str = "asteria:lava";
+const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
+const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
+const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
 
 #[derive(Component)]
 pub(crate) struct HudBlockIcon {
@@ -43,6 +50,23 @@ pub(crate) struct HudItemIconView<'a> {
     pub(crate) player_position: Vec2,
     pub(crate) language: Language,
     pub(crate) icon_materials: &'a mut Assets<BlockIconMaterial>,
+}
+
+pub(crate) fn stack_image_override<'a>(
+    stack: &ItemStack,
+    items: &'a ItemRegistry,
+) -> Option<&'a str> {
+    if stack.id() == BUCKET_TOOL_ID {
+        return Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
+            Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
+            Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
+            _ => BUCKET_EMPTY_ICON,
+        });
+    }
+
+    items
+        .get(stack.id())
+        .map(|definition| definition.icon_for_metadata(stack.metadata().iter()))
 }
 
 pub(crate) fn spawn_hud_item_icon(

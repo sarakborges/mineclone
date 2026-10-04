@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
+        builtin_ids::BUCKET_FLUID_METADATA_KEY,
         inventory_category::InventoryCategoryRegistry,
         item::{ItemRegistry, display_name},
         layer::LayerRegistry,
@@ -10,6 +10,7 @@ use crate::{
         secondary_property::SecondaryPropertyRegistry,
         tool::ToolRegistry,
     },
+    hud::{block_icon::BlockIconMaterial, item_icon::stack_image_override},
     localization::{ActiveLanguage, UiLocalization},
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
@@ -20,13 +21,12 @@ use crate::{
     ui::selectable,
 };
 
-use crate::hud::block_icon::BlockIconMaterial;
-
 use super::{
     CharacterInfoInventoryRoot,
     layout::{
-        InventoryItemView, InventoryLayoutState, spawn_creative_catalog_rows, spawn_cursor_icon,
-        spawn_cursor_stack_count, spawn_inventory_item, spawn_inventory_root,
+        InventoryItemView, InventoryLayoutState, spawn_creative_catalog_rows,
+        spawn_cursor_icon_with_override, spawn_cursor_stack_count,
+        spawn_inventory_item_with_override, spawn_inventory_root,
     },
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
@@ -39,21 +39,6 @@ use super::{
 };
 
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
-const LAVA_FLUID_ID: &str = "asteria:lava";
-const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
-const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
-const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
-
-fn bucket_icon_for_stack(stack: &ItemStack) -> Option<&'static str> {
-    if stack.id() != BUCKET_TOOL_ID {
-        return None;
-    }
-    Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
-        Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
-        Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
-        _ => BUCKET_EMPTY_ICON,
-    })
-}
 
 fn bucket_display_name_from_metadata(
     item_id: &str,
@@ -90,13 +75,13 @@ fn creative_slot_matches_cursor(slot: &CreativeInventorySlot, cursor: &Inventory
     if stack.id() != slot_item {
         return false;
     }
+    if let Some((key, value)) = slot.metadata {
+        return stack.metadata().get(key) == Some(value);
+    }
     if slot_item != BUCKET_TOOL_ID {
         return true;
     }
-    match slot.metadata {
-        Some((key, value)) => stack.metadata().get(key) == Some(value),
-        None => stack.metadata().get(BUCKET_FLUID_METADATA_KEY).is_none(),
-    }
+    stack.metadata().get(BUCKET_FLUID_METADATA_KEY).is_none()
 }
 
 #[derive(SystemParam)]
@@ -419,25 +404,10 @@ pub(super) fn sync_inventory_cursor_icon(
     let position = context.window.cursor_position().unwrap_or(Vec2::ZERO);
     let player_position = Vec2::new(context.player.translation.x, context.player.translation.z);
     let mut items = content.view(player_position, &mut icon_materials);
+    let image_override = stack_image_override(stack, &content.items);
 
     commands.entity(root_entity).with_children(|root| {
-        if let Some(icon) = bucket_icon_for_stack(stack) {
-            root.spawn((
-                InventoryCursorIcon,
-                ImageNode::new(items.asset_server.load(icon)),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(position.x - ITEM_ICON_SIZE * 0.5),
-                    top: px(position.y - ITEM_ICON_SIZE * 0.5),
-                    width: px(ITEM_ICON_SIZE),
-                    height: px(ITEM_ICON_SIZE),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
-        } else {
-            spawn_cursor_icon(root, item_id, position, &mut items);
-        }
+        spawn_cursor_icon_with_override(root, item_id, position, &mut items, image_override);
         spawn_cursor_stack_count(root, stack.quantity(), position);
     });
 }
@@ -461,8 +431,13 @@ pub(super) fn sync_inventory_slot_contents(
         let stack = hotbar.inventory_stack_at(slot.index);
         let item = stack.map(ItemStack::id);
         let quantity = stack.map_or(0, ItemStack::quantity);
-        let is_bucket = item == Some(BUCKET_TOOL_ID);
-        if slot.item == item && slot.quantity == quantity && !is_bucket {
+        let image_override = stack
+            .and_then(|stack| stack_image_override(stack, &content.items))
+            .map(str::to_owned);
+        if slot.item == item
+            && slot.quantity == quantity
+            && slot.image_override == image_override
+        {
             continue;
         }
 
@@ -474,25 +449,19 @@ pub(super) fn sync_inventory_slot_contents(
 
         slot.item = item;
         slot.quantity = quantity;
+        slot.image_override = image_override.clone();
         let Some(stack) = stack else {
             continue;
         };
         let item_id = stack.id();
 
         commands.entity(entity).with_children(|slot_node| {
-            if let Some(icon) = bucket_icon_for_stack(stack) {
-                slot_node.spawn((
-                    ImageNode::new(items.asset_server.load(icon)),
-                    Node {
-                        width: px(ITEM_ICON_SIZE),
-                        height: px(ITEM_ICON_SIZE),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-            } else {
-                spawn_inventory_item(slot_node, item_id, &mut items);
-            }
+            spawn_inventory_item_with_override(
+                slot_node,
+                item_id,
+                &mut items,
+                image_override.as_deref(),
+            );
             crate::hud::item_stack_count::spawn_item_stack_count(slot_node, quantity);
         });
     }
