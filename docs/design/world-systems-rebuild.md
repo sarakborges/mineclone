@@ -440,6 +440,37 @@ The semantics are binding:
 
 This produces ordinary authored ocean terrain and local water bodies without reintroducing hydrology ownership or the old failure mode where caves beneath oceans acquire ceiling water source blocks.
 
+#### Terrain representation and cross-chunk sampling
+
+Terrain uses a hybrid representation: a continuous authoritative 2D base-surface field plus one authoritative 3D final terrain-density/occupancy field.
+
+Conceptually:
+
+```text
+surface biome sample (x, z)
+    -> base surface/profile (x, z)
+        -> base solid density (x, y, z)
+            + 3D shape contributions
+                -> final terrain density/occupancy (x, y, z)
+```
+
+The semantics are binding:
+
+- surface-biome terrain produces the continuous base surface/profile in world X/Z. This provides the cheap large-scale terrain shape used by ordinary terrain, Ocean floors, coast transitions, and query hints;
+- the base surface is converted into base 3D solidity/density; caves, overhangs, floating formations, volume-biome terrain, additive masses, carving, and other true 3D effects compose into the same final terrain field rather than becoming independent competing terrain truths;
+- final generated voxel solidity is determined by the authoritative final 3D terrain field. The exact numeric density convention/operators may evolve, but there is one final occupancy answer for a world XYZ position;
+- terrain contributions consume authoritative biome samples/influences. They do not independently rediscover biome boundaries or neighboring biome ownership;
+- `base_surface_at(x, z)` and effective `surface_at(x, z)`/column-summary queries are distinct capabilities: the base surface is a cheap 2D terrain result, while the effective surface query must account for relevant 3D formations such as floating masses;
+- effective surface/column queries must not brute-force scan the full world height voxel-by-voxel. The terrain owner must use its base-surface result plus bounded vertical ranges/candidate crossings from relevant 3D contributions to answer surface and safe-position queries efficiently;
+- scalar terrain queries and bounded area/volume sampling are semantically identical. Batch APIs exist to reuse biome, surface, noise, and 3D contribution work rather than invoking an expensive independent scalar pipeline for every voxel;
+- all terrain evaluation is anchored in world coordinates and the authoritative world seed/definitions. Chunk-local coordinates, chunk-specific seeds, request origins, cache-tile origins, or generation order may not alter terrain output;
+- a chunk may request a bounded world-space halo when a real algorithm needs neighboring samples for gradients, interpolation, slopes, or similar calculations. Querying that halo does not materialize neighboring chunks and may not make the result depend on which chunk/request asked first;
+- any internal lattice/interpolation grid must be anchored in world space so the same XYZ sample resolves identically when requested alone, from either adjacent chunk, or as part of a larger batch;
+- generating chunk A then B, B then A, or B directly must produce identical overlapping terrain facts;
+- terrain batch generation may use internal sample grids/caches, but their dimensions and cache warmth remain performance details and cannot become semantic generation regions.
+
+This preserves cheap surface/column queries for warp, spawn, maps, and diagnostics while retaining a true 3D terrain model capable of caves, overhangs, floating formations, and arbitrary volume-biome terrain.
+
 **Gate:** terrain is deterministic across chunk seams and generation order, with visual/debug validation available before materials/features are layered on top.
 
 ### Phase 5 — Surface, materials, and generated natural fluids
@@ -669,17 +700,22 @@ At a queried XYZ position, an occupying volume biome supplies the effective biom
 
 Ocean terrain owns its floor/profile, and generation fills only the exposed water volume from that floor up to `seaLevel`. Enclosed or isolated voids beneath the floor, including caves under oceans, stay dry unless another explicit feature places fluid there. Land/Ocean boundaries use the shared biome boundary/influence data to shape coast terrain, but influence weight never becomes a second ocean mask or threshold. Coast is not a biome. Lakes, swamp puddles, and similar water bodies remain local terrain/material/fluid generation features of their owning biome or feature, and generated fluids enter runtime simulation only through the explicit generated-fluid frontier/topology boundary rather than bulk scheduling every generated voxel.
 
+#### Terrain representation and cross-chunk sampling — resolved 2026-10-04
+
+Terrain uses a hybrid model: surface-biome terrain defines an authoritative continuous 2D base-surface/profile field, and one authoritative 3D terrain-density/occupancy field composes that base with caves, overhangs, floating formations, volume-biome effects, additive masses, carving, and other 3D shape contributions.
+
+Final generated solidity comes from the final 3D terrain field. `base_surface_at` remains a cheap 2D result, while effective surface/column queries account for relevant 3D formations using bounded candidate ranges rather than brute-force full-height scans. Terrain is evaluated in world coordinates only; batch requests and optional halos are performance mechanisms and never semantic chunk boundaries. Any interpolation lattice is anchored in world space, scalar and batch results are equivalent, and output is invariant under chunk request/generation order.
+
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. terrain representation and cross-chunk sampling strategy;
-2. structure planning/index/query contract;
-3. safe spawn/warp destination query strategy;
-4. generated vs persisted chunk/delta representation;
-5. persistence format boundaries;
-6. loading phase hierarchy and progress aggregation;
-7. benchmark budgets and fixed-seed visual/performance fixtures.
+1. structure planning/index/query contract;
+2. safe spawn/warp destination query strategy;
+3. generated vs persisted chunk/delta representation;
+4. persistence format boundaries;
+5. loading phase hierarchy and progress aggregation;
+6. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
