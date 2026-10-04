@@ -55,6 +55,8 @@ impl BiomeDefinition {
     }
 
     pub fn validate_references(&self, biomes: &BiomeRegistry) {
+        let own_dimension = biome_dimension_components(&self.id)
+            .expect("validated biome id must contain a dimension");
         for forbidden in &self.cannot_border {
             assert!(
                 forbidden != &self.id,
@@ -67,14 +69,12 @@ impl BiomeDefinition {
                     self.id, forbidden
                 )
             });
-            assert!(
-                target.belongs_to_dimension(
-                    dimension_id_from_biome_id(&self.id)
-                        .expect("validated biome id must contain a dimension")
-                ),
+            let target_dimension = biome_dimension_components(&target.id)
+                .expect("validated biome id must contain a dimension");
+            assert_eq!(
+                target_dimension, own_dimension,
                 "biome {} cannotBorder target {} belongs to a different dimension",
-                self.id,
-                forbidden
+                self.id, forbidden
             );
         }
     }
@@ -143,9 +143,7 @@ fn default_biome_weight() -> f32 {
 
 fn assert_valid_biome_id(id: &str) {
     let Some((namespace, dimension)) = biome_dimension_components(id) else {
-        panic!(
-            "biome id {id} must use the form <namespace>:<dimension>/<biome>"
-        );
+        panic!("biome id {id} must use the form <namespace>:<dimension>/<biome>");
     };
     assert!(!namespace.is_empty(), "biome id namespace cannot be empty");
     assert!(!dimension.is_empty(), "biome id dimension cannot be empty");
@@ -166,11 +164,6 @@ fn dimension_components(id: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((namespace, dimension))
-}
-
-fn dimension_id_from_biome_id(id: &str) -> Option<String> {
-    let (namespace, dimension) = biome_dimension_components(id)?;
-    Some(format!("{namespace}:{dimension}"))
 }
 
 #[cfg(test)]
