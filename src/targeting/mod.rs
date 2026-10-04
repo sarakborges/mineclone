@@ -7,7 +7,7 @@ mod mining_visual;
 mod placement;
 mod placement_orientation;
 mod placement_preview;
-mod portal_activation;
+pub(crate) mod portal_activation;
 mod scene;
 
 pub(crate) use interaction::ToolUse;
