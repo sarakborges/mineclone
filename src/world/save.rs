@@ -31,10 +31,6 @@ impl InMemoryWorldSave {
         self.seed.is_some() && self.dimension_id.is_some()
     }
 
-    pub(crate) fn game_rules(&self) -> GameRules {
-        self.game_rules
-    }
-
     pub(crate) fn spawn_biome(&self) -> Option<&str> {
         self.spawn_biome.as_deref()
     }
@@ -46,35 +42,6 @@ impl InMemoryWorldSave {
 
     pub(crate) const fn world_generation(&self) -> WorldGenerationSettings {
         self.world_generation
-    }
-
-    pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
-        self.players
-            .get(&player_id)
-            .and_then(PlayerSaveData::position)
-    }
-
-    pub fn player_game_mode(&self, player_id: PlayerId) -> GameMode {
-        self.players
-            .get(&player_id)
-            .map(PlayerSaveData::game_mode)
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn player_health(&self, player_id: PlayerId) -> Option<f32> {
-        self.players
-            .get(&player_id)
-            .and_then(PlayerSaveData::health)
-    }
-
-    pub(crate) fn player_look(&self, player_id: PlayerId) -> Option<(f32, f32)> {
-        self.players.get(&player_id).and_then(PlayerSaveData::look)
-    }
-
-    pub(crate) fn player_flying(&self, player_id: PlayerId) -> bool {
-        self.players
-            .get(&player_id)
-            .is_some_and(PlayerSaveData::flying)
     }
 
     pub fn begin_new_world(
