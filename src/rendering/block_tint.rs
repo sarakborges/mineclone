@@ -21,42 +21,33 @@ const DYE_SATURATION_GAMMA: f32 = 1.85;
 
 pub(crate) fn block_tint_at(
     tint: BlockTint,
-    position: Vec2,
-    biome_field: &BiomeField,
-    biomes: &BiomeRegistry,
+    _position: Vec2,
+    _biome_field: &BiomeField,
+    _biomes: &BiomeRegistry,
 ) -> Color {
     match tint {
-        BlockTint::None => Color::WHITE,
-        BlockTint::Grass => biome_field.grass_color(position, biomes).to_color(),
-        BlockTint::Leaf => biome_field.leaf_color(position, biomes).to_color(),
-        BlockTint::Foliage => biome_field.foliage_color(position, biomes).to_color(),
+        BlockTint::None | BlockTint::Grass | BlockTint::Leaf | BlockTint::Foliage => Color::WHITE,
     }
 }
 
 pub(crate) fn block_tint_for_biome(
     tint: BlockTint,
-    biome_id: &str,
-    biomes: &BiomeRegistry,
+    _biome_id: &str,
+    _biomes: &BiomeRegistry,
 ) -> Option<Color> {
-    let visuals = biomes.get(biome_id)?.visuals.as_ref()?;
     Some(match tint {
-        BlockTint::None => Color::WHITE,
-        BlockTint::Grass => visuals.grass_color.to_color(),
-        BlockTint::Leaf => visuals.leaf_color.to_color(),
-        BlockTint::Foliage => visuals.foliage_color.to_color(),
+        BlockTint::None | BlockTint::Grass | BlockTint::Leaf | BlockTint::Foliage => Color::WHITE,
     })
 }
 
 pub(crate) fn block_tint_at_with_override(
     tint: BlockTint,
     position: Vec2,
-    biome_override: Option<&str>,
+    _biome_override: Option<&str>,
     biome_field: &BiomeField,
     biomes: &BiomeRegistry,
 ) -> Color {
-    biome_override
-        .and_then(|biome_id| block_tint_for_biome(tint, biome_id, biomes))
-        .unwrap_or_else(|| block_tint_at(tint, position, biome_field, biomes))
+    block_tint_at(tint, position, biome_field, biomes)
 }
 
 pub(crate) fn secondary_property_dye_tint(
