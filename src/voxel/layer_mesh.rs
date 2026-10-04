@@ -9,7 +9,7 @@ use crate::content::{
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    layer::block_face,
+    layer::{LayerCell, block_face},
     mesh::geometry::is_face_exposed,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{
@@ -116,8 +116,7 @@ where
                 emit_centered_layer(
                     &mut buffers,
                     local_voxel,
-                    attached.cell.layer_id,
-                    attached.cell.texture_rotation,
+                    attached.cell,
                     face,
                     definition,
                     tint,
@@ -205,8 +204,7 @@ where
 fn emit_centered_layer(
     buffers: &mut LayerMeshBuffers,
     local_voxel: IVec3,
-    layer_id: &'static str,
-    texture_rotation: TextureRotation,
+    cell: LayerCell,
     face: BlockFace,
     definition: &LayerDefinition,
     tint: [f32; 3],
@@ -217,10 +215,10 @@ fn emit_centered_layer(
     let vertices = face.unit_vertices().map(|vertex| {
         (Vec3::from_array(vertex) + origin - normal * 0.5).to_array()
     });
-    let uvs = texture_rotation.rotate_uvs(VOXEL_FACE_UVS);
+    let uvs = cell.texture_rotation.rotate_uvs(VOXEL_FACE_UVS);
 
     push_lit_quad(
-        layer_buffer(buffers, layer_id, definition),
+        layer_buffer(buffers, cell.layer_id, definition),
         vertices,
         face.normal(),
         uvs,
@@ -230,7 +228,7 @@ fn emit_centered_layer(
     );
 
     push_lit_quad(
-        layer_buffer(buffers, layer_id, definition),
+        layer_buffer(buffers, cell.layer_id, definition),
         [vertices[0], vertices[3], vertices[2], vertices[1]],
         (-normal).to_array(),
         [uvs[0], uvs[3], uvs[2], uvs[1]],
