@@ -204,9 +204,6 @@ impl HudSettings {
     }
 }
 
-#[derive(Component)]
-pub(crate) struct GameplayUiCamera;
-
 pub(crate) struct HudPlugin;
 
 impl Plugin for HudPlugin {
