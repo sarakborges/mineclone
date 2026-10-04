@@ -56,16 +56,8 @@ impl<M: Send + Sync + 'static> DropdownState<M> {
         self.open = !self.open;
     }
 
-    pub fn open(&mut self) {
-        self.open = true;
-    }
-
     pub fn close(&mut self) {
         self.open = false;
-    }
-
-    pub fn reset(&mut self) {
-        self.close();
     }
 }
 
@@ -149,10 +141,6 @@ pub fn option<M: Send + Sync + 'static>(selected: bool, border_width: f32) -> im
         BackgroundColor(background),
         BorderColor::all(border),
     )
-}
-
-pub fn inside<M: Send + Sync + 'static>() -> DropdownInside<M> {
-    DropdownInside::default()
 }
 
 pub fn clicked_outside<M: Send + Sync + 'static>(
