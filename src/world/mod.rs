@@ -14,9 +14,6 @@ pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
-// Phase 2 foundation is intentionally not wired into generated content yet. It
-// owns only the immutable query root until later phases add biome/terrain/
-// structure capabilities.
 #[allow(dead_code)]
 pub(crate) mod generator;
 mod lighting_updates;
@@ -44,7 +41,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::dimension::DimensionRegistry,
+    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     player::hotbar::PlayerHotbar,
     rendering::terrain_material::TerrainLightingBuffer,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
@@ -301,6 +298,7 @@ fn install_world_generator(
     seed: Res<WorldSeed>,
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
+    biomes: Res<BiomeRegistry>,
 ) {
     let definition = dimensions
         .get(current_dimension.id.as_str())
@@ -311,7 +309,7 @@ fn install_world_generator(
             )
         });
 
-    commands.insert_resource(WorldGenerator::new(seed.0, definition));
+    commands.insert_resource(WorldGenerator::new(seed.0, definition, &biomes));
 }
 
 fn prepare_world_session(
