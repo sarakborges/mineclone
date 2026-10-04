@@ -42,90 +42,90 @@
   "visuals": {
     "skyColor": {
       "dawn": {
-        "hue": 254.8052,
-        "saturation": 0.3869,
-        "intensity": 0.42
-      },
-      "day": {
-        "hue": 192.2222,
-        "saturation": 0.403,
-        "intensity": 0.5255
-      },
-      "dusk": {
-        "hue": 254.8052,
-        "saturation": 0.3869,
+        "hue": 270,
+        "saturation": 0.34,
         "intensity": 0.34
       },
+      "day": {
+        "hue": 165,
+        "saturation": 0.38,
+        "intensity": 0.42
+      },
+      "dusk": {
+        "hue": 285,
+        "saturation": 0.36,
+        "intensity": 0.28
+      },
       "night": {
-        "hue": 254.8052,
-        "saturation": 0.3869,
+        "hue": 250,
+        "saturation": 0.28,
         "intensity": 0.12
       }
     },
     "fogColor": {
       "dawn": {
-        "hue": 192.2222,
-        "saturation": 0.403,
-        "intensity": 0.34
+        "hue": 165,
+        "saturation": 0.34,
+        "intensity": 0.28
       },
       "day": {
-        "hue": 192.2222,
-        "saturation": 0.403,
-        "intensity": 0.5255
+        "hue": 165,
+        "saturation": 0.36,
+        "intensity": 0.4
       },
       "dusk": {
-        "hue": 254.8052,
-        "saturation": 0.3869,
-        "intensity": 0.3
+        "hue": 180,
+        "saturation": 0.3,
+        "intensity": 0.24
       },
       "night": {
-        "hue": 192.2222,
-        "saturation": 0.403,
+        "hue": 170,
+        "saturation": 0.28,
         "intensity": 0.1
       }
     },
     "grassColor": {
-      "hue": 180,
-      "saturation": 0.2759,
-      "intensity": 0.9098
+      "hue": 155,
+      "saturation": 0.3,
+      "intensity": 0.48
     },
     "leafColor": {
-      "hue": 180,
-      "saturation": 0.2759,
-      "intensity": 0.9098
+      "hue": 165,
+      "saturation": 0.36,
+      "intensity": 0.44
     },
     "foliageColor": {
-      "hue": 180,
-      "saturation": 0.149,
-      "intensity": 1
+      "hue": 150,
+      "saturation": 0.26,
+      "intensity": 0.52
     },
     "waterColor": {
-      "hue": 192.2222,
-      "saturation": 0.403,
-      "intensity": 0.5255
+      "hue": 175,
+      "saturation": 0.38,
+      "intensity": 0.36
     },
     "underwaterTint": {
       "color": {
-        "hue": 192.2222,
-        "saturation": 0.403,
-        "intensity": 0.28
+        "hue": 175,
+        "saturation": 0.38,
+        "intensity": 0.24
       },
       "opacity": 0.2
     },
     "stars": {
       "density": 0.82,
       "color": {
-        "hue": 180,
-        "saturation": 0.149,
-        "intensity": 1
+        "hue": 165,
+        "saturation": 0.24,
+        "intensity": 0.72
       }
     },
     "clouds": {
       "density": 0.08,
       "color": {
-        "hue": 254.8052,
-        "saturation": 0.3869,
-        "intensity": 0.42
+        "hue": 270,
+        "saturation": 0.24,
+        "intensity": 0.3
       }
     },
     "terrainRoughness": 0.94,
