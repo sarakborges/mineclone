@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::voxel::{chunk::VoxelChunk, coordinates::ChunkCoord};
 
 use super::{
-    generation::{ChunkGenerationPassTimings, generate_chunk, generate_chunk_profiled},
+    generation::{ChunkGenerationPassTimings, generate_chunk_profiled},
     generation_snapshot::GenerationSnapshot,
 };
 
@@ -20,11 +20,6 @@ pub(crate) struct ChunkGenerationJob {
 impl ChunkGenerationJob {
     pub(crate) fn new(coord: ChunkCoord, snapshot: Arc<GenerationSnapshot>) -> Self {
         Self { coord, snapshot }
-    }
-
-    pub(crate) fn run(self) -> VoxelChunk {
-        let context = self.snapshot.context();
-        generate_chunk(self.coord.as_ivec3(), &context)
     }
 
     pub(crate) fn run_profiled(self) -> (VoxelChunk, ChunkGenerationPassTimings) {
@@ -97,8 +92,10 @@ mod tests {
         let (snapshot, fluids) = test_snapshot();
         let coord = ChunkCoord::from_ivec3(IVec3::new(0, 2, 0));
 
-        let first = ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run();
-        let second = ChunkGenerationJob::new(coord, snapshot).run();
+        let first = ChunkGenerationJob::new(coord, Arc::clone(&snapshot))
+            .run_profiled()
+            .0;
+        let second = ChunkGenerationJob::new(coord, snapshot).run_profiled().0;
         let first_disk = DiskChunk::from_chunk(coord.as_ivec3(), &first, &fluids)
             .expect("generated chunk must serialize to authoritative disk form");
         let second_disk = DiskChunk::from_chunk(coord.as_ivec3(), &second, &fluids)
@@ -132,13 +129,21 @@ mod tests {
         ];
 
         for &coord in &coords {
-            black_box(ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run());
+            black_box(
+                ChunkGenerationJob::new(coord, Arc::clone(&snapshot))
+                    .run_profiled()
+                    .0,
+            );
         }
 
         let mut samples_ms = Vec::with_capacity(coords.len());
         for &coord in &coords {
             let started = Instant::now();
-            black_box(ChunkGenerationJob::new(coord, Arc::clone(&snapshot)).run());
+            black_box(
+                ChunkGenerationJob::new(coord, Arc::clone(&snapshot))
+                    .run_profiled()
+                    .0,
+            );
             samples_ms.push(started.elapsed().as_secs_f64() * 1_000.0);
         }
         samples_ms.sort_by(f64::total_cmp);
