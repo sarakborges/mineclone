@@ -207,10 +207,6 @@ impl BiomeQueries<'_> {
             .map(|rule| (&rule.id, rule.region_min, rule.region_max))
     }
 
-    pub(crate) fn suppressed_biomes(&self) -> &[BiomeId] {
-        &self.layout.suppressed_biomes
-    }
-
     pub(crate) const fn formation_seed_spacing(&self) -> u32 {
         self.layout.seed_spacing
     }
@@ -220,9 +216,7 @@ impl BiomeQueries<'_> {
 pub(super) struct BiomeLayout {
     entropy: GenerationEntropy,
     rules: Arc<[BiomeRule]>,
-    suppressed_biomes: Arc<[BiomeId]>,
     seed_spacing: u32,
-    fallback_rule: usize,
     seed_pick_domain: GenerationDomain,
     jitter_x_domain: GenerationDomain,
     jitter_z_domain: GenerationDomain,
@@ -320,43 +314,23 @@ impl BiomeLayout {
             definition.validate_references(registry);
         }
 
-        let all_rules = definitions
+        let rules = definitions
             .into_iter()
             .map(BiomeRule::from_definition)
             .collect::<Vec<_>>();
-        let fallback_original = choose_fallback_rule(&all_rules);
-        let fallback = all_rules[fallback_original].clone();
-        let fallback_id = fallback.id.clone();
-        let mut suppressed_biomes = Vec::new();
-        let mut active_rules = Vec::new();
-        for rule in all_rules {
-            if compatible_rules(&rule, &fallback) {
-                active_rules.push(rule);
-            } else {
-                suppressed_biomes.push(rule.id);
-            }
-        }
-        active_rules.sort_by(|left, right| left.id.cmp(&right.id));
-        suppressed_biomes.sort();
-        let fallback_rule = active_rules
-            .iter()
-            .position(|rule| rule.id == fallback_id)
-            .expect("fallback biome must remain active");
-        let min_span = active_rules
+        let min_span = rules
             .iter()
             .map(|rule| rule.region_min)
             .min()
-            .expect("active biome layout cannot be empty");
+            .expect("biome layout cannot be empty");
         let seed_spacing = min_span
             .div_ceil(3)
             .clamp(MIN_SEED_SPACING, MAX_SEED_SPACING);
 
         Self {
             entropy: GenerationEntropy::new(snapshot),
-            rules: active_rules.into(),
-            suppressed_biomes: suppressed_biomes.into(),
+            rules: rules.into(),
             seed_spacing,
-            fallback_rule,
             seed_pick_domain: GenerationDomain::named(SEED_PICK_DOMAIN),
             jitter_x_domain: GenerationDomain::named(SEED_JITTER_X_DOMAIN),
             jitter_z_domain: GenerationDomain::named(SEED_JITTER_Z_DOMAIN),
@@ -622,17 +596,22 @@ impl BiomeLayout {
                     .all(|neighbor| self.compatible_indices(*candidate, neighbor.rule))
             })
             .collect::<SmallVec<[usize; 16]>>();
-        let eligible = if eligible.is_empty() {
-            debug_assert!(
-                established
-                    .iter()
-                    .all(|neighbor| self.compatible_indices(self.fallback_rule, neighbor.rule)),
-                "fallback biome must be compatible with every active biome"
-            );
-            SmallVec::from_slice(&[self.fallback_rule])
-        } else {
-            eligible
-        };
+        if eligible.is_empty() {
+            let assignment = established
+                .iter()
+                .copied()
+                .max_by(|left, right| {
+                    self.growth_affinity(*left, bucket)
+                        .cmp(&self.growth_affinity(*right, bucket))
+                        .then_with(|| right.root.cmp(&left.root))
+                })
+                .expect("an empty compatible pool must have an established formation to absorb it");
+            debug_assert!(established
+                .iter()
+                .all(|neighbor| self.compatible_indices(assignment.rule, neighbor.rule)));
+            cache.insert(bucket, assignment);
+            return assignment;
+        }
 
         let mut weighted = SmallVec::<[(usize, u64); 16]>::new();
         let mut total = 0_u64;
@@ -832,29 +811,6 @@ impl BiomeLayout {
         );
         lerp(lerp(a, b, tx), lerp(c, d, tx), tz)
     }
-}
-
-fn choose_fallback_rule(rules: &[BiomeRule]) -> usize {
-    rules
-        .iter()
-        .enumerate()
-        .max_by(|(left_index, left), (right_index, right)| {
-            let left_weight = compatible_weight(rules, *left_index);
-            let right_weight = compatible_weight(rules, *right_index);
-            left_weight
-                .cmp(&right_weight)
-                .then_with(|| right.id.cmp(&left.id))
-        })
-        .map(|(index, _)| index)
-        .expect("biome layout needs at least one rule")
-}
-
-fn compatible_weight(rules: &[BiomeRule], candidate: usize) -> u128 {
-    rules
-        .iter()
-        .filter(|other| compatible_rules(&rules[candidate], other))
-        .map(|rule| u128::from(rule.weight_units))
-        .sum()
 }
 
 fn compatible_rules(left: &BiomeRule, right: &BiomeRule) -> bool {
@@ -1086,6 +1042,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn cannot_border_does_not_remove_authored_biomes_from_layout() {
+        let layout = standard_layout(321);
+        let ids = layout
+            .rules
+            .iter()
+            .map(|rule| rule.id.as_str())
+            .collect::<Vec<_>>();
+        assert!(ids.contains(&"asteria:test/a"));
+        assert!(ids.contains(&"asteria:test/b"));
+        assert_eq!(ids.len(), 4);
     }
 
     #[test]
