@@ -15,10 +15,10 @@ use crate::{
 use super::{
     block_gravity::PendingBlockGravityUpdates,
     cell::VoxelCell,
-    chunk::{MAX_LAYERS_PER_VOXEL, ObjectCells},
+    chunk::ObjectCells,
     coordinates::ChunkCoord,
     fluid::FluidCell,
-    layer::LayerCell,
+    layer::{LayerCell, MAX_LAYERS_PER_VOXEL},
     lighting::PendingLightingUpdates,
     read::VoxelTopologyReader,
     world::VoxelWorld,
