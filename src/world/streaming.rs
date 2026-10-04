@@ -14,14 +14,6 @@ pub(super) struct ChunkStreamingState {
     pressure_evicted_meshes: HashMap<IVec3, usize>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub(super) struct StreamingPriorityScanDiagnostic {
-    pub(super) count: usize,
-    pub(super) average_micros: u64,
-    pub(super) max_micros: u64,
-    pub(super) max_queue_len: usize,
-}
-
 impl ChunkStreamingState {
     pub(super) fn center(&self) -> Option<IVec3> {
         None
@@ -29,10 +21,6 @@ impl ChunkStreamingState {
 
     pub(super) fn movement_direction(&self) -> IVec2 {
         IVec2::ZERO
-    }
-
-    pub(super) fn selection_revision(&self) -> u64 {
-        0
     }
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
@@ -81,33 +69,6 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn forget_initial_lighting_seeded(&mut self, _coord: IVec3) {}
-
-    pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
-        (0, 0, 0, 0, 0, self.pressure_evicted_meshes.len())
-    }
-
-    pub(super) fn diagnostic_renderable_backlog_counts(&self) -> (usize, usize, usize) {
-        (0, 0, 0)
-    }
-
-    pub(super) fn diagnostic_generation_prefetch_count(&self) -> usize {
-        0
-    }
-
-    pub(super) fn diagnostic_fluid_settling_counts(
-        &self,
-    ) -> (bool, usize, usize, usize, usize, usize, usize) {
-        (false, 0, 0, 0, 0, 0, 0)
-    }
-
-    pub(super) fn take_priority_scan_diagnostics(
-        &self,
-    ) -> (StreamingPriorityScanDiagnostic, StreamingPriorityScanDiagnostic) {
-        (
-            StreamingPriorityScanDiagnostic::default(),
-            StreamingPriorityScanDiagnostic::default(),
-        )
-    }
 }
 
 pub(super) fn chunk_load_priority(
