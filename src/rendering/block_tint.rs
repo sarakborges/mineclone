@@ -4,7 +4,6 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
         block::{BlockDefinition, BlockTint},
         builtin_ids::DYED_PROPERTY_ID,
         color::Hsi,
@@ -14,40 +13,15 @@ use crate::{
         block_state::{BlockState, BlockStateToken},
         cell::VoxelCell,
     },
-    world::biome_field::BiomeField,
 };
 
 const DYE_SATURATION_GAMMA: f32 = 1.85;
 
-pub(crate) fn block_tint_at(
-    tint: BlockTint,
-    _position: Vec2,
-    _biome_field: &BiomeField,
-    _biomes: &BiomeRegistry,
-) -> Color {
-    match tint {
-        BlockTint::None | BlockTint::Grass | BlockTint::Leaf | BlockTint::Foliage => Color::WHITE,
-    }
-}
-
-pub(crate) fn block_tint_for_biome(
-    tint: BlockTint,
-    _biome_id: &str,
-    _biomes: &BiomeRegistry,
-) -> Option<Color> {
-    Some(match tint {
-        BlockTint::None | BlockTint::Grass | BlockTint::Leaf | BlockTint::Foliage => Color::WHITE,
-    })
-}
-
-pub(crate) fn block_tint_at_with_override(
-    tint: BlockTint,
-    position: Vec2,
-    _biome_override: Option<&str>,
-    biome_field: &BiomeField,
-    biomes: &BiomeRegistry,
-) -> Color {
-    block_tint_at(tint, position, biome_field, biomes)
+/// Biome-authored block tinting was deleted with the old biome presentation
+/// stack. Keep blocks neutral until the new authoritative biome presentation
+/// contract supplies tint data again.
+pub(crate) fn block_tint(_tint: BlockTint) -> Color {
+    Color::WHITE
 }
 
 pub(crate) fn secondary_property_dye_tint(
