@@ -62,6 +62,28 @@ fn composed_surface_height_from_sample(
     sample: &BiomeFieldSample<'_>,
 ) -> f32 {
     let horizontal = position.as_vec2();
+    let (primary_terrain, primary_modifiers, primary_seed) =
+        biome_field.surface_terrain(sample.primary_surface_index);
+
+    // Volcano terrain already uses the field distribution strength to taper its
+    // cone into the surrounding land. Blending its height a second time with a
+    // neighboring biome clips the authored cone at the biome boundary.
+    if matches!(primary_terrain, BiomeTerrain::Volcano { .. }) {
+        let terrain_strength = sample
+            .influences
+            .iter()
+            .find(|influence| influence.surface_index == sample.primary_surface_index)
+            .map_or(1.0, |influence| influence.terrain_strength);
+        return biome_surface_height(
+            horizontal,
+            dimension.sea_level,
+            primary_seed,
+            primary_terrain,
+            primary_modifiers,
+            terrain_strength,
+        );
+    }
+
     compose_surface_height(sample.influences.iter().map(|influence| {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
@@ -249,12 +271,11 @@ fn biome_surface_height(
             let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
             let broad = fractal_noise(position * scale, seed);
             let detail = fractal_noise(position * detail_scale, seed.rotate_left(23));
-            let pond_broad =
-                fractal_noise(position * (scale * 1.15), seed.rotate_left(7));
-            let pond_detail =
-                fractal_noise(position * (detail_scale * 0.42), seed.rotate_left(47));
-            let pond_signal = pond_broad * 0.78 + pond_detail * 0.22;
-            let pond_strength = smoothstep(((pond_signal - 0.10) / 0.35).clamp(0.0, 1.0));
+            let pond_broad = fractal_noise(position * (scale * 3.2), seed.rotate_left(7));
+            let pond_detail = fractal_noise(position * (detail_scale * 0.85), seed.rotate_left(47));
+            let pond_signal = pond_broad * 0.66 + pond_detail * 0.34;
+            let pond_strength = smoothstep(((pond_signal + 0.05) / 0.42).clamp(0.0, 1.0))
+                .powf(0.82);
             sea_level + base_height - depth * strength * pond_strength
                 + broad * amplitude
                 + detail * detail_amplitude
@@ -531,11 +552,11 @@ mod tests {
     #[test]
     fn swamp_terrain_contains_both_pools_and_dry_ground() {
         let terrain = BiomeTerrain::Swamp {
-            base_height: 1.4,
-            depth: 3.2,
-            amplitude: 0.85,
+            base_height: 0.9,
+            depth: 4.8,
+            amplitude: 0.7,
             scale: 0.0065,
-            detail_amplitude: 0.45,
+            detail_amplitude: 0.4,
             detail_scale: 0.045,
         };
         let mut wet = false;
