@@ -1,4 +1,5 @@
 mod biome;
+mod biome_map;
 mod foundation;
 
 use std::sync::Arc;
@@ -10,6 +11,7 @@ pub(crate) use biome::{
     BiomeAreaSample, BiomeId, BiomeInfluence, BiomeQueries, BiomeSample, BiomeSearchResult,
 };
 use biome::BiomeLayout;
+pub(crate) use biome_map::{BiomeMapConfig, BiomeMapRender, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 
 /// Immutable entry point for deterministic generated-world queries.
