@@ -19,7 +19,8 @@ The active implementation branch is `main`. Branch/tool/Git execution rules are 
 
 ### Design
 
-- [`design/worldgen-coherence.md`](design/worldgen-coherence.md) — worldgen coherence package: biome relationships, ocean margins, volume biomes, surface indicators, and floating islands.
+- [`design/world-systems-rebuild.md`](design/world-systems-rebuild.md) — active phased rebuild plan for world generation, biomes, persistence, loading, and affected world-query consumers.
+- [`design/worldgen-coherence.md`](design/worldgen-coherence.md) — older deferred worldgen coherence package; requirements must be revalidated against the active rebuild plan before implementation.
 - [`design/portal-travel.md`](design/portal-travel.md) — prepared data-driven inter-dimensional travel contract: exact-coordinate destination plus generic connected-Structure arrival carving.
 
 ### Features
