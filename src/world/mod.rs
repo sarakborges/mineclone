@@ -1,8 +1,6 @@
 pub(crate) mod biome;
 pub(crate) mod biome_field;
 mod chunk_async_work;
-mod chunk_generation_tasks;
-mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
@@ -54,8 +52,6 @@ use crate::{
 use biome::CurrentBiome;
 use biome_field::BiomeField;
 use chunk_async_work::{ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work};
-use chunk_generation_tasks::GenerationScheduler;
-use chunk_mesh_tasks::PresentationScheduler;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
 use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{
@@ -137,8 +133,6 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkPresentationSelection>()
             .init_resource::<ChunkAsyncWorkLimiter>()
-            .init_resource::<GenerationScheduler>()
-            .init_resource::<PresentationScheduler>()
             .init_resource::<ChunkRemeshTasks>()
             .init_resource::<PresentationLightingRevisions>()
             .init_resource::<ChunkUnloadState>()
@@ -167,8 +161,6 @@ impl Plugin for WorldPlugin {
                 (
                     reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkPresentationSelection>,
-                    reset_resource::<GenerationScheduler>,
-                    reset_resource::<PresentationScheduler>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkRemeshQueue>,
@@ -189,8 +181,6 @@ impl Plugin for WorldPlugin {
                 (
                     reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkPresentationSelection>,
-                    reset_resource::<GenerationScheduler>,
-                    reset_resource::<PresentationScheduler>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkUnloadState>,
@@ -209,8 +199,6 @@ impl Plugin for WorldPlugin {
                 OnExit(GameState::Gameplay),
                 (
                     clear_chunk_render_pool,
-                    reset_resource::<GenerationScheduler>,
-                    reset_resource::<PresentationScheduler>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<PresentationLightingRevisions>,
                     reset_resource::<ChunkUnloadState>,
