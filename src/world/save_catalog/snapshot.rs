@@ -10,11 +10,10 @@ use crate::{
 use super::invalid_data;
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
-    new_world::{WorldGenerationSettings, WorldgenVersion, is_valid_biome_size_multiplier},
     world_names::validate_world_name,
 };
 
-pub(super) const SAVE_FORMAT_VERSION: u32 = 6;
+pub(super) const SAVE_FORMAT_VERSION: u32 = 7;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -24,11 +23,8 @@ pub(super) struct WorldManifest {
     pub(super) seed: u64,
     pub(super) dimension_id: String,
     pub(super) dimensions: Vec<String>,
-    pub(super) worldgen_version: WorldgenVersion,
-    pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
-    pub(super) world_generation: WorldGenerationSettings,
     pub(super) last_saved_unix_ms: u64,
     pub(super) generation: u64,
     pub(super) snapshot_file: Option<String>,
@@ -52,7 +48,6 @@ pub(crate) struct SavedPlayer {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SavedDimensionState {
     pub(crate) dimension_id: String,
-    pub(crate) spawn_biome: Option<String>,
     pub(crate) storage_boxes: Vec<SavedStorageBox>,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
@@ -63,13 +58,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) id: String,
     pub(crate) seed: u64,
     pub(crate) dimension_id: String,
-    pub(super) worldgen_version: WorldgenVersion,
-    pub(crate) spawn_biome: Option<String>,
-    pub(crate) current_biome: Option<String>,
-    pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
-    pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
@@ -88,14 +78,8 @@ pub(super) struct StoredWorldSnapshot {
     pub(super) id: String,
     pub(super) seed: u64,
     pub(super) dimension_id: String,
-    pub(super) worldgen_version: WorldgenVersion,
-    pub(super) spawn_biome: Option<String>,
-    #[serde(default)]
-    pub(super) current_biome: Option<String>,
-    pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) spawn_creatures: bool,
-    pub(super) world_generation: WorldGenerationSettings,
     pub(super) player: Option<SavedPlayer>,
     pub(super) day: u64,
     pub(super) tick_in_day: u64,
@@ -113,13 +97,8 @@ pub(super) struct DiskWorldSnapshot<'a> {
     id: &'a str,
     seed: u64,
     dimension_id: &'a str,
-    worldgen_version: &'a WorldgenVersion,
-    spawn_biome: &'a Option<String>,
-    current_biome: &'a Option<String>,
-    biome_size_multiplier: f32,
     ticks_per_second: u32,
     spawn_creatures: bool,
-    world_generation: WorldGenerationSettings,
     player: &'a Option<SavedPlayer>,
     day: u64,
     tick_in_day: u64,
@@ -137,13 +116,8 @@ impl StoredWorldSnapshot {
             id: self.id,
             seed: self.seed,
             dimension_id: self.dimension_id,
-            worldgen_version: self.worldgen_version,
-            spawn_biome: self.spawn_biome,
-            current_biome: self.current_biome,
-            biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
-            world_generation: self.world_generation,
             player: self.player,
             day: self.day,
             tick_in_day: self.tick_in_day,
@@ -161,12 +135,8 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) id: &'a str,
     pub(crate) seed: u64,
     pub(crate) dimension_id: &'a str,
-    pub(crate) spawn_biome: Option<&'a str>,
-    pub(crate) current_biome: Option<&'a str>,
-    pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) spawn_creatures: bool,
-    pub(crate) world_generation: WorldGenerationSettings,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
@@ -199,13 +169,8 @@ impl WorldSnapshot {
             id: &self.id,
             seed: self.seed,
             dimension_id: &self.dimension_id,
-            worldgen_version: &self.worldgen_version,
-            spawn_biome: &self.spawn_biome,
-            current_biome: &self.current_biome,
-            biome_size_multiplier: self.biome_size_multiplier,
             ticks_per_second: self.ticks_per_second,
             spawn_creatures: self.spawn_creatures,
-            world_generation: self.world_generation,
             player: &self.player,
             day: self.day,
             tick_in_day: self.tick_in_day,
@@ -222,9 +187,6 @@ impl WorldSnapshot {
         validate_world_name(source.id)?;
         if source.ticks_per_second == 0 || source.dimension_id.is_empty() || source.day == 0 {
             return Err(invalid_data("incomplete world state"));
-        }
-        if !is_valid_biome_size_multiplier(source.biome_size_multiplier) {
-            return Err(invalid_data("invalid biome size multiplier"));
         }
         if let Some(player) = source.player.as_ref() {
             if player.position.iter().any(|coord| !coord.is_finite()) {
@@ -257,13 +219,8 @@ impl WorldSnapshot {
             id: source.id.to_owned(),
             seed: source.seed,
             dimension_id: source.dimension_id.to_owned(),
-            worldgen_version: WorldgenVersion::current(),
-            spawn_biome: source.spawn_biome.map(str::to_owned),
-            current_biome: source.current_biome.map(str::to_owned),
-            biome_size_multiplier: source.biome_size_multiplier,
             ticks_per_second: source.ticks_per_second,
             spawn_creatures: source.spawn_creatures,
-            world_generation: source.world_generation,
             player: source.player,
             day: source.day,
             tick_in_day: source.tick_in_day,
@@ -289,13 +246,8 @@ mod tests {
             id: "World".to_owned(),
             seed: 1,
             dimension_id: "asteria:overworld".to_owned(),
-            worldgen_version: WorldgenVersion::current(),
-            spawn_biome: None,
-            current_biome: None,
-            biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
             ticks_per_second: 20,
             spawn_creatures: true,
-            world_generation: WorldGenerationSettings::default(),
             player: None,
             day: 1,
             tick_in_day: 0,
@@ -310,6 +262,7 @@ mod tests {
         let value = serde_json::to_value(snapshot.disk_snapshot()).unwrap();
         assert_eq!(value["format_version"], SAVE_FORMAT_VERSION);
         assert!(value.get("chunks").is_none());
+        assert!(value.get("worldgen_version").is_none());
     }
 
     #[test]
@@ -318,13 +271,8 @@ mod tests {
             id: "World".to_owned(),
             seed: 1,
             dimension_id: "asteria:umbral".to_owned(),
-            worldgen_version: WorldgenVersion::current(),
-            spawn_biome: None,
-            current_biome: None,
-            biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
             ticks_per_second: 20,
             spawn_creatures: true,
-            world_generation: WorldGenerationSettings::default(),
             player: None,
             day: 1,
             tick_in_day: 0,
@@ -335,7 +283,6 @@ mod tests {
             creatures: Vec::new(),
             inactive_dimensions: vec![SavedDimensionState {
                 dimension_id: "asteria:overworld".to_owned(),
-                spawn_biome: None,
                 storage_boxes: Vec::new(),
                 fluid_updates: SavedFluidUpdates::default(),
                 creatures: Vec::new(),
