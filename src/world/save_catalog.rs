@@ -38,10 +38,6 @@ pub(crate) use self::{
 
 use super::{
     dimension_persistence::InactiveDimensionStates,
-    new_world::{
-        WorldGenerationSettings, WorldgenVersion, biome_size_multiplier_tenths,
-        is_valid_biome_size_multiplier,
-    },
     world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_name},
 };
 
@@ -54,7 +50,6 @@ pub(crate) struct WorldSummary {
     pub(crate) day: u64,
     pub(crate) dimension_id: String,
     pub(crate) player_position: Option<[f32; 3]>,
-    pub(crate) biome_id: Option<String>,
 }
 
 impl WorldSummary {
@@ -67,7 +62,6 @@ impl WorldSummary {
             day: 0,
             dimension_id: String::new(),
             player_position: None,
-            biome_id: None,
         }
     }
 }
@@ -108,21 +102,13 @@ pub(crate) fn create_new_world(
     requested_name: &str,
     seed: u64,
     dimension_id: &str,
-    biome_size_multiplier: f32,
     ticks_per_second: u32,
     spawn_creatures: bool,
-    world_generation: WorldGenerationSettings,
 ) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "World seed metadata must include a dimension and a positive tick rate",
-        ));
-    }
-    if !is_valid_biome_size_multiplier(biome_size_multiplier) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments",
         ));
     }
     let created_at = now_unix_ms()?;
@@ -148,11 +134,8 @@ pub(crate) fn create_new_world(
                     seed,
                     dimension_id: dimension_id.to_owned(),
                     dimensions: vec![dimension_id.to_owned()],
-                    worldgen_version: WorldgenVersion::current(),
-                    biome_size_multiplier,
                     ticks_per_second,
                     spawn_creatures,
-                    world_generation,
                     last_saved_unix_ms: created_at,
                     generation: 0,
                     snapshot_file: None,
@@ -208,14 +191,8 @@ pub(crate) fn save_world_owned(
     }
 
     let initial: WorldManifest = read_json(&directory.join(manifest_name(0)))?;
-    initial
-        .worldgen_version
-        .validate_matches(snapshot.worldgen_version)?;
     if initial.id != snapshot.id
         || initial.seed != snapshot.seed
-        || initial.world_generation != snapshot.world_generation
-        || biome_size_multiplier_tenths(initial.biome_size_multiplier)
-            != biome_size_multiplier_tenths(snapshot.biome_size_multiplier)
         || initial.format_version != SAVE_FORMAT_VERSION
         || initial.generation != 0
         || initial.snapshot_file.is_some()
@@ -245,12 +222,8 @@ pub(crate) fn save_world_owned(
     loop {
         let occupied = directory.join(snapshot_name(next)).exists()
             || directory.join(manifest_name(next)).exists()
-            || directory
-                .join(format!("{}.tmp", snapshot_name(next)))
-                .exists()
-            || directory
-                .join(format!("{}.tmp", manifest_name(next)))
-                .exists()
+            || directory.join(format!("{}.tmp", snapshot_name(next))).exists()
+            || directory.join(format!("{}.tmp", manifest_name(next))).exists()
             || generation_world_storage_slot_exists(&directory, next)?;
         if !occupied {
             break;
@@ -284,11 +257,8 @@ pub(crate) fn save_world_owned(
         seed: snapshot.seed,
         dimension_id: snapshot.dimension_id.clone(),
         dimensions: snapshot_dimensions,
-        worldgen_version: snapshot.worldgen_version,
-        biome_size_multiplier: snapshot.biome_size_multiplier,
         ticks_per_second: snapshot.ticks_per_second,
         spawn_creatures: snapshot.spawn_creatures,
-        world_generation: snapshot.world_generation,
         last_saved_unix_ms: saved_at,
         generation: next,
         snapshot_file: Some(snapshot_file.clone()),
@@ -387,7 +357,6 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
                 day: 0,
                 dimension_id: manifest.dimension_id,
                 player_position: None,
-                biome_id: None,
             }),
             Err(error) => {
                 warn!("World {id} is present on disk but incompatible: {error}");
