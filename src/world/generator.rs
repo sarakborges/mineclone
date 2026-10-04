@@ -2,6 +2,8 @@ mod foundation;
 
 use std::sync::Arc;
 
+use bevy::prelude::Resource;
+
 use crate::content::dimension::DimensionDefinition;
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 
@@ -12,7 +14,7 @@ use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, Generat
 /// the private foundation read context below. Runtime/gameplay consumers must
 /// receive those semantic capabilities rather than seed, entropy, snapshots,
 /// registries, or cache internals.
-#[derive(Clone, Debug)]
+#[derive(Resource, Clone, Debug)]
 pub(crate) struct WorldGenerator {
     snapshot: Arc<GenerationSnapshot>,
 }
