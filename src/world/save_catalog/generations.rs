@@ -25,10 +25,7 @@ use super::{
     },
     validation::{PruneRegistries, SaveRegistries},
 };
-use crate::world::{
-    new_world::{biome_size_multiplier_tenths, is_valid_biome_size_multiplier},
-    world_names::{WORLDS_DIRECTORY, validate_world_name},
-};
+use crate::world::world_names::{WORLDS_DIRECTORY, validate_world_name};
 
 pub(super) const RETAINED_GENERATIONS: usize = 4;
 
@@ -118,7 +115,6 @@ pub(super) fn newest_restorable_summary(
                     day: snapshot.day,
                     dimension_id: snapshot.dimension_id,
                     player_position: snapshot.player.map(|player| player.position),
-                    biome_id: snapshot.current_biome,
                 });
             }
             Err(error) => warn!(
@@ -251,18 +247,11 @@ fn decode_snapshot_state(
         return Err(invalid_data("unsupported or mismatched save format"));
     }
 
-    manifest
-        .worldgen_version
-        .validate_matches(stored.worldgen_version)?;
     if stored.id != id
         || stored.seed != manifest.seed
         || stored.dimension_id != manifest.dimension_id
-        || biome_size_multiplier_tenths(stored.biome_size_multiplier)
-            != biome_size_multiplier_tenths(manifest.biome_size_multiplier)
-        || !is_valid_biome_size_multiplier(stored.biome_size_multiplier)
         || stored.ticks_per_second != manifest.ticks_per_second
         || stored.spawn_creatures != manifest.spawn_creatures
-        || stored.world_generation != manifest.world_generation
         || stored.ticks_per_second == 0
         || stored.day == 0
         || stored
@@ -298,8 +287,6 @@ fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
     manifest.format_version == SAVE_FORMAT_VERSION
         && manifest.id == id
         && manifest.generation == generation
-        && manifest.worldgen_version.validate().is_ok()
-        && is_valid_biome_size_multiplier(manifest.biome_size_multiplier)
         && manifest.ticks_per_second > 0
         && dimensions_are_canonical
         && generation > 0
