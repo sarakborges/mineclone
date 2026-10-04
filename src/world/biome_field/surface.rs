@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use super::{
-    BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES, SurfaceBoundarySample,
+    BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
     constants::{BORDER_TRANSITION_WIDTH, VISUAL_BLEND_WIDTH},
     spatial::{smoothstep, varied_surface_margin_width},
 };
@@ -111,6 +111,24 @@ impl BiomeField {
             identity_surface_index,
             influences,
         }
+    }
+
+    pub(crate) fn surface_boundary_separator(&self, left: usize, right: usize) -> Option<usize> {
+        let left_biome = self.surface_biomes.get(left)?;
+        let right_biome = self.surface_biomes.get(right)?;
+        if left == right {
+            return Some(left);
+        }
+
+        Some(
+            if left_biome.weight > right_biome.weight
+                || (left_biome.weight == right_biome.weight && left_biome.id < right_biome.id)
+            {
+                left
+            } else {
+                right
+            },
+        )
     }
 }
 
