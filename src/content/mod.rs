@@ -35,6 +35,7 @@ pub(crate) mod loot;
 pub(crate) mod object;
 pub(crate) mod object_id;
 pub(crate) mod player;
+pub(crate) mod portal;
 mod registry;
 pub(crate) mod secondary_property;
 pub(crate) mod sky;
