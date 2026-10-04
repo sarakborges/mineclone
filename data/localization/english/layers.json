@@ -1,5 +1,8 @@
 {
   "asteria:moss": {
     "/name": "Moss"
+  },
+  "asteria:umbral_portal": {
+    "/name": "Umbral Portal"
   }
 }
