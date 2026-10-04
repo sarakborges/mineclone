@@ -9,8 +9,10 @@ use super::{
     },
 };
 
-const LAND_SITE_JITTER_FRACTION: f32 = 0.28;
+const LAND_SITE_JITTER_FRACTION: f32 = 0.12;
 const LAND_SITE_SEARCH_RADIUS: i32 = 3;
+const LAND_SCALE_MIN_SPACING_FRACTION: f32 = 0.65;
+const LAND_SCALE_MAX_SPACING_FRACTION: f32 = 1.35;
 const OCEAN_DOMAIN_SCALE_MULTIPLIER: f32 = 2.0;
 const OCEAN_DOMAIN_THRESHOLD: f32 = 0.18;
 const OCEAN_DOMAIN_DETAIL_WEIGHT: f32 = 0.28;
@@ -226,7 +228,7 @@ impl BiomeField {
             let biome_index = self.surface_field_config.first_land_index;
             let biome = &self.surface_biomes[biome_index];
             let site = land_site_position(cell, spacing, self.seed);
-            let scale = land_site_scale(cell, biome, self.seed);
+            let scale = land_site_scale(cell, biome, spacing, self.seed);
             LandSiteCandidate {
                 score: ((warped - site) / scale).length_squared(),
                 tie_break: cell_hash(cell, self.seed ^ LAND_HASH_SALT.rotate_left(17)),
@@ -267,8 +269,9 @@ impl BiomeField {
     fn land_site_candidate(&self, cell: IVec2, warped: Vec2) -> LandSiteCandidate {
         let biome_index = self.land_biome_for_cell(cell);
         let biome = &self.surface_biomes[biome_index];
-        let site = land_site_position(cell, self.surface_field_config.land_spacing, self.seed);
-        let scale = land_site_scale(cell, biome, self.seed);
+        let spacing = self.surface_field_config.land_spacing;
+        let site = land_site_position(cell, spacing, self.seed);
+        let scale = land_site_scale(cell, biome, spacing, self.seed);
         LandSiteCandidate {
             score: ((warped - site) / scale).length_squared(),
             tie_break: cell_hash(cell, self.seed ^ LAND_HASH_SALT.rotate_left(17)),
@@ -359,6 +362,10 @@ impl BiomeField {
     }
 
     fn neighbor_conflict(&self, cell: IVec2, candidate: usize) -> bool {
+        if self.ocean_neighbor_conflict(cell, candidate) {
+            return true;
+        }
+
         for z in -1..=1 {
             for x in -1..=1 {
                 if x == 0 && z == 0 {
@@ -393,6 +400,42 @@ impl BiomeField {
             }
         }
         false
+    }
+
+    fn ocean_neighbor_conflict(&self, cell: IVec2, candidate: usize) -> bool {
+        if !self.spawn_oceans {
+            return false;
+        }
+        let Some(ocean_index) = self.ocean_surface_index else {
+            return false;
+        };
+        let candidate_biome = &self.surface_biomes[candidate];
+        let ocean_biome = &self.surface_biomes[ocean_index];
+        let denied = candidate_biome.neighbor_deny.as_ref().is_some_and(|selector| {
+            selector.matches(&ocean_biome.id, &ocean_biome.tags)
+        }) || ocean_biome.neighbor_deny.as_ref().is_some_and(|selector| {
+            selector.matches(&candidate_biome.id, &candidate_biome.tags)
+        });
+        if !denied {
+            return false;
+        }
+
+        let spacing = self.surface_field_config.land_spacing;
+        let site = land_site_position(cell, spacing, self.seed);
+        let half = spacing * 0.55;
+        [
+            Vec2::ZERO,
+            Vec2::new(half.x, 0.0),
+            Vec2::new(-half.x, 0.0),
+            Vec2::new(0.0, half.y),
+            Vec2::new(0.0, -half.y),
+            Vec2::new(half.x, half.y),
+            Vec2::new(half.x, -half.y),
+            Vec2::new(-half.x, half.y),
+            Vec2::new(-half.x, -half.y),
+        ]
+        .into_iter()
+        .any(|offset| self.ocean_domain_value(site + offset) > 0.0)
     }
 }
 
@@ -436,13 +479,21 @@ pub(super) fn land_site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 
     )
 }
 
-fn land_site_scale(cell: IVec2, biome: &BiomeFieldEntry, seed: u64) -> Vec2 {
+fn land_site_scale(cell: IVec2, biome: &BiomeFieldEntry, spacing: Vec2, seed: u64) -> Vec2 {
     let x = hash_unit(cell_hash(cell, seed ^ LAND_SCALE_X_SALT));
     let z = hash_unit(cell_hash(cell, seed ^ LAND_SCALE_Z_SALT));
     Vec2::new(
-        lerp(biome.size.x.min, biome.size.x.max, x).max(1.0),
-        lerp(biome.size.z.min, biome.size.z.max, z).max(1.0),
+        stabilized_axis_scale(x, biome.size.x.min, biome.size.x.max, spacing.x),
+        stabilized_axis_scale(z, biome.size.z.min, biome.size.z.max, spacing.y),
     )
+}
+
+fn stabilized_axis_scale(sample: f32, authored_min: f32, authored_max: f32, spacing: f32) -> f32 {
+    let authored_min = authored_min.max(1.0);
+    let authored_max = authored_max.max(authored_min);
+    let lower = (spacing * LAND_SCALE_MIN_SPACING_FRACTION).clamp(authored_min, authored_max);
+    let upper = (spacing * LAND_SCALE_MAX_SPACING_FRACTION).clamp(lower, authored_max);
+    lerp(authored_min, authored_max, sample).clamp(lower, upper)
 }
 
 #[cfg(test)]
@@ -575,11 +626,17 @@ mod tests {
         };
         for z in -8..=8 {
             for x in -8..=8 {
-                let scale = land_site_scale(IVec2::new(x, z), &biome, 42);
+                let scale = land_site_scale(IVec2::new(x, z), &biome, Vec2::splat(250.0), 42);
                 assert!((80.0..=180.0).contains(&scale.x));
                 assert!((140.0..=360.0).contains(&scale.y));
             }
         }
+    }
+
+    #[test]
+    fn stabilized_scale_limits_extreme_cell_competition() {
+        assert_eq!(stabilized_axis_scale(0.0, 80.0, 420.0, 250.0), 162.5);
+        assert_eq!(stabilized_axis_scale(1.0, 80.0, 420.0, 250.0), 337.5);
     }
 
     #[test]
@@ -727,6 +784,41 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn ocean_neighbor_deny_keeps_denied_land_sites_off_the_coast() {
+        let plains = entry("test:plains", 1.0, size(120.0, 420.0));
+        let mut wasteland = entry("test:wasteland", 2.0, size(120.0, 420.0));
+        wasteland.neighbor_deny = Some(SurfaceBiomeSelector {
+            ids: vec!["test:ocean".to_owned()],
+            tags: Vec::new(),
+        });
+        let ocean = entry("test:ocean", 1.0, size(180.0, 520.0));
+        let surface_biomes = Arc::new(vec![plains, wasteland, ocean]);
+        let config = SurfaceFieldConfig::from_biomes(&surface_biomes, Some(2));
+        let field = BiomeField {
+            surface_biomes,
+            volume_biomes: Arc::new(Vec::new()),
+            surface_field_config: config,
+            volume_site_spacing: None,
+            climate: MacroClimateField::new(404),
+            seed: 404,
+            single_surface_biome: None,
+            ocean_surface_index: Some(2),
+            spawn_oceans: true,
+            spawn_target_surface_biome: None,
+        };
+
+        for z in -24..=24 {
+            for x in -24..=24 {
+                let cell = IVec2::new(x, z);
+                if field.land_biome_for_cell(cell) != 1 {
+                    continue;
+                }
+                assert!(!field.ocean_neighbor_conflict(cell, 1));
             }
         }
     }
