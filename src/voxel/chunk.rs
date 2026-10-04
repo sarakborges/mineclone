@@ -191,7 +191,7 @@ fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
 }
 
 fn shared_empty_objects() -> Arc<HashMap<u16, ObjectCells>> {
-    static EMPTY_OBJECTS: OnceLock<Arc<HashMap<u16, ObjectCells>> = OnceLock::new();
+    static EMPTY_OBJECTS: OnceLock<Arc<HashMap<u16, ObjectCells>>> = OnceLock::new();
     Arc::clone(EMPTY_OBJECTS.get_or_init(|| Arc::new(HashMap::new())))
 }
 
@@ -1724,6 +1724,17 @@ mod tests {
             LayerFace::Top,
             LayerCell::new("asteria:moss", Default::default()),
         ));
+    }
+
+    #[test]
+    fn explicit_supportless_layers_can_occupy_air() {
+        let mut chunk = VoxelChunk::empty();
+        let portal = LayerCell::new("asteria:umbral_portal", Default::default());
+
+        assert!(chunk.add_layer_without_support(2, 3, 4, LayerFace::Front, portal));
+        assert_eq!(chunk.layers_at(2, 3, 4).len(), 1);
+        assert!(chunk.has_terrain_content());
+        assert!(!chunk.is_empty());
     }
 
     #[test]
