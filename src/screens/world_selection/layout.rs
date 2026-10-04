@@ -3,7 +3,7 @@ use chrono::{DateTime, Datelike, Local, Timelike, Utc};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    content::dimension::DimensionRegistry,
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
         button::{ButtonVariant, COMPACT_CONTROL_HEIGHT, button},
@@ -33,7 +33,6 @@ pub(super) fn spawn_world_entry(
     localization: &UiLocalization,
     language: Language,
     dimensions: &DimensionRegistry,
-    biomes: &BiomeRegistry,
     thumbnail: Option<Handle<Image>>,
 ) {
     let id = world.id.clone();
@@ -42,14 +41,6 @@ pub(super) fn spawn_world_entry(
         .map_or(world.dimension_id.as_str(), |definition| {
             definition.name.text(language)
         });
-    let biome = world
-        .biome_id
-        .as_deref()
-        .and_then(|biome_id| biomes.get(biome_id))
-        .map_or(
-            localization.text(language, "worldSelection.unknown"),
-            |definition| definition.name.text(language),
-        );
     let position = format_coordinates(world.player_position);
     let days_passed = world.day.saturating_sub(1);
 
@@ -102,11 +93,6 @@ pub(super) fn spawn_world_entry(
                             metadata,
                             localization.text(language, "worldSelection.dimension"),
                             dimension.to_owned(),
-                        );
-                        spawn_metadata(
-                            metadata,
-                            localization.text(language, "worldSelection.biome"),
-                            biome.to_owned(),
                         );
                         spawn_metadata(
                             metadata,
