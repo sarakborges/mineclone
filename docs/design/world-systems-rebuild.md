@@ -245,7 +245,34 @@ It owns:
 
 Ocean participates as a normal biome identity.
 
-Constraints such as min/max size, avoid-near, and exclusivity must not create an unsatisfiable planner that panics. Exact priority and conflict semantics remain explicit design decisions to settle before implementation of this phase.
+#### Biome formation size semantics
+
+Biome size configuration describes the preferred characteristic span of one logical biome formation in world blocks. It guides formation creation and deliberate growth; it is not a hard geometric invariant over the final connected component.
+
+Use a forward-only data shape conceptually equivalent to:
+
+```json
+"regionSize": {
+  "min": 256,
+  "max": 768
+}
+```
+
+The exact serialized names may be finalized with the biome definition rewrite, but the semantics are binding:
+
+- `min` is the smallest characteristic scale at which the layout should deliberately create or preserve a distinct formation;
+- `max` is the largest characteristic scale the layout should deliberately target for that formation;
+- each formation deterministically chooses/derives a target scale within the configured range;
+- the range is expressed as an intuitive linear world-space span in blocks, not an exact connected-component area requirement;
+- a residual pocket clearly too small to support a new formation is absorbed by an existing neighboring formation instead of creating a tiny sliver biome;
+- `max` is not a clipping boundary: a formation may exceed it when absorbing residual space, satisfying higher-priority relationship rules, or naturally touching/merging with another compatible formation;
+- two independently formed regions of the same biome may touch and read as one larger connected area; do not split them merely to keep the final connected component under `max`;
+- neither bound may make layout generation unsatisfiable, cause a panic, or require inventing a separator biome;
+- no algorithm may introduce abrupt cuts solely to enforce the configured range numerically.
+
+Treat these values as layout objectives with deterministic conflict handling, not as constraints that must be proven globally by flood-filling the generated world.
+
+`avoidNear` and exclusivity remain separate relationship rules and are resolved independently below before Biome Layout implementation begins.
 
 #### Required biome map viewer
 
@@ -478,23 +505,28 @@ Use the capability boundary defined in section 5.4.
 
 One immutable generation entry point composes specialized biome, terrain, and structure query owners plus chunk materialization. External consumers receive the narrow capability they need and do not reconstruct generation from raw seed/definitions. Queries are pure with respect to runtime/persistence state, scalar and bounded-area forms are semantically equivalent, domain owners own efficient search, and chunk materialization consumes query results rather than serving as a prerequisite for them.
 
+#### Biome formation size semantics — resolved 2026-10-04
+
+Biome `regionSize.min/max` describe the preferred characteristic linear span of one logical formation in world blocks. They are layout objectives, not hard connected-component constraints.
+
+`min` controls whether a distinct formation is worth creating/preserving; undersized residual pockets are absorbed into existing neighbors. `max` limits deliberate target growth but never acts as a clipping wall. Residual absorption, higher-priority relationship rules, and contact/merging with the same biome may produce a larger final connected area. Size rules must never make generation unsatisfiable, cause panic, create separator biomes, or produce abrupt cuts merely to satisfy a number.
+
 ### Open decisions
 
 Resolve these one at a time and update this document as decisions become authoritative:
 
-1. biome min/max-size semantics;
-2. `avoidNear` semantics and priority;
-3. exclusive-neighbor semantics and conflict resolution;
-4. biome blend representation and number of influences;
-5. surface/volume biome relationship model;
-6. ocean/sea-level terrain semantics without a hydrology subsystem;
-7. terrain representation and cross-chunk sampling strategy;
-8. structure planning/index/query contract;
-9. safe spawn/warp destination query strategy;
-10. generated vs persisted chunk/delta representation;
-11. persistence format boundaries;
-12. loading phase hierarchy and progress aggregation;
-13. benchmark budgets and fixed-seed visual/performance fixtures.
+1. `avoidNear` semantics and priority;
+2. exclusive-neighbor semantics and conflict resolution;
+3. biome blend representation and number of influences;
+4. surface/volume biome relationship model;
+5. ocean/sea-level terrain semantics without a hydrology subsystem;
+6. terrain representation and cross-chunk sampling strategy;
+7. structure planning/index/query contract;
+8. safe spawn/warp destination query strategy;
+9. generated vs persisted chunk/delta representation;
+10. persistence format boundaries;
+11. loading phase hierarchy and progress aggregation;
+12. benchmark budgets and fixed-seed visual/performance fixtures.
 
 A later implementation phase must not silently decide one of these differently from what the document records.
 
