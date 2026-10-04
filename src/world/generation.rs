@@ -89,13 +89,6 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) feature_fields: &'a WorldFeatureFields,
 }
 
-pub(crate) fn generate_chunk(
-    chunk_coord: IVec3,
-    context: &ChunkGenerationContext<'_>,
-) -> VoxelChunk {
-    generate_chunk_profiled(chunk_coord, context).0
-}
-
 pub(crate) fn generate_chunk_profiled(
     chunk_coord: IVec3,
     context: &ChunkGenerationContext<'_>,
