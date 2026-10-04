@@ -20,6 +20,7 @@ use super::{
     layer::{LayerDefinition, LayerRegistry},
     object::{ObjectDefinition, ObjectRegistry},
     player::PlayerDefinition,
+    portal::{PortalDefinition, PortalRegistry},
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
@@ -46,6 +47,7 @@ pub(crate) struct LoadedContent {
     pub items: ItemRegistry,
     pub layers: LayerRegistry,
     pub objects: ObjectRegistry,
+    pub portals: PortalRegistry,
     pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
@@ -71,6 +73,7 @@ impl LoadedContent {
         commands.insert_resource(self.items);
         commands.insert_resource(self.layers);
         commands.insert_resource(self.objects);
+        commands.insert_resource(self.portals);
         commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
@@ -198,6 +201,18 @@ fn load_definition(
         content
             .objects
             .insert(read_localized_json_definition::<ObjectDefinition>(
+                path,
+                localizations,
+            ));
+    } else if path_has_component(path, "portals") {
+        assert!(
+            path.starts_with(data_root().join("portals")),
+            "portal definitions must be under data/portals/, not {}",
+            path.display()
+        );
+        content
+            .portals
+            .insert(read_localized_json_definition::<PortalDefinition>(
                 path,
                 localizations,
             ));
