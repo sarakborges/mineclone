@@ -287,6 +287,7 @@ fn map_player_skin_meshes(
         };
 
         let mut outer_mesh = (*source_mesh).clone();
+        drop(source_mesh);
         if !remap_mesh_uvs(&mut outer_mesh, outer_spec.layout) {
             warn!(
                 "player skin outer layer {} skipped: source mesh has unexpected vertex data",
