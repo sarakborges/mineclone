@@ -89,8 +89,7 @@ impl ItemRegistry {
             definition.id,
             definition.icon
         );
-        for index in 0..definition.icon_variants.len() {
-            let variant = &mut definition.icon_variants[index];
+        for variant in &mut definition.icon_variants {
             variant.metadata_key = variant.metadata_key.trim().to_owned();
             variant.metadata_value = variant.metadata_value.trim().to_owned();
             variant.icon = variant.icon.trim().to_owned();
@@ -110,6 +109,9 @@ impl ItemRegistry {
                 definition.id,
                 variant.icon
             );
+        }
+        for index in 0..definition.icon_variants.len() {
+            let variant = &definition.icon_variants[index];
             assert!(
                 !definition.icon_variants[..index].iter().any(|earlier| {
                     earlier.metadata_key == variant.metadata_key
