@@ -1,0 +1,39 @@
+{
+  "id": "asteria:umbral_portal",
+  "category": "crafted_blocks",
+  "creativeVisible": false,
+  "icon": "textures/objects/umbral_portal.png",
+  "placementFaces": [
+    "right",
+    "left",
+    "top",
+    "bottom",
+    "front",
+    "back"
+  ],
+  "target": {
+    "size": [
+      1.0,
+      0.125,
+      1.0
+    ],
+    "centerOffset": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "unlit": true,
+  "castsShadow": false,
+  "receivesShadow": false,
+  "dropSelf": false,
+  "visual": {
+    "type": "voxelPlate"
+  },
+  "interaction": "break",
+  "positionJitter": [
+    0.0,
+    0.0
+  ],
+  "lootTable": []
+}
