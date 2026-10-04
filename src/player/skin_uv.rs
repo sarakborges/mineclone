@@ -13,6 +13,14 @@ const OUTER_LAYER_DEPTH_PIXELS: f32 = 0.25;
 #[derive(Component)]
 struct PlayerSkinOuterLayer;
 
+type PlayerSkinBaseMesh<'a> = (
+    Entity,
+    &'a Name,
+    &'a Mesh3d,
+    &'a MeshMaterial3d<StandardMaterial>,
+    &'a RenderLayers,
+);
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct OuterLayerSpec {
     name: &'static str,
@@ -78,16 +86,7 @@ impl Plugin for PlayerSkinUvPlugin {
 fn spawn_player_skin_outer_layers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    base_meshes: Query<
-        (
-            Entity,
-            &Name,
-            &Mesh3d,
-            &MeshMaterial3d<StandardMaterial>,
-            &RenderLayers,
-        ),
-        Added<RenderLayers>,
-    >,
+    base_meshes: Query<PlayerSkinBaseMesh<'_>, Added<RenderLayers>>,
 ) {
     for (entity, name, mesh_handle, material_handle, render_layers) in &base_meshes {
         let Some(spec) = OuterLayerSpec::for_base_mesh(name.as_str()) else {
