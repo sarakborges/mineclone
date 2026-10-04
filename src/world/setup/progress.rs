@@ -13,7 +13,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::app::crash_log::log_gameplay_event;
+use crate::{
+    app::crash_log::log_gameplay_event,
+    world::chunk_generation_tasks::GenerationPipelineDiagnostic,
+};
 
 use self::{
     assets::wait_for_gameplay_assets,
@@ -55,6 +58,7 @@ pub(in crate::world) struct LoadingRuntime<'w, 's> {
 fn log_loading_diagnostics(
     delta: Duration,
     state: &super::WorldLoadingState,
+    generation_diagnostics: GenerationPipelineDiagnostic,
     diagnostics: &mut LoadingDiagnostics,
 ) {
     let timer = diagnostics
@@ -70,14 +74,14 @@ fn log_loading_diagnostics(
         log_gameplay_event(format!(
             "world.loading.phase.start phase={:?} detail={}",
             state.phase,
-            loading_phase_detail(state)
+            loading_phase_detail(state, generation_diagnostics)
         ));
         diagnostics.previous_phase = Some(state.phase);
     } else if progress_due {
         log_gameplay_event(format!(
             "world.loading.phase.progress phase={:?} detail={}",
             state.phase,
-            loading_phase_detail(state)
+            loading_phase_detail(state, generation_diagnostics)
         ));
     }
 
@@ -160,10 +164,13 @@ fn loading_step_detail(state: &super::WorldLoadingState, step: WorldLoadingStep)
     }
 }
 
-fn loading_phase_detail(state: &super::WorldLoadingState) -> String {
+fn loading_phase_detail(
+    state: &super::WorldLoadingState,
+    generation_diagnostics: GenerationPipelineDiagnostic,
+) -> String {
     match state.phase {
         WorldLoadingPhase::Generating => format!(
-            "generated={}/{} cursor={}",
+            "generated={}/{} cursor={} generation_passes={generation_diagnostics:?}",
             state.generated,
             state.total(),
             state.generation_cursor
@@ -280,9 +287,11 @@ pub(in crate::world) fn setup_world(
         ),
     }
 
+    let generation_diagnostics = pipeline.generation_tasks.diagnostics();
     log_loading_diagnostics(
         runtime.time.delta(),
         &progress.loading_state,
+        generation_diagnostics,
         &mut runtime.loading_diagnostics,
     );
 }
