@@ -44,6 +44,7 @@ mod validation;
 pub(crate) mod world_recipe;
 
 use bevy::prelude::*;
+pub(crate) use loader::read_content;
 use loader::load_content;
 
 pub(crate) struct ContentPlugin;
