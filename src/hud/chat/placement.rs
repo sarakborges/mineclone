@@ -546,15 +546,10 @@ impl ChatPlacementContext<'_, '_> {
         }
         player.translation = destination;
         if pieces.len() == 1 {
-            format!(
-                "Placed {} ({}).",
-                structure.name.text(self.language.get()),
-                structure.id
-            )
+            format!("Placed {}.", structure.id)
         } else {
             format!(
-                "Placed {} ({}) with {} connected structures.",
-                structure.name.text(self.language.get()),
+                "Placed {} with {} connected structures.",
                 structure.id,
                 pieces.len()
             )
