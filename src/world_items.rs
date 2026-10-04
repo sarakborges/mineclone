@@ -30,7 +30,7 @@ use crate::{
             set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
-        block_tint::block_tint_at,
+        block_tint::block_tint,
         block_visual_content::BlockVisualContent,
         extruded_sprite::{ExtrudedSpriteGeometry, PendingExtrudedSprite},
     },
@@ -446,13 +446,7 @@ fn spawn_extruded_object_item(
         return false;
     };
 
-    let horizontal = Vec2::new(request.position.x, request.position.z);
-    let tint = block_tint_at(
-        definition.tint,
-        horizontal,
-        &content.block_content.biome_field,
-        &content.block_content.biomes,
-    );
+    let tint = block_tint(definition.tint);
     let scale = world_item_extruded_sprite_scale(*size);
     let translation = Vec3::Y * (-ITEM_HALF_EXTENT - *base_offset * scale);
 
