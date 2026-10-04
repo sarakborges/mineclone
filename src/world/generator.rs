@@ -7,11 +7,9 @@ use std::sync::Arc;
 use bevy::prelude::Resource;
 
 use crate::content::{biome::BiomeRegistry, dimension::DimensionDefinition};
-pub(crate) use biome::{
-    BiomeAreaSample, BiomeId, BiomeInfluence, BiomeQueries, BiomeSample, BiomeSearchResult,
-};
+pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
-pub(crate) use biome_map::{BiomeMapConfig, BiomeMapRender, render_biome_map};
+pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 
 /// Immutable entry point for deterministic generated-world queries.
