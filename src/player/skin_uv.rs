@@ -24,60 +24,60 @@ type PlayerSkinMesh<'a> = (
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct SkinPartSpec {
-    base_layout: SkinBoxUv,
-    outer_layer: Option<OuterLayerSpec>,
+    base: SkinBoxUv,
+    outer: Option<OuterLayerSpec>,
 }
 
 impl SkinPartSpec {
     fn for_mesh_name(name: &str) -> Option<Self> {
         match name {
             "HeadMesh" => Some(Self {
-                base_layout: SkinBoxUv::HEAD,
-                outer_layer: None,
+                base: SkinBoxUv::HEAD,
+                outer: None,
             }),
             "HairLayer" => Some(Self {
-                base_layout: SkinBoxUv::HEAD_LAYER,
-                outer_layer: None,
+                base: SkinBoxUv::HEAD_LAYER,
+                outer: None,
             }),
             "BodyMesh" => Some(Self {
-                base_layout: SkinBoxUv::BODY,
-                outer_layer: Some(OuterLayerSpec {
-                    name: "BodyLayer",
-                    layout: SkinBoxUv::BODY_LAYER,
-                    dimensions_pixels: Vec3::new(8.0, 12.0, 4.0),
-                }),
+                base: SkinBoxUv::BODY,
+                outer: Some(OuterLayerSpec::new(
+                    "BodyLayer",
+                    SkinBoxUv::BODY_LAYER,
+                    Vec3::new(8.0, 12.0, 4.0),
+                )),
             }),
             "RightArmMesh" => Some(Self {
-                base_layout: SkinBoxUv::RIGHT_ARM,
-                outer_layer: Some(OuterLayerSpec {
-                    name: "RightArmLayer",
-                    layout: SkinBoxUv::RIGHT_ARM_LAYER,
-                    dimensions_pixels: Vec3::new(4.0, 12.0, 4.0),
-                }),
+                base: SkinBoxUv::RIGHT_ARM,
+                outer: Some(OuterLayerSpec::new(
+                    "RightArmLayer",
+                    SkinBoxUv::RIGHT_ARM_LAYER,
+                    Vec3::new(4.0, 12.0, 4.0),
+                )),
             }),
             "LeftArmMesh" => Some(Self {
-                base_layout: SkinBoxUv::LEFT_ARM,
-                outer_layer: Some(OuterLayerSpec {
-                    name: "LeftArmLayer",
-                    layout: SkinBoxUv::LEFT_ARM_LAYER,
-                    dimensions_pixels: Vec3::new(4.0, 12.0, 4.0),
-                }),
+                base: SkinBoxUv::LEFT_ARM,
+                outer: Some(OuterLayerSpec::new(
+                    "LeftArmLayer",
+                    SkinBoxUv::LEFT_ARM_LAYER,
+                    Vec3::new(4.0, 12.0, 4.0),
+                )),
             }),
             "RightLegMesh" => Some(Self {
-                base_layout: SkinBoxUv::RIGHT_LEG,
-                outer_layer: Some(OuterLayerSpec {
-                    name: "RightLegLayer",
-                    layout: SkinBoxUv::RIGHT_LEG_LAYER,
-                    dimensions_pixels: Vec3::new(4.0, 12.0, 4.0),
-                }),
+                base: SkinBoxUv::RIGHT_LEG,
+                outer: Some(OuterLayerSpec::new(
+                    "RightLegLayer",
+                    SkinBoxUv::RIGHT_LEG_LAYER,
+                    Vec3::new(4.0, 12.0, 4.0),
+                )),
             }),
             "LeftLegMesh" => Some(Self {
-                base_layout: SkinBoxUv::LEFT_LEG,
-                outer_layer: Some(OuterLayerSpec {
-                    name: "LeftLegLayer",
-                    layout: SkinBoxUv::LEFT_LEG_LAYER,
-                    dimensions_pixels: Vec3::new(4.0, 12.0, 4.0),
-                }),
+                base: SkinBoxUv::LEFT_LEG,
+                outer: Some(OuterLayerSpec::new(
+                    "LeftLegLayer",
+                    SkinBoxUv::LEFT_LEG_LAYER,
+                    Vec3::new(4.0, 12.0, 4.0),
+                )),
             }),
             _ => None,
         }
@@ -92,6 +92,14 @@ struct OuterLayerSpec {
 }
 
 impl OuterLayerSpec {
+    const fn new(name: &'static str, layout: SkinBoxUv, dimensions_pixels: Vec3) -> Self {
+        Self {
+            name,
+            layout,
+            dimensions_pixels,
+        }
+    }
+
     fn relative_scale(self) -> Vec3 {
         let expansion = Vec3::splat(OUTER_LAYER_DEPTH_PIXELS * 2.0);
         (self.dimensions_pixels + expansion) / self.dimensions_pixels
@@ -139,7 +147,7 @@ impl SkinBoxUv {
     fn uv(self, position: [f32; 3], normal: [f32; 3]) -> Option<[f32; 2]> {
         let face = SkinFace::from_normal(normal)?;
         let rect = self.rect(face);
-        let [s, t] = face.face_coordinates(position);
+        let [s, t] = face.coordinates(position);
         Some([
             (rect.x + s * rect.width) / SKIN_ATLAS_SIZE,
             (rect.y + t * rect.height) / SKIN_ATLAS_SIZE,
@@ -167,12 +175,9 @@ impl SkinBoxUv {
                 self.width,
                 self.height,
             ),
-            SkinFace::Top => PixelRect::new(
-                self.x + self.depth,
-                self.y,
-                self.width,
-                self.depth,
-            ),
+            SkinFace::Top => {
+                PixelRect::new(self.x + self.depth, self.y, self.width, self.depth)
+            }
             SkinFace::Bottom => PixelRect::new(
                 self.x + self.depth + self.width,
                 self.y,
@@ -212,13 +217,13 @@ impl SkinFace {
         }
     }
 
-    fn face_coordinates(self, position: [f32; 3]) -> [f32; 2] {
+    fn coordinates(self, position: [f32; 3]) -> [f32; 2] {
         let [x, y, z] = position;
         match self {
             Self::Front => [x + 0.5, 0.5 - y],
-            Self::Back => [x + 0.5, 0.5 - y],
-            Self::Right => [0.5 - z, 0.5 - y],
-            Self::Left => [z + 0.5, 0.5 - y],
+            Self::Back => [0.5 - x, 0.5 - y],
+            Self::Right => [z + 0.5, 0.5 - y],
+            Self::Left => [0.5 - z, 0.5 - y],
             Self::Top => [x + 0.5, z + 0.5],
             Self::Bottom => [x + 0.5, 0.5 - z],
         }
@@ -250,48 +255,54 @@ impl Plugin for PlayerSkinUvPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (map_player_skin_meshes, sync_outer_layer_render_layers)
+            (configure_player_skin_meshes, sync_outer_layer_render_layers)
                 .chain()
                 .run_if(in_state(GameState::Gameplay)),
         );
     }
 }
 
-fn map_player_skin_meshes(
+fn configure_player_skin_meshes(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    player_meshes: Query<PlayerSkinMesh<'_>, Added<RenderLayers>>,
+    player_meshes: Query<
+        PlayerSkinMesh<'_>,
+        (Added<RenderLayers>, Without<PlayerSkinOuterLayer>),
+    >,
 ) {
     for (entity, name, mesh_handle, material_handle, render_layers) in &player_meshes {
         let Some(spec) = SkinPartSpec::for_mesh_name(name.as_str()) else {
             continue;
         };
 
-        let Some(mut source_mesh) = meshes.get_mut(mesh_handle.id()) else {
+        let Some(source_mesh) = meshes.get(mesh_handle.id()).cloned() else {
             warn!(
-                "player skin UV mapping skipped for {}: source mesh is unavailable",
+                "player skin mapping skipped for {}: source mesh is unavailable",
                 name.as_str()
             );
             continue;
         };
-        if !remap_mesh_uvs(&mut source_mesh, spec.base_layout) {
+
+        let mut base_mesh = source_mesh.clone();
+        if !remap_mesh_uvs(&mut base_mesh, spec.base) {
             warn!(
-                "player skin UV mapping skipped for {}: source mesh has unexpected vertex data",
+                "player skin mapping skipped for {}: source mesh has unexpected vertex data",
                 name.as_str()
             );
             continue;
         }
+        let base_mesh = meshes.add(base_mesh);
+        commands.entity(entity).insert(Mesh3d(base_mesh));
 
-        let Some(outer_spec) = spec.outer_layer else {
+        let Some(outer) = spec.outer else {
             continue;
         };
 
-        let mut outer_mesh = (*source_mesh).clone();
-        drop(source_mesh);
-        if !remap_mesh_uvs(&mut outer_mesh, outer_spec.layout) {
+        let mut outer_mesh = source_mesh;
+        if !remap_mesh_uvs(&mut outer_mesh, outer.layout) {
             warn!(
                 "player skin outer layer {} skipped: source mesh has unexpected vertex data",
-                outer_spec.name
+                outer.name
             );
             continue;
         }
@@ -299,11 +310,11 @@ fn map_player_skin_meshes(
 
         commands.entity(entity).with_children(|parent| {
             parent.spawn((
-                Name::new(outer_spec.name),
+                Name::new(outer.name),
                 PlayerSkinOuterLayer,
                 Mesh3d(outer_mesh),
                 material_handle.clone(),
-                Transform::from_scale(outer_spec.relative_scale()),
+                Transform::from_scale(outer.relative_scale()),
                 Visibility::Inherited,
                 render_layers.clone(),
                 NotShadowCaster,
@@ -360,45 +371,83 @@ fn remap_mesh_uvs(mesh: &mut Mesh, layout: SkinBoxUv) -> bool {
 mod tests {
     use super::*;
 
-    fn assert_uv(actual: [f32; 2], expected_pixels: [f32; 2]) {
+    fn assert_uv_pixels(actual: [f32; 2], expected: [f32; 2]) {
         let expected = [
-            expected_pixels[0] / SKIN_ATLAS_SIZE,
-            expected_pixels[1] / SKIN_ATLAS_SIZE,
+            expected[0] / SKIN_ATLAS_SIZE,
+            expected[1] / SKIN_ATLAS_SIZE,
         ];
         assert!((actual[0] - expected[0]).abs() < f32::EPSILON);
         assert!((actual[1] - expected[1]).abs() < f32::EPSILON);
     }
 
     #[test]
-    fn head_front_uses_standard_skin_region() {
-        assert_uv(
+    fn side_faces_keep_canonical_orientation() {
+        assert_uv_pixels(
             SkinBoxUv::HEAD
                 .uv([-0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-                .expect("head front top-left UV"),
+                .expect("front top-left"),
             [8.0, 8.0],
         );
-        assert_uv(
+        assert_uv_pixels(
             SkinBoxUv::HEAD
-                .uv([0.5, -0.5, 0.5], [0.0, 0.0, 1.0])
-                .expect("head front bottom-right UV"),
-            [16.0, 16.0],
+                .uv([0.5, 0.5, -0.5], [0.0, 0.0, -1.0])
+                .expect("back top-left"),
+            [24.0, 8.0],
+        );
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([-0.5, 0.5, -0.5], [-1.0, 0.0, 0.0])
+                .expect("right top-left"),
+            [0.0, 8.0],
+        );
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([0.5, 0.5, 0.5], [1.0, 0.0, 0.0])
+                .expect("left top-left"),
+            [16.0, 8.0],
         );
     }
 
     #[test]
-    fn body_front_uses_standard_skin_region() {
-        assert_eq!(
-            SkinBoxUv::BODY.rect(SkinFace::Front),
-            PixelRect::new(20.0, 20.0, 8.0, 12.0)
+    fn back_and_side_faces_are_not_mirrored() {
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([-0.5, 0.5, -0.5], [0.0, 0.0, -1.0])
+                .expect("back top-right"),
+            [32.0, 8.0],
         );
-        assert_eq!(
-            SkinBoxUv::BODY_LAYER.rect(SkinFace::Front),
-            PixelRect::new(20.0, 36.0, 8.0, 12.0)
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([-0.5, 0.5, 0.5], [-1.0, 0.0, 0.0])
+                .expect("right top-right"),
+            [8.0, 8.0],
+        );
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([0.5, 0.5, -0.5], [1.0, 0.0, 0.0])
+                .expect("left top-right"),
+            [24.0, 8.0],
         );
     }
 
     #[test]
-    fn every_player_mesh_has_an_explicit_layout() {
+    fn top_and_bottom_faces_keep_canonical_orientation() {
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([-0.5, 0.5, -0.5], [0.0, 1.0, 0.0])
+                .expect("top top-left"),
+            [8.0, 0.0],
+        );
+        assert_uv_pixels(
+            SkinBoxUv::HEAD
+                .uv([-0.5, -0.5, 0.5], [0.0, -1.0, 0.0])
+                .expect("bottom top-left"),
+            [16.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn every_player_mesh_has_one_canonical_layout() {
         for name in [
             "HeadMesh",
             "HairLayer",
@@ -416,7 +465,11 @@ mod tests {
     }
 
     #[test]
-    fn limb_outer_layers_use_explicit_standard_regions() {
+    fn outer_layers_use_explicit_canonical_regions() {
+        assert_eq!(
+            SkinBoxUv::BODY_LAYER.rect(SkinFace::Front),
+            PixelRect::new(20.0, 36.0, 8.0, 12.0)
+        );
         assert_eq!(
             SkinBoxUv::RIGHT_ARM_LAYER.rect(SkinFace::Front),
             PixelRect::new(44.0, 36.0, 4.0, 12.0)
@@ -436,10 +489,10 @@ mod tests {
     }
 
     #[test]
-    fn normalized_uvs_scale_to_every_supported_texture_size() {
+    fn normalized_uvs_address_all_supported_texture_sizes() {
         let uv = SkinBoxUv::BODY
             .uv([-0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-            .expect("body front top-left UV");
+            .expect("body front top-left");
 
         for size in [64.0, 128.0, 256.0, 512.0] {
             let scale = size / SKIN_ATLAS_SIZE;
@@ -449,10 +502,10 @@ mod tests {
     }
 
     #[test]
-    fn body_outer_layer_expands_by_quarter_pixel_per_side() {
+    fn outer_layer_depth_is_model_space_not_texture_resolution() {
         let scale = SkinPartSpec::for_mesh_name("BodyMesh")
-            .expect("body spec")
-            .outer_layer
+            .expect("body")
+            .outer
             .expect("body layer")
             .relative_scale();
 
