@@ -2,13 +2,15 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::world::WorldSeed;
 
-use super::ChatState;
+use super::{ChatMessage, ChatState};
 
 /// Phase-1 placeholder. The legacy locate implementation reconstructed worldgen
 /// internals directly and was removed with the old generator. Phase 8 will
 /// reconnect this command to the new biome/structure query capabilities.
 #[derive(Resource, Default)]
-pub(super) struct PendingLocate;
+pub(super) struct PendingLocate {
+    completed: Option<(String, IVec3)>,
+}
 
 #[derive(SystemParam)]
 pub(super) struct ChatLocateContext<'w> {
@@ -28,7 +30,11 @@ impl ChatLocateContext<'_> {
 }
 
 pub(super) fn poll_locate_task(
-    _pending: ResMut<PendingLocate>,
-    _chat: ResMut<ChatState>,
+    mut pending: ResMut<PendingLocate>,
+    mut chat: ResMut<ChatState>,
 ) {
+    let Some((prefix, target)) = pending.completed.take() else {
+        return;
+    };
+    chat.append(ChatMessage::Located { prefix, target });
 }
