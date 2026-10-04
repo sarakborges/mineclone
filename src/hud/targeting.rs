@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
-        block_tint::{apply_secondary_property_tint, block_tint_at},
+        block_tint::{apply_secondary_property_tint, block_tint},
         block_visual_content::BlockVisualContent,
     },
     targeting::{
@@ -373,13 +373,7 @@ fn update_target_hud(
         let light = state.world.light_at(support + IVec3::Y);
         let sky_light = light.sky();
         let block_light = light.block();
-        let tint_position = Vec2::new(support.x as f32 + 0.5, support.z as f32 + 0.5);
-        let tint = block_tint_at(
-            object.tint,
-            tint_position,
-            &content.visual.biome_field,
-            &content.visual.biomes,
-        );
+        let tint = block_tint(object.tint);
         let snapshot = TargetObjectHudSnapshot {
             support,
             sky_light,
@@ -388,10 +382,7 @@ fn update_target_hud(
             icon: object.icon.clone(),
             tint,
         };
-        let definitions_changed = content.objects.is_changed()
-            || content.visual.biomes.is_changed()
-            || content.visual.biome_field.is_changed()
-            || state.language.is_changed();
+        let definitions_changed = content.objects.is_changed() || state.language.is_changed();
 
         if cached_object.as_ref() == Some(&snapshot)
             && !definitions_changed
