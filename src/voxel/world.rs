@@ -8,7 +8,7 @@ mod resident_index;
 use bevy::prelude::*;
 
 use crate::content::{
-    layer::{LayerFace, LayerRegistry},
+    layer::{LayerAnchor, LayerFace, LayerRegistry},
     object::ObjectRegistry,
 };
 
@@ -350,13 +350,14 @@ impl VoxelWorld {
         let (chunk_coord, local_position) = split_world_position(world_position);
         let changed = {
             let chunk = self.resident.get_mut(chunk_coord)?;
-            chunk.add_layer(
-                local_position.x as usize,
-                local_position.y as usize,
-                local_position.z as usize,
-                face,
-                layer,
-            )
+            let x = local_position.x as usize;
+            let y = local_position.y as usize;
+            let z = local_position.z as usize;
+            if definition.anchor == LayerAnchor::Center {
+                chunk.add_layer_without_support(x, y, z, face, layer)
+            } else {
+                chunk.add_layer(x, y, z, face, layer)
+            }
         };
         if !changed {
             return None;
