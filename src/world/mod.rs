@@ -13,23 +13,15 @@ mod chunk_unloading;
 mod chunk_visibility;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
-mod density_sampling;
 pub(crate) mod deterministic;
 pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
-pub(crate) mod generation;
-mod generation_job;
-pub(crate) mod generation_region;
-mod generation_snapshot;
 mod lighting_updates;
-mod macro_climate;
 mod main_world_diagnostics;
-mod material_field;
 pub(crate) mod math;
 pub(crate) mod new_world;
-mod noise;
 mod presentation_snapshot;
 mod render_diagnostics;
 pub(crate) mod render_distance;
@@ -40,17 +32,12 @@ mod save;
 pub(crate) mod save_catalog;
 pub(crate) mod save_session;
 mod seed;
-mod setup;
 mod storage_durability;
 mod streaming;
-mod structure_field;
-mod structure_metadata;
-pub(crate) mod terrain;
 pub(crate) mod thumbnail;
 pub(crate) mod tick;
 pub(crate) mod warp;
 mod work_budget;
-pub(crate) mod world_feature_fields;
 pub(crate) mod world_names;
 
 use bevy::prelude::*;
@@ -61,11 +48,9 @@ use crate::{
     rendering::terrain_material::TerrainLightingBuffer,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
-use biome::{CurrentBiome, track_current_biome};
+use biome::CurrentBiome;
 use biome_field::BiomeField;
-use chunk_async_work::{
-    ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work,
-};
+use chunk_async_work::{ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work};
 use chunk_generation_tasks::GenerationScheduler;
 use chunk_mesh_tasks::PresentationScheduler;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
@@ -89,11 +74,10 @@ use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 use main_world_diagnostics::{
     MainWorldWorkSamples, begin_deferred_mesh_retirement_work, begin_fluid_work,
-    begin_generation_refill_work, begin_lighting_work, begin_remesh_work, begin_residency_work,
-    begin_retirement_work, begin_streaming_work, begin_visibility_work,
-    finish_deferred_mesh_retirement_work, finish_fluid_work, finish_generation_refill_work,
+    begin_lighting_work, begin_remesh_work, begin_residency_work, begin_retirement_work,
+    begin_visibility_work, finish_deferred_mesh_retirement_work, finish_fluid_work,
     finish_lighting_work, finish_remesh_work, finish_residency_work, finish_retirement_work,
-    finish_streaming_work, finish_visibility_work, log_main_world_work,
+    finish_visibility_work, log_main_world_work,
 };
 pub(crate) use new_world::{
     DEFAULT_BIOME_SIZE_MULTIPLIER, MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER,
@@ -121,14 +105,11 @@ use save_session::{
     save_on_gameplay_window_close,
 };
 pub(crate) use seed::WorldSeed;
-pub(crate) use setup::{WorldLoadingPhaseStatus, WorldLoadingState, WorldLoadingStep};
-use setup::{begin_world_loading, setup_world};
-use streaming::{ChunkStreamingState, refill_generation_workers, stream_chunks};
+use streaming::ChunkStreamingState;
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
-use warp::{PendingWarp, resolve_pending_warp, resume_dimension_warp};
+use warp::{PendingWarp, resolve_pending_warp};
 pub(crate) use work_budget::WorldFrameWorkBudget;
 use work_budget::begin_world_frame_work_budget;
-use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
 
@@ -140,6 +121,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<CurrentDimension>()
             .init_resource::<DimensionEntityCounts>()
             .init_resource::<CurrentBiome>()
+            .init_resource::<BiomeField>()
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
@@ -181,6 +163,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 OnEnter(GameState::Loading),
                 (
+                    reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkPresentationSelection>,
                     reset_resource::<GenerationScheduler>,
                     reset_resource::<PresentationScheduler>,
@@ -196,7 +179,6 @@ impl Plugin for WorldPlugin {
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     prepare_world_session,
-                    begin_world_loading,
                 )
                     .chain(),
             )
@@ -218,7 +200,6 @@ impl Plugin for WorldPlugin {
                     reset_render_prepare_diagnostics,
                     reset_chunk_async_work_limit,
                     restore_loaded_clock,
-                    resume_dimension_warp,
                 )
                     .chain(),
             )
@@ -236,7 +217,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingWarp>,
                 ),
             )
-            .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
             .add_systems(
                 First,
                 begin_main_frame_work.run_if(in_state(GameState::Gameplay)),
@@ -256,9 +236,6 @@ impl Plugin for WorldPlugin {
                 Update,
                 (
                     begin_world_frame_work_budget,
-                    begin_streaming_work,
-                    stream_chunks,
-                    finish_streaming_work,
                     begin_retirement_work,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
@@ -267,10 +244,6 @@ impl Plugin for WorldPlugin {
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                Update,
-                track_current_biome.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 PostUpdate,
@@ -291,16 +264,6 @@ impl Plugin for WorldPlugin {
                     sync_chunk_visibility,
                     sync_new_chunk_visibility,
                     finish_visibility_work,
-                )
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                Last,
-                (
-                    begin_generation_refill_work,
-                    refill_generation_workers,
-                    finish_generation_refill_work.before(log_main_world_work),
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -370,12 +333,9 @@ fn release_world_session(
     }
 
     commands.remove_resource::<VoxelWorld>();
-    commands.remove_resource::<BiomeField>();
-    commands.remove_resource::<WorldFeatureFields>();
     commands.remove_resource::<TerrainLightingBuffer>();
     commands.remove_resource::<TerrainMaterials>();
     commands.remove_resource::<FluidMaterials>();
-    commands.remove_resource::<WorldLoadingState>();
     commands.remove_resource::<WorldDirectoryLock>();
     commands.insert_resource(InMemoryWorldSave::default());
     commands.insert_resource(WorldSession::default());
