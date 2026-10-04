@@ -66,3 +66,22 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      # Phase 3 visual fixtures use the same public biome-map query path as the
+      # standalone diagnostic viewer. These are executable smoke renders, not
+      # `cargo test`; the PNG/legend artifacts are reviewed before terrain work.
+      - name: Render biome map fixtures
+        run: |
+          mkdir -p target/biome-maps
+          cargo run --locked -- --biome-map --seed 0 --dimension asteria:overworld --output target/biome-maps/overworld-seed-0.png --scale 8 --width 256 --height 256
+          cargo run --locked -- --biome-map --seed 1337 --dimension asteria:overworld --output target/biome-maps/overworld-seed-1337.png --scale 8 --width 256 --height 256
+          cargo run --locked -- --biome-map --seed 0 --dimension asteria:umbral --output target/biome-maps/umbral-seed-0.png --scale 8 --width 256 --height 256
+          cargo run --locked -- --biome-map --seed 1337 --dimension asteria:umbral --output target/biome-maps/umbral-seed-1337.png --scale 8 --width 256 --height 256
+
+      - name: Upload biome map fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: biome-map-fixtures
+          path: target/biome-maps/
+          if-no-files-found: error
+          retention-days: 7
