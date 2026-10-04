@@ -13,15 +13,44 @@ use super::{
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ItemIconVariantDefinition {
+    pub metadata_key: String,
+    pub metadata_value: String,
+    pub icon: String,
+}
+
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub category: String,
     pub icon: String,
+    #[serde(default)]
+    pub icon_variants: Vec<ItemIconVariantDefinition>,
 }
 
 impl ItemDefinition {
+    pub(crate) fn icon_variant(&self, metadata_key: &str, metadata_value: &str) -> Option<&str> {
+        self.icon_variants
+            .iter()
+            .find(|variant| {
+                variant.metadata_key == metadata_key && variant.metadata_value == metadata_value
+            })
+            .map(|variant| variant.icon.as_str())
+    }
+
+    pub(crate) fn icon_for_metadata<'a, 'm>(
+        &'a self,
+        metadata: impl IntoIterator<Item = (&'m str, &'m str)>,
+    ) -> &'a str {
+        metadata
+            .into_iter()
+            .find_map(|(key, value)| self.icon_variant(key, value))
+            .unwrap_or(&self.icon)
+    }
+
     pub(crate) fn validate_references(&self, categories: &InventoryCategoryRegistry) {
         assert!(
             categories.get(&self.category).is_some(),
@@ -60,6 +89,38 @@ impl ItemRegistry {
             definition.id,
             definition.icon
         );
+        for index in 0..definition.icon_variants.len() {
+            let variant = &mut definition.icon_variants[index];
+            variant.metadata_key = variant.metadata_key.trim().to_owned();
+            variant.metadata_value = variant.metadata_value.trim().to_owned();
+            variant.icon = variant.icon.trim().to_owned();
+            assert!(
+                !variant.metadata_key.is_empty(),
+                "item {} icon variant metadataKey cannot be empty",
+                definition.id
+            );
+            assert!(
+                !variant.metadata_value.is_empty(),
+                "item {} icon variant metadataValue cannot be empty",
+                definition.id
+            );
+            assert!(
+                is_safe_relative_asset_path(&variant.icon),
+                "item {} icon variant must be a safe relative asset path: {}",
+                definition.id,
+                variant.icon
+            );
+            assert!(
+                !definition.icon_variants[..index].iter().any(|earlier| {
+                    earlier.metadata_key == variant.metadata_key
+                        && earlier.metadata_value == variant.metadata_value
+                }),
+                "item {} icon variants cannot duplicate selector {}={}",
+                definition.id,
+                variant.metadata_key,
+                variant.metadata_value
+            );
+        }
         definition
             .name
             .validate(&format!("item {} name", definition.id));
