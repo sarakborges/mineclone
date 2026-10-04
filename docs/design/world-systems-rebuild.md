@@ -86,7 +86,7 @@ Query calls must not silently mutate persistence, streaming, chunk residency, re
 
 When working on this rebuild, implement the generated world as deterministic spatial fields that can be queried directly by world coordinate or bounded area. Do not introduce a fixed logical generation region, generation tile, or region ownership boundary into world semantics.
 
-The runtime `VoxelChunk` remains a materialization/storage/rendering unit. It is not the semantic unit from which biome, terrain, or structure truth is derived.
+The runtime `VoxelChunk` remains a materialization/storage/rendering unit. It is not the semantic unit from which biome, terrain, or structure truth is derived before materialization. Once a chunk is materialized into the playable world, the persistence contract in Phase 9 makes that materialized chunk authoritative saved world state.
 
 Performance mechanisms are explicitly allowed and expected, but they stay internal to the subsystem that owns the expensive query:
 
@@ -133,9 +133,9 @@ Specific rules:
 
 - query-looking operations are side-effect free with respect to persistence and runtime residency;
 - a query must not load/generate a chunk merely to discover a fact that exists in the deterministic generated world;
-- a query must not depend on `VoxelWorld`, rendering, mesh state, camera state, chunk residency, or prior generation order unless the requested fact is explicitly runtime state rather than generated-world state;
+- a query must not depend on `VoxelWorld`, rendering, mesh state, camera state, chunk residency, or prior generation order unless the requested fact is explicitly runtime/current-world state rather than generated-world state;
 - consumers must not assemble their own biome resolver, terrain sampler, or structure planner from raw seed/configuration;
-- the same authoritative structure placement returned by structure search must be the placement later materialized by chunk generation;
+- the same authoritative structure placement returned by structure search must be the placement later materialized by chunk generation for an unmaterialized location;
 - biome search belongs to the biome owner and structure search belongs to the structure owner; commands do not implement brute-force spatial scans over scalar APIs when the domain can provide a more efficient search;
 - scalar queries exist for isolated reads; bounded-area/batch APIs exist wherever generation, map rendering, or other hot paths would otherwise recompute shared work repeatedly;
 - batch and scalar forms must be semantically equivalent;
@@ -508,6 +508,8 @@ Includes:
 
 Structure planning must be deterministic in world space. A structure crossing multiple chunks is one logical placement, not independently invented per chunk. Structure search and materialization must use the same authoritative placement owner.
 
+Existing generic authoring semantics are preserved: biome coverage, terrain/ground restrictions, spacing, priority/reservation/conflict groups, StructureSets, variants, and connectors remain content-owned rules rather than becoming special cases in the new generator. `/place structure` remains a manual/runtime placement tool and is not the source of deterministic world placement.
+
 **Gate:** placement/location queries agree with materialized generation and remain generation-order independent.
 
 ### Phase 7 — Chunk synthesis
@@ -516,7 +518,9 @@ Define the authoritative conversion from generated world data into runtime `Voxe
 
 The synthesis layer combines biome/terrain/material/feature results and publishes the minimal runtime data required by streaming, lighting, fluids, meshing, and rendering.
 
-**Gate:** chunk output can be requested directly for arbitrary coordinates and matches fixed-seed deterministic snapshots/tests.
+Materializing a chunk into the playable world is also the persistence boundary defined in Phase 9: after first materialization, that chunk becomes saved world state rather than a disposable reconstruction of the current generator.
+
+**Gate:** chunk output can be requested directly for arbitrary coordinates and matches fixed-seed deterministic snapshots/tests before persistence takes ownership of the materialized result.
 
 ### Phase 8 — Consumer integration
 
@@ -528,7 +532,7 @@ Uses the biome search capability. It must not generate every chunk in the search
 
 #### `/locate structure`
 
-Uses deterministic structure search. It must return the same authoritative placement that generation would materialize and must not require full chunk materialization of the searched path/area.
+Uses deterministic structure search. It must return the same authoritative placement that generation would materialize in unmaterialized world space and must not require full chunk materialization of the searched path/area. Current-world lookup over already-materialized space must respect persisted world state where generated content may have been removed or changed.
 
 #### `/warp`
 
@@ -539,17 +543,18 @@ A warp must:
 1. switch interest directly to the destination coordinates;
 2. query authoritative terrain/surface information to narrow a safe destination;
 3. load/generate only the required destination neighborhood;
-4. never generate the spatial path between source and destination.
+4. validate the final local destination against current runtime state after that neighborhood exists;
+5. never generate the spatial path between source and destination.
 
-The current implementation already redirects streaming to the target instead of intentionally following the path, but its local safe-position search can become expensive. The rebuilt contract must avoid large brute-force 3D searches when terrain/surface information can narrow the candidate set.
+The current implementation already redirects streaming to the target instead of intentionally following the path, but its local safe-position search can become expensive. The rebuilt contract replaces the large brute-force 3D search with query-guided candidate selection plus a small local runtime validation.
 
 #### Spawn and respawn
 
-Spawn selection uses generation queries and intentionally requests only the neighborhood needed to enter gameplay. It must not rely on generating a huge area and then discovering a safe position.
+Spawn selection uses generation queries and intentionally requests only the neighborhood needed to enter gameplay. It must not rely on generating a huge area and then discovering a safe position. Spawn, warp, dimension travel, and portals share the same destination-preparation primitive while retaining their different policy inputs.
 
 #### Portals and dimension travel
 
-Portal travel, Dimensional Slicer travel, cross-dimension warp, and similar systems share the direct destination-loading contract rather than each inventing a different transition mechanism.
+Portal travel, Dimensional Slicer travel, cross-dimension warp, and similar systems share the direct destination-loading contract rather than each inventing a different transition mechanism. An authored exact-coordinate portal remains exact-coordinate policy; arrival carving/routes remain ordinary Structure/connectors rather than portal-specific worldgen.
 
 #### Streaming
 
@@ -559,21 +564,47 @@ Streaming remains the runtime owner of residency/interest, but requests material
 
 ### Phase 9 — Persistence
 
-Design persistence only after generated-vs-mutable ownership is clear.
+Persistence freezes the world that has actually been materialized.
 
-The new save model should persist authoritative mutable state, for example:
+The generated world remains queryable everywhere, but only chunks that enter the playable/materialized world become persisted spatial state. Merely querying a coordinate through `/locate`, spawn search, warp planning, diagnostics, or the biome-map viewer does not materialize or persist that location.
+
+The binding persistence semantics are:
+
+- when a chunk is materialized into the playable world for the first time, its complete authoritative voxel/world content becomes persistent for that dimension, even if the player never edits it;
+- after that point, loading the chunk restores the saved materialized state instead of regenerating it from the current world generator;
+- later block, layer, object, fluid, metadata, storage, Structure destruction, and other persistent world changes update that saved chunk state rather than being represented as a required delta over the original procedural baseline;
+- a chunk that materializes as empty still needs a persistent materialization record, even if its encoded payload is tiny, so a future generator revision cannot silently populate previously explored empty space;
+- world coordinates that have never been materialized remain generator-owned and are generated on demand when first entering the playable world;
+- if the world-generation algorithm/content changes later, already-materialized chunks stay exactly as saved while never-materialized areas may be created by the newer generator. Mixed generation eras are therefore an intentional property of a long-lived world rather than a reason to rewrite old terrain;
+- persistence must not require rerunning the historical generator to reconstruct an already-materialized chunk. Generator/version metadata may exist for diagnostics or policy, but a persisted chunk is self-sufficient authoritative spatial state;
+- full-state persistence is a semantic contract, not a requirement for naive storage. Palette encoding, compression, region packing, empty-section elision, deduplication, or other lossless compact representations are allowed as storage details;
+- generated caches, biome-map caches, terrain fields, Structure planning caches, meshes, derived lighting, generation queues, loading state, and other reconstructible acceleration/presentation data are not persisted as independent truth.
+
+The save model also persists non-spatial authoritative state as required, including:
 
 - seed/world/dimension/session metadata;
 - player/session state;
 - entities;
 - inventories/storages;
-- player/world edits or chunk deltas;
-- runtime fluid/scheduled state when required;
-- other state that cannot be deterministically reconstructed.
+- runtime fluid/scheduled state that is not already fully represented by chunk content;
+- other mutable state that cannot be reconstructed from the persisted world and current runtime rules.
 
-Do not persist generated caches, biome-map caches, meshes, derived lighting, generation queues, or other data that can be reconstructed from authoritative state unless measurement and correctness require a specific persisted cache.
+Keep persistence boundaries separated conceptually:
 
-**Gate:** new-format save/load roundtrip restores authoritative mutable state without making serialization shape the owner of world-generation semantics.
+```text
+World manifest/identity
+    world identity and durable global generation/config metadata
+
+World snapshot
+    player, clocks/rules, entities, inventory and other non-spatial runtime state
+
+Per-dimension spatial state
+    every materialized chunk's authoritative saved world content
+```
+
+The existing generation-based atomic publication/staging shape is worth preserving where practical, but its current rule that only mutated chunks are persistent is explicitly superseded by this rebuild.
+
+**Gate:** save/load roundtrip restores every materialized chunk exactly, including unedited and intentionally empty chunks, while never-materialized coordinates remain absent from spatial storage and can still be generated on first materialization.
 
 ### Phase 10 — World loading pipeline
 
@@ -586,6 +617,8 @@ The pipeline must:
 - group concurrent work under a logical parent phase;
 - support cancellation/stale-result rejection where relevant;
 - avoid turning implementation workers into user-visible top-level phases.
+
+The current model where many detailed generation pass labels all mirror one `Generating` phase is obsolete. Internal biome/terrain/density/material/Structure pass timings remain diagnostics; user-visible progress is published by logical parent work with real counters.
 
 **Gate:** initial world entry, load-from-save, dimension transition, and destination preparation use the same coherent progress model where appropriate.
 
@@ -610,7 +643,7 @@ Preparing Presentation
   Meshing        43%
 ```
 
-The exact stages will be determined by the final pipeline. The invariant is hierarchical progress: logical phase first, concurrent child operations inside it.
+The exact labels may evolve with implementation, but the invariant is hierarchical progress: logical phase first, concurrent child operations inside it. Progress comes from real work counts and never from fake timers or duplicated aliases of the same phase.
 
 **Gate:** progress accurately reflects the pipeline, never blocks on irrelevant background work, and remains stable when internal worker parallelism changes.
 
@@ -630,6 +663,10 @@ Required performance coverage includes at least:
 - locate queries;
 - peak temporary memory and cache growth where relevant.
 
+Use fixed visual/performance fixtures spanning ordinary biome borders, three-or-more-biome junctions, `cannotBorder`, Ocean/coast, volume biomes, caves, floating formations, Structure-heavy areas, Overworld, and Umbral. Measure cold and warm paths where caching changes cost but not semantics.
+
+Do not invent hard millisecond budgets before the replacement generator exists. Establish the first correct measured baseline, then promote concrete thresholds into regression budgets so later changes can be compared against evidence rather than arbitrary numbers.
+
 **Gate:** correctness, determinism, visual review, targeted benchmarks, and CI are green before the rebuild is considered mergeable.
 
 ## 7. Current known affected subsystems
@@ -638,21 +675,21 @@ This list is intentionally explicit so cleanup does not accidentally delete a co
 
 | Consumer | Expected relationship to rebuild |
 | --- | --- |
-| Structures/connectors | preserve generic primitives, replace old worldgen coupling |
+| Structures/connectors | preserve generic primitives and authored rules; replace old worldgen coupling with authoritative placement/query owner |
 | Chat `/locate biome` | consume biome search capability |
-| Chat `/locate structure` | consume authoritative deterministic structure search |
-| Chat `/warp` | direct destination preparation + terrain/surface safe-position queries |
-| Spawn/respawn | consume generation query capabilities |
-| Portals/Dimensional Slicer | use common direct destination-loading contract |
+| Chat `/locate structure` | consume authoritative deterministic structure search, with current-world state respected for already-materialized space |
+| Chat `/warp` | direct destination preparation + terrain/surface candidate query + minimal runtime safety validation |
+| Spawn/respawn | consume the same destination-preparation primitive with spawn policy |
+| Portals/Dimensional Slicer | use common direct destination-loading contract; arrival carving remains Structure/connectors |
 | Streaming | preserve residency/selection infrastructure; replace generator/materialization interface |
 | Rendering/biome visuals | consume new biome influence/blend data; do not resolve biome ownership |
 | Runtime lighting | preserve solver; adapt initial generated-content boundary only if required |
 | Runtime fluids | preserve simulation; adapt generated-fluid frontier/publication boundary only if required |
-| Persistence/save catalog/session | redesign serialized world contract around new authoritative state |
-| Loading UI | replace current flat/concurrent stage presentation with hierarchical progress |
+| Persistence/save catalog/session | preserve useful atomic save shell; persist every materialized chunk as authoritative per-dimension spatial state |
+| Loading pipeline/UI | replace duplicated pass rows with one structured hierarchical progress model; UI only renders it |
 | Developer diagnostics | consume query capabilities; add biome map viewer and generation/performance diagnostics |
 
-Phase 0 must expand or correct this table from current code before destructive cleanup begins.
+Phase 0 must verify these classifications against the live implementation before destructive cleanup, but the behavioral contracts above are already decided.
 
 ## 8. Decisions to settle incrementally
 
@@ -706,18 +743,47 @@ Terrain uses a hybrid model: surface-biome terrain defines an authoritative cont
 
 Final generated solidity comes from the final 3D terrain field. `base_surface_at` remains a cheap 2D result, while effective surface/column queries account for relevant 3D formations using bounded candidate ranges rather than brute-force full-height scans. Terrain is evaluated in world coordinates only; batch requests and optional halos are performance mechanisms and never semantic chunk boundaries. Any interpolation lattice is anchored in world space, scalar and batch results are equivalent, and output is invariant under chunk request/generation order.
 
+#### Structure planning, placement, and query contract — resolved 2026-10-04
+
+Preserve the project's generic Structure authoring model rather than redesigning it. A Structure placement is deterministic world-space intent that may cross any number of chunks; chunks only materialize the intersecting portion. StructureSets, groups/variants, connectors, biome-coverage rules, terrain/ground/fluid restrictions, spacing, overlap, reservations, priorities, and conflict groups remain authored Structure concerns.
+
+One authoritative Structure query owner supplies both placements intersecting an area and efficient structure search. `/locate structure` consumes that owner and must identify the same placement chunk generation would materialize in unmaterialized space. Rivers continue to use the same generic connector system. `/place structure` remains a separate manual/runtime tool and intentionally does not define procedural placement semantics.
+
+#### Safe spawn, warp, and destination preparation — resolved 2026-10-04
+
+Spawn, warp, dimension travel, and portals share one direct destination-preparation primitive. A generated-world query first narrows likely safe candidates without chunk materialization; streaming interest moves directly to the chosen destination region; only the minimal required neighborhood is materialized; then a small runtime validation checks actual current collision/support/fluid state before final placement.
+
+This replaces the current large 3D warp BFS and never generates a path between source and destination. Different callers retain policy differences: spawn searches for a suitable initial location, warp prefers the requested XYZ then nearby valid alternatives, and exact-coordinate portal travel keeps its authored coordinate policy while Structure/connectors own any arrival carving or surface route.
+
+#### Materialized chunk persistence — resolved 2026-10-04
+
+The save persists the explored/materialized world, not merely player deltas over a procedural baseline.
+
+A chunk becomes authoritative persisted spatial state the first time it is materialized into the playable world, even when it is unedited or empty. From then on, reload restores that saved state and subsequent world mutations update it. Query-only access does not materialize or persist chunks. Coordinates never materialized remain generator-owned and are produced only when first entering the playable world.
+
+Consequently, future worldgen changes may affect never-materialized territory while already-materialized territory remains frozen exactly as saved. Persisted chunks are self-sufficient and do not require the historical generator to reconstruct them. Compression/palette/region packing and similar lossless representations are implementation choices; the semantic unit is complete persisted chunk state, not a mandatory sparse delta.
+
+#### Persistence boundaries — resolved 2026-10-04
+
+Keep world identity/global metadata, non-spatial runtime snapshot state, and per-dimension spatial chunk state as separate persistence boundaries. Preserve the useful atomic generation/staging/publication behavior of the current save system where practical, but replace the current mutated-chunks-only spatial policy with all-materialized-chunks persistence.
+
+Do not persist biome/terrain/Structure caches, mesh/light data, generation queues, loading progress, or other reconstructible acceleration/presentation state as independent truth. Runtime/scheduled simulation state that cannot be recovered from chunk content remains snapshot state.
+
+#### Loading progress hierarchy — resolved 2026-10-04
+
+The loading owner publishes logical parent phases with real progress counters; concurrent implementation work is grouped beneath those parents. The UI is only a renderer of that model. Detailed generation-pass timings stay available to diagnostics but do not become duplicate user-visible top-level progress rows.
+
+The current fifteen-row presentation, where multiple generation labels mirror the same `Generating` phase/status, is explicitly obsolete. Progress must remain stable if internal worker count or scheduling changes and must never rely on fake timing.
+
+#### Benchmark and fixture strategy — resolved 2026-10-04
+
+Use fixed seeds and visual/performance fixtures covering representative biome boundaries/junctions, Ocean/coast, volume biomes, floating terrain, Structure-heavy areas, dimensions, near/far queries, and order independence. Measure scalar and area queries, search, chunk synthesis, loading, warp/locate, cache behavior, and relevant temporary memory.
+
+Concrete millisecond budgets are not guessed during planning. Establish a correct replacement-generator baseline first, then promote measured thresholds to regression gates. This resolves the benchmark strategy while deliberately deferring numeric thresholds until evidence exists.
+
 ### Open decisions
 
-Resolve these one at a time and update this document as decisions become authoritative:
-
-1. structure planning/index/query contract;
-2. safe spawn/warp destination query strategy;
-3. generated vs persisted chunk/delta representation;
-4. persistence format boundaries;
-5. loading phase hierarchy and progress aggregation;
-6. benchmark budgets and fixed-seed visual/performance fixtures.
-
-A later implementation phase must not silently decide one of these differently from what the document records.
+No unresolved architecture/game-behavior decisions remain from this planning pass. Concrete implementation details may still expose new decisions, but they must be brought back explicitly rather than being silently invented during implementation. Numeric performance thresholds are set only after the first correct measured baseline, as defined above.
 
 ## 9. Branch and integration strategy
 
