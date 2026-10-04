@@ -158,74 +158,6 @@ impl Hsi {
         Color::srgb(red, green, blue)
     }
 
-    pub fn lerp(self, other: Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
-        let start = self.normalized();
-        let end = other.normalized();
-        let start_hue = if start.saturation <= f32::EPSILON {
-            end.hue
-        } else {
-            start.hue
-        };
-        let end_hue = if end.saturation <= f32::EPSILON {
-            start_hue
-        } else {
-            end.hue
-        };
-        let hue_delta = (end_hue - start_hue + 180.0).rem_euclid(360.0) - 180.0;
-
-        Self::new(
-            start_hue + hue_delta * t,
-            start.saturation + (end.saturation - start.saturation) * t,
-            start.intensity + (end.intensity - start.intensity) * t,
-        )
-        .normalized()
-    }
-
-    pub fn blend_weighted(colors: impl IntoIterator<Item = (Self, f32)>) -> Self {
-        let mut total_weight = 0.0;
-        let mut saturation = 0.0;
-        let mut intensity = 0.0;
-        let mut hue_x = 0.0;
-        let mut hue_y = 0.0;
-        let mut fallback_hue = 0.0;
-        let mut fallback_weight = -1.0_f32;
-
-        for (color, weight) in colors {
-            let weight = weight.max(0.0);
-            if weight <= f32::EPSILON {
-                continue;
-            }
-            let color = color.normalized();
-            total_weight += weight;
-            saturation += color.saturation * weight;
-            intensity += color.intensity * weight;
-
-            let chroma_weight = weight * color.saturation;
-            if chroma_weight > f32::EPSILON {
-                let hue = color.hue.to_radians();
-                hue_x += hue.cos() * chroma_weight;
-                hue_y += hue.sin() * chroma_weight;
-                if chroma_weight > fallback_weight {
-                    fallback_weight = chroma_weight;
-                    fallback_hue = color.hue;
-                }
-            }
-        }
-
-        if total_weight <= f32::EPSILON {
-            return Self::BLACK;
-        }
-
-        let hue = if hue_x.abs() <= f32::EPSILON && hue_y.abs() <= f32::EPSILON {
-            fallback_hue
-        } else {
-            hue_y.atan2(hue_x).to_degrees().rem_euclid(HUE_TURN_DEGREES)
-        };
-
-        Self::new(hue, saturation / total_weight, intensity / total_weight).normalized()
-    }
-
     pub fn is_valid(self) -> bool {
         self.hue.is_finite()
             && self.saturation.is_finite()
@@ -248,21 +180,5 @@ mod tests {
                 assert!((round_trip[channel] - rgb[channel]).abs() < 0.001);
             }
         }
-    }
-
-    #[test]
-    fn hue_interpolation_wraps_across_zero() {
-        let middle = Hsi::new(350.0, 1.0, 0.3).lerp(Hsi::new(10.0, 1.0, 0.3), 0.5);
-        assert!(middle.hue < 1.0 || middle.hue > 359.0);
-    }
-
-    #[test]
-    fn weighted_blend_keeps_saturation_for_opposing_hues() {
-        let mixed = Hsi::blend_weighted([
-            (Hsi::new(0.0, 1.0, 0.33), 0.5),
-            (Hsi::new(180.0, 1.0, 0.33), 0.5),
-        ]);
-
-        assert_eq!(mixed.saturation, 1.0);
     }
 }
