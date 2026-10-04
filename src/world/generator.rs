@@ -2,18 +2,19 @@ mod foundation;
 
 use std::sync::Arc;
 
-use crate::{content::dimension::DimensionDefinition, world::WorldSeed};
+use crate::content::dimension::DimensionDefinition;
 
 pub(crate) use foundation::{
-    GenerationDimension, GenerationDomain, GenerationSnapshot, SampleArea2d, SampleGrid2d,
+    GenerationDimension, GenerationDomain, GenerationPoint2, GenerationPoint3, GenerationSeed,
+    GenerationSnapshot, SampleArea2d, SampleGrid2d,
 };
 use foundation::GenerationEntropy;
 
 /// Immutable entry point for deterministic generated-world queries.
 ///
-/// This object deliberately owns no runtime world, chunk residency, persistence,
-/// rendering, or task state. Later generation layers compose their specialized
-/// query owners behind this facade while sharing the same immutable snapshot.
+/// The rebuild owns this state completely. It deliberately does not reuse the
+/// legacy world seed, dimension runtime identity, coordinate wrappers, hashing,
+/// chunk residency, persistence, rendering, or task state.
 #[derive(Clone, Debug)]
 pub(crate) struct WorldGenerator {
     snapshot: Arc<GenerationSnapshot>,
@@ -21,7 +22,7 @@ pub(crate) struct WorldGenerator {
 }
 
 impl WorldGenerator {
-    pub(crate) fn new(seed: WorldSeed, dimension: &DimensionDefinition) -> Self {
+    pub(crate) fn new(seed: GenerationSeed, dimension: &DimensionDefinition) -> Self {
         Self::from_snapshot(GenerationSnapshot::new(
             seed,
             GenerationDimension::from_definition(dimension),
@@ -38,9 +39,8 @@ impl WorldGenerator {
         &self.snapshot
     }
 
-    /// Foundation-only deterministic entropy. Domain owners consume this;
-    /// external gameplay/query consumers must use the specialized capability
-    /// that owns the generated fact instead of reconstructing it from entropy.
+    /// Foundation-only deterministic entropy. Later biome/terrain/structure
+    /// owners consume this internally; gameplay consumers never do.
     pub(super) fn entropy(&self) -> &GenerationEntropy {
         &self.entropy
     }
@@ -49,12 +49,11 @@ impl WorldGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::dimension::DimensionId;
 
     fn test_generator(seed: u64, dimension_id: &str) -> WorldGenerator {
         WorldGenerator::from_snapshot(GenerationSnapshot::new(
-            WorldSeed(seed),
-            GenerationDimension::new(DimensionId::from(dimension_id), 64, 1.0),
+            GenerationSeed::new(seed),
+            GenerationDimension::new(dimension_id, 64, 1.0),
         ))
     }
 
@@ -65,7 +64,7 @@ mod tests {
 
         let generator = test_generator(7, "asteria:test");
         let clone = generator.clone();
-        assert_eq!(generator.snapshot().seed().0, clone.snapshot().seed().0);
+        assert_eq!(generator.snapshot().seed(), clone.snapshot().seed());
         assert_eq!(
             generator.snapshot().dimension().id(),
             clone.snapshot().dimension().id()
@@ -77,7 +76,7 @@ mod tests {
         let generator = test_generator(9_001, "asteria:test");
         let clone = generator.clone();
         let domain = GenerationDomain::named("phase2-test");
-        let point = bevy::prelude::IVec2::new(-987_654, 1_234_567);
+        let point = GenerationPoint2::new(-987_654, 1_234_567);
 
         assert_eq!(
             generator.entropy().sample_2d(domain, point),
