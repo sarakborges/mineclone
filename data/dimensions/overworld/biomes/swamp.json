@@ -14,7 +14,8 @@
       "block": "asteria:grass_block",
       "alternates": [
         "asteria:dirt",
-        "asteria:mud"
+        "asteria:mud",
+        "asteria:water"
       ],
       "patchScale": 0.13,
       "depth": 1

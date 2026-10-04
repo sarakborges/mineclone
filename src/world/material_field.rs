@@ -91,9 +91,24 @@ pub(crate) fn solid_block_id(
         }
     }
 
+    surface_material_id(surface, surface_materials, biome_field.seed())
+        .map(intern_block_id)
+        .unwrap_or_else(|| {
+            panic!(
+                "surface biome sample did not resolve a material at depth {}",
+                surface.depth
+            )
+        })
+}
+
+pub(crate) fn surface_material_id<'a>(
+    surface: SurfaceMaterialSample,
+    surface_materials: &SurfaceMaterialColumn<'a>,
+    seed: u64,
+) -> Option<&'a str> {
     // Surface layers are horizontal cover. On a cliff/steep mountain edge,
     // expose the biome's deepest authored substrate instead of wrapping grass,
-    // dirt, sand, or another shallow surface layer down the wall.
+    // dirt, sand, fluid, or another shallow surface material down the wall.
     let material_depth = if surface.steep {
         u32::MAX
     } else {
@@ -103,26 +118,19 @@ pub(crate) fn solid_block_id(
         surface_materials,
         material_depth,
         surface.position,
-        biome_field.seed(),
+        seed,
     );
-    let resolved_material = if !surface.steep && surface.depth > 0 {
+    if !surface.steep && surface.depth > 0 {
         strongest_surface_material(
             surface_materials,
-            irregular_layer_depth(surface.position, surface.depth, biome_field.seed()),
+            irregular_layer_depth(surface.position, surface.depth, seed),
             surface.position,
-            biome_field.seed(),
+            seed,
         )
         .or(base_material)
     } else {
         base_material
-    };
-
-    resolved_material.map(intern_block_id).unwrap_or_else(|| {
-        panic!(
-            "surface biome sample did not resolve a material at depth {}",
-            surface.depth
-        )
-    })
+    }
 }
 
 fn strongest_surface_material<'a>(

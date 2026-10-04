@@ -1,6 +1,10 @@
 use serde::Deserialize;
 
-use super::{biome::BiomeDefinition, block::BlockRegistry};
+use super::{
+    biome::{BiomeDefinition, BiomeKind},
+    block::BlockRegistry,
+    fluid::FluidRegistry,
+};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,40 +80,32 @@ impl BiomeDefinition {
         }
     }
 
-    pub(crate) fn validate_material_references(&self, blocks: &BlockRegistry) {
-        for layer in &self.surface_layers {
-            assert!(
-                blocks.get(&layer.block).is_some(),
-                "biome {} surface layer references missing block: {}",
-                self.id,
-                layer.block
+    pub(crate) fn validate_material_references(
+        &self,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+    ) {
+        for (index, layer) in self.surface_layers.iter().enumerate() {
+            validate_layer_material_references(
+                self,
+                layer,
+                index,
+                "surfaceLayers",
+                blocks,
+                fluids,
             );
-            for alternate in &layer.alternates {
-                assert!(
-                    blocks.get(alternate).is_some(),
-                    "biome {} surface layer references missing alternate block: {}",
-                    self.id,
-                    alternate
-                );
-            }
         }
 
         if let Some(margin) = &self.surface_margin {
-            for layer in &margin.surface_layers {
-                assert!(
-                    blocks.get(&layer.block).is_some(),
-                    "biome {} surface margin references missing block: {}",
-                    self.id,
-                    layer.block
+            for (index, layer) in margin.surface_layers.iter().enumerate() {
+                validate_layer_material_references(
+                    self,
+                    layer,
+                    index,
+                    "surfaceMargin.surfaceLayers",
+                    blocks,
+                    fluids,
                 );
-                for alternate in &layer.alternates {
-                    assert!(
-                        blocks.get(alternate).is_some(),
-                        "biome {} surface margin references missing alternate block: {}",
-                        self.id,
-                        alternate
-                    );
-                }
             }
         }
 
@@ -120,6 +116,37 @@ impl BiomeDefinition {
                 self.id
             );
         }
+    }
+}
+
+fn validate_layer_material_references(
+    biome: &BiomeDefinition,
+    layer: &BiomeMaterialLayer,
+    layer_index: usize,
+    field: &str,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) {
+    for material in std::iter::once(&layer.block).chain(layer.alternates.iter()) {
+        if blocks.get(material).is_some() {
+            continue;
+        }
+
+        assert!(
+            fluids.id_of(material).is_some(),
+            "biome {} {field}[{layer_index}] references missing block or fluid: {material}",
+            biome.id
+        );
+        assert!(
+            biome.kind == BiomeKind::Surface,
+            "biome {} {field}[{layer_index}] fluid material {material} is only valid for surface biomes",
+            biome.id
+        );
+        assert!(
+            layer_index == 0 && layer.depth == Some(1),
+            "biome {} {field}[{layer_index}] fluid material {material} must be in a one-voxel top surface layer",
+            biome.id
+        );
     }
 }
 

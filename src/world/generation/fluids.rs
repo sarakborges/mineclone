@@ -16,6 +16,10 @@ use crate::{
         biome_field::BiomeField,
         deterministic::{hash_string, mix_seed},
         generation::GenerationColumnSample,
+        material_field::{
+            SurfaceMaterialColumn, SurfaceMaterialSample, resolve_surface_material_column,
+            surface_material_id,
+        },
         noise::fractal_noise_2d,
         terrain::surface_height_from_sample,
     },
@@ -92,6 +96,7 @@ pub(super) fn rasterize_fluid_pass(
         .id_of(pass.sea_fluid)
         .unwrap_or_else(|| panic!("dimension references missing seaFluid: {}", pass.sea_fluid));
     let mut placements = Vec::<([u8; 3], FluidCell, bool)>::new();
+    let mut surface_materials = SurfaceMaterialColumn::default();
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -109,11 +114,43 @@ pub(super) fn rasterize_fluid_pass(
                 .flatten();
 
             for local_y in 0..CHUNK_SIZE {
-                if density[voxel_index(local_x, local_y, local_z)] > 0.0 {
+                let index = voxel_index(local_x, local_y, local_z);
+                let world_y = chunk_origin.y + local_y as i32;
+                if density[index] > 0.0 {
+                    if world_y == column.surface_height - 1
+                        && chunk.cell_at_local(local_x, local_y, local_z).is_none()
+                    {
+                        resolve_surface_material_column(
+                            &column.surface_influences,
+                            column.surface_margin_index,
+                            pass.biome_field,
+                            pass.biomes,
+                            &mut surface_materials,
+                        );
+                        let material = surface_material_id(
+                            SurfaceMaterialSample {
+                                position: Vec3::new(
+                                    world_x as f32 + 0.5,
+                                    world_y as f32 + 0.5,
+                                    world_z as f32 + 0.5,
+                                ),
+                                depth: 0,
+                                steep: column.steep_surface,
+                            },
+                            &surface_materials,
+                            pass.biome_field.seed(),
+                        );
+                        if let Some(fluid_id) = material.and_then(|id| pass.fluids.id_of(id)) {
+                            placements.push((
+                                [local_x as u8, local_y as u8, local_z as u8],
+                                FluidCell::source(fluid_id, MAX_FLUID_LEVEL),
+                                false,
+                            ));
+                        }
+                    }
                     continue;
                 }
 
-                let world_y = chunk_origin.y + local_y as i32;
                 let (fluid, static_sea) = if let Some(authored) =
                     authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
                 {
