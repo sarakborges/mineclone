@@ -116,15 +116,7 @@ fn log_loading_diagnostics(
 
 fn loading_step_detail(state: &super::WorldLoadingState, step: WorldLoadingStep) -> String {
     match step {
-        WorldLoadingStep::BiomeMap
-        | WorldLoadingStep::TerrainColumns
-        | WorldLoadingStep::VolumeBiomes
-        | WorldLoadingStep::DensityField
-        | WorldLoadingStep::Materials
-        | WorldLoadingStep::InitialFluids
-        | WorldLoadingStep::Structures
-        | WorldLoadingStep::SurfaceObjects
-        | WorldLoadingStep::ChunkIntegration => format!(
+        WorldLoadingStep::Generating => format!(
             "generated={}/{} cursor={}",
             state.generated,
             state.total(),
