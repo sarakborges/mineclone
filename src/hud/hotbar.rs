@@ -5,7 +5,7 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         block::BlockRegistry,
-        builtin_ids::{BUCKET_FLUID_METADATA_KEY, WATER_FLUID_ID},
+        builtin_ids::BUCKET_FLUID_METADATA_KEY,
         item::{ItemRegistry, display_name},
         layer::LayerRegistry,
         object::ObjectRegistry,
@@ -14,7 +14,7 @@ use crate::{
     },
     hud::{
         block_icon::BlockIconMaterial,
-        item_icon::{HudBlockIcon, HudItemIconView, spawn_hud_item_icon},
+        item_icon::{HudBlockIcon, HudItemIconView, spawn_hud_item_icon, stack_image_override},
         item_stack_count::spawn_item_stack_count,
     },
     localization::ActiveLanguage,
@@ -33,21 +33,6 @@ use crate::{
 const SLOT_SIZE: f32 = 44.0;
 const ITEM_ICON_SIZE: f32 = 34.0;
 const BUCKET_TOOL_ID: &str = "asteria:bucket";
-const LAVA_FLUID_ID: &str = "asteria:lava";
-const BUCKET_EMPTY_ICON: &str = "textures/tools/iron_bucket_empty.png";
-const BUCKET_WATER_ICON: &str = "textures/tools/iron_bucket_water.png";
-const BUCKET_LAVA_ICON: &str = "textures/tools/iron_bucket_lava.png";
-
-fn bucket_icon_for_stack(stack: &ItemStack) -> Option<&'static str> {
-    if stack.id() != BUCKET_TOOL_ID {
-        return None;
-    }
-    Some(match stack.metadata().get(BUCKET_FLUID_METADATA_KEY) {
-        Some(WATER_FLUID_ID) => BUCKET_WATER_ICON,
-        Some(LAVA_FLUID_ID) => BUCKET_LAVA_ICON,
-        _ => BUCKET_EMPTY_ICON,
-    })
-}
 
 fn stack_display_name(stack: &ItemStack, base_name: &str) -> String {
     if stack.id() != BUCKET_TOOL_ID {
@@ -77,7 +62,7 @@ struct HotbarSlot {
     index: usize,
     item: Option<&'static str>,
     quantity: u32,
-    bucket_icon: Option<&'static str>,
+    image_override: Option<String>,
 }
 
 #[derive(Default)]
@@ -225,14 +210,16 @@ fn spawn_hotbar(
                     let stack = content.hotbar.stack_at(index);
                     let item = stack.map(ItemStack::id);
                     let quantity = stack.map_or(0, ItemStack::quantity);
-                    let bucket_icon = stack.and_then(bucket_icon_for_stack);
+                    let image_override = stack
+                        .and_then(|stack| stack_image_override(stack, &content.items))
+                        .map(str::to_owned);
 
                     row.spawn((
                         HotbarSlot {
                             index,
                             item,
                             quantity,
-                            bucket_icon,
+                            image_override: image_override.clone(),
                         },
                         Node {
                             width: px(SLOT_SIZE),
@@ -253,7 +240,7 @@ fn spawn_hotbar(
                                 stack.id(),
                                 &mut items,
                                 ITEM_ICON_SIZE,
-                                bucket_icon,
+                                image_override.as_deref(),
                                 Some(index),
                             );
                             spawn_item_stack_count(slot, quantity);
@@ -348,10 +335,12 @@ fn sync_hotbar(
         let next_stack = content.hotbar.stack_at(slot.index);
         let next_item = next_stack.map(ItemStack::id);
         let next_quantity = next_stack.map_or(0, ItemStack::quantity);
-        let next_bucket_icon = next_stack.and_then(bucket_icon_for_stack);
+        let next_image_override = next_stack
+            .and_then(|stack| stack_image_override(stack, &content.items))
+            .map(str::to_owned);
         if slot.item == next_item
             && slot.quantity == next_quantity
-            && slot.bucket_icon == next_bucket_icon
+            && slot.image_override == next_image_override
             && !language_changed
         {
             continue;
@@ -364,7 +353,7 @@ fn sync_hotbar(
         }
         slot.item = next_item;
         slot.quantity = next_quantity;
-        slot.bucket_icon = next_bucket_icon;
+        slot.image_override = next_image_override.clone();
 
         let Some(stack) = next_stack else {
             continue;
@@ -375,7 +364,7 @@ fn sync_hotbar(
                 stack.id(),
                 &mut items,
                 ITEM_ICON_SIZE,
-                next_bucket_icon,
+                next_image_override.as_deref(),
                 Some(slot.index),
             );
             spawn_item_stack_count(slot_node, next_quantity);
