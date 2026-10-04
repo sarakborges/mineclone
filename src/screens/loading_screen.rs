@@ -306,68 +306,31 @@ fn loading_step_label(
     language: Language,
     step: WorldLoadingStep,
 ) -> String {
-    let translated = match (language, step) {
-        (Language::English, WorldLoadingStep::BiomeMap) => "Biome map",
-        (Language::English, WorldLoadingStep::TerrainColumns) => "Terrain columns",
-        (Language::English, WorldLoadingStep::VolumeBiomes) => "Volume biomes",
-        (Language::English, WorldLoadingStep::DensityField) => "Density field",
-        (Language::English, WorldLoadingStep::Materials) => "Material rasterization",
-        (Language::English, WorldLoadingStep::InitialFluids) => "Initial fluid rasterization",
-        (Language::English, WorldLoadingStep::Structures) => "Structures",
-        (Language::English, WorldLoadingStep::SurfaceObjects) => "Surface objects",
-        (Language::English, WorldLoadingStep::ChunkIntegration) => "Chunk integration",
-        (Language::PortugueseBrazil, WorldLoadingStep::BiomeMap) => "Mapa de biomas",
-        (Language::PortugueseBrazil, WorldLoadingStep::TerrainColumns) => "Colunas de terreno",
-        (Language::PortugueseBrazil, WorldLoadingStep::VolumeBiomes) => "Biomas volumétricos",
-        (Language::PortugueseBrazil, WorldLoadingStep::DensityField) => "Campo de densidade",
-        (Language::PortugueseBrazil, WorldLoadingStep::Materials) => "Rasterização de materiais",
-        (Language::PortugueseBrazil, WorldLoadingStep::InitialFluids) => {
-            "Rasterização inicial de fluidos"
-        }
-        (Language::PortugueseBrazil, WorldLoadingStep::Structures) => "Estruturas",
-        (Language::PortugueseBrazil, WorldLoadingStep::SurfaceObjects) => "Objetos de superfície",
-        (Language::PortugueseBrazil, WorldLoadingStep::ChunkIntegration) => "Integração de chunks",
-        (Language::Spanish, WorldLoadingStep::BiomeMap) => "Mapa de biomas",
-        (Language::Spanish, WorldLoadingStep::TerrainColumns) => "Columnas de terreno",
-        (Language::Spanish, WorldLoadingStep::VolumeBiomes) => "Biomas volumétricos",
-        (Language::Spanish, WorldLoadingStep::DensityField) => "Campo de densidad",
-        (Language::Spanish, WorldLoadingStep::Materials) => "Rasterización de materiales",
-        (Language::Spanish, WorldLoadingStep::InitialFluids) => "Rasterización inicial de fluidos",
-        (Language::Spanish, WorldLoadingStep::Structures) => "Estructuras",
-        (Language::Spanish, WorldLoadingStep::SurfaceObjects) => "Objetos de superficie",
-        (Language::Spanish, WorldLoadingStep::ChunkIntegration) => "Integración de chunks",
-        (_, WorldLoadingStep::SettlingFluids) => {
-            return localization
-                .text(language, "loading.phase.settlingFluids")
-                .to_owned();
-        }
-        (_, WorldLoadingStep::Lighting) => {
-            return localization
-                .text(language, "loading.phase.lighting")
-                .to_owned();
-        }
-        (_, WorldLoadingStep::Meshing) => {
-            return localization
-                .text(language, "loading.phase.meshing")
-                .to_owned();
-        }
-        (_, WorldLoadingStep::Assets) => {
-            return localization
-                .text(language, "loading.phase.assets")
-                .to_owned();
-        }
-        (_, WorldLoadingStep::Finalizing) => {
-            return localization
-                .text(language, "loading.phase.finalizing")
-                .to_owned();
-        }
-        (_, WorldLoadingStep::Spawning) => {
-            return localization
-                .text(language, "loading.phase.presentation")
-                .to_owned();
-        }
-    };
-    translated.to_owned()
+    match step {
+        WorldLoadingStep::Generating => match language {
+            Language::English => "Generating initial area".to_owned(),
+            Language::PortugueseBrazil => "Gerando área inicial".to_owned(),
+            Language::Spanish => "Generando área inicial".to_owned(),
+        },
+        WorldLoadingStep::SettlingFluids => localization
+            .text(language, "loading.phase.settlingFluids")
+            .to_owned(),
+        WorldLoadingStep::Lighting => localization
+            .text(language, "loading.phase.lighting")
+            .to_owned(),
+        WorldLoadingStep::Meshing => localization
+            .text(language, "loading.phase.meshing")
+            .to_owned(),
+        WorldLoadingStep::Assets => localization
+            .text(language, "loading.phase.assets")
+            .to_owned(),
+        WorldLoadingStep::Finalizing => localization
+            .text(language, "loading.phase.finalizing")
+            .to_owned(),
+        WorldLoadingStep::Spawning => localization
+            .text(language, "loading.phase.presentation")
+            .to_owned(),
+    }
 }
 
 fn phase_text_color(status: WorldLoadingPhaseStatus) -> Color {
