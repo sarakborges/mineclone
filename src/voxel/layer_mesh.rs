@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 
 use crate::content::{
     block::{BlockLookup, BlockRegistry},
-    layer::{LayerDefinition, LayerRegistry},
+    layer::{LayerAnchor, LayerDefinition, LayerRegistry},
 };
 
 use super::{
@@ -96,11 +96,6 @@ where
             }
 
             let face = block_face(attached.face);
-            let stack_index = attached_layers[..order]
-                .iter()
-                .filter(|earlier| earlier.face == attached.face)
-                .count();
-            let outward_offset = definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
             let face_index = block_face_index(face);
             let lighting = if let Some(lighting) = lighting_by_face[face_index] {
                 lighting
@@ -116,6 +111,26 @@ where
                 lighting
             };
             let tint = tint_at(world_voxel, definition);
+
+            if definition.anchor == LayerAnchor::Center {
+                emit_centered_layer(
+                    &mut buffers,
+                    local_voxel,
+                    attached.cell.layer_id,
+                    attached.cell.texture_rotation,
+                    face,
+                    definition,
+                    tint,
+                    lighting,
+                );
+                continue;
+            }
+
+            let stack_index = attached_layers[..order]
+                .iter()
+                .filter(|earlier| earlier.face == attached.face)
+                .count();
+            let outward_offset = definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
 
             if MicroblockMask::has_partial_geometry(support_cell) {
                 emit_sculpted_layer(
@@ -185,6 +200,44 @@ where
         .collect::<Vec<_>>();
     meshes.sort_by_key(|mesh| (mesh.layer_id, mesh.casts_shadow));
     meshes
+}
+
+fn emit_centered_layer(
+    buffers: &mut LayerMeshBuffers,
+    local_voxel: IVec3,
+    layer_id: &'static str,
+    texture_rotation: TextureRotation,
+    face: BlockFace,
+    definition: &LayerDefinition,
+    tint: [f32; 3],
+    lighting: super::mesh_lighting::FaceLighting,
+) {
+    let origin = local_voxel.as_vec3();
+    let normal = Vec3::from_array(face.normal());
+    let vertices = face.unit_vertices().map(|vertex| {
+        (Vec3::from_array(vertex) + origin - normal * 0.5).to_array()
+    });
+    let uvs = texture_rotation.rotate_uvs(VOXEL_FACE_UVS);
+
+    push_lit_quad(
+        layer_buffer(buffers, layer_id, definition),
+        vertices,
+        face.normal(),
+        uvs,
+        tint,
+        lighting,
+        0.0,
+    );
+
+    push_lit_quad(
+        layer_buffer(buffers, layer_id, definition),
+        [vertices[0], vertices[3], vertices[2], vertices[1]],
+        (-normal).to_array(),
+        [uvs[0], uvs[3], uvs[2], uvs[1]],
+        tint,
+        lighting,
+        0.0,
+    );
 }
 
 #[expect(
