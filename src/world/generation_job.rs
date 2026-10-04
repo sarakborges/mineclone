@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::voxel::{chunk::VoxelChunk, coordinates::ChunkCoord};
 
-use super::{generation::generate_chunk, generation_snapshot::GenerationSnapshot};
+use super::{
+    generation::{ChunkGenerationPassTimings, generate_chunk, generate_chunk_profiled},
+    generation_snapshot::GenerationSnapshot,
+};
 
 /// Immutable, scheduler-independent unit of chunk generation work.
 ///
@@ -22,6 +25,11 @@ impl ChunkGenerationJob {
     pub(crate) fn run(self) -> VoxelChunk {
         let context = self.snapshot.context();
         generate_chunk(self.coord.as_ivec3(), &context)
+    }
+
+    pub(crate) fn run_profiled(self) -> (VoxelChunk, ChunkGenerationPassTimings) {
+        let context = self.snapshot.context();
+        generate_chunk_profiled(self.coord.as_ivec3(), &context)
     }
 }
 
