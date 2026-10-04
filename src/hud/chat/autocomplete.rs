@@ -246,7 +246,7 @@ impl AutocompleteCatalog<'_> {
             .filter(|structure| id_matches_query(&structure.id, prefix))
             .map(|structure| Suggestion {
                 value: structure.id.clone(),
-                description: structure.name.text(self.language.get()).to_owned(),
+                description: "Structure".to_owned(),
             })
             .collect::<Vec<_>>();
 
@@ -255,12 +255,9 @@ impl AutocompleteCatalog<'_> {
                 .group_references()
                 .filter(|(_, structure, _)| !locatable_only || structure.locatable)
                 .filter(|(reference, _, _)| id_matches_query(reference, prefix))
-                .map(|(reference, structure, count)| Suggestion {
+                .map(|(reference, _, count)| Suggestion {
                     value: reference.to_owned(),
-                    description: format!(
-                        "{} ({count} variations)",
-                        structure.name.text(self.language.get())
-                    ),
+                    description: format!("Structure group ({count} variations)"),
                 }),
         );
         values.extend(
