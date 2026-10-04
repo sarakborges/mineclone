@@ -367,9 +367,8 @@ mod tests {
                 LayerFace::Front => IVec3::Z,
                 _ => unreachable!("portal test planes only use canonical positive faces"),
             };
-            if (voxel - origin).dot(normal).abs() > 0 {
-                PortalCell::Unloaded
-            } else if (voxel - origin).abs().max_element() > 8 {
+            let delta = voxel - origin;
+            if delta.dot(normal) != 0 || delta.abs().max_element() > 8 {
                 PortalCell::Unloaded
             } else {
                 PortalCell::Empty
