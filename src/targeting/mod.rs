@@ -7,7 +7,7 @@ mod mining_visual;
 mod placement;
 mod placement_orientation;
 mod placement_preview;
-pub(crate) mod portal_activation;
+mod portal_activation;
 mod scene;
 
 pub(crate) use interaction::ToolUse;
@@ -15,3 +15,7 @@ pub(crate) use mining::BlockMiningState;
 pub(crate) use placement::placement_voxel;
 pub(crate) use placement_orientation::PlacementOrientation;
 pub(crate) use scene::{BlockTargetingScene, BlockTargetingVisualSnapshot};
+
+pub(crate) fn portal_activation_plugin() -> impl bevy::prelude::Plugin {
+    portal_activation::PortalActivationPlugin
+}
