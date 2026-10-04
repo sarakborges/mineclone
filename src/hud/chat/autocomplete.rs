@@ -433,19 +433,16 @@ pub(super) struct AutocompleteContent<'w> {
 }
 
 impl AutocompleteContent<'_> {
-    fn catalog(&self) -> AutocompleteCatalog<'_> {
-        AutocompleteCatalog {
+    fn catalog(&self) -> Option<AutocompleteCatalog<'_>> {
+        Some(AutocompleteCatalog {
             creatures: &self.creatures,
             biomes: &self.biomes,
-            current_dimension: self
-                .dimension
-                .definition()
-                .expect("current dimension definition must exist during gameplay"),
+            current_dimension: self.dimension.definition()?,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
             dimensions: &self.dimensions,
             language: &self.language,
-        }
+        })
     }
 }
 
@@ -464,7 +461,10 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    let catalog = content.catalog();
+    let Some(catalog) = content.catalog() else {
+        autocomplete.set_suggestions(0..0, Vec::new());
+        return;
+    };
     let player_position = player.single().ok().map(|transform| {
         (transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT)
             .floor()
