@@ -9,7 +9,7 @@ use super::{
         direction_label,
     },
     coordinates::CoordinatesHudText,
-    named::{BiomeHudText, DimensionHudText},
+    named::DimensionHudText,
 };
 
 pub(super) fn spawn_world_hud(mut commands: Commands) {
@@ -33,12 +33,6 @@ pub(super) fn spawn_world_hud(mut commands: Commands) {
                     TextLayout::justify(Justify::Center),
                     typography::tooltip_shadow(),
                     DimensionHudText,
-                ));
-                banner.spawn((
-                    typography::hud_subheading(""),
-                    TextLayout::justify(Justify::Center),
-                    typography::tooltip_shadow(),
-                    BiomeHudText,
                 ));
                 banner.spawn((
                     typography::hud(""),
