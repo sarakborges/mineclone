@@ -83,10 +83,13 @@ pub(super) fn rasterize_material_pass(
                     } else {
                         resolved_block_id
                     };
-                    let block = context
-                        .blocks
-                        .get(block_id)
-                        .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
+                    let Some(block) = context.blocks.get(block_id) else {
+                        debug_assert_eq!(
+                            surface_sample.depth, 0,
+                            "validated fluid surface material must only replace the top terrain voxel"
+                        );
+                        continue;
+                    };
                     let rotation =
                         TextureRotation::for_position(world_position, block.rotate_texture.any());
                     let cell = VoxelCell::new(block_id, rotation);
