@@ -406,8 +406,6 @@ fn test_fluids() -> FluidRegistry {
         name: localized_text(WATER_ID),
         color: Hsi::new(240.0, 1.0, 1.0),
         light_color: None,
-        biome_tint: false,
-        biome_immersion_tint: false,
         opacity: 0.5,
         roughness: 0.0,
         metallic: 0.0,

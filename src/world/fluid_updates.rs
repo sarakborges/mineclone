@@ -1,6 +1,4 @@
 mod diagnostics;
-mod frontier;
-mod settling;
 mod solver;
 mod state;
 
@@ -16,9 +14,6 @@ use crate::{
     },
 };
 
-pub(in crate::world) use self::settling::{
-    GeneratedFluidSettling, GeneratedFluidSettlingCompletion,
-};
 pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use self::{
     diagnostics::FluidPerformanceDiagnostics,
@@ -38,6 +33,25 @@ const FLUID_CATCHUP_BUDGET: Duration = Duration::from_millis(3);
 const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
+
+/// Runtime handoff for one exposed empty neighbor of generated fluid.
+///
+/// Future chunk synthesis calls this only for generated-fluid frontier targets,
+/// never once per filled generated-fluid voxel. The normal runtime scheduler
+/// revalidates target eligibility before assigning the authored fluid delay, so
+/// publication and runtime simulation keep separate ownership.
+#[allow(dead_code)]
+pub(crate) fn enqueue_generated_fluid_frontier(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    fluid: &str,
+    position: IVec3,
+) {
+    let fluid_id = fluids
+        .id_of(fluid)
+        .unwrap_or_else(|| panic!("generated fluid frontier references missing fluid {fluid}"));
+    pending.enqueue_fluid(fluid_id, position);
+}
 
 #[derive(SystemParam)]
 pub(super) struct FluidSimulationRuntime<'w> {
@@ -176,9 +190,6 @@ fn process_due_fluid_ticks(
                 .streaming
                 .generated_fluid_settling_owns_mutation(coord)
         {
-            // Generated chunks and any already-published chunks temporarily
-            // owned by the settling closure are worldgen-owned. Reuse dormant
-            // scheduling; publication/final reconciliation reactivates them.
             runtime.pending.defer_unloaded(scheduled);
             continue;
         }
@@ -435,9 +446,6 @@ mod tests {
         assert!(!fluid_tick_target_can_change(&world, source));
         assert!(!fluid_tick_target_can_change(&world, solid));
         assert!(!fluid_tick_target_can_change(&world, IVec3::new(0, -1, 0)));
-
-        // Keep unloaded targets schedulable so existing dormant-tick semantics
-        // still carry edge propagation across streaming boundaries.
         assert!(fluid_tick_target_can_change(&world, IVec3::new(32, 2, 0),));
     }
 }

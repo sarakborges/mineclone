@@ -19,7 +19,6 @@ use super::{
 
 pub(crate) struct InactiveDimensionState {
     world: VoxelWorld,
-    spawn_biome: Option<String>,
     storage_boxes: StorageBoxStorage,
     fluid_updates: SavedFluidUpdates,
     creatures: Vec<SavedCreature>,
@@ -28,24 +27,21 @@ pub(crate) struct InactiveDimensionState {
 impl InactiveDimensionState {
     pub(crate) fn new(
         world: VoxelWorld,
-        spawn_biome: Option<String>,
         storage_boxes: StorageBoxStorage,
         fluid_updates: SavedFluidUpdates,
         creatures: Vec<SavedCreature>,
     ) -> Self {
         Self {
             world,
-            spawn_biome,
             storage_boxes,
             fluid_updates,
             creatures,
         }
     }
 
-    fn empty(spawn_biome: Option<String>) -> Self {
+    fn empty() -> Self {
         Self::new(
             VoxelWorld::default(),
-            spawn_biome,
             StorageBoxStorage::default(),
             SavedFluidUpdates::default(),
             Vec::new(),
@@ -54,10 +50,6 @@ impl InactiveDimensionState {
 
     pub(crate) fn world(&self) -> &VoxelWorld {
         &self.world
-    }
-
-    pub(crate) fn spawn_biome(&self) -> Option<&str> {
-        self.spawn_biome.as_deref()
     }
 
     pub(crate) fn storage_boxes(&self) -> &StorageBoxStorage {
@@ -76,14 +68,12 @@ impl InactiveDimensionState {
         self,
     ) -> (
         VoxelWorld,
-        Option<String>,
         StorageBoxStorage,
         SavedFluidUpdates,
         Vec<SavedCreature>,
     ) {
         (
             self.world,
-            self.spawn_biome,
             self.storage_boxes,
             self.fluid_updates,
             self.creatures,
@@ -153,19 +143,11 @@ impl DimensionRuntimeContext<'_, '_> {
         &self.world
     }
 
-    pub(crate) fn inactive_spawn_biome(&self, dimension_id: &str) -> Option<Option<&str>> {
-        self.inactive_dimensions
-            .get(dimension_id)
-            .map(InactiveDimensionState::spawn_biome)
-    }
-
     pub(crate) fn swap_to(
         &mut self,
         current_dimension: &DimensionId,
-        current_spawn_biome: Option<String>,
         target_dimension: &str,
-        new_target_spawn_biome: Option<String>,
-    ) -> io::Result<Option<String>> {
+    ) -> io::Result<()> {
         let current_fluid_updates = self
             .pending_fluids
             .capture_saved(self.world_tick.current_tick(), &self.fluids)?;
@@ -186,12 +168,11 @@ impl DimensionRuntimeContext<'_, '_> {
         let target_state = self
             .inactive_dimensions
             .take(target_dimension)
-            .unwrap_or_else(|| InactiveDimensionState::empty(new_target_spawn_biome));
+            .unwrap_or_else(InactiveDimensionState::empty);
 
         self.storage_boxes.close();
         let current_state = InactiveDimensionState::new(
             std::mem::take(&mut *self.world),
-            current_spawn_biome,
             std::mem::take(&mut *self.storage_boxes),
             current_fluid_updates,
             current_creatures,
@@ -199,13 +180,12 @@ impl DimensionRuntimeContext<'_, '_> {
         self.inactive_dimensions
             .insert(current_dimension.clone(), current_state);
 
-        let (world, spawn_biome, storage_boxes, _fluid_updates, creatures) =
-            target_state.into_parts();
+        let (world, storage_boxes, _fluid_updates, creatures) = target_state.into_parts();
         *self.world = world;
         *self.storage_boxes = storage_boxes;
         *self.pending_fluids = target_pending_fluids;
         *self.pending_creatures = PendingCreatureRestores::new(creatures);
 
-        Ok(spawn_biome)
+        Ok(())
     }
 }

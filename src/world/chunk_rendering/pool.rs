@@ -115,7 +115,6 @@ pub struct ChunkRenderPool {
     published_sources: HashMap<IVec3, ChunkPublishedPresentationSources>,
     total_mesh_bytes: usize,
     membership_revision: u64,
-    presentation_reset_revision: u64,
 }
 
 impl ChunkRenderPool {
@@ -129,10 +128,6 @@ impl ChunkRenderPool {
 
     pub(crate) fn membership_revision(&self) -> u64 {
         self.membership_revision
-    }
-
-    pub(crate) fn presentation_reset_revision(&self) -> u64 {
-        self.presentation_reset_revision
     }
 
     pub(crate) fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
@@ -149,28 +144,6 @@ impl ChunkRenderPool {
 
     pub(crate) fn entity_count(&self) -> usize {
         self.active.values().map(|slot| slot.entities.len()).sum()
-    }
-
-    pub(crate) fn diagnostic_mesh_kind_counts(&self) -> (usize, usize, usize, usize) {
-        let mut terrain_array = 0;
-        let mut terrain_legacy = 0;
-        let mut layers = 0;
-        let mut fluids = 0;
-
-        for key in self
-            .active
-            .values()
-            .flat_map(|allocation| allocation.mesh_keys.iter())
-        {
-            match key {
-                ChunkMeshKey::TerrainArray { .. } => terrain_array += 1,
-                ChunkMeshKey::TerrainLegacy { .. } => terrain_legacy += 1,
-                ChunkMeshKey::Layer { .. } => layers += 1,
-                ChunkMeshKey::Fluid(_) => fluids += 1,
-            }
-        }
-
-        (terrain_array, terrain_legacy, layers, fluids)
     }
 
     pub(crate) fn mesh_bytes(&self) -> usize {
@@ -196,28 +169,6 @@ impl ChunkRenderPool {
         self.active
             .get(&coord)
             .map_or(0, |allocation| allocation.mesh_bytes)
-    }
-
-    pub(crate) fn record_initial_presentation_sources(
-        &mut self,
-        coord: IVec3,
-        content: ChunkPresentationSource,
-        lighting: PresentationLightingSource,
-    ) {
-        self.record_presentation_sources(
-            coord,
-            ChunkRenderSectionKind::Terrain,
-            ChunkMeshletMask::ALL,
-            content,
-            lighting,
-        );
-        self.record_presentation_sources(
-            coord,
-            ChunkRenderSectionKind::Fluid,
-            ChunkMeshletMask::ALL,
-            content,
-            lighting,
-        );
     }
 
     pub(crate) fn record_terrain_presentation_sources(
@@ -684,7 +635,6 @@ impl ChunkRenderPool {
         if had_active_allocations {
             self.bump_membership_revision();
         }
-        self.bump_presentation_reset_revision();
 
         parts
     }
@@ -717,13 +667,6 @@ impl ChunkRenderPool {
             .membership_revision
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
-    }
-
-    fn bump_presentation_reset_revision(&mut self) {
-        self.presentation_reset_revision = self
-            .presentation_reset_revision
-            .checked_add(1)
-            .expect("chunk render pool presentation reset revision exhausted");
     }
 }
 

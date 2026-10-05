@@ -11,7 +11,7 @@ use crate::{
     app::game_state::GameState,
     content::object::{ObjectDefinition, ObjectVisualDefinition},
     rendering::{
-        block_tint::block_tint_at,
+        block_tint::block_tint,
         color::{MATERIAL_TINT_RGB_LEVELS, quantize_srgba},
         extruded_sprite::{
             ExtrudedSpriteAssetContext, ExtrudedSpriteAssetRequest, ExtrudedSpriteGeometry,
@@ -139,12 +139,7 @@ pub(super) fn build_world_object_chunk(
             continue;
         }
 
-        let tint = block_tint_at(
-            definition.tint,
-            Vec2::new(transform.translation.x, transform.translation.z),
-            &content.biome_field,
-            &content.biomes,
-        );
+        let tint = block_tint(definition.tint);
 
         let resolved =
             resolve_object_render_assets(definition, tint, content, assets, &mut primitive_meshes)?;

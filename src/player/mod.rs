@@ -1,3 +1,7 @@
+// Player restore/spawn entry points are temporarily dormant while Phase 1 has
+// no world activation path. The gameplay implementations remain intact for the
+// query-first spawn/warp integration instead of being replaced with legacy shims.
+#[allow(dead_code)]
 pub(crate) mod camera;
 pub(crate) mod character_info;
 pub(crate) mod game_mode;
@@ -7,8 +11,10 @@ pub(crate) mod inventory;
 pub(crate) mod item_stack;
 mod material;
 pub(crate) mod model;
+#[allow(dead_code)]
 pub(crate) mod movement;
 pub(crate) mod player_id;
+#[allow(dead_code)]
 pub(crate) mod save;
 pub(crate) mod skin_uv;
 pub(crate) mod viewmodel;
@@ -24,7 +30,8 @@ use crate::{
     content::player::PlayerDefinition,
     entity::EntityHealth,
     rendering::camera_stack::WORLD_CAMERA_ORDER,
-    voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
+    voxel::world::VoxelWorld,
+    world::{destination::find_generated_surface_destination, generator::WorldGenerator},
 };
 use camera::{GameplayCamera, GameplayWorldCamera};
 use game_mode::GameMode;
@@ -43,8 +50,10 @@ pub(crate) const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
 #[derive(Component, Default)]
 pub(crate) struct PlayerEntity;
 
+#[allow(dead_code)]
 const SPAWN_SEARCH_RADIUS_BLOCKS: i32 = 64;
 
+#[allow(dead_code)]
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     translation: Vec3,
@@ -106,6 +115,7 @@ pub(crate) fn spawn_player_entity(
         });
 }
 
+#[allow(dead_code)]
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
     let feet = translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let feet_voxel = feet.floor().as_ivec3();
@@ -119,57 +129,31 @@ pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) ->
         && world.fluid_at(head_voxel).is_none()
 }
 
+#[allow(dead_code)]
 pub(crate) fn find_safe_spawn_position(
-    world: &VoxelWorld,
+    generator: &WorldGenerator,
     preferred_column: IVec2,
-    mut accepts_column: impl FnMut(IVec2) -> bool,
+    accepts_column: impl FnMut(IVec2) -> bool,
 ) -> Option<Vec3> {
-    find_map_square_rings(preferred_column, SPAWN_SEARCH_RADIUS_BLOCKS, 1, |column| {
-        if !accepts_column(column) {
-            return None;
-        }
-
-        let feet_y = safe_surface_feet_y(world, column)?;
-        Some(Vec3::new(
-            column.x as f32 + 0.5,
-            feet_y as f32 + PLAYER_EYE_HEIGHT,
-            column.y as f32 + 0.5,
-        ))
-    })
+    let feet = find_generated_surface_destination(
+        generator,
+        preferred_column,
+        SPAWN_SEARCH_RADIUS_BLOCKS,
+        accepts_column,
+    )?;
+    Some(Vec3::new(
+        feet.x as f32 + 0.5,
+        feet.y as f32 + PLAYER_EYE_HEIGHT,
+        feet.z as f32 + 0.5,
+    ))
 }
 
-pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -> Vec3 {
-    find_safe_spawn_position(world, preferred_column, |_| true).unwrap_or_else(|| {
+#[allow(dead_code)]
+pub(crate) fn safe_spawn_position(generator: &WorldGenerator, preferred_column: IVec2) -> Vec3 {
+    find_safe_spawn_position(generator, preferred_column, |_| true).unwrap_or_else(|| {
         panic!(
             "could not find a safe generated player spawn within {} blocks of {:?}",
             SPAWN_SEARCH_RADIUS_BLOCKS, preferred_column
         )
     })
-}
-
-fn safe_surface_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
-    let highest_y = world.highest_loaded_world_y_in_column(column.x, column.y)?;
-
-    for support_y in (0..=highest_y).rev() {
-        let support = IVec3::new(column.x, support_y, column.y);
-        if !world.is_solid(support) {
-            continue;
-        }
-
-        let feet = support + IVec3::Y;
-        let head = feet + IVec3::Y;
-        if !world.is_loaded_at(head) {
-            continue;
-        }
-        if world.is_solid(feet) || world.is_solid(head) {
-            continue;
-        }
-        if world.fluid_at(feet).is_some() || world.fluid_at(head).is_some() {
-            continue;
-        }
-
-        return Some(feet.y);
-    }
-
-    None
 }

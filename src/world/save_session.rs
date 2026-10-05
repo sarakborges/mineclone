@@ -26,8 +26,6 @@ use crate::{
 };
 
 use super::{
-    InMemoryWorldSave,
-    biome::CurrentBiome,
     current_context::CurrentDimensionContext,
     day_night::DayNightClock,
     dimension::CurrentDimension,
@@ -134,8 +132,6 @@ struct WorldSnapshotState<'w> {
     seed: Res<'w, WorldSeed>,
     dimension: Res<'w, CurrentDimension>,
     rules: Res<'w, GameRules>,
-    save: Res<'w, InMemoryWorldSave>,
-    biome: Res<'w, CurrentBiome>,
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
     storage_boxes: Res<'w, StorageBoxStorage>,
@@ -196,12 +192,13 @@ impl WorldSaveEntities<'_, '_> {
     }
 
     fn saved_creatures(&self) -> Vec<SavedCreature> {
-        self.pending_creatures
-            .snapshot(self.creatures.iter().filter_map(
-                |(instance, transform, health, meta_tags)| {
+        self.pending_creatures.snapshot(
+            self.creatures
+                .iter()
+                .filter_map(|(instance, transform, health, meta_tags)| {
                     SavedCreature::from_runtime(instance, transform, health, meta_tags)
-                },
-            ))
+                }),
+        )
     }
 }
 
@@ -254,7 +251,6 @@ impl WorldSaveContext<'_, '_> {
                 sort_saved_creatures(&mut creatures);
                 SavedDimensionState {
                     dimension_id: dimension_id.to_owned(),
-                    spawn_biome: state.spawn_biome().map(str::to_owned),
                     storage_boxes: state.storage_boxes().saved_boxes(),
                     fluid_updates: state.fluid_updates().clone(),
                     creatures,
@@ -268,12 +264,8 @@ impl WorldSaveContext<'_, '_> {
             id,
             seed: self.state.seed.0,
             dimension_id: self.state.dimension.id.as_str(),
-            spawn_biome: self.state.save.spawn_biome(),
-            current_biome: Some(self.state.biome.id.as_str()),
-            biome_size_multiplier: self.state.save.biome_size_multiplier(),
             ticks_per_second: self.state.rules.ticks_per_second(),
             spawn_creatures: self.state.rules.spawn_creatures(),
-            world_generation: self.state.save.world_generation(),
             player: Some(self.entities.saved_player()?),
             day: self.state.clock.day,
             tick_in_day: self.state.clock.tick_in_day(),

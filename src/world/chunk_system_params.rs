@@ -1,18 +1,11 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::content::{
-    biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
-    fluid::FluidRegistry, layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
-    structure::StructureRegistry, structure_set::StructureSetRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+    secondary_property::SecondaryPropertyRegistry,
 };
 
-use super::{
-    biome_field::BiomeField,
-    chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials},
-    current_context::CurrentDimensionContext,
-    new_world::WorldGenerationSettings,
-    world_feature_fields::WorldFeatureFields,
-};
+use super::chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials};
 
 #[derive(SystemParam)]
 pub(crate) struct VoxelContent<'w> {
@@ -25,8 +18,6 @@ pub(crate) struct VoxelContent<'w> {
 #[derive(SystemParam)]
 pub(crate) struct ChunkContent<'w> {
     voxel: VoxelContent<'w>,
-    pub(crate) biomes: Res<'w, BiomeRegistry>,
-    pub(crate) biome_field: Res<'w, BiomeField>,
 }
 
 impl ChunkContent<'_> {
@@ -46,20 +37,11 @@ impl ChunkContent<'_> {
         &self.voxel.secondary_properties
     }
 
-    pub(crate) fn generation_inputs_changed(&self) -> bool {
-        self.voxel.blocks.is_changed()
-            || self.voxel.fluids.is_changed()
-            || self.biomes.is_changed()
-            || self.biome_field.is_changed()
-    }
-
     pub(crate) fn mesh_inputs_changed(&self) -> bool {
         self.voxel.blocks.is_changed()
             || self.voxel.layers.is_changed()
             || self.voxel.fluids.is_changed()
             || self.voxel.secondary_properties.is_changed()
-            || self.biomes.is_changed()
-            || self.biome_field.is_changed()
     }
 
     pub(crate) fn render_context<'a>(
@@ -73,37 +55,10 @@ impl ChunkContent<'_> {
             blocks: self.blocks(),
             layers: self.layers(),
             fluids: self.fluids(),
-            biomes: &self.biomes,
             secondary_properties: self.secondary_properties(),
-            biome_field: &self.biome_field,
             terrain_materials,
             fluid_materials,
         }
-    }
-}
-
-#[derive(SystemParam)]
-pub(crate) struct ChunkGeneration<'w> {
-    pub(crate) dimension: CurrentDimensionContext<'w>,
-    pub(crate) structures: Res<'w, StructureRegistry>,
-    pub(crate) structure_sets: Res<'w, StructureSetRegistry>,
-    pub(crate) world_generation: Res<'w, WorldGenerationSettings>,
-    pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
-}
-
-impl ChunkGeneration<'_> {
-    pub(crate) fn dimension(&self) -> &DimensionDefinition {
-        self.dimension
-            .definition()
-            .unwrap_or_else(|| panic!("missing dimension definition: {}", self.dimension.id()))
-    }
-
-    pub(crate) fn inputs_changed(&self) -> bool {
-        self.dimension.inputs_changed()
-            || self.structures.is_changed()
-            || self.structure_sets.is_changed()
-            || self.world_generation.is_changed()
-            || self.feature_fields.is_changed()
     }
 }
 

@@ -1,396 +1,465 @@
-use std::sync::Arc;
-
 use bevy::prelude::*;
 use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use self::validation::validate_biome_definition;
-use super::{
-    biome_density::BiomeDensityModifier,
-    biome_distribution::BiomeDistribution,
-    biome_material::BiomeMaterialLayer,
-    biome_sky_layer::BiomeSkyLayerVisuals,
-    biome_structure::{BiomeStructure, BiomeStructurePlacementRules},
-    biome_surface_fluid::BiomeSurfaceFluid,
-    biome_surface_margin::BiomeSurfaceMargin,
-    biome_terrain::BiomeTerrain,
-    biome_terrain_modifier::BiomeTerrainModifier,
-    block::BlockRegistry,
-    color::Hsi,
-    creature::CreatureRegistry,
-    day_night_phase::DayNightPhases,
-    fluid::FluidRegistry,
-    object::ObjectRegistry,
-    registry::DefinitionMap,
-};
+use super::registry::DefinitionMap;
 
-mod validation;
+const DEFAULT_BIOME_WEIGHT: f32 = 1.0;
+const DEFAULT_REGION_MIN: u32 = 384;
+const DEFAULT_REGION_MAX: u32 = 768;
+const MAX_REGION_SPAN: u32 = 16_384;
+const DEFAULT_TERRAIN_BASE_HEIGHT_OFFSET: f32 = 8.0;
+const DEFAULT_TERRAIN_MACRO_AMPLITUDE: f32 = 18.0;
+const DEFAULT_TERRAIN_MACRO_SCALE: u32 = 640;
+const DEFAULT_TERRAIN_DETAIL_AMPLITUDE: f32 = 4.0;
+const DEFAULT_TERRAIN_DETAIL_SCALE: u32 = 96;
+const MAX_TERRAIN_SCALE: u32 = 16_384;
+const MAX_TERRAIN_AMPLITUDE: f32 = 512.0;
+const MAX_TERRAIN_3D_VERTICAL_SPAN: i64 = 512;
+const MAX_FLOATING_ROUGHNESS: f32 = 0.5;
+const MAX_SURFACE_LAYER_DEPTH: u32 = 64;
+const MAX_SURFACE_PATCH_SPACING: u32 = 512;
+const MAX_SURFACE_PATCH_RADIUS: u32 = 256;
+const MAX_SURFACE_PATCH_BLOCKS: usize = 8;
+const DEFAULT_SURFACE_PATCH_CHANCE: f32 = 1.0;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BiomeKind {
-    #[default]
-    Surface,
-    Volume,
-}
-
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeClimateRange {
-    pub min: f32,
-    pub max: f32,
-}
-
-#[derive(Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeClimate {
-    #[serde(default)]
-    pub temperature: Option<BiomeClimateRange>,
-    #[serde(default)]
-    pub humidity: Option<BiomeClimateRange>,
-    #[serde(default)]
-    pub continentalness: Option<BiomeClimateRange>,
-    #[serde(default)]
-    pub erosion: Option<BiomeClimateRange>,
-}
-
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeVerticalRange {
-    pub min: f32,
-    pub max: f32,
-}
-
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeUnderwaterTint {
-    pub color: Hsi,
-    pub opacity: f32,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeVisuals {
-    pub sky_color: DayNightPhases<Hsi>,
-    pub fog_color: DayNightPhases<Hsi>,
-    #[serde(default = "default_vegetation_color")]
-    pub grass_color: Hsi,
-    #[serde(default = "default_vegetation_color")]
-    pub leaf_color: Hsi,
-    #[serde(default = "default_vegetation_color")]
-    pub foliage_color: Hsi,
-    #[serde(default)]
-    pub water_color: Option<Hsi>,
-    pub underwater_tint: BiomeUnderwaterTint,
-    #[serde(default)]
-    pub stars: BiomeSkyLayerVisuals,
-    #[serde(default)]
-    pub clouds: BiomeSkyLayerVisuals,
-    pub terrain_roughness: f32,
-    pub terrain_metallic: f32,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreatureSpawnRule {
-    pub creature: String,
-    #[serde(default = "default_spawn_weight")]
-    pub weight: f32,
-    #[serde(default)]
-    pub light_min: u8,
-    #[serde(default = "default_spawn_light_max")]
-    pub light_max: u8,
-    #[serde(default = "default_spawn_spacing")]
-    pub spacing: f32,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeObjectSpawnRule {
-    pub object: String,
-    pub spacing: i32,
-    pub chance: f32,
-    #[serde(default)]
-    pub jitter: i32,
-    #[serde(default = "default_object_cluster_min")]
-    pub cluster_min: u8,
-    #[serde(default = "default_object_cluster_max")]
-    pub cluster_max: u8,
-    #[serde(default)]
-    pub cluster_radius: i32,
-    #[serde(default)]
-    pub ground_blocks: Vec<String>,
-}
-
-fn default_object_cluster_min() -> u8 {
-    1
-}
-fn default_object_cluster_max() -> u8 {
-    1
-}
-
-impl BiomeObjectSpawnRule {
-    fn validate(&self, biome_id: &str) {
-        assert!(
-            self.spacing > 0,
-            "biome {biome_id} object spawn {} spacing must be positive",
-            self.object
-        );
-        assert!(
-            self.chance.is_finite() && (0.0..=1.0).contains(&self.chance),
-            "biome {biome_id} object spawn {} chance must be between 0 and 1",
-            self.object
-        );
-        assert!(
-            self.jitter >= 0 && (self.jitter as i64) * 2 < self.spacing as i64,
-            "biome {biome_id} object spawn {} jitter must be smaller than half its spacing",
-            self.object
-        );
-        assert!(
-            self.cluster_min > 0 && self.cluster_max >= self.cluster_min,
-            "biome {biome_id} object spawn {} cluster range is invalid",
-            self.object
-        );
-        assert!(
-            self.cluster_radius >= 0 && self.cluster_radius < self.spacing,
-            "biome {biome_id} object spawn {} clusterRadius must be non-negative and smaller than spacing",
-            self.object
-        );
-    }
-}
-
-fn default_spawn_weight() -> f32 {
-    1.0
-}
-fn default_spawn_light_max() -> u8 {
-    15
-}
-fn default_spawn_spacing() -> f32 {
-    16.0
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SurfaceBiomeSelector {
-    #[serde(default)]
-    pub ids: Vec<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-impl SurfaceBiomeSelector {
-    pub(crate) fn matches(&self, surface_id: &str, surface_tags: &[String]) -> bool {
-        self.ids.iter().any(|id| id == surface_id)
-            || self
-                .tags
-                .iter()
-                .any(|tag| surface_tags.iter().any(|candidate| candidate == tag))
-    }
-
-    pub(crate) fn validate(&self, biome_id: &str, field: &str) {
-        assert!(
-            !self.ids.is_empty() || !self.tags.is_empty(),
-            "biome {biome_id} {field} must define at least one id or tag"
-        );
-        for (index, id) in self.ids.iter().enumerate() {
-            assert!(
-                !id.trim().is_empty(),
-                "biome {biome_id} {field}.ids[{index}] cannot be empty"
-            );
-        }
-        for (index, tag) in self.tags.iter().enumerate() {
-            assert!(
-                !tag.trim().is_empty(),
-                "biome {biome_id} {field}.tags[{index}] cannot be empty"
-            );
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VolumeSurfaceConstraints {
-    #[serde(default)]
-    pub allow: Option<SurfaceBiomeSelector>,
-    #[serde(default)]
-    pub deny: Option<SurfaceBiomeSelector>,
-}
-
-impl VolumeSurfaceConstraints {
-    pub(crate) fn allows_surface(&self, surface_id: &str, surface_tags: &[String]) -> bool {
-        if self
-            .deny
-            .as_ref()
-            .is_some_and(|selector| selector.matches(surface_id, surface_tags))
-        {
-            return false;
-        }
-
-        self.allow
-            .as_ref()
-            .is_none_or(|selector| selector.matches(surface_id, surface_tags))
-    }
-
-    pub(crate) fn validate(&self, biome_id: &str) {
-        if let Some(allow) = &self.allow {
-            allow.validate(biome_id, "surfaceConstraints.allow");
-        }
-        if let Some(deny) = &self.deny {
-            deny.validate(biome_id, "surfaceConstraints.deny");
-        }
-    }
-}
-
+/// One biome identity in the shared biome universe.
+///
+/// Spatial placement is capability-owned. A biome participates in the 2D
+/// surface field only when `surfaceLayout` is authored. Future volume-layout
+/// authoring extends this same identity instead of creating a parallel biome
+/// type hierarchy.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
     pub name: LocalizedText,
     #[serde(default)]
-    pub kind: BiomeKind,
+    pub surface_layout: Option<SurfaceBiomeLayoutDefinition>,
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub surface_terrain: Option<SurfaceTerrainDefinition>,
     #[serde(default)]
-    pub surface_constraints: Option<VolumeSurfaceConstraints>,
-    #[serde(default = "default_biome_distributions")]
-    pub distributions: Vec<BiomeDistribution>,
+    pub surface_layers: Option<Vec<SurfaceLayerDefinition>>,
     #[serde(default)]
-    pub climate: BiomeClimate,
+    pub terrain_3d: Option<Terrain3dDefinition>,
+}
+
+/// Authored inputs owned exclusively by the 2D surface biome layout.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceBiomeLayoutDefinition {
+    #[serde(default = "default_biome_weight")]
+    pub weight: f32,
     #[serde(default)]
-    pub vertical_range: Option<BiomeVerticalRange>,
+    pub region_size: BiomeRegionSize,
     #[serde(default)]
-    pub priority: i32,
+    pub cannot_border: Vec<String>,
+}
+
+impl Default for SurfaceBiomeLayoutDefinition {
+    fn default() -> Self {
+        Self {
+            weight: default_biome_weight(),
+            region_size: BiomeRegionSize::default(),
+            cannot_border: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BiomeRegionSize {
+    pub min: u32,
+    pub max: u32,
+}
+
+impl Default for BiomeRegionSize {
+    fn default() -> Self {
+        Self {
+            min: DEFAULT_REGION_MIN,
+            max: DEFAULT_REGION_MAX,
+        }
+    }
+}
+
+/// Authored continuous base-surface profile for one surface biome.
+///
+/// The profile is interpreted by the terrain owner. It does not own biome
+/// placement, chunk generation, materials, caves, or 3D feature placement.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceTerrainDefinition {
+    #[serde(default = "default_terrain_base_height_offset")]
+    pub base_height_offset: f32,
+    #[serde(default = "default_terrain_macro_amplitude")]
+    pub macro_amplitude: f32,
+    #[serde(default = "default_terrain_macro_scale")]
+    pub macro_scale: u32,
+    #[serde(default = "default_terrain_detail_amplitude")]
+    pub detail_amplitude: f32,
+    #[serde(default = "default_terrain_detail_scale")]
+    pub detail_scale: u32,
+}
+
+impl Default for SurfaceTerrainDefinition {
+    fn default() -> Self {
+        Self {
+            base_height_offset: default_terrain_base_height_offset(),
+            macro_amplitude: default_terrain_macro_amplitude(),
+            macro_scale: default_terrain_macro_scale(),
+            detail_amplitude: default_terrain_detail_amplitude(),
+            detail_scale: default_terrain_detail_scale(),
+        }
+    }
+}
+
+/// Ordered generated solid-material layers for one surface biome.
+///
+/// Every finite layer owns `depth` voxels measured downward from the local
+/// exposed terrain surface. The final depthless layer is the core material.
+/// Terrain still owns solidity; these rules only classify already-solid voxels.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceLayerDefinition {
+    pub block: String,
     #[serde(default)]
-    pub terrain: Option<BiomeTerrain>,
+    pub depth: Option<u32>,
     #[serde(default)]
-    pub terrain_modifiers: Vec<BiomeTerrainModifier>,
+    pub patch: Option<SurfacePatchDefinition>,
+}
+
+/// Deterministic world-space patches that replace a finite surface layer's
+/// base block with one of the authored alternatives.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfacePatchDefinition {
+    pub spacing: u32,
+    pub radius: u32,
     #[serde(default)]
-    pub surface_fluid: Option<BiomeSurfaceFluid>,
+    pub jitter: u32,
+    #[serde(default = "default_surface_patch_chance")]
+    pub chance: f32,
+    pub blocks: Vec<String>,
+}
+
+/// Optional true-3D terrain contributions authored by a biome.
+///
+/// These rules are consumed by the single terrain-density owner. They do not
+/// create a second terrain field or redefine biome ownership.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Terrain3dDefinition {
     #[serde(default)]
-    pub surface_margin: Option<BiomeSurfaceMargin>,
-    #[serde(default)]
-    pub surface_layers: Vec<BiomeMaterialLayer>,
-    #[serde(default)]
-    pub density_modifier: Option<BiomeDensityModifier>,
-    #[serde(default)]
-    pub solid_block: Option<String>,
-    #[serde(default)]
-    pub structures: Vec<BiomeStructure>,
-    #[serde(default)]
-    pub creature_spawns: Vec<CreatureSpawnRule>,
-    #[serde(default)]
-    pub object_spawns: Vec<BiomeObjectSpawnRule>,
-    #[serde(default)]
-    pub visuals: Option<BiomeVisuals>,
+    pub floating_formation: Option<FloatingFormationDefinition>,
+}
+
+/// Bounded additive floating mass authored in absolute world Y.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FloatingFormationDefinition {
+    pub min_y: i32,
+    pub max_y: i32,
+    pub horizontal_scale: u32,
+    pub detail_scale: u32,
+    pub coverage: f32,
+    pub roughness: f32,
+    pub density_scale: f32,
 }
 
 impl BiomeDefinition {
-    pub fn visuals(&self) -> &BiomeVisuals {
-        self.visuals
-            .as_ref()
-            .unwrap_or_else(|| panic!("biome {} does not define visuals", self.id))
+    pub fn belongs_to_dimension(&self, dimension_id: &str) -> bool {
+        biome_dimension_components(&self.id).is_some_and(|(namespace, dimension)| {
+            dimension_components(dimension_id).is_some_and(
+                |(dimension_namespace, dimension_name)| {
+                    namespace == dimension_namespace && dimension == dimension_name
+                },
+            )
+        })
     }
 
-    pub(crate) fn validate_spawn_references(&self, creatures: &CreatureRegistry) {
-        for spawn in &self.creature_spawns {
+    pub fn validate_references(&self, biomes: &BiomeRegistry) {
+        let Some(surface) = &self.surface_layout else {
+            return;
+        };
+        let own_dimension = biome_dimension_components(&self.id)
+            .expect("validated biome id must contain a dimension");
+        for forbidden in &surface.cannot_border {
             assert!(
-                creatures.get(&spawn.creature).is_some(),
-                "biome {} references missing creature spawn: {}",
+                forbidden != &self.id,
+                "biome {} cannot forbid bordering itself",
+                self.id
+            );
+            let target = biomes.get(forbidden).unwrap_or_else(|| {
+                panic!(
+                    "biome {} surfaceLayout.cannotBorder references missing biome {}",
+                    self.id, forbidden
+                )
+            });
+            let target_dimension = biome_dimension_components(&target.id)
+                .expect("validated biome id must contain a dimension");
+            assert_eq!(
+                target_dimension, own_dimension,
+                "biome {} surfaceLayout.cannotBorder target {} belongs to a different dimension",
+                self.id, forbidden
+            );
+            assert!(
+                target.surface_layout.is_some(),
+                "biome {} surfaceLayout.cannotBorder target {} does not participate in the surface layout",
                 self.id,
-                spawn.creature
+                forbidden
             );
         }
     }
 
-    pub(crate) fn validate_object_spawn_references(
-        &self,
-        objects: &ObjectRegistry,
-        blocks: &BlockRegistry,
-    ) {
-        for spawn in &self.object_spawns {
-            spawn.validate(&self.id);
-            assert!(
-                objects.get(&spawn.object).is_some(),
-                "biome {} references missing object spawn: {}",
-                self.id,
-                spawn.object
-            );
-            for block in &spawn.ground_blocks {
-                assert!(
-                    blocks.get(block).is_some(),
-                    "biome {} object spawn {} references missing ground block: {}",
-                    self.id,
-                    spawn.object,
-                    block
-                );
-            }
-        }
+    pub(crate) fn surface_terrain_profile(&self) -> SurfaceTerrainDefinition {
+        self.surface_terrain.unwrap_or_default()
     }
 
-    pub(crate) fn validate_surface_fluid_references(&self, fluids: &FluidRegistry) {
-        if let Some(surface_fluid) = &self.surface_fluid {
-            assert!(
-                fluids.id_of(surface_fluid.fluid_id()).is_some(),
-                "biome {} surfaceFluid references missing fluid {}",
-                self.id,
-                surface_fluid.fluid_id()
-            );
+    pub(crate) fn surface_layers_profile(&self) -> Option<&[SurfaceLayerDefinition]> {
+        self.surface_layers.as_deref()
+    }
+
+    pub(crate) const fn terrain_3d_profile(&self) -> Option<Terrain3dDefinition> {
+        self.terrain_3d
+    }
+
+    fn validate(&self) {
+        assert_valid_biome_id(&self.id);
+        self.name.validate(&format!("biome {} name", self.id));
+        if let Some(surface) = &self.surface_layout {
+            surface.validate(&self.id);
+        }
+        if let Some(terrain) = self.surface_terrain {
+            terrain.validate(&self.id);
+        }
+        if let Some(layers) = &self.surface_layers {
+            validate_surface_layers(&self.id, layers);
+        }
+        if let Some(terrain_3d) = self.terrain_3d {
+            terrain_3d.validate(&self.id);
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct BiomeStructurePlacement {
-    pub(crate) biome_id: String,
-    pub(crate) structure_id: String,
-    pub(crate) placement: BiomeStructurePlacementRules,
+impl SurfaceBiomeLayoutDefinition {
+    fn validate(&self, biome_id: &str) {
+        assert!(
+            self.weight.is_finite() && self.weight > 0.0,
+            "biome {biome_id} surfaceLayout.weight must be finite and positive"
+        );
+        assert!(
+            self.region_size.min > 0,
+            "biome {biome_id} surfaceLayout.regionSize.min must be positive"
+        );
+        assert!(
+            self.region_size.max >= self.region_size.min,
+            "biome {biome_id} surfaceLayout.regionSize.max must be greater than or equal to min"
+        );
+        assert!(
+            self.region_size.max <= MAX_REGION_SPAN,
+            "biome {biome_id} surfaceLayout.regionSize.max must not exceed {MAX_REGION_SPAN} blocks"
+        );
+        for forbidden in &self.cannot_border {
+            assert_valid_biome_id(forbidden);
+        }
+    }
+}
+
+impl SurfaceTerrainDefinition {
+    fn validate(self, biome_id: &str) {
+        assert!(
+            self.base_height_offset.is_finite(),
+            "biome {biome_id} surfaceTerrain.baseHeightOffset must be finite"
+        );
+        assert!(
+            self.macro_amplitude.is_finite()
+                && (0.0..=MAX_TERRAIN_AMPLITUDE).contains(&self.macro_amplitude),
+            "biome {biome_id} surfaceTerrain.macroAmplitude must be finite and within 0..={MAX_TERRAIN_AMPLITUDE}"
+        );
+        assert!(
+            self.detail_amplitude.is_finite()
+                && (0.0..=MAX_TERRAIN_AMPLITUDE).contains(&self.detail_amplitude),
+            "biome {biome_id} surfaceTerrain.detailAmplitude must be finite and within 0..={MAX_TERRAIN_AMPLITUDE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.macro_scale),
+            "biome {biome_id} surfaceTerrain.macroScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.detail_scale),
+            "biome {biome_id} surfaceTerrain.detailScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            self.detail_scale <= self.macro_scale,
+            "biome {biome_id} surfaceTerrain.detailScale must not exceed macroScale"
+        );
+    }
+}
+
+fn validate_surface_layers(biome_id: &str, layers: &[SurfaceLayerDefinition]) {
+    assert!(
+        !layers.is_empty(),
+        "biome {biome_id} surfaceLayers must contain at least one layer"
+    );
+    let mut finite_depth = 0_u32;
+    for (index, layer) in layers.iter().enumerate() {
+        assert_valid_block_id(
+            biome_id,
+            &format!("surfaceLayers[{index}].block"),
+            &layer.block,
+        );
+
+        let final_layer = index + 1 == layers.len();
+        match (final_layer, layer.depth) {
+            (false, Some(depth)) => {
+                assert!(
+                    depth > 0,
+                    "biome {biome_id} surfaceLayers[{index}].depth must be positive"
+                );
+                finite_depth = finite_depth
+                    .checked_add(depth)
+                    .expect("surface layer depth must fit u32");
+                assert!(
+                    finite_depth <= MAX_SURFACE_LAYER_DEPTH,
+                    "biome {biome_id} finite surface layer depth must not exceed {MAX_SURFACE_LAYER_DEPTH} blocks"
+                );
+                if let Some(patch) = &layer.patch {
+                    validate_surface_patch(biome_id, index, &layer.block, patch);
+                }
+            }
+            (false, None) => panic!(
+                "biome {biome_id} surfaceLayers[{index}] requires depth before the final core layer"
+            ),
+            (true, None) => {
+                assert!(
+                    layer.patch.is_none(),
+                    "biome {biome_id} final core surfaceLayers entry cannot author a surface patch"
+                );
+            }
+            (true, Some(_)) => panic!(
+                "biome {biome_id} final surfaceLayers entry is the core layer and must omit depth"
+            ),
+        }
+    }
+}
+
+fn validate_surface_patch(
+    biome_id: &str,
+    layer_index: usize,
+    base_block: &str,
+    patch: &SurfacePatchDefinition,
+) {
+    assert!(
+        (2..=MAX_SURFACE_PATCH_SPACING).contains(&patch.spacing),
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.spacing must be within 2..={MAX_SURFACE_PATCH_SPACING}"
+    );
+    assert!(
+        patch.radius > 0 && patch.radius <= MAX_SURFACE_PATCH_RADIUS,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.radius must be within 1..={MAX_SURFACE_PATCH_RADIUS}"
+    );
+    assert!(
+        patch.jitter <= patch.spacing / 2,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.jitter must not exceed half the spacing"
+    );
+    assert!(
+        patch.radius.saturating_add(patch.jitter) <= patch.spacing,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch radius + jitter must not exceed spacing"
+    );
+    assert!(
+        patch.chance.is_finite() && patch.chance > 0.0 && patch.chance <= 1.0,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.chance must be finite and within (0, 1]"
+    );
+    assert!(
+        !patch.blocks.is_empty() && patch.blocks.len() <= MAX_SURFACE_PATCH_BLOCKS,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks must contain 1..={MAX_SURFACE_PATCH_BLOCKS} entries"
+    );
+    for (block_index, block) in patch.blocks.iter().enumerate() {
+        assert_valid_block_id(
+            biome_id,
+            &format!("surfaceLayers[{layer_index}].patch.blocks[{block_index}]"),
+            block,
+        );
+        assert!(
+            block != base_block,
+            "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks cannot repeat the base block {base_block}"
+        );
+        assert!(
+            !patch.blocks[..block_index].contains(block),
+            "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks cannot contain duplicates"
+        );
+    }
+}
+
+fn assert_valid_block_id(biome_id: &str, field: &str, block: &str) {
+    let trimmed = block.trim();
+    let valid = trimmed.split_once(':').is_some_and(|(namespace, local)| {
+        !namespace.is_empty() && !local.is_empty() && !local.contains(':')
+    });
+    assert!(
+        valid && trimmed == block,
+        "biome {biome_id} {field} must be a trimmed namespaced block id"
+    );
+}
+
+impl Terrain3dDefinition {
+    fn validate(self, biome_id: &str) {
+        if let Some(floating) = self.floating_formation {
+            floating.validate(biome_id);
+        }
+    }
+}
+
+impl FloatingFormationDefinition {
+    fn validate(self, biome_id: &str) {
+        assert!(
+            self.max_y > self.min_y,
+            "biome {biome_id} terrain3d.floatingFormation.maxY must be greater than minY"
+        );
+        let vertical_span = i64::from(self.max_y) - i64::from(self.min_y);
+        assert!(
+            vertical_span <= MAX_TERRAIN_3D_VERTICAL_SPAN,
+            "biome {biome_id} terrain3d.floatingFormation vertical span must not exceed {MAX_TERRAIN_3D_VERTICAL_SPAN} blocks"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.horizontal_scale),
+            "biome {biome_id} terrain3d.floatingFormation.horizontalScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.detail_scale),
+            "biome {biome_id} terrain3d.floatingFormation.detailScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            self.detail_scale <= self.horizontal_scale,
+            "biome {biome_id} terrain3d.floatingFormation.detailScale must not exceed horizontalScale"
+        );
+        assert!(
+            self.coverage.is_finite() && self.coverage > 0.0 && self.coverage <= 1.0,
+            "biome {biome_id} terrain3d.floatingFormation.coverage must be finite and within (0, 1]"
+        );
+        assert!(
+            self.roughness.is_finite()
+                && (0.0..=MAX_FLOATING_ROUGHNESS).contains(&self.roughness),
+            "biome {biome_id} terrain3d.floatingFormation.roughness must be finite and within 0..={MAX_FLOATING_ROUGHNESS}"
+        );
+        assert!(
+            self.density_scale.is_finite()
+                && self.density_scale > 0.0
+                && self.density_scale <= MAX_TERRAIN_AMPLITUDE,
+            "biome {biome_id} terrain3d.floatingFormation.densityScale must be finite and within (0, {MAX_TERRAIN_AMPLITUDE}]"
+        );
+    }
 }
 
 #[derive(Clone, Resource, Default)]
 pub struct BiomeRegistry {
     definitions: DefinitionMap<BiomeDefinition>,
-    has_volume_density_modifiers: bool,
-    has_volume_solid_density_modifiers: bool,
-    structure_placements: Arc<Vec<BiomeStructurePlacement>>,
 }
 
 impl BiomeRegistry {
     pub fn insert(&mut self, definition: BiomeDefinition) {
-        assert!(!definition.id.trim().is_empty(), "biome id cannot be empty");
-        definition
-            .name
-            .validate(&format!("biome {} name", definition.id));
-        validate_biome_definition(&definition);
-
-        let has_density_modifier =
-            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some();
-        let has_solid_density_modifier = definition.kind == BiomeKind::Volume
-            && matches!(
-                definition.density_modifier,
-                Some(BiomeDensityModifier::Solid { .. })
-            );
-        let biome_id = definition.id.clone();
-        let placements = definition
-            .structures
-            .iter()
-            .map(|structure| BiomeStructurePlacement {
-                biome_id: biome_id.clone(),
-                structure_id: structure.id.clone(),
-                placement: structure.placement_for_biome(&biome_id, definition.kind),
-            })
-            .collect::<Vec<_>>();
-
-        self.definitions.insert(biome_id, definition);
-        self.has_volume_density_modifiers |= has_density_modifier;
-        self.has_volume_solid_density_modifiers |= has_solid_density_modifier;
-        let structure_placements = Arc::make_mut(&mut self.structure_placements);
-        structure_placements.extend(placements);
-        structure_placements.sort_by(|left, right| {
-            left.biome_id
-                .cmp(&right.biome_id)
-                .then_with(|| left.structure_id.cmp(&right.structure_id))
-        });
+        definition.validate();
+        self.definitions.insert(definition.id.clone(), definition);
     }
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
@@ -401,65 +470,193 @@ impl BiomeRegistry {
         self.definitions.values()
     }
 
-    pub fn has_volume_density_modifiers(&self) -> bool {
-        self.has_volume_density_modifiers
-    }
-
-    pub fn has_volume_solid_density_modifiers(&self) -> bool {
-        self.has_volume_solid_density_modifiers
-    }
-
-    pub(crate) fn structure_placements(&self) -> &[BiomeStructurePlacement] {
-        &self.structure_placements
+    pub fn surface_for_dimension<'a>(
+        &'a self,
+        dimension_id: &'a str,
+    ) -> impl Iterator<Item = &'a BiomeDefinition> + 'a {
+        self.iter().filter(move |definition| {
+            definition.surface_layout.is_some() && definition.belongs_to_dimension(dimension_id)
+        })
     }
 }
 
-fn default_biome_distributions() -> Vec<BiomeDistribution> {
-    vec![BiomeDistribution::Regional]
+fn default_biome_weight() -> f32 {
+    DEFAULT_BIOME_WEIGHT
 }
 
-fn default_vegetation_color() -> Hsi {
-    Hsi::new(112.1111, 0.56363636, 0.36666667)
+fn default_terrain_base_height_offset() -> f32 {
+    DEFAULT_TERRAIN_BASE_HEIGHT_OFFSET
+}
+
+fn default_terrain_macro_amplitude() -> f32 {
+    DEFAULT_TERRAIN_MACRO_AMPLITUDE
+}
+
+fn default_terrain_macro_scale() -> u32 {
+    DEFAULT_TERRAIN_MACRO_SCALE
+}
+
+fn default_terrain_detail_amplitude() -> f32 {
+    DEFAULT_TERRAIN_DETAIL_AMPLITUDE
+}
+
+fn default_terrain_detail_scale() -> u32 {
+    DEFAULT_TERRAIN_DETAIL_SCALE
+}
+
+fn default_surface_patch_chance() -> f32 {
+    DEFAULT_SURFACE_PATCH_CHANCE
+}
+
+fn assert_valid_biome_id(id: &str) {
+    let Some((namespace, dimension)) = biome_dimension_components(id) else {
+        panic!("biome id {id} must use the form <namespace>:<dimension>/<biome>");
+    };
+    assert!(!namespace.is_empty(), "biome id namespace cannot be empty");
+    assert!(!dimension.is_empty(), "biome id dimension cannot be empty");
+}
+
+fn biome_dimension_components(id: &str) -> Option<(&str, &str)> {
+    let (namespace, remainder) = id.split_once(':')?;
+    let (dimension, local_name) = remainder.split_once('/')?;
+    if namespace.is_empty() || dimension.is_empty() || local_name.is_empty() {
+        return None;
+    }
+    Some((namespace, dimension))
+}
+
+fn dimension_components(id: &str) -> Option<(&str, &str)> {
+    let (namespace, dimension) = id.split_once(':')?;
+    if namespace.is_empty() || dimension.is_empty() || dimension.contains('/') {
+        return None;
+    }
+    Some((namespace, dimension))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn tags(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_string()).collect()
+    fn definition(id: &str, surface: bool) -> BiomeDefinition {
+        let mut value = serde_json::json!({
+            "id": id,
+            "name": {
+                "english": "Biome",
+                "portuguese_brazil": "Biome",
+                "spanish": "Biome"
+            }
+        });
+        if surface {
+            value["surfaceLayout"] = serde_json::json!({});
+        }
+        serde_json::from_value(value).expect("biome definition must deserialize")
     }
 
     #[test]
-    fn surface_selector_matches_ids_or_tags() {
-        let selector = SurfaceBiomeSelector {
-            ids: vec!["asteria:overworld/plains".to_string()],
-            tags: vec!["mountain".to_string()],
-        };
+    fn surface_layout_is_explicit_and_uses_forward_only_defaults() {
+        let identity_only = definition("asteria:overworld/caverns", false);
+        assert!(identity_only.surface_layout.is_none());
 
-        assert!(selector.matches("asteria:overworld/plains", &[]));
-        assert!(selector.matches("asteria:overworld/alps", &tags(&["mountain", "cold"])));
-        assert!(!selector.matches("asteria:overworld/ocean", &tags(&["water"])));
+        let definition = definition("asteria:overworld/plains", true);
+        let surface = definition
+            .surface_layout
+            .as_ref()
+            .expect("surface layout must exist");
+        assert_eq!(surface.weight, 1.0);
+        assert_eq!(surface.region_size, BiomeRegionSize::default());
+        assert!(surface.cannot_border.is_empty());
+        assert_eq!(
+            definition.surface_terrain_profile(),
+            SurfaceTerrainDefinition::default()
+        );
+        assert!(definition.surface_layers_profile().is_none());
+        assert!(definition.terrain_3d_profile().is_none());
+        assert!(definition.belongs_to_dimension("asteria:overworld"));
+        assert!(!definition.belongs_to_dimension("asteria:umbral"));
     }
 
     #[test]
-    fn volume_surface_constraints_default_to_allow_and_deny_wins() {
-        let unrestricted = VolumeSurfaceConstraints::default();
-        assert!(unrestricted.allows_surface("asteria:overworld/ocean", &tags(&["water"])));
+    fn surface_layers_use_finite_layers_and_depthless_core() {
+        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+            "id": "asteria:overworld/plains",
+            "name": {
+                "english": "Plains",
+                "portuguese_brazil": "Planicies",
+                "spanish": "Llanuras"
+            },
+            "surfaceLayout": {},
+            "surfaceLayers": [
+                {
+                    "block": "asteria:grass_block",
+                    "depth": 1,
+                    "patch": {
+                        "spacing": 14,
+                        "radius": 6,
+                        "jitter": 2,
+                        "chance": 0.9,
+                        "blocks": ["asteria:dirt", "asteria:mud"]
+                    }
+                },
+                { "block": "asteria:dirt", "depth": 4 },
+                { "block": "asteria:stone" }
+            ]
+        }))
+        .expect("surface layers must deserialize");
+        definition.validate();
+        let layers = definition
+            .surface_layers_profile()
+            .expect("surface layers must be authored");
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0].depth, Some(1));
+        assert_eq!(layers[2].depth, None);
+        let patch = layers[0].patch.as_ref().expect("patch must be authored");
+        assert_eq!(patch.blocks, ["asteria:dirt", "asteria:mud"]);
+    }
 
-        let constrained = VolumeSurfaceConstraints {
-            allow: Some(SurfaceBiomeSelector {
-                ids: Vec::new(),
-                tags: vec!["mountain".to_string()],
-            }),
-            deny: Some(SurfaceBiomeSelector {
-                ids: vec!["asteria:overworld/volcano".to_string()],
-                tags: Vec::new(),
-            }),
-        };
+    #[test]
+    fn terrain_3d_floating_formation_is_explicit() {
+        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+            "id": "asteria:overworld/floating_islands",
+            "name": {
+                "english": "Floating Islands",
+                "portuguese_brazil": "Ilhas Flutuantes",
+                "spanish": "Islas Flotantes"
+            },
+            "surfaceLayout": {},
+            "terrain3d": {
+                "floatingFormation": {
+                    "minY": 200,
+                    "maxY": 280,
+                    "horizontalScale": 112,
+                    "detailScale": 40,
+                    "coverage": 0.55,
+                    "roughness": 0.18,
+                    "densityScale": 28.0
+                }
+            }
+        }))
+        .expect("floating terrain definition must deserialize");
+        let terrain_3d = definition
+            .terrain_3d_profile()
+            .expect("terrain3d must be authored");
+        let floating = terrain_3d
+            .floating_formation
+            .expect("floating formation must be authored");
+        assert_eq!(floating.min_y, 200);
+        assert_eq!(floating.max_y, 280);
+    }
 
-        assert!(constrained.allows_surface("asteria:overworld/alps", &tags(&["mountain"]),));
-        assert!(!constrained.allows_surface("asteria:overworld/volcano", &tags(&["mountain"]),));
-        assert!(!constrained.allows_surface("asteria:overworld/plains", &[]));
+    #[test]
+    fn surface_dimension_filter_excludes_identity_only_biomes() {
+        let mut registry = BiomeRegistry::default();
+        registry.insert(definition("asteria:overworld/caverns", false));
+        registry.insert(definition("asteria:overworld/plains", true));
+        registry.insert(definition("asteria:umbral/wraith_grove", true));
+
+        let ids = registry
+            .surface_for_dimension("asteria:overworld")
+            .map(|definition| definition.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["asteria:overworld/plains"]);
     }
 }

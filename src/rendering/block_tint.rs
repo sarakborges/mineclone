@@ -4,7 +4,6 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
         block::{BlockDefinition, BlockTint},
         builtin_ids::DYED_PROPERTY_ID,
         color::Hsi,
@@ -14,49 +13,15 @@ use crate::{
         block_state::{BlockState, BlockStateToken},
         cell::VoxelCell,
     },
-    world::biome_field::BiomeField,
 };
 
 const DYE_SATURATION_GAMMA: f32 = 1.85;
 
-pub(crate) fn block_tint_at(
-    tint: BlockTint,
-    position: Vec2,
-    biome_field: &BiomeField,
-    biomes: &BiomeRegistry,
-) -> Color {
-    match tint {
-        BlockTint::None => Color::WHITE,
-        BlockTint::Grass => biome_field.grass_color(position, biomes).to_color(),
-        BlockTint::Leaf => biome_field.leaf_color(position, biomes).to_color(),
-        BlockTint::Foliage => biome_field.foliage_color(position, biomes).to_color(),
-    }
-}
-
-pub(crate) fn block_tint_for_biome(
-    tint: BlockTint,
-    biome_id: &str,
-    biomes: &BiomeRegistry,
-) -> Option<Color> {
-    let visuals = biomes.get(biome_id)?.visuals.as_ref()?;
-    Some(match tint {
-        BlockTint::None => Color::WHITE,
-        BlockTint::Grass => visuals.grass_color.to_color(),
-        BlockTint::Leaf => visuals.leaf_color.to_color(),
-        BlockTint::Foliage => visuals.foliage_color.to_color(),
-    })
-}
-
-pub(crate) fn block_tint_at_with_override(
-    tint: BlockTint,
-    position: Vec2,
-    biome_override: Option<&str>,
-    biome_field: &BiomeField,
-    biomes: &BiomeRegistry,
-) -> Color {
-    biome_override
-        .and_then(|biome_id| block_tint_for_biome(tint, biome_id, biomes))
-        .unwrap_or_else(|| block_tint_at(tint, position, biome_field, biomes))
+/// Biome-authored block tinting was deleted with the old biome presentation
+/// stack. Keep blocks neutral until the new authoritative biome presentation
+/// contract supplies tint data again.
+pub(crate) fn block_tint(_tint: BlockTint) -> Color {
+    Color::WHITE
 }
 
 pub(crate) fn secondary_property_dye_tint(

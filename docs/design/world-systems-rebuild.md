@@ -1,0 +1,800 @@
+# World Systems Rebuild Plan
+
+Status: **active planning and implementation plan**  
+Working branch: `world-systems-rebuild`  
+Scope: world generation, biome generation, world loading, loading presentation, persistence, and the external systems that consume world-generation queries.
+
+## 1. Purpose
+
+Asteria's current world stack has been rewritten and patched several times. Some surrounding systems are now good and must be preserved, but biome/world generation accumulated overlapping ownership, expensive hot-path repair logic, and contracts that leak into loading, persistence, structures, chat commands, warp, spawn, and dimension travel.
+
+This rebuild is intentionally forward-only. It replaces the affected world systems instead of preserving obsolete internal behavior or save formats.
+
+The rebuild proceeds in dependency order and explicit phases. Do not start the next generation layer until the previous layer has a stable contract, tests, diagnostics, and acceptable performance.
+
+## 2. Systems in rebuild scope
+
+The following systems are expected to be replaced or substantially redesigned:
+
+- surface/volume biome ownership and biome relationships;
+- terrain/world generation;
+- generated surface/material assignment;
+- generated natural fluid placement that belongs directly to terrain/world formation;
+- generation-side structure/feature integration;
+- chunk synthesis from generated world data;
+- world persistence contracts and serialized world state;
+- initial world bootstrap/loading orchestration;
+- loading progress model;
+- loading screen presentation;
+- worldgen query APIs used by commands, spawn, teleportation, portals, tools, and diagnostics.
+
+## 3. Systems to preserve unless an explicit contract change requires adaptation
+
+The rebuild must not casually replace working runtime infrastructure. Preserve these systems where possible:
+
+- voxel/chunk runtime representation;
+- chunk residency and streaming infrastructure;
+- chunk rendering and visibility;
+- meshing/remeshing;
+- runtime lighting solver;
+- runtime fluid simulation;
+- generic Structure definitions, transforms, variants, groups, and connectors where their abstractions remain sound;
+- player/gameplay systems;
+- inventory, crafting, storage, entities, and unrelated content systems.
+
+Preserved systems may receive narrow adapter/interface changes when the new world contract requires them. They are not automatically in rewrite scope.
+
+## 4. Explicit non-goals and forbidden regressions
+
+### 4.1 No dedicated hydrology subsystem
+
+Do not recreate a hydrology graph, drainage network, river planner, basin system, or equivalent world-generation owner.
+
+Generated water that is an immediate consequence of terrain/world formation may be produced by the terrain/material generation path. Rivers remain authored connected Structures/connectors according to `AGENTS.md`.
+
+### 4.2 No `land biome` abstraction
+
+Ocean is a biome, not a separate ownership universe. The new biome owner must not be structured as `ocean domain + land sites`, must not expose `land_biome_*` concepts, and must not invent separator biomes to repair adjacency.
+
+### 4.3 No generation-order dependence
+
+Generating a far location directly must produce the same result as reaching it through normal streaming. Output may not depend on which neighboring chunks were already generated, rendered, loaded, or requested first.
+
+### 4.4 No hidden chunk generation from query commands
+
+Queries such as biome location, spawn search, map visualization, structure location, and terrain sampling must not materialize entire chunk paths merely to answer a question.
+
+### 4.5 No backward-compatibility burden by default
+
+Old world-generation internals and old save formats do not constrain the new design. Migration/compatibility is out of scope unless explicitly requested later.
+
+## 5. Cross-cutting contracts
+
+These rules apply to every rebuild phase.
+
+### 5.1 One authoritative owner per generated fact
+
+Biome ownership, terrain shape, generated materials, structure placement, persistence state, and loading progress each have one authoritative owner. Consumers read those results; they do not rediscover them independently.
+
+### 5.2 Pure deterministic queries
+
+The generator exposes side-effect-free queries for information that does not require voxel materialization. Relevant capabilities include biome ownership/influence, surface/terrain information, biome search, deterministic structure-placement candidates, spawn suitability, and map/debug sampling.
+
+Query calls must not silently mutate persistence, streaming, chunk residency, rendering state, or runtime world state.
+
+### 5.3 Query-based world model is authoritative
+
+When working on this rebuild, implement the generated world as deterministic spatial fields that can be queried directly by world coordinate or bounded area. Do not introduce a fixed logical generation region, generation tile, or region ownership boundary into world semantics.
+
+The runtime `VoxelChunk` remains a materialization/storage/rendering unit. It is not the semantic unit from which biome, terrain, or structure truth is derived before materialization. Once a chunk is materialized into the playable world, the persistence contract in Phase 9 makes that materialized chunk authoritative saved world state.
+
+Performance mechanisms are explicitly allowed and expected, but they stay internal to the subsystem that owns the expensive query:
+
+- bulk/area sampling;
+- reusable per-request sample grids or snapshots;
+- cache tiles;
+- bounded LRU caches;
+- spatial indexes;
+- precomputed immutable metadata;
+- batched noise/field evaluation.
+
+Those mechanisms are implementation details only. Their dimensions, eviction order, task scheduling, cache warmth, or presence must never change generated output. A caller must not need to know that a cache tile or internal batch exists.
+
+Do not implement the query-based contract naively by repeatedly invoking expensive scalar queries for every voxel when a chunk/area request can evaluate shared data once and reuse it across biome, terrain, material, and feature work. Query-based describes ownership and the external contract, not permission for redundant computation.
+
+Changing an internal tile size, cache strategy, batching strategy, or execution order must preserve identical world results for the same seed, definitions, dimension, and coordinates.
+
+### 5.4 Query ownership and capability boundaries
+
+When implementing the rebuild, use one immutable generation entry point, conceptually `WorldGenerator`, built from the authoritative seed plus immutable dimension/content generation definitions. It is a façade over specialized generation capabilities, not a monolithic manager that owns every algorithm in one module.
+
+The generation owner exposes specialized capabilities conceptually equivalent to:
+
+- **Biome query capability** — point sampling, bounded-area sampling, biome influence/boundary data, and biome search;
+- **Terrain query capability** — surface/column information, density/shape sampling where required, and bounded-area terrain sampling;
+- **Structure query capability** — deterministic placements intersecting an area and structure search;
+- **Chunk materialization capability** — synthesize a runtime `VoxelChunk` from the authoritative generation capabilities.
+
+Exact Rust names and signatures may evolve when implementation begins, but the dependency direction is fixed:
+
+```text
+biome queries
+    -> terrain queries
+        -> material/surface generation
+            -> structure/feature integration
+                -> chunk materialization
+```
+
+A later layer may consume an earlier authoritative capability. An earlier query capability must never require chunk materialization in order to answer its own facts.
+
+External consumers such as `/locate`, `/warp`, spawn, portals, streaming, diagnostics, and the biome-map viewer receive the smallest relevant query capability. They must not reconstruct generation logic from seed, registries, definitions, noise primitives, or internal caches.
+
+Specific rules:
+
+- query-looking operations are side-effect free with respect to persistence and runtime residency;
+- a query must not load/generate a chunk merely to discover a fact that exists in the deterministic generated world;
+- a query must not depend on `VoxelWorld`, rendering, mesh state, camera state, chunk residency, or prior generation order unless the requested fact is explicitly runtime/current-world state rather than generated-world state;
+- consumers must not assemble their own biome resolver, terrain sampler, or structure planner from raw seed/configuration;
+- the same authoritative structure placement returned by structure search must be the placement later materialized by chunk generation for an unmaterialized location;
+- biome search belongs to the biome owner and structure search belongs to the structure owner; commands do not implement brute-force spatial scans over scalar APIs when the domain can provide a more efficient search;
+- scalar queries exist for isolated reads; bounded-area/batch APIs exist wherever generation, map rendering, or other hot paths would otherwise recompute shared work repeatedly;
+- batch and scalar forms must be semantically equivalent;
+- caches, indexes, sample grids, and batched evaluation accelerate the capability that owns them but never become a second source of truth;
+- `WorldGenerator` may compose these capabilities, but implementation logic remains in the specialized owner rather than accumulating into a god object.
+
+The intended usage is conceptually:
+
+```text
+WorldGenerator
+  |- biome capability
+  |- terrain capability
+  |- structure capability
+  `- chunk materialization
+```
+
+The names are intentionally non-binding; the ownership rules are binding.
+
+### 5.5 Performance is a contract
+
+Hot paths must be measurable. Expensive neighborhood searches, recursive repair, repeated noise evaluation, unbounded scans, and per-voxel rediscovery of large-scale fields require explicit justification and benchmarks.
+
+### 5.6 Parallelism must not leak into semantics
+
+Independent work may execute concurrently, but result order must not affect generated output or loading state correctness.
+
+## 6. Implementation phases
+
+### Phase 0 — Impact audit and external contracts
+
+Before deleting old code, identify every subsystem that consumes biome/world-generation/loading/persistence behavior and document what capability it actually needs.
+
+Known consumers to audit include:
+
+- generic Structures and connector placement;
+- `/locate biome`;
+- `/locate structure`;
+- `/warp`;
+- spawn selection and respawn;
+- portal/dimension travel, including the Dimensional Slicer path;
+- chunk streaming and far-coordinate requests;
+- biome visuals/tint consumers;
+- world selection/new-world creation;
+- persistence/save catalog/session reconstruction;
+- loading screen and progress reporting;
+- developer diagnostics and map/debug tools.
+
+The audit must classify each dependency as one of:
+
+1. preserved contract;
+2. adapter required;
+3. rewritten consumer;
+4. obsolete dependency to remove.
+
+**Gate:** the required external capabilities of the new world stack are known before cleanup starts.
+
+### Phase 1 — Cleanup
+
+Remove obsolete world-generation/biome/loading/persistence ownership that would otherwise constrain the new architecture.
+
+Goals:
+
+- remove old biome-field ownership and repair/fallback paths;
+- remove obsolete generation orchestration;
+- remove obsolete loading-progress orchestration;
+- detach obsolete persistence contracts from the active path;
+- preserve only minimal compile-safe boundaries required by unrelated runtime systems;
+- do not implement replacement behavior prematurely during cleanup.
+
+**Gate:** old ownership cannot accidentally participate in later phases; branch remains buildable/testable at the intended intermediate level.
+
+### Phase 2 — Generation foundation and query model
+
+Define the minimal common foundation used by every later generation stage.
+
+Responsibilities include:
+
+- world seed and deterministic random/noise primitives;
+- dimension generation context;
+- world/chunk coordinate semantics;
+- the query-based spatial contract defined in section 5.3;
+- the capability/ownership contract defined in section 5.4;
+- immutable generation snapshots/definitions;
+- pure scalar and bounded-area query boundaries where each is appropriate;
+- generation result/materialization boundary;
+- explicit cache/batch ownership where measurement proves it useful.
+
+This phase must prove direct far-coordinate access: requesting data at B must never require materializing or traversing the path from A to B.
+
+**Gate:** deterministic foundation tests, direct-coordinate query tests, scalar/batch equivalence tests, and equivalence tests across different internal batching/cache conditions are green.
+
+### Phase 3 — Biome Layout
+
+Biome layout is the first world-content layer.
+
+It owns:
+
+- biome identity at surface/world positions;
+- coherent biome region shapes;
+- region sizing behavior;
+- weights;
+- biome border compatibility semantics;
+- conflict handling without generation failure;
+- boundary representation;
+- blend/influence information consumed by later systems;
+- efficient biome search consistent with point/area sampling.
+
+Ocean participates as a normal biome identity.
+
+#### Biome formation size semantics
+
+Biome size configuration describes the preferred characteristic span of one logical biome formation in world blocks. It guides formation creation and deliberate growth; it is not a hard geometric invariant over the final connected component.
+
+Use a forward-only data shape conceptually equivalent to:
+
+```json
+"regionSize": {
+  "min": 256,
+  "max": 768
+}
+```
+
+The exact serialized names may be finalized with the biome definition rewrite, but the semantics are binding:
+
+- `min` is the smallest characteristic scale at which the layout should deliberately create or preserve a distinct formation;
+- `max` is the largest characteristic scale the layout should deliberately target for that formation;
+- each formation deterministically chooses/derives a target scale within the configured range;
+- the range is expressed as an intuitive linear world-space span in blocks, not an exact connected-component area requirement;
+- a residual pocket clearly too small to support a new formation is absorbed by an existing neighboring formation instead of creating a tiny sliver biome;
+- `max` is not a clipping boundary: a formation may exceed it when absorbing residual space, satisfying higher-priority relationship rules, or naturally touching/merging with another compatible formation;
+- two independently formed regions of the same biome may touch and read as one larger connected area; do not split them merely to keep the final connected component under `max`;
+- neither bound may make layout generation unsatisfiable, cause a panic, or require inventing a separator biome;
+- no algorithm may introduce abrupt cuts solely to enforce the configured range numerically.
+
+Treat these values as layout objectives with deterministic conflict handling, not as constraints that must be proven globally by flood-filling the generated world.
+
+There is no separate exclusivity relationship in the rebuild. Any former exclusivity rule is represented by `cannotBorder` and follows the border-compatibility contract below.
+
+#### Biome border compatibility semantics
+
+The old `avoidNear` and separate exclusivity concepts are superseded in the rebuild. There is no distance-based avoidance rule and no second exclusivity mechanism. The authored relationship describes only whether two biome formations are allowed to share a border.
+
+Use a forward-only data shape conceptually equivalent to:
+
+```json
+"cannotBorder": [
+  "asteria:desert",
+  "asteria:tundra"
+]
+```
+
+The exact selector representation may later support IDs/tags as needed, but the semantics are binding:
+
+- incompatibility is enforced **before biome selection**, not repaired after generation;
+- whenever a new logical biome formation must be selected, first build the normal eligible biome pool for the dimension/location;
+- filter that pool to candidates compatible with every already-established formation that the new formation would border;
+- if either side declares that it `cannotBorder` the other, the pair is incompatible; border validity is therefore symmetric even if authored from only one side;
+- only after compatibility filtering are normal biome weights and deterministic selection applied;
+- `regionSize` objectives never make an incompatible candidate eligible;
+- there is no separate `exclusive`, `exclusiveNeighbor`, or equivalent runtime rule; all such intent is expressed by `cannotBorder`;
+- an incompatible biome must never be selected with the intention of fixing the border later;
+- do not insert a third/separator biome merely to separate two incompatible biomes;
+- do not create a global adjacency-repair pass for this rule;
+- if compatibility filtering leaves no candidate for a new formation, do not create a new formation there; resolve the remaining space through deterministic growth/absorption by an already-existing compatible neighboring formation;
+- construction/growth must preserve the same compatibility rule so the layout does not intentionally create an invalid border later;
+- border compatibility must never cause a panic or a `no valid biome` runtime failure.
+
+Conceptually, selection is:
+
+```text
+eligible biome pool
+    -> filter by compatibility with every adjacent formation
+        -> apply weights
+            -> deterministic selection
+```
+
+This rule is intentionally simple: incompatible biome borders are prevented by candidate filtering at construction time, not by distance fields, penalties, separators, post-generation repair, or a second exclusivity subsystem.
+
+#### Biome blend and influence semantics
+
+Biome ownership remains discrete even where continuous properties blend. Every sampled world position has exactly one authoritative primary biome, while the same sample may also expose a variable collection of weighted biome influences for continuous transition behavior.
+
+Conceptually:
+
+```text
+BiomeSample
+  |- primary: BiomeId
+  `- influences:
+       |- BiomeId + normalized weight
+       |- BiomeId + normalized weight
+       `- ...
+```
+
+The semantics are binding:
+
+- `primary` answers biome identity and is not redefined by visual/terrain interpolation;
+- `influences` contains every locally relevant biome participating meaningfully in the transition at that sampled position;
+- there is no semantic maximum of two or three influences; multi-biome junctions are represented directly instead of discarding an otherwise relevant biome to fit a fixed pair/triple;
+- influence weights are normalized and sum to `1.0` subject only to normal floating-point tolerance;
+- an interior position normally resolves to one influence with weight `1.0`; an ordinary border normally has two; a genuine multi-region junction may have more;
+- influence membership and weights are derived from the authoritative new Biome Layout geometry/boundaries, not from restoring the old site-distance/Voronoi implementation;
+- a biome that is merely nearby but does not participate in the local boundary/transition topology must not appear as an influence simply because its region is within some search radius;
+- continuous properties such as terrain shape and biome-driven visual colors may combine all returned influences according to their normalized weights;
+- discrete properties remain domain-owned: biome identity, `/locate biome`, `cannotBorder`, and other identity rules use the authoritative primary biome unless that consumer explicitly defines another discrete choice rule;
+- consumers must not independently recompute a different influence set from raw distances or neighboring chunks;
+- the implementation may use compact inline storage, reusable buffers, area sampling, or other allocation-avoidance strategies, but those optimizations must not impose an externally visible arbitrary influence-count cap or make scalar and batch samples disagree.
+
+The September 8 gradual-biome implementation is a behavioral reference for the successful weighted multi-biome contract: it evolved from primary/secondary blending to normalized weighted influence collections specifically to handle shared borders and multi-biome intersections. Its old site grid, distance search, sinusoidal warp, and Voronoi-like ownership are not architecture to restore.
+
+Exact transition width/falloff is a Phase 3 implementation/tuning concern. It must be deterministic, derived consistently from the authoritative boundaries, and validated through the required biome map viewer rather than becoming a second ownership model.
+
+#### Surface and volume biome relationship
+
+Biome layout has two related but distinct spatial ownership layers:
+
+- the **surface biome field** is authoritative in two dimensions and maps world `(x, z)` to the surface layout sample for that column;
+- the optional **volume biome field** is authoritative in three dimensions and may map any world `(x, y, z)` to a volume biome sample.
+
+A volume biome is not synonymous with an underground biome. Volume formations may exist at any Y, including entirely below terrain, intersecting the generated surface, extending through terrain into open air, or existing entirely above the terrain in regions such as floating formations or atmospheric/magical volumes.
+
+Conceptually the biome capability exposes equivalent facts to:
+
+```text
+surface_biome_at(x, z) -> BiomeSample
+volume_biome_at(x, y, z) -> optional BiomeSample
+effective_biome_at(x, y, z) -> BiomeSample
+```
+
+The effective biome rule is simple:
+
+```text
+if a volume biome occupies (x, y, z)
+    use that volume biome sample
+otherwise
+    inherit the surface biome sample for (x, z)
+```
+
+The semantics are binding:
+
+- surface ownership remains an authoritative 2D fact even when a volume biome overlaps that column;
+- a volume biome overrides only the effective biome at the XYZ positions it occupies; it does not mutate, split, or replace the underlying surface layout;
+- volume placement may consume the surface layout as an eligibility/input signal, but dependency is one-way: volume layout does not rewrite surface ownership;
+- surface and volume biomes use the same `BiomeId` definition universe; do not create parallel `SurfaceBiome` and `UndergroundBiome` type hierarchies merely because their placement fields have different dimensionality;
+- the initial world may contain zero authored volume biomes without changing the contract;
+- a volume biome may influence 3D generation behavior where its authored rules require it, including density/shape, carving/additive mass, materials, structures, vegetation, or environment behavior; it is not restricted to cave decoration;
+- consumers asking for biome identity at an XYZ position use the effective biome rather than assuming the surface biome extends infinitely through Y;
+- surface and volume fields each own their own boundary/influence sampling. Their influence vectors are not automatically merged into one mixed surface/volume vector; the effective resolver selects the active field's sample at that point;
+- scalar and bounded-area/volume query forms must remain semantically equivalent and generation-order independent.
+
+This keeps the 2D surface layout stable and inspectable while allowing true 3D biome volumes anywhere in world space.
+
+#### Required biome map viewer
+
+This phase is not complete without a real 2D biome-map visualization tool.
+
+The viewer must render a selected seed/dimension/area as a map-like image, not merely print sampled IDs. Required capabilities:
+
+- biome colors/legend;
+- configurable center and scale/zoom;
+- configurable output resolution/area;
+- biome boundary overlay;
+- blend/influence overlay;
+- ability to inspect region shape and small/sliver regions;
+- deterministic output for a fixed seed/configuration;
+- image export or equivalent persistent visual output for comparison.
+
+Additional diagnostic overlays such as region IDs, constraint violations, region size, or repaired/absorbed areas should be added when they materially help validation.
+
+**Gate:** biome maps are visually reviewable, deterministic, performant, and pass relationship/size/boundary tests before terrain begins.
+
+### Phase 4 — Terrain
+
+Terrain consumes the authoritative biome capability; it does not resolve biome ownership again.
+
+Responsibilities include:
+
+- base surface height/shape;
+- mountains, plains, wastelands, swamps, ocean floors, floating formations, and other biome-authored terrain behavior;
+- caves/overhangs/volume terrain where applicable;
+- continuous cross-chunk world-space sampling;
+- terrain blending driven by the biome boundary/influence representation;
+- efficient surface/column queries for consumers such as spawn and warp.
+
+#### Ocean and sea-level semantics
+
+`seaLevel` is a dimension-level vertical reference, not a global rule that fills every empty voxel below that Y with water. It may be used by authored terrain profiles, ocean-floor depth, coast shaping, altitude-relative rules, and similar generation logic, but it does not itself create fluid.
+
+Ocean remains an ordinary surface biome identity selected by the same authoritative biome layout as every other surface biome. There is no parallel ocean mask, land/ocean ownership split, or Coast biome.
+
+The semantics are binding:
+
+- surface ownership determines where the generated ocean body exists: a column whose authoritative primary surface biome is Ocean belongs to the ocean body; a non-Ocean column does not become ocean merely because its terrain falls below `seaLevel`;
+- Ocean terrain generates its own floor/shape, and generated ocean fluid fills only the exposed water volume between that generated floor and `seaLevel`;
+- ocean generation must not treat every empty voxel in an Ocean X/Z column below `seaLevel` as water. Enclosed or isolated empty volume beneath the generated ocean floor, including caves and overhang voids, remains dry unless another explicit generation feature places fluid there;
+- generated ocean fill therefore follows the exposed top-side terrain/body-of-water volume rather than performing a blind vertical or flood fill through arbitrary subterranean emptiness;
+- land/Ocean transitions use the same authoritative biome boundary/influence information to shape a coherent coast. Terrain may blend toward the ocean profile near the border, but blend weights do not become a second ocean-ownership threshold;
+- in particular, do not decide ocean membership with rules such as `ocean_weight > threshold`; discrete Ocean ownership remains the source of truth while continuous influence data shapes terrain/material transitions;
+- the coast is a terrain consequence of the land/Ocean boundary, not a separate biome identity or hydrology subsystem;
+- non-Ocean terrain is not globally clamped above `seaLevel`; depressions below sea level may exist where authored. The specific land/Ocean boundary logic is responsible for producing a coherent shoreline where the two meet;
+- lakes, swamp puddles, shallow pools, and other local generated water are terrain/material/fluid features of their owning biome/feature and do not replace surface biome ownership with Ocean;
+- generated ocean/lake/puddle fluid is initial generated world state. Generation does not bulk-enqueue every generated fluid voxel for runtime propagation; the runtime fluid owner reacts through its explicit generated-fluid frontier/topology boundary.
+
+This produces ordinary authored ocean terrain and local water bodies without reintroducing hydrology ownership or the old failure mode where caves beneath oceans acquire ceiling water source blocks.
+
+#### Terrain representation and cross-chunk sampling
+
+Terrain uses a hybrid representation: a continuous authoritative 2D base-surface field plus one authoritative 3D final terrain-density/occupancy field.
+
+Conceptually:
+
+```text
+surface biome sample (x, z)
+    -> base surface/profile (x, z)
+        -> base solid density (x, y, z)
+            + 3D shape contributions
+                -> final terrain density/occupancy (x, y, z)
+```
+
+The semantics are binding:
+
+- surface-biome terrain produces the continuous base surface/profile in world X/Z. This provides the cheap large-scale terrain shape used by ordinary terrain, Ocean floors, coast transitions, and query hints;
+- the base surface is converted into base 3D solidity/density; caves, overhangs, floating formations, volume-biome terrain, additive masses, carving, and other true 3D effects compose into the same final terrain field rather than becoming independent competing terrain truths;
+- final generated voxel solidity is determined by the authoritative final 3D terrain field. The exact numeric density convention/operators may evolve, but there is one final occupancy answer for a world XYZ position;
+- terrain contributions consume authoritative biome samples/influences. They do not independently rediscover biome boundaries or neighboring biome ownership;
+- `base_surface_at(x, z)` and effective `surface_at(x, z)`/column-summary queries are distinct capabilities: the base surface is a cheap 2D terrain result, while the effective surface query must account for relevant 3D formations such as floating masses;
+- effective surface/column queries must not brute-force scan the full world height voxel-by-voxel. The terrain owner must use its base-surface result plus bounded vertical ranges/candidate crossings from relevant 3D contributions to answer surface and safe-position queries efficiently;
+- scalar terrain queries and bounded area/volume sampling are semantically identical. Batch APIs exist to reuse biome, surface, noise, and 3D contribution work rather than invoking an expensive independent scalar pipeline for every voxel;
+- all terrain evaluation is anchored in world coordinates and the authoritative world seed/definitions. Chunk-local coordinates, chunk-specific seeds, request origins, cache-tile origins, or generation order may not alter terrain output;
+- a chunk may request a bounded world-space halo when a real algorithm needs neighboring samples for gradients, interpolation, slopes, or similar calculations. Querying that halo does not materialize neighboring chunks and may not make the result depend on which chunk/request asked first;
+- any internal lattice/interpolation grid must be anchored in world space so the same XYZ sample resolves identically when requested alone, from either adjacent chunk, or as part of a larger batch;
+- generating chunk A then B, B then A, or B directly must produce identical overlapping terrain facts;
+- terrain batch generation may use internal sample grids/caches, but their dimensions and cache warmth remain performance details and cannot become semantic generation regions.
+
+This preserves cheap surface/column queries for warp, spawn, maps, and diagnostics while retaining a true 3D terrain model capable of caves, overhangs, floating formations, and arbitrary volume-biome terrain.
+
+**Gate:** terrain is deterministic across chunk seams and generation order, with visual/debug validation available before materials/features are layered on top.
+
+### Phase 5 — Surface, materials, and generated natural fluids
+
+Convert terrain into generated block/material composition.
+
+Responsibilities include:
+
+- surface and subsurface layers;
+- stone/core layers;
+- biome-driven material selection;
+- snow/sand/etc. generated surface rules;
+- ocean/body-of-water fill that is directly part of world formation;
+- generated fluid placement without creating a separate hydrology owner;
+- material/tint transitions derived from the same biome boundaries used by terrain.
+
+Generated fluids must integrate with runtime fluid simulation through an explicit boundary; generation must not bulk schedule every generated fluid voxel as dynamic work.
+
+**Gate:** surface/material/fluid output is deterministic, seam-safe, and does not introduce a second biome/boundary resolver.
+
+### Phase 6 — Structures and features
+
+Integrate the generic Structure/feature system after biome, terrain, and materials are authoritative.
+
+Includes:
+
+- trees and vegetation;
+- boulders and surface objects;
+- authored Structures/groups;
+- connector-based chains;
+- rivers through the generic Structure/connector architecture;
+- waterfalls when represented as Structures/features;
+- underground/volume features;
+- cross-chunk placements without clipping at chunk boundaries.
+
+Structure planning must be deterministic in world space. A structure crossing multiple chunks is one logical placement, not independently invented per chunk. Structure search and materialization must use the same authoritative placement owner.
+
+Existing generic authoring semantics are preserved: biome coverage, terrain/ground restrictions, spacing, priority/reservation/conflict groups, StructureSets, variants, and connectors remain content-owned rules rather than becoming special cases in the new generator. `/place structure` remains a manual/runtime placement tool and is not the source of deterministic world placement.
+
+**Gate:** placement/location queries agree with materialized generation and remain generation-order independent.
+
+### Phase 7 — Chunk synthesis
+
+Define the authoritative conversion from generated world data into runtime `VoxelChunk` content.
+
+The synthesis layer combines biome/terrain/material/feature results and publishes the minimal runtime data required by streaming, lighting, fluids, meshing, and rendering.
+
+Materializing a chunk into the playable world is also the persistence boundary defined in Phase 9: after first materialization, that chunk becomes saved world state rather than a disposable reconstruction of the current generator.
+
+**Gate:** chunk output can be requested directly for arbitrary coordinates and matches fixed-seed deterministic snapshots/tests before persistence takes ownership of the materialized result.
+
+### Phase 8 — Consumer integration
+
+Reconnect systems that need world knowledge to the new query/generation APIs.
+
+#### `/locate biome`
+
+Uses the biome search capability. It must not generate every chunk in the search area or implement its own brute-force world traversal.
+
+#### `/locate structure`
+
+Uses deterministic structure search. It must return the same authoritative placement that generation would materialize in unmaterialized world space and must not require full chunk materialization of the searched path/area. Current-world lookup over already-materialized space must respect persisted world state where generated content may have been removed or changed.
+
+#### `/warp`
+
+Warp is destination relocation, not navigation through the world.
+
+A warp must:
+
+1. switch interest directly to the destination coordinates;
+2. query authoritative terrain/surface information to narrow a safe destination;
+3. load/generate only the required destination neighborhood;
+4. validate the final local destination against current runtime state after that neighborhood exists;
+5. never generate the spatial path between source and destination.
+
+The current implementation already redirects streaming to the target instead of intentionally following the path, but its local safe-position search can become expensive. The rebuilt contract replaces the large brute-force 3D search with query-guided candidate selection plus a small local runtime validation.
+
+#### Spawn and respawn
+
+Spawn selection uses generation queries and intentionally requests only the neighborhood needed to enter gameplay. It must not rely on generating a huge area and then discovering a safe position. Spawn, warp, dimension travel, and portals share the same destination-preparation primitive while retaining their different policy inputs.
+
+#### Portals and dimension travel
+
+Portal travel, Dimensional Slicer travel, cross-dimension warp, and similar systems share the direct destination-loading contract rather than each inventing a different transition mechanism. An authored exact-coordinate portal remains exact-coordinate policy; arrival carving/routes remain ordinary Structure/connectors rather than portal-specific worldgen.
+
+#### Streaming
+
+Streaming remains the runtime owner of residency/interest, but requests materialization by coordinate through the new boundary and must not assume generation order affects output.
+
+**Gate:** all audited consumers from Phase 0 are migrated or explicitly preserved through stable adapters.
+
+### Phase 9 — Persistence
+
+Persistence freezes the world that has actually been materialized.
+
+The generated world remains queryable everywhere, but only chunks that enter the playable/materialized world become persisted spatial state. Merely querying a coordinate through `/locate`, spawn search, warp planning, diagnostics, or the biome-map viewer does not materialize or persist that location.
+
+The binding persistence semantics are:
+
+- when a chunk is materialized into the playable world for the first time, its complete authoritative voxel/world content becomes persistent for that dimension, even if the player never edits it;
+- after that point, loading the chunk restores the saved materialized state instead of regenerating it from the current world generator;
+- later block, layer, object, fluid, metadata, storage, Structure destruction, and other persistent world changes update that saved chunk state rather than being represented as a required delta over the original procedural baseline;
+- a chunk that materializes as empty still needs a persistent materialization record, even if its encoded payload is tiny, so a future generator revision cannot silently populate previously explored empty space;
+- world coordinates that have never been materialized remain generator-owned and are generated on demand when first entering the playable world;
+- if the world-generation algorithm/content changes later, already-materialized chunks stay exactly as saved while never-materialized areas may be created by the newer generator. Mixed generation eras are therefore an intentional property of a long-lived world rather than a reason to rewrite old terrain;
+- persistence must not require rerunning the historical generator to reconstruct an already-materialized chunk. Generator/version metadata may exist for diagnostics or policy, but a persisted chunk is self-sufficient authoritative spatial state;
+- full-state persistence is a semantic contract, not a requirement for naive storage. Palette encoding, compression, region packing, empty-section elision, deduplication, or other lossless compact representations are allowed as storage details;
+- generated caches, biome-map caches, terrain fields, Structure planning caches, meshes, derived lighting, generation queues, loading state, and other reconstructible acceleration/presentation data are not persisted as independent truth.
+
+The save model also persists non-spatial authoritative state as required, including:
+
+- seed/world/dimension/session metadata;
+- player/session state;
+- entities;
+- inventories/storages;
+- runtime fluid/scheduled state that is not already fully represented by chunk content;
+- other mutable state that cannot be reconstructed from the persisted world and current runtime rules.
+
+Keep persistence boundaries separated conceptually:
+
+```text
+World manifest/identity
+    world identity and durable global generation/config metadata
+
+World snapshot
+    player, clocks/rules, entities, inventory and other non-spatial runtime state
+
+Per-dimension spatial state
+    every materialized chunk's authoritative saved world content
+```
+
+The existing generation-based atomic publication/staging shape is worth preserving where practical, but its current rule that only mutated chunks are persistent is explicitly superseded by this rebuild.
+
+**Gate:** save/load roundtrip restores every materialized chunk exactly, including unedited and intentionally empty chunks, while never-materialized coordinates remain absent from spatial storage and can still be generated on first materialization.
+
+### Phase 10 — World loading pipeline
+
+Rebuild world bootstrap/loading around explicit dependencies.
+
+The pipeline must:
+
+- distinguish required-to-enter-gameplay work from background continuation;
+- expose structured progress independent of the loading UI;
+- group concurrent work under a logical parent phase;
+- support cancellation/stale-result rejection where relevant;
+- avoid turning implementation workers into user-visible top-level phases.
+
+The current model where many detailed generation pass labels all mirror one `Generating` phase is obsolete. Internal biome/terrain/density/material/Structure pass timings remain diagnostics; user-visible progress is published by logical parent work with real counters.
+
+**Gate:** initial world entry, load-from-save, dimension transition, and destination preparation use the same coherent progress model where appropriate.
+
+### Phase 11 — Loading screen
+
+The loading screen is a presentation consumer of the loading pipeline. It does not own world-loading logic.
+
+It must show all meaningful steps, but parallel work is grouped under one logical phase instead of presenting many simultaneous top-level phases.
+
+Example shape:
+
+```text
+Preparing World
+
+Generating Initial Area
+  Terrain        82%
+  Structures     61%
+  Finalization   74%
+
+Preparing Presentation
+  Lighting       55%
+  Meshing        43%
+```
+
+The exact labels may evolve with implementation, but the invariant is hierarchical progress: logical phase first, concurrent child operations inside it. Progress comes from real work counts and never from fake timers or duplicated aliases of the same phase.
+
+**Gate:** progress accurately reflects the pipeline, never blocks on irrelevant background work, and remains stable when internal worker parallelism changes.
+
+### Phase 12 — End-to-end validation and performance
+
+Run fixed-seed, multi-seed, near/far-coordinate, save/load, dimension-travel, warp, locate, streaming, and visual validation.
+
+Required performance coverage includes at least:
+
+- biome scalar and area-query cost;
+- biome-map generation cost;
+- terrain scalar and area-query/generation cost;
+- structure search cost;
+- chunk synthesis cost;
+- initial playable-area time;
+- far-coordinate warp preparation;
+- locate queries;
+- peak temporary memory and cache growth where relevant.
+
+Use fixed visual/performance fixtures spanning ordinary biome borders, three-or-more-biome junctions, `cannotBorder`, Ocean/coast, volume biomes, caves, floating formations, Structure-heavy areas, Overworld, and Umbral. Measure cold and warm paths where caching changes cost but not semantics.
+
+Do not invent hard millisecond budgets before the replacement generator exists. Establish the first correct measured baseline, then promote concrete thresholds into regression budgets so later changes can be compared against evidence rather than arbitrary numbers.
+
+**Gate:** correctness, determinism, visual review, targeted benchmarks, and CI are green before the rebuild is considered mergeable.
+
+## 7. Current known affected subsystems
+
+This list is intentionally explicit so cleanup does not accidentally delete a contract another subsystem still relies on.
+
+| Consumer | Expected relationship to rebuild |
+| --- | --- |
+| Structures/connectors | preserve generic primitives and authored rules; replace old worldgen coupling with authoritative placement/query owner |
+| Chat `/locate biome` | consume biome search capability |
+| Chat `/locate structure` | consume authoritative deterministic structure search, with current-world state respected for already-materialized space |
+| Chat `/warp` | direct destination preparation + terrain/surface candidate query + minimal runtime safety validation |
+| Spawn/respawn | consume the same destination-preparation primitive with spawn policy |
+| Portals/Dimensional Slicer | use common direct destination-loading contract; arrival carving remains Structure/connectors |
+| Streaming | preserve residency/selection infrastructure; replace generator/materialization interface |
+| Rendering/biome visuals | consume new biome influence/blend data; do not resolve biome ownership |
+| Runtime lighting | preserve solver; adapt initial generated-content boundary only if required |
+| Runtime fluids | preserve simulation; adapt generated-fluid frontier/publication boundary only if required |
+| Persistence/save catalog/session | preserve useful atomic save shell; persist every materialized chunk as authoritative per-dimension spatial state |
+| Loading pipeline/UI | replace duplicated pass rows with one structured hierarchical progress model; UI only renders it |
+| Developer diagnostics | consume query capabilities; add biome map viewer and generation/performance diagnostics |
+
+Phase 0 must verify these classifications against the live implementation before destructive cleanup, but the behavioral contracts above are already decided.
+
+## 8. Decisions to settle incrementally
+
+### Resolved decisions
+
+#### Spatial generation model — resolved 2026-10-04
+
+The rebuild uses the query-based world model defined in section 5.3.
+
+There is no fixed logical generation region. Generated facts are deterministic functions/fields of seed, definitions, dimension, and world coordinates. `VoxelChunk` remains the runtime materialization unit only. Internal cache tiles, batches, sample grids, and spatial indexes are allowed solely as bounded performance mechanisms and may not affect semantics or become visible dependencies of consumers.
+
+#### Query API and ownership — resolved 2026-10-04
+
+Use the capability boundary defined in section 5.4.
+
+One immutable generation entry point composes specialized biome, terrain, and structure query owners plus chunk materialization. External consumers receive the narrow capability they need and do not reconstruct generation from raw seed/definitions. Queries are pure with respect to runtime/persistence state, scalar and bounded-area forms are semantically equivalent, domain owners own efficient search, and chunk materialization consumes query results rather than serving as a prerequisite for them.
+
+#### Biome formation size semantics — resolved 2026-10-04
+
+Biome `regionSize.min/max` describe the preferred characteristic linear span of one logical formation in world blocks. They are layout objectives, not hard connected-component constraints.
+
+`min` controls whether a distinct formation is worth creating/preserving; undersized residual pockets are absorbed into existing neighbors. `max` limits deliberate target growth but never acts as a clipping wall. Residual absorption, higher-priority relationship rules, and contact/merging with the same biome may produce a larger final connected area. Size rules must never make generation unsatisfiable, cause panic, create separator biomes, or produce abrupt cuts merely to satisfy a number.
+
+#### Biome border compatibility — resolved 2026-10-04
+
+The rebuild replaces distance-like `avoidNear` behavior and any separate exclusivity behavior with one direct border-incompatibility rule, conceptually authored as `cannotBorder`.
+
+A new biome formation is selected only from candidates compatible with every adjacent established formation. Compatibility filtering happens before weights/deterministic selection. If either side forbids the border, that candidate is excluded. The generator does not first select an incompatible biome and repair it, does not insert a separator biome, and does not run a second exclusivity subsystem. If the filtered pool is empty, no new formation is created at that point; remaining space is handled through deterministic growth/absorption by a compatible existing neighbor. This rule must never cause runtime `no valid biome` failure or panic.
+
+#### Biome blend and influence representation — resolved 2026-10-04
+
+Each position has exactly one authoritative primary biome plus a variable normalized collection of locally relevant biome influences. There is no semantic two- or three-influence cap. Interior positions normally have one influence, ordinary borders normally have two, and genuine multi-biome junctions may expose more.
+
+Continuous consumers may combine all influence weights, while discrete identity remains governed by `primary` unless a domain explicitly defines another discrete selection rule. Influences come from the authoritative new layout geometry/boundaries rather than restoring the September site's distance/Voronoi implementation. The successful September 8 move from primary/secondary to weighted multi-biome influence collections is retained as behavioral precedent only. Internal compact storage/batching is allowed, but it must not change the influence contract or make scalar and batch sampling disagree.
+
+#### Surface and volume biome relationship — resolved 2026-10-04
+
+Surface biome ownership is an authoritative 2D X/Z layout. Volume biome ownership is an optional authoritative 3D field and may exist at any Y: below terrain, intersecting the terrain surface, crossing into open air, or entirely above terrain.
+
+At a queried XYZ position, an occupying volume biome supplies the effective biome sample; otherwise the position inherits the surface biome sample for that X/Z column. Volume layout may consume surface layout as an eligibility/input signal but never mutates or replaces the underlying surface ownership. Surface and volume use the same `BiomeId` definition universe rather than separate biome type hierarchies, and each field owns its own boundary/influence sample instead of automatically mixing surface and volume influence vectors.
+
+#### Ocean and sea-level semantics — resolved 2026-10-04
+
+`seaLevel` is a dimension-level vertical reference only; it does not globally fill empty space below that height. Ocean is an ordinary surface biome selected by the same biome layout as every other surface biome, and discrete Ocean ownership determines where the generated ocean body exists.
+
+Ocean terrain owns its floor/profile, and generation fills only the exposed water volume from that floor up to `seaLevel`. Enclosed or isolated voids beneath the floor, including caves under oceans, stay dry unless another explicit feature places fluid there. Land/Ocean boundaries use the shared biome boundary/influence data to shape coast terrain, but influence weight never becomes a second ocean mask or threshold. Coast is not a biome. Lakes, swamp puddles, and similar water bodies remain local terrain/material/fluid generation features of their owning biome or feature, and generated fluids enter runtime simulation only through the explicit generated-fluid frontier/topology boundary rather than bulk scheduling every generated voxel.
+
+#### Terrain representation and cross-chunk sampling — resolved 2026-10-04
+
+Terrain uses a hybrid model: surface-biome terrain defines an authoritative continuous 2D base-surface/profile field, and one authoritative 3D terrain-density/occupancy field composes that base with caves, overhangs, floating formations, volume-biome effects, additive masses, carving, and other 3D shape contributions.
+
+Final generated solidity comes from the final 3D terrain field. `base_surface_at` remains a cheap 2D result, while effective surface/column queries account for relevant 3D formations using bounded candidate ranges rather than brute-force full-height scans. Terrain is evaluated in world coordinates only; batch requests and optional halos are performance mechanisms and never semantic chunk boundaries. Any interpolation lattice is anchored in world space, scalar and batch results are equivalent, and output is invariant under chunk request/generation order.
+
+#### Structure planning, placement, and query contract — resolved 2026-10-04
+
+Preserve the project's generic Structure authoring model rather than redesigning it. A Structure placement is deterministic world-space intent that may cross any number of chunks; chunks only materialize the intersecting portion. StructureSets, groups/variants, connectors, biome-coverage rules, terrain/ground/fluid restrictions, spacing, overlap, reservations, priorities, and conflict groups remain authored Structure concerns.
+
+One authoritative Structure query owner supplies both placements intersecting an area and efficient structure search. `/locate structure` consumes that owner and must identify the same placement chunk generation would materialize in unmaterialized space. Rivers continue to use the same generic connector system. `/place structure` remains a separate manual/runtime tool and intentionally does not define procedural placement semantics.
+
+#### Safe spawn, warp, and destination preparation — resolved 2026-10-04
+
+Spawn, warp, dimension travel, and portals share one direct destination-preparation primitive. A generated-world query first narrows likely safe candidates without chunk materialization; streaming interest moves directly to the chosen destination region; only the minimal required neighborhood is materialized; then a small runtime validation checks actual current collision/support/fluid state before final placement.
+
+This replaces the current large 3D warp BFS and never generates a path between source and destination. Different callers retain policy differences: spawn searches for a suitable initial location, warp prefers the requested XYZ then nearby valid alternatives, and exact-coordinate portal travel keeps its authored coordinate policy while Structure/connectors own any arrival carving or surface route.
+
+#### Materialized chunk persistence — resolved 2026-10-04
+
+The save persists the explored/materialized world, not merely player deltas over a procedural baseline.
+
+A chunk becomes authoritative persisted spatial state the first time it is materialized into the playable world, even when it is unedited or empty. From then on, reload restores that saved state and subsequent world mutations update it. Query-only access does not materialize or persist chunks. Coordinates never materialized remain generator-owned and are produced only when first entering the playable world.
+
+Consequently, future worldgen changes may affect never-materialized territory while already-materialized territory remains frozen exactly as saved. Persisted chunks are self-sufficient and do not require the historical generator to reconstruct them. Compression/palette/region packing and similar lossless representations are implementation choices; the semantic unit is complete persisted chunk state, not a mandatory sparse delta.
+
+#### Persistence boundaries — resolved 2026-10-04
+
+Keep world identity/global metadata, non-spatial runtime snapshot state, and per-dimension spatial chunk state as separate persistence boundaries. Preserve the useful atomic generation/staging/publication behavior of the current save system where practical, but replace the current mutated-chunks-only spatial policy with all-materialized-chunks persistence.
+
+Do not persist biome/terrain/Structure caches, mesh/light data, generation queues, loading progress, or other reconstructible acceleration/presentation state as independent truth. Runtime/scheduled simulation state that cannot be recovered from chunk content remains snapshot state.
+
+#### Loading progress hierarchy — resolved 2026-10-04
+
+The loading owner publishes logical parent phases with real progress counters; concurrent implementation work is grouped beneath those parents. The UI is only a renderer of that model. Detailed generation-pass timings stay available to diagnostics but do not become duplicate user-visible top-level progress rows.
+
+The current fifteen-row presentation, where multiple generation labels mirror the same `Generating` phase/status, is explicitly obsolete. Progress must remain stable if internal worker count or scheduling changes and must never rely on fake timing.
+
+#### Benchmark and fixture strategy — resolved 2026-10-04
+
+Use fixed seeds and visual/performance fixtures covering representative biome boundaries/junctions, Ocean/coast, volume biomes, floating terrain, Structure-heavy areas, dimensions, near/far queries, and order independence. Measure scalar and area queries, search, chunk synthesis, loading, warp/locate, cache behavior, and relevant temporary memory.
+
+Concrete millisecond budgets are not guessed during planning. Establish a correct replacement-generator baseline first, then promote measured thresholds to regression gates. This resolves the benchmark strategy while deliberately deferring numeric thresholds until evidence exists.
+
+### Open decisions
+
+No unresolved architecture/game-behavior decisions remain from this planning pass. Concrete implementation details may still expose new decisions, but they must be brought back explicitly rather than being silently invented during implementation. Numeric performance thresholds are set only after the first correct measured baseline, as defined above.
+
+## 9. Branch and integration strategy
+
+Implementation work for this rebuild lives on `world-systems-rebuild` until the new stack has an end-to-end playable path and passes its gates.
+
+The branch may periodically incorporate current `main` changes so unrelated features are not lost. The rebuild should not be partially merged into `main` merely to reduce branch size.
+
+Normal repository Git/CI rules remain defined by `AGENTS.md`; this document defines the rebuild architecture and phase order, not a competing Git policy.
+
+## 10. Relationship to existing worldgen documents
+
+`docs/design/worldgen-coherence.md` contains older deferred requirements and useful historical intent, but it predates this rebuild decision. During the rebuild, this document owns the active phase plan. Individual useful requirements from older documents must be revalidated against the new architecture before implementation rather than copied automatically.
+
+Repository-wide normative rules in `AGENTS.md`, `ARCHITECTURE.md`, and `ENGINEERING_PRACTICES.md` still take precedence over this plan.

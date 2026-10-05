@@ -28,9 +28,7 @@ use super::{
         SettingsBackButton, SettingsContentScrollArea, SettingsPendingSectionScroll,
         SettingsSection, SettingsSectionPanel, SettingsSectionSelection, section_button,
     },
-    new_world_section::{
-        new_world_generation_section, new_world_settings_section, spawn_new_world_footer,
-    },
+    new_world_section::{new_world_settings_section, spawn_new_world_footer},
     render_distance_section::graphics_section,
     world_settings_section::world_settings_section,
 };
@@ -49,11 +47,8 @@ const GAME_SECTIONS: &[SettingsSection] = &[
 ];
 const WORLD_SECTIONS: &[SettingsSection] =
     &[SettingsSection::WorldSettings, SettingsSection::GameRules];
-const CREATE_WORLD_SECTIONS: &[SettingsSection] = &[
-    SettingsSection::WorldSettings,
-    SettingsSection::WorldGeneration,
-    SettingsSection::GameRules,
-];
+const CREATE_WORLD_SECTIONS: &[SettingsSection] =
+    &[SettingsSection::WorldSettings, SettingsSection::GameRules];
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsScreenContext {
@@ -163,9 +158,6 @@ pub(super) fn spawn_settings_screen(
     roots: Query<(Entity, &SettingsScreenContext)>,
 ) {
     let context = world.screen_context();
-    // Rebuilding for a language change preserves the current section. The new
-    // scroll area receives a pending anchor and restores that section after
-    // layout has measured the replacement tree.
     let replacing = roots.iter().any(|(_, existing)| *existing == context);
     for (entity, _) in &roots {
         commands.entity(entity).despawn();
@@ -387,17 +379,6 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                     );
                                     spawn_settings_section(
                                         panels,
-                                        SettingsSection::WorldGeneration,
-                                        new_world_generation_section(
-                                            view.new_world,
-                                            view.localization,
-                                            view.language,
-                                        ),
-                                        view.localization,
-                                        view.language,
-                                    );
-                                    spawn_settings_section(
-                                        panels,
                                         SettingsSection::GameRules,
                                         game_rules_section(
                                             view.ticks_per_second,
@@ -446,9 +427,6 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                 }
                             }
 
-                            // A full viewport of trailing space lets the final
-                            // section reach the top, so it can become the
-                            // authoritative active sidebar item.
                             panels.spawn(Node {
                                 width: percent(100),
                                 height: percent(100),

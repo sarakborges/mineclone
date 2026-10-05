@@ -462,8 +462,6 @@ impl TerrainMaterials {
             target_data[start..start + TERRAIN_TEXTURE_BYTES].copy_from_slice(&layer);
         }
 
-        // Once the array owns the texels, its source handles are redundant.
-        // Legacy 3+ layer materials keep their own texture handles alive.
         texture_sources.take();
         self.texture_array_ready.store(true, Ordering::Release);
         true

@@ -6,20 +6,13 @@ use bevy::platform::collections::HashSet;
 use crate::{
     player::{PlayerEntity, camera::GameplayWorldCamera},
     voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position},
-    world::{
-        biome::CurrentBiome, chunk_rendering::ChunkRenderPool,
-        render_distance::RenderDistanceSettings,
-    },
+    world::{chunk_rendering::ChunkRenderPool, render_distance::RenderDistanceSettings},
 };
 
 const FOG_START_RADIUS_FRACTION: f32 = 0.78;
 const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
 const MIN_FOG_END_CHUNKS: f32 = 1.0;
-
-const UMBRAL_REACH_FOG_DISTANCE_MULTIPLIER: f32 = 0.58;
-const WITHERED_WASTE_FOG_DISTANCE_MULTIPLIER: f32 = 0.52;
-const WRAITH_GROVE_FOG_DISTANCE_MULTIPLIER: f32 = 0.46;
 
 #[derive(Default)]
 pub(super) struct FogDistanceState {
@@ -29,7 +22,6 @@ pub(super) struct FogDistanceState {
     render_distance_chunks: Option<i32>,
     player_horizontal: Option<Vec2>,
     camera_entity: Option<Entity>,
-    biome_fog_distance_multiplier: Option<f32>,
 }
 
 pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
@@ -46,45 +38,9 @@ pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
     FogFalloff::Linear { start, end }
 }
 
-fn authored_biome_fog_distance_multiplier(biome_id: &str) -> f32 {
-    match biome_id {
-        "asteria:umbral/umbral_reach" => UMBRAL_REACH_FOG_DISTANCE_MULTIPLIER,
-        "asteria:umbral/withered_waste" => WITHERED_WASTE_FOG_DISTANCE_MULTIPLIER,
-        "asteria:umbral/wraith_grove" => WRAITH_GROVE_FOG_DISTANCE_MULTIPLIER,
-        _ => 1.0,
-    }
-}
-
-fn current_biome_fog_distance_multiplier(current_biome: &CurrentBiome) -> f32 {
-    let mut weighted_multiplier = 0.0;
-    let mut total_weight = 0.0;
-
-    for influence in &current_biome.surface_influences {
-        if influence.weight <= 0.0 {
-            continue;
-        }
-        weighted_multiplier +=
-            authored_biome_fog_distance_multiplier(&influence.id) * influence.weight;
-        total_weight += influence.weight;
-    }
-
-    if total_weight > f32::EPSILON {
-        (weighted_multiplier / total_weight).clamp(0.25, 1.5)
-    } else {
-        authored_biome_fog_distance_multiplier(&current_biome.surface_id).clamp(0.25, 1.5)
-    }
-}
-
-fn apply_biome_fog_density(start: f32, end: f32, multiplier: f32) -> (f32, f32) {
-    let end = (end * multiplier).max(minimum_fog_end());
-    let start = (start * multiplier).min((end - 1.0).max(0.0));
-    (start, end)
-}
-
 pub(super) fn update_fog_distance(
     player: Single<&Transform, With<PlayerEntity>>,
     camera: Single<Entity, With<GameplayWorldCamera>>,
-    current_biome: Res<CurrentBiome>,
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
     mut fogs: Query<&mut DistanceFog, With<GameplayWorldCamera>>,
@@ -96,7 +52,6 @@ pub(super) fn update_fog_distance(
     let render_distance_chunks = render_distance.chunks();
     let frontier_center = chunk_coord_from_position(player.translation).xz();
     let player_horizontal = player.translation.xz();
-    let biome_fog_distance_multiplier = current_biome_fog_distance_multiplier(&current_biome);
     let missing_columns_changed = state.render_pool_revision != Some(render_pool_revision)
         || state.render_distance_chunks != Some(render_distance_chunks)
         || state.frontier_center != Some(frontier_center);
@@ -112,8 +67,7 @@ pub(super) fn update_fog_distance(
 
     let frontier_inputs_changed = missing_columns_changed
         || state.player_horizontal != Some(player_horizontal)
-        || state.camera_entity != Some(camera_entity)
-        || state.biome_fog_distance_multiplier != Some(biome_fog_distance_multiplier);
+        || state.camera_entity != Some(camera_entity);
     if !frontier_inputs_changed {
         return;
     }
@@ -123,7 +77,6 @@ pub(super) fn update_fog_distance(
     state.render_distance_chunks = Some(render_distance_chunks);
     state.player_horizontal = Some(player_horizontal);
     state.camera_entity = Some(camera_entity);
-    state.biome_fog_distance_multiplier = Some(biome_fog_distance_multiplier);
 
     let (_, target_end) = fog_distances(render_distance_chunks);
     let guard_end = nearest_missing_column_distance(player_horizontal, &state.missing_columns)
@@ -133,14 +86,11 @@ pub(super) fn update_fog_distance(
         .map_or(target_end, |guard_end| guard_end.min(target_end))
         .max(minimum_end);
     let (start, end) = guarded_fog_distances(render_distance_chunks, end);
-    let (start, end) = apply_biome_fog_density(start, end, biome_fog_distance_multiplier);
 
     for mut fog in &mut fogs {
         // Linear fog reaches the fully opaque fog color at `end`. Allow the
         // streaming guard to pull that point inward far enough to cover any
         // not-yet-rendered chunk column instead of exposing the world void.
-        // Umbral surface biomes then author an additional distance multiplier
-        // so their fog remains intentionally denser without a dimension-wide override.
         fog.falloff = FogFalloff::Linear { start, end };
     }
 }
@@ -227,17 +177,6 @@ mod tests {
         assert!(end >= radius * 0.96);
         assert!(end <= radius);
         assert!(end > start);
-    }
-
-    #[test]
-    fn umbral_biomes_author_denser_fog_individually() {
-        assert!(authored_biome_fog_distance_multiplier("asteria:umbral/umbral_reach") < 1.0);
-        assert!(authored_biome_fog_distance_multiplier("asteria:umbral/withered_waste") < 1.0);
-        assert!(authored_biome_fog_distance_multiplier("asteria:umbral/wraith_grove") < 1.0);
-        assert_eq!(
-            authored_biome_fog_distance_multiplier("asteria:overworld/plains"),
-            1.0
-        );
     }
 
     #[test]

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState, content::fluid::FluidRegistry, player::camera::GameplayCamera,
-    rendering::biome_visuals::CurrentBiomeVisuals, voxel::world::VoxelWorld,
+    voxel::world::VoxelWorld,
 };
 
 #[derive(Component)]
@@ -43,7 +43,6 @@ fn update_fluid_immersion_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     fluids: Res<FluidRegistry>,
-    biome_visuals: CurrentBiomeVisuals,
     tint: Single<(&mut BackgroundColor, &mut Visibility), With<FluidImmersionTintOverlay>>,
     mut active_fluid: Local<Option<crate::content::fluid::FluidId>>,
 ) {
@@ -73,19 +72,12 @@ fn update_fluid_immersion_tint(
     let entering_fluid = *visibility != Visibility::Visible;
     let fluid_changed = *active_fluid != Some(cell.fluid_id);
 
+    // Biome-derived immersion tint belonged to the deleted biome presentation
+    // stack. Explicit fluid tint remains valid runtime content; biome-derived
+    // tint will return only with the new authoritative biome presentation API.
     let resolved_tint = definition
         .immersion_tint
-        .map(|tint| (tint.color, tint.opacity))
-        .or_else(|| {
-            definition.biome_immersion_tint.then(|| {
-                (
-                    biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color),
-                    biome_visuals
-                        .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
-                        .clamp(0.0, 1.0),
-                )
-            })
-        });
+        .map(|tint| (tint.color, tint.opacity));
 
     let Some((color, opacity)) = resolved_tint else {
         *active_fluid = Some(cell.fluid_id);
@@ -95,7 +87,7 @@ fn update_fluid_immersion_tint(
         return;
     };
 
-    if entering_fluid || fluid_changed || biome_visuals.inputs_changed() || fluids.is_changed() {
+    if entering_fluid || fluid_changed || fluids.is_changed() {
         let [red, green, blue] = color.to_srgb();
         background.0 = Color::srgba(red, green, blue, opacity);
     }

@@ -12,7 +12,7 @@ use bevy::{
     render::{Render, RenderApp, RenderSystems},
 };
 
-use crate::app::{crash_log::append_runtime_diagnostic, game_state::GameState};
+use crate::app::crash_log::append_runtime_diagnostic;
 
 const RENDER_WORK_SAMPLE_CAPACITY: usize = 4096;
 const RENDER_WORK_MICROS_BITS: u32 = 32;
@@ -48,7 +48,6 @@ struct RenderFrameWorkDiagnostic {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum PresentationPublicationStage {
-    InitialPublish,
     RemeshApply,
 }
 
@@ -97,7 +96,6 @@ impl TimingMetrics {
     }
 }
 
-static PRESENTATION_INITIAL_PUBLISH_METRICS: TimingMetrics = TimingMetrics::new();
 static PRESENTATION_REMESH_APPLY_METRICS: TimingMetrics = TimingMetrics::new();
 static RENDER_EXTRACT_COMMANDS_METRICS: TimingMetrics = TimingMetrics::new();
 static RENDER_PREPARE_ASSETS_METRICS: TimingMetrics = TimingMetrics::new();
@@ -149,7 +147,6 @@ impl Drop for PresentationPublicationTimer {
 
 fn publication_metrics(stage: PresentationPublicationStage) -> &'static TimingMetrics {
     match stage {
-        PresentationPublicationStage::InitialPublish => &PRESENTATION_INITIAL_PUBLISH_METRICS,
         PresentationPublicationStage::RemeshApply => &PRESENTATION_REMESH_APPLY_METRICS,
     }
 }
@@ -167,11 +164,8 @@ fn render_stage_metrics(stage: RenderWorkStage) -> &'static TimingMetrics {
     }
 }
 
-fn take_presentation_publication_diagnostics() -> (TimingDiagnostic, TimingDiagnostic) {
-    (
-        PRESENTATION_INITIAL_PUBLISH_METRICS.take(),
-        PRESENTATION_REMESH_APPLY_METRICS.take(),
-    )
+fn take_presentation_publication_diagnostic() -> TimingDiagnostic {
+    PRESENTATION_REMESH_APPLY_METRICS.take()
 }
 
 fn take_render_stage_diagnostics() -> RenderStageDiagnostics {
@@ -357,7 +351,6 @@ pub(super) fn collect_render_frame_work(
 }
 
 pub(super) fn reset_render_frame_work_samples(
-    state: Res<State<GameState>>,
     bridge: Res<RenderFrameWorkBridge>,
     mut samples: ResMut<RenderFrameWorkSamples>,
 ) {
@@ -366,17 +359,15 @@ pub(super) fn reset_render_frame_work_samples(
     samples.skipped_samples = 0;
     samples.micros.clear();
     let _ = take_render_stage_diagnostics();
-    if *state.get() == GameState::Loading {
-        let _ = take_presentation_publication_diagnostics();
-    }
+    let _ = take_presentation_publication_diagnostic();
 }
 
 pub(super) fn log_render_frame_work(mut samples: ResMut<RenderFrameWorkSamples>) {
     let diagnostic = samples.take_diagnostic();
     let render_stages = take_render_stage_diagnostics();
-    let (publish_initial, publish_remesh_apply) = take_presentation_publication_diagnostics();
+    let publish_remesh_apply = take_presentation_publication_diagnostic();
     let line = format!(
-        "render work: samples={} skipped_samples={} avg_us={} p50_us={} p95_us={} p99_us={} max_us={} stage_extract_avg_us={} stage_extract_max_us={} stage_assets_avg_us={} stage_assets_max_us={} stage_meshes_avg_us={} stage_meshes_max_us={} stage_views_avg_us={} stage_views_max_us={} stage_queue_avg_us={} stage_queue_max_us={} stage_prepare_avg_us={} stage_prepare_max_us={} stage_render_avg_us={} stage_render_max_us={} stage_cleanup_avg_us={} stage_cleanup_max_us={} publish_initial_count={} publish_initial_avg_us={} publish_initial_max_us={} publish_remesh_apply_count={} publish_remesh_apply_avg_us={} publish_remesh_apply_max_us={}",
+        "render work: samples={} skipped_samples={} avg_us={} p50_us={} p95_us={} p99_us={} max_us={} stage_extract_avg_us={} stage_extract_max_us={} stage_assets_avg_us={} stage_assets_max_us={} stage_meshes_avg_us={} stage_meshes_max_us={} stage_views_avg_us={} stage_views_max_us={} stage_queue_avg_us={} stage_queue_max_us={} stage_prepare_avg_us={} stage_prepare_max_us={} stage_render_avg_us={} stage_render_max_us={} stage_cleanup_avg_us={} stage_cleanup_max_us={} publish_remesh_apply_count={} publish_remesh_apply_avg_us={} publish_remesh_apply_max_us={}",
         diagnostic.count,
         diagnostic.skipped_samples,
         diagnostic.average_micros,
@@ -400,9 +391,6 @@ pub(super) fn log_render_frame_work(mut samples: ResMut<RenderFrameWorkSamples>)
         render_stages.render.max_micros,
         render_stages.cleanup.average_micros,
         render_stages.cleanup.max_micros,
-        publish_initial.count,
-        publish_initial.average_micros,
-        publish_initial.max_micros,
         publish_remesh_apply.count,
         publish_remesh_apply.average_micros,
         publish_remesh_apply.max_micros,

@@ -18,12 +18,12 @@ use crate::{
     },
 };
 
-pub(super) enum WorldActivationError {
+pub(crate) enum WorldActivationError {
     Load(io::Error),
     Inventory(io::Error),
 }
 
-pub(super) struct PreparedWorldActivation {
+pub(crate) struct PreparedWorldActivation {
     inventory: PlayerHotbar,
     storage_boxes: StorageBoxStorage,
     save: InMemoryWorldSave,
@@ -39,7 +39,7 @@ pub(super) struct PreparedWorldActivation {
 }
 
 impl PreparedWorldActivation {
-    pub(super) fn prepare(
+    pub(crate) fn prepare(
         id: String,
         mut snapshot: WorldSnapshot,
         world: VoxelWorld,
@@ -91,7 +91,6 @@ impl PreparedWorldActivation {
                 saved.dimension_id,
                 InactiveDimensionState::new(
                     inactive_world,
-                    saved.spawn_biome,
                     storage,
                     saved.fluid_updates,
                     saved.creatures,
@@ -112,14 +111,7 @@ impl PreparedWorldActivation {
         rules.set_spawn_creatures(snapshot.spawn_creatures);
 
         let mut save = InMemoryWorldSave::default();
-        save.begin_new_world(
-            seed,
-            &dimension_id,
-            rules,
-            snapshot.spawn_biome.as_deref(),
-            snapshot.biome_size_multiplier,
-            snapshot.world_generation,
-        );
+        save.begin_new_world(seed, &dimension_id, rules);
         if let Some(player) = snapshot.player {
             let game_mode = if player.spectator {
                 GameMode::Spectator
@@ -158,7 +150,7 @@ impl PreparedWorldActivation {
         })
     }
 
-    pub(super) fn commit(
+    pub(crate) fn commit(
         self,
         commands: &mut Commands,
         inventory: &mut PlayerHotbar,

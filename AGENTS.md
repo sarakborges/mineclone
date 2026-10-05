@@ -117,11 +117,21 @@ Before publishing a change:
 - Inspect the final changed-file set and diff/state against the original user instruction.
 - Verify every requested item is represented and no unrelated files slipped in.
 - Run the narrowest relevant validation first, then broader validation when the change requires it.
-- For reproducible bugs, add or update a regression test when practical.
-- For Rust changes, run the repository's applicable Rust checks/Clippy/test gate before claiming correctness when the environment permits it.
+- For reproducible bugs, add or update a regression test when practical, but do not run it through `cargo test` unless the user explicitly requests that command for the current task.
+- For Rust changes, use the repository's applicable Rust checks and Clippy gate; do not add or execute `cargo test` as part of validation.
 - For content/assets, run the corresponding localization/content/GLB/asset audits when applicable.
 - Do not claim that behavior works merely because code compiles.
 - Do not claim CI is green until the relevant workflow/status has actually been observed as successful for the delivered commit.
+
+### Rust validation command policy
+
+> **DO NOT RUN, ADD, ENABLE, OR REINTRODUCE `cargo test` IN AGENT WORKFLOWS OR CI UNLESS THE USER EXPLICITLY REQUESTS `cargo test` FOR THAT SPECIFIC TASK.**
+
+- Do not execute `cargo test`, including filtered, package-specific, target-specific, or feature-specific variants.
+- Do not add `cargo test` steps to GitHub Actions, scripts, validation helpers, hooks, or other automated gates.
+- Do not treat the presence of Rust unit/regression tests as permission to execute them with `cargo test`.
+- The default Rust validation gate is `cargo clippy --locked --all-targets --all-features -- -D warnings` followed by `cargo check --locked`, plus any applicable non-Cargo content/asset audits.
+- If stronger runtime or behavioral validation is needed, use an already-approved project mechanism or ask for an explicit validation direction; do not silently fall back to `cargo test`.
 
 ### CI completion is mandatory
 

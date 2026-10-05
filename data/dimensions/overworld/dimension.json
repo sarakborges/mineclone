@@ -1,266 +1,273 @@
 {
   "id": "asteria:overworld",
-  "biomes": [
-    {
-      "id": "asteria:overworld/plains",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 120,
-          "max": 420
-        },
-        "z": {
-          "min": 120,
-          "max": 420
-        },
-        "y": null
-      }
-    },
-    {
-      "id": "asteria:overworld/swamp",
-      "weight": 0.9,
-      "size": {
-        "x": {
-          "min": 120,
-          "max": 360
-        },
-        "z": {
-          "min": 120,
-          "max": 360
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "neighborDeny": {
-        "tags": [
-          "mountain"
-        ]
-      }
-    },
-    {
-      "id": "asteria:overworld/arctic",
-      "weight": 0.9,
-      "size": {
-        "x": {
-          "min": 140,
-          "max": 400
-        },
-        "z": {
-          "min": 140,
-          "max": 400
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "neighborDeny": {
-        "ids": [
-          "asteria:overworld/volcano",
-          "asteria:overworld/desert",
-          "asteria:overworld/swamp"
-        ]
-      }
-    },
-    {
-      "id": "asteria:overworld/desert",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 140,
-          "max": 420
-        },
-        "z": {
-          "min": 140,
-          "max": 420
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5
-    },
-    {
-      "id": "asteria:overworld/wasteland",
-      "weight": 1.3,
-      "size": {
-        "x": {
-          "min": 120,
-          "max": 420
-        },
-        "z": {
-          "min": 120,
-          "max": 420
-        },
-        "y": null
-      },
-      "neighborDeny": {
-        "ids": [
-          "asteria:overworld/arctic",
-          "asteria:overworld/ocean"
-        ]
-      }
-    },
-    {
-      "id": "asteria:overworld/enchanted_forest",
-      "weight": 1.25,
-      "size": {
-        "x": {
-          "min": 140,
-          "max": 460
-        },
-        "z": {
-          "min": 140,
-          "max": 460
-        },
-        "y": null
-      },
-      "neighborDeny": {
-        "ids": [
-          "asteria:overworld/arctic",
-          "asteria:overworld/desert",
-          "asteria:overworld/volcano"
-        ]
-      }
-    },
-    {
-      "id": "asteria:overworld/mountains",
-      "weight": 0.85,
-      "size": {
-        "x": {
-          "min": 90,
-          "max": 260
-        },
-        "z": {
-          "min": 90,
-          "max": 260
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/mountains"
-    },
-    {
-      "id": "asteria:overworld/gorge",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 80,
-          "max": 180
-        },
-        "z": {
-          "min": 140,
-          "max": 360
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/mountains"
-    },
-    {
-      "id": "asteria:overworld/alps",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 140,
-          "max": 320
-        },
-        "z": {
-          "min": 140,
-          "max": 320
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/mountains"
-    },
-    {
-      "id": "asteria:overworld/mountain_belt",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 160,
-          "max": 380
-        },
-        "z": {
-          "min": 160,
-          "max": 380
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/mountains"
-    },
-    {
-      "id": "asteria:overworld/volcano",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 120,
-          "max": 260
-        },
-        "z": {
-          "min": 120,
-          "max": 260
-        },
-        "y": null
-      },
-      "spawnWeight": 0.5,
-      "exclusiveNeighborGroup": "asteria:overworld/mountains"
-    },
-    {
-      "id": "asteria:overworld/caverns",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 48,
-          "max": 96
-        },
-        "z": {
-          "min": 48,
-          "max": 96
-        },
-        "y": {
-          "min": 18,
-          "max": 34
-        }
-      }
-    },
-    {
-      "id": "asteria:overworld/floating_islands",
-      "weight": 0.25,
-      "size": {
-        "x": {
-          "min": 84,
-          "max": 120
-        },
-        "z": {
-          "min": 84,
-          "max": 120
-        },
-        "y": {
-          "min": 24,
-          "max": 36
-        }
-      }
-    },
-    {
-      "id": "asteria:overworld/ocean",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 180,
-          "max": 520
-        },
-        "z": {
-          "min": 180,
-          "max": 520
-        },
-        "y": null
-      }
-    }
-  ],
   "dayNightCycle": "asteria:overworld/day_night_cycle",
   "sky": "asteria:overworld/sky",
   "seaLevel": 90,
   "gravityStrength": 18.0,
-  "seaFluid": "asteria:water",
   "maxEntities": 128,
-  "oceanBiome": "asteria:overworld/ocean"
+  "generatedOcean": {
+    "biome": "asteria:overworld/ocean",
+    "fluid": "asteria:water"
+  },
+  "generatedSurfaceFluids": [
+    {
+      "biome": "asteria:overworld/swamp",
+      "fluid": "asteria:water",
+      "spacing": 18,
+      "radius": 5,
+      "jitter": 3,
+      "chance": 0.75,
+      "depth": 1
+    },
+    {
+      "biome": "asteria:overworld/volcano",
+      "fluid": "asteria:lava",
+      "spacing": 96,
+      "radius": 10,
+      "jitter": 12,
+      "chance": 0.4,
+      "depth": 2
+    }
+  ],
+  "generatedSurfaceStructures": [
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:tree_oak",
+      "spacing": 80,
+      "chance": 0.54,
+      "jitter": 24
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:tree_willow",
+      "spacing": 36,
+      "chance": 0.72,
+      "jitter": 11
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_small",
+      "spacing": 36,
+      "chance": 0.28,
+      "jitter": 11
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_medium",
+      "spacing": 58,
+      "chance": 0.2,
+      "jitter": 18
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_big",
+      "spacing": 88,
+      "chance": 0.13,
+      "jitter": 27
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_huge",
+      "spacing": 140,
+      "chance": 0.07,
+      "jitter": 43
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:lake",
+      "spacing": 256,
+      "chance": 0.5,
+      "jitter": 64
+    },
+    {
+      "biome": "asteria:overworld/swamp",
+      "structure": "asteria:tree_willow",
+      "spacing": 9,
+      "chance": 0.9,
+      "jitter": 3
+    },
+    {
+      "biome": "asteria:overworld/swamp",
+      "structure": "asteria:boulder_small",
+      "spacing": 52,
+      "chance": 0.18,
+      "jitter": 15
+    },
+    {
+      "biome": "asteria:overworld/enchanted_forest",
+      "structure": "asteria:enchanted_heart",
+      "spacing": 1000,
+      "chance": 1.0,
+      "jitter": 112
+    },
+    {
+      "biome": "asteria:overworld/enchanted_forest",
+      "structure": "asteria:tree_enchanted",
+      "spacing": 12,
+      "chance": 0.66,
+      "jitter": 3
+    },
+    {
+      "biome": "asteria:overworld/enchanted_forest",
+      "structure": "asteria:boulder_small",
+      "spacing": 48,
+      "chance": 0.2,
+      "jitter": 14
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_small",
+      "spacing": 24,
+      "chance": 0.4,
+      "jitter": 7
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_medium",
+      "spacing": 40,
+      "chance": 0.3,
+      "jitter": 12
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_big",
+      "spacing": 64,
+      "chance": 0.2,
+      "jitter": 20
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_huge",
+      "spacing": 104,
+      "chance": 0.1,
+      "jitter": 32
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_small",
+      "spacing": 28,
+      "chance": 0.34,
+      "jitter": 8
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_medium",
+      "spacing": 44,
+      "chance": 0.27,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_big",
+      "spacing": 68,
+      "chance": 0.18,
+      "jitter": 21
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_huge",
+      "spacing": 108,
+      "chance": 0.1,
+      "jitter": 33
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 192,
+      "chance": 0.45,
+      "jitter": 48
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_small",
+      "spacing": 30,
+      "chance": 0.3,
+      "jitter": 9
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_medium",
+      "spacing": 48,
+      "chance": 0.24,
+      "jitter": 14
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_big",
+      "spacing": 78,
+      "chance": 0.16,
+      "jitter": 23
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_medium",
+      "spacing": 42,
+      "chance": 0.25,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_big",
+      "spacing": 64,
+      "chance": 0.19,
+      "jitter": 20
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_huge",
+      "spacing": 102,
+      "chance": 0.11,
+      "jitter": 31
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 224,
+      "chance": 0.4,
+      "jitter": 56
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_small",
+      "spacing": 28,
+      "chance": 0.32,
+      "jitter": 8
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_medium",
+      "spacing": 44,
+      "chance": 0.26,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_big",
+      "spacing": 70,
+      "chance": 0.17,
+      "jitter": 21
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_huge",
+      "spacing": 112,
+      "chance": 0.09,
+      "jitter": 34
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 224,
+      "chance": 0.32,
+      "jitter": 56
+    },
+    {
+      "biome": "asteria:overworld/ocean",
+      "structure": "asteria:river_ocean_mouth",
+      "spacing": 192,
+      "chance": 0.55,
+      "jitter": 48,
+      "placement": "biomeMargin"
+    }
+  ]
 }

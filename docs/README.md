@@ -6,20 +6,22 @@ This directory contains project documentation that is not required to live at th
 
 Repository-wide authority and active work state stay in the root because agents and contributors must find them immediately:
 
-- [`../AGENTS.md`](../AGENTS.md) — mandatory agent/contributor rules, including `main` branch targeting, scoped repository navigation, anti-loop tool discipline, Git delivery verification, and forward-only feature policy.
+- [`../AGENTS.md`](../AGENTS.md) — mandatory agent/contributor rules, including branch resolution, scoped repository navigation, anti-loop tool discipline, Git delivery verification, Rust validation command policy, and forward-only feature policy.
 - [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — canonical Asteria architecture contracts.
 - [`../ENGINEERING_PRACTICES.md`](../ENGINEERING_PRACTICES.md) — canonical engineering rules.
 - [`../HANDOFF.md`](../HANDOFF.md) — current implementation handoff only.
 
 When documents disagree, `AGENTS.md`, `ARCHITECTURE.md`, and `ENGINEERING_PRACTICES.md` are normative. Archived plans and handoffs are historical evidence, not current authority.
 
-The active implementation branch is `main`. Branch/tool/Git execution rules are intentionally centralized in `AGENTS.md`; feature documents and handoffs must not redefine them.
+Branch/tool/Git execution rules are intentionally centralized in `AGENTS.md`; feature documents and handoffs must not redefine them.
 
 ## Current documentation
 
 ### Design
 
-- [`design/worldgen-coherence.md`](design/worldgen-coherence.md) — worldgen coherence package: biome relationships, ocean margins, volume biomes, surface indicators, and floating islands.
+- [`design/world-systems-rebuild.md`](design/world-systems-rebuild.md) — architecture, decisions, phase gates, and behavioral contract for the world-systems rebuild.
+- [`design/world-systems-rebuild-status.md`](design/world-systems-rebuild-status.md) — live implementation status for the rebuild: completed phases, active phase, current owners, known incompleteness, and next concrete work.
+- [`design/worldgen-coherence.md`](design/worldgen-coherence.md) — older deferred worldgen coherence package; requirements must be revalidated against the active rebuild plan before implementation.
 - [`design/portal-travel.md`](design/portal-travel.md) — prepared data-driven inter-dimensional travel contract: exact-coordinate destination plus generic connected-Structure arrival carving.
 
 ### Features

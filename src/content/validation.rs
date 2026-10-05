@@ -165,15 +165,10 @@ pub(super) fn validate_content(content: &LoadedContent) {
     }
 
     for biome in content.biomes.iter() {
-        biome.validate_material_references(&content.blocks, &content.fluids);
-        biome.validate_spawn_references(&content.creatures);
-        biome.validate_object_spawn_references(&content.objects, &content.blocks);
-        biome.validate_structure_references(&content.structures, &content.structure_sets);
-        biome.validate_surface_fluid_references(&content.fluids);
+        biome.validate_references(&content.biomes);
     }
 
     for dimension in content.dimensions.iter() {
-        dimension.validate_biomes(&content.biomes);
         assert!(
             content
                 .day_night_cycles
@@ -189,7 +184,50 @@ pub(super) fn validate_content(content: &LoadedContent) {
             dimension.id,
             dimension.sky
         );
-        dimension.validate_fluid_references(&content.fluids);
+
+        for (index, generated) in dimension.generated_surface_structures.iter().enumerate() {
+            let biome = content.biomes.get(&generated.biome).unwrap_or_else(|| {
+                panic!(
+                    "dimension {} generatedSurfaceStructures[{index}] references missing biome {}",
+                    dimension.id, generated.biome
+                )
+            });
+            assert!(
+                biome.belongs_to_dimension(&dimension.id) && biome.surface_layout.is_some(),
+                "dimension {} generatedSurfaceStructures[{index}] biome {} must be a surface biome in this dimension",
+                dimension.id,
+                generated.biome
+            );
+            assert!(
+                content.structures.resolves_reference(&generated.structure)
+                    || content.structure_sets.get(&generated.structure).is_some(),
+                "dimension {} generatedSurfaceStructures[{index}] references missing Structure, Structure group, or StructureSet {}",
+                dimension.id,
+                generated.structure
+            );
+            if generated.placement
+                == super::dimension::GeneratedSurfaceStructurePlacement::BiomeMargin
+            {
+                assert!(
+                    content.structure_sets.get(&generated.structure).is_none(),
+                    "dimension {} generatedSurfaceStructures[{index}] biomeMargin placement cannot reference StructureSet {}",
+                    dimension.id,
+                    generated.structure
+                );
+                let members = content
+                    .structures
+                    .reference_members(&generated.structure)
+                    .expect("validated biomeMargin Structure reference must resolve");
+                assert!(
+                    members
+                        .iter()
+                        .all(|structure| structure.supported_rotations().len() == 4),
+                    "dimension {} generatedSurfaceStructures[{index}] biomeMargin Structure/group {} must support all horizontal rotations",
+                    dimension.id,
+                    generated.structure
+                );
+            }
+        }
     }
 
     for portal in content.portals.iter() {

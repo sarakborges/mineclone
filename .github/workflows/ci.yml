@@ -14,18 +14,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: rust-validation-probes-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    # Keep the OS fixed: native package archives and compiler outputs are
-    # specific to the runner distribution and Rust toolchain.
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Fail early on malformed content/assets before spending time restoring
-      # the Rust toolchain and Bevy system dependencies.
       - name: Audit localizations
         run: python3 tools/check_localizations.py
 
@@ -35,13 +35,44 @@ jobs:
       - name: Audit GLB assets
         run: python3 tools/check_glb_assets.py
 
+      - name: Audit Structure query contract
+        run: python3 tools/check_structure_query_contract.py
+
+      - name: Audit chunk materializer contract
+        run: python3 tools/check_chunk_materializer_contract.py
+
+      - name: Audit chunk seams
+        run: python3 tools/check_chunk_seams.py
+
+      - name: Audit streaming materialization contract
+        run: python3 tools/check_streaming_materialization_contract.py
+
+      - name: Audit streaming presentation contract
+        run: python3 tools/check_streaming_presentation_contract.py
+
+      - name: Audit locate generator contract
+        run: python3 tools/check_locate_generator_contract.py
+
+      - name: Audit destination query contract
+        run: python3 tools/check_destination_query_contract.py
+
+      - name: Audit materialized chunk persistence contract
+        run: python3 tools/check_materialized_chunk_persistence_contract.py
+
+      - name: Audit loading pipeline contract
+        run: python3 tools/check_loading_pipeline_contract.py
+
+      - name: Audit loading screen contract
+        run: python3 tools/check_loading_screen_contract.py
+
+      - name: Audit world rebuild end-to-end contract
+        run: python3 tools/check_world_rebuild_end_to_end_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 
-      # The first run installs the Bevy system libraries; subsequent runs
-      # restore their installed files instead of repeating apt-get install.
       - name: Cache Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
@@ -50,12 +81,9 @@ jobs:
             libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
           version: ubuntu-24.04-bevy-0.19-v1
 
-      # Cargo.lock is committed for reproducible executable builds.
       - name: Report dependency lock
         run: sha256sum Cargo.lock
 
-      # Cache downloaded crates and compiled dependency artifacts. The key
-      # includes the committed lockfile, so dependency versions remain stable.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -66,3 +94,43 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      # Link once so probe execution time is separated from Bevy build/link time.
+      - name: Build world rebuild probes
+        timeout-minutes: 15
+        run: cargo build --locked --bin asteria --bin world-rebuild-smoke
+
+      # CI records the first reproducible fixed-seed baseline with one cold and
+      # one warm pass for every required query family. Heavier sample counts
+      # remain available through the CLI for follow-up profiling after this
+      # baseline establishes evidence-based regression budgets.
+      - name: Record world rebuild query baseline
+        timeout-minutes: 5
+        run: |
+          ./target/debug/asteria --worldgen-benchmark \
+            --seed 181960897289965 \
+            --dimension asteria:overworld \
+            --center-x 0 --center-z 0 \
+            --far-x 250000 --far-z -250000 \
+            --samples 1 \
+            --area-size 4 \
+            --search-radius 64 \
+            --destination-radius 4 \
+            --output worldgen-benchmark-overworld.json
+          cat worldgen-benchmark-overworld.json
+
+      - name: Smoke world rebuild lifecycle and record runtime baseline
+        timeout-minutes: 5
+        run: |
+          /usr/bin/time -v ./target/debug/world-rebuild-smoke \
+            2>&1 | tee world-rebuild-runtime-baseline.txt
+
+      - name: Upload world rebuild performance baselines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-rebuild-performance-baselines
+          path: |
+            worldgen-benchmark-overworld.json
+            world-rebuild-runtime-baseline.txt
+          if-no-files-found: ignore

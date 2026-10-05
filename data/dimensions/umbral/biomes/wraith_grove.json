@@ -1,12 +1,12 @@
 {
   "id": "asteria:umbral/wraith_grove",
-  "terrain": {
-    "type": "rolling",
-    "baseHeight": 4,
-    "amplitude": 3,
-    "scale": 0.012,
-    "detailAmplitude": 1,
-    "detailScale": 0.045
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 12.0,
+    "macroAmplitude": 12.0,
+    "macroScale": 768,
+    "detailAmplitude": 4.0,
+    "detailScale": 112
   },
   "surfaceLayers": [
     {
@@ -20,121 +20,5 @@
     {
       "block": "asteria:stone"
     }
-  ],
-  "structures": [
-    {
-      "id": "asteria:tree_oak",
-      "placement": {
-        "spacing": 12,
-        "chance": 0.66,
-        "jitter": 3
-      }
-    },
-    {
-      "id": "asteria:boulder_small",
-      "placement": {
-        "spacing": 48,
-        "chance": 0.2,
-        "jitter": 14
-      }
-    }
-  ],
-  "visuals": {
-    "skyColor": {
-      "dawn": {
-        "hue": 270,
-        "saturation": 0.34,
-        "intensity": 0.34
-      },
-      "day": {
-        "hue": 165,
-        "saturation": 0.38,
-        "intensity": 0.42
-      },
-      "dusk": {
-        "hue": 285,
-        "saturation": 0.36,
-        "intensity": 0.28
-      },
-      "night": {
-        "hue": 250,
-        "saturation": 0.28,
-        "intensity": 0.12
-      }
-    },
-    "fogColor": {
-      "dawn": {
-        "hue": 165,
-        "saturation": 0.34,
-        "intensity": 0.28
-      },
-      "day": {
-        "hue": 165,
-        "saturation": 0.36,
-        "intensity": 0.4
-      },
-      "dusk": {
-        "hue": 180,
-        "saturation": 0.3,
-        "intensity": 0.24
-      },
-      "night": {
-        "hue": 170,
-        "saturation": 0.28,
-        "intensity": 0.1
-      }
-    },
-    "grassColor": {
-      "hue": 155,
-      "saturation": 0.3,
-      "intensity": 0.48
-    },
-    "leafColor": {
-      "hue": 165,
-      "saturation": 0.36,
-      "intensity": 0.44
-    },
-    "foliageColor": {
-      "hue": 150,
-      "saturation": 0.26,
-      "intensity": 0.52
-    },
-    "waterColor": {
-      "hue": 175,
-      "saturation": 0.38,
-      "intensity": 0.36
-    },
-    "underwaterTint": {
-      "color": {
-        "hue": 175,
-        "saturation": 0.38,
-        "intensity": 0.24
-      },
-      "opacity": 0.2
-    },
-    "stars": {
-      "density": 0.82,
-      "color": {
-        "hue": 165,
-        "saturation": 0.24,
-        "intensity": 0.72
-      }
-    },
-    "clouds": {
-      "density": 0.08,
-      "color": {
-        "hue": 270,
-        "saturation": 0.24,
-        "intensity": 0.3
-      }
-    },
-    "terrainRoughness": 0.94,
-    "terrainMetallic": 0
-  },
-  "climate": {
-    "continentalness": {
-      "min": 0.36,
-      "max": 1
-    }
-  }
+  ]
 }

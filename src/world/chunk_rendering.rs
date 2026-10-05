@@ -7,7 +7,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
@@ -17,15 +17,13 @@ use crate::{
     },
 };
 
-use super::biome_field::BiomeField;
-
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
 pub(crate) use pool::{
     ChunkRenderPool, DeferredMeshAssetRetirements, advance_deferred_mesh_asset_retirements,
     clear_chunk_render_pool, retire_chunk_render_allocation,
 };
 pub(crate) use refresh::{apply_built_chunk_fluid_meshlets, apply_built_chunk_geometry_meshlets};
-pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
+pub(crate) use spawn::{BuiltChunkMesh, spawn_built_chunk_meshes};
 
 const MEBIBYTE: usize = 1024 * 1024;
 
@@ -57,9 +55,7 @@ pub(crate) struct ChunkMeshBuildContext<'a, W: VoxelRead + ?Sized> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
-    pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) secondary_properties: &'a SecondaryPropertyRegistry,
-    pub(crate) biome_field: &'a BiomeField,
     pub(crate) texture_table: &'a TerrainTextureTable,
 }
 
@@ -68,9 +64,7 @@ pub(crate) struct ChunkRenderContext<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
-    pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) secondary_properties: &'a SecondaryPropertyRegistry,
-    pub(crate) biome_field: &'a BiomeField,
     pub(crate) terrain_materials: &'a TerrainMaterials,
     pub(crate) fluid_materials: &'a FluidMaterials,
 }
@@ -82,9 +76,7 @@ impl ChunkRenderContext<'_> {
             blocks: self.blocks,
             layers: self.layers,
             fluids: self.fluids,
-            biomes: self.biomes,
             secondary_properties: self.secondary_properties,
-            biome_field: self.biome_field,
             texture_table: self.terrain_materials.texture_table(),
         }
     }

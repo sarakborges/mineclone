@@ -52,22 +52,6 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.remove(&coord).is_some()
     }
 
-    pub(crate) fn cancel_where(
-        &mut self,
-        mut predicate: impl FnMut(ChunkCoord) -> bool,
-    ) -> Vec<ChunkCoord> {
-        let coords = self
-            .pending
-            .keys()
-            .copied()
-            .filter(|coord| predicate(*coord))
-            .collect::<Vec<_>>();
-        for coord in &coords {
-            self.pending.remove(coord);
-        }
-        coords
-    }
-
     pub(crate) fn insert(
         &mut self,
         coord: ChunkCoord,
@@ -83,26 +67,6 @@ impl<T> ChunkTaskQueue<T> {
         true
     }
 
-    pub(crate) fn cancel_farthest_where(
-        &mut self,
-        center: ChunkCoord,
-        mut predicate: impl FnMut(ChunkCoord) -> bool,
-    ) -> Option<ChunkCoord> {
-        let center = center.as_ivec3();
-        let coord = self
-            .pending
-            .keys()
-            .copied()
-            .filter(|coord| predicate(*coord))
-            .max_by_key(|coord| {
-                let coord = coord.as_ivec3();
-                let delta = coord - center;
-                (delta.length_squared(), coord.x, coord.y, coord.z)
-            })?;
-        self.pending.remove(&coord);
-        Some(coord)
-    }
-
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T, ChunkCoord>> {
         let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
             check_ready(&mut pending.task).map(|output| (*coord, pending.revision, output))
@@ -115,33 +79,5 @@ impl<T> ChunkTaskQueue<T> {
             revision,
             output,
         })
-    }
-
-    pub(crate) fn poll_ready_by_key<K: Ord>(
-        &mut self,
-        mut key: impl FnMut(ChunkCoord) -> K,
-    ) -> Option<CompletedChunkTask<T, ChunkCoord>> {
-        let mut coords = self.pending.keys().copied().collect::<Vec<_>>();
-        coords.sort_unstable_by_key(|coord| key(*coord));
-
-        for coord in coords {
-            let pending = self
-                .pending
-                .get_mut(&coord)
-                .expect("selected chunk task must remain pending");
-            let Some(output) = check_ready(&mut pending.task) else {
-                continue;
-            };
-            let revision = pending.revision;
-            self.pending.remove(&coord);
-
-            return Some(CompletedChunkTask {
-                coord,
-                revision,
-                output,
-            });
-        }
-
-        None
     }
 }

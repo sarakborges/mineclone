@@ -24,10 +24,6 @@ pub struct FluidDefinition {
     pub color: Hsi,
     #[serde(default)]
     pub light_color: Option<Hsi>,
-    #[serde(default)]
-    pub biome_tint: bool,
-    #[serde(default)]
-    pub biome_immersion_tint: bool,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]

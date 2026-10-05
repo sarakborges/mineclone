@@ -8,7 +8,6 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
         builtin_ids::{BUCKET_FLUID_METADATA_KEY, DYED_PROPERTY_ID, WATER_FLUID_ID},
         item::ItemRegistry,
         object::{ObjectRegistry, ObjectVisualDefinition},
@@ -17,13 +16,9 @@ use crate::{
         tool::ToolRegistry,
         tool_behavior::BRUSH_PAINT_BEHAVIOR_ID,
     },
-    player::{
-        camera::{CameraPerspective, GameplayCamera},
-        hotbar::PlayerHotbar,
-    },
-    rendering::block_tint::block_tint_at,
+    player::{camera::CameraPerspective, hotbar::PlayerHotbar},
+    rendering::block_tint::block_tint,
     tools::BrushMode,
-    world::biome_field::BiomeField,
 };
 
 const HELD_SPRITE_SIZE: f32 = 0.52;
@@ -213,8 +208,6 @@ pub(crate) struct HeldObjectModelSyncView<'w, 's> {
             &'static MeshMaterial3d<StandardMaterial>,
         ),
     >,
-    biome_field: Res<'w, BiomeField>,
-    biomes: Res<'w, BiomeRegistry>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
@@ -443,9 +436,7 @@ fn configure_loaded_held_object_scene(
 
 pub(crate) fn sync_held_object_models(
     content: HeldSpriteContent,
-    player: Single<&Transform, With<GameplayCamera>>,
     mut view: HeldObjectModelSyncView,
-    mut tint_cell: Local<Option<IVec2>>,
 ) {
     let selected = content.hotbar.item_at(content.hotbar.selected_slot());
     for (root, mut visibility) in &mut view.roots {
@@ -459,16 +450,9 @@ pub(crate) fn sync_held_object_models(
         }
     }
 
-    let current_cell = player.translation.xz().floor().as_ivec2();
-    let inputs_changed = content.hotbar.is_changed()
-        || content.objects.is_changed()
-        || view.biome_field.is_changed()
-        || view.biomes.is_changed()
-        || *tint_cell != Some(current_cell);
-    if !inputs_changed {
+    if !content.hotbar.is_changed() && !content.objects.is_changed() {
         return;
     }
-    *tint_cell = Some(current_cell);
 
     let Some(object_id) = selected else {
         return;
@@ -480,12 +464,7 @@ pub(crate) fn sync_held_object_models(
         return;
     }
 
-    let tint = block_tint_at(
-        object.tint,
-        current_cell.as_vec2() + Vec2::splat(0.5),
-        &view.biome_field,
-        &view.biomes,
-    );
+    let tint = block_tint(object.tint);
     for (marker, handle) in &view.model_materials {
         if marker.object_id != object_id {
             continue;

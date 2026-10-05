@@ -1,176 +1,43 @@
 {
   "id": "asteria:overworld/swamp",
-  "terrain": {
-    "type": "swamp",
-    "baseHeight": 0.9,
-    "depth": 4.8,
-    "amplitude": 0.7,
-    "scale": 0.0065,
-    "detailAmplitude": 0.4,
-    "detailScale": 0.045
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 2.0,
+    "macroAmplitude": 4.0,
+    "macroScale": 896,
+    "detailAmplitude": 1.5,
+    "detailScale": 160
   },
   "surfaceLayers": [
     {
       "block": "asteria:grass_block",
-      "alternates": [
-        "asteria:dirt",
-        "asteria:mud",
-        "asteria:water"
-      ],
-      "patchScale": 0.13,
-      "depth": 1
+      "depth": 1,
+      "patch": {
+        "spacing": 14,
+        "radius": 6,
+        "jitter": 2,
+        "chance": 0.9,
+        "blocks": [
+          "asteria:dirt",
+          "asteria:mud"
+        ]
+      }
     },
     {
       "block": "asteria:dirt",
-      "alternates": [
-        "asteria:mud"
-      ],
-      "patchScale": 0.15,
-      "depth": 4
+      "depth": 4,
+      "patch": {
+        "spacing": 16,
+        "radius": 6,
+        "jitter": 3,
+        "chance": 0.7,
+        "blocks": [
+          "asteria:mud"
+        ]
+      }
     },
     {
       "block": "asteria:stone"
-    }
-  ],
-  "creatureSpawns": [
-    {
-      "creature": "asteria:slime",
-      "weight": 1,
-      "lightMin": 0,
-      "lightMax": 15,
-      "spacing": 14
-    }
-  ],
-  "structures": [
-    {
-      "id": "asteria:tree_willow",
-      "placement": {
-        "spacing": 9,
-        "chance": 0.9,
-        "jitter": 3
-      }
-    },
-    {
-      "id": "asteria:boulder_small",
-      "placement": {
-        "spacing": 52,
-        "chance": 0.18,
-        "jitter": 15
-      }
-    }
-  ],
-  "visuals": {
-    "skyColor": {
-      "dawn": {
-        "hue": 207,
-        "saturation": 0.28,
-        "intensity": 0.62
-      },
-      "day": {
-        "hue": 198,
-        "saturation": 0.38,
-        "intensity": 0.54
-      },
-      "dusk": {
-        "hue": 255,
-        "saturation": 0.22,
-        "intensity": 0.5
-      },
-      "night": {
-        "hue": 218,
-        "saturation": 0.48,
-        "intensity": 0.055
-      }
-    },
-    "fogColor": {
-      "dawn": {
-        "hue": 133,
-        "saturation": 0.16,
-        "intensity": 0.5
-      },
-      "day": {
-        "hue": 125,
-        "saturation": 0.19,
-        "intensity": 0.55
-      },
-      "dusk": {
-        "hue": 210,
-        "saturation": 0.15,
-        "intensity": 0.42
-      },
-      "night": {
-        "hue": 176,
-        "saturation": 0.28,
-        "intensity": 0.06
-      }
-    },
-    "grassColor": {
-      "hue": 103,
-      "saturation": 0.24,
-      "intensity": 0.31
-    },
-    "leafColor": {
-      "hue": 108,
-      "saturation": 0.22,
-      "intensity": 0.3
-    },
-    "foliageColor": {
-      "hue": 99,
-      "saturation": 0.2,
-      "intensity": 0.29
-    },
-    "waterColor": {
-      "hue": 112,
-      "saturation": 0.34,
-      "intensity": 0.25
-    },
-    "underwaterTint": {
-      "color": {
-        "hue": 118,
-        "saturation": 0.42,
-        "intensity": 0.22
-      },
-      "opacity": 0.34
-    },
-    "stars": {
-      "density": 0.55,
-      "color": {
-        "hue": 215,
-        "saturation": 0.06,
-        "intensity": 0.88
-      }
-    },
-    "clouds": {
-      "density": 0.62,
-      "color": {
-        "hue": 130,
-        "saturation": 0.06,
-        "intensity": 0.76
-      }
-    },
-    "terrainRoughness": 1,
-    "terrainMetallic": 0
-  },
-  "climate": {
-    "continentalness": {
-      "min": 0.36,
-      "max": 1
-    }
-  },
-  "objectSpawns": [
-    {
-      "object": "asteria:mushroom_brown",
-      "spacing": 34,
-      "chance": 0.5,
-      "jitter": 8,
-      "clusterMin": 2,
-      "clusterMax": 5,
-      "clusterRadius": 4,
-      "groundBlocks": [
-        "asteria:grass_block",
-        "asteria:dirt",
-        "asteria:mud"
-      ]
     }
   ]
 }

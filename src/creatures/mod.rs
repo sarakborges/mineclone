@@ -3,7 +3,6 @@ mod lifecycle;
 mod material;
 mod metadata;
 mod motion;
-mod natural_spawn;
 mod particles;
 mod persistence;
 mod spawn;
@@ -20,7 +19,6 @@ use lifecycle::{despawn_dead_creatures, despawn_distant_creatures};
 pub(crate) use material::apply_creature_material_overrides;
 pub(crate) use metadata::EntityMetaTags;
 use motion::move_creatures;
-use natural_spawn::natural_spawn_creatures;
 use particles::{emit_creature_particles, update_creature_particles};
 pub(crate) use persistence::{PendingCreatureRestores, SavedCreature, sort_saved_creatures};
 use spawn::restore_saved_creatures;
@@ -52,15 +50,7 @@ impl Plugin for CreaturesPlugin {
             )
             .add_systems(
                 Update,
-                restore_saved_creatures
-                    .run_if(in_state(GameState::Gameplay))
-                    .before(natural_spawn_creatures),
-            )
-            .add_systems(
-                Update,
-                natural_spawn_creatures
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                restore_saved_creatures.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,

@@ -1,653 +1,339 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use bevy::{
-    platform::collections::HashSet,
-    prelude::{IVec2, IVec3, Res, ResMut},
-};
+use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::{
-    voxel::{
-        chunk::VoxelChunk,
-        coordinates::{chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains},
-        world::VoxelWorld,
+    content::{
+        block::BlockRegistry, fluid::FluidRegistry,
+        secondary_property::SecondaryPropertyRegistry,
     },
-    world::{
-        chunk_async_work::ChunkAsyncWorkLimiter,
-        chunk_generation_tasks::{GenerationScheduler, MAX_GENERATION_TASKS_IN_FLIGHT},
-        chunk_rendering::ChunkRenderPool,
-        chunk_system_params::ChunkContent,
-        fluid_updates::GeneratedFluidSettlingCompletion,
-        work_budget::FrameWorkBudget,
+    voxel::{
+        coordinates::{ChunkCoord, chunk_coord_from_world, chunk_origin},
+        lighting::PendingLightingUpdates,
+        world::VoxelWorld,
     },
 };
 
-use super::{ChunkStreamingQueues, ChunkStreamingWork};
+use super::ChunkStreamingState;
+use crate::world::{
+    chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
+    fluid_updates::{PendingFluidUpdates, enqueue_generated_fluid_frontier},
+    generator::{MaterializedChunk, WorldGenerator},
+    revision::TaskInputRevision,
+    work_budget::FrameWorkBudget,
+};
 
-const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
-const MAX_CRITICAL_GENERATION_WAVE_TARGETS: usize = 4;
-const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
-const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
-const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
-const STREAMING_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(1);
-const MIN_STREAMING_FLUID_SETTLING_UPDATES: usize = 1;
-const MAX_STREAMING_FLUID_SETTLING_UPDATES: usize = 128;
-const SETTLED_PUBLICATION_BUDGET: Duration = Duration::from_millis(1);
-const MIN_SETTLED_PUBLICATIONS_PER_FRAME: usize = 1;
-const MAX_SETTLED_PUBLICATIONS_PER_FRAME: usize = 8;
+const MAX_MATERIALIZATION_TASKS_IN_FLIGHT: usize = 4;
+const MAX_MATERIALIZATION_RESULTS_PER_FRAME: usize = 8;
+const MAX_MATERIALIZATION_DISPATCHES_PER_FRAME: usize = 4;
+const MATERIALIZATION_RESULT_BUDGET: Duration = Duration::from_millis(1);
+const MATERIALIZATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
+const FLUID_SPREAD_TARGETS: [IVec3; 5] =
+    [IVec3::NEG_Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
+const FRONTIER_SOURCE_NEIGHBORS: [IVec3; 5] =
+    [IVec3::Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ChunkAvailability {
-    Resident,
-    Archived,
-    Absent,
+#[derive(Resource)]
+pub(crate) struct ChunkMaterializationTasks {
+    revision: TaskInputRevision,
+    tasks: ChunkTaskQueue<MaterializedChunk>,
 }
 
-fn chunk_availability(world: &VoxelWorld, coord: IVec3) -> ChunkAvailability {
-    if world.chunk(coord).is_some() {
-        ChunkAvailability::Resident
-    } else if world.has_resident_or_persisted_chunk(coord) {
-        ChunkAvailability::Archived
-    } else {
-        ChunkAvailability::Absent
+impl Default for ChunkMaterializationTasks {
+    fn default() -> Self {
+        Self {
+            revision: TaskInputRevision::default().next(),
+            tasks: ChunkTaskQueue::default(),
+        }
     }
 }
 
-fn wants_generation(state: &super::ChunkStreamingState, coord: IVec3) -> bool {
-    state.residency.desired.contains(&coord)
+impl ChunkMaterializationTasks {
+    pub(super) fn restart_for_generator_change(&mut self) {
+        self.revision = self.revision.next();
+        self.tasks = ChunkTaskQueue::default();
+    }
+
+    pub(super) const fn revision(&self) -> TaskInputRevision {
+        self.revision
+    }
+
+    pub(super) fn pending_count(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub(super) fn contains(&self, coord: IVec3) -> bool {
+        self.tasks.contains(ChunkCoord::from_ivec3(coord))
+    }
+
+    fn schedule(&mut self, coord: IVec3, generator: &WorldGenerator) -> bool {
+        if self.tasks.len() >= MAX_MATERIALIZATION_TASKS_IN_FLIGHT || self.contains(coord) {
+            return false;
+        }
+
+        let generator = generator.clone();
+        let task =
+            AsyncComputeTaskPool::get().spawn(async move { generator.materialize_chunk(coord) });
+        self.tasks.insert(
+            ChunkCoord::from_ivec3(coord),
+            self.revision,
+            task,
+        )
+    }
+
+    fn poll_ready(&mut self) -> Option<CompletedChunkTask<MaterializedChunk>> {
+        self.tasks.poll_ready().map(CompletedChunkTask::into_runtime)
+    }
 }
 
-pub(super) fn collect_generated_chunks(
-    content: &ChunkContent<'_>,
-    work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
+pub(super) struct MaterializationDefinitions<'a> {
+    pub(super) blocks: &'a BlockRegistry,
+    pub(super) fluids: &'a FluidRegistry,
+    pub(super) secondary_properties: &'a SecondaryPropertyRegistry,
+}
+
+pub(super) struct MaterializationRuntime<'a> {
+    world: &'a mut VoxelWorld,
+    pending_fluid: &'a mut PendingFluidUpdates,
+    pending_lighting: &'a mut PendingLightingUpdates,
+    definitions: MaterializationDefinitions<'a>,
     current_tick: u64,
+    deadline: Instant,
+}
+
+impl<'a> MaterializationRuntime<'a> {
+    pub(super) fn new(
+        world: &'a mut VoxelWorld,
+        pending_fluid: &'a mut PendingFluidUpdates,
+        pending_lighting: &'a mut PendingLightingUpdates,
+        definitions: MaterializationDefinitions<'a>,
+        current_tick: u64,
+        deadline: Instant,
+    ) -> Self {
+        Self {
+            world,
+            pending_fluid,
+            pending_lighting,
+            definitions,
+            current_tick,
+            deadline,
+        }
+    }
+}
+
+pub(super) fn collect_materialized_chunks(
+    generator_tasks: &mut ChunkMaterializationTasks,
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
 ) {
-    if work.state.generation_wave.has_settled_publication() {
-        if process_settled_wave_publication(work) {
-            work.state.generation_wave.finish();
-        }
+    if generator_tasks.pending_count() == 0 {
         return;
     }
 
-    if work.state.generation_wave.fluid_settling.is_active() {
-        if !process_streaming_fluid_settling(content, work) {
-            return;
-        }
-        let completion = work
-            .state
-            .generation_wave
-            .fluid_settling
-            .take_completion()
-            .expect("completed streaming fluid settling must own its generation wave");
-        begin_settled_wave_publication(completion, work, queues, current_tick);
-        if !work.state.generation_wave.has_settled_publication() {
-            work.state.generation_wave.finish();
-        }
-        return;
-    }
-
-    let deadline = work.frame_budget.deadline();
-    let current_revision = work.generation_tasks.revision();
-    let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
-        .with_global_deadline(deadline)
-        .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
-
-    loop {
-        if budget.exhausted() {
-            break;
-        }
-
-        let Some(completed) = work.generation_tasks.poll_ready() else {
-            break;
-        };
-        budget.record(1);
-
-        let horizontal = IVec2::new(completed.coord.x, completed.coord.z);
-        if let Some(structure_top_chunk) = work
-            .generation_tasks
-            .structure_top_chunk_if_ready(horizontal)
-        {
-            work.state
-                .adopt_structure_top_chunk(horizontal, structure_top_chunk);
-        }
-
-        if completed.revision != current_revision {
-            if wants_generation(&work.state, completed.coord)
-                && work.state.generation_wave.contains_target(completed.coord)
-            {
-                work.state.generation_wave.enqueue_pending(completed.coord);
-            } else {
-                work.state.generation_wave.abandon_target(completed.coord);
-            }
-            continue;
-        }
-        if !wants_generation(&work.state, completed.coord) {
-            work.state.generation_wave.abandon_target(completed.coord);
-            continue;
-        }
-        match chunk_availability(&work.world, completed.coord) {
-            ChunkAvailability::Resident => {
-                work.state.mark_ready(completed.coord);
-                work.state.generation_wave.complete_target(completed.coord);
-                continue;
-            }
-            ChunkAvailability::Archived => {
-                assert!(
-                    work.world.restore_chunk(completed.coord),
-                    "archived chunk must remain restorable: {:?}",
-                    completed.coord
-                );
-                work.state.mark_ready(completed.coord);
-                work.state.generation_wave.complete_target(completed.coord);
-                continue;
-            }
-            ChunkAvailability::Absent => {}
-        }
-
-        let requires_fluid_settling = generated_chunk_requires_fluid_settling(
-            &work.world,
-            completed.coord,
-            &completed.output,
-        );
-        work.world.insert_chunk(completed.coord, completed.output);
-        if requires_fluid_settling {
-            work.state
-                .generation_wave
-                .stage_generated_chunk(completed.coord);
-        } else {
-            work.state.mark_ready(completed.coord);
-            work.state.generation_wave.complete_target(completed.coord);
-        }
-    }
-
-    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave.pending_len() > 0 {
-        return;
-    }
-
-    let staged = work.state.generation_wave.take_staged_generated_chunks();
-    if staged.is_empty() {
-        work.state.generation_wave.finish();
-        return;
-    }
-
-    let world = &work.world;
-    work.state
-        .generation_wave
-        .fluid_settling
-        .begin(world, content.fluids(), staged);
-
-    if process_streaming_fluid_settling(content, work) {
-        let completion = work
-            .state
-            .generation_wave
-            .fluid_settling
-            .take_completion()
-            .expect("completed streaming fluid settling must own its generation wave");
-        begin_settled_wave_publication(completion, work, queues, current_tick);
-        if !work.state.generation_wave.has_settled_publication() {
-            work.state.generation_wave.finish();
-        }
-    }
-}
-
-fn process_streaming_fluid_settling(
-    content: &ChunkContent<'_>,
-    work: &mut ChunkStreamingWork<'_>,
-) -> bool {
-    let deadline = work.frame_budget.deadline();
-    let mut settling_budget = FrameWorkBudget::new(
-        STREAMING_FLUID_SETTLING_BUDGET,
-        MIN_STREAMING_FLUID_SETTLING_UPDATES,
-    )
-    .with_global_deadline(deadline)
-    .with_maximum_items(MAX_STREAMING_FLUID_SETTLING_UPDATES);
-
-    let state = &mut work.state;
-    let world = &mut work.world;
-    state
-        .generation_wave
-        .fluid_settling
-        .process(world, content.fluids(), &mut settling_budget)
-}
-
-fn begin_settled_wave_publication(
-    completion: GeneratedFluidSettlingCompletion,
-    work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
-    current_tick: u64,
-) {
-    reconcile_existing_fluid_changes(&completion.changed_existing_positions, work, queues);
-
-    for &coord in &completion.owned_existing_chunks {
-        queues.fluid.reactivate_loaded_chunk(coord, current_tick);
-        queues
-            .fluid
-            .enqueue_loaded_fluid_frontier(&work.world, coord);
-    }
-
-    work.state
-        .generation_wave
-        .begin_settled_publication(completion.generated_chunks);
-}
-
-fn process_settled_wave_publication(work: &mut ChunkStreamingWork<'_>) -> bool {
-    let deadline = work.frame_budget.deadline();
-    let mut budget = FrameWorkBudget::new(
-        SETTLED_PUBLICATION_BUDGET,
-        MIN_SETTLED_PUBLICATIONS_PER_FRAME,
-    )
-    .with_global_deadline(deadline)
-    .with_maximum_items(MAX_SETTLED_PUBLICATIONS_PER_FRAME);
+    let current_revision = generator_tasks.revision();
+    let mut budget = FrameWorkBudget::new(MATERIALIZATION_RESULT_BUDGET, 1)
+        .with_global_deadline(runtime.deadline)
+        .with_maximum_items(MAX_MATERIALIZATION_RESULTS_PER_FRAME);
 
     while !budget.exhausted() {
-        let Some(coord) = work.state.generation_wave.pop_settled_publication_chunk() else {
-            return true;
+        let Some(completed) = generator_tasks.poll_ready() else {
+            break;
         };
         budget.record(1);
 
-        if !work.state.keeps_loaded(coord) {
-            work.world.archive_chunk(coord);
-            work.state.generation_wave.complete_target(coord);
+        let coord = completed.coord;
+        streaming.finish_materializing(coord);
+        if completed.revision != current_revision {
+            if streaming.keeps_loaded(coord) {
+                streaming.enqueue_pending(coord);
+            }
+            continue;
+        }
+        if !streaming.keeps_loaded(coord) {
             continue;
         }
 
-        // Settling has already converged generated fluids. Lighting stays
-        // uninitialized until initial publication; dynamic propagation treats
-        // unpublished chunks as outside its active domain.
-        work.state.mark_ready(coord);
-        work.state.generation_wave.complete_target(coord);
-    }
+        if runtime.world.restore_chunk(coord) {
+            activate_restored_chunk(streaming, runtime, coord);
+            continue;
+        }
 
-    !work.state.generation_wave.has_settled_publication()
-}
+        let frontiers = completed.output.generated_fluid_frontiers().to_vec();
+        runtime
+            .world
+            .insert_chunk(coord, completed.output.into_chunk());
+        activate_resident_lighting_and_presentation(streaming, runtime, coord);
+        runtime
+            .pending_fluid
+            .reactivate_loaded_chunk(coord, runtime.current_tick);
 
-fn reconcile_existing_fluid_changes(
-    changed_positions: &[IVec3],
-    work: &mut ChunkStreamingWork<'_>,
-    queues: &mut ChunkStreamingQueues<'_>,
-) {
-    if changed_positions.is_empty() {
-        return;
-    }
-
-    queues
-        .lighting
-        .enqueue_settling_medium_edits(changed_positions.iter().copied());
-
-    let mut changed_chunks = HashSet::new();
-    let mut affected_fluid_meshes = HashSet::new();
-    for &position in changed_positions {
-        let coord = chunk_coord_from_world(position);
-        changed_chunks.insert(coord);
-        visit_chunk_coords_whose_voxel_halo_contains(position, |affected| {
-            affected_fluid_meshes.insert(affected);
-        });
-    }
-
-    for affected in affected_fluid_meshes {
-        queues
-            .lighting
-            .defer_settling_fluid_remesh(affected, changed_chunks.contains(&affected));
-    }
-
-    let mut changed_chunks = changed_chunks.into_iter().collect::<Vec<_>>();
-    changed_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-    for coord in changed_chunks {
-        queues
-            .fluid
-            .enqueue_loaded_fluid_frontier(&work.world, coord);
+        for frontier in frontiers {
+            if runtime.world.is_loaded_at(frontier.position()) {
+                enqueue_generated_fluid_frontier(
+                    runtime.pending_fluid,
+                    runtime.definitions.fluids,
+                    frontier.fluid(),
+                    frontier.position(),
+                );
+            }
+        }
+        enqueue_neighbor_frontiers_targeting_chunk(
+            runtime.world,
+            coord,
+            runtime.pending_fluid,
+            runtime.definitions.fluids,
+        );
     }
 }
 
-pub(super) fn dispatch_generation_tasks(
-    render_pool: &ChunkRenderPool,
-    work: &mut ChunkStreamingWork<'_>,
+pub(super) fn dispatch_materialization_tasks(
+    generator: &WorldGenerator,
+    generator_tasks: &mut ChunkMaterializationTasks,
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
 ) {
-    if work.state.generation_wave.fluid_settling.is_active() {
-        return;
+    let mut budget = FrameWorkBudget::new(MATERIALIZATION_DISPATCH_BUDGET, 1)
+        .with_global_deadline(runtime.deadline)
+        .with_maximum_items(MAX_MATERIALIZATION_DISPATCHES_PER_FRAME);
+
+    while generator_tasks.pending_count() < MAX_MATERIALIZATION_TASKS_IN_FLIGHT
+        && !budget.exhausted()
+    {
+        let Some(coord) = streaming.pop_pending_by_priority() else {
+            break;
+        };
+        budget.record(1);
+
+        if !streaming.keeps_loaded(coord) || streaming.is_materializing(coord) {
+            continue;
+        }
+        if runtime.world.restore_chunk(coord) {
+            activate_restored_chunk(streaming, runtime, coord);
+            continue;
+        }
+
+        if generator_tasks.schedule(coord, generator) {
+            streaming.mark_materializing(coord);
+        } else {
+            streaming.enqueue_pending(coord);
+            break;
+        }
     }
+}
 
-    let deadline = work.frame_budget.deadline();
-    let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
-        .with_global_deadline(deadline)
-        .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
-
-    if work.state.generation_wave.accepts_new_targets() {
-        select_generation_wave(render_pool, work, &mut budget);
-    }
-
-    schedule_generation_wave_pending(
-        &mut work.state,
-        &mut work.generation_tasks,
-        &work.async_work,
-        Some(&mut budget),
+fn activate_restored_chunk(
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
+    coord: IVec3,
+) {
+    activate_resident_lighting_and_presentation(streaming, runtime, coord);
+    runtime
+        .pending_fluid
+        .reactivate_loaded_chunk(coord, runtime.current_tick);
+    enqueue_source_frontiers_to_loaded_targets(
+        runtime.world,
+        coord,
+        runtime.pending_fluid,
+        runtime.definitions.fluids,
+    );
+    enqueue_neighbor_frontiers_targeting_chunk(
+        runtime.world,
+        coord,
+        runtime.pending_fluid,
+        runtime.definitions.fluids,
     );
 }
 
-fn schedule_generation_wave_pending(
-    state: &mut super::ChunkStreamingState,
-    generation_tasks: &mut GenerationScheduler,
-    async_work: &ChunkAsyncWorkLimiter,
-    mut budget: Option<&mut FrameWorkBudget>,
-) {
-    let attempts = state.generation_wave.pending_len();
-    for _ in 0..attempts {
-        if generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT
-            || budget.as_ref().is_some_and(|budget| budget.exhausted())
-        {
-            break;
-        }
-
-        let Some(coord) = state.generation_wave.pop_pending() else {
-            break;
-        };
-        if !wants_generation(state, coord) {
-            state.generation_wave.abandon_target(coord);
-            if let Some(budget) = budget.as_deref_mut() {
-                budget.record(1);
-            }
-            continue;
-        }
-        if generation_tasks.contains(coord) {
-            if let Some(budget) = budget.as_deref_mut() {
-                budget.record(1);
-            }
-            continue;
-        }
-
-        if generation_tasks.schedule(coord, async_work) {
-            if let Some(budget) = budget.as_deref_mut() {
-                budget.record(1);
-            }
-        } else {
-            state.generation_wave.enqueue_pending(coord);
-            if let Some(budget) = budget.as_deref_mut() {
-                budget.record(1);
-            }
-            // With the task-count cap checked above, schedule failure means
-            // the shared async limiter has no free permit. Retrying other
-            // targets in the same pass only burns main-thread time.
-            break;
-        }
-    }
-}
-
-pub(in crate::world) fn refill_generation_workers(
-    mut world: ResMut<VoxelWorld>,
-    mut state: ResMut<super::ChunkStreamingState>,
-    mut generation_tasks: ResMut<GenerationScheduler>,
-    async_work: Res<ChunkAsyncWorkLimiter>,
-) {
-    if state.generation_wave.settling_or_publishing() {
-        prefetch_next_generation_wave(&mut world, &mut state, &mut generation_tasks, &async_work);
-        return;
-    }
-
-    if state.generation_wave.pending_len() == 0 {
-        return;
-    }
-
-    // Generation tasks are short once caches are warm. A second dispatch point
-    // late in the frame lets workers consume already-selected wave targets
-    // instead of idling until the next Update after their permits are released.
-    // This does no priority scanning and never grows the active wave.
-    schedule_generation_wave_pending(&mut state, &mut generation_tasks, &async_work, None);
-}
-
-fn prefetch_next_generation_wave(
-    world: &mut VoxelWorld,
-    state: &mut super::ChunkStreamingState,
-    generation_tasks: &mut GenerationScheduler,
-    async_work: &ChunkAsyncWorkLimiter,
-) {
-    let prefetch_limit = generation_wave_target_limit(state);
-    let mut attempts = MAX_GENERATION_DISPATCH_WORK_PER_FRAME;
-
-    while attempts > 0
-        && generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
-        && state.generation_wave.prefetch_len() < prefetch_limit
-    {
-        attempts -= 1;
-
-        let Some(coord) = state.pop_pending_by_priority() else {
-            break;
-        };
-        if !wants_generation(state, coord) {
-            continue;
-        }
-        if generation_tasks.contains(coord)
-            || state.generation_wave.contains_prefetch(coord)
-            || state.generation_wave.contains_target(coord)
-        {
-            continue;
-        }
-
-        match chunk_availability(world, coord) {
-            ChunkAvailability::Resident => {
-                state.mark_ready(coord);
-                continue;
-            }
-            ChunkAvailability::Archived => {
-                assert!(
-                    world.restore_chunk(coord),
-                    "archived chunk must remain restorable: {coord:?}"
-                );
-                state.mark_ready(coord);
-                continue;
-            }
-            ChunkAvailability::Absent => {}
-        }
-
-        if generation_tasks.schedule(coord, async_work) {
-            state.generation_wave.mark_prefetched(coord);
-        } else {
-            state.requeue(coord);
-            break;
-        }
-    }
-}
-
-fn generated_chunk_requires_fluid_settling(
-    world: &VoxelWorld,
+fn activate_resident_lighting_and_presentation(
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
     coord: IVec3,
-    chunk: &VoxelChunk,
-) -> bool {
-    if chunk.has_fluid_settling_work() {
-        return true;
-    }
-
-    for y in -1..=1 {
-        for z in -1..=1 {
-            for x in -1..=1 {
-                let offset = IVec3::new(x, y, z);
-                if offset == IVec3::ZERO {
-                    continue;
-                }
-                if world
-                    .chunk(coord + offset)
-                    .is_some_and(VoxelChunk::has_fluid_settling_work)
-                {
-                    return true;
-                }
-            }
-        }
-    }
-
-    false
-}
-
-fn generation_wave_target_limit(state: &mut super::ChunkStreamingState) -> usize {
-    if state.center().is_none() {
-        return MAX_GENERATION_TASKS_IN_FLIGHT;
-    }
-
-    if state.has_critical_pending() {
-        MAX_CRITICAL_GENERATION_WAVE_TARGETS.min(MAX_GENERATION_TASKS_IN_FLIGHT)
-    } else {
-        MAX_GENERATION_TASKS_IN_FLIGHT
-    }
-}
-
-fn select_generation_wave(
-    render_pool: &ChunkRenderPool,
-    work: &mut ChunkStreamingWork<'_>,
-    budget: &mut FrameWorkBudget,
 ) {
-    let target_limit = generation_wave_target_limit(&mut work.state);
-    while work.state.generation_wave.target_len() < target_limit {
-        if budget.exhausted() {
-            break;
-        }
+    let seed = runtime.pending_lighting.seed_chunk_direct_lighting(
+        runtime.world,
+        coord,
+        runtime.definitions.blocks,
+        runtime.definitions.fluids,
+        runtime.definitions.secondary_properties,
+    );
+    let chunk_is_empty = runtime
+        .world
+        .chunk(coord)
+        .unwrap_or_else(|| panic!("activated chunk must be resident: {coord:?}"))
+        .is_empty();
 
-        let Some(coord) = work.state.pop_pending_by_priority() else {
-            break;
-        };
-        // Priority selection itself is the expensive operation: it scans the
-        // pending frontier. Count every scan immediately, including stale or
-        // already-owned entries, so those discard paths cannot bypass the
-        // frame deadline and drain an arbitrarily large queue in one Update.
-        budget.record(1);
-
-        if !wants_generation(&work.state, coord) {
-            continue;
-        }
-
-        if render_pool.contains(coord)
-            || work.state.ready.contains(coord)
-            || work.mesh_tasks.contains(coord)
-            || work.generation_tasks.contains(coord)
-            || work.state.generated_chunk_is_unpublished(coord)
-        {
-            continue;
-        }
-
-        match chunk_availability(&work.world, coord) {
-            ChunkAvailability::Resident => {
-                work.state.mark_ready(coord);
-                continue;
-            }
-            ChunkAvailability::Archived => {
-                assert!(
-                    work.world.restore_chunk(coord),
-                    "archived chunk must remain restorable: {coord:?}"
-                );
-                work.state.mark_ready(coord);
-                continue;
-            }
-            ChunkAvailability::Absent => {}
-        }
-
-        work.state.generation_wave.start_target(coord);
+    if chunk_is_empty {
+        runtime.pending_lighting.enqueue_empty_chunk_relaxation(coord);
+    } else if seed.requires_relaxation {
+        runtime.pending_lighting.enqueue_chunk_relaxation(coord);
     }
+    if seed.changes_direct_sky_below {
+        runtime
+            .pending_lighting
+            .enqueue_loaded_column_below(runtime.world, coord);
+    }
+
+    streaming.enqueue_presentation(coord);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::voxel::{cell::VoxelCell, fluid::FluidCell};
-
-    #[test]
-    fn chunk_availability_distinguishes_resident_archived_and_absent() {
-        let coord = IVec3::new(3, 2, -4);
-        let mut world = VoxelWorld::default();
-        assert_eq!(chunk_availability(&world, coord), ChunkAvailability::Absent);
-
-        world.insert_chunk(coord, VoxelChunk::empty());
-        assert_eq!(
-            chunk_availability(&world, coord),
-            ChunkAvailability::Resident
-        );
-
-        let world_position = coord * crate::voxel::chunk::CHUNK_SIZE as i32 + IVec3::ONE;
-        assert!(
-            world
-                .set_block_at(
-                    world_position,
-                    Some(VoxelCell::new("stone", Default::default())),
-                )
-                .is_some()
-        );
-        world.archive_chunk(coord);
-        assert_eq!(
-            chunk_availability(&world, coord),
-            ChunkAvailability::Archived
-        );
-
-        assert!(world.restore_chunk(coord));
-        assert_eq!(
-            chunk_availability(&world, coord),
-            ChunkAvailability::Resident
-        );
-    }
-
-    #[test]
-    fn retained_chunks_are_not_eligible_for_generation_work() {
-        let desired = IVec3::new(2, 0, 0);
-        let retained = IVec3::new(-2, 0, 0);
-        let mut state = super::super::ChunkStreamingState::default();
-        state.residency.desired.insert(desired);
-        state.residency.retained.insert(retained);
-
-        assert!(wants_generation(&state, desired));
-        assert!(!wants_generation(&state, retained));
-        assert!(state.keeps_loaded(retained));
-    }
-
-    #[test]
-    fn dry_generated_chunks_skip_settling_only_without_fluid_neighbors() {
-        let coord = IVec3::new(3, 2, -4);
-        let dry = VoxelChunk::empty();
-        let mut world = VoxelWorld::default();
-
-        assert!(!generated_chunk_requires_fluid_settling(
-            &world, coord, &dry
-        ));
-
-        let mut static_water = VoxelChunk::empty();
-        static_water.edit_initial_fluids(|fluids| {
-            fluids.set_fluid(4, 5, 6, FluidCell::source(0, 8));
+fn enqueue_source_frontiers_to_loaded_targets(
+    world: &VoxelWorld,
+    source_coord: IVec3,
+    pending_fluid: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+) {
+    let Some(chunk) = world.chunk(source_coord) else {
+        return;
+    };
+    let source_origin = chunk_origin(source_coord);
+    chunk.visit_potential_fluid_frontier_sources(|local_source, fluid| {
+        let definition = fluids.get(fluid.fluid_id).unwrap_or_else(|| {
+            panic!(
+                "resident chunk {source_coord:?} references missing fluid id {}",
+                fluid.fluid_id
+            )
         });
-        static_water.suppress_generated_fluid_frontiers(&[[4, 5, 6]]);
-        assert!(!generated_chunk_requires_fluid_settling(
-            &world,
-            coord,
-            &static_water
-        ));
+        let source = source_origin + local_source;
+        for offset in FLUID_SPREAD_TARGETS {
+            let target = source + offset;
+            if world.is_loaded_at(target) {
+                enqueue_generated_fluid_frontier(pending_fluid, fluids, &definition.id, target);
+            }
+        }
+    });
+}
 
-        let mut flowing = VoxelChunk::empty();
-        flowing.set_fluid(4, 5, 6, Some(FluidCell::spreading(0, 7, 1)));
-        assert!(generated_chunk_requires_fluid_settling(
-            &world, coord, &flowing
-        ));
-
-        world.insert_chunk(coord + IVec3::X, flowing);
-        assert!(generated_chunk_requires_fluid_settling(&world, coord, &dry));
-    }
-
-    #[test]
-    fn critical_generation_frontier_uses_smaller_publication_waves() {
-        let center = IVec3::new(10, 2, -4);
-        let mut state = super::super::ChunkStreamingState {
-            selection_state: super::super::selection_state::StreamingSelectionState::configured(
-                Some(center),
-                IVec2::ZERO,
-                0,
-                0,
-            ),
-            ..Default::default()
+fn enqueue_neighbor_frontiers_targeting_chunk(
+    world: &VoxelWorld,
+    target_coord: IVec3,
+    pending_fluid: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+) {
+    for offset in FRONTIER_SOURCE_NEIGHBORS {
+        let source_coord = target_coord + offset;
+        let Some(chunk) = world.chunk(source_coord) else {
+            continue;
         };
-        state.pending.enqueue(center + IVec3::X);
-
-        assert_eq!(
-            generation_wave_target_limit(&mut state),
-            MAX_CRITICAL_GENERATION_WAVE_TARGETS,
-        );
-
-        state.pending.clear();
-        state.pending.enqueue(center + IVec3::new(4, 0, 0));
-        assert_eq!(
-            generation_wave_target_limit(&mut state),
-            MAX_GENERATION_TASKS_IN_FLIGHT,
-        );
+        let source_origin = chunk_origin(source_coord);
+        chunk.visit_potential_fluid_frontier_sources(|local_source, fluid| {
+            let definition = fluids.get(fluid.fluid_id).unwrap_or_else(|| {
+                panic!(
+                    "resident chunk {source_coord:?} references missing fluid id {}",
+                    fluid.fluid_id
+                )
+            });
+            let source = source_origin + local_source;
+            for spread in FLUID_SPREAD_TARGETS {
+                let target = source + spread;
+                if chunk_coord_from_world(target) == target_coord {
+                    enqueue_generated_fluid_frontier(
+                        pending_fluid,
+                        fluids,
+                        &definition.id,
+                        target,
+                    );
+                }
+            }
+        });
     }
 }

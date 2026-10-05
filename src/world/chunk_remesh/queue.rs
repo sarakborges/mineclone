@@ -137,22 +137,6 @@ impl ChunkRemeshQueue {
         self.enqueue_geometry_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
 
-    pub(crate) fn enqueue_geometry_meshlets_priority(
-        &mut self,
-        coord: IVec3,
-        meshlets: ChunkMeshletMask,
-    ) {
-        self.enqueue_geometry_meshlets(coord, meshlets, true);
-    }
-
-    pub(crate) fn enqueue_fluid_meshlets_priority(
-        &mut self,
-        coord: IVec3,
-        meshlets: ChunkMeshletMask,
-    ) {
-        self.enqueue_fluid_meshlets(coord, meshlets, true);
-    }
-
     pub(crate) fn enqueue_halo_change(
         &mut self,
         coord: IVec3,

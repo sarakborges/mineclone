@@ -3,15 +3,6 @@ pub(crate) mod ambient_particle_registry;
 pub(crate) mod asset_path;
 pub(crate) mod attack;
 pub(crate) mod biome;
-pub(crate) mod biome_density;
-pub(crate) mod biome_distribution;
-pub(crate) mod biome_material;
-pub(crate) mod biome_sky_layer;
-pub(crate) mod biome_structure;
-pub(crate) mod biome_surface_fluid;
-pub(crate) mod biome_surface_margin;
-pub(crate) mod biome_terrain;
-pub(crate) mod biome_terrain_modifier;
 pub(crate) mod block;
 pub(crate) mod block_id;
 pub(crate) mod block_orientation;
@@ -30,7 +21,7 @@ pub(crate) mod item_id;
 mod json_file;
 pub(crate) mod layer;
 pub(crate) mod layer_id;
-mod loader;
+pub(crate) mod loader;
 pub(crate) mod loot;
 pub(crate) mod object;
 pub(crate) mod object_id;
@@ -39,8 +30,11 @@ pub(crate) mod portal;
 mod registry;
 pub(crate) mod secondary_property;
 pub(crate) mod sky;
+#[allow(dead_code)]
 pub(crate) mod structure;
+#[allow(dead_code)]
 pub(crate) mod structure_rules;
+#[allow(dead_code)]
 pub(crate) mod structure_set;
 pub(crate) mod tool;
 pub(crate) mod tool_behavior;
@@ -50,8 +44,8 @@ mod validation;
 pub(crate) mod world_recipe;
 
 use bevy::prelude::*;
+pub(crate) use loader::read_content;
 use loader::load_content;
-pub(crate) use loader::{LoadedContent, read_content};
 
 pub(crate) struct ContentPlugin;
 

@@ -31,11 +31,13 @@ impl ChunkPersistenceState {
         self.archived_chunks.contains_key(&coord)
     }
 
+    /// Any chunk that reached runtime residency has crossed the persistence
+    /// boundary. Archiving must therefore retain it even when the player never
+    /// mutated it and even when its voxel payload is empty.
     pub(super) fn archive_if_persistent(&mut self, coord: IVec3, chunk: &VoxelChunk) {
-        if self.is_persistent(coord) {
-            self.archived_chunks
-                .insert(coord, Arc::new(ArchivedChunk::from_chunk(chunk)));
-        }
+        self.mark_persistent(coord);
+        self.archived_chunks
+            .insert(coord, Arc::new(ArchivedChunk::from_chunk(chunk)));
     }
 
     pub(super) fn restore(&mut self, coord: IVec3) -> Option<VoxelChunk> {
@@ -59,11 +61,16 @@ impl ChunkPersistenceState {
 }
 
 impl VoxelWorld {
-    /// Captures only chunks with persistent mutations. Untouched deterministic
-    /// terrain is reconstructed from the seed after load instead of being kept
-    /// in RAM and copied into every save.
-    pub(crate) fn persistent_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.persistence.persistent_coords()
+    /// Every chunk that has entered the playable/materialized world is part of
+    /// persistent spatial state. Resident chunks are included directly; chunks
+    /// that were unloaded are retained by `ChunkPersistenceState`.
+    pub(crate) fn persistent_chunk_coords(&self) -> impl Iterator<Item = IVec3> {
+        let mut coords = self
+            .persistence
+            .persistent_coords()
+            .collect::<HashSet<_>>();
+        coords.extend(self.resident.coords());
+        coords.into_iter()
     }
 
     pub(crate) fn save_persistent_chunk(
@@ -71,21 +78,22 @@ impl VoxelWorld {
         coord: IVec3,
         fluids: &FluidRegistry,
     ) -> io::Result<DiskChunk> {
-        if !self.persistence.is_persistent(coord) {
+        let resident = self.resident.get(coord);
+        if resident.is_none() && !self.persistence.is_persistent(coord) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("chunk {coord:?} is not persistent"),
+                format!("chunk {coord:?} was never materialized"),
             ));
         }
 
-        if let Some(chunk) = self.resident.get(coord) {
+        if let Some(chunk) = resident {
             DiskChunk::from_chunk(coord, chunk, fluids)
         } else if let Some(archived) = self.persistence.archived_chunk(coord) {
             DiskChunk::from_archived_chunk(coord, archived, fluids)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("persistent chunk {coord:?} has neither loaded nor archived content"),
+                format!("materialized chunk {coord:?} has neither resident nor archived content"),
             ))
         }
     }

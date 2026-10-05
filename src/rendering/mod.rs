@@ -1,12 +1,16 @@
 mod ambient_particles;
 mod asset_upload;
-pub(crate) mod biome_visuals;
 pub(crate) mod block_display;
 pub(crate) mod block_model;
 pub(crate) mod block_model_material;
+// Materialization/loading is intentionally absent in Phase 1; retain the generic
+// render infrastructure for the replacement pipeline without retaining the old
+// loading preloader itself.
+#[allow(dead_code)]
 pub(crate) mod block_texture;
 pub(crate) mod block_tint;
 pub(crate) mod block_visual_content;
+#[allow(dead_code)]
 pub(crate) mod camera_stack;
 mod celestial;
 mod celestial_path;
@@ -15,13 +19,13 @@ mod dynamic_lights;
 mod environment;
 pub(crate) mod extruded_sprite;
 mod fog;
-mod gameplay_asset_preload;
 mod lighting;
 mod mesh_allocator_diagnostics;
 pub(crate) mod object_primitives;
 mod sky;
 mod sky_layers;
 mod sun_lighting;
+#[allow(dead_code)]
 pub(crate) mod terrain_material;
 pub(crate) mod wind;
 
@@ -44,14 +48,11 @@ use sun_lighting::SunLightingPlugin;
 use terrain_material::{TerrainLightingBuffer, TerrainMaterial};
 use wind::Wind;
 
-pub(crate) use gameplay_asset_preload::GameplayAssetPreloads;
-
 pub(crate) struct RenderingPlugin;
 
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<GameplayAssetPreloads>()
-            .init_resource::<Wind>()
+        app.init_resource::<Wind>()
             .add_plugins((
                 MaterialPlugin::<TerrainMaterial>::default(),
                 MaterialPlugin::<BlockModelMaterial>::default(),

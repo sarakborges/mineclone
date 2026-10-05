@@ -1,12 +1,12 @@
 {
   "id": "asteria:umbral/umbral_reach",
-  "terrain": {
-    "type": "rolling",
-    "baseHeight": 4,
-    "amplitude": 3,
-    "scale": 0.012,
-    "detailAmplitude": 1,
-    "detailScale": 0.045
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 6.0,
+    "macroAmplitude": 20.0,
+    "macroScale": 768,
+    "detailAmplitude": 6.0,
+    "detailScale": 96
   },
   "surfaceLayers": [
     {
@@ -19,172 +19,6 @@
     },
     {
       "block": "asteria:stone"
-    }
-  ],
-  "creatureSpawns": [
-    {
-      "creature": "asteria:slime",
-      "weight": 1,
-      "lightMin": 0,
-      "lightMax": 15,
-      "spacing": 16
-    }
-  ],
-  "structures": [
-    {
-      "id": "asteria:tree_oak",
-      "placement": {
-        "spacing": 80,
-        "chance": 0.54,
-        "jitter": 24
-      }
-    },
-    {
-      "id": "asteria:tree_willow",
-      "placement": {
-        "spacing": 36,
-        "chance": 0.72,
-        "jitter": 11
-      }
-    },
-    {
-      "id": "asteria:boulder_small",
-      "placement": {
-        "spacing": 36,
-        "chance": 0.28,
-        "jitter": 11
-      }
-    },
-    {
-      "id": "asteria:boulder_medium",
-      "placement": {
-        "spacing": 58,
-        "chance": 0.2,
-        "jitter": 18
-      }
-    },
-    {
-      "id": "asteria:boulder_big",
-      "placement": {
-        "spacing": 88,
-        "chance": 0.13,
-        "jitter": 27
-      }
-    },
-    {
-      "id": "asteria:boulder_huge",
-      "placement": {
-        "spacing": 140,
-        "chance": 0.07,
-        "jitter": 43
-      }
-    }
-  ],
-  "visuals": {
-    "skyColor": {
-      "dawn": {
-        "hue": 236,
-        "saturation": 0.34,
-        "intensity": 0.34
-      },
-      "day": {
-        "hue": 224,
-        "saturation": 0.3,
-        "intensity": 0.4
-      },
-      "dusk": {
-        "hue": 244,
-        "saturation": 0.36,
-        "intensity": 0.28
-      },
-      "night": {
-        "hue": 232,
-        "saturation": 0.28,
-        "intensity": 0.14
-      }
-    },
-    "fogColor": {
-      "dawn": {
-        "hue": 234,
-        "saturation": 0.3,
-        "intensity": 0.28
-      },
-      "day": {
-        "hue": 224,
-        "saturation": 0.28,
-        "intensity": 0.36
-      },
-      "dusk": {
-        "hue": 242,
-        "saturation": 0.32,
-        "intensity": 0.24
-      },
-      "night": {
-        "hue": 232,
-        "saturation": 0.24,
-        "intensity": 0.11
-      }
-    },
-    "grassColor": {
-      "hue": 220,
-      "saturation": 0.22,
-      "intensity": 0.34
-    },
-    "leafColor": {
-      "hue": 232,
-      "saturation": 0.28,
-      "intensity": 0.3
-    },
-    "foliageColor": {
-      "hue": 216,
-      "saturation": 0.24,
-      "intensity": 0.36
-    },
-    "underwaterTint": {
-      "color": {
-        "hue": 228,
-        "saturation": 0.3,
-        "intensity": 0.26
-      },
-      "opacity": 0.2
-    },
-    "stars": {
-      "density": 0.65,
-      "color": {
-        "hue": 220,
-        "saturation": 0.3,
-        "intensity": 0.66
-      }
-    },
-    "clouds": {
-      "density": 0.45,
-      "color": {
-        "hue": 238,
-        "saturation": 0.26,
-        "intensity": 0.3
-      }
-    },
-    "terrainRoughness": 0.98,
-    "terrainMetallic": 0
-  },
-  "climate": {
-    "continentalness": {
-      "min": 0.36,
-      "max": 1
-    }
-  },
-  "objectSpawns": [
-    {
-      "object": "asteria:grass",
-      "spacing": 34,
-      "chance": 0.5,
-      "jitter": 8,
-      "clusterMin": 2,
-      "clusterMax": 5,
-      "clusterRadius": 4,
-      "groundBlocks": [
-        "asteria:grass_block"
-      ]
     }
   ]
 }

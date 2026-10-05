@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
     rendering::block_texture::TerrainTextureTable,
@@ -13,68 +13,33 @@ use crate::{
         coordinates::ChunkCoord,
         mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot, ChunkSnapshotSource},
         meshlet::ChunkMeshletMask,
-        revision::ChunkContentRevision,
     },
 };
 
-use super::{
-    biome_field::BiomeField, chunk_rendering::ChunkMeshBuildContext,
-    chunk_system_params::ChunkContent,
-};
+use super::{chunk_rendering::ChunkMeshBuildContext, chunk_system_params::ChunkContent};
 
-/// Immutable world-content identity captured by a presentation job or
-/// synchronous publication. Mesh-backed sources retain halo revisions; empty
-/// synchronous publications retain only the center revision. This remains
-/// separate from authored/content-definition and lighting revisions.
+/// Immutable world-content identity captured by a remesh job.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkPresentationSource {
     coord: ChunkCoord,
-    mesh_revisions: Option<ChunkMeshDependencies>,
-    center_revision: Option<ChunkContentRevision>,
+    mesh_revisions: ChunkMeshDependencies,
 }
 
 impl ChunkPresentationSource {
     pub(crate) fn capture(coord: ChunkCoord, world: &ChunkMeshSnapshot) -> Self {
         Self {
             coord,
-            mesh_revisions: Some(world.dependencies()),
-            center_revision: None,
+            mesh_revisions: world.dependencies(),
         }
-    }
-
-    pub(crate) fn capture_center(coord: IVec3, source: &impl ChunkSnapshotSource) -> Option<Self> {
-        let coord = ChunkCoord::from_ivec3(coord);
-        Some(Self {
-            coord,
-            mesh_revisions: None,
-            center_revision: Some(source.chunk_content_revision(coord)?),
-        })
     }
 
     pub(crate) fn for_meshlets(mut self, meshlets: ChunkMeshletMask) -> Self {
-        if let Some(revisions) = self.mesh_revisions {
-            self.mesh_revisions = Some(revisions.for_meshlets(meshlets));
-        }
+        self.mesh_revisions = self.mesh_revisions.for_meshlets(meshlets);
         self
     }
 
     pub(crate) fn is_current(&self, source: &impl ChunkSnapshotSource) -> bool {
-        if let Some(revisions) = self.mesh_revisions {
-            return source.snapshot_chunk(self.coord).is_some() && revisions.is_current(source);
-        }
-        self.center_revision
-            .is_some_and(|expected| source.chunk_content_revision(self.coord) == Some(expected))
-    }
-
-    pub(crate) fn initial_catchup_meshlets_with(
-        &self,
-        source: &impl ChunkSnapshotSource,
-        neighbor_is_visible: impl FnMut(IVec3) -> bool,
-    ) -> ChunkMeshletMask {
-        self.mesh_revisions
-            .map_or_else(ChunkMeshletMask::default, |revisions| {
-                revisions.initial_catchup_meshlets_with(source, neighbor_is_visible)
-            })
+        source.snapshot_chunk(self.coord).is_some() && self.mesh_revisions.is_current(source)
     }
 }
 
@@ -142,15 +107,13 @@ impl PresentationLightingSource {
 }
 
 /// Immutable authored/content inputs shared by background voxel presentation
-/// jobs. Mesh and remesh schedulers decide when to execute; this type owns the
-/// presentation input boundary they are allowed to capture.
+/// jobs. Remesh scheduling decides when to execute; this type owns the
+/// presentation input boundary it is allowed to capture.
 pub(crate) struct PresentationContentSnapshot {
     blocks: BlockRegistry,
     layers: LayerRegistry,
     fluids: FluidRegistry,
-    biomes: BiomeRegistry,
     secondary_properties: SecondaryPropertyRegistry,
-    biome_field: BiomeField,
     texture_table: TerrainTextureTable,
 }
 
@@ -160,9 +123,7 @@ impl PresentationContentSnapshot {
             blocks: content.blocks().clone(),
             layers: content.layers().clone(),
             fluids: content.fluids().clone(),
-            biomes: BiomeRegistry::clone(&content.biomes),
             secondary_properties: content.secondary_properties().clone(),
-            biome_field: content.biome_field.as_ref().clone(),
             texture_table: TerrainTextureTable::from_blocks(content.blocks()),
         }
     }
@@ -176,9 +137,7 @@ impl PresentationContentSnapshot {
             blocks: &self.blocks,
             layers: &self.layers,
             fluids: &self.fluids,
-            biomes: &self.biomes,
             secondary_properties: &self.secondary_properties,
-            biome_field: &self.biome_field,
             texture_table: &self.texture_table,
         }
     }
