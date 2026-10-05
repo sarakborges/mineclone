@@ -5,6 +5,10 @@ edition = "2024"
 build = "build.rs"
 default-run = "asteria"
 
+[[bin]]
+name = "world-rebuild-smoke"
+path = "src/world_rebuild_smoke.rs"
+
 [dependencies]
 arrayvec = "0.7"
 bevy = { version = "0.19.1", features = ["system_font_discovery", "system_clipboard", "debug"] }
