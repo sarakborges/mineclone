@@ -430,6 +430,7 @@ impl ChunkMaterializer {
         chunk_origin: IVec3,
     ) {
         let max_rise = structure.restrictions.max_slope.max(0);
+        let material_queries = self.materials.queries();
         for voxel in structure.voxels() {
             let attached_objects = structure.objects_for_voxel(voxel);
             let attachment_only = voxel.block_id.is_none()
@@ -441,23 +442,26 @@ impl ChunkMaterializer {
             }
 
             let marker_world_position = origin + rotation.rotate_offset(voxel.offset);
-            let support = (0..=max_rise).rev().find_map(|rise| {
+            let support_world_position = (0..=max_rise).rev().find_map(|rise| {
                 let candidate = marker_world_position + IVec3::Y * rise;
-                let local = candidate - chunk_origin;
-                if !local_in_bounds(local) {
-                    return None;
-                }
-                let x = local.x as usize;
-                let y = local.y as usize;
-                let z = local.z as usize;
-                chunk.cell_at(x, y, z).is_some().then_some((candidate, local))
+                material_queries
+                    .solid_block_at(candidate.x, candidate.y, candidate.z)
+                    .is_some()
+                    .then_some(candidate)
             });
-            let Some((support_world_position, local)) = support else {
+            let Some(support_world_position) = support_world_position else {
                 continue;
             };
+            let local = support_world_position - chunk_origin;
+            if !local_in_bounds(local) {
+                continue;
+            }
             let x = local.x as usize;
             let y = local.y as usize;
             let z = local.z as usize;
+            if chunk.cell_at(x, y, z).is_none() {
+                continue;
+            }
 
             if structure.layers_only_voxel(voxel) {
                 for (face, layer) in self.surface_layer_placements(
@@ -486,8 +490,7 @@ impl ChunkMaterializer {
                         )
                         .is_some()
                 } else {
-                    self.materials
-                        .queries()
+                    material_queries
                         .generated_fluid_at(
                             target_world_position.x,
                             target_world_position.y,
