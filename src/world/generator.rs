@@ -1,6 +1,7 @@
 mod biome;
 mod biome_map;
 mod foundation;
+mod generated_fluid;
 mod material;
 mod terrain;
 mod terrain_debug;
@@ -11,12 +12,13 @@ use bevy::prelude::Resource;
 
 use crate::content::{
     biome::BiomeRegistry,
-    dimension::{DimensionDefinition, GeneratedOceanDefinition},
+    dimension::{DimensionDefinition, GeneratedOceanDefinition, GeneratedSurfaceFluidDefinition},
 };
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
+use generated_fluid::GeneratedFluidField;
 pub(crate) use material::MaterialQueries;
 use material::MaterialField;
 pub(crate) use terrain::TerrainQueries;
@@ -46,34 +48,43 @@ impl WorldGenerator {
             GenerationSeed::new(seed),
             GenerationDimension::from_definition(dimension),
         );
-        Self::from_snapshot_with_generated_ocean(
+        Self::from_snapshot_with_generated_fluids(
             snapshot,
             biome_registry,
             dimension.generated_ocean.as_ref(),
+            &dimension.generated_surface_fluids,
         )
     }
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
-        Self::from_snapshot_with_generated_ocean(snapshot, biome_registry, None)
+        Self::from_snapshot_with_generated_fluids(snapshot, biome_registry, None, &[])
     }
 
-    fn from_snapshot_with_generated_ocean(
+    fn from_snapshot_with_generated_fluids(
         snapshot: GenerationSnapshot,
         biome_registry: &BiomeRegistry,
         generated_ocean: Option<&GeneratedOceanDefinition>,
+        generated_surface_fluids: &[GeneratedSurfaceFluidDefinition],
     ) -> Self {
         let biomes = Arc::new(BiomeLayout::new(&snapshot, biome_registry));
+        let generated_fluids = Arc::new(GeneratedFluidField::new(
+            &snapshot,
+            biome_registry,
+            generated_ocean,
+            generated_surface_fluids,
+        ));
         let terrain = Arc::new(TerrainField::new(
             &snapshot,
             biome_registry,
             Arc::clone(&biomes),
+            Arc::clone(&generated_fluids),
         ));
         let materials = Arc::new(MaterialField::new(
             &snapshot,
             biome_registry,
             Arc::clone(&biomes),
             Arc::clone(&terrain),
-            generated_ocean,
+            generated_fluids,
         ));
         Self {
             snapshot: Arc::new(snapshot),

@@ -5,11 +5,32 @@ use crate::localization::LocalizedText;
 
 use crate::content::registry::DefinitionMap;
 
+const MAX_GENERATED_SURFACE_FLUID_SPACING: u32 = 512;
+const MAX_GENERATED_SURFACE_FLUID_RADIUS: u32 = 256;
+const MAX_GENERATED_SURFACE_FLUID_DEPTH: u32 = 4;
+const DEFAULT_GENERATED_SURFACE_FLUID_CHANCE: f32 = 1.0;
+const DEFAULT_GENERATED_SURFACE_FLUID_DEPTH: u32 = 1;
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratedOceanDefinition {
     pub biome: String,
     pub fluid: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedSurfaceFluidDefinition {
+    pub biome: String,
+    pub fluid: String,
+    pub spacing: u32,
+    pub radius: u32,
+    #[serde(default)]
+    pub jitter: u32,
+    #[serde(default = "default_generated_surface_fluid_chance")]
+    pub chance: f32,
+    #[serde(default = "default_generated_surface_fluid_depth")]
+    pub depth: u32,
 }
 
 #[derive(Clone, Deserialize)]
@@ -25,10 +46,20 @@ pub struct DimensionDefinition {
     pub max_entities: usize,
     #[serde(default)]
     pub generated_ocean: Option<GeneratedOceanDefinition>,
+    #[serde(default)]
+    pub generated_surface_fluids: Vec<GeneratedSurfaceFluidDefinition>,
 }
 
 fn default_max_entities() -> usize {
     128
+}
+
+fn default_generated_surface_fluid_chance() -> f32 {
+    DEFAULT_GENERATED_SURFACE_FLUID_CHANCE
+}
+
+fn default_generated_surface_fluid_depth() -> u32 {
+    DEFAULT_GENERATED_SURFACE_FLUID_DEPTH
 }
 
 #[derive(Resource, Default)]
@@ -74,6 +105,17 @@ impl DimensionRegistry {
                 &ocean.fluid,
             );
         }
+        for (index, surface_fluid) in definition.generated_surface_fluids.iter().enumerate() {
+            validate_generated_surface_fluid(&definition.id, index, surface_fluid);
+            assert!(
+                !definition.generated_surface_fluids[..index]
+                    .iter()
+                    .any(|previous| previous.biome == surface_fluid.biome),
+                "dimension {} generatedSurfaceFluids cannot define more than one local surface fluid rule for biome {}",
+                definition.id,
+                surface_fluid.biome
+            );
+        }
         self.definitions.insert(definition.id.clone(), definition);
     }
 
@@ -84,6 +126,47 @@ impl DimensionRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &DimensionDefinition> {
         self.definitions.values()
     }
+}
+
+fn validate_generated_surface_fluid(
+    dimension_id: &str,
+    index: usize,
+    definition: &GeneratedSurfaceFluidDefinition,
+) {
+    assert_namespaced_id(
+        dimension_id,
+        &format!("generatedSurfaceFluids[{index}].biome"),
+        &definition.biome,
+    );
+    assert_namespaced_id(
+        dimension_id,
+        &format!("generatedSurfaceFluids[{index}].fluid"),
+        &definition.fluid,
+    );
+    assert!(
+        (2..=MAX_GENERATED_SURFACE_FLUID_SPACING).contains(&definition.spacing),
+        "dimension {dimension_id} generatedSurfaceFluids[{index}].spacing must be within 2..={MAX_GENERATED_SURFACE_FLUID_SPACING}"
+    );
+    assert!(
+        definition.radius > 0 && definition.radius <= MAX_GENERATED_SURFACE_FLUID_RADIUS,
+        "dimension {dimension_id} generatedSurfaceFluids[{index}].radius must be within 1..={MAX_GENERATED_SURFACE_FLUID_RADIUS}"
+    );
+    assert!(
+        definition.jitter <= definition.spacing / 2,
+        "dimension {dimension_id} generatedSurfaceFluids[{index}].jitter must not exceed half the spacing"
+    );
+    assert!(
+        definition.radius.saturating_add(definition.jitter) <= definition.spacing,
+        "dimension {dimension_id} generatedSurfaceFluids[{index}] radius + jitter must not exceed spacing"
+    );
+    assert!(
+        definition.chance.is_finite() && definition.chance > 0.0 && definition.chance <= 1.0,
+        "dimension {dimension_id} generatedSurfaceFluids[{index}].chance must be finite and within (0, 1]"
+    );
+    assert!(
+        (1..=MAX_GENERATED_SURFACE_FLUID_DEPTH).contains(&definition.depth),
+        "dimension {dimension_id} generatedSurfaceFluids[{index}].depth must be within 1..={MAX_GENERATED_SURFACE_FLUID_DEPTH}"
+    );
 }
 
 fn assert_namespaced_id(dimension_id: &str, field: &str, value: &str) {

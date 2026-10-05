@@ -8,5 +8,16 @@
   "generatedOcean": {
     "biome": "asteria:overworld/ocean",
     "fluid": "asteria:water"
-  }
+  },
+  "generatedSurfaceFluids": [
+    {
+      "biome": "asteria:overworld/swamp",
+      "fluid": "asteria:water",
+      "spacing": 18,
+      "radius": 5,
+      "jitter": 3,
+      "chance": 0.75,
+      "depth": 1
+    }
+  ]
 }

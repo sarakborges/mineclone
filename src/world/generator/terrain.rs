@@ -10,6 +10,7 @@ use super::{
         GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationPoint3,
         GenerationSnapshot,
     },
+    generated_fluid::GeneratedFluidField,
 };
 
 const MACRO_NOISE_DOMAIN_PREFIX: &str = "terrain/base-surface/macro/v1/";
@@ -26,11 +27,13 @@ const CAVE_MAX_DEPTH: f32 = 120.0;
 const CAVE_BOUNDARY_FADE: f32 = 8.0;
 const CAVE_NOISE_HALF_WIDTH: f32 = 0.18;
 const CAVE_DENSITY_SCALE: f32 = 24.0;
+const SURFACE_FLUID_VOID_DENSITY: f32 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct TerrainColumnSample {
     base_surface: f32,
     surface_y: i32,
+    surface_cut_depth: u32,
 }
 
 impl TerrainColumnSample {
@@ -40,6 +43,10 @@ impl TerrainColumnSample {
 
     pub(crate) const fn surface_y(self) -> i32 {
         self.surface_y
+    }
+
+    pub(crate) const fn surface_cut_depth(self) -> u32 {
+        self.surface_cut_depth
     }
 }
 
@@ -136,12 +143,17 @@ impl TerrainQueries<'_> {
         self.terrain.base_surface_at(x, z)
     }
 
+    /// Authoritative bounded column summary for one X/Z coordinate.
+    pub(crate) fn column_at(&self, x: i32, z: i32) -> TerrainColumnSample {
+        self.terrain.column_at(x, z)
+    }
+
     /// Highest generated solid voxel for the current final terrain field.
     ///
     /// Additive contributions expose explicit finite vertical candidate bounds,
     /// so this query never scans the whole world height.
     pub(crate) fn surface_at(&self, x: i32, z: i32) -> i32 {
-        self.terrain.column_at(x, z).surface_y()
+        self.column_at(x, z).surface_y()
     }
 
     /// Final terrain density at a world-space voxel coordinate.
@@ -195,6 +207,7 @@ pub(super) struct TerrainField {
     sea_level: f32,
     entropy: GenerationEntropy,
     biomes: Arc<BiomeLayout>,
+    generated_fluids: Arc<GeneratedFluidField>,
     rules: HashMap<String, TerrainRule>,
     caves: CaveField,
 }
@@ -369,6 +382,7 @@ impl TerrainField {
         snapshot: &GenerationSnapshot,
         registry: &BiomeRegistry,
         biomes: Arc<BiomeLayout>,
+        generated_fluids: Arc<GeneratedFluidField>,
     ) -> Self {
         let dimension_id = snapshot.dimension().id();
         let rules = registry
@@ -389,6 +403,7 @@ impl TerrainField {
             sea_level: snapshot.dimension().sea_level() as f32,
             entropy: GenerationEntropy::new(snapshot),
             biomes,
+            generated_fluids,
             rules,
             caves: CaveField::new(),
         }
@@ -401,9 +416,17 @@ impl TerrainField {
     fn column_at(&self, x: i32, z: i32) -> TerrainColumnSample {
         let sample = self.biomes.queries().surface_biome_at(x, z);
         let base_surface = self.base_surface_from_biome_sample(x, z, &sample);
+        let surface_cut_depth = self.generated_fluids.surface_cut_depth_at(x, z, &sample);
         TerrainColumnSample {
             base_surface,
-            surface_y: self.effective_surface_y(x, z, base_surface, &sample),
+            surface_y: self.effective_surface_y(
+                x,
+                z,
+                base_surface,
+                surface_cut_depth,
+                &sample,
+            ),
+            surface_cut_depth,
         }
     }
 
@@ -415,7 +438,8 @@ impl TerrainField {
     fn density_at(&self, x: i32, y: i32, z: i32) -> f32 {
         let sample = self.biomes.queries().surface_biome_at(x, z);
         let base_surface = self.base_surface_from_biome_sample(x, z, &sample);
-        self.density_from_column(x, y, z, base_surface, &sample)
+        let surface_cut_depth = self.generated_fluids.surface_cut_depth_at(x, z, &sample);
+        self.density_from_column(x, y, z, base_surface, surface_cut_depth, &sample)
     }
 
     fn density_from_column(
@@ -424,6 +448,7 @@ impl TerrainField {
         y: i32,
         z: i32,
         base_surface: f32,
+        surface_cut_depth: u32,
         sample: &BiomeSample,
     ) -> f32 {
         let base_density = base_surface - y as f32;
@@ -447,6 +472,16 @@ impl TerrainField {
             }
         }
 
+        if surface_cut_depth > 0 {
+            let cut_depth = i32::try_from(surface_cut_depth)
+                .expect("validated generated surface fluid depth must fit i32");
+            let base_surface_y = floor_to_world_y(base_surface);
+            let cut_floor = base_surface_y.saturating_sub(cut_depth);
+            if y > cut_floor && y <= base_surface_y {
+                solid_density = solid_density.min(-SURFACE_FLUID_VOID_DENSITY);
+            }
+        }
+
         let cave_void = self
             .caves
             .void_density(self.entropy, x, y, z, base_surface);
@@ -462,9 +497,12 @@ impl TerrainField {
         x: i32,
         z: i32,
         base_surface: f32,
+        surface_cut_depth: u32,
         sample: &BiomeSample,
     ) -> i32 {
-        let base_surface_y = floor_to_world_y(base_surface);
+        let cut_depth = i32::try_from(surface_cut_depth)
+            .expect("validated generated surface fluid depth must fit i32");
+        let base_surface_y = floor_to_world_y(base_surface).saturating_sub(cut_depth);
         let Some((candidate_min, candidate_max)) = self.additive_candidate_bounds(sample) else {
             return base_surface_y;
         };
@@ -477,7 +515,15 @@ impl TerrainField {
             return base_surface_y;
         }
         for y in (search_min..=candidate_max).rev() {
-            if self.density_from_column(x, y, z, base_surface, sample) >= 0.0 {
+            if self.density_from_column(
+                x,
+                y,
+                z,
+                base_surface,
+                surface_cut_depth,
+                sample,
+            ) >= 0.0
+            {
                 return y;
             }
         }
@@ -540,9 +586,19 @@ impl TerrainField {
                     .sample_at(x_index, z_index)
                     .expect("matching biome sample grid must contain every terrain sample");
                 let base_surface = self.base_surface_from_biome_sample(x, z, biome_sample);
+                let surface_cut_depth = self
+                    .generated_fluids
+                    .surface_cut_depth_at(x, z, biome_sample);
                 samples.push(TerrainColumnSample {
                     base_surface,
-                    surface_y: self.effective_surface_y(x, z, base_surface, biome_sample),
+                    surface_y: self.effective_surface_y(
+                        x,
+                        z,
+                        base_surface,
+                        surface_cut_depth,
+                        biome_sample,
+                    ),
+                    surface_cut_depth,
                 });
             }
         }
@@ -581,6 +637,7 @@ impl TerrainField {
             .sample_surface_area(origin_x, origin_z, width, depth);
         let column_count = checked_sample_count([width, depth], "terrain density columns");
         let mut base_surfaces = Vec::with_capacity(column_count);
+        let mut surface_cut_depths = Vec::with_capacity(column_count);
 
         for z_index in 0..depth {
             let z = grid_axis(origin_z, z_index, 1);
@@ -590,6 +647,10 @@ impl TerrainField {
                     .sample_at(x_index, z_index)
                     .expect("matching biome sample grid must contain every density column");
                 base_surfaces.push(self.base_surface_from_biome_sample(x, z, biome_sample));
+                surface_cut_depths.push(
+                    self.generated_fluids
+                        .surface_cut_depth_at(x, z, biome_sample),
+                );
             }
         }
 
@@ -603,6 +664,7 @@ impl TerrainField {
                     let x = grid_axis(origin_x, x_index, 1);
                     let column_index = z_index as usize * width_usize + x_index as usize;
                     let base_surface = base_surfaces[column_index];
+                    let surface_cut_depth = surface_cut_depths[column_index];
                     let biome_sample = biome_samples
                         .sample_at(x_index, z_index)
                         .expect("matching biome sample grid must contain every density column");
@@ -611,6 +673,7 @@ impl TerrainField {
                         y,
                         z,
                         base_surface,
+                        surface_cut_depth,
                         biome_sample,
                     ));
                 }
@@ -816,6 +879,7 @@ fn checked_sample_count<const N: usize>(extents: [u32; N], label: &str) -> usize
 #[cfg(test)]
 mod tests {
     use super::super::foundation::{GenerationDimension, GenerationSeed};
+    use super::super::generated_fluid::GeneratedFluidField;
     use super::*;
     use crate::content::biome::BiomeDefinition;
 
@@ -827,7 +891,8 @@ mod tests {
             GenerationDimension::new("asteria:test", 64, 1.0),
         );
         let biomes = Arc::new(BiomeLayout::new(&snapshot, &registry));
-        TerrainField::new(&snapshot, &registry, biomes)
+        let generated_fluids = Arc::new(GeneratedFluidField::new(&snapshot, &registry, None, &[]));
+        TerrainField::new(&snapshot, &registry, biomes, generated_fluids)
     }
 
     fn base_definition() -> BiomeDefinition {
