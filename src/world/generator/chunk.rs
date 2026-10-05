@@ -670,7 +670,7 @@ fn probability_selected(value: u64, chance: f32) -> bool {
     if chance >= 1.0 {
         return true;
     }
-    value as f64 / u64::MAX as f64 < f64::from(chance)
+    value as f64 / (u64::MAX as f64) < f64::from(chance)
 }
 
 fn local_position(x: usize, y: usize, z: usize) -> IVec3 {
