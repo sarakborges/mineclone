@@ -16,6 +16,8 @@ Repository validation follows root `AGENTS.md`.
 - `tools/check_chunk_materializer_contract.py` is the lightweight Phase 7 composition gate; it verifies dense semantic sampling occurs before runtime composition, then guards block → generated-fluid → planned-Structure → generated-fluid-frontier ordering without introducing `VoxelWorld` ownership.
 - `tools/check_chunk_seams.py` is the lightweight Phase 7 seam/order gate; it freezes scalar/batch owner shape, world/chunk partitioning (including negative coordinates), Structure/`clearAbove` clipping, attachment-only world-space projection, generated-fluid frontier behavior, and reordered-neighbor semantic fixtures without linking/running the game binary.
 - `tools/check_streaming_materialization_contract.py` is the lightweight Phase 8 streaming gate; it guards generator-owned selection/materialization, stale async-result rejection, restored-vs-new publication, resident-before-frontier ordering, sparse generated-fluid frontier handoff, and deterministic chunk-priority tie-breaks without executing the game binary.
+- `tools/check_streaming_presentation_contract.py` is the lightweight Phase 8 presentation gate; it guards resident publication before direct-light activation, presentation-selection sync, remesh-owned initial mesh work, and neighbor halo catch-up without introducing another meshing owner.
+- `tools/check_locate_generator_contract.py` is the lightweight Phase 8 query-consumer gate; it requires `/locate` to use `WorldGenerator` biome/terrain/Structure capabilities and rejects runtime chunk scans, raw seed access, materialization, and owner-internal dependencies.
 - Visual/debug validation is an on-demand consumer capability, not a permanent CI fixture-rendering loop.
 - A milestone is not complete while the exact delivered SHA has pending, failed, or unobservable CI.
 
@@ -31,7 +33,7 @@ Repository validation follows root `AGENTS.md`.
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
 | 6 — Structures/features | Complete for current authored content | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, all current simple surface roots, biome-margin roots, lake/waterfall connected roots, and a lightweight CI seam/order/nearest contract gate. |
 | 7 — Chunk synthesis | Complete for current authored content | `ChunkMaterializer` deterministically composes dense solid/material results, generated fluids, already-planned Structure pieces, attachment-only payloads, and sparse generated-fluid frontier targets into one `VoxelChunk`; lightweight adjacent-chunk seam/order validation is green. |
-| 8 — Consumer integration | In progress | Streaming now selects requests from authoritative generator facts, asynchronously calls `WorldGenerator::materialize_chunk(...)`, publishes new chunks into `VoxelWorld`, restores archived chunks without regeneration, rejects stale results, and hands off only resident generated-fluid frontier targets. Presentation/lighting and generated-world query consumers remain. |
+| 8 — Consumer integration | In progress | Streaming materialization, restored/new publication, generated-fluid frontier handoff, resident lighting/presentation activation, and `/locate biome`/`/locate structure` are generator-backed. Spawn/warp/portal and remaining generated-world consumers still need migration/audit. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
 | 10 — Loading pipeline | Pending | Old loading ownership was removed; replacement pipeline has not been implemented. |
 | 11 — Loading screen | Pending | Replacement UI has not been implemented. |
@@ -159,6 +161,7 @@ Implemented now:
 - `StructureQueries::placements_intersecting(...)` plans/arbitates complete logical graphs first and only then returns surviving pieces intersecting the requested rectangle;
 - a multi-piece Set/connector graph can therefore cross a future chunk/request boundary without that boundary changing its composition or arbitration result;
 - `StructureQueries::find_nearest(...)` measures distance to the logical root anchor and reuses the same accepted placement graph; the representative returned piece retains that logical `placement_anchor`;
+- `StructureQueries::find_nearest_variant(...)` applies a concrete direct-root variation filter inside the same accepted nearest-root search, so `/locate` does not recreate Structure selection or scan materialized chunks;
 - runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner;
 - all current simple surface-biome roots from the preserved Overworld authoring have been migrated into `generatedSurfaceStructures`: Plains oak/willow and four boulder sizes; Swamp willow plus small boulders; Enchanted Forest heart, enchanted trees, and small boulders; Wasteland four boulder sizes; Mountains four boulder sizes; Gorge small/medium/big boulders; Alps medium/big/huge boulders; and Mountain Belt four boulder sizes;
 - those migrated roots preserve their historical spacing/chance/jitter values while resolving exclusively through the rebuilt `StructureField`;
@@ -223,17 +226,22 @@ For the currently authored world-generation stack, the materialization ownership
 
 ## Phase 8 — Consumer integration in progress
 
-Current streaming-side implementation:
+Current consumer-side implementation:
 
 - `src/world/streaming.rs`
 - `src/world/streaming/selection.rs`
 - `src/world/streaming/generation.rs`
+- `src/world/streaming/presentation.rs`
+- `src/world/chunk_visibility.rs`
+- `src/hud/chat/locate.rs`
 - `tools/check_streaming_materialization_contract.py`
+- `tools/check_streaming_presentation_contract.py`
+- `tools/check_locate_generator_contract.py`
 - `.github/workflows/ci.yml`
 
 Implemented now:
 
-- `ChunkStreamingState` owns only runtime interest/residency policy: current center, movement direction, desired/retired membership, pending materialization requests, and in-flight coordinates; it does not own generated biome/terrain/material/Structure truth;
+- `ChunkStreamingState` owns only runtime interest/residency policy: current center, movement direction, desired/retired membership, pending materialization requests, in-flight coordinates, and pending presentation membership; it does not own generated biome/terrain/material/Structure truth;
 - desired horizontal columns are selected from render distance while their generated vertical span is derived from authoritative `TerrainQueries::sample_surface_area(...)` plus `StructureQueries::placements_intersecting(...)`; a small player-local vertical safety range is included independently of generated semantics;
 - streaming does not inspect `VoxelWorld` to infer generated terrain or Structure facts; `VoxelWorld` is consulted only for runtime residency/restoration/publication state;
 - newly requested chunks are materialized asynchronously by cloning the immutable `WorldGenerator` and calling `WorldGenerator::materialize_chunk(coord)` in the async compute pool;
@@ -247,23 +255,32 @@ Implemented now:
 - when a neighboring target chunk becomes resident later, streaming re-evaluates potential generated-fluid frontier sources on already-resident neighboring chunks and enqueues only targets that actually belong to the newly resident chunk; this keeps A→B and B→A load order from changing which boundary targets wake;
 - restored chunks reactivate dormant fluid ticks and participate in the same resident boundary-frontier revalidation without being regenerated;
 - no filled generated-fluid volume is bulk-enqueued into runtime simulation;
-- the streaming contract audit freezes generator-owned selection/materialization, stale-result rejection, restored-vs-new publication, resident-before-frontier ordering, sparse frontier handoff, and deterministic priority without linking or executing the game binary.
+- newly published/restored resident chunks enter the preserved direct-light seed/relaxation path only after `VoxelWorld` residency is established, then enqueue presentation work;
+- streaming synchronizes `ChunkPresentationSelection` from its own resident interest state, so presentation cannot outlive/escape the current streaming selection;
+- initial presentation reserves render-pool membership without synchronously building meshes and hands all heavy mesh generation to the existing budgeted `ChunkRemeshQueue`;
+- first presentation enqueues an all-meshlet remesh plus neighbor halo catch-up, preserving geometry/fluid seam updates when a chunk becomes visible after its neighbors;
+- presentation publication is explicitly frame-budgeted and skips retired, missing, or already-presented chunks;
+- `/locate biome` validates current authored surface-biome eligibility, clones no generation registries into its worker, calls `BiomeQueries::find_surface_biome(...)`, and resolves display Y through `TerrainQueries::surface_at(...)`;
+- `/locate structure` validates locatability/reference authoring, then calls `StructureQueries::find_nearest(...)`; requested group variations use `find_nearest_variant(...)`, which filters the deterministic resolved root inside `StructureField` rather than scanning chunks or rebuilding variation selection in chat code;
+- `/locate` workers clone only the immutable `WorldGenerator`, run on the async compute pool, and preserve the existing clickable locate-result behavior without materializing chunks;
+- the streaming materialization contract audit freezes generator-owned selection/materialization, stale-result rejection, restored-vs-new publication, resident-before-frontier ordering, sparse frontier handoff, and deterministic priority without linking or executing the game binary;
+- the streaming presentation contract audit freezes resident publication before lighting/presentation activation, selection synchronization, remesh-owned initial mesh work, and neighbor halo catch-up;
+- the locate generator contract audit rejects `VoxelWorld`, raw seed, chunk materialization/grid traversal, consumer-side Structure area scans, and direct owner-internal dependencies from the chat locate path.
 
 ### Phase 8 current boundary
 
-Streaming can now request and publish deterministic generated chunk content while preserving the minimum explicit restored-vs-new boundary required before Phase 9 persistence work. This is not yet the complete consumer cut: newly resident chunks still need their presentation/direct-light activation reconnected, and generated-world query consumers must move to generator capabilities rather than materialized chunk scans.
+Streaming now owns deterministic materialization/residency policy and reconnects resident chunks into preserved lighting/presentation queues without becoming a generation owner. `/locate biome` and `/locate structure` now answer unmaterialized generated-world questions directly from the immutable generator snapshot. The remaining Phase 8 work is the rest of the generated-world consumer audit/migration, especially spawn/warp/portal destination and grounding queries.
 
 ## Next concrete work
 
-Continue **Phase 8 — Consumer integration** with post-publication runtime activation, then generated-world query consumers.
+Continue **Phase 8 — Consumer integration** with the remaining generated-world query consumers.
 
 Required direction:
 
-1. reconnect newly published/restored chunk presentation and direct-light activation through the preserved lighting/remesh/render residency queues, without moving generation semantics into presentation code;
-2. keep activation order budgeted and residency-safe so stale/retired chunks cannot publish presentation work after selection changes;
-3. reconnect `/locate biome` and `/locate structure` directly to `WorldGenerator` biome/Structure query capabilities rather than scanning materialized chunks;
-4. reconnect spawn/warp and portal destination queries to authoritative generator terrain/material/Structure capabilities where generated-world facts are required;
-5. keep the Phase 8 persistence boundary limited to restored-vs-new chunk identity; the full all-materialized-chunks persistence contract remains Phase 9.
+1. reconnect spawn/warp and portal destination/grounding queries to authoritative generator terrain/material/Structure capabilities wherever they ask about generated-world facts;
+2. audit remaining gameplay/debug consumers for direct generated-world reconstruction or materialized-chunk scans and migrate only the consumers that need generator truth;
+3. preserve runtime mutation/residency ownership where the question is about current mutable world state rather than untouched generated-world facts;
+4. keep the Phase 8 persistence boundary limited to restored-vs-new chunk identity; the full all-materialized-chunks persistence contract remains Phase 9.
 
 ## Important non-regression rules
 
