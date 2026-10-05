@@ -27,29 +27,28 @@ pub(super) fn desired_chunk_coords(
             }
 
             let horizontal = center.xz() + IVec2::new(dx, dz);
-            let origin_x = horizontal.x.saturating_mul(chunk_size);
-            let origin_z = horizontal.y.saturating_mul(chunk_size);
-            let last = chunk_size - 1;
-            let samples = [
-                IVec2::new(origin_x, origin_z),
-                IVec2::new(origin_x.saturating_add(last), origin_z),
-                IVec2::new(origin_x, origin_z.saturating_add(last)),
-                IVec2::new(
-                    origin_x.saturating_add(last),
-                    origin_z.saturating_add(last),
-                ),
-                IVec2::new(
-                    origin_x.saturating_add(chunk_size / 2),
-                    origin_z.saturating_add(chunk_size / 2),
-                ),
-            ];
-
+            let Some(origin_x) = horizontal.x.checked_mul(chunk_size) else {
+                continue;
+            };
+            let Some(origin_z) = horizontal.y.checked_mul(chunk_size) else {
+                continue;
+            };
+            let surface = generator.terrain().sample_surface_area(
+                origin_x,
+                origin_z,
+                CHUNK_SIZE as u32,
+                CHUNK_SIZE as u32,
+            );
             let mut minimum_surface = i32::MAX;
             let mut maximum_surface = i32::MIN;
-            for sample in samples {
-                let surface = generator.terrain().surface_at(sample.x, sample.y);
-                minimum_surface = minimum_surface.min(surface);
-                maximum_surface = maximum_surface.max(surface);
+            for z in 0..CHUNK_SIZE as u32 {
+                for x in 0..CHUNK_SIZE as u32 {
+                    let column = surface
+                        .sample_at(x, z)
+                        .expect("matching streaming surface area must contain each chunk column");
+                    minimum_surface = minimum_surface.min(column.surface_y());
+                    maximum_surface = maximum_surface.max(column.surface_y());
+                }
             }
 
             let minimum_chunk = minimum_surface
@@ -69,8 +68,12 @@ pub(super) fn desired_chunk_coords(
                 CHUNK_SIZE as u32,
             ) {
                 let (minimum_y, maximum_y) = placement.vertical_bounds();
+                let attachment_rise = placement.structure().restrictions.max_slope.max(0);
                 let minimum_y = minimum_y.div_euclid(chunk_size).max(0);
-                let maximum_y = maximum_y.div_euclid(chunk_size).max(minimum_y);
+                let maximum_y = maximum_y
+                    .saturating_add(attachment_rise)
+                    .div_euclid(chunk_size)
+                    .max(minimum_y);
                 insert_vertical_range(&mut desired, horizontal, minimum_y, maximum_y);
             }
 
