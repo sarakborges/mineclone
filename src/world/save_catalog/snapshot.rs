@@ -13,7 +13,7 @@ use crate::world::{
     world_names::validate_world_name,
 };
 
-pub(super) const SAVE_FORMAT_VERSION: u32 = 7;
+pub(super) const SAVE_FORMAT_VERSION: u32 = 8;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
