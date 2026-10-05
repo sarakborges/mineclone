@@ -19,6 +19,10 @@ const MAX_TERRAIN_AMPLITUDE: f32 = 512.0;
 const MAX_TERRAIN_3D_VERTICAL_SPAN: i64 = 512;
 const MAX_FLOATING_ROUGHNESS: f32 = 0.5;
 const MAX_SURFACE_LAYER_DEPTH: u32 = 64;
+const MAX_SURFACE_PATCH_SPACING: u32 = 512;
+const MAX_SURFACE_PATCH_RADIUS: u32 = 256;
+const MAX_SURFACE_PATCH_BLOCKS: usize = 8;
+const DEFAULT_SURFACE_PATCH_CHANCE: f32 = 1.0;
 
 /// One biome identity in the shared biome universe.
 ///
@@ -115,12 +119,28 @@ impl Default for SurfaceTerrainDefinition {
 /// Every finite layer owns `depth` voxels measured downward from the local
 /// exposed terrain surface. The final depthless layer is the core material.
 /// Terrain still owns solidity; these rules only classify already-solid voxels.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SurfaceLayerDefinition {
     pub block: String,
     #[serde(default)]
     pub depth: Option<u32>,
+    #[serde(default)]
+    pub patch: Option<SurfacePatchDefinition>,
+}
+
+/// Deterministic world-space patches that replace a finite surface layer's
+/// base block with one of the authored alternatives.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfacePatchDefinition {
+    pub spacing: u32,
+    pub radius: u32,
+    #[serde(default)]
+    pub jitter: u32,
+    #[serde(default = "default_surface_patch_chance")]
+    pub chance: f32,
+    pub blocks: Vec<String>,
 }
 
 /// Optional true-3D terrain contributions authored by a biome.
@@ -284,13 +304,10 @@ fn validate_surface_layers(biome_id: &str, layers: &[SurfaceLayerDefinition]) {
     );
     let mut finite_depth = 0_u32;
     for (index, layer) in layers.iter().enumerate() {
-        let block = layer.block.trim();
-        let valid_block_id = block.split_once(':').is_some_and(|(namespace, local)| {
-            !namespace.is_empty() && !local.is_empty() && !local.contains(':')
-        });
-        assert!(
-            valid_block_id && block == layer.block,
-            "biome {biome_id} surfaceLayers[{index}].block must be a trimmed namespaced block id"
+        assert_valid_block_id(
+            biome_id,
+            &format!("surfaceLayers[{index}].block"),
+            &layer.block,
         );
 
         let final_layer = index + 1 == layers.len();
@@ -307,16 +324,82 @@ fn validate_surface_layers(biome_id: &str, layers: &[SurfaceLayerDefinition]) {
                     finite_depth <= MAX_SURFACE_LAYER_DEPTH,
                     "biome {biome_id} finite surface layer depth must not exceed {MAX_SURFACE_LAYER_DEPTH} blocks"
                 );
+                if let Some(patch) = &layer.patch {
+                    validate_surface_patch(biome_id, index, &layer.block, patch);
+                }
             }
             (false, None) => panic!(
                 "biome {biome_id} surfaceLayers[{index}] requires depth before the final core layer"
             ),
-            (true, None) => {}
+            (true, None) => {
+                assert!(
+                    layer.patch.is_none(),
+                    "biome {biome_id} final core surfaceLayers entry cannot author a surface patch"
+                );
+            }
             (true, Some(_)) => panic!(
                 "biome {biome_id} final surfaceLayers entry is the core layer and must omit depth"
             ),
         }
     }
+}
+
+fn validate_surface_patch(
+    biome_id: &str,
+    layer_index: usize,
+    base_block: &str,
+    patch: &SurfacePatchDefinition,
+) {
+    assert!(
+        (2..=MAX_SURFACE_PATCH_SPACING).contains(&patch.spacing),
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.spacing must be within 2..={MAX_SURFACE_PATCH_SPACING}"
+    );
+    assert!(
+        patch.radius > 0 && patch.radius <= MAX_SURFACE_PATCH_RADIUS,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.radius must be within 1..={MAX_SURFACE_PATCH_RADIUS}"
+    );
+    assert!(
+        patch.jitter <= patch.spacing / 2,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.jitter must not exceed half the spacing"
+    );
+    assert!(
+        patch.radius.saturating_add(patch.jitter) <= patch.spacing,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch radius + jitter must not exceed spacing"
+    );
+    assert!(
+        patch.chance.is_finite() && patch.chance > 0.0 && patch.chance <= 1.0,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.chance must be finite and within (0, 1]"
+    );
+    assert!(
+        !patch.blocks.is_empty() && patch.blocks.len() <= MAX_SURFACE_PATCH_BLOCKS,
+        "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks must contain 1..={MAX_SURFACE_PATCH_BLOCKS} entries"
+    );
+    for (block_index, block) in patch.blocks.iter().enumerate() {
+        assert_valid_block_id(
+            biome_id,
+            &format!("surfaceLayers[{layer_index}].patch.blocks[{block_index}]"),
+            block,
+        );
+        assert!(
+            block != base_block,
+            "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks cannot repeat the base block {base_block}"
+        );
+        assert!(
+            !patch.blocks[..block_index].contains(block),
+            "biome {biome_id} surfaceLayers[{layer_index}].patch.blocks cannot contain duplicates"
+        );
+    }
+}
+
+fn assert_valid_block_id(biome_id: &str, field: &str, block: &str) {
+    let trimmed = block.trim();
+    let valid = trimmed.split_once(':').is_some_and(|(namespace, local)| {
+        !namespace.is_empty() && !local.is_empty() && !local.contains(':')
+    });
+    assert!(
+        valid && trimmed == block,
+        "biome {biome_id} {field} must be a trimmed namespaced block id"
+    );
 }
 
 impl Terrain3dDefinition {
@@ -421,6 +504,10 @@ fn default_terrain_detail_scale() -> u32 {
     DEFAULT_TERRAIN_DETAIL_SCALE
 }
 
+fn default_surface_patch_chance() -> f32 {
+    DEFAULT_SURFACE_PATCH_CHANCE
+}
+
 fn assert_valid_biome_id(id: &str) {
     let Some((namespace, dimension)) = biome_dimension_components(id) else {
         panic!("biome id {id} must use the form <namespace>:<dimension>/<biome>");
@@ -499,7 +586,17 @@ mod tests {
             },
             "surfaceLayout": {},
             "surfaceLayers": [
-                { "block": "asteria:grass_block", "depth": 1 },
+                {
+                    "block": "asteria:grass_block",
+                    "depth": 1,
+                    "patch": {
+                        "spacing": 14,
+                        "radius": 6,
+                        "jitter": 2,
+                        "chance": 0.9,
+                        "blocks": ["asteria:dirt", "asteria:mud"]
+                    }
+                },
                 { "block": "asteria:dirt", "depth": 4 },
                 { "block": "asteria:stone" }
             ]
@@ -512,6 +609,8 @@ mod tests {
         assert_eq!(layers.len(), 3);
         assert_eq!(layers[0].depth, Some(1));
         assert_eq!(layers[2].depth, None);
+        let patch = layers[0].patch.as_ref().expect("patch must be authored");
+        assert_eq!(patch.blocks, ["asteria:dirt", "asteria:mud"]);
     }
 
     #[test]

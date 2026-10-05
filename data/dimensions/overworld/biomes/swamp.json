@@ -11,11 +11,30 @@
   "surfaceLayers": [
     {
       "block": "asteria:grass_block",
-      "depth": 1
+      "depth": 1,
+      "patch": {
+        "spacing": 14,
+        "radius": 6,
+        "jitter": 2,
+        "chance": 0.9,
+        "blocks": [
+          "asteria:dirt",
+          "asteria:mud"
+        ]
+      }
     },
     {
       "block": "asteria:dirt",
-      "depth": 4
+      "depth": 4,
+      "patch": {
+        "spacing": 16,
+        "radius": 6,
+        "jitter": 3,
+        "chance": 0.7,
+        "blocks": [
+          "asteria:mud"
+        ]
+      }
     },
     {
       "block": "asteria:stone"
