@@ -16,6 +16,21 @@ pub(crate) struct ChunkPresentationSelection {
 }
 
 impl ChunkPresentationSelection {
+    pub(crate) fn sync_from_streaming(&mut self, center: Option<IVec3>, horizontal_radius: i32) {
+        let center = center.map(|coord| coord.xz());
+        let (_, hide_radius) = chunk_visibility_radii(horizontal_radius);
+        if self.center == center && self.hide_radius == hide_radius {
+            return;
+        }
+
+        self.center = center;
+        self.hide_radius = hide_radius;
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .expect("chunk presentation selection revision exhausted");
+    }
+
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
