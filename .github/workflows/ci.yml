@@ -104,6 +104,9 @@ jobs:
       - name: Check
         run: cargo check --locked
 
+      # CI records a bounded fixed-seed sample. The CLI defaults remain the
+      # heavier manual profiling profile; this gate only needs a reproducible
+      # near/far cold/warm baseline without turning validation into a load test.
       - name: Record world rebuild query baseline
         run: |
           cargo run --locked --bin asteria -- --worldgen-benchmark \
@@ -111,6 +114,10 @@ jobs:
             --dimension asteria:overworld \
             --center-x 0 --center-z 0 \
             --far-x 250000 --far-z -250000 \
+            --samples 512 \
+            --area-size 32 \
+            --search-radius 1024 \
+            --destination-radius 32 \
             --output worldgen-benchmark-overworld.json
           cat worldgen-benchmark-overworld.json
 
