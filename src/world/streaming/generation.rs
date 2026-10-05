@@ -3,9 +3,13 @@ use std::time::{Duration, Instant};
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::{
-    content::fluid::FluidRegistry,
+    content::{
+        block::BlockRegistry, fluid::FluidRegistry,
+        secondary_property::SecondaryPropertyRegistry,
+    },
     voxel::{
         coordinates::{ChunkCoord, chunk_coord_from_world, chunk_origin},
+        lighting::PendingLightingUpdates,
         world::VoxelWorld,
     },
 };
@@ -82,10 +86,17 @@ impl ChunkMaterializationTasks {
     }
 }
 
+pub(super) struct MaterializationDefinitions<'a> {
+    pub(super) blocks: &'a BlockRegistry,
+    pub(super) fluids: &'a FluidRegistry,
+    pub(super) secondary_properties: &'a SecondaryPropertyRegistry,
+}
+
 pub(super) struct MaterializationRuntime<'a> {
     world: &'a mut VoxelWorld,
     pending_fluid: &'a mut PendingFluidUpdates,
-    fluids: &'a FluidRegistry,
+    pending_lighting: &'a mut PendingLightingUpdates,
+    definitions: MaterializationDefinitions<'a>,
     current_tick: u64,
     deadline: Instant,
 }
@@ -94,14 +105,16 @@ impl<'a> MaterializationRuntime<'a> {
     pub(super) fn new(
         world: &'a mut VoxelWorld,
         pending_fluid: &'a mut PendingFluidUpdates,
-        fluids: &'a FluidRegistry,
+        pending_lighting: &'a mut PendingLightingUpdates,
+        definitions: MaterializationDefinitions<'a>,
         current_tick: u64,
         deadline: Instant,
     ) -> Self {
         Self {
             world,
             pending_fluid,
-            fluids,
+            pending_lighting,
+            definitions,
             current_tick,
             deadline,
         }
@@ -141,7 +154,7 @@ pub(super) fn collect_materialized_chunks(
         }
 
         if runtime.world.restore_chunk(coord) {
-            activate_restored_chunk(runtime, coord);
+            activate_restored_chunk(streaming, runtime, coord);
             continue;
         }
 
@@ -149,6 +162,7 @@ pub(super) fn collect_materialized_chunks(
         runtime
             .world
             .insert_chunk(coord, completed.output.into_chunk());
+        activate_resident_lighting_and_presentation(streaming, runtime, coord);
         runtime
             .pending_fluid
             .reactivate_loaded_chunk(coord, runtime.current_tick);
@@ -157,7 +171,7 @@ pub(super) fn collect_materialized_chunks(
             if runtime.world.is_loaded_at(frontier.position()) {
                 enqueue_generated_fluid_frontier(
                     runtime.pending_fluid,
-                    runtime.fluids,
+                    runtime.definitions.fluids,
                     frontier.fluid(),
                     frontier.position(),
                 );
@@ -167,7 +181,7 @@ pub(super) fn collect_materialized_chunks(
             runtime.world,
             coord,
             runtime.pending_fluid,
-            runtime.fluids,
+            runtime.definitions.fluids,
         );
     }
 }
@@ -194,7 +208,7 @@ pub(super) fn dispatch_materialization_tasks(
             continue;
         }
         if runtime.world.restore_chunk(coord) {
-            activate_restored_chunk(runtime, coord);
+            activate_restored_chunk(streaming, runtime, coord);
             continue;
         }
 
@@ -207,7 +221,12 @@ pub(super) fn dispatch_materialization_tasks(
     }
 }
 
-fn activate_restored_chunk(runtime: &mut MaterializationRuntime<'_>, coord: IVec3) {
+fn activate_restored_chunk(
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
+    coord: IVec3,
+) {
+    activate_resident_lighting_and_presentation(streaming, runtime, coord);
     runtime
         .pending_fluid
         .reactivate_loaded_chunk(coord, runtime.current_tick);
@@ -215,14 +234,46 @@ fn activate_restored_chunk(runtime: &mut MaterializationRuntime<'_>, coord: IVec
         runtime.world,
         coord,
         runtime.pending_fluid,
-        runtime.fluids,
+        runtime.definitions.fluids,
     );
     enqueue_neighbor_frontiers_targeting_chunk(
         runtime.world,
         coord,
         runtime.pending_fluid,
-        runtime.fluids,
+        runtime.definitions.fluids,
     );
+}
+
+fn activate_resident_lighting_and_presentation(
+    streaming: &mut ChunkStreamingState,
+    runtime: &mut MaterializationRuntime<'_>,
+    coord: IVec3,
+) {
+    let seed = runtime.pending_lighting.seed_chunk_direct_lighting(
+        runtime.world,
+        coord,
+        runtime.definitions.blocks,
+        runtime.definitions.fluids,
+        runtime.definitions.secondary_properties,
+    );
+    let chunk_is_empty = runtime
+        .world
+        .chunk(coord)
+        .unwrap_or_else(|| panic!("activated chunk must be resident: {coord:?}"))
+        .is_empty();
+
+    if chunk_is_empty {
+        runtime.pending_lighting.enqueue_empty_chunk_relaxation(coord);
+    } else if seed.requires_relaxation {
+        runtime.pending_lighting.enqueue_chunk_relaxation(coord);
+    }
+    if seed.changes_direct_sky_below {
+        runtime
+            .pending_lighting
+            .enqueue_loaded_column_below(runtime.world, coord);
+    }
+
+    streaming.enqueue_presentation(coord);
 }
 
 fn enqueue_source_frontiers_to_loaded_targets(
