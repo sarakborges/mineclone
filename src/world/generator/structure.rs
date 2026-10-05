@@ -14,12 +14,14 @@ use crate::content::{
     dimension::GeneratedSurfaceStructureDefinition,
     structure::{StructureDefinition, StructureRegistry, StructureRotation},
     structure_rules::{StructureFluidPolicy, StructureProximityMode, StructureProximityTarget},
+    structure_set::StructureSetRegistry,
 };
 
 use super::{
     biome::BiomeLayout,
     foundation::{GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationSnapshot},
     material::MaterialField,
+    structure_set::CompiledStructureSet,
     terrain::TerrainField,
 };
 
@@ -32,6 +34,7 @@ const ROTATION_DOMAIN_PREFIX: &str = "structure/root/rotation/v1/";
 #[derive(Clone, Debug)]
 pub(crate) struct StructurePlacement {
     reference: Arc<str>,
+    placement_anchor: IVec2,
     structure: Arc<StructureDefinition>,
     rotation: StructureRotation,
     origin: IVec3,
@@ -40,6 +43,13 @@ pub(crate) struct StructurePlacement {
 impl StructurePlacement {
     pub(crate) fn reference(&self) -> &str {
         &self.reference
+    }
+
+    /// Logical root anchor shared by every piece of one placement. For a
+    /// single Structure this is the Structure anchor; for a StructureSet it is
+    /// the set anchor, not the individual piece origin.
+    pub(crate) const fn placement_anchor(&self) -> IVec2 {
+        self.placement_anchor
     }
 
     pub(crate) fn structure(&self) -> &StructureDefinition {
@@ -77,7 +87,29 @@ impl StructurePlacement {
 struct StructureCandidate {
     rule_index: usize,
     cell: GenerationPoint2,
-    placement: StructurePlacement,
+    placement_anchor: IVec2,
+    pieces: Arc<[StructurePlacement]>,
+    horizontal_minimum: IVec2,
+    horizontal_maximum: IVec2,
+    minimum_y: i32,
+    maximum_y: i32,
+    priority: i32,
+    reserve_space: bool,
+    conflict_groups: Arc<[String]>,
+}
+
+impl StructureCandidate {
+    const fn horizontal_bounds(&self) -> (IVec2, IVec2) {
+        (self.horizontal_minimum, self.horizontal_maximum)
+    }
+
+    const fn vertical_bounds(&self) -> (i32, i32) {
+        (self.minimum_y, self.maximum_y)
+    }
+
+    fn representative(&self) -> Option<StructurePlacement> {
+        self.pieces.first().cloned()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -86,9 +118,10 @@ pub(crate) struct StructureQueries<'a> {
 }
 
 impl StructureQueries<'_> {
-    /// Returns authoritative root Structure placements whose horizontal bounds
-    /// intersect the requested world-space rectangle. The request does not
-    /// materialize chunks and does not affect future results.
+    /// Returns authoritative Structure pieces whose horizontal bounds intersect
+    /// the requested world-space rectangle. Multi-piece StructureSet planning
+    /// and conflict resolution happen before this request-level intersection,
+    /// so chunk/request boundaries never become logical placement boundaries.
     pub(crate) fn placements_intersecting(
         &self,
         origin_x: i32,
@@ -100,8 +133,10 @@ impl StructureQueries<'_> {
             .placements_intersecting(origin_x, origin_z, width, depth)
     }
 
-    /// Finds the nearest authoritative root placement for an authored Structure
-    /// or Structure-group reference without materializing the searched area.
+    /// Finds the nearest authoritative logical root for an authored root
+    /// reference. The returned representative piece carries the root reference
+    /// and logical `placement_anchor`; callers must not treat its piece origin
+    /// as the logical anchor for a StructureSet.
     pub(crate) fn find_nearest(
         &self,
         reference: &str,
@@ -130,13 +165,21 @@ struct RootStructureRule {
     spacing: i32,
     jitter: u32,
     chance: f32,
-    variants: Arc<[Arc<StructureDefinition>]>,
+    source: RootStructureSource,
     maximum_horizontal_extent: i32,
     presence_domain: GenerationDomain,
     jitter_x_domain: GenerationDomain,
     jitter_z_domain: GenerationDomain,
-    variant_domain: GenerationDomain,
-    rotation_domain: GenerationDomain,
+}
+
+#[derive(Clone, Debug)]
+enum RootStructureSource {
+    Direct {
+        variants: Arc<[Arc<StructureDefinition>]>,
+        variant_domain: GenerationDomain,
+        rotation_domain: GenerationDomain,
+    },
+    Set(CompiledStructureSet),
 }
 
 impl StructureField {
@@ -144,6 +187,7 @@ impl StructureField {
         snapshot: &GenerationSnapshot,
         biome_registry: &BiomeRegistry,
         structure_registry: &StructureRegistry,
+        structure_set_registry: &StructureSetRegistry,
         biomes: Arc<BiomeLayout>,
         terrain: Arc<TerrainField>,
         materials: Arc<MaterialField>,
@@ -164,7 +208,7 @@ impl StructureField {
                     "dimension {dimension_id} generatedSurfaceStructures biome {} must be a surface biome in this dimension",
                     definition.biome
                 );
-                RootStructureRule::new(definition, structure_registry)
+                RootStructureRule::new(definition, structure_registry, structure_set_registry)
             })
             .collect::<Vec<_>>()
             .into();
@@ -196,20 +240,17 @@ impl StructureField {
         let query_maximum = IVec2::new(maximum_x, maximum_z);
         let direct_candidates =
             self.collect_candidates_intersecting_bounds(query_minimum, query_maximum);
-        let mut placements = self
-            .resolve_conflicts(direct_candidates)
-            .into_iter()
-            .map(|candidate| candidate.placement)
-            .collect::<Vec<_>>();
+        let mut placements = Vec::new();
 
-        placements.sort_by(|left, right| {
-            left.origin
-                .z
-                .cmp(&right.origin.z)
-                .then_with(|| left.origin.x.cmp(&right.origin.x))
-                .then_with(|| left.origin.y.cmp(&right.origin.y))
-                .then_with(|| left.structure.id.cmp(&right.structure.id))
-        });
+        for candidate in self.resolve_conflicts(direct_candidates) {
+            placements.extend(candidate.pieces.iter().filter_map(|placement| {
+                let (minimum, maximum) = placement.horizontal_bounds();
+                rectangles_overlap(minimum, maximum, query_minimum, query_maximum)
+                    .then(|| placement.clone())
+            }));
+        }
+
+        placements.sort_by(|left, right| placement_sort_key(left).cmp(&placement_sort_key(right)));
         placements
     }
 
@@ -247,8 +288,7 @@ impl StructureField {
                     ) else {
                         continue;
                     };
-                    let (placement_minimum, placement_maximum) =
-                        candidate.placement.horizontal_bounds();
+                    let (placement_minimum, placement_maximum) = candidate.horizontal_bounds();
                     if rectangles_overlap(
                         placement_minimum,
                         placement_maximum,
@@ -279,7 +319,7 @@ impl StructureField {
             .collect::<HashSet<_>>();
 
         for direct in &direct_candidates {
-            let (minimum, maximum) = direct.placement.horizontal_bounds();
+            let (minimum, maximum) = direct.horizontal_bounds();
             for candidate in self.collect_candidates_intersecting_bounds(minimum, maximum) {
                 if same_candidate(&candidate, direct)
                     || !self.candidate_outranks(&candidate, direct)
@@ -341,13 +381,15 @@ impl StructureField {
                     ) else {
                         continue;
                     };
-                    let delta = candidate.placement.origin.xz() - origin;
+                    let delta = candidate.placement_anchor - origin;
                     let distance_squared = i128::from(delta.x) * i128::from(delta.x)
                         + i128::from(delta.y) * i128::from(delta.y);
                     if distance_squared > maximum_squared || !self.candidate_is_accepted(&candidate) {
                         continue;
                     }
-                    let placement = candidate.placement;
+                    let Some(placement) = candidate.representative() else {
+                        continue;
+                    };
                     let replace = best.as_ref().is_none_or(|(current_distance, current)| {
                         distance_squared < *current_distance
                             || (distance_squared == *current_distance
@@ -364,7 +406,7 @@ impl StructureField {
     }
 
     fn candidate_is_accepted(&self, candidate: &StructureCandidate) -> bool {
-        let (minimum, maximum) = candidate.placement.horizontal_bounds();
+        let (minimum, maximum) = candidate.horizontal_bounds();
         !self
             .collect_candidates_intersecting_bounds(minimum, maximum)
             .into_iter()
@@ -391,10 +433,8 @@ impl StructureField {
         let left_rule = &self.rules[left.rule_index];
         let right_rule = &self.rules[right.rule_index];
         right
-            .placement
-            .structure
             .priority
-            .cmp(&left.placement.structure.priority)
+            .cmp(&left.priority)
             .then_with(|| {
                 left_rule
                     .reference
@@ -402,9 +442,9 @@ impl StructureField {
                     .cmp(right_rule.reference.as_ref())
             })
             .then_with(|| left_rule.biome.as_ref().cmp(right_rule.biome.as_ref()))
-            .then_with(|| left.placement.origin.x.cmp(&right.placement.origin.x))
-            .then_with(|| left.placement.origin.z.cmp(&right.placement.origin.z))
-            .then_with(|| left.placement.origin.y.cmp(&right.placement.origin.y))
+            .then_with(|| left.placement_anchor.x.cmp(&right.placement_anchor.x))
+            .then_with(|| left.placement_anchor.y.cmp(&right.placement_anchor.y))
+            .then_with(|| left.minimum_y.cmp(&right.minimum_y))
     }
 
     fn resolve_candidate(
@@ -439,25 +479,87 @@ impl StructureField {
             return None;
         }
 
-        let variant_hash = self.entropy.sample_2d(rule.variant_domain, cell);
-        let variant_count = u64::try_from(rule.variants.len())
-            .expect("structure variant count must fit u64");
-        let variant_index = usize::try_from(variant_hash % variant_count).ok()?;
-        let structure = Arc::clone(rule.variants.get(variant_index)?);
-        let rotation = structure.rotation_for_hash(self.entropy.sample_2d(rule.rotation_domain, cell));
-        let origin_y = self.fit_origin_y(&structure, rotation, anchor)?;
-
-        self.satisfies_restrictions(rule, &structure, rotation, anchor, origin_y)
-            .then_some(StructureCandidate {
-                rule_index,
-                cell,
-                placement: StructurePlacement {
+        let (pieces, priority, reserve_space, conflict_groups) = match &rule.source {
+            RootStructureSource::Direct {
+                variants,
+                variant_domain,
+                rotation_domain,
+            } => {
+                let variant_hash = self.entropy.sample_2d(*variant_domain, cell);
+                let variant_count =
+                    u64::try_from(variants.len()).expect("structure variant count must fit u64");
+                let variant_index = usize::try_from(variant_hash % variant_count).ok()?;
+                let structure = Arc::clone(variants.get(variant_index)?);
+                let rotation = structure
+                    .rotation_for_hash(self.entropy.sample_2d(*rotation_domain, cell));
+                let origin_y = self.fit_origin_y(&structure, rotation, anchor)?;
+                if !self.satisfies_restrictions(rule, &structure, rotation, anchor, origin_y) {
+                    return None;
+                }
+                let priority = structure.priority;
+                let reserve_space = structure.generation.reserve_space;
+                let conflict_groups: Arc<[String]> = structure.conflict_groups.clone().into();
+                let placement = StructurePlacement {
                     reference: Arc::clone(&rule.reference),
+                    placement_anchor: anchor,
                     structure,
                     rotation,
                     origin: IVec3::new(anchor.x, origin_y, anchor.y),
-                },
-            })
+                };
+                (
+                    vec![placement],
+                    priority,
+                    reserve_space,
+                    conflict_groups,
+                )
+            }
+            RootStructureSource::Set(set) => {
+                let resolved = set.resolve(self.entropy, cell, anchor, |structure, rotation, piece_anchor| {
+                    let origin_y = self.fit_origin_y(structure, rotation, piece_anchor)?;
+                    self.satisfies_restrictions(
+                        rule,
+                        structure,
+                        rotation,
+                        piece_anchor,
+                        origin_y,
+                    )
+                    .then_some(origin_y)
+                })?;
+                let pieces = resolved
+                    .into_iter()
+                    .map(|piece| StructurePlacement {
+                        reference: Arc::clone(&rule.reference),
+                        placement_anchor: anchor,
+                        structure: piece.structure,
+                        rotation: piece.rotation,
+                        origin: IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y),
+                    })
+                    .collect::<Vec<_>>();
+                (
+                    pieces,
+                    set.priority(),
+                    set.reserve_space(),
+                    set.conflict_groups(),
+                )
+            }
+        };
+
+        let (horizontal_minimum, horizontal_maximum, minimum_y, maximum_y) =
+            placement_bounds(&pieces)?;
+
+        Some(StructureCandidate {
+            rule_index,
+            cell,
+            placement_anchor: anchor,
+            pieces: pieces.into(),
+            horizontal_minimum,
+            horizontal_maximum,
+            minimum_y,
+            maximum_y,
+            priority,
+            reserve_space,
+            conflict_groups,
+        })
     }
 
     fn fit_origin_y(
@@ -684,40 +786,46 @@ impl RootStructureRule {
     fn new(
         definition: &GeneratedSurfaceStructureDefinition,
         structures: &StructureRegistry,
+        structure_sets: &StructureSetRegistry,
     ) -> Self {
-        let variants = structures
-            .reference_members(&definition.structure)
-            .unwrap_or_else(|| {
-                panic!(
-                    "generated surface structure rule references missing Structure or Structure group: {}",
-                    definition.structure
-                )
-            })
-            .into_iter()
-            .map(|structure| Arc::new(structure.clone()))
-            .collect::<Vec<_>>();
-        assert!(
-            !variants.is_empty(),
-            "generated surface structure reference {} must resolve at least one Structure",
-            definition.structure
-        );
-        let maximum_horizontal_extent = variants
-            .iter()
-            .flat_map(|structure| {
-                structure.supported_rotations().iter().map(|rotation| {
-                    let (minimum, maximum) = structure.horizontal_bounds_for_rotation(*rotation);
-                    minimum
-                        .x
-                        .unsigned_abs()
-                        .max(minimum.y.unsigned_abs())
-                        .max(maximum.x.unsigned_abs())
-                        .max(maximum.y.unsigned_abs())
-                })
-            })
-            .max()
-            .and_then(|extent| i32::try_from(extent).ok())
-            .unwrap_or(0);
         let suffix = format!("{}/{}", definition.biome, definition.structure);
+        let (source, maximum_horizontal_extent) =
+            if let Some(set) = structure_sets.get(&definition.structure) {
+                let compiled = CompiledStructureSet::new(set, structures, &suffix);
+                let maximum_horizontal_extent =
+                    maximum_extent_from_bounds(compiled.horizontal_bounds());
+                (RootStructureSource::Set(compiled), maximum_horizontal_extent)
+            } else {
+                let variants = structures
+                    .reference_members(&definition.structure)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "generated surface structure rule references missing Structure, Structure group, or StructureSet: {}",
+                            definition.structure
+                        )
+                    })
+                    .into_iter()
+                    .map(|structure| Arc::new(structure.clone()))
+                    .collect::<Vec<_>>();
+                assert!(
+                    !variants.is_empty(),
+                    "generated surface structure reference {} must resolve at least one Structure",
+                    definition.structure
+                );
+                let maximum_horizontal_extent = maximum_extent_for_variants(&variants);
+                (
+                    RootStructureSource::Direct {
+                        variants: variants.into(),
+                        variant_domain: GenerationDomain::named(&format!(
+                            "{VARIANT_DOMAIN_PREFIX}{suffix}"
+                        )),
+                        rotation_domain: GenerationDomain::named(&format!(
+                            "{ROTATION_DOMAIN_PREFIX}{suffix}"
+                        )),
+                    },
+                    maximum_horizontal_extent,
+                )
+            };
 
         Self {
             biome: Arc::from(definition.biome.as_str()),
@@ -726,15 +834,59 @@ impl RootStructureRule {
                 .expect("validated structure spacing must fit i32"),
             jitter: definition.jitter,
             chance: definition.chance,
-            variants: variants.into(),
+            source,
             maximum_horizontal_extent,
             presence_domain: GenerationDomain::named(&format!("{PRESENCE_DOMAIN_PREFIX}{suffix}")),
             jitter_x_domain: GenerationDomain::named(&format!("{JITTER_X_DOMAIN_PREFIX}{suffix}")),
             jitter_z_domain: GenerationDomain::named(&format!("{JITTER_Z_DOMAIN_PREFIX}{suffix}")),
-            variant_domain: GenerationDomain::named(&format!("{VARIANT_DOMAIN_PREFIX}{suffix}")),
-            rotation_domain: GenerationDomain::named(&format!("{ROTATION_DOMAIN_PREFIX}{suffix}")),
         }
     }
+}
+
+fn maximum_extent_for_variants(variants: &[Arc<StructureDefinition>]) -> i32 {
+    variants
+        .iter()
+        .flat_map(|structure| {
+            structure.supported_rotations().iter().map(|rotation| {
+                maximum_extent_from_bounds(structure.horizontal_bounds_for_rotation(*rotation))
+            })
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn maximum_extent_from_bounds((minimum, maximum): (IVec2, IVec2)) -> i32 {
+    minimum
+        .x
+        .unsigned_abs()
+        .max(minimum.y.unsigned_abs())
+        .max(maximum.x.unsigned_abs())
+        .max(maximum.y.unsigned_abs())
+        .try_into()
+        .unwrap_or(i32::MAX)
+}
+
+fn placement_bounds(pieces: &[StructurePlacement]) -> Option<(IVec2, IVec2, i32, i32)> {
+    let mut horizontal_minimum = IVec2::splat(i32::MAX);
+    let mut horizontal_maximum = IVec2::splat(i32::MIN);
+    let mut minimum_y = i32::MAX;
+    let mut maximum_y = i32::MIN;
+
+    for piece in pieces {
+        let (piece_minimum, piece_maximum) = piece.horizontal_bounds();
+        let (piece_minimum_y, piece_maximum_y) = piece.vertical_bounds();
+        horizontal_minimum = horizontal_minimum.min(piece_minimum);
+        horizontal_maximum = horizontal_maximum.max(piece_maximum);
+        minimum_y = minimum_y.min(piece_minimum_y);
+        maximum_y = maximum_y.max(piece_maximum_y);
+    }
+
+    (minimum_y != i32::MAX).then_some((
+        horizontal_minimum,
+        horizontal_maximum,
+        minimum_y,
+        maximum_y,
+    ))
 }
 
 fn candidate_identity(candidate: &StructureCandidate) -> (usize, i32, i32) {
@@ -750,10 +902,10 @@ fn same_candidate(left: &StructureCandidate, right: &StructureCandidate) -> bool
 }
 
 fn candidates_conflict(higher: &StructureCandidate, lower: &StructureCandidate) -> bool {
-    let (higher_minimum, higher_maximum) = higher.placement.horizontal_bounds();
-    let (lower_minimum, lower_maximum) = lower.placement.horizontal_bounds();
-    let (higher_minimum_y, higher_maximum_y) = higher.placement.vertical_bounds();
-    let (lower_minimum_y, lower_maximum_y) = lower.placement.vertical_bounds();
+    let (higher_minimum, higher_maximum) = higher.horizontal_bounds();
+    let (lower_minimum, lower_maximum) = lower.horizontal_bounds();
+    let (higher_minimum_y, higher_maximum_y) = higher.vertical_bounds();
+    let (lower_minimum_y, lower_maximum_y) = lower.vertical_bounds();
 
     rectangles_overlap(
         higher_minimum,
@@ -762,13 +914,13 @@ fn candidates_conflict(higher: &StructureCandidate, lower: &StructureCandidate) 
         lower_maximum,
     ) && higher_maximum_y >= lower_minimum_y
         && higher_minimum_y <= lower_maximum_y
-        && (higher.placement.structure.generation.reserve_space
-            || higher
-                .placement
-                .structure
-                .conflict_groups
-                .iter()
-                .any(|group| lower.placement.structure.conflict_groups.contains(group)))
+        && (higher.reserve_space
+            || higher.conflict_groups.iter().any(|group| {
+                lower
+                    .conflict_groups
+                    .iter()
+                    .any(|candidate| candidate == group)
+            }))
 }
 
 fn candidate_cell_bounds(spacing: i32, minimum: IVec2, maximum: IVec2) -> (IVec2, IVec2) {
@@ -820,8 +972,12 @@ fn jitter_offset(value: u64, jitter: u32) -> i64 {
     i64::try_from(value % span).expect("structure jitter remainder must fit i64") - i64::from(jitter)
 }
 
-fn placement_sort_key(placement: &StructurePlacement) -> (i32, i32, i32, &str) {
+fn placement_sort_key(
+    placement: &StructurePlacement,
+) -> (i32, i32, i32, i32, i32, &str) {
     (
+        placement.placement_anchor.y,
+        placement.placement_anchor.x,
         placement.origin.z,
         placement.origin.x,
         placement.origin.y,
