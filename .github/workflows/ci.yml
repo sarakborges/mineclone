@@ -66,6 +66,9 @@ jobs:
       - name: Audit loading pipeline contract
         run: python3 tools/check_loading_pipeline_contract.py
 
+      - name: Audit loading screen contract
+        run: python3 tools/check_loading_screen_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
