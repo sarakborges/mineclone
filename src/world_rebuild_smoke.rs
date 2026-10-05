@@ -3,8 +3,9 @@
     windows_subsystem = "windows"
 )]
 #![allow(
+    dead_code,
     unused_imports,
-    reason = "this diagnostic binary reuses the application module tree, including main-only CLI reexports"
+    reason = "this diagnostic binary reuses the application module tree, so main-only code is intentionally unreachable here"
 )]
 
 mod app;
@@ -294,11 +295,11 @@ fn generated_destination(app: &App, dimension_id: &str, column: IVec2) -> IVec3 
     let generator = WorldGenerator::new_runtime(
         seed,
         dimension,
-        &biomes,
-        &blocks,
-        &fluids,
-        &structures,
-        &structure_sets,
+        biomes,
+        blocks,
+        fluids,
+        structures,
+        structure_sets,
     );
     find_generated_surface_destination(&generator, column, 64, |_| true).unwrap_or_else(|| {
         panic!("smoke could not resolve a generated destination near {column:?} in {dimension_id}")
