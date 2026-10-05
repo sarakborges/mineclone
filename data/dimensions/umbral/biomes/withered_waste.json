@@ -1,4 +1,11 @@
 {
   "id": "asteria:umbral/withered_waste",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 4.0,
+    "macroAmplitude": 16.0,
+    "macroScale": 704,
+    "detailAmplitude": 5.0,
+    "detailScale": 96
+  }
 }

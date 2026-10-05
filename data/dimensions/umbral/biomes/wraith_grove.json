@@ -1,4 +1,11 @@
 {
   "id": "asteria:umbral/wraith_grove",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 12.0,
+    "macroAmplitude": 12.0,
+    "macroScale": 768,
+    "detailAmplitude": 4.0,
+    "detailScale": 112
+  }
 }

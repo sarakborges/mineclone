@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/wasteland",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 8.0,
+    "macroAmplitude": 18.0,
+    "macroScale": 704,
+    "detailAmplitude": 6.0,
+    "detailScale": 96
+  }
 }

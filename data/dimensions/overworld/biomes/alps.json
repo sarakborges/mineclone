@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/alps",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 80.0,
+    "macroAmplitude": 70.0,
+    "macroScale": 1024,
+    "detailAmplitude": 14.0,
+    "detailScale": 112
+  }
 }

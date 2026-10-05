@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/mountain_belt",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 42.0,
+    "macroAmplitude": 34.0,
+    "macroScale": 896,
+    "detailAmplitude": 8.0,
+    "detailScale": 112
+  }
 }

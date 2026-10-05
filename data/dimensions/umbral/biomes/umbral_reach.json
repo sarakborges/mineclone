@@ -1,4 +1,11 @@
 {
   "id": "asteria:umbral/umbral_reach",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 6.0,
+    "macroAmplitude": 20.0,
+    "macroScale": 768,
+    "detailAmplitude": 6.0,
+    "detailScale": 96
+  }
 }

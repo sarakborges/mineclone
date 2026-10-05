@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/volcano",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 72.0,
+    "macroAmplitude": 48.0,
+    "macroScale": 768,
+    "detailAmplitude": 10.0,
+    "detailScale": 96
+  }
 }

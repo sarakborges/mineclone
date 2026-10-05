@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/enchanted_forest",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 16.0,
+    "macroAmplitude": 14.0,
+    "macroScale": 704,
+    "detailAmplitude": 4.0,
+    "detailScale": 96
+  }
 }

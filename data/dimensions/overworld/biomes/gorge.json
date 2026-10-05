@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/gorge",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 18.0,
+    "macroAmplitude": 22.0,
+    "macroScale": 640,
+    "detailAmplitude": 6.0,
+    "detailScale": 80
+  }
 }
