@@ -285,6 +285,12 @@ fn run_terrain_debug_cli() -> bool {
     render
         .save(&output)
         .unwrap_or_else(|error| panic!("{error}"));
+    if !render.validation_passed() {
+        panic!(
+            "terrain debug invariant validation failed; inspect {}",
+            output.with_extension("debug.json").display()
+        );
+    }
     println!(
         "terrain debug saved: {} (density slice and metadata saved beside it)",
         output.display()
