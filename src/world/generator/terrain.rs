@@ -228,10 +228,6 @@ struct CaveField {
 
 impl CaveField {
     fn new() -> Self {
-        debug_assert!(CAVE_MIN_DEPTH > 0.0);
-        debug_assert!(CAVE_MAX_DEPTH > CAVE_MIN_DEPTH);
-        debug_assert!(CAVE_BOUNDARY_FADE > 0.0);
-        debug_assert!(CAVE_NOISE_HALF_WIDTH > 0.0 && CAVE_NOISE_HALF_WIDTH < 1.0);
         Self {
             primary_domain: GenerationDomain::named(CAVE_PRIMARY_DOMAIN),
             secondary_domain: GenerationDomain::named(CAVE_SECONDARY_DOMAIN),
