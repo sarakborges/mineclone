@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `19d10a882f9ba75596113718c010a02d517d012a` (`Fix Structure query compilation`). Rust validation run `37264433026` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
+Code baseline recorded here: `4ed132a92516c1213f540b7649ff09062bddaed5` (`Keep generated structure validation scoped`), including `7b20dee4d1c331b62d3e550ead42df3e2531e2df` (`Resolve root structure placement conflicts`). Rust validation run `37299795207` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
 
 ## Validation policy
 
@@ -25,7 +25,7 @@ Repository validation follows root `AGENTS.md`.
 | 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
-| 6 — Structures/features | In progress | A deterministic world-space `StructureField` now owns root placement/query for the first authored Plains Structures. StructureSets, connectors, priority/conflict/reservation arbitration, and the remaining biome placements are still pending. |
+| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query plus priority, conflict-group, reservation, and overlap arbitration for the first authored Plains Structures. StructureSets, connectors, remaining biome placements, and final placement-graph seam/order validation are still pending. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
@@ -158,9 +158,16 @@ Implemented now:
 - root candidates require the authoritative primary surface biome instead of resolving biome boundaries independently;
 - ground fitting consumes `TerrainQueries::surface_at` and the existing Structure support/full-footprint rules;
 - authored min/max slope, min/max Y, `groundBlocks`, `requiredBiomeCoverage`, dry-ground, fluid-forbid, and block/fluid proximity constraints consume authoritative biome/terrain/material/generated-fluid queries;
-- `StructureQueries::placements_intersecting(...)` enumerates only relevant world-space candidate cells, resolves complete logical placements, then reports placements whose actual bounds intersect the requested rectangle;
-- querying a neighboring/requesting area therefore does not clip a logical Structure to that area;
-- `StructureQueries::find_nearest(...)` searches the same authoritative root placement owner rather than creating a locate-specific resolver;
+- root arbitration is intent-based: a candidate is rejected whenever a directly overlapping higher-ranked conflicting intent exists, regardless of whether that higher-ranked intent would itself later survive another conflict;
+- root ranking is deterministic: authored `priority` descending, then placement reference, biome id, root anchor X/Z, and placement Y ascending;
+- `reserveSpace` is directional: only a higher-ranked reserving root can reject a lower-ranked overlap solely by reservation;
+- shared `conflictGroups` are symmetric once the deterministic ranking selects the higher intent;
+- arbitration requires actual 3D placement overlap, using full horizontal and vertical Structure bounds rather than request/chunk bounds;
+- competitor discovery is performed from complete logical placement bounds, so a higher-ranked placement outside the requesting rectangle can still reject a lower-ranked placement crossing that boundary;
+- `StructureQueries::placements_intersecting(...)` enumerates only relevant world-space candidate cells, resolves complete logical placements, arbitrates them, then reports surviving placements whose actual bounds intersect the requested rectangle;
+- querying a neighboring/requesting area therefore does not clip a logical Structure to that area or change which root wins an overlap;
+- `StructureQueries::find_nearest(...)` searches the same authoritative root placement owner and filters through the same arbitration instead of creating a locate-specific resolver;
+- `generatedSurfaceStructures` references are validated at content-load time: referenced biome must exist as a surface biome in the same dimension and the Structure/Structure-group reference must resolve;
 - runtime world installation freezes the loaded `StructureRegistry` into the generator-side owner; biome/terrain diagnostic tools that do not consume Structures remain independent of Structure content.
 
 Current root authoring shape:
@@ -183,15 +190,14 @@ The first migrated roots are the existing Plains oak/willow groups plus small/me
 
 ### What is intentionally incomplete in Phase 6
 
-The current `StructureField` is a foundation, not the completed Structure planner. Remaining work includes:
+The current `StructureField` remains a root-placement foundation, not the completed Structure graph planner. Remaining work includes:
 
-- deterministic priority arbitration;
-- `conflictGroups` and overlap/reservation handling, including `reserveSpace` semantics;
-- `StructureSet` expansion (`relativeTo`, min/max distance, separation, attempts, overlap rules);
+- `StructureSet` expansion (`relativeTo`, min/max distance, separation, attempts, overlap rules) inside the same placement graph;
 - connector-chain expansion and connector strength/distance behavior;
+- extending the same priority/conflict/reservation arbitration over multi-piece Set/connector placement graphs rather than inventing a second resolver;
 - preserving connected rivers, waterfalls, cavern entrances/tunnels, and other paths as generic Structures/connectors rather than creating a hydrology subsystem;
 - migration of the remaining current biome/dimension Structure root authoring beyond the first Plains slice;
-- final scalar/bounded-query seam/order validation for planned Structure graphs;
+- final scalar/bounded-query seam/order validation for complete planned Structure graphs;
 - exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure`.
 
 Structure planning must remain independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
@@ -203,9 +209,9 @@ Continue **Phase 6 — Structures/features**, not chunk synthesis.
 Required direction:
 
 1. extend the existing `StructureField`; do not add a parallel planner;
-2. add deterministic priority/conflict/reservation arbitration for independently selected roots;
-3. integrate preserved `StructureSet` expansion into the same placement graph;
-4. integrate connector-chain expansion into the same placement graph, preserving generic rivers/waterfalls/connectors and avoiding any hydrology subsystem;
+2. integrate preserved `StructureSet` expansion into the same deterministic placement graph, including `relativeTo`, authored distances/separation/attempts, overlap rules, and complete graph bounds;
+3. apply the existing root priority/conflict/reservation semantics to the resulting multi-piece placement intent;
+4. integrate connector-chain expansion after Sets, preserving generic rivers/waterfalls/connectors and avoiding any hydrology subsystem;
 5. migrate remaining authored Structure roots only through this owner;
 6. validate that overlapping bounded requests observe the same complete logical placements regardless of request origin/order;
 7. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
