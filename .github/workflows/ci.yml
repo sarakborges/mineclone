@@ -69,6 +69,9 @@ jobs:
       - name: Audit loading screen contract
         run: python3 tools/check_loading_screen_contract.py
 
+      - name: Audit world rebuild end-to-end contract
+        run: python3 tools/check_world_rebuild_end_to_end_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
