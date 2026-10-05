@@ -10,6 +10,7 @@ mod chunk_visibility;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
 pub(crate) mod deterministic;
+pub(crate) mod destination;
 pub(crate) mod dimension;
 pub(crate) mod dimension_persistence;
 pub(crate) mod fluid_updates;
