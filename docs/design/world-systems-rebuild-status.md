@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `3291594fefded1aa6c09dbffd88aea372cd277af` (`Fix generated fluid Clippy gate`), including `53e09fa0f087210f55dfbbad4a6009368b25569b` (`Add shallow swamp surface puddles`). Rust validation run `37260578857` completed successfully for that baseline. Terrain invariant validation remains available through the on-demand terrain debug path introduced before Phase 5.
+Code baseline recorded here: `8c46c0bda3b9a78cadb62c6caced2a2e209dfee5` (`Define generated fluid runtime frontier handoff`), including `2cb360dac9f88c503bca353905aed089e29d8096` (`Author volcano lava pools`). Rust validation run `37262689844` completed successfully for that baseline. Terrain invariant validation remains available through the on-demand terrain debug path introduced before Phase 5.
 
 ## Validation policy
 
@@ -24,7 +24,7 @@ Repository validation follows root `AGENTS.md`.
 | 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
 | 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
 | 4 — Terrain | Complete for current authored content | Continuous 2D base terrain, authoritative final 3D density, bounded caves, authored floating masses, bounded effective-surface resolution, scalar/batch queries, and the terrain debug renderer with built-in seam/query validation are implemented. No currently authored terrain requires another true-3D form. |
-| 5 — Surface/materials/generated fluids | In progress | Authoritative solid composition, deterministic surface patches, generated Ocean water, and shallow generated swamp puddles are implemented. Local lava and the generated-fluid-to-runtime-fluid frontier publication boundary remain pending. |
+| 5 — Surface/materials/generated fluids | Complete for current authored content | Authoritative solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch generated-fluid queries, and the explicit runtime frontier handoff are implemented. |
 | 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals and streaming still need reconnection to the new generator capabilities. |
@@ -177,9 +177,9 @@ These do not block Phase 4 for the content currently authored:
 
 Any such extension must compose into the same `TerrainField`, expose bounded candidates where effective-column queries need them, and preserve scalar/batch/world-coordinate equivalence.
 
-## Phase 5 — surface/material composition in progress
+## Phase 5 — completed surface/material/generated-fluid composition
 
-Authoritative implementation currently being built:
+Authoritative implementation:
 
 - `src/world/generator/material.rs`
 - `src/world/generator/generated_fluid.rs`
@@ -187,12 +187,13 @@ Authoritative implementation currently being built:
 - `src/content/dimension/types.rs` `generatedOcean` and `generatedSurfaceFluids`
 - the current surface-biome JSON definitions under `data/dimensions/*/biomes/`
 - `data/dimensions/overworld/dimension.json`
+- `src/world/fluid_updates.rs` for the explicit generated-frontier-to-runtime scheduler handoff
 
 Current material/generated-fluid contract:
 
 - `TerrainField` remains the sole owner of whether a voxel is solid or empty; material composition never recreates terrain occupancy;
-- `GeneratedFluidField` is the one generated-fluid spatial-rule owner. It consumes immutable dimension authoring, deterministic world-space entropy, and authoritative primary surface-biome samples for both Ocean and local surface-fluid placement;
-- `TerrainField` consumes only the shallow local-fluid cut depth from that same `GeneratedFluidField`, so a puddle removes terrain through the authoritative density field instead of placing fluid inside a still-solid voxel;
+- `GeneratedFluidField` is the one generated-fluid spatial-rule owner. It consumes immutable dimension authoring, deterministic world-space entropy, and authoritative primary surface-biome samples for Ocean and local surface-fluid placement;
+- `TerrainField` consumes only the shallow local-fluid cut depth from that same `GeneratedFluidField`, so a surface pool removes terrain through the authoritative density field instead of placing fluid inside a still-solid voxel;
 - `MaterialField` owns generated solid block composition and exposes initial generated-fluid queries by consuming `TerrainField`, `BiomeLayout`, and the shared `GeneratedFluidField` rather than re-resolving fluid placement;
 - `MaterialQueries::solid_block_at(x, y, z)` returns no block for empty terrain and the authored solid block for occupied terrain;
 - `MaterialQueries::sample_solid_volume(...)` provides dense unit-step XYZ solid sampling for later chunk synthesis without materializing a `VoxelChunk`;
@@ -211,11 +212,12 @@ Current material/generated-fluid contract:
 - the Overworld dimension explicitly authors `generatedOcean.biome = asteria:overworld/ocean` and `generatedOcean.fluid = asteria:water`;
 - generated Ocean water exists only when the authoritative primary surface biome matches that authored Ocean biome, the final terrain density is empty, and the voxel lies strictly above the authoritative base Ocean floor and at or below dimension `seaLevel`;
 - empty cave/overhang volume below the generated Ocean floor remains dry because generated Ocean fill never applies at or below `base_surface_at(x, z)`;
-- the Overworld also authors a deterministic `generatedSurfaceFluids` water rule for `asteria:overworld/swamp`;
-- swamp puddle placement is world-coordinate anchored and seed/domain deterministic, using authored spacing/radius/jitter/chance rather than chunk/request-local randomness;
-- the current swamp puddle depth is one voxel: `TerrainField` carves the former top solid voxel, `surface_at` resolves the solid puddle bed below it, and `GeneratedFluidField` fills exactly that removed voxel with `asteria:water`;
-- this makes water genuinely interleave with grass/dirt/mud at the swamp surface instead of floating one block above an unchanged solid surface;
-- generated fluid is initial world formation only. Runtime propagation/frontier scheduling remains a later explicit boundary and generation does not bulk-schedule generated Ocean or puddle voxels.
+- the Overworld authors deterministic `generatedSurfaceFluids` rules for swamp water and volcano lava;
+- swamp puddle placement is world-coordinate anchored and seed/domain deterministic, with a one-voxel cut so water genuinely interleaves with grass/dirt/mud at the swamp surface;
+- volcano lava uses the same deterministic local-fluid rule and currently creates sparse two-voxel-deep surface lava pools in the Volcano biome;
+- the current Volcano terrain does not author a dedicated crater/caldera shape, so this implementation deliberately does not mislabel random pools as geometric crater lava; a future authored crater must be a Terrain extension and may reuse the same generated-fluid owner;
+- generated fluid is initial world formation only. Filled Ocean/puddle/lava voxels are never bulk-enqueued as runtime simulation work;
+- `enqueue_generated_fluid_frontier(...)` is the explicit runtime handoff for a future materialization path: chunk synthesis will call it only for exposed empty frontier targets, and the existing runtime scheduler revalidates the target before assigning the authored spread delay.
 
 Current solid layer authoring shape:
 
@@ -265,6 +267,15 @@ Current generated-fluid authoring shape:
       "jitter": 3,
       "chance": 0.75,
       "depth": 1
+    },
+    {
+      "biome": "asteria:overworld/volcano",
+      "fluid": "asteria:lava",
+      "spacing": 96,
+      "radius": 10,
+      "jitter": 12,
+      "chance": 0.4,
+      "depth": 2
     }
   ]
 }
@@ -272,27 +283,28 @@ Current generated-fluid authoring shape:
 
 Finite solid entries require a positive `depth`. The final entry is the depthless core layer. The total finite authored depth is bounded. Patches are optional and may only replace finite layers; they remain deterministic spatial material variation rather than a second terrain or biome field. Wasteland is explicitly dirt/gravel/stone, mountain/gorge profiles remain stone-dominant, Ocean floor uses sand/gravel/stone, and the Umbral profiles preserve their authored solid identities.
 
-### What is not implemented yet in Phase 5
+### Deferred Phase 5 extensions
 
-Solid layers, deterministic solid surface patches, authoritative generated Ocean fill, and shallow generated swamp puddles are implemented. Remaining work includes:
+These do not block Phase 5 for the currently authored content:
 
-- local generated fluids such as volcano crater lava where authored;
-- the explicit handoff from generated-fluid initial state to runtime dynamic-fluid frontier scheduling.
+- a dedicated Volcano crater/caldera terrain form, if later authored;
+- additional local generated-fluid formations introduced by future biome/dimension content;
+- direct invocation of the frontier handoff, which belongs to Phase 7 chunk materialization once generated voxels actually enter the runtime world.
 
-Generated fluids must remain initial world formation, not a hydrology subsystem. Local generated fluids must reuse authoritative biome/terrain/material facts rather than creating independent spatial ownership.
+Any extension must continue to use the same `TerrainField`, `GeneratedFluidField`, `MaterialField`, and runtime frontier boundary rather than adding a hydrology or parallel material owner.
 
 ## Next concrete work
 
-Continue **Phase 5**, not chunk synthesis.
+Begin **Phase 6 — Structures/features**, not chunk synthesis.
 
 Required direction:
 
-1. add the next authored local generated-fluid formation, starting with volcano crater lava if the current volcano content requires it, through the existing `GeneratedFluidField` rather than a new subsystem;
-2. keep scalar and dense bounded generated-fluid queries deterministic and world-coordinate anchored, reusing authoritative biome/terrain/material results rather than introducing another resolver;
-3. define the generated-fluid-to-runtime-fluid frontier boundary so initial generation does not bulk-schedule every generated fluid voxel, while exposed empty neighbors can seed runtime continuation when materialization is introduced;
-4. preserve the Ocean rule that subterranean cave/overhang voids below the generated floor stay dry;
-5. preserve shallow surface-fluid cuts as authoritative Terrain density changes rather than material-only overrides;
-6. remain pre-`VoxelChunk` until Phase 7.
+1. audit the preserved generic Structure definitions, StructureSets/groups, variants, placement constraints, reservations/conflict groups, and connectors that Phase 6 must consume;
+2. introduce one deterministic generation-side Structure placement/query owner in world space, independent from runtime `/place structure` mutation;
+3. make placement consume authoritative biome, terrain, and material queries rather than resolving those facts again;
+4. preserve authored spacing, priority, terrain/ground restrictions, connector chains, variants, and cross-chunk logical placements without clipping to a requesting chunk;
+5. keep rivers/waterfalls in the generic Structure/connector architecture; do not create a hydrology subsystem;
+6. expose deterministic placement/search capabilities that Phase 7 materialization and Phase 8 `/locate structure` can share.
 
 ## Important non-regression rules
 
@@ -300,6 +312,6 @@ Required direction:
 - No semantic generation region or chunk-owned biome/terrain truth.
 - No separate land/ocean ownership model.
 - No hydrology subsystem; rivers remain generic connected Structures/connectors.
-- No duplicated biome map, terrain sampler, material sampler, generated-fluid sampler, or query resolver.
+- No duplicated biome map, terrain sampler, material sampler, generated-fluid sampler, Structure placement owner, or query resolver.
 - No compatibility shims for deleted generation contracts unless explicitly requested.
 - No `cargo test` in agent workflows/CI unless explicitly requested for the current task.
