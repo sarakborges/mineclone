@@ -5,6 +5,10 @@ use image::{Rgba, RgbaImage};
 use super::TerrainQueries;
 
 const MAX_DEBUG_RESOLUTION: u32 = 4096;
+const VALIDATION_SURFACE_SIZE: u32 = 17;
+const VALIDATION_SURFACE_SHIFT: u32 = 8;
+const VALIDATION_VOLUME_SIZE: u32 = 9;
+const VALIDATION_VOLUME_SHIFT: u32 = 4;
 
 #[derive(Clone, Debug)]
 pub(crate) struct TerrainDebugConfig {
@@ -64,14 +68,49 @@ impl TerrainDebugConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct TerrainDebugValidation {
+    surface_scalar_batch_mismatches: u64,
+    surface_overlap_mismatches: u64,
+    density_scalar_batch_mismatches: u64,
+    density_overlap_mismatches: u64,
+    density_repeat_mismatches: u64,
+    surface_crossing_mismatches: u64,
+}
+
+impl TerrainDebugValidation {
+    const fn passed(self) -> bool {
+        self.surface_scalar_batch_mismatches == 0
+            && self.surface_overlap_mismatches == 0
+            && self.density_scalar_batch_mismatches == 0
+            && self.density_overlap_mismatches == 0
+            && self.density_repeat_mismatches == 0
+            && self.surface_crossing_mismatches == 0
+    }
+
+    const fn mismatch_count(self) -> u64 {
+        self.surface_scalar_batch_mismatches
+            + self.surface_overlap_mismatches
+            + self.density_scalar_batch_mismatches
+            + self.density_overlap_mismatches
+            + self.density_repeat_mismatches
+            + self.surface_crossing_mismatches
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct TerrainDebugRender {
     surface: RgbaImage,
     density_slice: RgbaImage,
     metadata_json: String,
+    validation: TerrainDebugValidation,
 }
 
 impl TerrainDebugRender {
+    pub(crate) const fn validation_passed(&self) -> bool {
+        self.validation.passed()
+    }
+
     pub(crate) fn save(&self, output: &Path) -> Result<(), String> {
         self.surface.save(output).map_err(|error| {
             format!(
@@ -205,6 +244,12 @@ pub(crate) fn render_terrain_debug(
         }
     }
 
+    let validation = validate_terrain_queries(
+        queries,
+        config.center_x,
+        config.center_y,
+        config.center_z,
+    );
     let metadata_json = serde_json::to_string_pretty(&serde_json::json!({
         "center": [config.center_x, config.center_y, config.center_z],
         "blocksPerPixel": config.blocks_per_pixel,
@@ -234,6 +279,20 @@ pub(crate) fn render_terrain_debug(
                 "baseSurfaceCrossing": [244, 164, 54],
                 "effectiveAdditiveCrossing": [24, 230, 236]
             }
+        },
+        "validation": {
+            "passed": validation.passed(),
+            "mismatchCount": validation.mismatch_count(),
+            "surfaceScalarBatchMismatches": validation.surface_scalar_batch_mismatches,
+            "surfaceOverlapMismatches": validation.surface_overlap_mismatches,
+            "densityScalarBatchMismatches": validation.density_scalar_batch_mismatches,
+            "densityOverlapMismatches": validation.density_overlap_mismatches,
+            "densityRepeatMismatches": validation.density_repeat_mismatches,
+            "surfaceCrossingMismatches": validation.surface_crossing_mismatches,
+            "surfaceProbeSize": VALIDATION_SURFACE_SIZE,
+            "surfaceOverlapShift": VALIDATION_SURFACE_SHIFT,
+            "densityProbeSize": VALIDATION_VOLUME_SIZE,
+            "densityOverlapShift": VALIDATION_VOLUME_SHIFT
         }
     }))
     .expect("terrain debug metadata must serialize");
@@ -242,7 +301,140 @@ pub(crate) fn render_terrain_debug(
         surface,
         density_slice,
         metadata_json,
+        validation,
     }
+}
+
+fn validate_terrain_queries(
+    queries: TerrainQueries<'_>,
+    center_x: i32,
+    center_y: i32,
+    center_z: i32,
+) -> TerrainDebugValidation {
+    let mut validation = TerrainDebugValidation::default();
+
+    let surface_extent = VALIDATION_SURFACE_SIZE + VALIDATION_SURFACE_SHIFT;
+    let surface_origin_x = validation_origin(center_x, surface_extent);
+    let surface_origin_z = validation_origin(center_z, VALIDATION_SURFACE_SIZE);
+    let surface_right_origin_x = grid_axis(surface_origin_x, VALIDATION_SURFACE_SHIFT, 1);
+    let surface_left = queries.sample_surface_area(
+        surface_origin_x,
+        surface_origin_z,
+        VALIDATION_SURFACE_SIZE,
+        VALIDATION_SURFACE_SIZE,
+    );
+    let surface_right = queries.sample_surface_area(
+        surface_right_origin_x,
+        surface_origin_z,
+        VALIDATION_SURFACE_SIZE,
+        VALIDATION_SURFACE_SIZE,
+    );
+
+    for z_index in 0..VALIDATION_SURFACE_SIZE {
+        let z = grid_axis(surface_origin_z, z_index, 1);
+        for x_index in 0..VALIDATION_SURFACE_SIZE {
+            let x = grid_axis(surface_origin_x, x_index, 1);
+            let batch = surface_left
+                .sample_at(x_index, z_index)
+                .expect("terrain validation surface sample must exist");
+            if batch.base_surface().to_bits() != queries.base_surface_at(x, z).to_bits()
+                || batch.surface_y() != queries.surface_at(x, z)
+            {
+                validation.surface_scalar_batch_mismatches += 1;
+            }
+
+            let surface_y = batch.surface_y();
+            let crossing_is_solid = queries.density_at(x, surface_y, z) >= 0.0;
+            let above_is_empty = surface_y
+                .checked_add(1)
+                .is_some_and(|above| queries.density_at(x, above, z) < 0.0);
+            if !crossing_is_solid || !above_is_empty {
+                validation.surface_crossing_mismatches += 1;
+            }
+        }
+
+        for left_x_index in VALIDATION_SURFACE_SHIFT..VALIDATION_SURFACE_SIZE {
+            let left = surface_left
+                .sample_at(left_x_index, z_index)
+                .expect("terrain validation left overlap sample must exist");
+            let right = surface_right
+                .sample_at(left_x_index - VALIDATION_SURFACE_SHIFT, z_index)
+                .expect("terrain validation right overlap sample must exist");
+            if left != right {
+                validation.surface_overlap_mismatches += 1;
+            }
+        }
+    }
+
+    let density_extent = VALIDATION_VOLUME_SIZE + VALIDATION_VOLUME_SHIFT;
+    let density_origin_x = validation_origin(center_x, density_extent);
+    let density_origin_y = validation_origin(center_y, VALIDATION_VOLUME_SIZE);
+    let density_origin_z = validation_origin(center_z, VALIDATION_VOLUME_SIZE);
+    let density_right_origin_x = grid_axis(density_origin_x, VALIDATION_VOLUME_SHIFT, 1);
+    let density_left = queries.sample_density_volume(
+        density_origin_x,
+        density_origin_y,
+        density_origin_z,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+    );
+    let density_right = queries.sample_density_volume(
+        density_right_origin_x,
+        density_origin_y,
+        density_origin_z,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+    );
+    let density_repeat = queries.sample_density_volume(
+        density_origin_x,
+        density_origin_y,
+        density_origin_z,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+        VALIDATION_VOLUME_SIZE,
+    );
+
+    for z_index in 0..VALIDATION_VOLUME_SIZE {
+        let z = grid_axis(density_origin_z, z_index, 1);
+        for y_index in 0..VALIDATION_VOLUME_SIZE {
+            let y = grid_axis(density_origin_y, y_index, 1);
+            for x_index in 0..VALIDATION_VOLUME_SIZE {
+                let x = grid_axis(density_origin_x, x_index, 1);
+                let batch = density_left
+                    .density_at(x_index, y_index, z_index)
+                    .expect("terrain validation density sample must exist");
+                if batch.to_bits() != queries.density_at(x, y, z).to_bits() {
+                    validation.density_scalar_batch_mismatches += 1;
+                }
+                let repeated = density_repeat
+                    .density_at(x_index, y_index, z_index)
+                    .expect("terrain validation repeated density sample must exist");
+                if batch.to_bits() != repeated.to_bits() {
+                    validation.density_repeat_mismatches += 1;
+                }
+            }
+
+            for left_x_index in VALIDATION_VOLUME_SHIFT..VALIDATION_VOLUME_SIZE {
+                let left = density_left
+                    .density_at(left_x_index, y_index, z_index)
+                    .expect("terrain validation left density overlap must exist");
+                let right = density_right
+                    .density_at(
+                        left_x_index - VALIDATION_VOLUME_SHIFT,
+                        y_index,
+                        z_index,
+                    )
+                    .expect("terrain validation right density overlap must exist");
+                if left.to_bits() != right.to_bits() {
+                    validation.density_overlap_mismatches += 1;
+                }
+            }
+        }
+    }
+
+    validation
 }
 
 fn surface_color(base_y: i32, effective_y: i32, center_y: i32) -> [u8; 4] {
@@ -275,6 +467,13 @@ fn sample_origin(center: i32, pixel_count: u32, blocks_per_pixel: u32, axis: &st
         "terrain debug {axis} span exceeds world coordinate range"
     );
     first as i32
+}
+
+fn validation_origin(center: i32, extent: u32) -> i32 {
+    let half = i64::from(extent / 2);
+    let min_origin = i64::from(i32::MIN);
+    let max_origin = i64::from(i32::MAX) - i64::from(extent - 1);
+    (i64::from(center) - half).clamp(min_origin, max_origin) as i32
 }
 
 fn grid_axis(origin: i32, index: u32, step: u32) -> i32 {
