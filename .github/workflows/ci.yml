@@ -78,6 +78,7 @@ jobs:
           set -euo pipefail
           mkdir -p terrain-validation
           cargo build --locked
+          export LD_LIBRARY_PATH="$PWD/target/debug/deps:${LD_LIBRARY_PATH:-}"
           ./target/debug/asteria \
             --biome-map \
             --seed 0 \
