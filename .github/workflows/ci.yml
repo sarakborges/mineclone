@@ -51,6 +51,9 @@ jobs:
       - name: Audit streaming materialization contract
         run: python3 tools/check_streaming_materialization_contract.py
 
+      - name: Audit streaming presentation contract
+        run: python3 tools/check_streaming_presentation_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
