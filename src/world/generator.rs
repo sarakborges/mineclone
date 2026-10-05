@@ -23,7 +23,7 @@ use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, Generat
 use generated_fluid::GeneratedFluidField;
 pub(crate) use material::MaterialQueries;
 use material::MaterialField;
-pub(crate) use structure::{StructurePlacement, StructureQueries};
+pub(crate) use structure::StructureQueries;
 use structure::StructureField;
 pub(crate) use terrain::TerrainQueries;
 use terrain::TerrainField;
@@ -44,7 +44,29 @@ pub(crate) struct WorldGenerator {
 }
 
 impl WorldGenerator {
+    /// Generator used by diagnostic/query paths that do not consume authored
+    /// Structures. Runtime world installation uses `new_with_structures`.
     pub(crate) fn new(
+        seed: u64,
+        dimension: &DimensionDefinition,
+        biome_registry: &BiomeRegistry,
+    ) -> Self {
+        let snapshot = GenerationSnapshot::new(
+            GenerationSeed::new(seed),
+            GenerationDimension::from_definition(dimension),
+        );
+        let structures = StructureRegistry::default();
+        Self::from_snapshot_with_content(
+            snapshot,
+            biome_registry,
+            &structures,
+            dimension.generated_ocean.as_ref(),
+            &dimension.generated_surface_fluids,
+            &[],
+        )
+    }
+
+    pub(crate) fn new_with_structures(
         seed: u64,
         dimension: &DimensionDefinition,
         biome_registry: &BiomeRegistry,
@@ -65,11 +87,11 @@ impl WorldGenerator {
     }
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
-        let structure_registry = StructureRegistry::default();
+        let structures = StructureRegistry::default();
         Self::from_snapshot_with_content(
             snapshot,
             biome_registry,
-            &structure_registry,
+            &structures,
             None,
             &[],
             &[],
@@ -295,8 +317,7 @@ mod tests {
     fn world_generator_copies_authored_dimension_inputs() {
         let mut definition = test_dimension_definition("asteria:authored", 72, 0.85);
         let registry = test_biome_registry("asteria:authored");
-        let structures = StructureRegistry::default();
-        let generator = WorldGenerator::new(991, &definition, &registry, &structures);
+        let generator = WorldGenerator::new(991, &definition, &registry);
 
         definition.id = "asteria:mutated".to_owned();
         definition.sea_level = -10;
