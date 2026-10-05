@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `a4b62bebeb22d7a4fe63558a0a939a083d01f54c` (`Author terrain profiles for all surface biomes`). Rust validation run `37249243969` completed successfully for that baseline.
+Code baseline recorded here: `768c6acf7a8436ad1a4c7dcf2bf2fd2edef8a698` (`Fix cave field Clippy gate`). Rust validation run `37251258649` completed successfully for that baseline.
 
 ## Validation policy
 
@@ -22,7 +22,7 @@ Repository validation follows root `AGENTS.md`.
 | 1 — Cleanup | Complete | Legacy biome/world-generation/loading ownership and transitional biome presentation bridges were removed. Preserved runtime systems remain separate from the new generator. |
 | 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
 | 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
-| 4 — Terrain | In progress | Continuous 2D base-surface terrain and base 3D density are implemented. Surface terrain profiles are authored for all current surface biomes. True 3D terrain contributions are still pending. |
+| 4 — Terrain | In progress | Continuous 2D base-surface terrain, final 3D density composition, a bounded subtractive cave field, and dense XYZ density sampling are implemented. Additive 3D formations and effective surface resolution for them are still pending. |
 | 5 — Surface/materials/generated fluids | Pending | Not started on the new stack. |
 | 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
@@ -115,9 +115,11 @@ Authoritative implementation currently being built:
 Current terrain facts:
 
 - `TerrainQueries::base_surface_at(x, z)` exposes the continuous authoritative 2D base surface;
-- `TerrainQueries::surface_at(x, z)` currently resolves the highest voxel of that base-solid field;
-- `TerrainQueries::density_at(x, y, z)` currently uses the base surface as the 3D solid/empty crossing;
-- bounded terrain grid sampling reuses one authoritative biome sample grid instead of rediscovering biome ownership per voxel;
+- `TerrainQueries::surface_at(x, z)` currently resolves the highest voxel of the base surface because the only true 3D contribution implemented so far is deliberately bounded below that crossing;
+- `TerrainQueries::density_at(x, y, z)` composes the base-solid density with the same `TerrainField`'s bounded subtractive cave contribution;
+- cave noise is deterministic, world-coordinate anchored, and limited to a finite depth band below the base surface so it cannot change the top crossing;
+- `TerrainQueries::sample_density_volume(...)` provides dense XYZ batch sampling while reusing one authoritative biome sample and base-surface result per X/Z column;
+- bounded terrain surface-grid sampling reuses one authoritative biome sample grid instead of rediscovering biome ownership per voxel;
 - biome influence weights blend each participating biome's terrain profile;
 - terrain noise is anchored in world coordinates and deterministic generator domains;
 - every current surface biome now has an authored `surfaceTerrain` profile.
@@ -138,22 +140,16 @@ Current `surfaceTerrain` shape:
 
 ### What is not implemented yet in Phase 4
 
-The current 3D density is still only the base-solid conversion:
+The final density field now has its first bounded true 3D contribution, but Phase 4 is not complete. Remaining work includes, as applicable:
 
-```text
-base surface - world Y
-```
-
-Phase 4 is not complete until the same final terrain field can compose the required true 3D contributions, including as applicable:
-
-- caves/carving;
+- additive masses;
 - overhangs;
 - floating formations;
-- additive masses;
 - future volume-biome terrain effects;
-- effective surface/column resolution that accounts for those 3D contributions without brute-force scanning the whole world height.
+- effective surface/column resolution that accounts for additive 3D contributions without brute-force scanning the whole world height;
+- visual/debug validation of the final terrain field before materials/features are layered on top.
 
-Cross-chunk/world-space determinism must remain unchanged when those contributions are added.
+Cross-chunk/world-space determinism must remain unchanged as those contributions are added.
 
 ## Next concrete work
 
@@ -164,10 +160,11 @@ The next implementation should extend the current `TerrainField`; do not create 
 Required direction:
 
 1. keep `base_surface_at` as the cheap authoritative 2D terrain result;
-2. introduce bounded, deterministic 3D terrain contributions into the same final density field;
-3. make effective column/surface queries account for those contributions without full-height brute-force scans;
-4. preserve scalar/batch equivalence and world-coordinate anchoring;
-5. only after Phase 4 is complete proceed to surface/material/generated-fluid composition.
+2. add the first bounded additive 3D terrain contribution to the same final density field;
+3. give additive contributions explicit vertical candidate bounds so `surface_at` can resolve the highest effective solid crossing without a full-height scan;
+4. preserve scalar/batch equivalence and world-coordinate anchoring in both density and effective-column queries;
+5. add terrain visual/debug validation before closing Phase 4;
+6. only after Phase 4 is complete proceed to surface/material/generated-fluid composition.
 
 ## Important non-regression rules
 
