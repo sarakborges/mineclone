@@ -73,6 +73,13 @@
       "jitter": 43
     },
     {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:lake",
+      "spacing": 256,
+      "chance": 0.5,
+      "jitter": 64
+    },
+    {
       "biome": "asteria:overworld/swamp",
       "structure": "asteria:tree_willow",
       "spacing": 9,
@@ -164,6 +171,13 @@
       "jitter": 33
     },
     {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 192,
+      "chance": 0.45,
+      "jitter": 48
+    },
+    {
       "biome": "asteria:overworld/gorge",
       "structure": "asteria:boulder_small",
       "spacing": 30,
@@ -206,6 +220,13 @@
       "jitter": 31
     },
     {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 224,
+      "chance": 0.4,
+      "jitter": 56
+    },
+    {
       "biome": "asteria:overworld/mountain_belt",
       "structure": "asteria:boulder_small",
       "spacing": 28,
@@ -232,6 +253,13 @@
       "spacing": 112,
       "chance": 0.09,
       "jitter": 34
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:mountain_waterfall",
+      "spacing": 224,
+      "chance": 0.32,
+      "jitter": 56
     },
     {
       "biome": "asteria:overworld/ocean",
