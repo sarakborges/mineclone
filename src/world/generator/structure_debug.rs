@@ -5,10 +5,15 @@ use serde::Serialize;
 
 use crate::content::structure::StructureRotation;
 
-use super::structure::{StructurePlacement, StructureQueries};
+use super::{
+    biome::BiomeQueries,
+    structure::{StructurePlacement, StructureQueries},
+};
 
 const DEFAULT_SEARCH_RADIUS: u32 = 8_192;
 const DEFAULT_WINDOW_SIZE: u32 = 512;
+const PROBE_STRUCTURE_RADIUS: u32 = 2_048;
+const MARGIN_SCAN_STEP: i32 = 128;
 
 #[derive(Clone, Debug)]
 pub(crate) struct StructureDebugConfig {
@@ -55,6 +60,8 @@ impl StructureDebugReport {
 #[serde(rename_all = "camelCase")]
 struct StructureProbeReport {
     reference: String,
+    biome: String,
+    search_hint: Option<[i32; 2]>,
     found: bool,
     placement_anchor: Option<[i32; 2]>,
     representative_structure: Option<String>,
@@ -100,33 +107,46 @@ impl AxisValidationReport {
 #[derive(Clone, Copy)]
 struct ProbeDefinition {
     reference: &'static str,
+    biome: &'static str,
+    biome_margin: bool,
     expected_families: &'static [&'static str],
 }
 
 const PROBES: [ProbeDefinition; 5] = [
     ProbeDefinition {
         reference: "asteria:tree_oak",
+        biome: "asteria:overworld/plains",
+        biome_margin: false,
         expected_families: &[],
     },
     ProbeDefinition {
         reference: "asteria:enchanted_heart",
+        biome: "asteria:overworld/enchanted_forest",
+        biome_margin: false,
         expected_families: &["world_tree"],
     },
     ProbeDefinition {
         reference: "asteria:river_ocean_mouth",
+        biome: "asteria:overworld/ocean",
+        biome_margin: true,
         expected_families: &["river_segment"],
     },
     ProbeDefinition {
         reference: "asteria:lake",
+        biome: "asteria:overworld/plains",
+        biome_margin: false,
         expected_families: &["river_segment"],
     },
     ProbeDefinition {
         reference: "asteria:mountain_waterfall",
+        biome: "asteria:overworld/mountains",
+        biome_margin: false,
         expected_families: &["mountain_pond", "river_segment"],
     },
 ];
 
 pub(crate) fn validate_structure_debug(
+    biomes: BiomeQueries<'_>,
     structures: StructureQueries<'_>,
     config: &StructureDebugConfig,
 ) -> StructureDebugReport {
@@ -138,7 +158,7 @@ pub(crate) fn validate_structure_debug(
 
     let probes = PROBES
         .iter()
-        .map(|probe| validate_probe(structures, config, *probe))
+        .map(|probe| validate_probe(biomes, structures, config, *probe))
         .collect();
 
     StructureDebugReport {
@@ -150,18 +170,25 @@ pub(crate) fn validate_structure_debug(
 }
 
 fn validate_probe(
+    biomes: BiomeQueries<'_>,
     structures: StructureQueries<'_>,
     config: &StructureDebugConfig,
     probe: ProbeDefinition,
 ) -> StructureProbeReport {
-    let Some(representative) = structures.find_nearest(
-        probe.reference,
-        config.center_x,
-        config.center_z,
-        config.search_radius,
-    ) else {
+    let hint = find_probe_hint(biomes, config, probe);
+    let representative = hint.and_then(|hint| {
+        structures.find_nearest(
+            probe.reference,
+            hint.x,
+            hint.y,
+            PROBE_STRUCTURE_RADIUS.min(config.search_radius),
+        )
+    });
+    let Some(representative) = representative else {
         return StructureProbeReport {
             reference: probe.reference.to_owned(),
+            biome: probe.biome.to_owned(),
+            search_hint: hint.map(ivec2_array),
             found: false,
             placement_anchor: None,
             representative_structure: None,
@@ -209,8 +236,10 @@ fn validate_probe(
 
     StructureProbeReport {
         reference: probe.reference.to_owned(),
+        biome: probe.biome.to_owned(),
+        search_hint: hint.map(ivec2_array),
         found: true,
-        placement_anchor: Some([anchor.x, anchor.y]),
+        placement_anchor: Some(ivec2_array(anchor)),
         representative_structure: Some(representative.structure_id().to_owned()),
         expected_families: probe
             .expected_families
@@ -222,6 +251,81 @@ fn validate_probe(
         x_axis: Some(x_axis),
         z_axis: Some(z_axis),
     }
+}
+
+fn find_probe_hint(
+    biomes: BiomeQueries<'_>,
+    config: &StructureDebugConfig,
+    probe: ProbeDefinition,
+) -> Option<IVec2> {
+    let found = biomes.find_surface_biome(
+        probe.biome,
+        config.center_x,
+        config.center_z,
+        config.search_radius,
+    )?;
+    let (x, z) = found.position();
+    let inside = IVec2::new(x, z);
+    if !probe.biome_margin {
+        return Some(inside);
+    }
+    find_biome_margin_hint(biomes, probe.biome, inside, config.search_radius)
+}
+
+fn find_biome_margin_hint(
+    biomes: BiomeQueries<'_>,
+    biome: &str,
+    inside: IVec2,
+    search_radius: u32,
+) -> Option<IVec2> {
+    let max_steps = i32::try_from(search_radius / MARGIN_SCAN_STEP.unsigned_abs())
+        .unwrap_or(i32::MAX)
+        .max(1);
+    for direction in [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y] {
+        let mut previous = inside;
+        for step in 1..=max_steps {
+            let distance = step.saturating_mul(MARGIN_SCAN_STEP);
+            let current = IVec2::new(
+                inside.x.saturating_add(direction.x.saturating_mul(distance)),
+                inside.y.saturating_add(direction.y.saturating_mul(distance)),
+            );
+            if biomes
+                .surface_biome_at(current.x, current.y)
+                .primary()
+                .as_str()
+                != biome
+            {
+                return refine_margin_hint(biomes, biome, previous, current);
+            }
+            previous = current;
+        }
+    }
+    None
+}
+
+fn refine_margin_hint(
+    biomes: BiomeQueries<'_>,
+    biome: &str,
+    mut inside: IVec2,
+    mut outside: IVec2,
+) -> Option<IVec2> {
+    while (outside - inside).abs().max_element() > 1 {
+        let middle = IVec2::new(
+            i32::try_from((i64::from(inside.x) + i64::from(outside.x)) / 2).ok()?,
+            i32::try_from((i64::from(inside.y) + i64::from(outside.y)) / 2).ok()?,
+        );
+        if biomes
+            .surface_biome_at(middle.x, middle.y)
+            .primary()
+            .as_str()
+            == biome
+        {
+            inside = middle;
+        } else {
+            outside = middle;
+        }
+    }
+    Some(outside)
 }
 
 #[derive(Clone, Copy)]
@@ -367,13 +471,13 @@ fn placement_fingerprint(placement: StructurePlacement) -> PlacementFingerprint 
     let (vertical_minimum, vertical_maximum) = placement.vertical_bounds();
     PlacementFingerprint {
         reference: placement.reference().to_owned(),
-        placement_anchor: [anchor.x, anchor.y],
+        placement_anchor: ivec2_array(anchor),
         structure_id: placement.structure_id().to_owned(),
         group_id: placement.structure().group_id.clone(),
         rotation: rotation_index(placement.rotation()),
         origin: ivec3_array(origin),
-        horizontal_minimum: [horizontal_minimum.x, horizontal_minimum.y],
-        horizontal_maximum: [horizontal_maximum.x, horizontal_maximum.y],
+        horizontal_minimum: ivec2_array(horizontal_minimum),
+        horizontal_maximum: ivec2_array(horizontal_maximum),
         vertical_minimum,
         vertical_maximum,
     }
@@ -427,6 +531,10 @@ fn rotation_index(rotation: StructureRotation) -> u8 {
         StructureRotation::Degrees180 => 2,
         StructureRotation::Degrees270 => 3,
     }
+}
+
+const fn ivec2_array(value: IVec2) -> [i32; 2] {
+    [value.x, value.y]
 }
 
 const fn ivec3_array(value: IVec3) -> [i32; 3] {
