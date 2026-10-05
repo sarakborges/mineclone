@@ -33,6 +33,20 @@ pub(crate) struct WorldLoadingProgress {
     total: usize,
 }
 
+impl WorldLoadingProgress {
+    pub(crate) const fn phase(&self) -> WorldLoadingPhase {
+        self.phase
+    }
+
+    pub(crate) const fn completed(&self) -> usize {
+        self.completed
+    }
+
+    pub(crate) const fn total(&self) -> usize {
+        self.total
+    }
+}
+
 #[derive(Resource, Clone, Debug)]
 pub(super) struct WorldLoadingState {
     center: Option<IVec3>,
