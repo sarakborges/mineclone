@@ -12,41 +12,50 @@ generation = GENERATION.read_text(encoding="utf-8")
 selection = SELECTION.read_text(encoding="utf-8")
 world = WORLD.read_text(encoding="utf-8")
 
+
+def compact(source: str) -> str:
+    return "".join(source.split())
+
+
+streaming_compact = compact(streaming)
+generation_compact = compact(generation)
+selection_compact = compact(selection)
+
 required_streaming = [
-    "desired_chunk_coords(&generator",
+    "#[derive(SystemParam)]structChunkStreamingInputs",
+    "#[derive(SystemParam)]structChunkStreamingRuntime",
+    "desired_chunk_coords(&inputs.generator",
     "collect_materialized_chunks(",
     "dispatch_materialization_tasks(",
-    "completed.revision != current_revision" if False else "restart_for_generator_change",
-    "chunk_load_priority(*coord, center, movement_direction)",
+    "restart_for_generator_change",
+    "chunk_load_priority(*coord,center,movement_direction)",
 ]
 for marker in required_streaming:
-    if marker not in streaming:
+    if marker not in streaming_compact:
         raise SystemExit(f"streaming integration lost required runtime contract: {marker}")
 
 required_generation = [
     "generator.materialize_chunk(coord)",
-    "completed.revision != current_revision",
-    "world.restore_chunk(coord)",
-    "world.insert_chunk(coord, completed.output.into_chunk())",
+    "completed.revision!=current_revision",
+    "runtime.world.restore_chunk(coord)",
+    "runtime.world.insert_chunk(coord,completed.output.into_chunk())",
     "enqueue_generated_fluid_frontier(",
     "enqueue_neighbor_frontiers_targeting_chunk(",
-    "pending_fluid.reactivate_loaded_chunk(coord, current_tick)",
+    "runtime.pending_fluid.reactivate_loaded_chunk(coord,runtime.current_tick)",
 ]
 for marker in required_generation:
-    if marker not in generation:
+    if marker not in generation_compact:
         raise SystemExit(f"materialization publication lost required behavior: {marker}")
 
-if generation.index("world.insert_chunk(coord, completed.output.into_chunk())") > generation.index(
-    "pending_fluid.reactivate_loaded_chunk(coord, current_tick)"
-):
+insert_marker = "runtime.world.insert_chunk(coord,completed.output.into_chunk())"
+reactivate_marker = "runtime.pending_fluid.reactivate_loaded_chunk(coord,runtime.current_tick)"
+if generation_compact.index(insert_marker) > generation_compact.index(reactivate_marker):
     raise SystemExit("new generated chunk must become resident before runtime fluid reactivation")
 
-collect_start = generation.index("pub(super) fn collect_materialized_chunks")
-dispatch_start = generation.index("pub(super) fn dispatch_materialization_tasks")
-collect_body = generation[collect_start:dispatch_start]
-if collect_body.index("world.insert_chunk(coord, completed.output.into_chunk())") > collect_body.index(
-    "enqueue_generated_fluid_frontier("
-):
+collect_start = generation_compact.index("pub(super)fncollect_materialized_chunks")
+dispatch_start = generation_compact.index("pub(super)fndispatch_materialization_tasks")
+collect_body = generation_compact[collect_start:dispatch_start]
+if collect_body.index(insert_marker) > collect_body.index("enqueue_generated_fluid_frontier("):
     raise SystemExit("generated frontier handoff must happen after VoxelWorld publication")
 
 required_selection = [
@@ -55,7 +64,7 @@ required_selection = [
     "placement.vertical_bounds()",
 ]
 for marker in required_selection:
-    if marker not in selection:
+    if marker not in selection_compact:
         raise SystemExit(f"streaming selection lost authoritative generator query: {marker}")
 if "VoxelWorld" in selection:
     raise SystemExit("streaming selection must not derive generated-world facts from VoxelWorld")
@@ -75,6 +84,7 @@ def priority(coord, center=(0, 4, 0), movement=(1, 0)):
     forward = dx * movement[0] + dz * movement[1]
     directional = 1 if movement == (0, 0) or forward == 0 else (0 if forward > 0 else 2)
     return (horizontal, total, directional, y, z, x)
+
 
 coords = [(2, 4, 0), (-2, 4, 0), (0, 3, 2), (0, 5, -2), (1, 4, 1)]
 forward = sorted(coords, key=priority)
