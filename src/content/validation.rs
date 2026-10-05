@@ -114,12 +114,12 @@ pub(super) fn validate_content(content: &LoadedContent) {
         );
         assert!(
             content.layers.get(&item.id).is_none(),
-            "content id {} cannot be both an item and a layer",
+            "content id {} cannot be both a layer and an item",
             item.id
         );
         assert!(
             content.tools.get(&item.id).is_none(),
-            "content id {} cannot be both an item and a tool",
+            "content id {} cannot be both a tool and an item",
             item.id
         );
         item.validate_references(&content.inventory_categories);
@@ -184,6 +184,27 @@ pub(super) fn validate_content(content: &LoadedContent) {
             dimension.id,
             dimension.sky
         );
+
+        for (index, generated) in dimension.generated_surface_structures.iter().enumerate() {
+            let biome = content.biomes.get(&generated.biome).unwrap_or_else(|| {
+                panic!(
+                    "dimension {} generatedSurfaceStructures[{index}] references missing biome {}",
+                    dimension.id, generated.biome
+                )
+            });
+            assert!(
+                biome.belongs_to_dimension(&dimension.id) && biome.surface_layout.is_some(),
+                "dimension {} generatedSurfaceStructures[{index}] biome {} must be a surface biome in this dimension",
+                dimension.id,
+                generated.biome
+            );
+            assert!(
+                content.structures.resolves_reference(&generated.structure),
+                "dimension {} generatedSurfaceStructures[{index}] references missing Structure or Structure group {}",
+                dimension.id,
+                generated.structure
+            );
+        }
     }
 
     for portal in content.portals.iter() {
