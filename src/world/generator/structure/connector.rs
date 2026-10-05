@@ -170,13 +170,9 @@ impl ConnectorGraph {
                             memo,
                             active,
                         );
-                        extend_bounds(
-                            &mut bounds,
-                            (
-                                child_origin.xz() + child_bounds.0,
-                                child_origin.xz() + child_bounds.1,
-                            ),
-                        );
+                        let child_horizontal = IVec2::new(child_origin.x, child_origin.z);
+                        bounds.0 = bounds.0.min(child_horizontal + child_bounds.0);
+                        bounds.1 = bounds.1.max(child_horizontal + child_bounds.1);
                     }
                 }
             }
@@ -258,7 +254,11 @@ impl ConnectorGraph {
                 );
 
                 let world_face = parent.rotation.rotate_face(output.face);
-                let distance = connector_distance(hash.rotate_left(11), output.min_distance, output.max_distance);
+                let distance = connector_distance(
+                    hash.rotate_left(11),
+                    output.min_distance,
+                    output.max_distance,
+                );
                 let world_position = parent.origin
                     + parent.rotation.rotate_offset(output.offset)
                     + connector_face_offset(world_face)
@@ -285,7 +285,7 @@ impl ConnectorGraph {
                     rotation: child_rotation,
                     origin: child_origin,
                 };
-                let child_positions = transformed_voxel_positions(&child_piece);
+                let child_positions = transformed_voxel_positions(&child_piece).collect::<Vec<_>>();
                 if child_positions
                     .iter()
                     .any(|position| occupied.contains(position))
@@ -326,7 +326,9 @@ impl ConnectorGraph {
         hash ^= u64::try_from(connector_index + 1)
             .expect("connector index must fit u64")
             .wrapping_mul(CONNECTOR_INDEX_SALT);
-        hash ^= u64::from(depth + 1).wrapping_mul(CONNECTOR_DEPTH_SALT);
+        hash ^= u64::from(depth)
+            .saturating_add(1)
+            .wrapping_mul(CONNECTOR_DEPTH_SALT);
         hash ^= u64::from(rotation_index(parent.rotation) + 1)
             .wrapping_mul(CONNECTOR_ROTATION_SALT);
         avalanche(hash)
