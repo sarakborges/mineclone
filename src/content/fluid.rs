@@ -132,4 +132,11 @@ impl FluidRegistry {
     pub fn get(&self, fluid_id: FluidId) -> Option<&FluidDefinition> {
         self.definitions.get(fluid_id as usize)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (FluidId, &FluidDefinition)> {
+        self.definitions
+            .iter()
+            .enumerate()
+            .map(|(index, definition)| (index as FluidId, definition))
+    }
 }
