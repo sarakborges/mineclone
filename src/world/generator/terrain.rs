@@ -4,11 +4,24 @@ use crate::content::biome::{BiomeDefinition, BiomeRegistry, SurfaceTerrainDefini
 
 use super::{
     biome::{BiomeLayout, BiomeSample},
-    foundation::{GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationSnapshot},
+    foundation::{
+        GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationPoint3,
+        GenerationSnapshot,
+    },
 };
 
 const MACRO_NOISE_DOMAIN_PREFIX: &str = "terrain/base-surface/macro/v1/";
 const DETAIL_NOISE_DOMAIN_PREFIX: &str = "terrain/base-surface/detail/v1/";
+const CAVE_PRIMARY_DOMAIN: &str = "terrain/density/caves/primary/v1";
+const CAVE_SECONDARY_DOMAIN: &str = "terrain/density/caves/secondary/v1";
+
+const CAVE_HORIZONTAL_SCALE: u32 = 56;
+const CAVE_VERTICAL_SCALE: u32 = 36;
+const CAVE_MIN_DEPTH: f32 = 10.0;
+const CAVE_MAX_DEPTH: f32 = 120.0;
+const CAVE_BOUNDARY_FADE: f32 = 8.0;
+const CAVE_NOISE_HALF_WIDTH: f32 = 0.18;
+const CAVE_DENSITY_SCALE: f32 = 24.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct TerrainColumnSample {
@@ -63,6 +76,51 @@ impl TerrainAreaSample {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TerrainVolumeSample {
+    origin_x: i32,
+    origin_y: i32,
+    origin_z: i32,
+    width: u32,
+    height: u32,
+    depth: u32,
+    densities: Vec<f32>,
+}
+
+impl TerrainVolumeSample {
+    pub(crate) const fn origin(&self) -> (i32, i32, i32) {
+        (self.origin_x, self.origin_y, self.origin_z)
+    }
+
+    pub(crate) const fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub(crate) const fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub(crate) const fn depth(&self) -> u32 {
+        self.depth
+    }
+
+    pub(crate) fn density_at(
+        &self,
+        x_index: u32,
+        y_index: u32,
+        z_index: u32,
+    ) -> Option<f32> {
+        if x_index >= self.width || y_index >= self.height || z_index >= self.depth {
+            return None;
+        }
+        let width = self.width as usize;
+        let height = self.height as usize;
+        self.densities
+            .get((z_index as usize * height + y_index as usize) * width + x_index as usize)
+            .copied()
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct TerrainQueries<'a> {
     terrain: &'a TerrainField,
@@ -74,10 +132,12 @@ impl TerrainQueries<'_> {
         self.terrain.base_surface_at(x, z)
     }
 
-    /// Highest generated base-solid voxel for the current terrain field.
+    /// Highest generated solid voxel for the current terrain field.
     ///
-    /// Later 3D contributions extend this operation without changing the base
-    /// surface fact exposed by `base_surface_at`.
+    /// The current 3D cave contribution is explicitly bounded below the base
+    /// surface, so it cannot replace the highest solid crossing. Additive 3D
+    /// contributions extend the bounded candidate search owned here without
+    /// changing the base-surface fact exposed by `base_surface_at`.
     pub(crate) fn surface_at(&self, x: i32, z: i32) -> i32 {
         self.terrain.column_at(x, z).surface_y()
     }
@@ -110,6 +170,22 @@ impl TerrainQueries<'_> {
         self.terrain
             .sample_surface_grid(origin_x, origin_z, width, depth, step)
     }
+
+    /// Dense unit-step XYZ sampling for future chunk materialization and
+    /// diagnostics. Biome ownership and base surface are sampled once per X/Z
+    /// column and reused across every Y in the request.
+    pub(crate) fn sample_density_volume(
+        &self,
+        origin_x: i32,
+        origin_y: i32,
+        origin_z: i32,
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> TerrainVolumeSample {
+        self.terrain
+            .sample_density_volume(origin_x, origin_y, origin_z, width, height, depth)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -118,6 +194,7 @@ pub(super) struct TerrainField {
     entropy: GenerationEntropy,
     biomes: Arc<BiomeLayout>,
     rules: HashMap<String, TerrainRule>,
+    caves: CaveField,
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +217,79 @@ impl TerrainRule {
                 definition.id
             )),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CaveField {
+    primary_domain: GenerationDomain,
+    secondary_domain: GenerationDomain,
+}
+
+impl CaveField {
+    fn new() -> Self {
+        debug_assert!(CAVE_MIN_DEPTH > 0.0);
+        debug_assert!(CAVE_MAX_DEPTH > CAVE_MIN_DEPTH);
+        debug_assert!(CAVE_BOUNDARY_FADE > 0.0);
+        debug_assert!(CAVE_NOISE_HALF_WIDTH > 0.0 && CAVE_NOISE_HALF_WIDTH < 1.0);
+        Self {
+            primary_domain: GenerationDomain::named(CAVE_PRIMARY_DOMAIN),
+            secondary_domain: GenerationDomain::named(CAVE_SECONDARY_DOMAIN),
+        }
+    }
+
+    /// Returns positive signed void density only inside the bounded cave field.
+    ///
+    /// The upper bound stays below the base surface so this subtractive
+    /// contribution cannot punch through the authoritative top crossing. That
+    /// keeps the cheap surface query exact until an additive contribution is
+    /// introduced.
+    fn void_density(
+        &self,
+        entropy: GenerationEntropy,
+        x: i32,
+        y: i32,
+        z: i32,
+        base_surface: f32,
+    ) -> f32 {
+        let depth = base_surface - y as f32;
+        if !(CAVE_MIN_DEPTH..=CAVE_MAX_DEPTH).contains(&depth) {
+            return 0.0;
+        }
+
+        let primary = value_noise_3d(
+            entropy,
+            self.primary_domain,
+            x,
+            y,
+            z,
+            CAVE_HORIZONTAL_SCALE,
+            CAVE_VERTICAL_SCALE,
+        )
+        .abs();
+        let secondary = value_noise_3d(
+            entropy,
+            self.secondary_domain,
+            x,
+            y,
+            z,
+            CAVE_HORIZONTAL_SCALE,
+            CAVE_VERTICAL_SCALE,
+        )
+        .abs();
+        let noise_clearance = CAVE_NOISE_HALF_WIDTH - primary.max(secondary);
+        if noise_clearance <= 0.0 {
+            return 0.0;
+        }
+
+        let upper_clearance = (depth - CAVE_MIN_DEPTH) / CAVE_BOUNDARY_FADE;
+        let lower_clearance = (CAVE_MAX_DEPTH - depth) / CAVE_BOUNDARY_FADE;
+        let depth_envelope = upper_clearance.min(lower_clearance).clamp(0.0, 1.0);
+        if depth_envelope <= 0.0 {
+            return 0.0;
+        }
+
+        noise_clearance / CAVE_NOISE_HALF_WIDTH * depth_envelope * CAVE_DENSITY_SCALE
     }
 }
 
@@ -169,6 +319,7 @@ impl TerrainField {
             entropy: GenerationEntropy::new(snapshot),
             biomes,
             rules,
+            caves: CaveField::new(),
         }
     }
 
@@ -190,7 +341,21 @@ impl TerrainField {
     }
 
     fn density_at(&self, x: i32, y: i32, z: i32) -> f32 {
-        self.base_surface_at(x, z) - y as f32
+        let sample = self.biomes.queries().surface_biome_at(x, z);
+        let base_surface = self.base_surface_from_biome_sample(x, z, &sample);
+        self.density_from_column(x, y, z, base_surface)
+    }
+
+    fn density_from_column(&self, x: i32, y: i32, z: i32, base_surface: f32) -> f32 {
+        let base_density = base_surface - y as f32;
+        let cave_void = self
+            .caves
+            .void_density(self.entropy, x, y, z, base_surface);
+        if cave_void > 0.0 {
+            base_density.min(-cave_void)
+        } else {
+            base_density
+        }
     }
 
     fn sample_surface_grid(
@@ -201,14 +366,14 @@ impl TerrainField {
         depth: u32,
         step: u32,
     ) -> TerrainAreaSample {
-        assert!(width > 0 && depth > 0, "terrain sample area must be non-empty");
+        assert!(
+            width > 0 && depth > 0,
+            "terrain sample area must be non-empty"
+        );
         assert!(step > 0, "terrain sample step must be positive");
         validate_grid_extent(origin_x, width, step, "X");
         validate_grid_extent(origin_z, depth, step, "Z");
-        let sample_count = u64::from(width)
-            .checked_mul(u64::from(depth))
-            .and_then(|count| usize::try_from(count).ok())
-            .expect("terrain sample area is too large");
+        let sample_count = checked_sample_count([width, depth], "terrain sample area");
         let biome_samples = self
             .biomes
             .queries()
@@ -237,6 +402,68 @@ impl TerrainField {
             depth,
             step,
             samples,
+        }
+    }
+
+    fn sample_density_volume(
+        &self,
+        origin_x: i32,
+        origin_y: i32,
+        origin_z: i32,
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> TerrainVolumeSample {
+        assert!(
+            width > 0 && height > 0 && depth > 0,
+            "terrain density volume must be non-empty"
+        );
+        validate_grid_extent(origin_x, width, 1, "X");
+        validate_grid_extent(origin_y, height, 1, "Y");
+        validate_grid_extent(origin_z, depth, 1, "Z");
+        let sample_count =
+            checked_sample_count([width, height, depth], "terrain density volume");
+        let biome_samples = self
+            .biomes
+            .queries()
+            .sample_surface_area(origin_x, origin_z, width, depth);
+        let column_count = checked_sample_count([width, depth], "terrain density columns");
+        let mut base_surfaces = Vec::with_capacity(column_count);
+
+        for z_index in 0..depth {
+            let z = grid_axis(origin_z, z_index, 1);
+            for x_index in 0..width {
+                let x = grid_axis(origin_x, x_index, 1);
+                let biome_sample = biome_samples
+                    .sample_at(x_index, z_index)
+                    .expect("matching biome sample grid must contain every density column");
+                base_surfaces.push(self.base_surface_from_biome_sample(x, z, biome_sample));
+            }
+        }
+
+        let mut densities = Vec::with_capacity(sample_count);
+        let width_usize = width as usize;
+        for z_index in 0..depth {
+            let z = grid_axis(origin_z, z_index, 1);
+            for y_index in 0..height {
+                let y = grid_axis(origin_y, y_index, 1);
+                for x_index in 0..width {
+                    let x = grid_axis(origin_x, x_index, 1);
+                    let column_index = z_index as usize * width_usize + x_index as usize;
+                    let base_surface = base_surfaces[column_index];
+                    densities.push(self.density_from_column(x, y, z, base_surface));
+                }
+            }
+        }
+
+        TerrainVolumeSample {
+            origin_x,
+            origin_y,
+            origin_z,
+            width,
+            height,
+            depth,
+            densities,
         }
     }
 
@@ -314,6 +541,64 @@ fn value_noise_2d(
     lerp(nx0, nx1, smooth_z)
 }
 
+fn value_noise_3d(
+    entropy: GenerationEntropy,
+    domain: GenerationDomain,
+    x: i32,
+    y: i32,
+    z: i32,
+    horizontal_scale: u32,
+    vertical_scale: u32,
+) -> f32 {
+    let horizontal_scale_i64 = i64::from(horizontal_scale);
+    let vertical_scale_i64 = i64::from(vertical_scale);
+    let x_i64 = i64::from(x);
+    let y_i64 = i64::from(y);
+    let z_i64 = i64::from(z);
+
+    let cell_x = x_i64.div_euclid(horizontal_scale_i64);
+    let cell_y = y_i64.div_euclid(vertical_scale_i64);
+    let cell_z = z_i64.div_euclid(horizontal_scale_i64);
+    let fraction_x =
+        x_i64.rem_euclid(horizontal_scale_i64) as f32 / horizontal_scale as f32;
+    let fraction_y = y_i64.rem_euclid(vertical_scale_i64) as f32 / vertical_scale as f32;
+    let fraction_z =
+        z_i64.rem_euclid(horizontal_scale_i64) as f32 / horizontal_scale as f32;
+    let smooth_x = smoothstep(fraction_x);
+    let smooth_y = smoothstep(fraction_y);
+    let smooth_z = smoothstep(fraction_z);
+
+    let x0 = i32::try_from(cell_x).expect("terrain noise X lattice must fit i32");
+    let y0 = i32::try_from(cell_y).expect("terrain noise Y lattice must fit i32");
+    let z0 = i32::try_from(cell_z).expect("terrain noise Z lattice must fit i32");
+    let x1 = x0
+        .checked_add(1)
+        .expect("terrain noise X lattice neighbor must fit i32");
+    let y1 = y0
+        .checked_add(1)
+        .expect("terrain noise Y lattice neighbor must fit i32");
+    let z1 = z0
+        .checked_add(1)
+        .expect("terrain noise Z lattice neighbor must fit i32");
+
+    let n000 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x0, y0, z0)));
+    let n100 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x1, y0, z0)));
+    let n010 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x0, y1, z0)));
+    let n110 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x1, y1, z0)));
+    let n001 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x0, y0, z1)));
+    let n101 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x1, y0, z1)));
+    let n011 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x0, y1, z1)));
+    let n111 = entropy_value(entropy.sample_3d(domain, GenerationPoint3::new(x1, y1, z1)));
+
+    let nx00 = lerp(n000, n100, smooth_x);
+    let nx10 = lerp(n010, n110, smooth_x);
+    let nx01 = lerp(n001, n101, smooth_x);
+    let nx11 = lerp(n011, n111, smooth_x);
+    let nxy0 = lerp(nx00, nx10, smooth_y);
+    let nxy1 = lerp(nx01, nx11, smooth_y);
+    lerp(nxy0, nxy1, smooth_z)
+}
+
 fn entropy_value(value: u64) -> f32 {
     const MASK: u64 = (1_u64 << 24) - 1;
     let unit = (value >> 40) & MASK;
@@ -357,4 +642,109 @@ fn validate_grid_extent(origin: i32, count: u32, step: u32, axis: &str) {
         i32::try_from(end).is_ok(),
         "terrain sample {axis} extent exceeds world coordinates"
     );
+}
+
+fn checked_sample_count<const N: usize>(extents: [u32; N], label: &str) -> usize {
+    extents
+        .into_iter()
+        .try_fold(1_u64, |count, extent| count.checked_mul(u64::from(extent)))
+        .and_then(|count| usize::try_from(count).ok())
+        .unwrap_or_else(|| panic!("{label} is too large"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::foundation::{GenerationDimension, GenerationSeed};
+    use super::*;
+    use crate::content::biome::BiomeDefinition;
+
+    fn test_field(seed: u64) -> TerrainField {
+        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+            "id": "asteria:test/base",
+            "name": {
+                "english": "Base",
+                "portuguese_brazil": "Base",
+                "spanish": "Base"
+            },
+            "surfaceLayout": {},
+            "surfaceTerrain": {
+                "baseHeightOffset": 8.0,
+                "macroAmplitude": 12.0,
+                "macroScale": 256,
+                "detailAmplitude": 3.0,
+                "detailScale": 64
+            }
+        }))
+        .expect("test biome must deserialize");
+        let mut registry = BiomeRegistry::default();
+        registry.insert(definition);
+        let snapshot = GenerationSnapshot::new(
+            GenerationSeed::new(seed),
+            GenerationDimension::new("asteria:test", 64, 1.0),
+        );
+        let biomes = Arc::new(BiomeLayout::new(&snapshot, &registry));
+        TerrainField::new(&snapshot, &registry, biomes)
+    }
+
+    #[test]
+    fn density_volume_matches_scalar_queries() {
+        let field = test_field(71);
+        let queries = field.queries();
+        let volume = queries.sample_density_volume(-9, 20, 13, 11, 17, 7);
+
+        for z_index in 0..volume.depth() {
+            for y_index in 0..volume.height() {
+                for x_index in 0..volume.width() {
+                    let x = volume.origin().0 + x_index as i32;
+                    let y = volume.origin().1 + y_index as i32;
+                    let z = volume.origin().2 + z_index as i32;
+                    assert_eq!(
+                        volume.density_at(x_index, y_index, z_index),
+                        Some(queries.density_at(x, y, z))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn caves_never_change_the_surface_crossing() {
+        let field = test_field(93);
+        let queries = field.queries();
+
+        for z in (-96..=96).step_by(24) {
+            for x in (-96..=96).step_by(24) {
+                let base_surface = queries.base_surface_at(x, z);
+                let surface_y = queries.surface_at(x, z);
+                assert_eq!(surface_y, floor_to_world_y(base_surface));
+                assert!(queries.density_at(x, surface_y, z) >= 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn cave_carving_is_bounded_below_the_base_surface() {
+        let field = test_field(104);
+        let queries = field.queries();
+        let x = 17;
+        let z = -29;
+        let base_surface = queries.base_surface_at(x, z);
+
+        for depth in [
+            0.0_f32,
+            4.0,
+            CAVE_MIN_DEPTH,
+            CAVE_MAX_DEPTH,
+            CAVE_MAX_DEPTH + 1.0,
+        ] {
+            let y = floor_to_world_y(base_surface - depth);
+            if depth < CAVE_MIN_DEPTH || depth > CAVE_MAX_DEPTH {
+                assert_eq!(
+                    queries.density_at(x, y, z),
+                    base_surface - y as f32,
+                    "out-of-band cave field must leave base density untouched"
+                );
+            }
+        }
+    }
 }
