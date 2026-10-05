@@ -205,6 +205,28 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 dimension.id,
                 generated.structure
             );
+            if generated.placement
+                == super::dimension::GeneratedSurfaceStructurePlacement::BiomeMargin
+            {
+                assert!(
+                    content.structure_sets.get(&generated.structure).is_none(),
+                    "dimension {} generatedSurfaceStructures[{index}] biomeMargin placement cannot reference StructureSet {}",
+                    dimension.id,
+                    generated.structure
+                );
+                let members = content
+                    .structures
+                    .reference_members(&generated.structure)
+                    .expect("validated biomeMargin Structure reference must resolve");
+                assert!(
+                    members
+                        .iter()
+                        .all(|structure| structure.supported_rotations().len() == 4),
+                    "dimension {} generatedSurfaceStructures[{index}] biomeMargin Structure/group {} must support all horizontal rotations",
+                    dimension.id,
+                    generated.structure
+                );
+            }
         }
     }
 

@@ -13,7 +13,7 @@ use bevy::{
 
 use crate::content::{
     biome::BiomeRegistry,
-    dimension::GeneratedSurfaceStructureDefinition,
+    dimension::{GeneratedSurfaceStructureDefinition, GeneratedSurfaceStructurePlacement},
     structure::{StructureDefinition, StructureRegistry, StructureRotation},
     structure_rules::{StructureFluidPolicy, StructureProximityMode, StructureProximityTarget},
     structure_set::StructureSetRegistry,
@@ -33,6 +33,7 @@ const JITTER_X_DOMAIN_PREFIX: &str = "structure/root/jitter-x/v1/";
 const JITTER_Z_DOMAIN_PREFIX: &str = "structure/root/jitter-z/v1/";
 const VARIANT_DOMAIN_PREFIX: &str = "structure/root/variant/v1/";
 const ROTATION_DOMAIN_PREFIX: &str = "structure/root/rotation/v1/";
+const MARGIN_SAMPLE_DIVISIONS: i32 = 16;
 
 #[derive(Clone, Debug)]
 pub(crate) struct StructurePlacement {
@@ -115,6 +116,13 @@ impl StructureCandidate {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct RootAnchor {
+    position: IVec2,
+    forced_rotation: Option<StructureRotation>,
+    margin_inside: Option<IVec2>,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct StructureQueries<'a> {
     field: &'a StructureField,
@@ -155,6 +163,7 @@ impl StructureQueries<'_> {
 #[derive(Clone, Debug)]
 pub(super) struct StructureField {
     entropy: GenerationEntropy,
+    sea_level: i32,
     biomes: Arc<BiomeLayout>,
     terrain: Arc<TerrainField>,
     materials: Arc<MaterialField>,
@@ -169,6 +178,7 @@ struct RootStructureRule {
     spacing: i32,
     jitter: u32,
     chance: f32,
+    placement: GeneratedSurfaceStructurePlacement,
     source: RootStructureSource,
     maximum_horizontal_extent: i32,
     presence_domain: GenerationDomain,
@@ -230,6 +240,7 @@ impl StructureField {
 
         Self {
             entropy: GenerationEntropy::new(snapshot),
+            sea_level: snapshot.dimension().sea_level(),
             biomes,
             terrain,
             materials,
@@ -475,25 +486,27 @@ impl StructureField {
             return None;
         }
 
-        let spacing = i64::from(rule.spacing);
-        let anchor_x = i64::from(cell.x()) * spacing
-            + spacing / 2
-            + jitter_offset(
-                self.entropy.sample_2d(rule.jitter_x_domain, cell),
-                rule.jitter,
-            );
-        let anchor_z = i64::from(cell.z()) * spacing
-            + spacing / 2
-            + jitter_offset(
-                self.entropy.sample_2d(rule.jitter_z_domain, cell),
-                rule.jitter,
-            );
-        let anchor = IVec2::new(i32::try_from(anchor_x).ok()?, i32::try_from(anchor_z).ok()?);
-
-        let biome_sample = self.biomes.queries().surface_biome_at(anchor.x, anchor.y);
-        if biome_sample.primary().as_str() != rule.biome.as_ref() {
-            return None;
-        }
+        let hint = self.lattice_hint(rule, cell)?;
+        let root = match rule.placement {
+            GeneratedSurfaceStructurePlacement::BiomeInterior => {
+                let biome_sample = self
+                    .biomes
+                    .queries()
+                    .surface_biome_at(hint.x, hint.y);
+                if biome_sample.primary().as_str() != rule.biome.as_ref() {
+                    return None;
+                }
+                RootAnchor {
+                    position: hint,
+                    forced_rotation: None,
+                    margin_inside: None,
+                }
+            }
+            GeneratedSurfaceStructurePlacement::BiomeMargin => {
+                self.find_biome_margin_anchor(rule, cell, hint)?
+            }
+        };
+        let anchor = root.position;
 
         let (pieces, priority, reserve_space, conflict_groups) = match &rule.source {
             RootStructureSource::Direct {
@@ -506,9 +519,10 @@ impl StructureField {
                     u64::try_from(variants.len()).expect("structure variant count must fit u64");
                 let variant_index = usize::try_from(variant_hash % variant_count).ok()?;
                 let structure = Arc::clone(variants.get(variant_index)?);
-                let rotation = structure
-                    .rotation_for_hash(self.entropy.sample_2d(*rotation_domain, cell));
-                let origin_y = self.fit_origin_y(&structure, rotation, anchor)?;
+                let rotation = root.forced_rotation.unwrap_or_else(|| {
+                    structure.rotation_for_hash(self.entropy.sample_2d(*rotation_domain, cell))
+                });
+                let origin_y = self.fit_root_origin_y(rule, &structure, rotation, root)?;
                 if !self.satisfies_restrictions(rule, &structure, rotation, anchor, origin_y) {
                     return None;
                 }
@@ -530,6 +544,7 @@ impl StructureField {
                 )
             }
             RootStructureSource::Set(set) => {
+                debug_assert!(root.forced_rotation.is_none());
                 let resolved = set.resolve(self.entropy, cell, anchor, |structure, rotation, piece_anchor| {
                     let origin_y = self.fit_origin_y(structure, rotation, piece_anchor)?;
                     self.satisfies_restrictions(
@@ -591,6 +606,167 @@ impl StructureField {
             reserve_space,
             conflict_groups,
         })
+    }
+
+    fn lattice_hint(&self, rule: &RootStructureRule, cell: GenerationPoint2) -> Option<IVec2> {
+        let spacing = i64::from(rule.spacing);
+        let anchor_x = i64::from(cell.x()) * spacing
+            + spacing / 2
+            + jitter_offset(
+                self.entropy.sample_2d(rule.jitter_x_domain, cell),
+                rule.jitter,
+            );
+        let anchor_z = i64::from(cell.z()) * spacing
+            + spacing / 2
+            + jitter_offset(
+                self.entropy.sample_2d(rule.jitter_z_domain, cell),
+                rule.jitter,
+            );
+        Some(IVec2::new(
+            i32::try_from(anchor_x).ok()?,
+            i32::try_from(anchor_z).ok()?,
+        ))
+    }
+
+    fn find_biome_margin_anchor(
+        &self,
+        rule: &RootStructureRule,
+        cell: GenerationPoint2,
+        hint: IVec2,
+    ) -> Option<RootAnchor> {
+        let (minimum, maximum) = cell_world_bounds(cell, rule.spacing)?;
+        let side = usize::try_from(MARGIN_SAMPLE_DIVISIONS + 1).ok()?;
+        let mut positions = Vec::with_capacity(side * side);
+        let mut target = Vec::with_capacity(side * side);
+        let queries = self.biomes.queries();
+
+        for z_index in 0..=MARGIN_SAMPLE_DIVISIONS {
+            let z = sample_cell_axis(minimum.y, maximum.y, z_index);
+            for x_index in 0..=MARGIN_SAMPLE_DIVISIONS {
+                let x = sample_cell_axis(minimum.x, maximum.x, x_index);
+                let position = IVec2::new(x, z);
+                positions.push(position);
+                target.push(
+                    queries.surface_biome_at(position.x, position.y).primary().as_str()
+                        == rule.biome.as_ref(),
+                );
+            }
+        }
+
+        let mut best: Option<(i64, IVec2, IVec2)> = None;
+        for z_index in 0..=MARGIN_SAMPLE_DIVISIONS {
+            for x_index in 0..MARGIN_SAMPLE_DIVISIONS {
+                let left = grid_index(side, x_index, z_index)?;
+                let right = grid_index(side, x_index + 1, z_index)?;
+                if target[left] == target[right] || positions[left] == positions[right] {
+                    continue;
+                }
+                if let Some((inside, outside)) =
+                    self.refine_biome_margin(rule.biome.as_ref(), positions[left], positions[right])
+                {
+                    select_margin_candidate(&mut best, hint, inside, outside);
+                }
+            }
+        }
+        for z_index in 0..MARGIN_SAMPLE_DIVISIONS {
+            for x_index in 0..=MARGIN_SAMPLE_DIVISIONS {
+                let top = grid_index(side, x_index, z_index)?;
+                let bottom = grid_index(side, x_index, z_index + 1)?;
+                if target[top] == target[bottom] || positions[top] == positions[bottom] {
+                    continue;
+                }
+                if let Some((inside, outside)) =
+                    self.refine_biome_margin(rule.biome.as_ref(), positions[top], positions[bottom])
+                {
+                    select_margin_candidate(&mut best, hint, inside, outside);
+                }
+            }
+        }
+
+        let (_, outside, outward) = best?;
+        Some(RootAnchor {
+            position: outside,
+            forced_rotation: rotation_for_outward_normal(outward),
+            margin_inside: Some(outside - outward),
+        })
+    }
+
+    fn refine_biome_margin(
+        &self,
+        biome: &str,
+        mut left: IVec2,
+        mut right: IVec2,
+    ) -> Option<(IVec2, IVec2)> {
+        let mut left_is_target = self
+            .biomes
+            .queries()
+            .surface_biome_at(left.x, left.y)
+            .primary()
+            .as_str()
+            == biome;
+        let right_is_target = self
+            .biomes
+            .queries()
+            .surface_biome_at(right.x, right.y)
+            .primary()
+            .as_str()
+            == biome;
+        if left_is_target == right_is_target {
+            return None;
+        }
+
+        while (right - left).abs().max_element() > 1 {
+            let middle = IVec2::new(
+                i32::try_from((i64::from(left.x) + i64::from(right.x)) / 2).ok()?,
+                i32::try_from((i64::from(left.y) + i64::from(right.y)) / 2).ok()?,
+            );
+            if middle == left || middle == right {
+                break;
+            }
+            let middle_is_target = self
+                .biomes
+                .queries()
+                .surface_biome_at(middle.x, middle.y)
+                .primary()
+                .as_str()
+                == biome;
+            if middle_is_target == left_is_target {
+                left = middle;
+                left_is_target = middle_is_target;
+            } else {
+                right = middle;
+            }
+        }
+
+        let (inside, outside) = if left_is_target {
+            (left, right)
+        } else {
+            (right, left)
+        };
+        let outward = outside - inside;
+        ((outward.x.unsigned_abs() + outward.y.unsigned_abs()) == 1).then_some((inside, outside))
+    }
+
+    fn fit_root_origin_y(
+        &self,
+        rule: &RootStructureRule,
+        structure: &StructureDefinition,
+        rotation: StructureRotation,
+        root: RootAnchor,
+    ) -> Option<i32> {
+        if rule.placement == GeneratedSurfaceStructurePlacement::BiomeMargin
+            && let Some(inside) = root.margin_inside
+            && self
+                .materials
+                .queries()
+                .generated_fluid_at(inside.x, self.sea_level, inside.y)
+                .is_some()
+        {
+            return self
+                .sea_level
+                .checked_sub(structure.ground_anchor_y_offset());
+        }
+        self.fit_origin_y(structure, rotation, root.position)
     }
 
     fn fit_origin_y(
@@ -821,6 +997,13 @@ impl RootStructureRule {
         connectors: &ConnectorGraph,
     ) -> Self {
         let suffix = format!("{}/{}", definition.biome, definition.structure);
+        if definition.placement == GeneratedSurfaceStructurePlacement::BiomeMargin {
+            assert!(
+                structure_sets.get(&definition.structure).is_none(),
+                "biomeMargin generated surface structure cannot reference a StructureSet: {}",
+                definition.structure
+            );
+        }
         let (source, maximum_horizontal_extent) =
             if let Some(set) = structure_sets.get(&definition.structure) {
                 let connected_bounds = set
@@ -850,6 +1033,15 @@ impl RootStructureRule {
                     "generated surface structure reference {} must resolve at least one Structure",
                     definition.structure
                 );
+                if definition.placement == GeneratedSurfaceStructurePlacement::BiomeMargin {
+                    assert!(
+                        variants
+                            .iter()
+                            .all(|structure| structure.supported_rotations().len() == 4),
+                        "biomeMargin generated surface structure reference {} must support all horizontal rotations",
+                        definition.structure
+                    );
+                }
                 let connected_bounds = connectors
                     .connected_horizontal_bounds_for_reference(&definition.structure)
                     .expect("validated Structure reference must have connector-expanded bounds");
@@ -874,12 +1066,79 @@ impl RootStructureRule {
                 .expect("validated structure spacing must fit i32"),
             jitter: definition.jitter,
             chance: definition.chance,
+            placement: definition.placement,
             source,
             maximum_horizontal_extent,
             presence_domain: GenerationDomain::named(&format!("{PRESENCE_DOMAIN_PREFIX}{suffix}")),
             jitter_x_domain: GenerationDomain::named(&format!("{JITTER_X_DOMAIN_PREFIX}{suffix}")),
             jitter_z_domain: GenerationDomain::named(&format!("{JITTER_Z_DOMAIN_PREFIX}{suffix}")),
         }
+    }
+}
+
+fn cell_world_bounds(cell: GenerationPoint2, spacing: i32) -> Option<(IVec2, IVec2)> {
+    let spacing = i64::from(spacing);
+    let minimum_x = i64::from(cell.x()) * spacing;
+    let minimum_z = i64::from(cell.z()) * spacing;
+    let maximum_x = minimum_x + spacing - 1;
+    let maximum_z = minimum_z + spacing - 1;
+    Some((
+        IVec2::new(i32::try_from(minimum_x).ok()?, i32::try_from(minimum_z).ok()?),
+        IVec2::new(i32::try_from(maximum_x).ok()?, i32::try_from(maximum_z).ok()?),
+    ))
+}
+
+fn sample_cell_axis(minimum: i32, maximum: i32, index: i32) -> i32 {
+    let span = i64::from(maximum) - i64::from(minimum);
+    let offset = span * i64::from(index) / i64::from(MARGIN_SAMPLE_DIVISIONS);
+    i32::try_from(i64::from(minimum) + offset).expect("cell sample remains within i32 bounds")
+}
+
+fn grid_index(side: usize, x: i32, z: i32) -> Option<usize> {
+    let x = usize::try_from(x).ok()?;
+    let z = usize::try_from(z).ok()?;
+    z.checked_mul(side)?.checked_add(x)
+}
+
+fn select_margin_candidate(
+    best: &mut Option<(i64, IVec2, IVec2)>,
+    hint: IVec2,
+    inside: IVec2,
+    outside: IVec2,
+) {
+    let outward = outside - inside;
+    let delta = outside - hint;
+    let distance_squared = i64::from(delta.x) * i64::from(delta.x)
+        + i64::from(delta.y) * i64::from(delta.y);
+    let candidate_key = (
+        distance_squared,
+        outside.y,
+        outside.x,
+        outward.y,
+        outward.x,
+    );
+    let replace = best.as_ref().is_none_or(|(current_distance, current_outside, current_outward)| {
+        candidate_key
+            < (
+                *current_distance,
+                current_outside.y,
+                current_outside.x,
+                current_outward.y,
+                current_outward.x,
+            )
+    });
+    if replace {
+        *best = Some((distance_squared, outside, outward));
+    }
+}
+
+fn rotation_for_outward_normal(outward: IVec2) -> Option<StructureRotation> {
+    match (outward.x, outward.y) {
+        (0, 1) => Some(StructureRotation::Degrees0),
+        (-1, 0) => Some(StructureRotation::Degrees90),
+        (0, -1) => Some(StructureRotation::Degrees180),
+        (1, 0) => Some(StructureRotation::Degrees270),
+        _ => None,
     }
 }
 

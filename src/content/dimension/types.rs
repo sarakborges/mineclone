@@ -35,6 +35,14 @@ pub struct GeneratedSurfaceFluidDefinition {
     pub depth: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum GeneratedSurfaceStructurePlacement {
+    #[default]
+    BiomeInterior,
+    BiomeMargin,
+}
+
 /// One deterministic world-space root placement rule for a surface Structure
 /// or Structure group. Internal StructureSet and connector expansion remain
 /// Structure concerns and are resolved by the generation-side Structure owner.
@@ -48,6 +56,8 @@ pub struct GeneratedSurfaceStructureDefinition {
     pub jitter: u32,
     #[serde(default = "default_generated_surface_structure_chance")]
     pub chance: f32,
+    #[serde(default)]
+    pub placement: GeneratedSurfaceStructurePlacement,
 }
 
 #[derive(Clone, Deserialize)]

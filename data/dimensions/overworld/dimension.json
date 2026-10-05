@@ -232,6 +232,14 @@
       "spacing": 112,
       "chance": 0.09,
       "jitter": 34
+    },
+    {
+      "biome": "asteria:overworld/ocean",
+      "structure": "asteria:river_ocean_mouth",
+      "spacing": 192,
+      "chance": 0.55,
+      "jitter": 48,
+      "placement": "biomeMargin"
     }
   ]
 }
