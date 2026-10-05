@@ -3,8 +3,8 @@
 
 This intentionally does not reimplement generation. It verifies that the same
 immutable query/materialization owners flow through streaming, persistence,
-loading, warp and locate, and that authored fixture families required for visual
-validation remain present.
+loading, warp and locate, and that fixture families required for visual and
+performance validation remain reproducible.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = (ROOT / "src/world/generator.rs").read_text(encoding="utf-8")
+BIOME = (ROOT / "src/world/generator/biome.rs").read_text(encoding="utf-8")
 CHUNK = (ROOT / "src/world/generator/chunk.rs").read_text(encoding="utf-8")
 SELECTION = (ROOT / "src/world/streaming/selection.rs").read_text(encoding="utf-8")
 MATERIALIZATION = (ROOT / "src/world/streaming/generation.rs").read_text(encoding="utf-8")
@@ -39,6 +40,7 @@ def load_json(path: Path) -> dict:
 
 
 generator = compact(GENERATOR)
+biome_source = compact(BIOME)
 chunk = compact(CHUNK)
 selection = compact(SELECTION)
 materialization = compact(MATERIALIZATION)
@@ -140,14 +142,27 @@ require(
     "/locate must remain query-only and must not scan/materialize runtime chunks",
 )
 
-# The existing on-demand visual diagnostics are part of Phase 12 fixture
-# coverage. They must stay seed/dimension/coordinate addressable so near/far,
-# multi-seed and multi-dimension fixtures can be reproduced without entering the
-# game runtime.
-for flag in ("--biome-map", "--terrain-debug", "--structure-debug"):
+# The existing on-demand visual/performance diagnostics are part of Phase 12
+# fixture coverage. They must stay seed/dimension/coordinate addressable so
+# near/far, multi-seed and multi-dimension probes can be reproduced without
+# entering the normal game runtime.
+for flag in (
+    "--biome-map",
+    "--terrain-debug",
+    "--structure-debug",
+    "--worldgen-benchmark",
+):
     require(flag in MAIN, f"missing on-demand diagnostic CLI {flag}")
 for flag in ("--seed", "--dimension", "--center-x", "--center-z"):
     require(flag in MAIN, f"diagnostic CLIs must remain addressable by {flag}")
+require(
+    "cold_ns" in MAIN and "warm_ns" in MAIN,
+    "performance diagnostics must publish separate cold/warm measurements",
+)
+require(
+    "No thresholds are applied" in MAIN,
+    "the first benchmark baseline must not invent a regression threshold",
+)
 
 # Ensure the authored fixture families named by the Phase 12 design still exist.
 dimension_files = sorted((ROOT / "data/dimensions").glob("*/dimension.json"))
@@ -169,16 +184,32 @@ biome_files = sorted((ROOT / "data/dimensions").glob("*/biomes/*.json"))
 require(biome_files, "no authored biome fixtures found")
 biomes = [load_json(path) for path in biome_files]
 require(
-    any((biome.get("surfaceLayout") or {}).get("cannotBorder") for biome in biomes),
-    "cannotBorder fixture authoring is missing",
-)
-require(
     any((biome.get("terrain3d") or {}).get("floatingFormation") for biome in biomes),
     "floating-terrain fixture authoring is missing",
+)
+
+# Production content is not required to invent a cannotBorder relationship just
+# to exercise the capability. The generator owns a focused synthetic fixture
+# with mutually incompatible biomes and far-coordinate/order checks; Phase 12
+# may use that fixture when no current production biome authors cannotBorder.
+authored_cannot_border = any(
+    (biome.get("surfaceLayout") or {}).get("cannotBorder") for biome in biomes
+)
+synthetic_cannot_border = all(
+    fragment in biome_source
+    for fragment in (
+        'definition("asteria:test/a",1.0,192,384,&["asteria:test/b"])',
+        'definition("asteria:test/b",1.0,192,384,&["asteria:test/a"])',
+        "fnsurface_sampling_is_direct_and_order_independent()",
+    )
+)
+require(
+    authored_cannot_border or synthetic_cannot_border,
+    "cannotBorder fixture coverage is missing",
 )
 
 print(
     "World rebuild end-to-end audit passed: immutable queries -> streaming selection -> "
     "chunk materialization -> persistent spatial state -> shared loading/destination consumers, "
-    "with reproducible Overworld/Umbral visual fixture families"
+    "with reproducible Overworld/Umbral visual and cold/warm performance fixtures"
 )
