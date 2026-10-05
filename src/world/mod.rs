@@ -263,7 +263,7 @@ impl Plugin for WorldPlugin {
                 (
                     begin_deferred_mesh_retirement_work,
                     advance_deferred_mesh_asset_retirements,
-                    finish_deferred_mesh_asset_retirements.before(log_main_world_work),
+                    finish_deferred_mesh_retirement_work.before(log_main_world_work),
                 )
                     .chain(),
             )
@@ -371,9 +371,8 @@ fn prepare_world_session(mut commands: Commands, mut context: WorldSessionPrepar
     *context.seed = seed;
     *context.current_dimension = dimension;
     *context.rules = rules;
-    context
-        .save
-        .begin_new_world(seed, context.current_dimension.id.as_str(), rules);
+    let dimension_id = context.current_dimension.id.to_string();
+    context.save.begin_new_world(seed, &dimension_id, rules);
     *context.session = WorldSession::new(id);
     commands.insert_resource(lock);
     commands.insert_resource(VoxelWorld::default());
