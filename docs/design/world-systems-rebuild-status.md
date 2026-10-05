@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `4f8ac2add3116eab7f2cdb44f171fe8f5fce2eac` (`Use grouped Structure authoring input`), including the deterministic StructureSet graph work rooted at `b7fc76323f8c430df0eafd44bc76763b161d25dc` (`Add deterministic StructureSet expansion`). Rust validation run `37302115103` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
+Code baseline recorded here: `895c29c2dfd81951fe6beadc1b7dcdc6c89a01e7` (`Fix connector graph compile gate`), including connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`) and `f61ae00b0ab8578fa364bbfad3a55a804cab9f5f` (`Integrate connector chains into StructureField`). Rust validation run `37306128853` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
 
 ## Validation policy
 
@@ -25,7 +25,7 @@ Repository validation follows root `AGENTS.md`.
 | 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
-| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, and multi-piece `StructureSet` expansion. Connector chains, remaining biome roots, and final placement-graph seam/order validation are still pending. |
+| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, and connector-chain expansion. Remaining root migration plus final placement-graph seam/order validation are still pending. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
@@ -104,42 +104,12 @@ Current contract:
 - generated fluid is initial world formation and filled voxels are never bulk-scheduled into the runtime solver;
 - `enqueue_generated_fluid_frontier(...)` is the explicit future Phase 7 handoff for exposed runtime continuation targets only.
 
-The currently authored generated-fluid shape includes:
-
-```json
-{
-  "generatedOcean": {
-    "biome": "asteria:overworld/ocean",
-    "fluid": "asteria:water"
-  },
-  "generatedSurfaceFluids": [
-    {
-      "biome": "asteria:overworld/swamp",
-      "fluid": "asteria:water",
-      "spacing": 18,
-      "radius": 5,
-      "jitter": 3,
-      "chance": 0.75,
-      "depth": 1
-    },
-    {
-      "biome": "asteria:overworld/volcano",
-      "fluid": "asteria:lava",
-      "spacing": 96,
-      "radius": 10,
-      "jitter": 12,
-      "chance": 0.4,
-      "depth": 2
-    }
-  ]
-}
-```
-
 ## Phase 6 — Structures/features in progress
 
 Authoritative generation-side implementation:
 
 - `src/world/generator/structure.rs`
+- `src/world/generator/structure/connector.rs`
 - `src/world/generator/structure_set.rs`
 - preserved generic Structure authoring/runtime definitions in `src/content/structure.rs`
 - preserved restriction definitions in `src/content/structure_rules.rs`
@@ -149,7 +119,7 @@ Authoritative generation-side implementation:
 
 ### Implemented Structure graph foundation
 
-`StructureField` is the single generation-side owner for deterministic Structure placement. Runtime `/place structure` remains a manual mutation path and is not the generation owner.
+`StructureField` is the single generation-side owner for deterministic Structure placement. `ConnectorGraph` is an internal compiled capability of that owner, not a parallel planner. Runtime `/place structure` remains a manual mutation path and is not the generation owner.
 
 Implemented now:
 
@@ -163,53 +133,33 @@ Implemented now:
 - ranking is deterministic: authored `priority` descending, then placement reference, biome id, logical root anchor, and placement Y;
 - `reserveSpace` is directional and shared `conflictGroups` are symmetric after deterministic ranking selects the higher intent;
 - arbitration uses complete 3D logical placement bounds rather than request/chunk bounds;
-- `StructureSet` elements deterministically apply authored chance, count min/max, group variation, and rotation;
-- `StructureSet` placement supports `relativeTo = origin`, `relativeTo = any`, or an earlier element id;
-- set elements honor authored min/max distance, `minSeparation`, `attempts`, and `allowOverlap` without introducing chunk-local placement state;
+- `StructureSet` elements deterministically apply authored chance, count min/max, group variation, rotation, `relativeTo`, distances, separation, attempts, and overlap rules;
 - required set elements reject the whole logical set when their authored minimum count cannot be placed;
 - each resolved set piece is ground-fit and restriction-checked through the same authoritative Terrain/Biome/Material queries as a direct root;
 - set-level `priority`, `conflictGroups`, and `reserveSpace` arbitrate the whole multi-piece logical placement, not each piece independently;
-- query candidate padding uses the set's finite authored/theoretical horizontal bounds, while conflict arbitration uses the actual resolved union bounds;
-- `StructureQueries::placements_intersecting(...)` plans/arbitrates complete logical placements first and only then returns the surviving pieces intersecting the requested rectangle;
-- a multi-piece set can therefore cross a future chunk/request boundary without that boundary changing its composition or arbitration result;
+- `ConnectorGraph` freezes concrete Structure and Structure-group connector targets and sorts group members by Structure id before deterministic selection;
+- connector output faces are rotated into world space and attach only to compatible opposite-face inputs, reusing the authored input-attachment contract and supported child rotations;
+- connector target variant, attachment, and min/max-distance choice are deterministic functions of immutable generation entropy plus parent world position/identity;
+- connector `strength` and `strengthLossOnEachLoop` propagate through breadth-first expansion; a child continues only while remaining strength is positive;
+- all roots of one direct/Set logical placement share one connector occupancy set, so connector children cannot overlap persistent voxels of sibling/root pieces or previously accepted children inside that graph;
+- connected children that require ground fit use the authoritative terrain surface; all connected children pass through the same Structure restrictions used by direct and Set pieces;
+- connector expansion happens before final placement bounds and arbitration, so root/Set `priority`, `conflictGroups`, and `reserveSpace` arbitrate the complete connector-expanded logical graph;
+- query candidate padding uses connector-expanded finite theoretical bounds, while arbitration uses the actual resolved union bounds;
+- recursive connector cycles that return to the same Structure/rotation/remaining-strength state are rejected during bound compilation; recursive authored chains must lose strength so query reach remains finite instead of relying on an arbitrary depth cap;
+- `StructureQueries::placements_intersecting(...)` plans/arbitrates complete logical graphs first and only then returns surviving pieces intersecting the requested rectangle;
+- a multi-piece Set/connector graph can therefore cross a future chunk/request boundary without that boundary changing its composition or arbitration result;
 - `StructureQueries::find_nearest(...)` measures distance to the logical root anchor and reuses the same accepted placement graph; the representative returned piece retains that logical `placement_anchor`;
-- `generatedSurfaceStructures` references are validated at content-load time against surface-biome ownership and Structure/Structure-group/StructureSet registries;
-- runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner;
-- element chance edge semantics are exact: `0` never selects and `1` always selects.
+- runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner.
 
-Current root authoring includes direct Structures/groups and a real StructureSet root:
-
-```json
-{
-  "generatedSurfaceStructures": [
-    {
-      "biome": "asteria:overworld/plains",
-      "structure": "asteria:tree_oak",
-      "spacing": 80,
-      "chance": 0.54,
-      "jitter": 24
-    },
-    {
-      "biome": "asteria:overworld/enchanted_forest",
-      "structure": "asteria:enchanted_heart",
-      "spacing": 1000,
-      "chance": 1.0,
-      "jitter": 112
-    }
-  ]
-}
-```
-
-The migrated roots currently include the existing Plains oak/willow groups plus small/medium/big/huge boulders and the Enchanted Forest `asteria:enchanted_heart` StructureSet. Their historical spacing/chance/jitter authoring is preserved while all placement now resolves against the rebuilt biome, terrain, material, generated-fluid, and Structure owners.
+Current migrated roots remain the existing Plains oak/willow groups plus small/medium/big/huge boulders and the Enchanted Forest `asteria:enchanted_heart` StructureSet. Connector-capable definitions such as river segments remain generic Structure content; this milestone integrates their generic chain semantics but does not yet invent or migrate a river-specific root-placement subsystem.
 
 ### What is intentionally incomplete in Phase 6
 
-The current `StructureField` now owns direct and StructureSet root graphs, but Phase 6 is not complete. Remaining work includes:
+The current `StructureField` owns direct roots, StructureSets, and connector-expanded logical graphs, but Phase 6 is not complete. Remaining work includes:
 
-- connector-chain expansion and connector strength/distance behavior inside the same placement graph;
-- preserving connected rivers, waterfalls, cavern entrances/tunnels, and other paths as generic Structures/connectors rather than creating a hydrology subsystem;
-- extending the same priority/conflict/reservation arbitration over connector-expanded logical graphs;
-- migration of the remaining current biome/dimension Structure root authoring;
+- migration of the remaining current biome/dimension Structure root authoring through the same owner;
+- where connector roots need placement relative to other world facts such as water-body margins, extending the generic Structure-placement authoring/query contract rather than creating a hydrology subsystem;
+- preserving rivers, waterfalls, cavern entrances/tunnels, and other connected features as ordinary Structure/connector graphs;
 - final scalar/bounded-query seam/order validation for complete planned Structure graphs;
 - exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure`.
 
@@ -221,13 +171,11 @@ Continue **Phase 6 — Structures/features**, not chunk synthesis.
 
 Required direction:
 
-1. extend the existing `StructureField`; do not add a parallel planner;
-2. integrate connector-chain expansion into the same deterministic logical placement graph, preserving connector target groups, compatible input faces/rotations, strength/loss, min/max distance, and finite termination;
-3. keep rivers/waterfalls generic Structure/connector chains and do not introduce a hydrology subsystem;
-4. apply the existing graph-level priority/conflict/reservation semantics to connector-expanded placements;
-5. migrate remaining authored Structure roots only through this owner;
-6. validate that overlapping bounded requests observe the same complete logical placements regardless of request origin/order;
-7. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
+1. extend the existing generic Structure root-placement authoring only where remaining content requires placement relative to authoritative world facts; do not add a parallel planner or hydrology owner;
+2. migrate remaining authored Structure roots through `StructureField`, including connected rivers/waterfalls/cavern paths only through generic Structure/connector semantics;
+3. keep connector-expanded graph arbitration under the existing root/Set priority/conflict/reservation owner;
+4. add final deterministic seam/order validation proving overlapping bounded requests observe the same complete logical graph regardless of request origin/order;
+5. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
 
 ## Important non-regression rules
 
