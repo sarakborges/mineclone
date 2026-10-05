@@ -178,7 +178,8 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
-                    reset_resource::<MainWorldWorkSamples>,
+                    reset_resource::<FrameTimeSamples>,
+                    reset_resource::<MainFrameWorkSamples>,
                     reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
@@ -255,7 +256,7 @@ impl Plugin for WorldPlugin {
                 (
                     begin_deferred_mesh_retirement_work,
                     advance_deferred_mesh_asset_retirements,
-                    finish_deferred_mesh_asset_retirements.before(log_main_world_work),
+                    finish_deferred_mesh_retirement_work.before(log_main_world_work),
                 )
                     .chain(),
             )
