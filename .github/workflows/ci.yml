@@ -60,6 +60,9 @@ jobs:
       - name: Audit destination query contract
         run: python3 tools/check_destination_query_contract.py
 
+      - name: Audit materialized chunk persistence contract
+        run: python3 tools/check_materialized_chunk_persistence_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
