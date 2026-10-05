@@ -18,6 +18,15 @@
       "jitter": 3,
       "chance": 0.75,
       "depth": 1
+    },
+    {
+      "biome": "asteria:overworld/volcano",
+      "fluid": "asteria:lava",
+      "spacing": 96,
+      "radius": 10,
+      "jitter": 12,
+      "chance": 0.4,
+      "depth": 2
     }
   ]
 }
