@@ -103,3 +103,6 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      - name: Smoke world rebuild lifecycle
+        run: cargo run --locked --bin world-rebuild-smoke
