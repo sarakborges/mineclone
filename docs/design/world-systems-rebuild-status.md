@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `f2cf78bb62bda3fad4305d215abd25cccc69448e` (`Remove blocking temporary terrain validation probe`). Rust validation run `37255450249` completed successfully for that baseline. The terrain debug implementation itself landed in `c70b205a259359f0fffd8deb7630a3d12fe42337` (`Add terrain debug CLI`).
+Code baseline recorded here: `7014b38aa42897015f66ed83c978c3f58f073979` (`Fail terrain debug on invariant mismatch`). Rust validation run `37255832690` completed successfully for that baseline. The terrain debug implementation originally landed in `c70b205a259359f0fffd8deb7630a3d12fe42337` (`Add terrain debug CLI`) and now carries built-in query-invariant validation.
 
 ## Validation policy
 
@@ -23,7 +23,7 @@ Repository validation follows root `AGENTS.md`.
 | 1 — Cleanup | Complete | Legacy biome/world-generation/loading ownership and transitional biome presentation bridges were removed. Preserved runtime systems remain separate from the new generator. |
 | 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
 | 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
-| 4 — Terrain | Complete for current authored content | Continuous 2D base terrain, authoritative final 3D density, bounded caves, authored floating masses, bounded effective-surface resolution, scalar/batch queries, and the terrain debug renderer are implemented. No currently authored terrain requires another true-3D form. |
+| 4 — Terrain | Complete for current authored content | Continuous 2D base terrain, authoritative final 3D density, bounded caves, authored floating masses, bounded effective-surface resolution, scalar/batch queries, and the terrain debug renderer with built-in seam/query validation are implemented. No currently authored terrain requires another true-3D form. |
 | 5 — Surface/materials/generated fluids | Pending | Not started on the new stack. |
 | 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
@@ -161,11 +161,12 @@ Current bounded floating authoring shape:
 
 - an X/Z effective-surface image;
 - an X/Y final-density slice at a selected Z;
-- JSON metadata containing sampled ranges and density classifications.
+- JSON metadata containing sampled ranges and density classifications;
+- a built-in validation report for scalar/batch equivalence, overlapping bounded-request seams, repeated density sampling after a differently-originated request, and effective-surface crossing consistency.
 
-The density view distinguishes base solid, cave carve, additive mass, the base crossing, and the effective additive crossing. The surface view highlights columns whose effective top rises above the base surface. This satisfies the rebuild gate that visual/debug terrain validation be available before material composition.
+The density view distinguishes base solid, cave carve, additive mass, the base crossing, and the effective additive crossing. The surface view highlights columns whose effective top rises above the base surface. The CLI writes the visual/JSON diagnostics first and then fails explicitly if any built-in terrain-query invariant reports a mismatch. This satisfies the rebuild gate that deterministic seam/query validation and visual/debug terrain inspection be available before material composition.
 
-Temporary CI fixture-rendering probes were deliberately removed after confirming they were an execution-environment concern rather than a terrain ownership requirement. The normal CI remains limited to the repository validation gate; debug rendering stays on-demand.
+Temporary CI fixture-rendering probes were deliberately removed because linking the full dynamically configured game binary inside every validation run was a blocking execution-environment cost rather than a terrain ownership requirement. The normal CI remains limited to the repository validation gate; debug rendering and its invariant checks stay on-demand.
 
 ### Deferred extensions
 
