@@ -1,4 +1,5 @@
 mod controls_screen;
+mod loading_screen;
 mod pause_menu;
 mod settings_screen;
 mod starting_screen;
@@ -6,6 +7,7 @@ mod world_selection;
 
 use bevy::prelude::*;
 use controls_screen::ControlsScreenPlugin;
+use loading_screen::LoadingScreenPlugin;
 use pause_menu::PauseMenuPlugin;
 use settings_screen::SettingsScreenPlugin;
 use starting_screen::StartingScreenPlugin;
@@ -20,6 +22,7 @@ impl Plugin for ScreensPlugin {
             SettingsScreenPlugin,
             StartingScreenPlugin,
             WorldSelectionPlugin,
+            LoadingScreenPlugin,
             PauseMenuPlugin,
         ));
     }
