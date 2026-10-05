@@ -1,4 +1,5 @@
 mod generation;
+mod presentation;
 mod residency;
 mod selection;
 
@@ -12,24 +13,32 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::fluid::FluidRegistry,
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::chunk_coord_from_position, deduplicated_queue::DeduplicatedQueue,
-        world::VoxelWorld,
+        lighting::PendingLightingUpdates, world::VoxelWorld,
     },
 };
 
 pub(super) use self::generation::ChunkMaterializationTasks;
 use self::{
-    generation::{MaterializationRuntime, collect_materialized_chunks, dispatch_materialization_tasks},
+    generation::{
+        MaterializationDefinitions, MaterializationRuntime, collect_materialized_chunks,
+        dispatch_materialization_tasks,
+    },
+    presentation::publish_pending_chunk_presentations,
     residency::ChunkResidencyState,
     selection::desired_chunk_coords,
 };
 use super::{
+    chunk_remesh::process_chunk_remesh_queue,
+    chunk_rendering::ChunkRenderPool,
+    chunk_system_params::VoxelContent,
     chunk_unloading::evict_distant_chunks,
+    chunk_visibility::ChunkPresentationSelection,
     fluid_updates::PendingFluidUpdates,
     generator::WorldGenerator,
+    lighting_updates::process_dynamic_lighting,
     render_distance::RenderDistanceSettings,
     tick::WorldTickClock,
     warp::{PendingWarp, resolve_pending_warp},
@@ -60,6 +69,13 @@ impl Plugin for ChunkStreamingPlugin {
                     .before(resolve_pending_warp)
                     .before(evict_distant_chunks)
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                PostUpdate,
+                publish_pending_chunk_presentations
+                    .after(process_dynamic_lighting)
+                    .before(process_chunk_remesh_queue)
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -79,6 +95,7 @@ pub(super) struct ChunkStreamingState {
     residency: ChunkResidencyState,
     pending: DeduplicatedQueue<IVec3>,
     materializing: HashSet<IVec3>,
+    presentation_pending: DeduplicatedQueue<IVec3>,
     pressure_evicted_meshes: HashMap<IVec3, usize>,
 }
 
@@ -117,7 +134,9 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn has_renderable_streaming_backlog(&self) -> bool {
-        self.pending.len() > 0 || !self.materializing.is_empty()
+        self.pending.len() > 0
+            || !self.materializing.is_empty()
+            || self.presentation_pending.len() > 0
     }
 
     pub(super) fn mesh_pressure_evicted_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
@@ -129,14 +148,22 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
-        self.pressure_evicted_meshes.remove(&coord).is_some()
+        let recovered = self.pressure_evicted_meshes.remove(&coord).is_some();
+        if recovered {
+            self.enqueue_presentation(coord);
+        }
+        recovered
     }
 
     pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3, bytes: usize) {
+        self.presentation_pending.remove(coord);
         self.pressure_evicted_meshes.insert(coord, bytes);
     }
 
-    pub(super) fn forget_initial_lighting_seeded(&mut self, _coord: IVec3) {}
+    pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
+        self.presentation_pending.remove(coord);
+        self.pressure_evicted_meshes.remove(&coord);
+    }
 
     fn selection_needs_rebuild(&self, center: IVec3, horizontal_radius: i32) -> bool {
         self.center != Some(center) || self.horizontal_radius != horizontal_radius
@@ -164,6 +191,16 @@ impl ChunkStreamingState {
         });
         for coord in retired {
             self.residency.enqueue_retired(coord);
+        }
+
+        let retained_presentations = self
+            .presentation_pending
+            .values()
+            .filter(|coord| desired.contains(coord))
+            .collect::<Vec<_>>();
+        self.presentation_pending.clear();
+        for coord in retained_presentations {
+            self.presentation_pending.enqueue(coord);
         }
 
         self.residency.desired = desired;
@@ -202,6 +239,31 @@ impl ChunkStreamingState {
         Some(selected)
     }
 
+    pub(super) fn enqueue_presentation(&mut self, coord: IVec3) {
+        if coord.y >= 0
+            && self.keeps_loaded(coord)
+            && !self.pressure_evicted_meshes.contains_key(&coord)
+        {
+            self.presentation_pending.enqueue(coord);
+        }
+    }
+
+    pub(super) fn pop_presentation_by_priority(
+        &mut self,
+        selection: &ChunkPresentationSelection,
+    ) -> Option<IVec3> {
+        let center = self.center?;
+        let movement_direction = self.movement_direction;
+        let selected = self
+            .presentation_pending
+            .values()
+            .filter(|coord| selection.retains_render_mesh(*coord))
+            .min_by_key(|coord| chunk_load_priority(*coord, center, movement_direction))?;
+        let removed = self.presentation_pending.remove(selected);
+        debug_assert!(removed, "selected presentation chunk must remain pending");
+        Some(selected)
+    }
+
     pub(super) fn is_materializing(&self, coord: IVec3) -> bool {
         self.materializing.contains(&coord)
     }
@@ -232,7 +294,8 @@ impl ChunkStreamingState {
 #[derive(SystemParam)]
 struct ChunkStreamingInputs<'w, 's> {
     generator: Res<'w, WorldGenerator>,
-    fluids: Res<'w, FluidRegistry>,
+    content: VoxelContent<'w>,
+    render_pool: Res<'w, ChunkRenderPool>,
     world_ticks: Res<'w, WorldTickClock>,
     render_distance: Res<'w, RenderDistanceSettings>,
     pending_warp: Res<'w, PendingWarp>,
@@ -246,6 +309,8 @@ struct ChunkStreamingRuntime<'w> {
     state: ResMut<'w, ChunkStreamingState>,
     tasks: ResMut<'w, ChunkMaterializationTasks>,
     pending_fluid: ResMut<'w, PendingFluidUpdates>,
+    pending_lighting: ResMut<'w, PendingLightingUpdates>,
+    presentation_selection: ResMut<'w, ChunkPresentationSelection>,
 }
 
 fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntime) {
@@ -261,6 +326,9 @@ fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntim
         .unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = inputs.render_distance.chunks();
+    runtime
+        .presentation_selection
+        .sync_from_streaming(Some(center), horizontal_radius);
 
     if runtime.state.selection_needs_rebuild(center, horizontal_radius) {
         let desired = desired_chunk_coords(&inputs.generator, center, horizontal_radius);
@@ -274,7 +342,9 @@ fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntim
             .desired
             .iter()
             .copied()
-            .filter(|coord| runtime.world.chunk(*coord).is_none() && !runtime.state.is_materializing(*coord))
+            .filter(|coord| {
+                runtime.world.chunk(*coord).is_none() && !runtime.state.is_materializing(*coord)
+            })
             .collect::<Vec<_>>();
         missing.sort_unstable_by_key(|coord| {
             chunk_load_priority(*coord, center, runtime.state.movement_direction())
@@ -282,13 +352,33 @@ fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntim
         for coord in missing {
             runtime.state.enqueue_pending(coord);
         }
+
+        let resident_unpresented = runtime
+            .state
+            .residency
+            .desired
+            .iter()
+            .copied()
+            .filter(|coord| {
+                runtime.world.chunk(*coord).is_some() && !inputs.render_pool.contains(*coord)
+            })
+            .collect::<Vec<_>>();
+        for coord in resident_unpresented {
+            runtime.state.enqueue_presentation(coord);
+        }
     }
 
     let current_tick = inputs.world_ticks.current_tick();
+    let definitions = MaterializationDefinitions {
+        blocks: &inputs.content.blocks,
+        fluids: &inputs.content.fluids,
+        secondary_properties: &inputs.content.secondary_properties,
+    };
     let mut materialization_runtime = MaterializationRuntime::new(
         &mut runtime.world,
         &mut runtime.pending_fluid,
-        &inputs.fluids,
+        &mut runtime.pending_lighting,
+        definitions,
         current_tick,
         inputs.frame_budget.deadline(),
     );
