@@ -1,10 +1,10 @@
 # World Systems Rebuild — Implementation Status
 
-This document tracks the current implementation state of the world-systems rebuild. The architecture and behavioral contract remain in [`world-systems-rebuild.md`](world-systems-rebuild.md); this file answers only: what is implemented now, what is intentionally incomplete, and what comes next.
+This document tracks the current implementation state of the world-systems rebuild. The architecture and behavioral contract remain in [`world-systems-rebuild.md`](world-systems-rebuild.md); this file records only what is implemented now, what remains, and the next concrete cut.
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `8c46c0bda3b9a78cadb62c6caced2a2e209dfee5` (`Define generated fluid runtime frontier handoff`), including `2cb360dac9f88c503bca353905aed089e29d8096` (`Author volcano lava pools`). Rust validation run `37262689844` completed successfully for that baseline. Terrain invariant validation remains available through the on-demand terrain debug path introduced before Phase 5.
+Code baseline recorded here: `19d10a882f9ba75596113718c010a02d517d012a` (`Fix Structure query compilation`). Rust validation run `37264433026` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
 
 ## Validation policy
 
@@ -12,51 +12,43 @@ Repository validation follows root `AGENTS.md`.
 
 - Do not run or add `cargo test` unless the user explicitly requests that command for the current task.
 - Default Rust validation is Clippy with `-D warnings`, `cargo check --locked`, and applicable content/localization/GLB audits.
-- The rebuild plan may describe behavioral invariants and regression coverage, but that does not override the repository command policy.
-- Visual/debug validation is an on-demand consumer capability. It is not a permanent CI fixture-rendering loop.
+- Visual/debug validation is an on-demand consumer capability, not a permanent CI fixture-rendering loop.
+- A milestone is not complete while the exact delivered SHA has pending, failed, or unobservable CI.
 
 ## Phase status
 
 | Phase | Status | Current state |
 | --- | --- | --- |
-| 0 — Impact audit | Complete | External consumers and required capability boundaries are documented in the rebuild plan. |
-| 1 — Cleanup | Complete | Legacy biome/world-generation/loading ownership and transitional biome presentation bridges were removed. Preserved runtime systems remain separate from the new generator. |
-| 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
-| 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
-| 4 — Terrain | Complete for current authored content | Continuous 2D base terrain, authoritative final 3D density, bounded caves, authored floating masses, bounded effective-surface resolution, scalar/batch queries, and the terrain debug renderer with built-in seam/query validation are implemented. No currently authored terrain requires another true-3D form. |
-| 5 — Surface/materials/generated fluids | Complete for current authored content | Authoritative solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch generated-fluid queries, and the explicit runtime frontier handoff are implemented. |
-| 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
+| 0 — Impact audit | Complete | External consumers and required capability boundaries are documented. |
+| 1 — Cleanup | Complete | Legacy biome/world-generation/loading ownership and transitional generation bridges were removed; preserved runtime systems remain separate. |
+| 2 — Generation foundation | Complete | Immutable generation snapshots, deterministic named entropy, world-coordinate queries, and scalar/bounded sampling primitives are implemented. |
+| 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
+| 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
+| 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
+| 6 — Structures/features | In progress | A deterministic world-space `StructureField` now owns root placement/query for the first authored Plains Structures. StructureSets, connectors, priority/conflict/reservation arbitration, and the remaining biome placements are still pending. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
-| 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals and streaming still need reconnection to the new generator capabilities. |
+| 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
 | 10 — Loading pipeline | Pending | Old loading ownership was removed; replacement pipeline has not been implemented. |
 | 11 — Loading screen | Pending | Replacement UI has not been implemented. |
 | 12 — End-to-end/performance | Pending | Begins after the new stack has an end-to-end playable path. |
 
-## Phase 1 — completed cleanup
+## Completed generation ownership
 
-The rebuild no longer keeps the previous world generator alive behind adapters.
+### Phase 2 — Generation foundation
 
-Removed or retired during cleanup included the old biome field/generation owners, old generation regions/schedulers, old setup/loading orchestration, old generated-fluid frontier coupling, old initial-mesh presentation scheduling, old worldgen persistence metadata, and temporary biome/tint bridges that existed only to keep legacy generation behavior visible.
+The generation foundation lives under `src/world/generator/` and is independent from runtime chunk state.
 
-Infrastructure intentionally preserved includes runtime voxel/chunk state, residency foundations, meshing/remeshing, lighting, dynamic fluids, rendering, generic Structure authoring primitives, gameplay systems, entities, inventory, crafting, and storage.
+Current invariants:
 
-## Phase 2 — completed generation foundation
+- one immutable seed/dimension snapshot per active generator;
+- deterministic named entropy domains;
+- direct world-coordinate access with no generation-order dependency;
+- scalar and bounded area/volume sampling;
+- no semantic generation region or chunk-owned truth;
+- no need to materialize a `VoxelChunk` to answer generated-world queries.
 
-The new generator foundation lives under `src/world/generator/` and is independent from the deleted worldgen implementation.
-
-Current foundation properties:
-
-- immutable generation snapshot per active dimension;
-- deterministic named entropy domains owned by the new generator;
-- generation-specific world coordinate/request types;
-- direct coordinate access with no source-to-destination traversal;
-- scalar and bounded grid/volume sampling primitives;
-- deterministic results independent of query history or generation order;
-- runtime installation/removal of the immutable `WorldGenerator` snapshot at world/dimension lifecycle boundaries;
-- no requirement to materialize a `VoxelChunk` merely to answer generated-world queries.
-
-## Phase 3 — completed surface Biome Layout
+### Phase 3 — Biome Layout
 
 Authoritative implementation:
 
@@ -64,40 +56,9 @@ Authoritative implementation:
 - `src/world/generator/biome_map.rs`
 - `src/content/biome.rs`
 
-The new biome authoring contract uses `surfaceLayout` and owns only layout concerns:
+The surface biome field owns primary identity, influences, region sizing, adjacency constraints, bounded sampling, and biome search. The map viewer consumes `BiomeQueries`; it is not another layout resolver. Effective XYZ biome lookup currently falls back to surface ownership because no volume-biome content is authored.
 
-```json
-{
-  "surfaceLayout": {
-    "weight": 1.0,
-    "regionSize": {
-      "min": 384,
-      "max": 768
-    },
-    "cannotBorder": []
-  }
-}
-```
-
-Implemented surface-query capabilities include:
-
-- one authoritative primary biome per X/Z point;
-- normalized variable influence collection for continuous transitions;
-- scalar surface sampling;
-- bounded area/grid sampling;
-- surface biome search;
-- region-size metadata;
-- deterministic formation geometry and compatibility filtering;
-- symmetric `cannotBorder` evaluation;
-- effective XYZ biome resolution that currently falls back to the surface field because no volume-biome field/content is authored yet.
-
-### Authoritative biome map viewer
-
-`src/world/generator/biome_map.rs` is the single biome-map implementation. A duplicate map path was removed rather than maintained in parallel.
-
-The viewer consumes `BiomeQueries`, the same source used by generation. It supports deterministic PNG output, stable biome colors, center/scale/output resolution, boundary and influence rendering, and JSON metadata. It must remain a consumer of the authoritative layout rather than becoming another resolver.
-
-## Phase 4 — completed terrain for current authored content
+### Phase 4 — Terrain
 
 Authoritative implementation:
 
@@ -105,79 +66,19 @@ Authoritative implementation:
 - `src/world/generator/terrain_debug.rs`
 - `src/content/biome.rs` `surfaceTerrain` and `terrain3d`
 
-Implemented terrain contract:
+Current terrain facts:
 
-- `TerrainQueries::base_surface_at(x, z)` is the continuous authoritative 2D base surface and is unchanged by true-3D contributions;
-- `TerrainQueries::density_at(x, y, z)` is the one authoritative final terrain-density answer;
-- final density composes base solidity, bounded subtractive cave carving, and biome-authored bounded additive floating formations inside the same `TerrainField`;
-- cave noise is deterministic, anchored in world coordinates, and bounded to a finite depth band below the base surface;
-- `terrain3d.floatingFormation` authors finite absolute vertical bounds and shape parameters for additive floating masses;
-- the current Overworld `floating_islands` biome authors its floating formation in world Y `200..280`;
-- floating formation shape and biome-edge retreat consume authoritative biome influence weights rather than resolving biome boundaries independently;
-- `TerrainQueries::surface_at(x, z)` finds the highest effective solid crossing from the base result plus finite candidate bounds exposed by active 3D contributions, never by scanning the full world height;
-- bounded surface-grid queries use the same effective-surface resolver as scalar queries;
-- `TerrainQueries::sample_density_volume(...)` provides dense XYZ sampling while reusing authoritative biome/base-column work;
-- noise/lattices remain world-coordinate anchored, preserving the same fact when sampled alone or from overlapping bounded requests;
-- every current surface biome has a `surfaceTerrain` profile;
-- no current authored biome requires a separate overhang form or volume-biome terrain effect.
+- `base_surface_at(x, z)` is the cheap authoritative 2D base surface;
+- `density_at(x, y, z)` is the one final terrain-density answer;
+- caves are bounded subtractive contributions;
+- biome-authored floating formations are bounded additive contributions in the same `TerrainField`;
+- `surface_at(x, z)` resolves the effective top using finite candidate bounds rather than scanning world height;
+- scalar, grid, and dense volume paths share the same semantics and world-coordinate anchoring;
+- the terrain debug path validates scalar/batch equivalence, overlapping request seams, repeated-query determinism, and effective-surface crossings.
 
-Current base-surface authoring shape:
+No currently authored terrain requires another true-3D form. Future volume-biome or overhang forms must compose into this same owner.
 
-```json
-{
-  "surfaceTerrain": {
-    "baseHeightOffset": 8.0,
-    "macroAmplitude": 18.0,
-    "macroScale": 640,
-    "detailAmplitude": 4.0,
-    "detailScale": 96
-  }
-}
-```
-
-Current bounded floating authoring shape:
-
-```json
-{
-  "terrain3d": {
-    "floatingFormation": {
-      "minY": 200,
-      "maxY": 280,
-      "horizontalScale": 112,
-      "detailScale": 40,
-      "coverage": 0.55,
-      "roughness": 0.18,
-      "densityScale": 28.0
-    }
-  }
-}
-```
-
-### Terrain visual/debug capability
-
-`src/world/generator/terrain_debug.rs` is a pure consumer of `TerrainQueries` and does not own or reimplement terrain semantics.
-
-`--terrain-debug` can render:
-
-- an X/Z effective-surface image;
-- an X/Y final-density slice at a selected Z;
-- JSON metadata containing sampled ranges and density classifications;
-- a built-in validation report for scalar/batch equivalence, overlapping bounded-request seams, repeated density sampling after a differently-originated request, and effective-surface crossing consistency.
-
-The density view distinguishes base solid, cave carve, additive mass, the base crossing, and the effective additive crossing. The surface view highlights columns whose effective top rises above the base surface. The CLI writes the visual/JSON diagnostics first and then fails explicitly if any built-in terrain-query invariant reports a mismatch. This satisfies the rebuild gate that deterministic seam/query validation and visual/debug terrain inspection be available before material composition.
-
-Temporary CI fixture-rendering probes were deliberately removed because linking the full dynamically configured game binary inside every validation run was a blocking execution-environment cost rather than a terrain ownership requirement. The normal CI remains limited to the repository validation gate; debug rendering and its invariant checks stay on-demand.
-
-### Deferred extensions
-
-These do not block Phase 4 for the content currently authored:
-
-- future volume-biome terrain effects, because no volume-biome terrain content exists yet;
-- additional overhang/additive forms if future biome authoring explicitly requires them.
-
-Any such extension must compose into the same `TerrainField`, expose bounded candidates where effective-column queries need them, and preserve scalar/batch/world-coordinate equivalence.
-
-## Phase 5 — completed surface/material/generated-fluid composition
+### Phase 5 — Surface/material/generated-fluid composition
 
 Authoritative implementation:
 
@@ -185,75 +86,28 @@ Authoritative implementation:
 - `src/world/generator/generated_fluid.rs`
 - `src/content/biome.rs` `surfaceLayers` and `surfaceLayers.patch`
 - `src/content/dimension/types.rs` `generatedOcean` and `generatedSurfaceFluids`
-- the current surface-biome JSON definitions under `data/dimensions/*/biomes/`
 - `data/dimensions/overworld/dimension.json`
-- `src/world/fluid_updates.rs` for the explicit generated-frontier-to-runtime scheduler handoff
+- `src/world/fluid_updates.rs` for the explicit generated-frontier runtime handoff
 
-Current material/generated-fluid contract:
+Current contract:
 
-- `TerrainField` remains the sole owner of whether a voxel is solid or empty; material composition never recreates terrain occupancy;
-- `GeneratedFluidField` is the one generated-fluid spatial-rule owner. It consumes immutable dimension authoring, deterministic world-space entropy, and authoritative primary surface-biome samples for Ocean and local surface-fluid placement;
-- `TerrainField` consumes only the shallow local-fluid cut depth from that same `GeneratedFluidField`, so a surface pool removes terrain through the authoritative density field instead of placing fluid inside a still-solid voxel;
-- `MaterialField` owns generated solid block composition and exposes initial generated-fluid queries by consuming `TerrainField`, `BiomeLayout`, and the shared `GeneratedFluidField` rather than re-resolving fluid placement;
-- `MaterialQueries::solid_block_at(x, y, z)` returns no block for empty terrain and the authored solid block for occupied terrain;
-- `MaterialQueries::sample_solid_volume(...)` provides dense unit-step XYZ solid sampling for later chunk synthesis without materializing a `VoxelChunk`;
-- `MaterialQueries::generated_fluid_at(x, y, z)` returns the initial generated fluid at an empty world-space voxel;
-- `MaterialQueries::sample_generated_fluid_volume(...)` provides dense unit-step XYZ generated-fluid sampling through the same Phase 5 ownership chain;
-- discrete solid/fluid ownership uses the authoritative primary surface biome from `BiomeQueries`, so no second biome-boundary or Ocean mask exists;
-- base terrain layers measure depth from the authoritative base surface;
-- additive terrain above the base surface, including floating formations, resolves its local exposed top with a bounded upward final-density scan capped by the authored finite material-layer depth, then applies the same surface/subsurface/core profile;
-- deep cave walls/floors therefore remain core material rather than incorrectly becoming surface soil merely because a cave exposes them;
-- batch solid/fluid composition reuses authoritative terrain-column, density-volume, and biome-area results, preserving scalar/batch ownership and world-coordinate semantics;
-- every currently authored surface biome in Overworld and Umbral has an explicit solid `surfaceLayers` profile; `MaterialField` refuses to construct a dimension whose participating surface biome lacks one;
-- finite material layers may optionally author deterministic world-space patch replacements;
-- patch placement uses seed/domain-addressed world-space lattice cells with deterministic presence, jitter, circular extent, stable overlap tie-breaking, and alternate-block selection;
-- scalar and bounded solid-material queries call the same patch resolver, so chunk/request origin cannot change the selected material;
-- swamp topsoil interleaves `grass_block`, `dirt`, and `mud`, while its finite dirt subsurface may transition into deterministic mud patches;
-- the Overworld dimension explicitly authors `generatedOcean.biome = asteria:overworld/ocean` and `generatedOcean.fluid = asteria:water`;
-- generated Ocean water exists only when the authoritative primary surface biome matches that authored Ocean biome, the final terrain density is empty, and the voxel lies strictly above the authoritative base Ocean floor and at or below dimension `seaLevel`;
-- empty cave/overhang volume below the generated Ocean floor remains dry because generated Ocean fill never applies at or below `base_surface_at(x, z)`;
-- the Overworld authors deterministic `generatedSurfaceFluids` rules for swamp water and volcano lava;
-- swamp puddle placement is world-coordinate anchored and seed/domain deterministic, with a one-voxel cut so water genuinely interleaves with grass/dirt/mud at the swamp surface;
-- volcano lava uses the same deterministic local-fluid rule and currently creates sparse two-voxel-deep surface lava pools in the Volcano biome;
-- the current Volcano terrain does not author a dedicated crater/caldera shape, so this implementation deliberately does not mislabel random pools as geometric crater lava; a future authored crater must be a Terrain extension and may reuse the same generated-fluid owner;
-- generated fluid is initial world formation only. Filled Ocean/puddle/lava voxels are never bulk-enqueued as runtime simulation work;
-- `enqueue_generated_fluid_frontier(...)` is the explicit runtime handoff for a future materialization path: chunk synthesis will call it only for exposed empty frontier targets, and the existing runtime scheduler revalidates the target before assigning the authored spread delay.
+- `TerrainField` alone owns solid/empty geometry;
+- `MaterialField` classifies already-solid terrain into generated block identities;
+- `GeneratedFluidField` alone owns initial generated-fluid spatial rules;
+- solid and fluid scalar/batch queries consume the same biome/terrain facts;
+- deep cave walls/floors remain core material rather than becoming topsoil merely because they are exposed;
+- swamp surface patches deterministically interleave grass/dirt/mud;
+- Ocean water fills only empty voxels above the authored Ocean floor through `seaLevel`, so cave voids below the floor stay dry;
+- swamp puddles are shallow Terrain cuts filled by generated water, so water genuinely replaces/interleaves with the surface instead of occupying a still-solid voxel;
+- Volcano currently authors sparse two-voxel-deep deterministic surface lava pools through the same generated-fluid owner;
+- Volcano does not currently author a crater/caldera Terrain form, so these pools are not mislabeled as crater lava;
+- generated fluid is initial world formation and filled voxels are never bulk-scheduled into the runtime solver;
+- `enqueue_generated_fluid_frontier(...)` is the explicit future Phase 7 handoff for exposed runtime continuation targets only.
 
-Current solid layer authoring shape:
+The currently authored generated-fluid shape includes:
 
 ```json
 {
-  "surfaceLayers": [
-    {
-      "block": "asteria:grass_block",
-      "depth": 1,
-      "patch": {
-        "spacing": 14,
-        "radius": 6,
-        "jitter": 2,
-        "chance": 0.9,
-        "blocks": [
-          "asteria:dirt",
-          "asteria:mud"
-        ]
-      }
-    },
-    {
-      "block": "asteria:dirt",
-      "depth": 4
-    },
-    {
-      "block": "asteria:stone"
-    }
-  ]
-}
-```
-
-Current generated-fluid authoring shape:
-
-```json
-{
-  "seaLevel": 90,
   "generatedOcean": {
     "biome": "asteria:overworld/ocean",
     "fluid": "asteria:water"
@@ -281,37 +135,88 @@ Current generated-fluid authoring shape:
 }
 ```
 
-Finite solid entries require a positive `depth`. The final entry is the depthless core layer. The total finite authored depth is bounded. Patches are optional and may only replace finite layers; they remain deterministic spatial material variation rather than a second terrain or biome field. Wasteland is explicitly dirt/gravel/stone, mountain/gorge profiles remain stone-dominant, Ocean floor uses sand/gravel/stone, and the Umbral profiles preserve their authored solid identities.
+## Phase 6 — Structures/features in progress
 
-### Deferred Phase 5 extensions
+Authoritative generation-side implementation now begins at:
 
-These do not block Phase 5 for the currently authored content:
+- `src/world/generator/structure.rs`
+- preserved generic authoring/runtime definitions in `src/content/structure.rs`
+- preserved restriction definitions in `src/content/structure_rules.rs`
+- preserved composition definitions in `src/content/structure_set.rs`
+- `src/content/dimension/types.rs` `generatedSurfaceStructures`
+- `data/dimensions/overworld/dimension.json`
 
-- a dedicated Volcano crater/caldera terrain form, if later authored;
-- additional local generated-fluid formations introduced by future biome/dimension content;
-- direct invocation of the frontier handoff, which belongs to Phase 7 chunk materialization once generated voxels actually enter the runtime world.
+### Implemented Structure foundation
 
-Any extension must continue to use the same `TerrainField`, `GeneratedFluidField`, `MaterialField`, and runtime frontier boundary rather than adding a hydrology or parallel material owner.
+`StructureField` is the single new generation-side owner for deterministic Structure placement. Runtime `/place structure` remains a manual mutation path and is not the generation owner.
+
+Implemented now:
+
+- root placements use deterministic seed/domain-addressed world-space lattice cells with authored `spacing`, `chance`, and `jitter`;
+- rules reference either a concrete Structure or an existing Structure group; group variants are frozen into the immutable generator snapshot and selected deterministically;
+- authored rotation support is selected deterministically from the Structure definition;
+- root candidates require the authoritative primary surface biome instead of resolving biome boundaries independently;
+- ground fitting consumes `TerrainQueries::surface_at` and the existing Structure support/full-footprint rules;
+- authored min/max slope, min/max Y, `groundBlocks`, `requiredBiomeCoverage`, dry-ground, fluid-forbid, and block/fluid proximity constraints consume authoritative biome/terrain/material/generated-fluid queries;
+- `StructureQueries::placements_intersecting(...)` enumerates only relevant world-space candidate cells, resolves complete logical placements, then reports placements whose actual bounds intersect the requested rectangle;
+- querying a neighboring/requesting area therefore does not clip a logical Structure to that area;
+- `StructureQueries::find_nearest(...)` searches the same authoritative root placement owner rather than creating a locate-specific resolver;
+- runtime world installation freezes the loaded `StructureRegistry` into the generator-side owner; biome/terrain diagnostic tools that do not consume Structures remain independent of Structure content.
+
+Current root authoring shape:
+
+```json
+{
+  "generatedSurfaceStructures": [
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:tree_oak",
+      "spacing": 80,
+      "chance": 0.54,
+      "jitter": 24
+    }
+  ]
+}
+```
+
+The first migrated roots are the existing Plains oak/willow groups plus small/medium/big/huge boulders, preserving their previous spacing/chance/jitter values while resolving them against the rebuilt biome, terrain, material, and generated-fluid owners.
+
+### What is intentionally incomplete in Phase 6
+
+The current `StructureField` is a foundation, not the completed Structure planner. Remaining work includes:
+
+- deterministic priority arbitration;
+- `conflictGroups` and overlap/reservation handling, including `reserveSpace` semantics;
+- `StructureSet` expansion (`relativeTo`, min/max distance, separation, attempts, overlap rules);
+- connector-chain expansion and connector strength/distance behavior;
+- preserving connected rivers, waterfalls, cavern entrances/tunnels, and other paths as generic Structures/connectors rather than creating a hydrology subsystem;
+- migration of the remaining current biome/dimension Structure root authoring beyond the first Plains slice;
+- final scalar/bounded-query seam/order validation for planned Structure graphs;
+- exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure`.
+
+Structure planning must remain independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
 
 ## Next concrete work
 
-Begin **Phase 6 — Structures/features**, not chunk synthesis.
+Continue **Phase 6 — Structures/features**, not chunk synthesis.
 
 Required direction:
 
-1. audit the preserved generic Structure definitions, StructureSets/groups, variants, placement constraints, reservations/conflict groups, and connectors that Phase 6 must consume;
-2. introduce one deterministic generation-side Structure placement/query owner in world space, independent from runtime `/place structure` mutation;
-3. make placement consume authoritative biome, terrain, and material queries rather than resolving those facts again;
-4. preserve authored spacing, priority, terrain/ground restrictions, connector chains, variants, and cross-chunk logical placements without clipping to a requesting chunk;
-5. keep rivers/waterfalls in the generic Structure/connector architecture; do not create a hydrology subsystem;
-6. expose deterministic placement/search capabilities that Phase 7 materialization and Phase 8 `/locate structure` can share.
+1. extend the existing `StructureField`; do not add a parallel planner;
+2. add deterministic priority/conflict/reservation arbitration for independently selected roots;
+3. integrate preserved `StructureSet` expansion into the same placement graph;
+4. integrate connector-chain expansion into the same placement graph, preserving generic rivers/waterfalls/connectors and avoiding any hydrology subsystem;
+5. migrate remaining authored Structure roots only through this owner;
+6. validate that overlapping bounded requests observe the same complete logical placements regardless of request origin/order;
+7. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
 
 ## Important non-regression rules
 
 - No legacy worldgen implementation may be restored for convenience.
-- No semantic generation region or chunk-owned biome/terrain truth.
+- No semantic generation region or chunk-owned biome/terrain/Structure truth.
 - No separate land/ocean ownership model.
 - No hydrology subsystem; rivers remain generic connected Structures/connectors.
-- No duplicated biome map, terrain sampler, material sampler, generated-fluid sampler, Structure placement owner, or query resolver.
+- No duplicate biome map, terrain sampler, material sampler, generated-fluid sampler, Structure planner, or query resolver.
+- Queries must remain pure, deterministic, world-coordinate anchored, and independent of generation/query order.
 - No compatibility shims for deleted generation contracts unless explicitly requested.
 - No `cargo test` in agent workflows/CI unless explicitly requested for the current task.
