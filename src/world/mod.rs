@@ -41,7 +41,9 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    content::{
+        biome::BiomeRegistry, dimension::DimensionRegistry, structure::StructureRegistry,
+    },
     player::hotbar::PlayerHotbar,
     rendering::terrain_material::TerrainLightingBuffer,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
@@ -176,7 +178,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
-                    reset_resource::<MainFrameWorkSamples>,
+                    reset_resource::<MainWorldWorkSamples>,
                     reset_resource::<MainWorldWorkSamples>,
                     reset_render_frame_work_samples,
                     reset_render_prepare_diagnostics,
@@ -253,7 +255,7 @@ impl Plugin for WorldPlugin {
                 (
                     begin_deferred_mesh_retirement_work,
                     advance_deferred_mesh_asset_retirements,
-                    finish_deferred_mesh_retirement_work.before(log_main_world_work),
+                    finish_deferred_mesh_asset_retirements.before(log_main_world_work),
                 )
                     .chain(),
             )
@@ -299,6 +301,7 @@ fn install_world_generator(
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
+    structures: Res<StructureRegistry>,
 ) {
     let definition = dimensions
         .get(current_dimension.id.as_str())
@@ -309,7 +312,12 @@ fn install_world_generator(
             )
         });
 
-    commands.insert_resource(WorldGenerator::new(seed.0, definition, &biomes));
+    commands.insert_resource(WorldGenerator::new(
+        seed.0,
+        definition,
+        &biomes,
+        &structures,
+    ));
 }
 
 fn prepare_world_session(
