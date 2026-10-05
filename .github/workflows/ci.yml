@@ -57,6 +57,9 @@ jobs:
       - name: Audit locate generator contract
         run: python3 tools/check_locate_generator_contract.py
 
+      - name: Audit destination query contract
+        run: python3 tools/check_destination_query_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
