@@ -73,11 +73,165 @@
       "jitter": 43
     },
     {
+      "biome": "asteria:overworld/swamp",
+      "structure": "asteria:tree_willow",
+      "spacing": 9,
+      "chance": 0.9,
+      "jitter": 3
+    },
+    {
+      "biome": "asteria:overworld/swamp",
+      "structure": "asteria:boulder_small",
+      "spacing": 52,
+      "chance": 0.18,
+      "jitter": 15
+    },
+    {
       "biome": "asteria:overworld/enchanted_forest",
       "structure": "asteria:enchanted_heart",
       "spacing": 1000,
       "chance": 1.0,
       "jitter": 112
+    },
+    {
+      "biome": "asteria:overworld/enchanted_forest",
+      "structure": "asteria:tree_enchanted",
+      "spacing": 12,
+      "chance": 0.66,
+      "jitter": 3
+    },
+    {
+      "biome": "asteria:overworld/enchanted_forest",
+      "structure": "asteria:boulder_small",
+      "spacing": 48,
+      "chance": 0.2,
+      "jitter": 14
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_small",
+      "spacing": 24,
+      "chance": 0.4,
+      "jitter": 7
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_medium",
+      "spacing": 40,
+      "chance": 0.3,
+      "jitter": 12
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_big",
+      "spacing": 64,
+      "chance": 0.2,
+      "jitter": 20
+    },
+    {
+      "biome": "asteria:overworld/wasteland",
+      "structure": "asteria:boulder_huge",
+      "spacing": 104,
+      "chance": 0.1,
+      "jitter": 32
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_small",
+      "spacing": 28,
+      "chance": 0.34,
+      "jitter": 8
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_medium",
+      "spacing": 44,
+      "chance": 0.27,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_big",
+      "spacing": 68,
+      "chance": 0.18,
+      "jitter": 21
+    },
+    {
+      "biome": "asteria:overworld/mountains",
+      "structure": "asteria:boulder_huge",
+      "spacing": 108,
+      "chance": 0.1,
+      "jitter": 33
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_small",
+      "spacing": 30,
+      "chance": 0.3,
+      "jitter": 9
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_medium",
+      "spacing": 48,
+      "chance": 0.24,
+      "jitter": 14
+    },
+    {
+      "biome": "asteria:overworld/gorge",
+      "structure": "asteria:boulder_big",
+      "spacing": 78,
+      "chance": 0.16,
+      "jitter": 23
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_medium",
+      "spacing": 42,
+      "chance": 0.25,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_big",
+      "spacing": 64,
+      "chance": 0.19,
+      "jitter": 20
+    },
+    {
+      "biome": "asteria:overworld/alps",
+      "structure": "asteria:boulder_huge",
+      "spacing": 102,
+      "chance": 0.11,
+      "jitter": 31
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_small",
+      "spacing": 28,
+      "chance": 0.32,
+      "jitter": 8
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_medium",
+      "spacing": 44,
+      "chance": 0.26,
+      "jitter": 13
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_big",
+      "spacing": 70,
+      "chance": 0.17,
+      "jitter": 21
+    },
+    {
+      "biome": "asteria:overworld/mountain_belt",
+      "structure": "asteria:boulder_huge",
+      "spacing": 112,
+      "chance": 0.09,
+      "jitter": 34
     }
   ]
 }
