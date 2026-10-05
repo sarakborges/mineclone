@@ -356,7 +356,7 @@ fn run_structure_debug_cli() -> bool {
         &loaded.structures,
         &loaded.structure_sets,
     );
-    let report = validate_structure_debug(generator.structures(), &config);
+    let report = validate_structure_debug(generator.biomes(), generator.structures(), &config);
     report
         .save(&output)
         .unwrap_or_else(|error| panic!("{error}"));
