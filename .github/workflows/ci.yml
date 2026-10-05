@@ -103,3 +103,17 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      # Temporary Phase 12 evidence collection. Remove after the first baseline
+      # is recorded in the rebuild status; these timings are not CI thresholds.
+      - name: Collect Phase 12 worldgen benchmark baseline
+        run: |
+          mkdir -p target/worldgen-benchmarks
+          cargo run --locked -- --worldgen-benchmark --seed 0 --dimension asteria:overworld --output target/worldgen-benchmarks/overworld-seed-0.json --samples 512 --area-size 32 --search-radius 4096
+          cargo run --locked -- --worldgen-benchmark --seed 1 --dimension asteria:overworld --output target/worldgen-benchmarks/overworld-seed-1.json --samples 512 --area-size 32 --search-radius 4096
+          cargo run --locked -- --worldgen-benchmark --seed 42 --dimension asteria:overworld --output target/worldgen-benchmarks/overworld-seed-42.json --samples 512 --area-size 32 --search-radius 4096
+          cargo run --locked -- --worldgen-benchmark --seed 0 --dimension asteria:umbral --output target/worldgen-benchmarks/umbral-seed-0.json --samples 512 --area-size 32 --search-radius 4096
+          for report in target/worldgen-benchmarks/*.json; do
+            echo "===== ${report} ====="
+            cat "${report}"
+          done
