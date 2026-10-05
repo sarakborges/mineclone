@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `c3c07e0604d08514e6b881a62b772d1f9d152d05` (`Migrate remaining surface structure roots`), including connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`) and `f61ae00b0ab8578fa364bbfad3a55a804cab9f5f` (`Integrate connector chains into StructureField`). Rust validation run `37307474283` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
+Code baseline recorded here: `6231b58e91d62df290a392de89e87bdd760b6f54` (`Add biome-margin Structure roots`), including connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`) and the complete simple-root migration at `c3c07e0604d08514e6b881a62b772d1f9d152d05` (`Migrate remaining surface structure roots`). Rust validation run `37310832213` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
 
 ## Validation policy
 
@@ -25,7 +25,7 @@ Repository validation follows root `AGENTS.md`.
 | 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
-| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, and all current lattice/biome surface roots. World-fact-relative connected roots plus final placement-graph seam/order validation remain pending. |
+| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, all current simple surface roots, and generic biome-margin roots. Ocean margins now seed river-mouth graphs; remaining connected-feature roots plus final placement-graph seam/order validation are pending. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
@@ -124,9 +124,14 @@ Authoritative generation-side implementation:
 Implemented now:
 
 - root placements use deterministic seed/domain-addressed world-space lattice cells with authored `spacing`, `chance`, and `jitter`;
+- root placement authoring now supports `placement = biomeInterior` (default) and `placement = biomeMargin` without creating another Structure planner;
+- `biomeMargin` keeps the same deterministic world-space lattice but uses its jittered cell point only as a selection hint: the root resolver samples authoritative primary-biome facts inside that cell, refines a detected cardinal boundary to adjacent inside/outside voxels, and chooses the exterior boundary voxel nearest that hint;
+- `biomeMargin` orientation is derived from the authoritative inside-to-outside cardinal normal, so an authored Structure's `front` points away from the referenced biome; it does not independently infer another biome boundary field;
+- a generated-fluid-backed biome margin can use the existing dimension `seaLevel` as the root ground plane only when the target-side voxel actually contains generated fluid there; this keeps an Ocean mouth at the generated water surface instead of fitting it to the Ocean floor, while connector children return to ordinary terrain ground fitting;
+- `biomeMargin` currently resolves concrete Structures/Structure groups only and requires every possible member to support all four horizontal rotations; StructureSets remain on ordinary authored roots until a real content requirement justifies a set-level margin contract;
 - a root reference may resolve to a concrete Structure, Structure group, or `StructureSet`; all referenced definitions/variants are frozen into the immutable generator snapshot;
 - authored Structure rotation and group variation are deterministic;
-- root candidates require the authoritative primary surface biome instead of resolving biome boundaries independently;
+- ordinary biome-interior root candidates require the authoritative primary surface biome instead of resolving biome boundaries independently;
 - ground fitting consumes `TerrainQueries::surface_at` and the existing Structure support/full-footprint rules;
 - authored min/max slope, min/max Y, `groundBlocks`, `requiredBiomeCoverage`, dry-ground, fluid-forbid, and block/fluid proximity constraints consume authoritative biome/terrain/material/generated-fluid queries;
 - root arbitration is intent-based: a candidate is rejected whenever a directly overlapping higher-ranked conflicting intent exists, regardless of whether that higher-ranked intent would itself later survive another conflict;
@@ -152,18 +157,19 @@ Implemented now:
 - runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner;
 - all current simple surface-biome roots from the preserved Overworld authoring have been migrated into `generatedSurfaceStructures`: Plains oak/willow and four boulder sizes; Swamp willow plus small boulders; Enchanted Forest heart, enchanted trees, and small boulders; Wasteland four boulder sizes; Mountains four boulder sizes; Gorge small/medium/big boulders; Alps medium/big/huge boulders; and Mountain Belt four boulder sizes;
 - those migrated roots preserve their historical spacing/chance/jitter values while resolving exclusively through the rebuilt `StructureField`;
-- Arctic, Desert, Ocean, Volcano, and Floating Islands had no simple surface roots in the preserved authoring and therefore do not receive invented lattice roots;
-- the current Umbral dimension authors no Structure roots, so none are restored implicitly.
+- Arctic, Desert, Ocean, Volcano, and Floating Islands had no simple biome-interior surface roots in the preserved authoring and therefore do not receive invented interior roots;
+- the current Umbral dimension authors no Structure roots, so none are restored implicitly;
+- Overworld now authors `asteria:river_ocean_mouth` as a `biomeMargin` root of `asteria:overworld/ocean` with current tuning `spacing = 192`, `chance = 0.55`, `jitter = 48`; its connector expands ordinary `asteria:river_segment` Structures through the same generic connector graph and arbitration path.
 
-Connector-capable definitions such as river segments remain generic Structure content. Their chain semantics are integrated, but rivers/waterfalls/cavern paths still need generic world-fact-relative root placement rather than pretending they are ordinary interior biome lattice roots.
+Rivers still have no dedicated source graph, downstream rasterizer, or hydrology owner. Ocean mouths are ordinary margin-relative Structure roots, lake Structures already carry ordinary river-segment output connectors, and every resulting connected piece remains part of the same `StructureField` logical graph.
 
 ### What is intentionally incomplete in Phase 6
 
-The current `StructureField` owns direct roots, StructureSets, connector-expanded logical graphs, and all current simple lattice/biome roots, but Phase 6 is not complete. Remaining work includes:
+The current `StructureField` owns direct roots, StructureSets, connector-expanded logical graphs, all current simple lattice/biome roots, and generic biome-margin roots, but Phase 6 is not complete. Remaining work includes:
 
-- generic Structure root placement relative to authoritative world facts where connected features require it, especially water-body margins/endpoints for rivers;
-- migration of rivers, waterfalls, cavern entrances/tunnels, and other connected features only through ordinary Structure/connector graphs;
-- final scalar/bounded-query seam/order validation for complete planned Structure graphs;
+- migration/authoring of the remaining connected-feature roots required by current content, including lake roots and any waterfall/cavern entrance or tunnel roots that should enter generation;
+- extending world-fact-relative root placement only when those concrete features require a fact other than biome margins; do not create feature-specific planners;
+- final scalar/bounded-query seam/order validation for complete planned Structure graphs, including connector chains rooted at biome margins;
 - exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure`.
 
 Structure planning must remain independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
@@ -174,9 +180,9 @@ Continue **Phase 6 — Structures/features**, not chunk synthesis.
 
 Required direction:
 
-1. extend the existing generic Structure root-placement authoring with a world-fact-relative placement mode; do not add a parallel planner or hydrology owner;
-2. first support deterministic water-body-margin roots so Ocean/lake margins can author river-mouth connectors with normal spacing/chance/jitter;
-3. reuse the same mechanism for other connected features such as waterfalls/cavern entrances where their placement is relative to authoritative terrain/material facts;
+1. inspect the remaining connected Structure content and migrate/author only the roots actually required for lakes, waterfalls, cavern entrances/tunnels, and similar features;
+2. reuse ordinary biome-interior roots, `biomeMargin`, StructureSets, and connectors wherever those contracts already express the placement; add another generic world-fact-relative placement mode only when a real remaining feature cannot be represented by them;
+3. keep rivers/waterfalls generic Structure/connector graphs and do not introduce a hydrology subsystem;
 4. keep connector-expanded graph arbitration under the existing root/Set priority/conflict/reservation owner;
 5. add final deterministic seam/order validation proving overlapping bounded requests observe the same complete logical graph regardless of request origin/order;
 6. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
