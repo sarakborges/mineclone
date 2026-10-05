@@ -72,7 +72,7 @@ required_world = {
     "new-world shell is prepared before generator installation": "prepare_world_session,install_world_generator",
     "new worlds reserve canonical persisted identity": "create_new_world(",
     "new worlds install an empty runtime voxel world": "commands.insert_resource(VoxelWorld::default());",
-    "new worlds initialize in-memory save ownership": ".begin_new_world(seed,context.current_dimension.id.as_str(),rules);",
+    "new worlds initialize in-memory save ownership": "context.save.begin_new_world(seed,&dimension_id,rules);",
     "session release returns future entry to New mode": "commands.insert_resource(WorldLoadMode::New);",
 }
 for description, fragment in required_world.items():
