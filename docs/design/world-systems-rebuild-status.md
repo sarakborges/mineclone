@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `895c29c2dfd81951fe6beadc1b7dcdc6c89a01e7` (`Fix connector graph compile gate`), including connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`) and `f61ae00b0ab8578fa364bbfad3a55a804cab9f5f` (`Integrate connector chains into StructureField`). Rust validation run `37306128853` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
+Code baseline recorded here: `c3c07e0604d08514e6b881a62b772d1f9d152d05` (`Migrate remaining surface structure roots`), including connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`) and `f61ae00b0ab8578fa364bbfad3a55a804cab9f5f` (`Integrate connector chains into StructureField`). Rust validation run `37307474283` completed successfully for that baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
 
 ## Validation policy
 
@@ -25,7 +25,7 @@ Repository validation follows root `AGENTS.md`.
 | 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
-| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, and connector-chain expansion. Remaining root migration plus final placement-graph seam/order validation are still pending. |
+| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, and all current lattice/biome surface roots. World-fact-relative connected roots plus final placement-graph seam/order validation remain pending. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
@@ -149,17 +149,20 @@ Implemented now:
 - `StructureQueries::placements_intersecting(...)` plans/arbitrates complete logical graphs first and only then returns surviving pieces intersecting the requested rectangle;
 - a multi-piece Set/connector graph can therefore cross a future chunk/request boundary without that boundary changing its composition or arbitration result;
 - `StructureQueries::find_nearest(...)` measures distance to the logical root anchor and reuses the same accepted placement graph; the representative returned piece retains that logical `placement_anchor`;
-- runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner.
+- runtime world installation freezes both `StructureRegistry` and `StructureSetRegistry` into the generator-side owner;
+- all current simple surface-biome roots from the preserved Overworld authoring have been migrated into `generatedSurfaceStructures`: Plains oak/willow and four boulder sizes; Swamp willow plus small boulders; Enchanted Forest heart, enchanted trees, and small boulders; Wasteland four boulder sizes; Mountains four boulder sizes; Gorge small/medium/big boulders; Alps medium/big/huge boulders; and Mountain Belt four boulder sizes;
+- those migrated roots preserve their historical spacing/chance/jitter values while resolving exclusively through the rebuilt `StructureField`;
+- Arctic, Desert, Ocean, Volcano, and Floating Islands had no simple surface roots in the preserved authoring and therefore do not receive invented lattice roots;
+- the current Umbral dimension authors no Structure roots, so none are restored implicitly.
 
-Current migrated roots remain the existing Plains oak/willow groups plus small/medium/big/huge boulders and the Enchanted Forest `asteria:enchanted_heart` StructureSet. Connector-capable definitions such as river segments remain generic Structure content; this milestone integrates their generic chain semantics but does not yet invent or migrate a river-specific root-placement subsystem.
+Connector-capable definitions such as river segments remain generic Structure content. Their chain semantics are integrated, but rivers/waterfalls/cavern paths still need generic world-fact-relative root placement rather than pretending they are ordinary interior biome lattice roots.
 
 ### What is intentionally incomplete in Phase 6
 
-The current `StructureField` owns direct roots, StructureSets, and connector-expanded logical graphs, but Phase 6 is not complete. Remaining work includes:
+The current `StructureField` owns direct roots, StructureSets, connector-expanded logical graphs, and all current simple lattice/biome roots, but Phase 6 is not complete. Remaining work includes:
 
-- migration of the remaining current biome/dimension Structure root authoring through the same owner;
-- where connector roots need placement relative to other world facts such as water-body margins, extending the generic Structure-placement authoring/query contract rather than creating a hydrology subsystem;
-- preserving rivers, waterfalls, cavern entrances/tunnels, and other connected features as ordinary Structure/connector graphs;
+- generic Structure root placement relative to authoritative world facts where connected features require it, especially water-body margins/endpoints for rivers;
+- migration of rivers, waterfalls, cavern entrances/tunnels, and other connected features only through ordinary Structure/connector graphs;
 - final scalar/bounded-query seam/order validation for complete planned Structure graphs;
 - exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure`.
 
@@ -171,11 +174,12 @@ Continue **Phase 6 — Structures/features**, not chunk synthesis.
 
 Required direction:
 
-1. extend the existing generic Structure root-placement authoring only where remaining content requires placement relative to authoritative world facts; do not add a parallel planner or hydrology owner;
-2. migrate remaining authored Structure roots through `StructureField`, including connected rivers/waterfalls/cavern paths only through generic Structure/connector semantics;
-3. keep connector-expanded graph arbitration under the existing root/Set priority/conflict/reservation owner;
-4. add final deterministic seam/order validation proving overlapping bounded requests observe the same complete logical graph regardless of request origin/order;
-5. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
+1. extend the existing generic Structure root-placement authoring with a world-fact-relative placement mode; do not add a parallel planner or hydrology owner;
+2. first support deterministic water-body-margin roots so Ocean/lake margins can author river-mouth connectors with normal spacing/chance/jitter;
+3. reuse the same mechanism for other connected features such as waterfalls/cavern entrances where their placement is relative to authoritative terrain/material facts;
+4. keep connector-expanded graph arbitration under the existing root/Set priority/conflict/reservation owner;
+5. add final deterministic seam/order validation proving overlapping bounded requests observe the same complete logical graph regardless of request origin/order;
+6. only after Phase 6 is complete move to Phase 7 `VoxelChunk` synthesis.
 
 ## Important non-regression rules
 
