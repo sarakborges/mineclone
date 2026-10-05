@@ -39,6 +39,9 @@ jobs:
       - name: Audit GLB assets
         run: python3 tools/check_glb_assets.py
 
+      - name: Audit Structure query contract
+        run: python3 tools/check_structure_query_contract.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
