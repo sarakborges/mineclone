@@ -2,12 +2,15 @@ mod generation;
 mod residency;
 mod selection;
 
+use std::cmp::Reverse;
+
 use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
 
 use crate::{
+    app::{game_state::GameState, resource_systems::reset_resource},
     content::fluid::FluidRegistry,
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
@@ -23,10 +26,42 @@ use self::{
     selection::desired_chunk_coords,
 };
 use super::{
-    fluid_updates::PendingFluidUpdates, generator::WorldGenerator,
-    render_distance::RenderDistanceSettings, tick::WorldTickClock, warp::PendingWarp,
-    work_budget::WorldFrameWorkBudget,
+    chunk_unloading::evict_distant_chunks,
+    fluid_updates::PendingFluidUpdates,
+    generator::WorldGenerator,
+    render_distance::RenderDistanceSettings,
+    tick::WorldTickClock,
+    warp::{PendingWarp, resolve_pending_warp},
+    work_budget::{WorldFrameWorkBudget, begin_world_frame_work_budget},
 };
+
+pub(super) struct ChunkStreamingPlugin;
+
+impl Plugin for ChunkStreamingPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ChunkMaterializationTasks>()
+            .add_systems(
+                OnEnter(GameState::Loading),
+                reset_resource::<ChunkMaterializationTasks>,
+            )
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                reset_resource::<ChunkMaterializationTasks>,
+            )
+            .add_systems(
+                OnExit(GameState::Gameplay),
+                reset_resource::<ChunkMaterializationTasks>,
+            )
+            .add_systems(
+                Update,
+                stream_chunks
+                    .after(begin_world_frame_work_budget)
+                    .before(resolve_pending_warp)
+                    .before(evict_distant_chunks)
+                    .run_if(in_state(GameState::Gameplay)),
+            );
+    }
+}
 
 pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
 
@@ -81,7 +116,7 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn has_renderable_streaming_backlog(&self) -> bool {
-        !self.pending.values().next().is_none() || !self.materializing.is_empty()
+        self.pending.len() > 0 || !self.materializing.is_empty()
     }
 
     pub(super) fn mesh_pressure_evicted_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
@@ -123,8 +158,8 @@ impl ChunkStreamingState {
             .filter(|coord| !desired.contains(coord))
             .collect::<Vec<_>>();
         retired.sort_unstable_by_key(|coord| {
-            let delta = *coord - center;
-            (Reverse(delta.length_squared()), coord.y, coord.z, coord.x)
+            let priority = chunk_load_priority(*coord, center, IVec2::ZERO);
+            (Reverse(priority.1), coord.y, coord.z, coord.x)
         });
         for coord in retired {
             self.residency.enqueue_retired(coord);
@@ -172,7 +207,10 @@ impl ChunkStreamingState {
 
     pub(super) fn mark_materializing(&mut self, coord: IVec3) {
         let inserted = self.materializing.insert(coord);
-        debug_assert!(inserted, "chunk cannot materialize twice concurrently: {coord:?}");
+        debug_assert!(
+            inserted,
+            "chunk cannot materialize twice concurrently: {coord:?}"
+        );
     }
 
     pub(super) fn finish_materializing(&mut self, coord: IVec3) {
