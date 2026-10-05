@@ -63,7 +63,10 @@ use ui::UiDesignSystemPlugin;
 use voxel::block_gravity::BlockGravityPlugin;
 use world::{
     WorldPlugin,
-    generator::{BiomeMapConfig, WorldGenerator, render_biome_map},
+    generator::{
+        BiomeMapConfig, TerrainDebugConfig, WorldGenerator, render_biome_map,
+        render_terrain_debug,
+    },
 };
 use world_items::WorldItemsPlugin;
 use world_objects::WorldObjectsPlugin;
@@ -82,7 +85,7 @@ fn main() {
 
 fn run_game() {
     prepare_runtime_directory();
-    if run_biome_map_cli() {
+    if run_biome_map_cli() || run_terrain_debug_cli() {
         return;
     }
     log_system_event(format!(
@@ -214,6 +217,77 @@ fn run_biome_map_cli() -> bool {
         "biome map saved: {} (legend: {})",
         output.display(),
         output.with_extension("legend.json").display()
+    );
+    true
+}
+
+fn run_terrain_debug_cli() -> bool {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if !arguments.iter().any(|argument| argument == "--terrain-debug") {
+        return false;
+    }
+
+    let mut seed = 0_u64;
+    let mut dimension_id = OVERWORLD_DIMENSION_ID.to_owned();
+    let mut output = PathBuf::from("terrain-debug.png");
+    let mut config = TerrainDebugConfig::default();
+    let mut index = 0;
+    while index < arguments.len() {
+        match arguments[index].as_str() {
+            "--terrain-debug" => {}
+            "--seed" => {
+                index += 1;
+                seed = parse_cli_value(&arguments, index, "--seed");
+            }
+            "--dimension" => {
+                index += 1;
+                dimension_id = cli_value(&arguments, index, "--dimension").to_owned();
+            }
+            "--output" => {
+                index += 1;
+                output = PathBuf::from(cli_value(&arguments, index, "--output"));
+            }
+            "--center-x" => {
+                index += 1;
+                config.center_x = parse_cli_value(&arguments, index, "--center-x");
+            }
+            "--center-y" => {
+                index += 1;
+                config.center_y = parse_cli_value(&arguments, index, "--center-y");
+            }
+            "--center-z" => {
+                index += 1;
+                config.center_z = parse_cli_value(&arguments, index, "--center-z");
+            }
+            "--scale" => {
+                index += 1;
+                config.blocks_per_pixel = parse_cli_value(&arguments, index, "--scale");
+            }
+            "--width" => {
+                index += 1;
+                config.width = parse_cli_value(&arguments, index, "--width");
+            }
+            "--height" => {
+                index += 1;
+                config.height = parse_cli_value(&arguments, index, "--height");
+            }
+            unknown => panic!("unknown terrain-debug argument {unknown}"),
+        }
+        index += 1;
+    }
+
+    let loaded = content::read_content();
+    let dimension = loaded.dimensions.get(&dimension_id).unwrap_or_else(|| {
+        panic!("terrain debug references missing dimension {dimension_id}")
+    });
+    let generator = WorldGenerator::new(seed, dimension, &loaded.biomes);
+    let render = render_terrain_debug(generator.terrain(), &config);
+    render
+        .save(&output)
+        .unwrap_or_else(|error| panic!("{error}"));
+    println!(
+        "terrain debug saved: {} (density slice and metadata saved beside it)",
+        output.display()
     );
     true
 }
