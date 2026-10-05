@@ -43,6 +43,7 @@ use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         biome::BiomeRegistry, dimension::DimensionRegistry, structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     player::hotbar::PlayerHotbar,
     rendering::terrain_material::TerrainLightingBuffer,
@@ -303,6 +304,7 @@ fn install_world_generator(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     structures: Res<StructureRegistry>,
+    structure_sets: Res<StructureSetRegistry>,
 ) {
     let definition = dimensions
         .get(current_dimension.id.as_str())
@@ -318,6 +320,7 @@ fn install_world_generator(
         definition,
         &biomes,
         &structures,
+        &structure_sets,
     ));
 }
 
