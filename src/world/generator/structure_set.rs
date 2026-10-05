@@ -138,7 +138,7 @@ impl CompiledStructureSet {
                     ^ (element_index as u64).wrapping_mul(ELEMENT_HASH_SALT),
             );
 
-            if unit_probability(element_hash) >= f64::from(element.chance) {
+            if !chance_selects(element.chance, element_hash) {
                 if element.required && element.count.min > 0 {
                     return None;
                 }
@@ -340,6 +340,10 @@ fn rectangles_overlap(
         && left_maximum.x >= right_minimum.x
         && left_minimum.y <= right_maximum.y
         && left_maximum.y >= right_minimum.y
+}
+
+fn chance_selects(chance: f32, value: u64) -> bool {
+    chance >= 1.0 || (chance > 0.0 && unit_probability(value) < f64::from(chance))
 }
 
 fn unit_probability(value: u64) -> f64 {
