@@ -325,7 +325,10 @@ fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntim
         .streaming_center()
         .unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = inputs.render_distance.chunks();
+    let horizontal_radius = inputs
+        .pending_warp
+        .streaming_horizontal_radius()
+        .unwrap_or_else(|| inputs.render_distance.chunks());
     runtime
         .presentation_selection
         .sync_from_streaming(Some(center), horizontal_radius);
