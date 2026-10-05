@@ -26,7 +26,7 @@ use generated_fluid::GeneratedFluidField;
 pub(crate) use material::MaterialQueries;
 use material::MaterialField;
 pub(crate) use structure::StructureQueries;
-use structure::StructureField;
+use structure::{StructureAuthoring, StructureField};
 pub(crate) use terrain::TerrainQueries;
 use terrain::TerrainField;
 pub(crate) use terrain_debug::{TerrainDebugConfig, render_terrain_debug};
@@ -137,13 +137,15 @@ impl WorldGenerator {
         ));
         let structures = Arc::new(StructureField::new(
             &snapshot,
-            biome_registry,
-            structure_registry,
-            structure_set_registry,
+            StructureAuthoring {
+                biomes: biome_registry,
+                structures: structure_registry,
+                structure_sets: structure_set_registry,
+                roots: generated_surface_structures,
+            },
             Arc::clone(&biomes),
             Arc::clone(&terrain),
             Arc::clone(&materials),
-            generated_surface_structures,
         ));
         Self {
             snapshot: Arc::new(snapshot),
