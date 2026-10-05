@@ -42,8 +42,8 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
-        biome::BiomeRegistry, dimension::DimensionRegistry, structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
+        fluid::FluidRegistry, structure::StructureRegistry, structure_set::StructureSetRegistry,
     },
     player::hotbar::PlayerHotbar,
     rendering::terrain_material::TerrainLightingBuffer,
@@ -303,6 +303,8 @@ fn install_world_generator(
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
+    blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
     structures: Res<StructureRegistry>,
     structure_sets: Res<StructureSetRegistry>,
 ) {
@@ -315,10 +317,12 @@ fn install_world_generator(
             )
         });
 
-    commands.insert_resource(WorldGenerator::new_with_structures(
+    commands.insert_resource(WorldGenerator::new_runtime(
         seed.0,
         definition,
         &biomes,
+        &blocks,
+        &fluids,
         &structures,
         &structure_sets,
     ));

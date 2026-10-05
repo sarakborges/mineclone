@@ -1,5 +1,6 @@
 mod biome;
 mod biome_map;
+mod chunk;
 mod foundation;
 mod generated_fluid;
 mod material;
@@ -11,17 +12,21 @@ mod terrain_debug;
 
 use std::sync::Arc;
 
-use bevy::prelude::Resource;
+use bevy::prelude::{IVec3, Resource};
 
 use crate::content::{
     biome::BiomeRegistry,
+    block::BlockRegistry,
     dimension::{DimensionDefinition, GeneratedOceanDefinition, GeneratedSurfaceFluidDefinition},
+    fluid::FluidRegistry,
     structure::StructureRegistry,
     structure_set::StructureSetRegistry,
 };
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
+pub(crate) use chunk::{GeneratedFluidFrontierTarget, MaterializedChunk};
+use chunk::{ChunkMaterializer, ChunkRuntimeContent};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 use generated_fluid::GeneratedFluidField;
 pub(crate) use material::MaterialQueries;
@@ -45,11 +50,12 @@ pub(crate) struct WorldGenerator {
     terrain: Arc<TerrainField>,
     materials: Arc<MaterialField>,
     structures: Arc<StructureField>,
+    chunk_materializer: Option<Arc<ChunkMaterializer>>,
 }
 
 impl WorldGenerator {
     /// Generator used by diagnostic/query paths that do not consume authored
-    /// Structures. Runtime world installation uses `new_with_structures`.
+    /// Structures or runtime chunk encoding registries.
     pub(crate) fn new(
         seed: u64,
         dimension: &DimensionDefinition,
@@ -69,9 +75,11 @@ impl WorldGenerator {
             dimension.generated_ocean.as_ref(),
             &dimension.generated_surface_fluids,
             &[],
+            None,
         )
     }
 
+    /// Query/debug generator with authored Structures but no runtime chunk encoder.
     pub(crate) fn new_with_structures(
         seed: u64,
         dimension: &DimensionDefinition,
@@ -91,6 +99,37 @@ impl WorldGenerator {
             dimension.generated_ocean.as_ref(),
             &dimension.generated_surface_fluids,
             &dimension.generated_surface_structures,
+            None,
+        )
+    }
+
+    /// Runtime generator with a frozen adapter capable of materializing `VoxelChunk` values.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new_runtime(
+        seed: u64,
+        dimension: &DimensionDefinition,
+        biome_registry: &BiomeRegistry,
+        block_registry: &BlockRegistry,
+        fluid_registry: &FluidRegistry,
+        structure_registry: &StructureRegistry,
+        structure_set_registry: &StructureSetRegistry,
+    ) -> Self {
+        let snapshot = GenerationSnapshot::new(
+            GenerationSeed::new(seed),
+            GenerationDimension::from_definition(dimension),
+        );
+        Self::from_snapshot_with_content(
+            snapshot,
+            biome_registry,
+            structure_registry,
+            structure_set_registry,
+            dimension.generated_ocean.as_ref(),
+            &dimension.generated_surface_fluids,
+            &dimension.generated_surface_structures,
+            Some(ChunkRuntimeContent {
+                blocks: block_registry,
+                fluids: fluid_registry,
+            }),
         )
     }
 
@@ -105,9 +144,11 @@ impl WorldGenerator {
             None,
             &[],
             &[],
+            None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn from_snapshot_with_content(
         snapshot: GenerationSnapshot,
         biome_registry: &BiomeRegistry,
@@ -116,6 +157,7 @@ impl WorldGenerator {
         generated_ocean: Option<&GeneratedOceanDefinition>,
         generated_surface_fluids: &[GeneratedSurfaceFluidDefinition],
         generated_surface_structures: &[crate::content::dimension::GeneratedSurfaceStructureDefinition],
+        chunk_runtime: Option<ChunkRuntimeContent<'_>>,
     ) -> Self {
         let biomes = Arc::new(BiomeLayout::new(&snapshot, biome_registry));
         let generated_fluids = Arc::new(GeneratedFluidField::new(
@@ -149,12 +191,22 @@ impl WorldGenerator {
             Arc::clone(&terrain),
             Arc::clone(&materials),
         ));
+        let chunk_materializer = chunk_runtime.map(|content| {
+            Arc::new(ChunkMaterializer::new(
+                &snapshot,
+                Arc::clone(&materials),
+                Arc::clone(&structures),
+                structure_registry,
+                content,
+            ))
+        });
         Self {
             snapshot: Arc::new(snapshot),
             biomes,
             terrain,
             materials,
             structures,
+            chunk_materializer,
         }
     }
 
@@ -172,6 +224,16 @@ impl WorldGenerator {
 
     pub(crate) fn structures(&self) -> StructureQueries<'_> {
         self.structures.queries()
+    }
+
+    /// Materializes one 16³ runtime chunk without making the chunk a semantic owner.
+    ///
+    /// This capability exists only on runtime generators built by `new_runtime`.
+    pub(crate) fn materialize_chunk(&self, coord: IVec3) -> MaterializedChunk {
+        self.chunk_materializer
+            .as_ref()
+            .expect("chunk materialization requires a runtime WorldGenerator")
+            .materialize(coord)
     }
 
     /// Internal-only generated-world read boundary.
