@@ -34,6 +34,25 @@ const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 
+/// Runtime handoff for one exposed empty neighbor of generated fluid.
+///
+/// Future chunk synthesis calls this only for generated-fluid frontier targets,
+/// never once per filled generated-fluid voxel. The normal runtime scheduler
+/// revalidates target eligibility before assigning the authored fluid delay, so
+/// publication and runtime simulation keep separate ownership.
+#[allow(dead_code)]
+pub(crate) fn enqueue_generated_fluid_frontier(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    fluid: &str,
+    position: IVec3,
+) {
+    let fluid_id = fluids
+        .id_of(fluid)
+        .unwrap_or_else(|| panic!("generated fluid frontier references missing fluid {fluid}"));
+    pending.enqueue_fluid(fluid_id, position);
+}
+
 #[derive(SystemParam)]
 pub(super) struct FluidSimulationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
