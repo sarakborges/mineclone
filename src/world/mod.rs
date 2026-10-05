@@ -39,16 +39,17 @@ pub(crate) mod warp;
 mod work_budget;
 pub(crate) mod world_names;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, prelude::*, render::storage::ShaderBuffer};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, structure::StructureRegistry, structure_set::StructureSetRegistry,
+        fluid::FluidRegistry, layer::LayerRegistry, structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     player::hotbar::PlayerHotbar,
-    rendering::terrain_material::TerrainLightingBuffer,
+    rendering::terrain_material::{TerrainLightingBuffer, TerrainMaterial},
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
 use chunk_async_work::{ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work};
@@ -106,6 +107,9 @@ use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 use warp::{PendingWarp, resolve_pending_warp};
 pub(crate) use work_budget::WorldFrameWorkBudget;
 use work_budget::begin_world_frame_work_budget;
+
+const DEFAULT_TERRAIN_ROUGHNESS: f32 = 0.98;
+const DEFAULT_TERRAIN_METALLIC: f32 = 0.0;
 
 pub(crate) struct WorldPlugin;
 
@@ -168,6 +172,7 @@ impl Plugin for WorldPlugin {
                     reset_chunk_async_work_limit,
                     prepare_world_session,
                     install_world_generator,
+                    install_world_render_resources,
                 )
                     .chain(),
             )
@@ -220,12 +225,18 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 Update,
-                begin_world_frame_work_budget.run_if(in_state(GameState::Loading)),
+                (
+                    begin_world_frame_work_budget,
+                    prepare_world_render_assets,
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Loading)),
             )
             .add_systems(
                 Update,
                 (
                     begin_world_frame_work_budget,
+                    prepare_world_render_assets,
                     begin_retirement_work,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
@@ -338,6 +349,64 @@ fn install_world_generator(
         &content.structures,
         &content.structure_sets,
     ));
+}
+
+#[derive(SystemParam)]
+struct WorldRenderBootstrap<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    asset_server: Res<'w, AssetServer>,
+    images: ResMut<'w, Assets<Image>>,
+    terrain_material_assets: ResMut<'w, Assets<TerrainMaterial>>,
+    shader_buffers: ResMut<'w, Assets<ShaderBuffer>>,
+    terrain_lighting: Option<Res<'w, TerrainLightingBuffer>>,
+    terrain_materials: Option<Res<'w, TerrainMaterials>>,
+    fluid_materials: Option<Res<'w, FluidMaterials>>,
+}
+
+fn install_world_render_resources(mut commands: Commands, mut content: WorldRenderBootstrap) {
+    let already_installed = content.terrain_lighting.is_some()
+        && content.terrain_materials.is_some()
+        && content.fluid_materials.is_some();
+    if already_installed {
+        return;
+    }
+    assert!(
+        content.terrain_lighting.is_none()
+            && content.terrain_materials.is_none()
+            && content.fluid_materials.is_none(),
+        "world render resources must be installed or absent as one coherent set"
+    );
+
+    let terrain_lighting = TerrainLightingBuffer::new(&mut content.shader_buffers);
+    let terrain_materials = TerrainMaterials::from_registry(
+        &content.blocks,
+        &content.layers,
+        &content.asset_server,
+        &mut content.images,
+        &mut content.terrain_material_assets,
+        &terrain_lighting,
+        DEFAULT_TERRAIN_ROUGHNESS,
+        DEFAULT_TERRAIN_METALLIC,
+    );
+    let fluid_materials = FluidMaterials::from_registry(
+        &content.fluids,
+        &mut content.terrain_material_assets,
+        &terrain_lighting,
+        terrain_materials.texture_array_handle(),
+    );
+
+    commands.insert_resource(terrain_lighting);
+    commands.insert_resource(terrain_materials);
+    commands.insert_resource(fluid_materials);
+}
+
+fn prepare_world_render_assets(
+    terrain_materials: Res<TerrainMaterials>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let _ = terrain_materials.ensure_texture_array_ready(&mut images);
 }
 
 #[derive(SystemParam)]
