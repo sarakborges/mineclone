@@ -104,5 +104,21 @@ jobs:
       - name: Check
         run: cargo check --locked
 
+      - name: Record world rebuild performance baseline
+        run: |
+          cargo run --locked --bin asteria -- --worldgen-benchmark \
+            --seed 181960897289965 \
+            --dimension asteria:overworld \
+            --center-x 0 --center-z 0 \
+            --far-x 250000 --far-z -250000 \
+            --output worldgen-benchmark-overworld.json
+          cat worldgen-benchmark-overworld.json
+
+      - name: Upload world rebuild performance baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-rebuild-performance-baseline
+          path: worldgen-benchmark-overworld.json
+
       - name: Smoke world rebuild lifecycle
         run: cargo run --locked --bin world-rebuild-smoke
