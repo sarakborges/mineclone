@@ -68,8 +68,9 @@ for description, fragment in required_generation.items():
     require(fragment in generation, description)
 
 required_world = {
-    "loading receives a fresh frame work budget": "begin_world_frame_work_budget.run_if(in_state(GameState::Loading))",
+    "loading receives a fresh frame work budget and advances render assets": "begin_world_frame_work_budget,prepare_world_render_assets,).chain().run_if(in_state(GameState::Loading))",
     "new-world shell is prepared before generator installation": "prepare_world_session,install_world_generator",
+    "render resources are installed after the generator bootstrap": "install_world_generator,install_world_render_resources",
     "new worlds reserve canonical persisted identity": "create_new_world(",
     "new worlds install an empty runtime voxel world": "commands.insert_resource(VoxelWorld::default());",
     "new worlds initialize in-memory save ownership": "context.save.begin_new_world(seed,&dimension_id,rules);",
@@ -109,5 +110,5 @@ require(ready(5, 5, True), "complete idle required residency must report ready")
 
 print(
     "Loading pipeline audit passed: shared new/load/dimension entry, query-guided destination, "
-    "real residency progress, stale-result rejection, and background presentation separation"
+    "real residency progress, render bootstrap, stale-result rejection, and background presentation separation"
 )
