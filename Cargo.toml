@@ -6,8 +6,16 @@ build = "build.rs"
 default-run = "asteria"
 
 [[bin]]
+name = "asteria"
+path = "src/main.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "world-rebuild-smoke"
 path = "src/world_rebuild_smoke.rs"
+test = false
+bench = false
 
 [dependencies]
 arrayvec = "0.7"
