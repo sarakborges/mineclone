@@ -138,7 +138,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<FrameTimeSamples>()
             .init_resource::<MainFrameWorkSamples>()
             .init_resource::<MainWorldWorkSamples>()
-            .add_plugins(DayNightPlugin)
+            .add_plugins((DayNightPlugin, streaming::ChunkStreamingPlugin))
             .add_systems(
                 OnEnter(GameState::StartingScreen),
                 (
