@@ -31,7 +31,7 @@ warp = compact(WARP)
 required_loading = {
     "loading exposes logical parent phases": "PreparingDestination,MaterializingInitialArea,Ready,",
     "load/new-world destination restores saved position when present": "letsaved_position=saved.and_then(|player|player.position());",
-    "new-world spawn uses generator destination queries": "find_safe_spawn_position(&generator,IVec2::ZERO,|_|true)",
+    "new-world spawn uses generator destination queries": "find_safe_spawn_position(&context.generator,IVec2::ZERO,|_|true)",
     "player is created before residency work": "spawn_player_entity(",
     "loading center is derived from the destination": "loading.center=Some(center);",
     "progress publishes real residency counters": "let(completed,total)=streaming.desired_residency_counts(&world);",
