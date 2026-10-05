@@ -5,7 +5,7 @@ use crate::{
     content::player::PlayerDefinition,
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity, find_safe_spawn_position, spawn_player_entity,
-        game_mode::GameMode, player_id::LOCAL_PLAYER_ID,
+        player_id::LOCAL_PLAYER_ID,
     },
     voxel::{coordinates::chunk_coord_from_position, world::VoxelWorld},
 };
@@ -88,10 +88,7 @@ pub(super) fn prepare_loading_destination(
     mut loading: ResMut<WorldLoadingState>,
     mut progress: ResMut<WorldLoadingProgress>,
 ) {
-    if loading.center.is_some() {
-        return;
-    }
-    if !players.is_empty() {
+    if loading.center.is_some() || !players.is_empty() {
         return;
     }
 
@@ -167,6 +164,3 @@ pub(super) fn finish_loading_when_ready(
 pub(super) fn world_streaming_active(state: Res<State<GameState>>) -> bool {
     matches!(state.get(), GameState::Loading | GameState::Gameplay)
 }
-
-#[allow(dead_code)]
-fn _game_mode_type_anchor(_: GameMode) {}
