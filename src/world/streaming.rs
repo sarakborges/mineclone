@@ -5,6 +5,7 @@ mod selection;
 use std::cmp::Reverse;
 
 use bevy::{
+    ecs::system::SystemParam,
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
@@ -21,7 +22,7 @@ use crate::{
 
 pub(super) use self::generation::ChunkMaterializationTasks;
 use self::{
-    generation::{collect_materialized_chunks, dispatch_materialization_tasks},
+    generation::{MaterializationRuntime, collect_materialized_chunks, dispatch_materialization_tasks},
     residency::ChunkResidencyState,
     selection::desired_chunk_coords,
 };
@@ -228,69 +229,79 @@ impl ChunkStreamingState {
     }
 }
 
-pub(super) fn stream_chunks(
-    generator: Res<WorldGenerator>,
-    fluids: Res<FluidRegistry>,
-    world_ticks: Res<WorldTickClock>,
-    render_distance: Res<RenderDistanceSettings>,
-    pending_warp: Res<PendingWarp>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    mut world: ResMut<VoxelWorld>,
-    mut state: ResMut<ChunkStreamingState>,
-    mut tasks: ResMut<ChunkMaterializationTasks>,
-    mut pending_fluid: ResMut<PendingFluidUpdates>,
-    frame_budget: Res<WorldFrameWorkBudget>,
-) {
-    if generator.is_changed() {
-        tasks.restart_for_generator_change();
-        state.restart_materializations();
+#[derive(SystemParam)]
+struct ChunkStreamingInputs<'w, 's> {
+    generator: Res<'w, WorldGenerator>,
+    fluids: Res<'w, FluidRegistry>,
+    world_ticks: Res<'w, WorldTickClock>,
+    render_distance: Res<'w, RenderDistanceSettings>,
+    pending_warp: Res<'w, PendingWarp>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
+}
+
+#[derive(SystemParam)]
+struct ChunkStreamingRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    state: ResMut<'w, ChunkStreamingState>,
+    tasks: ResMut<'w, ChunkMaterializationTasks>,
+    pending_fluid: ResMut<'w, PendingFluidUpdates>,
+}
+
+pub(super) fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntime) {
+    if inputs.generator.is_changed() {
+        runtime.tasks.restart_for_generator_change();
+        runtime.state.restart_materializations();
     }
 
-    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = pending_warp
+    let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let player_chunk = inputs
+        .pending_warp
         .streaming_center()
         .unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = render_distance.chunks();
+    let horizontal_radius = inputs.render_distance.chunks();
 
-    if state.selection_needs_rebuild(center, horizontal_radius) {
-        let desired = desired_chunk_coords(&generator, center, horizontal_radius);
-        state.rebuild_selection(center, horizontal_radius, desired);
+    if runtime.state.selection_needs_rebuild(center, horizontal_radius) {
+        let desired = desired_chunk_coords(&inputs.generator, center, horizontal_radius);
+        runtime
+            .state
+            .rebuild_selection(center, horizontal_radius, desired);
 
-        let mut missing = state
+        let mut missing = runtime
+            .state
             .residency
             .desired
             .iter()
             .copied()
-            .filter(|coord| world.chunk(*coord).is_none() && !state.is_materializing(*coord))
+            .filter(|coord| runtime.world.chunk(*coord).is_none() && !runtime.state.is_materializing(*coord))
             .collect::<Vec<_>>();
         missing.sort_unstable_by_key(|coord| {
-            chunk_load_priority(*coord, center, state.movement_direction())
+            chunk_load_priority(*coord, center, runtime.state.movement_direction())
         });
         for coord in missing {
-            state.enqueue_pending(coord);
+            runtime.state.enqueue_pending(coord);
         }
     }
 
-    let current_tick = world_ticks.current_tick();
-    collect_materialized_chunks(
-        &mut tasks,
-        &mut state,
-        &mut world,
-        &mut pending_fluid,
-        &fluids,
+    let current_tick = inputs.world_ticks.current_tick();
+    let mut materialization_runtime = MaterializationRuntime::new(
+        &mut runtime.world,
+        &mut runtime.pending_fluid,
+        &inputs.fluids,
         current_tick,
-        &frame_budget,
+        inputs.frame_budget.deadline(),
+    );
+    collect_materialized_chunks(
+        &mut runtime.tasks,
+        &mut runtime.state,
+        &mut materialization_runtime,
     );
     dispatch_materialization_tasks(
-        &generator,
-        &mut tasks,
-        &mut state,
-        &mut world,
-        &mut pending_fluid,
-        &fluids,
-        current_tick,
-        &frame_budget,
+        &inputs.generator,
+        &mut runtime.tasks,
+        &mut runtime.state,
+        &mut materialization_runtime,
     );
 }
 
