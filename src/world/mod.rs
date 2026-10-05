@@ -18,6 +18,7 @@ pub(crate) mod game_rules;
 #[allow(dead_code)]
 pub(crate) mod generator;
 mod lighting_updates;
+pub(crate) mod loading;
 mod main_world_diagnostics;
 pub(crate) mod new_world;
 mod presentation_snapshot;
@@ -216,6 +217,10 @@ impl Plugin for WorldPlugin {
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                begin_world_frame_work_budget.run_if(in_state(GameState::Loading)),
             )
             .add_systems(
                 Update,
