@@ -199,8 +199,9 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 generated.biome
             );
             assert!(
-                content.structures.resolves_reference(&generated.structure),
-                "dimension {} generatedSurfaceStructures[{index}] references missing Structure or Structure group {}",
+                content.structures.resolves_reference(&generated.structure)
+                    || content.structure_sets.get(&generated.structure).is_some(),
+                "dimension {} generatedSurfaceStructures[{index}] references missing Structure, Structure group, or StructureSet {}",
                 dimension.id,
                 generated.structure
             );
