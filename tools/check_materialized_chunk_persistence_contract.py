@@ -6,6 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PERSISTENCE = (ROOT / "src/voxel/world/persistence.rs").read_text(encoding="utf-8")
 STORAGE = (ROOT / "src/world/chunk_storage.rs").read_text(encoding="utf-8")
+DIMENSIONS = (ROOT / "src/world/save_catalog/dimensions.rs").read_text(encoding="utf-8")
+UNLOADING = (ROOT / "src/world/chunk_unloading.rs").read_text(encoding="utf-8")
+SNAPSHOT = (ROOT / "src/world/save_catalog/snapshot.rs").read_text(encoding="utf-8")
 DISK = (ROOT / "src/voxel/chunk_disk.rs").read_text(encoding="utf-8")
 
 
@@ -20,6 +23,9 @@ def require(condition: bool, message: str) -> None:
 
 persistence = compact(PERSISTENCE)
 storage = compact(STORAGE)
+dimensions = compact(DIMENSIONS)
+unloading = compact(UNLOADING)
+snapshot = compact(SNAPSHOT)
 disk = compact(DISK)
 
 required_persistence = {
@@ -48,6 +54,23 @@ required_storage = {
 for description, fragment in required_storage.items():
     require(fragment in storage, description)
 
+require(
+    "eviction.world.archive_chunk(coord)" in unloading,
+    "runtime eviction must hand resident chunks to the archival boundary",
+)
+require(
+    "for(dimension_id,world)inworlds" in dimensions
+    and "publish_generation_world_chunks(&directory,generation,world,fluids)?" in dimensions,
+    "every active/inactive dimension world must publish through the same chunk persistence boundary",
+)
+
+# v7 described mutation-only spatial persistence. The all-materialized contract
+# is intentionally forward-only and must not silently reinterpret those saves.
+require(
+    "constSAVE_FORMAT_VERSION:u32=8" in snapshot,
+    "all-materialized spatial persistence requires save format v8",
+)
+
 # Empty chunks still produce a DiskChunk entry because coord is mandatory while
 # content payloads are allowed to remain empty. This preserves explored empty
 # space across future generator revisions.
@@ -65,5 +88,5 @@ require(len(all_materialized) == 4, "resident/archive overlap must deduplicate")
 
 print(
     "Materialized chunk persistence audit passed: resident + archived chunks, "
-    "unedited/empty identity, and no regeneration-only save contract"
+    "unedited/empty identity, multi-dimension publication, and save format v8"
 )
