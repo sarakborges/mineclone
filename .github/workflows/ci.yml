@@ -15,21 +15,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: rust-validation-final-${{ github.ref }}
+  group: rust-validation-probes-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    # Keep the OS fixed: native package archives and compiler outputs are
-    # specific to the runner distribution and Rust toolchain.
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Fail early on malformed content/assets before spending time restoring
-      # the Rust toolchain and Bevy system dependencies.
       - name: Audit localizations
         run: python3 tools/check_localizations.py
 
@@ -77,8 +73,6 @@ jobs:
         with:
           components: clippy
 
-      # The first run installs the Bevy system libraries; subsequent runs
-      # restore their installed files instead of repeating apt-get install.
       - name: Cache Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
@@ -87,12 +81,9 @@ jobs:
             libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
           version: ubuntu-24.04-bevy-0.19-v1
 
-      # Cargo.lock is committed for reproducible executable builds.
       - name: Report dependency lock
         run: sha256sum Cargo.lock
 
-      # Cache downloaded crates and compiled dependency artifacts. The key
-      # includes the committed lockfile, so dependency versions remain stable.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -104,13 +95,19 @@ jobs:
       - name: Check
         run: cargo check --locked
 
+      # Link once so probe execution time is separated from Bevy build/link time.
+      - name: Build world rebuild probes
+        timeout-minutes: 15
+        run: cargo build --locked --bin asteria --bin world-rebuild-smoke
+
       # CI records the first reproducible fixed-seed baseline with one cold and
       # one warm pass for every required query family. Heavier sample counts
       # remain available through the CLI for follow-up profiling after this
       # baseline establishes evidence-based regression budgets.
       - name: Record world rebuild query baseline
+        timeout-minutes: 5
         run: |
-          cargo run --locked --bin asteria -- --worldgen-benchmark \
+          ./target/debug/asteria --worldgen-benchmark \
             --seed 181960897289965 \
             --dimension asteria:overworld \
             --center-x 0 --center-z 0 \
@@ -123,14 +120,17 @@ jobs:
           cat worldgen-benchmark-overworld.json
 
       - name: Smoke world rebuild lifecycle and record runtime baseline
+        timeout-minutes: 5
         run: |
-          /usr/bin/time -v cargo run --locked --bin world-rebuild-smoke \
+          /usr/bin/time -v ./target/debug/world-rebuild-smoke \
             2>&1 | tee world-rebuild-runtime-baseline.txt
 
       - name: Upload world rebuild performance baselines
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: world-rebuild-performance-baselines
           path: |
             worldgen-benchmark-overworld.json
             world-rebuild-runtime-baseline.txt
+          if-no-files-found: ignore
