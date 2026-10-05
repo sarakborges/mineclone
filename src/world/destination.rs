@@ -50,12 +50,7 @@ fn generated_surface_feet_y(generator: &WorldGenerator, column: IVec2) -> Option
     let feet_y = surface_y.checked_add(1)?;
     let head_y = feet_y.checked_add(1)?;
     let materials = generator.materials();
-    if materials
-        .solid_block_at(column.x, surface_y, column.y)
-        .is_none()
-    {
-        return None;
-    }
+    materials.solid_block_at(column.x, surface_y, column.y)?;
 
     for y in [feet_y, head_y] {
         if materials.solid_block_at(column.x, y, column.y).is_some()
