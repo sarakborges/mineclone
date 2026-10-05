@@ -43,7 +43,7 @@ for fragment, description in {
     require(fragment not in DESTINATION, f"generated destination query must not use {description}: found {fragment}")
 
 required_player = {
-    "spawn delegates to the shared generated destination primitive": "find_generated_surface_destination(generator,preferred_column,SPAWN_SEARCH_RADIUS_BLOCKS,accepts_column)",
+    "spawn delegates to the shared generated destination primitive": "find_generated_surface_destination(generator,preferred_column,SPAWN_SEARCH_RADIUS_BLOCKS,accepts_column,",
     "runtime player-clear checks remain runtime-owned": "pub(crate)fnplayer_position_is_clear(world:&VoxelWorld",
 }
 for description, fragment in required_player.items():
