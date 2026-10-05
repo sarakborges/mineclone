@@ -248,7 +248,9 @@ impl ChunkMaterializer {
             .into_iter()
             .filter(|placement| {
                 let (minimum_y, maximum_y) = placement.vertical_bounds();
-                maximum_y >= origin.y && minimum_y <= chunk_maximum_y
+                let attachment_rise = placement.structure().restrictions.max_slope.max(0);
+                maximum_y.saturating_add(attachment_rise) >= origin.y
+                    && minimum_y <= chunk_maximum_y
             })
             .collect::<Vec<_>>();
         self.rasterize_structures(&mut chunk, origin, &placements);
@@ -337,17 +339,6 @@ impl ChunkMaterializer {
                     && (structure.layers_only_voxel(voxel) || !attached_objects.is_empty());
 
                 if attachment_only {
-                    self.rasterize_attachment_only(
-                        chunk,
-                        structure,
-                        rotation,
-                        voxel,
-                        attached_objects,
-                        chunk_origin,
-                        x,
-                        y,
-                        z,
-                    );
                     return false;
                 }
 
@@ -410,6 +401,8 @@ impl ChunkMaterializer {
             },
         );
 
+        self.rasterize_attachment_payloads(chunk, structure, rotation, origin, chunk_origin);
+
         for world_position in structure.clear_above_positions(rotation, origin) {
             let local = world_position - chunk_origin;
             if !local_in_bounds(local) {
@@ -428,54 +421,83 @@ impl ChunkMaterializer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn rasterize_attachment_only(
+    fn rasterize_attachment_payloads(
         &self,
         chunk: &mut VoxelChunkStructureMut<'_>,
         structure: &StructureDefinition,
         rotation: StructureRotation,
-        voxel: &StructureVoxel,
-        attached_objects: &[crate::content::structure::StructureAttachedObject],
+        origin: IVec3,
         chunk_origin: IVec3,
-        x: usize,
-        y: usize,
-        z: usize,
     ) {
-        let max_rise = structure.restrictions.max_slope.max(0) as usize;
-        let Some(support_y) = (y..=y.saturating_add(max_rise))
-            .rev()
-            .find(|candidate_y| {
-                *candidate_y < CHUNK_SIZE && chunk.cell_at(x, *candidate_y, z).is_some()
-            })
-        else {
-            return;
-        };
-        let support_world_position =
-            chunk_origin + IVec3::new(x as i32, support_y as i32, z as i32);
-
-        if structure.layers_only_voxel(voxel) {
-            for (face, layer) in self.surface_layer_placements(
-                structure,
-                rotation,
-                voxel,
-                support_world_position,
-            ) {
-                let _ = chunk.add_layer(x, support_y, z, face, layer);
+        let max_rise = structure.restrictions.max_slope.max(0);
+        for voxel in structure.voxels() {
+            let attached_objects = structure.objects_for_voxel(voxel);
+            let attachment_only = voxel.block_id.is_none()
+                && structure.fluid_for_voxel(voxel).is_none()
+                && !structure.clears_voxel(voxel)
+                && (structure.layers_only_voxel(voxel) || !attached_objects.is_empty());
+            if !attachment_only {
+                continue;
             }
-        }
 
-        if attached_objects.is_empty() || chunk.fluid_at(x, support_y, z).is_some() {
-            return;
-        }
-        for attached in attached_objects {
-            let object = attached.object_cell(rotation, support_world_position);
-            let target = IVec3::new(x as i32, support_y as i32, z as i32) + object.face.normal();
-            let target_has_fluid = local_in_bounds(target)
-                && chunk
-                    .fluid_at(target.x as usize, target.y as usize, target.z as usize)
-                    .is_some();
-            if !target_has_fluid {
-                let _ = chunk.set_object(x, support_y, z, object);
+            let marker_world_position = origin + rotation.rotate_offset(voxel.offset);
+            let support = (0..=max_rise).rev().find_map(|rise| {
+                let candidate = marker_world_position + IVec3::Y * rise;
+                let local = candidate - chunk_origin;
+                if !local_in_bounds(local) {
+                    return None;
+                }
+                let x = local.x as usize;
+                let y = local.y as usize;
+                let z = local.z as usize;
+                chunk.cell_at(x, y, z).is_some().then_some((candidate, local))
+            });
+            let Some((support_world_position, local)) = support else {
+                continue;
+            };
+            let x = local.x as usize;
+            let y = local.y as usize;
+            let z = local.z as usize;
+
+            if structure.layers_only_voxel(voxel) {
+                for (face, layer) in self.surface_layer_placements(
+                    structure,
+                    rotation,
+                    voxel,
+                    support_world_position,
+                ) {
+                    let _ = chunk.add_layer(x, y, z, face, layer);
+                }
+            }
+
+            if attached_objects.is_empty() || chunk.fluid_at(x, y, z).is_some() {
+                continue;
+            }
+            for attached in attached_objects {
+                let object = attached.object_cell(rotation, support_world_position);
+                let target_world_position = support_world_position + object.face.normal();
+                let target_local = target_world_position - chunk_origin;
+                let target_has_fluid = if local_in_bounds(target_local) {
+                    chunk
+                        .fluid_at(
+                            target_local.x as usize,
+                            target_local.y as usize,
+                            target_local.z as usize,
+                        )
+                        .is_some()
+                } else {
+                    self.materials
+                        .queries()
+                        .generated_fluid_at(
+                            target_world_position.x,
+                            target_world_position.y,
+                            target_world_position.z,
+                        )
+                        .is_some()
+                };
+                if !target_has_fluid {
+                    let _ = chunk.set_object(x, y, z, object);
+                }
             }
         }
     }
