@@ -444,7 +444,7 @@ impl TerrainMaterials {
             layers.push(data.clone());
         }
 
-        let target = images
+        let mut target = images
             .get_mut(&self.texture_array)
             .expect("terrain texture array must remain resident while a world is active");
         let target_data = target
