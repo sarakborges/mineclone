@@ -31,6 +31,26 @@ struct LoadingProgressLabel;
 #[derive(Component)]
 struct LoadingProgressFill;
 
+type LoadingTitleQuery<'w, 's> = Query<'w, 's, &'static mut Text, With<LoadingTitle>>;
+type LoadingPhaseQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (With<LoadingPhaseLabel>, Without<LoadingTitle>),
+>;
+type LoadingProgressLabelQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<LoadingProgressLabel>,
+        Without<LoadingTitle>,
+        Without<LoadingPhaseLabel>,
+    ),
+>;
+type LoadingProgressFillQuery<'w, 's> =
+    Query<'w, 's, &'static mut Node, With<LoadingProgressFill>>;
+
 fn setup_loading_screen(
     mut commands: Commands,
     localization: Res<UiLocalization>,
@@ -103,17 +123,10 @@ fn sync_loading_screen(
     progress: Res<WorldLoadingProgress>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    mut titles: Query<&mut Text, With<LoadingTitle>>,
-    mut phases: Query<&mut Text, (With<LoadingPhaseLabel>, Without<LoadingTitle>)>,
-    mut labels: Query<
-        &mut Text,
-        (
-            With<LoadingProgressLabel>,
-            Without<LoadingTitle>,
-            Without<LoadingPhaseLabel>,
-        ),
-    >,
-    mut fills: Query<&mut Node, With<LoadingProgressFill>>,
+    mut titles: LoadingTitleQuery,
+    mut phases: LoadingPhaseQuery,
+    mut labels: LoadingProgressLabelQuery,
+    mut fills: LoadingProgressFillQuery,
 ) {
     if !progress.is_changed() && !localization.is_changed() && !language.is_changed() {
         return;
