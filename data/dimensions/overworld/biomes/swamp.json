@@ -7,5 +7,18 @@
     "macroScale": 896,
     "detailAmplitude": 1.5,
     "detailScale": 160
-  }
+  },
+  "surfaceLayers": [
+    {
+      "block": "asteria:grass_block",
+      "depth": 1
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 4
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ]
 }

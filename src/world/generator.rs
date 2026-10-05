@@ -1,6 +1,7 @@
 mod biome;
 mod biome_map;
 mod foundation;
+mod material;
 mod terrain;
 mod terrain_debug;
 
@@ -13,6 +14,8 @@ pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
+pub(crate) use material::MaterialQueries;
+use material::MaterialField;
 pub(crate) use terrain::TerrainQueries;
 use terrain::TerrainField;
 pub(crate) use terrain_debug::{TerrainDebugConfig, render_terrain_debug};
@@ -27,6 +30,7 @@ pub(crate) struct WorldGenerator {
     snapshot: Arc<GenerationSnapshot>,
     biomes: Arc<BiomeLayout>,
     terrain: Arc<TerrainField>,
+    materials: Arc<MaterialField>,
 }
 
 impl WorldGenerator {
@@ -49,10 +53,17 @@ impl WorldGenerator {
             biome_registry,
             Arc::clone(&biomes),
         ));
+        let materials = Arc::new(MaterialField::new(
+            &snapshot,
+            biome_registry,
+            Arc::clone(&biomes),
+            Arc::clone(&terrain),
+        ));
         Self {
             snapshot: Arc::new(snapshot),
             biomes,
             terrain,
+            materials,
         }
     }
 
@@ -62,6 +73,10 @@ impl WorldGenerator {
 
     pub(crate) fn terrain(&self) -> TerrainQueries<'_> {
         self.terrain.queries()
+    }
+
+    pub(crate) fn materials(&self) -> MaterialQueries<'_> {
+        self.materials.queries()
     }
 
     /// Internal-only generated-world read boundary.
@@ -94,8 +109,8 @@ impl GenerationReadContext<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::foundation::{GenerationDomain, GenerationPoint2, GenerationPoint3};
+    use super::*;
     use crate::content::biome::BiomeDefinition;
 
     fn test_generator(seed: u64, dimension_id: &str) -> WorldGenerator {
@@ -120,7 +135,11 @@ mod tests {
                 "spanish": "Base"
             },
             "surfaceLayout": {},
-            "surfaceTerrain": {}
+            "surfaceTerrain": {},
+            "surfaceLayers": [
+                { "block": "asteria:test_surface", "depth": 1 },
+                { "block": "asteria:test_core" }
+            ]
         }))
         .expect("test biome definition must deserialize");
         let mut registry = BiomeRegistry::default();
@@ -170,6 +189,17 @@ mod tests {
         assert_eq!(
             generator.terrain().surface_at(12, -34),
             clone.terrain().surface_at(12, -34)
+        );
+        let surface_y = generator.terrain().surface_at(12, -34);
+        assert_eq!(
+            generator
+                .materials()
+                .solid_block_at(12, surface_y, -34)
+                .map(|block| block.as_str().to_owned()),
+            clone
+                .materials()
+                .solid_block_at(12, surface_y, -34)
+                .map(|block| block.as_str().to_owned())
         );
     }
 

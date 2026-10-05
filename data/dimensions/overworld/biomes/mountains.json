@@ -7,5 +7,10 @@
     "macroScale": 896,
     "detailAmplitude": 12.0,
     "detailScale": 128
-  }
+  },
+  "surfaceLayers": [
+    {
+      "block": "asteria:stone"
+    }
+  ]
 }

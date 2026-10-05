@@ -18,6 +18,7 @@ const MAX_TERRAIN_SCALE: u32 = 16_384;
 const MAX_TERRAIN_AMPLITUDE: f32 = 512.0;
 const MAX_TERRAIN_3D_VERTICAL_SPAN: i64 = 512;
 const MAX_FLOATING_ROUGHNESS: f32 = 0.5;
+const MAX_SURFACE_LAYER_DEPTH: u32 = 64;
 
 /// One biome identity in the shared biome universe.
 ///
@@ -34,6 +35,8 @@ pub struct BiomeDefinition {
     pub surface_layout: Option<SurfaceBiomeLayoutDefinition>,
     #[serde(default)]
     pub surface_terrain: Option<SurfaceTerrainDefinition>,
+    #[serde(default)]
+    pub surface_layers: Option<Vec<SurfaceLayerDefinition>>,
     #[serde(default)]
     pub terrain_3d: Option<Terrain3dDefinition>,
 }
@@ -105,6 +108,19 @@ impl Default for SurfaceTerrainDefinition {
             detail_scale: default_terrain_detail_scale(),
         }
     }
+}
+
+/// Ordered generated solid-material layers for one surface biome.
+///
+/// Every finite layer owns `depth` voxels measured downward from the local
+/// exposed terrain surface. The final depthless layer is the core material.
+/// Terrain still owns solidity; these rules only classify already-solid voxels.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceLayerDefinition {
+    pub block: String,
+    #[serde(default)]
+    pub depth: Option<u32>,
 }
 
 /// Optional true-3D terrain contributions authored by a biome.
@@ -180,6 +196,10 @@ impl BiomeDefinition {
         self.surface_terrain.unwrap_or_default()
     }
 
+    pub(crate) fn surface_layers_profile(&self) -> Option<&[SurfaceLayerDefinition]> {
+        self.surface_layers.as_deref()
+    }
+
     pub(crate) const fn terrain_3d_profile(&self) -> Option<Terrain3dDefinition> {
         self.terrain_3d
     }
@@ -192,6 +212,9 @@ impl BiomeDefinition {
         }
         if let Some(terrain) = self.surface_terrain {
             terrain.validate(&self.id);
+        }
+        if let Some(layers) = &self.surface_layers {
+            validate_surface_layers(&self.id, layers);
         }
         if let Some(terrain_3d) = self.terrain_3d {
             terrain_3d.validate(&self.id);
@@ -251,6 +274,48 @@ impl SurfaceTerrainDefinition {
             self.detail_scale <= self.macro_scale,
             "biome {biome_id} surfaceTerrain.detailScale must not exceed macroScale"
         );
+    }
+}
+
+fn validate_surface_layers(biome_id: &str, layers: &[SurfaceLayerDefinition]) {
+    assert!(
+        !layers.is_empty(),
+        "biome {biome_id} surfaceLayers must contain at least one layer"
+    );
+    let mut finite_depth = 0_u32;
+    for (index, layer) in layers.iter().enumerate() {
+        let block = layer.block.trim();
+        let valid_block_id = block.split_once(':').is_some_and(|(namespace, local)| {
+            !namespace.is_empty() && !local.is_empty() && !local.contains(':')
+        });
+        assert!(
+            valid_block_id && block == layer.block,
+            "biome {biome_id} surfaceLayers[{index}].block must be a trimmed namespaced block id"
+        );
+
+        let final_layer = index + 1 == layers.len();
+        match (final_layer, layer.depth) {
+            (false, Some(depth)) => {
+                assert!(
+                    depth > 0,
+                    "biome {biome_id} surfaceLayers[{index}].depth must be positive"
+                );
+                finite_depth = finite_depth
+                    .checked_add(depth)
+                    .expect("surface layer depth must fit u32");
+                assert!(
+                    finite_depth <= MAX_SURFACE_LAYER_DEPTH,
+                    "biome {biome_id} finite surface layer depth must not exceed {MAX_SURFACE_LAYER_DEPTH} blocks"
+                );
+            }
+            (false, None) => panic!(
+                "biome {biome_id} surfaceLayers[{index}] requires depth before the final core layer"
+            ),
+            (true, None) => {}
+            (true, Some(_)) => panic!(
+                "biome {biome_id} final surfaceLayers entry is the core layer and must omit depth"
+            ),
+        }
     }
 }
 
@@ -417,9 +482,36 @@ mod tests {
             definition.surface_terrain_profile(),
             SurfaceTerrainDefinition::default()
         );
+        assert!(definition.surface_layers_profile().is_none());
         assert!(definition.terrain_3d_profile().is_none());
         assert!(definition.belongs_to_dimension("asteria:overworld"));
         assert!(!definition.belongs_to_dimension("asteria:umbral"));
+    }
+
+    #[test]
+    fn surface_layers_use_finite_layers_and_depthless_core() {
+        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+            "id": "asteria:overworld/plains",
+            "name": {
+                "english": "Plains",
+                "portuguese_brazil": "Planicies",
+                "spanish": "Llanuras"
+            },
+            "surfaceLayout": {},
+            "surfaceLayers": [
+                { "block": "asteria:grass_block", "depth": 1 },
+                { "block": "asteria:dirt", "depth": 4 },
+                { "block": "asteria:stone" }
+            ]
+        }))
+        .expect("surface layers must deserialize");
+        definition.validate();
+        let layers = definition
+            .surface_layers_profile()
+            .expect("surface layers must be authored");
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0].depth, Some(1));
+        assert_eq!(layers[2].depth, None);
     }
 
     #[test]

@@ -8,6 +8,19 @@
     "detailAmplitude": 2.0,
     "detailScale": 128
   },
+  "surfaceLayers": [
+    {
+      "block": "asteria:grass_block",
+      "depth": 1
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 4
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
   "terrain3d": {
     "floatingFormation": {
       "minY": 200,
