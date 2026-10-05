@@ -182,22 +182,27 @@ enum RootStructureSource {
     Set(CompiledStructureSet),
 }
 
+pub(super) struct StructureAuthoring<'a> {
+    pub(super) biomes: &'a BiomeRegistry,
+    pub(super) structures: &'a StructureRegistry,
+    pub(super) structure_sets: &'a StructureSetRegistry,
+    pub(super) roots: &'a [GeneratedSurfaceStructureDefinition],
+}
+
 impl StructureField {
     pub(super) fn new(
         snapshot: &GenerationSnapshot,
-        biome_registry: &BiomeRegistry,
-        structure_registry: &StructureRegistry,
-        structure_set_registry: &StructureSetRegistry,
+        authoring: StructureAuthoring<'_>,
         biomes: Arc<BiomeLayout>,
         terrain: Arc<TerrainField>,
         materials: Arc<MaterialField>,
-        definitions: &[GeneratedSurfaceStructureDefinition],
     ) -> Self {
         let dimension_id = snapshot.dimension().id();
-        let rules = definitions
+        let rules = authoring
+            .roots
             .iter()
             .map(|definition| {
-                let biome = biome_registry.get(&definition.biome).unwrap_or_else(|| {
+                let biome = authoring.biomes.get(&definition.biome).unwrap_or_else(|| {
                     panic!(
                         "dimension {dimension_id} generatedSurfaceStructures references missing biome {}",
                         definition.biome
@@ -208,7 +213,11 @@ impl StructureField {
                     "dimension {dimension_id} generatedSurfaceStructures biome {} must be a surface biome in this dimension",
                     definition.biome
                 );
-                RootStructureRule::new(definition, structure_registry, structure_set_registry)
+                RootStructureRule::new(
+                    definition,
+                    authoring.structures,
+                    authoring.structure_sets,
+                )
             })
             .collect::<Vec<_>>()
             .into();
