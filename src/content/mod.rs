@@ -21,7 +21,7 @@ pub(crate) mod item_id;
 mod json_file;
 pub(crate) mod layer;
 pub(crate) mod layer_id;
-mod loader;
+pub(crate) mod loader;
 pub(crate) mod loot;
 pub(crate) mod object;
 pub(crate) mod object_id;
@@ -44,7 +44,7 @@ mod validation;
 pub(crate) mod world_recipe;
 
 use bevy::prelude::*;
-pub(crate) use loader::{LoadedContent, read_content};
+pub(crate) use loader::read_content;
 use loader::load_content;
 
 pub(crate) struct ContentPlugin;
