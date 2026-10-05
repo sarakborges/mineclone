@@ -3,6 +3,7 @@ mod biome_map;
 mod foundation;
 mod generated_fluid;
 mod material;
+mod structure;
 mod terrain;
 mod terrain_debug;
 
@@ -13,6 +14,7 @@ use bevy::prelude::Resource;
 use crate::content::{
     biome::BiomeRegistry,
     dimension::{DimensionDefinition, GeneratedOceanDefinition, GeneratedSurfaceFluidDefinition},
+    structure::StructureRegistry,
 };
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
@@ -21,6 +23,8 @@ use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, Generat
 use generated_fluid::GeneratedFluidField;
 pub(crate) use material::MaterialQueries;
 use material::MaterialField;
+pub(crate) use structure::{StructurePlacement, StructureQueries};
+use structure::StructureField;
 pub(crate) use terrain::TerrainQueries;
 use terrain::TerrainField;
 pub(crate) use terrain_debug::{TerrainDebugConfig, render_terrain_debug};
@@ -36,6 +40,7 @@ pub(crate) struct WorldGenerator {
     biomes: Arc<BiomeLayout>,
     terrain: Arc<TerrainField>,
     materials: Arc<MaterialField>,
+    structures: Arc<StructureField>,
 }
 
 impl WorldGenerator {
@@ -43,28 +48,41 @@ impl WorldGenerator {
         seed: u64,
         dimension: &DimensionDefinition,
         biome_registry: &BiomeRegistry,
+        structure_registry: &StructureRegistry,
     ) -> Self {
         let snapshot = GenerationSnapshot::new(
             GenerationSeed::new(seed),
             GenerationDimension::from_definition(dimension),
         );
-        Self::from_snapshot_with_generated_fluids(
+        Self::from_snapshot_with_content(
             snapshot,
             biome_registry,
+            structure_registry,
             dimension.generated_ocean.as_ref(),
             &dimension.generated_surface_fluids,
+            &dimension.generated_surface_structures,
         )
     }
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
-        Self::from_snapshot_with_generated_fluids(snapshot, biome_registry, None, &[])
+        let structure_registry = StructureRegistry::default();
+        Self::from_snapshot_with_content(
+            snapshot,
+            biome_registry,
+            &structure_registry,
+            None,
+            &[],
+            &[],
+        )
     }
 
-    fn from_snapshot_with_generated_fluids(
+    fn from_snapshot_with_content(
         snapshot: GenerationSnapshot,
         biome_registry: &BiomeRegistry,
+        structure_registry: &StructureRegistry,
         generated_ocean: Option<&GeneratedOceanDefinition>,
         generated_surface_fluids: &[GeneratedSurfaceFluidDefinition],
+        generated_surface_structures: &[crate::content::dimension::GeneratedSurfaceStructureDefinition],
     ) -> Self {
         let biomes = Arc::new(BiomeLayout::new(&snapshot, biome_registry));
         let generated_fluids = Arc::new(GeneratedFluidField::new(
@@ -86,11 +104,21 @@ impl WorldGenerator {
             Arc::clone(&terrain),
             generated_fluids,
         ));
+        let structures = Arc::new(StructureField::new(
+            &snapshot,
+            biome_registry,
+            structure_registry,
+            Arc::clone(&biomes),
+            Arc::clone(&terrain),
+            Arc::clone(&materials),
+            generated_surface_structures,
+        ));
         Self {
             snapshot: Arc::new(snapshot),
             biomes,
             terrain,
             materials,
+            structures,
         }
     }
 
@@ -104,6 +132,10 @@ impl WorldGenerator {
 
     pub(crate) fn materials(&self) -> MaterialQueries<'_> {
         self.materials.queries()
+    }
+
+    pub(crate) fn structures(&self) -> StructureQueries<'_> {
+        self.structures.queries()
     }
 
     /// Internal-only generated-world read boundary.
@@ -263,7 +295,8 @@ mod tests {
     fn world_generator_copies_authored_dimension_inputs() {
         let mut definition = test_dimension_definition("asteria:authored", 72, 0.85);
         let registry = test_biome_registry("asteria:authored");
-        let generator = WorldGenerator::new(991, &definition, &registry);
+        let structures = StructureRegistry::default();
+        let generator = WorldGenerator::new(991, &definition, &registry, &structures);
 
         definition.id = "asteria:mutated".to_owned();
         definition.sea_level = -10;
