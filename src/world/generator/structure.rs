@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use bevy::prelude::{IVec2, IVec3};
+use bevy::{
+    math::Vec3Swizzles,
+    prelude::{IVec2, IVec3},
+};
 
 use crate::content::{
     biome::BiomeRegistry,
@@ -186,8 +189,14 @@ impl StructureField {
             let padding = rule
                 .maximum_horizontal_extent
                 .saturating_add(i32::try_from(rule.jitter).unwrap_or(i32::MAX));
-            let minimum = query_minimum - IVec2::splat(padding);
-            let maximum = query_maximum + IVec2::splat(padding);
+            let minimum = IVec2::new(
+                query_minimum.x.saturating_sub(padding),
+                query_minimum.y.saturating_sub(padding),
+            );
+            let maximum = IVec2::new(
+                query_maximum.x.saturating_add(padding),
+                query_maximum.y.saturating_add(padding),
+            );
             let (minimum_cell, maximum_cell) = candidate_cell_bounds(rule.spacing, minimum, maximum);
 
             for cell_z in minimum_cell.y..=maximum_cell.y {
@@ -230,8 +239,14 @@ impl StructureField {
         let origin = IVec2::new(origin_x, origin_z);
         let maximum_squared = i128::from(max_distance) * i128::from(max_distance);
         let radius = i32::try_from(max_distance).unwrap_or(i32::MAX);
-        let minimum = origin - IVec2::splat(radius);
-        let maximum = origin + IVec2::splat(radius);
+        let minimum = IVec2::new(
+            origin.x.saturating_sub(radius),
+            origin.y.saturating_sub(radius),
+        );
+        let maximum = IVec2::new(
+            origin.x.saturating_add(radius),
+            origin.y.saturating_add(radius),
+        );
         let mut best: Option<(i128, StructurePlacement)> = None;
 
         for rule in self.rules.iter().filter(|rule| rule.reference.as_ref() == reference) {
@@ -296,7 +311,9 @@ impl StructureField {
         }
 
         let variant_hash = self.entropy.sample_2d(rule.variant_domain, cell);
-        let variant_index = usize::try_from(variant_hash % rule.variants.len() as u64).ok()?;
+        let variant_count = u64::try_from(rule.variants.len())
+            .expect("structure variant count must fit u64");
+        let variant_index = usize::try_from(variant_hash % variant_count).ok()?;
         let structure = Arc::clone(rule.variants.get(variant_index)?);
         let rotation = structure.rotation_for_hash(self.entropy.sample_2d(rule.rotation_domain, cell));
         let origin_y = self.fit_origin_y(&structure, rotation, anchor)?;
@@ -325,7 +342,7 @@ impl StructureField {
         let mut maximum_ground_y = i32::MIN;
 
         for offset in supports {
-            let position = anchor + offset;
+            let position = checked_horizontal_add(anchor, offset)?;
             let ground_y = self.terrain.queries().surface_at(position.x, position.y);
             if structure.restrictions.requires_dry_ground
                 && self
@@ -371,18 +388,19 @@ impl StructureField {
                 .support_offsets_for_rotation(rotation)
                 .into_iter()
                 .any(|offset| {
-                    let position = anchor + offset;
-                    let ground_y = self.terrain.queries().surface_at(position.x, position.y);
-                    !self
-                        .materials
-                        .queries()
-                        .solid_block_at(position.x, ground_y, position.y)
-                        .is_some_and(|block| {
-                            restrictions
-                                .ground_blocks
-                                .iter()
-                                .any(|allowed| allowed == block.as_str())
-                        })
+                    checked_horizontal_add(anchor, offset).is_none_or(|position| {
+                        let ground_y = self.terrain.queries().surface_at(position.x, position.y);
+                        !self
+                            .materials
+                            .queries()
+                            .solid_block_at(position.x, ground_y, position.y)
+                            .is_some_and(|block| {
+                                restrictions
+                                    .ground_blocks
+                                    .iter()
+                                    .any(|allowed| allowed == block.as_str())
+                            })
+                    })
                 })
         {
             return false;
@@ -393,13 +411,14 @@ impl StructureField {
             let matching = footprint
                 .iter()
                 .filter(|offset| {
-                    let position = anchor + **offset;
-                    self.biomes
-                        .queries()
-                        .surface_biome_at(position.x, position.y)
-                        .primary()
-                        .as_str()
-                        == rule.biome.as_ref()
+                    checked_horizontal_add(anchor, **offset).is_some_and(|position| {
+                        self.biomes
+                            .queries()
+                            .surface_biome_at(position.x, position.y)
+                            .primary()
+                            .as_str()
+                            == rule.biome.as_ref()
+                    })
                 })
                 .count();
             let coverage = matching as f32 / footprint.len().max(1) as f32;
@@ -457,7 +476,8 @@ impl StructureField {
         maximum_distance: u32,
         target: &StructureProximityTarget,
     ) -> Option<i64> {
-        let radius = maximum_distance as i32;
+        let radius = i32::try_from(maximum_distance)
+            .expect("validated structure proximity maxDistance must fit i32");
         let maximum_squared = i64::from(maximum_distance) * i64::from(maximum_distance);
         let mut nearest = None;
         for z in -radius..=radius {
@@ -468,7 +488,10 @@ impl StructureField {
                 {
                     continue;
                 }
-                if self.proximity_target_matches(anchor + IVec2::new(x, z), target) {
+                let Some(position) = checked_horizontal_add(anchor, IVec2::new(x, z)) else {
+                    continue;
+                };
+                if self.proximity_target_matches(position, target) {
                     nearest = Some(distance_squared);
                 }
             }
@@ -483,7 +506,8 @@ impl StructureField {
         maximum_distance: u32,
         target: &StructureProximityTarget,
     ) -> bool {
-        let radius = maximum_distance as i32;
+        let radius = i32::try_from(maximum_distance)
+            .expect("validated structure proximity maxDistance must fit i32");
         let minimum_squared = i64::from(minimum_distance) * i64::from(minimum_distance);
         let maximum_squared = i64::from(maximum_distance) * i64::from(maximum_distance);
         for z in -radius..=radius {
@@ -492,7 +516,10 @@ impl StructureField {
                 if distance_squared < minimum_squared || distance_squared > maximum_squared {
                     continue;
                 }
-                if self.proximity_target_matches(anchor + IVec2::new(x, z), target) {
+                let Some(position) = checked_horizontal_add(anchor, IVec2::new(x, z)) else {
+                    continue;
+                };
+                if self.proximity_target_matches(position, target) {
                     return true;
                 }
             }
@@ -593,6 +620,13 @@ fn candidate_cell_bounds(spacing: i32, minimum: IVec2, maximum: IVec2) -> (IVec2
 fn checked_area_max(origin: i32, extent: u32, axis: &str) -> i32 {
     i32::try_from(i64::from(origin) + i64::from(extent) - 1)
         .unwrap_or_else(|_| panic!("structure query {axis} extent exceeds world coordinate range"))
+}
+
+fn checked_horizontal_add(origin: IVec2, offset: IVec2) -> Option<IVec2> {
+    Some(IVec2::new(
+        origin.x.checked_add(offset.x)?,
+        origin.y.checked_add(offset.y)?,
+    ))
 }
 
 fn rectangles_overlap(
