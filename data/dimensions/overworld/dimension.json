@@ -28,5 +28,49 @@
       "chance": 0.4,
       "depth": 2
     }
+  ],
+  "generatedSurfaceStructures": [
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:tree_oak",
+      "spacing": 80,
+      "chance": 0.54,
+      "jitter": 24
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:tree_willow",
+      "spacing": 36,
+      "chance": 0.72,
+      "jitter": 11
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_small",
+      "spacing": 36,
+      "chance": 0.28,
+      "jitter": 11
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_medium",
+      "spacing": 58,
+      "chance": 0.2,
+      "jitter": 18
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_big",
+      "spacing": 88,
+      "chance": 0.13,
+      "jitter": 27
+    },
+    {
+      "biome": "asteria:overworld/plains",
+      "structure": "asteria:boulder_huge",
+      "spacing": 140,
+      "chance": 0.07,
+      "jitter": 43
+    }
   ]
 }
