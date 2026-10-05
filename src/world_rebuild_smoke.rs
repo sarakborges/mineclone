@@ -2,6 +2,10 @@
     all(target_os = "windows", not(debug_assertions)),
     windows_subsystem = "windows"
 )]
+#![allow(
+    unused_imports,
+    reason = "this diagnostic binary reuses the application module tree, including main-only CLI reexports"
+)]
 
 mod app;
 mod content;
@@ -40,8 +44,8 @@ use bevy::{
 
 use app::{game_state::GameState, runtime_paths::prepare_runtime_directory};
 use content::{
-    LoadedContent,
     builtin_ids::{OVERWORLD_DIMENSION_ID, UMBRAL_DIMENSION_ID},
+    loader::LoadedContent,
 };
 use creatures::PendingCreatureRestores;
 use gameplay::storage_box::StorageBoxStorage;
@@ -305,7 +309,9 @@ fn persist_active_world(app: &mut App) {
     let world = app.world_mut();
     let mut state = SystemState::<(Res<WorldSession>, WorldSaveContext)>::new(world);
     let result = {
-        let (session, snapshot) = state.get(world);
+        let (session, snapshot) = state
+            .get(world)
+            .expect("smoke world save params must be available");
         session.persist(&snapshot)
     };
     state.apply(world);
