@@ -248,7 +248,7 @@ struct ChunkStreamingRuntime<'w> {
     pending_fluid: ResMut<'w, PendingFluidUpdates>,
 }
 
-pub(super) fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntime) {
+fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntime) {
     if inputs.generator.is_changed() {
         runtime.tasks.restart_for_generator_change();
         runtime.state.restart_materializations();
