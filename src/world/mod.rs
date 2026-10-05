@@ -95,7 +95,7 @@ use render_work_diagnostics::{
     reset_render_frame_work_samples,
 };
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
-use save_catalog::WorldDirectoryLock;
+use save_catalog::{WorldDirectoryLock, create_new_world};
 use save_session::{
     WorldSession, exit_on_window_close_without_gameplay, restore_loaded_clock,
     save_on_gameplay_window_close,
@@ -263,7 +263,7 @@ impl Plugin for WorldPlugin {
                 (
                     begin_deferred_mesh_retirement_work,
                     advance_deferred_mesh_asset_retirements,
-                    finish_deferred_mesh_retirement_work.before(log_main_world_work),
+                    finish_deferred_mesh_asset_retirements.before(log_main_world_work),
                 )
                     .chain(),
             )
@@ -340,14 +340,43 @@ fn install_world_generator(
     ));
 }
 
-fn prepare_world_session(
-    mut session: ResMut<WorldSession>,
-    mode: Res<WorldLoadMode>,
-    config: Res<NewWorldConfig>,
-) {
-    if *mode == WorldLoadMode::New {
-        *session = WorldSession::new(config.name().to_owned());
+#[derive(SystemParam)]
+struct WorldSessionPreparation<'w> {
+    mode: Res<'w, WorldLoadMode>,
+    config: Res<'w, NewWorldConfig>,
+    seed: ResMut<'w, WorldSeed>,
+    current_dimension: ResMut<'w, CurrentDimension>,
+    rules: ResMut<'w, GameRules>,
+    save: ResMut<'w, InMemoryWorldSave>,
+    session: ResMut<'w, WorldSession>,
+}
+
+fn prepare_world_session(mut commands: Commands, mut context: WorldSessionPreparation) {
+    if *context.mode != WorldLoadMode::New {
+        return;
     }
+
+    let seed = context.config.seed();
+    let dimension = CurrentDimension::default();
+    let rules = context.config.game_rules();
+    let (id, lock) = create_new_world(
+        context.config.name(),
+        seed.0,
+        dimension.id.as_str(),
+        rules.ticks_per_second(),
+        rules.spawn_creatures(),
+    )
+    .unwrap_or_else(|error| panic!("could not reserve new world save: {error}"));
+
+    *context.seed = seed;
+    *context.current_dimension = dimension;
+    *context.rules = rules;
+    context
+        .save
+        .begin_new_world(seed, context.current_dimension.id.as_str(), rules);
+    *context.session = WorldSession::new(id);
+    commands.insert_resource(lock);
+    commands.insert_resource(VoxelWorld::default());
 }
 
 fn release_world_session(
@@ -368,4 +397,5 @@ fn release_world_session(
     commands.insert_resource(InMemoryWorldSave::default());
     commands.insert_resource(WorldSession::default());
     commands.insert_resource(PlayerHotbar::default());
+    commands.insert_resource(WorldLoadMode::New);
 }
