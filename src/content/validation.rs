@@ -114,12 +114,12 @@ pub(super) fn validate_content(content: &LoadedContent) {
         );
         assert!(
             content.layers.get(&item.id).is_none(),
-            "content id {} cannot be both a layer and an item",
+            "content id {} cannot be both an item and a layer",
             item.id
         );
         assert!(
             content.tools.get(&item.id).is_none(),
-            "content id {} cannot be both a tool and an item",
+            "content id {} cannot be both an item and a tool",
             item.id
         );
         item.validate_references(&content.inventory_categories);
