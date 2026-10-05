@@ -25,7 +25,7 @@ use crate::content::{
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
-pub(crate) use chunk::{GeneratedFluidFrontierTarget, MaterializedChunk};
+pub(crate) use chunk::MaterializedChunk;
 use chunk::{ChunkMaterializer, ChunkRuntimeContent};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 use generated_fluid::GeneratedFluidField;
