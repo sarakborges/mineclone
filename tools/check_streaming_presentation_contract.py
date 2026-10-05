@@ -30,9 +30,7 @@ for marker in required_generation:
 
 insert = "runtime.world.insert_chunk(coord,completed.output.into_chunk())"
 lighting = "activate_resident_lighting_and_presentation(streaming,runtime,coord)"
-if generation.index(insert) > generation.index(lighting, generation.index(insert)):
-    pass
-else:
+if generation.index(insert) > generation.index(lighting):
     raise SystemExit("new chunk lighting/presentation activation must happen after VoxelWorld publication")
 
 required_streaming = [
