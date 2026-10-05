@@ -548,12 +548,14 @@ fn run_worldgen_benchmark_cli() -> bool {
         }),
     );
 
-    let mut map_config = BiomeMapConfig::default();
-    map_config.center_x = center_x;
-    map_config.center_z = center_z;
-    map_config.width = area_size;
-    map_config.height = area_size;
-    map_config.blocks_per_pixel = 4;
+    let map_config = BiomeMapConfig {
+        center_x,
+        center_z,
+        blocks_per_pixel: 4,
+        width: area_size,
+        height: area_size,
+        ..default()
+    };
     metrics.insert(
         "biomeMapRender".to_owned(),
         measure_benchmark(1, || {
