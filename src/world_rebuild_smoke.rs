@@ -167,6 +167,7 @@ fn run_world_rebuild_smoke() {
 fn build_smoke_app(content: LoadedContent) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
+        .add_plugins(bevy::state::app::StatesPlugin)
         .add_plugins(AssetPlugin::default())
         .init_state::<GameState>()
         .init_asset::<Image>()
