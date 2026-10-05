@@ -144,6 +144,10 @@ impl StructureQueries<'_> {
             .placements_intersecting(origin_x, origin_z, width, depth)
     }
 
+    pub(crate) fn has_root_reference(&self, reference: &str) -> bool {
+        self.field.has_root_reference(reference)
+    }
+
     /// Finds the nearest authoritative logical root for an authored root
     /// reference. The returned representative piece carries the root reference
     /// and logical `placement_anchor`; callers must not treat its piece origin
@@ -157,6 +161,27 @@ impl StructureQueries<'_> {
     ) -> Option<StructurePlacement> {
         self.field
             .find_nearest(reference, origin_x, origin_z, max_distance)
+    }
+
+    /// Finds the nearest accepted root whose deterministic direct-root variant
+    /// resolves to `structure_id`. The root reference remains the authored
+    /// placement identity; variation filtering therefore stays inside the
+    /// authoritative Structure owner instead of being rebuilt by consumers.
+    pub(crate) fn find_nearest_variant(
+        &self,
+        reference: &str,
+        structure_id: &str,
+        origin_x: i32,
+        origin_z: i32,
+        max_distance: u32,
+    ) -> Option<StructurePlacement> {
+        self.field.find_nearest_matching(
+            reference,
+            Some(structure_id),
+            origin_x,
+            origin_z,
+            max_distance,
+        )
     }
 }
 
@@ -372,9 +397,26 @@ impl StructureField {
             .collect()
     }
 
+    fn has_root_reference(&self, reference: &str) -> bool {
+        self.rules
+            .iter()
+            .any(|rule| rule.reference.as_ref() == reference)
+    }
+
     fn find_nearest(
         &self,
         reference: &str,
+        origin_x: i32,
+        origin_z: i32,
+        max_distance: u32,
+    ) -> Option<StructurePlacement> {
+        self.find_nearest_matching(reference, None, origin_x, origin_z, max_distance)
+    }
+
+    fn find_nearest_matching(
+        &self,
+        reference: &str,
+        structure_id: Option<&str>,
         origin_x: i32,
         origin_z: i32,
         max_distance: u32,
@@ -417,6 +459,11 @@ impl StructureField {
                     let Some(placement) = candidate.representative() else {
                         continue;
                     };
+                    if structure_id
+                        .is_some_and(|structure_id| placement.structure_id() != structure_id)
+                    {
+                        continue;
+                    }
                     let replace = best.as_ref().is_none_or(|(current_distance, current)| {
                         distance_squared < *current_distance
                             || (distance_squared == *current_distance
