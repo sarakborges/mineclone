@@ -132,7 +132,7 @@ pub(crate) fn validate_structure_debug(
 ) -> StructureDebugReport {
     assert!(config.search_radius > 0, "Structure debug search radius must be positive");
     assert!(
-        config.window_size >= 16 && config.window_size % 4 == 0,
+        config.window_size >= 16 && config.window_size.is_multiple_of(4),
         "Structure debug window size must be at least 16 and divisible by four"
     );
 
