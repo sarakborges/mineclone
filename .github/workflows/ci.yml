@@ -45,6 +45,9 @@ jobs:
       - name: Audit chunk materializer contract
         run: python3 tools/check_chunk_materializer_contract.py
 
+      - name: Audit chunk seams
+        run: python3 tools/check_chunk_seams.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
