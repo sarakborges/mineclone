@@ -8,23 +8,33 @@ GENERATOR = ROOT / "src/world/generator.rs"
 chunk = CHUNK.read_text(encoding="utf-8")
 generator = GENERATOR.read_text(encoding="utf-8")
 
-required_chunk_markers = [
+sample_markers = [
     "sample_solid_volume(",
-    "edit_initial_blocks(",
     "sample_generated_fluid_volume(",
+]
+composition_markers = [
+    "edit_initial_blocks(",
     "edit_initial_fluids(",
     "placements_intersecting(",
     "rasterize_structures(",
     "collect_generated_fluid_frontiers(",
 ]
-missing = [marker for marker in required_chunk_markers if marker not in chunk]
+missing = [
+    marker
+    for marker in sample_markers + composition_markers
+    if marker not in chunk
+]
 if missing:
     raise SystemExit(f"chunk materializer is missing required stages: {missing}")
 
-positions = [chunk.index(marker) for marker in required_chunk_markers]
+first_composition = chunk.index(composition_markers[0])
+if any(chunk.index(marker) > first_composition for marker in sample_markers):
+    raise SystemExit("dense solid/fluid samples must be resolved before VoxelChunk composition")
+
+positions = [chunk.index(marker) for marker in composition_markers]
 if positions != sorted(positions):
     raise SystemExit(
-        "chunk materialization stages must remain ordered solids -> generated fluids -> "
+        "VoxelChunk composition must remain ordered blocks -> generated fluids -> "
         "planned Structures -> generated-fluid frontier"
     )
 
@@ -60,6 +70,6 @@ if generator.index("let structures = Arc::new(StructureField::new(") > generator
     raise SystemExit("ChunkMaterializer must consume finalized StructureField placements")
 
 print(
-    "Chunk materializer contract audit passed: solids -> fluids -> Structures -> frontier, "
-    "no VoxelWorld ownership"
+    "Chunk materializer contract audit passed: dense samples -> blocks -> fluids -> "
+    "Structures -> frontier, no VoxelWorld ownership"
 )
