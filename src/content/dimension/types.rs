@@ -10,6 +10,8 @@ const MAX_GENERATED_SURFACE_FLUID_RADIUS: u32 = 256;
 const MAX_GENERATED_SURFACE_FLUID_DEPTH: u32 = 4;
 const DEFAULT_GENERATED_SURFACE_FLUID_CHANCE: f32 = 1.0;
 const DEFAULT_GENERATED_SURFACE_FLUID_DEPTH: u32 = 1;
+const MAX_GENERATED_SURFACE_STRUCTURE_SPACING: u32 = 16_384;
+const DEFAULT_GENERATED_SURFACE_STRUCTURE_CHANCE: f32 = 1.0;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +35,21 @@ pub struct GeneratedSurfaceFluidDefinition {
     pub depth: u32,
 }
 
+/// One deterministic world-space root placement rule for a surface Structure
+/// or Structure group. Internal StructureSet and connector expansion remain
+/// Structure concerns and are resolved by the generation-side Structure owner.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedSurfaceStructureDefinition {
+    pub biome: String,
+    pub structure: String,
+    pub spacing: u32,
+    #[serde(default)]
+    pub jitter: u32,
+    #[serde(default = "default_generated_surface_structure_chance")]
+    pub chance: f32,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
@@ -48,6 +65,8 @@ pub struct DimensionDefinition {
     pub generated_ocean: Option<GeneratedOceanDefinition>,
     #[serde(default)]
     pub generated_surface_fluids: Vec<GeneratedSurfaceFluidDefinition>,
+    #[serde(default)]
+    pub generated_surface_structures: Vec<GeneratedSurfaceStructureDefinition>,
 }
 
 fn default_max_entities() -> usize {
@@ -60,6 +79,10 @@ fn default_generated_surface_fluid_chance() -> f32 {
 
 fn default_generated_surface_fluid_depth() -> u32 {
     DEFAULT_GENERATED_SURFACE_FLUID_DEPTH
+}
+
+fn default_generated_surface_structure_chance() -> f32 {
+    DEFAULT_GENERATED_SURFACE_STRUCTURE_CHANCE
 }
 
 #[derive(Resource, Default)]
@@ -116,6 +139,21 @@ impl DimensionRegistry {
                 surface_fluid.biome
             );
         }
+        for (index, structure) in definition.generated_surface_structures.iter().enumerate() {
+            validate_generated_surface_structure(&definition.id, index, structure);
+            assert!(
+                !definition.generated_surface_structures[..index]
+                    .iter()
+                    .any(|previous| {
+                        previous.biome == structure.biome
+                            && previous.structure == structure.structure
+                    }),
+                "dimension {} generatedSurfaceStructures cannot repeat structure {} for biome {}",
+                definition.id,
+                structure.structure,
+                structure.biome
+            );
+        }
         self.definitions.insert(definition.id.clone(), definition);
     }
 
@@ -166,6 +204,35 @@ fn validate_generated_surface_fluid(
     assert!(
         (1..=MAX_GENERATED_SURFACE_FLUID_DEPTH).contains(&definition.depth),
         "dimension {dimension_id} generatedSurfaceFluids[{index}].depth must be within 1..={MAX_GENERATED_SURFACE_FLUID_DEPTH}"
+    );
+}
+
+fn validate_generated_surface_structure(
+    dimension_id: &str,
+    index: usize,
+    definition: &GeneratedSurfaceStructureDefinition,
+) {
+    assert_namespaced_id(
+        dimension_id,
+        &format!("generatedSurfaceStructures[{index}].biome"),
+        &definition.biome,
+    );
+    assert_namespaced_id(
+        dimension_id,
+        &format!("generatedSurfaceStructures[{index}].structure"),
+        &definition.structure,
+    );
+    assert!(
+        (2..=MAX_GENERATED_SURFACE_STRUCTURE_SPACING).contains(&definition.spacing),
+        "dimension {dimension_id} generatedSurfaceStructures[{index}].spacing must be within 2..={MAX_GENERATED_SURFACE_STRUCTURE_SPACING}"
+    );
+    assert!(
+        definition.jitter.saturating_mul(2) < definition.spacing,
+        "dimension {dimension_id} generatedSurfaceStructures[{index}].jitter must be smaller than half the spacing"
+    );
+    assert!(
+        definition.chance.is_finite() && (0.0..=1.0).contains(&definition.chance),
+        "dimension {dimension_id} generatedSurfaceStructures[{index}].chance must be finite and within [0, 1]"
     );
 }
 
