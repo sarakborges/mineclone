@@ -1,8 +1,4 @@
-use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
-    time::{Duration, Instant},
-};
+use std::{cmp::Reverse, collections::BinaryHeap};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -30,23 +26,25 @@ use crate::{
 
 use super::{
     InMemoryWorldSave, WorldLoadMode,
+    destination::find_generated_surface_destination,
     dimension::{CurrentDimension, DimensionId},
     dimension_persistence::DimensionRuntimeContext,
+    generator::WorldGenerator,
 };
 
-const WARP_SEARCH_RADIUS_BLOCKS: i32 = 32;
-const WARP_SEARCH_DIAMETER: usize = (WARP_SEARCH_RADIUS_BLOCKS * 2 + 1) as usize;
-const WARP_SEARCH_VOLUME: usize =
-    WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER;
+const WARP_QUERY_RADIUS_BLOCKS: i32 = 32;
+const WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS: i32 = 2;
+const WARP_RUNTIME_VALIDATION_DIAMETER: usize =
+    (WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS * 2 + 1) as usize;
+const WARP_RUNTIME_VALIDATION_VOLUME: usize = WARP_RUNTIME_VALIDATION_DIAMETER
+    * WARP_RUNTIME_VALIDATION_DIAMETER
+    * WARP_RUNTIME_VALIDATION_DIAMETER;
+const WARP_STREAMING_HORIZONTAL_RADIUS_CHUNKS: i32 = 1;
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
-const SLOW_WARP_SEARCH_WARNING: Duration = Duration::from_millis(4);
-const WARP_SEARCH_FRAME_BUDGET: Duration = Duration::from_millis(1);
-const WARP_SEARCH_BUDGET_CHECK_INTERVAL: usize = 64;
 
 #[derive(Default)]
 struct WarpSearchState {
-    radius: i32,
     frontier: BinaryHeap<Reverse<(i32, i32, i32, i32)>>,
     visited: Vec<bool>,
 }
@@ -60,7 +58,7 @@ impl WarpSearchState {
         if !self.visited.is_empty() {
             return;
         }
-        self.visited = vec![false; WARP_SEARCH_VOLUME];
+        self.visited = vec![false; WARP_RUNTIME_VALIDATION_VOLUME];
         self.enqueue(IVec3::ZERO);
     }
 
@@ -104,15 +102,18 @@ fn warp_queue_entry(offset: IVec3) -> Reverse<(i32, i32, i32, i32)> {
 }
 
 fn warp_offset_index(offset: IVec3) -> Option<usize> {
-    if offset.abs().max_element() > WARP_SEARCH_RADIUS_BLOCKS {
+    if offset.abs().max_element() > WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS {
         return None;
     }
 
-    let shift = WARP_SEARCH_RADIUS_BLOCKS;
+    let shift = WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS;
     let x = (offset.x + shift) as usize;
     let y = (offset.y + shift) as usize;
     let z = (offset.z + shift) as usize;
-    Some(x + y * WARP_SEARCH_DIAMETER + z * WARP_SEARCH_DIAMETER * WARP_SEARCH_DIAMETER)
+    Some(
+        x + y * WARP_RUNTIME_VALIDATION_DIAMETER
+            + z * WARP_RUNTIME_VALIDATION_DIAMETER * WARP_RUNTIME_VALIDATION_DIAMETER,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,6 +126,7 @@ pub(crate) enum WarpOutcome {
 pub(crate) struct PendingWarp {
     target: Option<IVec3>,
     dimension: Option<String>,
+    prepared_surface: Option<IVec3>,
     search: WarpSearchState,
     outcome: Option<WarpOutcome>,
 }
@@ -143,6 +145,7 @@ impl PendingWarp {
         ));
         self.target = Some(target);
         self.dimension = dimension.map(str::to_owned);
+        self.prepared_surface = None;
         self.search.reset();
         self.outcome = None;
     }
@@ -155,17 +158,32 @@ impl PendingWarp {
         if self.dimension.is_some() {
             return None;
         }
-        self.target.map(|target| {
+        self.prepared_surface.or(self.target).map(|target| {
             let mut coord = chunk_coord_from_world(target);
             coord.y = coord.y.max(0);
             coord
         })
     }
 
-    fn fail(&mut self) {
+    pub(super) fn streaming_horizontal_radius(&self) -> Option<i32> {
+        (self.target.is_some() && self.dimension.is_none())
+            .then_some(WARP_STREAMING_HORIZONTAL_RADIUS_CHUNKS)
+    }
+
+    fn prepare_surface(&mut self, target: IVec3) {
+        self.prepared_surface = Some(target);
+        self.search.reset();
+    }
+
+    fn clear_request(&mut self) {
         self.target = None;
         self.dimension = None;
+        self.prepared_surface = None;
         self.search.reset();
+    }
+
+    fn fail(&mut self) {
+        self.clear_request();
         self.outcome = Some(WarpOutcome::Failed);
     }
 }
@@ -176,6 +194,7 @@ pub(super) struct DimensionWarpContext<'w, 's> {
     current_dimension: ResMut<'w, CurrentDimension>,
     load_mode: ResMut<'w, WorldLoadMode>,
     save: ResMut<'w, InMemoryWorldSave>,
+    generator: Res<'w, WorldGenerator>,
     runtime: DimensionRuntimeContext<'w, 's>,
     next_game_state: ResMut<'w, NextState<GameState>>,
 }
@@ -211,11 +230,9 @@ enum WarpSearchResult {
 pub(super) fn resolve_pending_warp(
     mut pending: ResMut<PendingWarp>,
     mut dimension: DimensionWarpContext,
-    mut slow_search_warned: Local<bool>,
     mut player: WarpPlayer,
 ) {
     let Some(target) = pending.target else {
-        *slow_search_warned = false;
         return;
     };
 
@@ -228,7 +245,6 @@ pub(super) fn resolve_pending_warp(
                     "warp.failed target={target:?} dimension={requested_dimension} reason=unknown_dimension"
                 ));
                 pending.fail();
-                *slow_search_warned = false;
                 return;
             }
 
@@ -248,7 +264,6 @@ pub(super) fn resolve_pending_warp(
                     "warp.failed target={target:?} dimension={requested_dimension} reason=dimension_state error={error}"
                 ));
                 pending.fail();
-                *slow_search_warned = false;
                 return;
             }
 
@@ -271,35 +286,46 @@ pub(super) fn resolve_pending_warp(
                 previous_dimension_text, requested_dimension, target
             ));
 
-            pending.target = None;
-            pending.dimension = None;
-            pending.search.reset();
+            pending.clear_request();
             pending.outcome = None;
-            *slow_search_warned = false;
             return;
         }
     }
 
-    let search_started = Instant::now();
-    let result =
-        advance_safe_eye_position_search(dimension.runtime.world(), target, &mut pending.search);
-    let search_elapsed = search_started.elapsed();
-    if search_elapsed >= SLOW_WARP_SEARCH_WARNING && !*slow_search_warned {
-        log_gameplay_warn(format!(
-            "warp.search slow target={:?} radius={} frontier={} visited={} elapsed_ms={:.2}",
-            target,
-            pending.search.radius,
-            pending.search.frontier.len(),
-            pending
-                .search
-                .visited
-                .iter()
-                .filter(|visited| **visited)
-                .count(),
-            search_elapsed.as_secs_f64() * 1_000.0
-        ));
-        *slow_search_warned = true;
-    }
+    let result = if let Some(prepared_surface) = pending.prepared_surface {
+        advance_local_runtime_validation(
+            dimension.runtime.world(),
+            prepared_surface,
+            &mut pending.search,
+        )
+    } else {
+        match candidate_state(dimension.runtime.world(), target) {
+            CandidateState::Unloaded => WarpSearchResult::Pending,
+            CandidateState::Valid(eye) => WarpSearchResult::Found(eye),
+            CandidateState::Invalid => {
+                let generated = find_generated_surface_destination(
+                    &dimension.generator,
+                    target.xz(),
+                    WARP_QUERY_RADIUS_BLOCKS,
+                    |_| true,
+                );
+                let Some(generated) = generated else {
+                    log_gameplay_warn(format!(
+                        "warp.failed target={target:?} query_radius={} reason=no_generated_destination",
+                        WARP_QUERY_RADIUS_BLOCKS
+                    ));
+                    pending.fail();
+                    return;
+                };
+                log_gameplay_event(format!(
+                    "warp.destination_prepared target={target:?} generated={generated:?} query_radius={}",
+                    WARP_QUERY_RADIUS_BLOCKS
+                ));
+                pending.prepare_surface(generated);
+                return;
+            }
+        }
+    };
 
     match result {
         WarpSearchResult::Pending => {}
@@ -313,46 +339,34 @@ pub(super) fn resolve_pending_warp(
             let feet = (destination - Vec3::Y * PLAYER_EYE_HEIGHT)
                 .floor()
                 .as_ivec3();
-            pending.target = None;
-            pending.search.reset();
+            pending.clear_request();
             log_gameplay_event(format!(
                 "warp.success target={:?} destination={:?}",
                 target, feet
             ));
             pending.outcome = Some(WarpOutcome::Succeeded(feet));
-            *slow_search_warned = false;
         }
         WarpSearchResult::Exhausted => {
-            warn!(
-                "could not find a safe warp destination within {} blocks of {:?}",
-                WARP_SEARCH_RADIUS_BLOCKS, target
-            );
-            pending.target = None;
-            pending.search.reset();
             log_gameplay_warn(format!(
-                "warp.failed target={:?} search_radius={} reason=no_safe_destination",
-                target, WARP_SEARCH_RADIUS_BLOCKS
+                "warp.failed target={:?} query_radius={} runtime_validation_radius={} reason=no_safe_destination",
+                target, WARP_QUERY_RADIUS_BLOCKS, WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS
             ));
-            pending.outcome = Some(WarpOutcome::Failed);
-            *slow_search_warned = false;
+            pending.fail();
         }
     }
 }
 
-fn advance_safe_eye_position_search(
+fn advance_local_runtime_validation(
     world: &VoxelWorld,
     target: IVec3,
     search: &mut WarpSearchState,
 ) -> WarpSearchResult {
-    let frame_started = Instant::now();
-    let mut candidates_since_budget_check = 0_usize;
     search.ensure_started();
 
     loop {
         let Some(offset) = search.pop_nearest() else {
             return WarpSearchResult::Exhausted;
         };
-        search.radius = search.radius.max(offset.abs().max_element());
 
         let Some(feet) = target
             .x
@@ -372,14 +386,6 @@ fn advance_safe_eye_position_search(
             }
             CandidateState::Invalid => search.expand_from(offset),
             CandidateState::Valid(eye) => return WarpSearchResult::Found(eye),
-        }
-
-        candidates_since_budget_check += 1;
-        if candidates_since_budget_check >= WARP_SEARCH_BUDGET_CHECK_INTERVAL {
-            candidates_since_budget_check = 0;
-            if frame_started.elapsed() >= WARP_SEARCH_FRAME_BUDGET {
-                return WarpSearchResult::Pending;
-            }
         }
     }
 }
@@ -450,7 +456,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn warp_priority_queue_visits_offsets_by_non_decreasing_distance() {
+    fn runtime_validation_visits_offsets_by_non_decreasing_distance() {
         let mut search = WarpSearchState::default();
         search.ensure_started();
 
@@ -469,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn unloaded_candidate_can_be_requeued_without_expanding_search() {
+    fn unloaded_candidate_can_be_requeued_without_expanding_validation() {
         let mut search = WarpSearchState::default();
         search.ensure_started();
         let candidate = search.pop_nearest().expect("origin candidate must exist");
@@ -482,10 +488,14 @@ mod tests {
     }
 
     #[test]
-    fn warp_search_never_enqueues_offsets_outside_maximum_cube() {
+    fn runtime_validation_never_enqueues_offsets_outside_small_cube() {
         let mut search = WarpSearchState::default();
         search.ensure_started();
-        search.enqueue(IVec3::new(WARP_SEARCH_RADIUS_BLOCKS + 1, 0, 0));
+        search.enqueue(IVec3::new(
+            WARP_RUNTIME_VALIDATION_RADIUS_BLOCKS + 1,
+            0,
+            0,
+        ));
         assert_eq!(search.frontier.len(), 1);
     }
 
@@ -495,25 +505,49 @@ mod tests {
         pending.request(IVec3::new(15, 64, 15), Some("asteria:umbral"));
 
         assert_eq!(pending.streaming_center(), None);
+        assert_eq!(pending.streaming_horizontal_radius(), None);
     }
 
     #[test]
-    fn requesting_a_new_warp_resets_previous_search_progress() {
+    fn prepared_surface_retargets_streaming_directly() {
         let mut pending = PendingWarp::default();
-        pending.request(IVec3::new(10, 20, 30), Some("asteria:umbral"));
+        let requested = IVec3::new(15, 10, 15);
+        let generated = IVec3::new(80, 70, -40);
+        pending.request(requested, None);
+        let requested_center = pending.streaming_center();
+
+        pending.prepare_surface(generated);
+
+        assert_ne!(pending.streaming_center(), requested_center);
+        assert_eq!(
+            pending.streaming_center(),
+            Some(chunk_coord_from_world(generated).with_y(
+                chunk_coord_from_world(generated).y.max(0)
+            ))
+        );
+        assert_eq!(
+            pending.streaming_horizontal_radius(),
+            Some(WARP_STREAMING_HORIZONTAL_RADIUS_CHUNKS)
+        );
+    }
+
+    #[test]
+    fn requesting_a_new_warp_resets_prepared_destination_and_validation() {
+        let mut pending = PendingWarp::default();
+        pending.request(IVec3::new(10, 20, 30), None);
+        pending.prepare_surface(IVec3::new(12, 64, 34));
         pending.search.ensure_started();
         let origin = pending
             .search
             .pop_nearest()
             .expect("origin candidate must exist before reset");
         pending.search.expand_from(origin);
-        pending.search.radius = 8;
 
         pending.request(IVec3::new(-4, 7, 9), None);
 
         assert_eq!(pending.target, Some(IVec3::new(-4, 7, 9)));
         assert!(pending.dimension.is_none());
-        assert_eq!(pending.search.radius, 0);
+        assert!(pending.prepared_surface.is_none());
         assert!(pending.search.frontier.is_empty());
         assert!(pending.search.visited.is_empty());
         assert!(pending.outcome.is_none());
