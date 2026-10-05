@@ -313,7 +313,7 @@ fn install_world_generator(
             )
         });
 
-    commands.insert_resource(WorldGenerator::new(
+    commands.insert_resource(WorldGenerator::new_with_structures(
         seed.0,
         definition,
         &biomes,
