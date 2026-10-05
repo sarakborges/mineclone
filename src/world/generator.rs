@@ -2,6 +2,7 @@ mod biome;
 mod biome_map;
 mod foundation;
 mod terrain;
+mod terrain_debug;
 
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
 pub(crate) use terrain::TerrainQueries;
 use terrain::TerrainField;
+pub(crate) use terrain_debug::{TerrainDebugConfig, render_terrain_debug};
 
 /// Immutable entry point for deterministic generated-world queries.
 ///
