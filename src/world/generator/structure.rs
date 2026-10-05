@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    sync::Arc,
+};
 
 use bevy::{
     math::Vec3Swizzles,
@@ -67,6 +71,13 @@ impl StructurePlacement {
                 .saturating_add(self.structure.effective_max_y_offset()),
         )
     }
+}
+
+#[derive(Clone, Debug)]
+struct StructureCandidate {
+    rule_index: usize,
+    cell: GenerationPoint2,
+    placement: StructurePlacement,
 }
 
 #[derive(Clone, Copy)]
@@ -183,9 +194,37 @@ impl StructureField {
         let maximum_z = checked_area_max(origin_z, depth, "Z");
         let query_minimum = IVec2::new(origin_x, origin_z);
         let query_maximum = IVec2::new(maximum_x, maximum_z);
-        let mut placements = Vec::new();
+        let direct_candidates =
+            self.collect_candidates_intersecting_bounds(query_minimum, query_maximum);
+        let mut placements = self
+            .resolve_conflicts(direct_candidates)
+            .into_iter()
+            .map(|candidate| candidate.placement)
+            .collect::<Vec<_>>();
 
-        for rule in self.rules.iter() {
+        placements.sort_by(|left, right| {
+            left.origin
+                .z
+                .cmp(&right.origin.z)
+                .then_with(|| left.origin.x.cmp(&right.origin.x))
+                .then_with(|| left.origin.y.cmp(&right.origin.y))
+                .then_with(|| left.structure.id.cmp(&right.structure.id))
+        });
+        placements
+    }
+
+    fn collect_candidates_intersecting_bounds(
+        &self,
+        query_minimum: IVec2,
+        query_maximum: IVec2,
+    ) -> Vec<StructureCandidate> {
+        debug_assert!(
+            query_minimum.x <= query_maximum.x && query_minimum.y <= query_maximum.y,
+            "structure query bounds must be ordered"
+        );
+        let mut candidates = Vec::new();
+
+        for (rule_index, rule) in self.rules.iter().enumerate() {
             let padding = rule
                 .maximum_horizontal_extent
                 .saturating_add(i32::try_from(rule.jitter).unwrap_or(i32::MAX));
@@ -201,32 +240,69 @@ impl StructureField {
 
             for cell_z in minimum_cell.y..=maximum_cell.y {
                 for cell_x in minimum_cell.x..=maximum_cell.x {
-                    let cell = GenerationPoint2::new(cell_x, cell_z);
-                    let Some(placement) = self.resolve_candidate(rule, cell) else {
+                    let Some(candidate) = self.resolve_candidate(
+                        rule_index,
+                        rule,
+                        GenerationPoint2::new(cell_x, cell_z),
+                    ) else {
                         continue;
                     };
-                    let (placement_minimum, placement_maximum) = placement.horizontal_bounds();
+                    let (placement_minimum, placement_maximum) =
+                        candidate.placement.horizontal_bounds();
                     if rectangles_overlap(
                         placement_minimum,
                         placement_maximum,
                         query_minimum,
                         query_maximum,
                     ) {
-                        placements.push(placement);
+                        candidates.push(candidate);
                     }
                 }
             }
         }
 
-        placements.sort_by(|left, right| {
-            left.origin
-                .z
-                .cmp(&right.origin.z)
-                .then_with(|| left.origin.x.cmp(&right.origin.x))
-                .then_with(|| left.origin.y.cmp(&right.origin.y))
-                .then_with(|| left.structure.id.cmp(&right.structure.id))
-        });
-        placements
+        candidates
+    }
+
+    fn resolve_conflicts(
+        &self,
+        direct_candidates: Vec<StructureCandidate>,
+    ) -> Vec<StructureCandidate> {
+        if direct_candidates.is_empty() {
+            return direct_candidates;
+        }
+
+        let mut competitors = direct_candidates.clone();
+        let mut seen = competitors
+            .iter()
+            .map(candidate_identity)
+            .collect::<HashSet<_>>();
+
+        for direct in &direct_candidates {
+            let (minimum, maximum) = direct.placement.horizontal_bounds();
+            for candidate in self.collect_candidates_intersecting_bounds(minimum, maximum) {
+                if same_candidate(&candidate, direct)
+                    || !self.candidate_outranks(&candidate, direct)
+                    || !candidates_conflict(&candidate, direct)
+                {
+                    continue;
+                }
+                if seen.insert(candidate_identity(&candidate)) {
+                    competitors.push(candidate);
+                }
+            }
+        }
+
+        direct_candidates
+            .into_iter()
+            .filter(|candidate| {
+                !competitors.iter().any(|other| {
+                    !same_candidate(other, candidate)
+                        && self.candidate_outranks(other, candidate)
+                        && candidates_conflict(other, candidate)
+                })
+            })
+            .collect()
     }
 
     fn find_nearest(
@@ -249,21 +325,29 @@ impl StructureField {
         );
         let mut best: Option<(i128, StructurePlacement)> = None;
 
-        for rule in self.rules.iter().filter(|rule| rule.reference.as_ref() == reference) {
+        for (rule_index, rule) in self
+            .rules
+            .iter()
+            .enumerate()
+            .filter(|(_, rule)| rule.reference.as_ref() == reference)
+        {
             let (minimum_cell, maximum_cell) = candidate_cell_bounds(rule.spacing, minimum, maximum);
             for cell_z in minimum_cell.y..=maximum_cell.y {
                 for cell_x in minimum_cell.x..=maximum_cell.x {
-                    let Some(placement) =
-                        self.resolve_candidate(rule, GenerationPoint2::new(cell_x, cell_z))
-                    else {
+                    let Some(candidate) = self.resolve_candidate(
+                        rule_index,
+                        rule,
+                        GenerationPoint2::new(cell_x, cell_z),
+                    ) else {
                         continue;
                     };
-                    let delta = placement.origin.xz() - origin;
+                    let delta = candidate.placement.origin.xz() - origin;
                     let distance_squared = i128::from(delta.x) * i128::from(delta.x)
                         + i128::from(delta.y) * i128::from(delta.y);
-                    if distance_squared > maximum_squared {
+                    if distance_squared > maximum_squared || !self.candidate_is_accepted(&candidate) {
                         continue;
                     }
+                    let placement = candidate.placement;
                     let replace = best.as_ref().is_none_or(|(current_distance, current)| {
                         distance_squared < *current_distance
                             || (distance_squared == *current_distance
@@ -279,11 +363,56 @@ impl StructureField {
         best.map(|(_, placement)| placement)
     }
 
+    fn candidate_is_accepted(&self, candidate: &StructureCandidate) -> bool {
+        let (minimum, maximum) = candidate.placement.horizontal_bounds();
+        !self
+            .collect_candidates_intersecting_bounds(minimum, maximum)
+            .into_iter()
+            .any(|other| {
+                !same_candidate(&other, candidate)
+                    && self.candidate_outranks(&other, candidate)
+                    && candidates_conflict(&other, candidate)
+            })
+    }
+
+    fn candidate_outranks(
+        &self,
+        left: &StructureCandidate,
+        right: &StructureCandidate,
+    ) -> bool {
+        self.candidate_order(left, right) == Ordering::Less
+    }
+
+    fn candidate_order(
+        &self,
+        left: &StructureCandidate,
+        right: &StructureCandidate,
+    ) -> Ordering {
+        let left_rule = &self.rules[left.rule_index];
+        let right_rule = &self.rules[right.rule_index];
+        right
+            .placement
+            .structure
+            .priority
+            .cmp(&left.placement.structure.priority)
+            .then_with(|| {
+                left_rule
+                    .reference
+                    .as_ref()
+                    .cmp(right_rule.reference.as_ref())
+            })
+            .then_with(|| left_rule.biome.as_ref().cmp(right_rule.biome.as_ref()))
+            .then_with(|| left.placement.origin.x.cmp(&right.placement.origin.x))
+            .then_with(|| left.placement.origin.z.cmp(&right.placement.origin.z))
+            .then_with(|| left.placement.origin.y.cmp(&right.placement.origin.y))
+    }
+
     fn resolve_candidate(
         &self,
+        rule_index: usize,
         rule: &RootStructureRule,
         cell: GenerationPoint2,
-    ) -> Option<StructurePlacement> {
+    ) -> Option<StructureCandidate> {
         if unit_probability(self.entropy.sample_2d(rule.presence_domain, cell))
             > f64::from(rule.chance)
         {
@@ -319,11 +448,15 @@ impl StructureField {
         let origin_y = self.fit_origin_y(&structure, rotation, anchor)?;
 
         self.satisfies_restrictions(rule, &structure, rotation, anchor, origin_y)
-            .then_some(StructurePlacement {
-                reference: Arc::clone(&rule.reference),
-                structure,
-                rotation,
-                origin: IVec3::new(anchor.x, origin_y, anchor.y),
+            .then_some(StructureCandidate {
+                rule_index,
+                cell,
+                placement: StructurePlacement {
+                    reference: Arc::clone(&rule.reference),
+                    structure,
+                    rotation,
+                    origin: IVec3::new(anchor.x, origin_y, anchor.y),
+                },
             })
     }
 
@@ -602,6 +735,40 @@ impl RootStructureRule {
             rotation_domain: GenerationDomain::named(&format!("{ROTATION_DOMAIN_PREFIX}{suffix}")),
         }
     }
+}
+
+fn candidate_identity(candidate: &StructureCandidate) -> (usize, i32, i32) {
+    (
+        candidate.rule_index,
+        candidate.cell.x(),
+        candidate.cell.z(),
+    )
+}
+
+fn same_candidate(left: &StructureCandidate, right: &StructureCandidate) -> bool {
+    candidate_identity(left) == candidate_identity(right)
+}
+
+fn candidates_conflict(higher: &StructureCandidate, lower: &StructureCandidate) -> bool {
+    let (higher_minimum, higher_maximum) = higher.placement.horizontal_bounds();
+    let (lower_minimum, lower_maximum) = lower.placement.horizontal_bounds();
+    let (higher_minimum_y, higher_maximum_y) = higher.placement.vertical_bounds();
+    let (lower_minimum_y, lower_maximum_y) = lower.placement.vertical_bounds();
+
+    rectangles_overlap(
+        higher_minimum,
+        higher_maximum,
+        lower_minimum,
+        lower_maximum,
+    ) && higher_maximum_y >= lower_minimum_y
+        && higher_minimum_y <= lower_maximum_y
+        && (higher.placement.structure.generation.reserve_space
+            || higher
+                .placement
+                .structure
+                .conflict_groups
+                .iter()
+                .any(|group| lower.placement.structure.conflict_groups.contains(group)))
 }
 
 fn candidate_cell_bounds(spacing: i32, minimum: IVec2, maximum: IVec2) -> (IVec2, IVec2) {
