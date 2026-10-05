@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `4a68344adb7f46ec06bacc322b5048d55c4c4f2d` (`Run lightweight Structure query audit`), including connected surface-water roots from `4dc729be0dffbed013fc66b40564c44e6948df72`, biome-margin roots from `6231b58e91d62df290a392de89e87bdd760b6f54`, connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e`, and the complete simple-root migration at `c3c07e0604d08514e6b881a62b772d1f9d152d05`. Rust validation run `37318696976` completed successfully for this baseline, including the lightweight Structure query contract audit. Terrain/Structure debug capabilities remain available on demand and are not permanent full-binary CI probes.
+Code baseline recorded here: `087647e779cb424e52a9202bedfc4296d946e8ef` (`Align chunk materializer audit with composition order`), including the Phase 7 materializer implementation rooted at `df898c857a94c3dccba28ce2a7c4bd031fd691c9` and the initial materializer commit `b1a32a91e4f7937dfcc5180e4add93e09bbe3655`. Rust validation run `37324346270` completed successfully for this baseline, including localization/content/GLB audits, the Structure query contract audit, the chunk materializer contract audit, Clippy with `-D warnings`, and `cargo check --locked`. Terrain/Structure debug capabilities remain available on demand and are not permanent full-binary CI probes.
 
 ## Validation policy
 
@@ -13,6 +13,7 @@ Repository validation follows root `AGENTS.md`.
 - Do not run or add `cargo test` unless the user explicitly requests that command for the current task.
 - Default Rust validation is Clippy with `-D warnings`, `cargo check --locked`, and applicable content/localization/GLB audits.
 - `tools/check_structure_query_contract.py` is the lightweight CI gate for Structure bounded-query/order invariants; it reads the authoritative owner shape, verifies current authored probe families, and exercises overlap/order/nearest contracts without linking or running the game binary.
+- `tools/check_chunk_materializer_contract.py` is the lightweight Phase 7 gate for the materialization boundary; it verifies dense semantic sampling occurs before runtime composition, then guards block → generated-fluid → planned-Structure → generated-fluid-frontier ordering without introducing `VoxelWorld` ownership.
 - Visual/debug validation is an on-demand consumer capability, not a permanent CI fixture-rendering loop.
 - A milestone is not complete while the exact delivered SHA has pending, failed, or unobservable CI.
 
@@ -27,7 +28,7 @@ Repository validation follows root `AGENTS.md`.
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
 | 6 — Structures/features | Complete for current authored content | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, all current simple surface roots, biome-margin roots, lake/waterfall connected roots, and a lightweight CI seam/order/nearest contract gate. |
-| 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
+| 7 — Chunk synthesis | In progress | `ChunkMaterializer` now deterministically composes dense solid/material results, generated fluids, already-planned Structure pieces, and generated-fluid frontier targets into one `VoxelChunk`; adjacent-chunk/scalar seam validation is still pending before Phase 7 is complete. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
 | 10 — Loading pipeline | Pending | Old loading ownership was removed; replacement pipeline has not been implemented. |
@@ -181,17 +182,47 @@ Cavern entrance/tunnel Structures are preserved but are not a current Phase 6 su
 
 Structure planning remains independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
 
+## Phase 7 — Chunk synthesis in progress
+
+Authoritative materialization-side implementation:
+
+- `src/world/generator/chunk.rs`
+- `src/world/generator.rs` for the `WorldGenerator::materialize_chunk(...)` capability boundary
+- `src/world/mod.rs` for immutable runtime-content installation
+- `tools/check_chunk_materializer_contract.py` for the lightweight composition-order/ownership gate
+
+Implemented now:
+
+- `ChunkMaterializer` is the single adapter from semantic generator owners to one runtime `VoxelChunk`; the chunk remains materialized storage and does not become the owner of biome, terrain, material, fluid, or Structure generation facts;
+- runtime installation freezes `BlockRegistry` and `FluidRegistry` only as encoding dictionaries for already-authoritative generated identities; they do not participate in spatial generation decisions;
+- one chunk request resolves dense solid/material and generated-fluid volumes before mutating runtime chunk storage;
+- solids are encoded first with deterministic world-position texture rotation;
+- generated fluids are then encoded as initial source cells and assert that they do not overlap solid generated terrain;
+- already-planned `StructureField` placements intersecting the chunk are queried after base composition and rasterized without replanning at chunk boundaries;
+- Structure replacement semantics preserve the existing contract: `AirOnly` cannot replace base block/fluid occupancy or earlier claimed Structure content, while `Terrain` may replace base generated content but not earlier claimed Structure voxels;
+- Structure block, fluid, clear, `clearAbove`, surface-layer, object, orientation, fluid-displacement, and attachment payloads are materialized through existing generic Structure definitions;
+- cross-chunk Structure graphs are still planned globally by `StructureField`; the materializer only clips each already-resolved piece to the requested chunk volume;
+- generated-fluid frontier candidates are collected only after Structure composition, so Structure displacement/clears affect the handoff exactly as materialized;
+- frontier publication remains sparse: only exposed continuation targets are returned, never every generated fluid voxel;
+- frontier targets outside the requested chunk remain potential until runtime revalidation sees neighboring materialized state;
+- chunk synthesis is independent of `VoxelWorld`, streaming residency, neighboring chunk request order, and prior materialization history;
+- the lightweight CI materializer audit freezes dense-sampling-before-composition and block → fluid → Structure → frontier order without linking/running the game binary.
+
+### Phase 7 validation boundary still open
+
+The materialization ownership/composition foundation is implemented and compiles cleanly, but Phase 7 is not complete yet. The next validation cut must prove adjacent synthesized chunks agree with scalar generator facts and preserve Structure payloads across chunk seams. In particular, seam fixtures should cover ordinary block/fluid payloads, clear/`clearAbove`, generated-fluid frontiers, and attachment-only Structure payloads whose support can lie near a chunk boundary before consumer streaming is reconnected.
+
 ## Next concrete work
 
-Begin **Phase 7 — Chunk synthesis**.
+Continue **Phase 7 — Chunk synthesis validation**.
 
 Required direction:
 
-1. introduce one authoritative materialization path that asks `WorldGenerator` capabilities for terrain/material/generated-fluid/Structure facts covering one `VoxelChunk` volume; do not move semantic generation ownership into `VoxelChunk`;
-2. compose base solid/material results first, then generated fluids, then already-planned Structure pieces that intersect the chunk, respecting authored Structure payload semantics and allowing one logical graph to span multiple chunks without replanning;
-3. surface only generated-fluid frontier targets from newly materialized content to the existing runtime-fluid handoff; never bulk-schedule all generated fluid voxels;
-4. keep materialization deterministic and independent of chunk request order, neighboring chunk residency, streaming order, or prior materialization;
-5. validate adjacent synthesized chunks against scalar generator queries and Structure crossings before reconnecting streaming/consumers in Phase 8.
+1. add lightweight deterministic fixtures for adjacent synthesized chunks and compare base solid/generated-fluid cells against scalar `MaterialQueries` at shared boundaries;
+2. validate already-planned Structure pieces crossing chunk boundaries without chunk-local replanning, including block/fluid/clear/`clearAbove` and attachment-only payload seams;
+3. validate generated-fluid frontier targets at chunk edges so inside-chunk targets are filtered against final materialized content while cross-chunk targets remain deferred for runtime revalidation;
+4. prove repeated/reordered materialization of the same neighboring chunk set is byte/semantic-equivalent without requiring `VoxelWorld` or streaming residency;
+5. only after these seam/order fixtures are green, mark Phase 7 complete and begin Phase 8 consumer/streaming reconnection.
 
 ## Important non-regression rules
 
