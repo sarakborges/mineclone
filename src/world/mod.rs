@@ -111,6 +111,10 @@ use work_budget::begin_world_frame_work_budget;
 const DEFAULT_TERRAIN_ROUGHNESS: f32 = 0.98;
 const DEFAULT_TERRAIN_METALLIC: f32 = 0.0;
 
+fn world_frame_work_active(state: Res<State<GameState>>) -> bool {
+    matches!(state.get(), GameState::Loading | GameState::Gameplay)
+}
+
 pub(crate) struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
@@ -230,13 +234,11 @@ impl Plugin for WorldPlugin {
                     prepare_world_render_assets,
                 )
                     .chain()
-                    .run_if(in_state(GameState::Loading)),
+                    .run_if(world_frame_work_active),
             )
             .add_systems(
                 Update,
                 (
-                    begin_world_frame_work_budget,
-                    prepare_world_render_assets,
                     begin_retirement_work,
                     retire_distant_chunk_meshes,
                     resolve_pending_warp,
@@ -244,6 +246,7 @@ impl Plugin for WorldPlugin {
                     finish_retirement_work,
                 )
                     .chain()
+                    .after(prepare_world_render_assets)
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
