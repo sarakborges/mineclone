@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `7fab2753ed651416c2212358cbb146357349acaa` (`Add bounded floating terrain contributions`). Rust validation run `37252455803` completed successfully for that baseline.
+Code baseline recorded here: `c70b205a259359f0fffd8deb7630a3d12fe42337` (`Add terrain debug CLI`). Rust validation run `37252948392` completed successfully for that baseline.
 
 ## Validation policy
 
@@ -22,7 +22,7 @@ Repository validation follows root `AGENTS.md`.
 | 1 — Cleanup | Complete | Legacy biome/world-generation/loading ownership and transitional biome presentation bridges were removed. Preserved runtime systems remain separate from the new generator. |
 | 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
 | 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
-| 4 — Terrain | In progress | Continuous 2D base-surface terrain, final 3D density composition, bounded subtractive caves, biome-authored bounded floating masses, effective surface resolution, and dense XYZ density sampling are implemented. Terrain visual/debug validation and remaining true-3D forms are still pending. |
+| 4 — Terrain | In progress | Continuous 2D base-surface terrain, final 3D density composition, bounded subtractive caves, biome-authored bounded floating masses, effective surface resolution, dense XYZ density sampling, and an authoritative-query terrain debug renderer are implemented. Visual inspection and any remaining required true-3D forms are still pending. |
 | 5 — Surface/materials/generated fluids | Pending | Not started on the new stack. |
 | 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
@@ -110,6 +110,7 @@ The viewer must remain a consumer of the authoritative layout. It must never bec
 Authoritative implementation currently being built:
 
 - `src/world/generator/terrain.rs`
+- `src/world/generator/terrain_debug.rs`
 - `src/content/biome.rs` `surfaceTerrain` and `terrain3d`
 
 Current terrain facts:
@@ -124,7 +125,10 @@ Current terrain facts:
 - bounded surface-grid sampling uses the same effective surface resolver as scalar queries;
 - `TerrainQueries::sample_density_volume(...)` provides dense XYZ batch sampling while reusing one authoritative biome sample and base-surface result per X/Z column;
 - biome influence weights blend each participating biome's base terrain profile;
-- every current surface biome has an authored `surfaceTerrain` profile.
+- every current surface biome has an authored `surfaceTerrain` profile;
+- `src/world/generator/terrain_debug.rs` consumes only `TerrainQueries` and does not reimplement terrain semantics;
+- `--terrain-debug` renders an X/Z effective-surface image, an X/Y final-density slice at the selected Z, and JSON metadata from the same authoritative queries;
+- the density slice distinguishes base solid, cave carve, additive mass, base-surface crossing, and effective additive crossing, while the surface map highlights columns whose effective top rises above the base surface.
 
 Current base-surface authoring shape:
 
@@ -160,11 +164,13 @@ Current bounded floating authoring shape:
 
 ### What is not implemented yet in Phase 4
 
-The final density field now composes both subtractive and additive bounded 3D terrain, but Phase 4 is not complete. Remaining work includes, as applicable:
+The final density field now composes both subtractive and additive bounded 3D terrain, and the authoritative-query debug renderer exists. Phase 4 is still not complete because the debug output has not yet been used to complete visual validation of the current terrain field. Remaining work includes, as applicable:
 
-- overhangs and other non-floating additive forms where authored terrain requires them;
-- future volume-biome terrain effects;
-- terrain visual/debug validation of final density, crossings and seams before materials/features are layered on top.
+- inspect floating formation shape and biome-edge retreat;
+- inspect cave crossings and accidental surface breakthroughs;
+- inspect cross-chunk/cross-boundary seams using matching world-space windows;
+- add overhangs or other non-floating additive forms only where the authored terrain contract actually requires them;
+- future volume-biome terrain effects remain deferred until volume-biome authoring exists.
 
 Cross-chunk/world-space determinism must remain unchanged as those contributions are added.
 
@@ -172,16 +178,16 @@ Cross-chunk/world-space determinism must remain unchanged as those contributions
 
 Continue **Phase 4**, not Phase 3.
 
-The next implementation should extend the current `TerrainField`; do not create a second terrain owner and do not return to biome-layout work unless a real Phase 4 requirement exposes a biome-layout defect.
+The next work should use the terrain debug path rather than inventing another terrain sampler or resolver.
 
 Required direction:
 
-1. keep `base_surface_at` as the cheap authoritative 2D terrain result;
-2. add a terrain visual/debug path that consumes the same `TerrainQueries` and can inspect final density/effective surfaces without becoming a second resolver;
-3. use that validation to inspect floating formations, cave crossings and cross-boundary/seam behavior;
-4. add any remaining true-3D terrain forms required to satisfy Phase 4 from the same final density owner;
+1. render representative `--terrain-debug` windows for base terrain, floating-island boundaries, and cave-heavy slices;
+2. inspect the generated surface/density images and JSON summaries for crossings and seams;
+3. correct defects in the existing final `TerrainField` if the validation exposes any;
+4. add another true-3D terrain form only if the visual/behavioral contract demonstrates it is actually required;
 5. preserve scalar/batch equivalence and world-coordinate anchoring;
-6. only after Phase 4 is complete proceed to surface/material/generated-fluid composition.
+6. once terrain validation is satisfied, close Phase 4 and proceed to Phase 5 surface/material/generated-fluid composition.
 
 ## Important non-regression rules
 
