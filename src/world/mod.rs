@@ -37,7 +37,7 @@ pub(crate) mod warp;
 mod work_budget;
 pub(crate) mod world_names;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
@@ -297,18 +297,24 @@ impl Plugin for WorldPlugin {
     }
 }
 
+#[derive(SystemParam)]
+struct WorldGeneratorContent<'w> {
+    dimensions: Res<'w, DimensionRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    blocks: Res<'w, BlockRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    structures: Res<'w, StructureRegistry>,
+    structure_sets: Res<'w, StructureSetRegistry>,
+}
+
 fn install_world_generator(
     mut commands: Commands,
     seed: Res<WorldSeed>,
     current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    structures: Res<StructureRegistry>,
-    structure_sets: Res<StructureSetRegistry>,
+    content: WorldGeneratorContent,
 ) {
-    let definition = dimensions
+    let definition = content
+        .dimensions
         .get(current_dimension.id.as_str())
         .unwrap_or_else(|| {
             panic!(
@@ -320,11 +326,11 @@ fn install_world_generator(
     commands.insert_resource(WorldGenerator::new_runtime(
         seed.0,
         definition,
-        &biomes,
-        &blocks,
-        &fluids,
-        &structures,
-        &structure_sets,
+        &content.biomes,
+        &content.blocks,
+        &content.fluids,
+        &content.structures,
+        &content.structure_sets,
     ));
 }
 
