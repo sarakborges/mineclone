@@ -4,6 +4,7 @@ mod foundation;
 mod generated_fluid;
 mod material;
 mod structure;
+mod structure_set;
 mod terrain;
 mod terrain_debug;
 
@@ -15,6 +16,7 @@ use crate::content::{
     biome::BiomeRegistry,
     dimension::{DimensionDefinition, GeneratedOceanDefinition, GeneratedSurfaceFluidDefinition},
     structure::StructureRegistry,
+    structure_set::StructureSetRegistry,
 };
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
@@ -56,10 +58,12 @@ impl WorldGenerator {
             GenerationDimension::from_definition(dimension),
         );
         let structures = StructureRegistry::default();
+        let structure_sets = StructureSetRegistry::default();
         Self::from_snapshot_with_content(
             snapshot,
             biome_registry,
             &structures,
+            &structure_sets,
             dimension.generated_ocean.as_ref(),
             &dimension.generated_surface_fluids,
             &[],
@@ -71,6 +75,7 @@ impl WorldGenerator {
         dimension: &DimensionDefinition,
         biome_registry: &BiomeRegistry,
         structure_registry: &StructureRegistry,
+        structure_set_registry: &StructureSetRegistry,
     ) -> Self {
         let snapshot = GenerationSnapshot::new(
             GenerationSeed::new(seed),
@@ -80,6 +85,7 @@ impl WorldGenerator {
             snapshot,
             biome_registry,
             structure_registry,
+            structure_set_registry,
             dimension.generated_ocean.as_ref(),
             &dimension.generated_surface_fluids,
             &dimension.generated_surface_structures,
@@ -88,10 +94,12 @@ impl WorldGenerator {
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
         let structures = StructureRegistry::default();
+        let structure_sets = StructureSetRegistry::default();
         Self::from_snapshot_with_content(
             snapshot,
             biome_registry,
             &structures,
+            &structure_sets,
             None,
             &[],
             &[],
@@ -102,6 +110,7 @@ impl WorldGenerator {
         snapshot: GenerationSnapshot,
         biome_registry: &BiomeRegistry,
         structure_registry: &StructureRegistry,
+        structure_set_registry: &StructureSetRegistry,
         generated_ocean: Option<&GeneratedOceanDefinition>,
         generated_surface_fluids: &[GeneratedSurfaceFluidDefinition],
         generated_surface_structures: &[crate::content::dimension::GeneratedSurfaceStructureDefinition],
@@ -130,6 +139,7 @@ impl WorldGenerator {
             &snapshot,
             biome_registry,
             structure_registry,
+            structure_set_registry,
             Arc::clone(&biomes),
             Arc::clone(&terrain),
             Arc::clone(&materials),
