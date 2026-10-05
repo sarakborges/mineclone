@@ -68,7 +68,8 @@ for description, fragment in required_generation.items():
     require(fragment in generation, description)
 
 required_world = {
-    "loading receives a fresh frame work budget and advances render assets": "begin_world_frame_work_budget,prepare_world_render_assets,).chain().run_if(in_state(GameState::Loading))",
+    "loading and gameplay share one frame work budget/render preparation chain": "begin_world_frame_work_budget,prepare_world_render_assets,).chain().run_if(world_frame_work_active)",
+    "the shared frame work condition includes loading and gameplay": "matches!(state.get(),GameState::Loading|GameState::Gameplay)",
     "new-world shell is prepared before generator installation": "prepare_world_session,install_world_generator",
     "render resources are installed after the generator bootstrap": "install_world_generator,install_world_render_resources",
     "new worlds reserve canonical persisted identity": "create_new_world(",
