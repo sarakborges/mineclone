@@ -18,12 +18,12 @@ use crate::{
     },
 };
 
-pub(super) enum WorldActivationError {
+pub(crate) enum WorldActivationError {
     Load(io::Error),
     Inventory(io::Error),
 }
 
-pub(super) struct PreparedWorldActivation {
+pub(crate) struct PreparedWorldActivation {
     inventory: PlayerHotbar,
     storage_boxes: StorageBoxStorage,
     save: InMemoryWorldSave,
@@ -39,7 +39,7 @@ pub(super) struct PreparedWorldActivation {
 }
 
 impl PreparedWorldActivation {
-    pub(super) fn prepare(
+    pub(crate) fn prepare(
         id: String,
         mut snapshot: WorldSnapshot,
         world: VoxelWorld,
@@ -150,7 +150,7 @@ impl PreparedWorldActivation {
         })
     }
 
-    pub(super) fn commit(
+    pub(crate) fn commit(
         self,
         commands: &mut Commands,
         inventory: &mut PlayerHotbar,
