@@ -39,6 +39,10 @@ use super::{
     fluid_updates::PendingFluidUpdates,
     generator::WorldGenerator,
     lighting_updates::process_dynamic_lighting,
+    loading::{
+        WorldLoadingProgress, WorldLoadingState, finish_loading_when_ready,
+        prepare_loading_destination, world_streaming_active,
+    },
     render_distance::RenderDistanceSettings,
     tick::WorldTickClock,
     warp::{PendingWarp, resolve_pending_warp},
@@ -50,9 +54,15 @@ pub(super) struct ChunkStreamingPlugin;
 impl Plugin for ChunkStreamingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkMaterializationTasks>()
+            .init_resource::<WorldLoadingState>()
+            .init_resource::<WorldLoadingProgress>()
             .add_systems(
                 OnEnter(GameState::Loading),
-                reset_resource::<ChunkMaterializationTasks>,
+                (
+                    reset_resource::<ChunkMaterializationTasks>,
+                    reset_resource::<WorldLoadingState>,
+                    reset_resource::<WorldLoadingProgress>,
+                ),
             )
             .add_systems(
                 OnEnter(GameState::Gameplay),
@@ -64,11 +74,23 @@ impl Plugin for ChunkStreamingPlugin {
             )
             .add_systems(
                 Update,
+                prepare_loading_destination.run_if(in_state(GameState::Loading)),
+            )
+            .add_systems(
+                Update,
                 stream_chunks
                     .after(begin_world_frame_work_budget)
+                    .after(prepare_loading_destination)
+                    .before(finish_loading_when_ready)
                     .before(resolve_pending_warp)
                     .before(evict_distant_chunks)
-                    .run_if(in_state(GameState::Gameplay)),
+                    .run_if(world_streaming_active),
+            )
+            .add_systems(
+                Update,
+                finish_loading_when_ready
+                    .after(stream_chunks)
+                    .run_if(in_state(GameState::Loading)),
             )
             .add_systems(
                 PostUpdate,
@@ -110,6 +132,21 @@ impl ChunkStreamingState {
 
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.residency.keeps_loaded(coord)
+    }
+
+    pub(super) fn desired_residency_counts(&self, world: &VoxelWorld) -> (usize, usize) {
+        let total = self.residency.desired.len();
+        let completed = self
+            .residency
+            .desired
+            .iter()
+            .filter(|coord| world.chunk(**coord).is_some())
+            .count();
+        (completed, total)
+    }
+
+    pub(super) fn materialization_is_idle(&self) -> bool {
+        self.pending.len() == 0 && self.materializing.is_empty()
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -299,7 +336,9 @@ struct ChunkStreamingInputs<'w, 's> {
     world_ticks: Res<'w, WorldTickClock>,
     render_distance: Res<'w, RenderDistanceSettings>,
     pending_warp: Res<'w, PendingWarp>,
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    loading: Res<'w, WorldLoadingState>,
+    game_state: Res<'w, State<GameState>>,
+    player: Query<'w, 's, &'static Transform, With<GameplayCamera>>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
@@ -319,16 +358,32 @@ fn stream_chunks(inputs: ChunkStreamingInputs, mut runtime: ChunkStreamingRuntim
         runtime.state.restart_materializations();
     }
 
-    let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = inputs
-        .pending_warp
-        .streaming_center()
-        .unwrap_or_else(|| chunk_coord_from_position(feet_position));
-    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = inputs
-        .pending_warp
-        .streaming_horizontal_radius()
-        .unwrap_or_else(|| inputs.render_distance.chunks());
+    let (center, horizontal_radius) = match inputs.game_state.get() {
+        GameState::Loading => {
+            let Some(center) = inputs.loading.streaming_center() else {
+                return;
+            };
+            (center, inputs.loading.horizontal_radius())
+        }
+        GameState::Gameplay => {
+            let Ok(player) = inputs.player.single() else {
+                return;
+            };
+            let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+            let player_chunk = inputs
+                .pending_warp
+                .streaming_center()
+                .unwrap_or_else(|| chunk_coord_from_position(feet_position));
+            let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+            let horizontal_radius = inputs
+                .pending_warp
+                .streaming_horizontal_radius()
+                .unwrap_or_else(|| inputs.render_distance.chunks());
+            (center, horizontal_radius)
+        }
+        _ => return,
+    };
+
     runtime
         .presentation_selection
         .sync_from_streaming(Some(center), horizontal_radius);
