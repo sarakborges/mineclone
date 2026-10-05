@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rust-validation-v2-${{ github.ref }}
+  group: rust-validation-v3-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
