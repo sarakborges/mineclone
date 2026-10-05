@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
@@ -16,7 +16,7 @@ use crate::world::{
     fluid_updates::{PendingFluidUpdates, enqueue_generated_fluid_frontier},
     generator::{MaterializedChunk, WorldGenerator},
     revision::TaskInputRevision,
-    work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
+    work_budget::FrameWorkBudget,
 };
 
 const MAX_MATERIALIZATION_TASKS_IN_FLIGHT: usize = 4;
@@ -82,14 +82,36 @@ impl ChunkMaterializationTasks {
     }
 }
 
+pub(super) struct MaterializationRuntime<'a> {
+    world: &'a mut VoxelWorld,
+    pending_fluid: &'a mut PendingFluidUpdates,
+    fluids: &'a FluidRegistry,
+    current_tick: u64,
+    deadline: Instant,
+}
+
+impl<'a> MaterializationRuntime<'a> {
+    pub(super) fn new(
+        world: &'a mut VoxelWorld,
+        pending_fluid: &'a mut PendingFluidUpdates,
+        fluids: &'a FluidRegistry,
+        current_tick: u64,
+        deadline: Instant,
+    ) -> Self {
+        Self {
+            world,
+            pending_fluid,
+            fluids,
+            current_tick,
+            deadline,
+        }
+    }
+}
+
 pub(super) fn collect_materialized_chunks(
     generator_tasks: &mut ChunkMaterializationTasks,
     streaming: &mut ChunkStreamingState,
-    world: &mut VoxelWorld,
-    pending_fluid: &mut PendingFluidUpdates,
-    fluids: &FluidRegistry,
-    current_tick: u64,
-    frame_budget: &WorldFrameWorkBudget,
+    runtime: &mut MaterializationRuntime<'_>,
 ) {
     if generator_tasks.pending_count() == 0 {
         return;
@@ -97,7 +119,7 @@ pub(super) fn collect_materialized_chunks(
 
     let current_revision = generator_tasks.revision();
     let mut budget = FrameWorkBudget::new(MATERIALIZATION_RESULT_BUDGET, 1)
-        .with_global_deadline(frame_budget.deadline())
+        .with_global_deadline(runtime.deadline)
         .with_maximum_items(MAX_MATERIALIZATION_RESULTS_PER_FRAME);
 
     while !budget.exhausted() {
@@ -118,31 +140,35 @@ pub(super) fn collect_materialized_chunks(
             continue;
         }
 
-        if world.restore_chunk(coord) {
-            activate_restored_chunk(world, coord, pending_fluid, fluids, current_tick);
+        if runtime.world.restore_chunk(coord) {
+            activate_restored_chunk(runtime, coord);
             continue;
         }
 
-        let frontiers = completed
-            .output
-            .generated_fluid_frontiers()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        world.insert_chunk(coord, completed.output.into_chunk());
-        pending_fluid.reactivate_loaded_chunk(coord, current_tick);
+        let frontiers = completed.output.generated_fluid_frontiers().to_vec();
+        runtime
+            .world
+            .insert_chunk(coord, completed.output.into_chunk());
+        runtime
+            .pending_fluid
+            .reactivate_loaded_chunk(coord, runtime.current_tick);
 
         for frontier in frontiers {
-            if world.is_loaded_at(frontier.position()) {
+            if runtime.world.is_loaded_at(frontier.position()) {
                 enqueue_generated_fluid_frontier(
-                    pending_fluid,
-                    fluids,
+                    runtime.pending_fluid,
+                    runtime.fluids,
                     frontier.fluid(),
                     frontier.position(),
                 );
             }
         }
-        enqueue_neighbor_frontiers_targeting_chunk(world, coord, pending_fluid, fluids);
+        enqueue_neighbor_frontiers_targeting_chunk(
+            runtime.world,
+            coord,
+            runtime.pending_fluid,
+            runtime.fluids,
+        );
     }
 }
 
@@ -150,14 +176,10 @@ pub(super) fn dispatch_materialization_tasks(
     generator: &WorldGenerator,
     generator_tasks: &mut ChunkMaterializationTasks,
     streaming: &mut ChunkStreamingState,
-    world: &mut VoxelWorld,
-    pending_fluid: &mut PendingFluidUpdates,
-    fluids: &FluidRegistry,
-    current_tick: u64,
-    frame_budget: &WorldFrameWorkBudget,
+    runtime: &mut MaterializationRuntime<'_>,
 ) {
     let mut budget = FrameWorkBudget::new(MATERIALIZATION_DISPATCH_BUDGET, 1)
-        .with_global_deadline(frame_budget.deadline())
+        .with_global_deadline(runtime.deadline)
         .with_maximum_items(MAX_MATERIALIZATION_DISPATCHES_PER_FRAME);
 
     while generator_tasks.pending_count() < MAX_MATERIALIZATION_TASKS_IN_FLIGHT
@@ -171,8 +193,8 @@ pub(super) fn dispatch_materialization_tasks(
         if !streaming.keeps_loaded(coord) || streaming.is_materializing(coord) {
             continue;
         }
-        if world.restore_chunk(coord) {
-            activate_restored_chunk(world, coord, pending_fluid, fluids, current_tick);
+        if runtime.world.restore_chunk(coord) {
+            activate_restored_chunk(runtime, coord);
             continue;
         }
 
@@ -185,16 +207,22 @@ pub(super) fn dispatch_materialization_tasks(
     }
 }
 
-fn activate_restored_chunk(
-    world: &VoxelWorld,
-    coord: IVec3,
-    pending_fluid: &mut PendingFluidUpdates,
-    fluids: &FluidRegistry,
-    current_tick: u64,
-) {
-    pending_fluid.reactivate_loaded_chunk(coord, current_tick);
-    enqueue_source_frontiers_to_loaded_targets(world, coord, pending_fluid, fluids);
-    enqueue_neighbor_frontiers_targeting_chunk(world, coord, pending_fluid, fluids);
+fn activate_restored_chunk(runtime: &mut MaterializationRuntime<'_>, coord: IVec3) {
+    runtime
+        .pending_fluid
+        .reactivate_loaded_chunk(coord, runtime.current_tick);
+    enqueue_source_frontiers_to_loaded_targets(
+        runtime.world,
+        coord,
+        runtime.pending_fluid,
+        runtime.fluids,
+    );
+    enqueue_neighbor_frontiers_targeting_chunk(
+        runtime.world,
+        coord,
+        runtime.pending_fluid,
+        runtime.fluids,
+    );
 }
 
 fn enqueue_source_frontiers_to_loaded_targets(
@@ -218,12 +246,7 @@ fn enqueue_source_frontiers_to_loaded_targets(
         for offset in FLUID_SPREAD_TARGETS {
             let target = source + offset;
             if world.is_loaded_at(target) {
-                enqueue_generated_fluid_frontier(
-                    pending_fluid,
-                    fluids,
-                    &definition.id,
-                    target,
-                );
+                enqueue_generated_fluid_frontier(pending_fluid, fluids, &definition.id, target);
             }
         }
     });
