@@ -7,5 +7,16 @@
     "macroScale": 896,
     "detailAmplitude": 2.0,
     "detailScale": 128
+  },
+  "terrain3d": {
+    "floatingFormation": {
+      "minY": 200,
+      "maxY": 280,
+      "horizontalScale": 112,
+      "detailScale": 40,
+      "coverage": 0.55,
+      "roughness": 0.18,
+      "densityScale": 28.0
+    }
   }
 }

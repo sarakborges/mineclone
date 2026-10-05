@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::content::biome::{BiomeDefinition, BiomeRegistry, SurfaceTerrainDefinition};
+use crate::content::biome::{
+    BiomeDefinition, BiomeRegistry, FloatingFormationDefinition, SurfaceTerrainDefinition,
+};
 
 use super::{
     biome::{BiomeLayout, BiomeSample},
@@ -14,6 +16,8 @@ const MACRO_NOISE_DOMAIN_PREFIX: &str = "terrain/base-surface/macro/v1/";
 const DETAIL_NOISE_DOMAIN_PREFIX: &str = "terrain/base-surface/detail/v1/";
 const CAVE_PRIMARY_DOMAIN: &str = "terrain/density/caves/primary/v1";
 const CAVE_SECONDARY_DOMAIN: &str = "terrain/density/caves/secondary/v1";
+const FLOATING_MASK_DOMAIN_PREFIX: &str = "terrain/density/floating/mask/v1/";
+const FLOATING_DETAIL_DOMAIN_PREFIX: &str = "terrain/density/floating/detail/v1/";
 
 const CAVE_HORIZONTAL_SCALE: u32 = 56;
 const CAVE_VERTICAL_SCALE: u32 = 36;
@@ -132,12 +136,10 @@ impl TerrainQueries<'_> {
         self.terrain.base_surface_at(x, z)
     }
 
-    /// Highest generated solid voxel for the current terrain field.
+    /// Highest generated solid voxel for the current final terrain field.
     ///
-    /// The current 3D cave contribution is explicitly bounded below the base
-    /// surface, so it cannot replace the highest solid crossing. Additive 3D
-    /// contributions extend the bounded candidate search owned here without
-    /// changing the base-surface fact exposed by `base_surface_at`.
+    /// Additive contributions expose explicit finite vertical candidate bounds,
+    /// so this query never scans the whole world height.
     pub(crate) fn surface_at(&self, x: i32, z: i32) -> i32 {
         self.terrain.column_at(x, z).surface_y()
     }
@@ -202,6 +204,7 @@ struct TerrainRule {
     profile: SurfaceTerrainDefinition,
     macro_domain: GenerationDomain,
     detail_domain: GenerationDomain,
+    floating: Option<FloatingFormationRule>,
 }
 
 impl TerrainRule {
@@ -216,7 +219,81 @@ impl TerrainRule {
                 "{DETAIL_NOISE_DOMAIN_PREFIX}{}",
                 definition.id
             )),
+            floating: definition
+                .terrain_3d_profile()
+                .and_then(|terrain| terrain.floating_formation)
+                .map(|floating| FloatingFormationRule::new(&definition.id, floating)),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FloatingFormationRule {
+    definition: FloatingFormationDefinition,
+    mask_domain: GenerationDomain,
+    detail_domain: GenerationDomain,
+}
+
+impl FloatingFormationRule {
+    fn new(biome_id: &str, definition: FloatingFormationDefinition) -> Self {
+        Self {
+            definition,
+            mask_domain: GenerationDomain::named(&format!(
+                "{FLOATING_MASK_DOMAIN_PREFIX}{biome_id}"
+            )),
+            detail_domain: GenerationDomain::named(&format!(
+                "{FLOATING_DETAIL_DOMAIN_PREFIX}{biome_id}"
+            )),
+        }
+    }
+
+    const fn vertical_bounds(&self) -> (i32, i32) {
+        (self.definition.min_y, self.definition.max_y)
+    }
+
+    fn density(
+        &self,
+        entropy: GenerationEntropy,
+        x: i32,
+        y: i32,
+        z: i32,
+        influence_weight: f32,
+    ) -> f32 {
+        let definition = self.definition;
+        if !(definition.min_y..=definition.max_y).contains(&y) || influence_weight <= 0.0 {
+            return f32::NEG_INFINITY;
+        }
+
+        let min_y = definition.min_y as f32;
+        let max_y = definition.max_y as f32;
+        let center_y = (min_y + max_y) * 0.5;
+        let half_height = (max_y - min_y) * 0.5;
+        let vertical_distance = ((y as f32 - center_y) / half_height).abs();
+
+        let mask_noise = value_noise_2d(
+            entropy,
+            self.mask_domain,
+            x,
+            z,
+            definition.horizontal_scale,
+        );
+        let mask_unit = mask_noise * 0.5 + 0.5;
+        let threshold = 1.0 - definition.coverage;
+        let horizontal_support =
+            ((mask_unit - threshold) / definition.coverage).clamp(0.0, 1.0);
+        let detail_noise = value_noise_3d(
+            entropy,
+            self.detail_domain,
+            x,
+            y,
+            z,
+            definition.detail_scale,
+            definition.detail_scale,
+        );
+        let raw_shape =
+            horizontal_support - vertical_distance + detail_noise * definition.roughness;
+        let blend_penalty = 1.0 - influence_weight.clamp(0.0, 1.0);
+        (raw_shape - blend_penalty) * definition.density_scale
     }
 }
 
@@ -237,9 +314,7 @@ impl CaveField {
     /// Returns positive signed void density only inside the bounded cave field.
     ///
     /// The upper bound stays below the base surface so this subtractive
-    /// contribution cannot punch through the authoritative top crossing. That
-    /// keeps the cheap surface query exact until an additive contribution is
-    /// introduced.
+    /// contribution cannot punch through the authoritative top crossing.
     fn void_density(
         &self,
         entropy: GenerationEntropy,
@@ -324,10 +399,11 @@ impl TerrainField {
     }
 
     fn column_at(&self, x: i32, z: i32) -> TerrainColumnSample {
-        let base_surface = self.base_surface_at(x, z);
+        let sample = self.biomes.queries().surface_biome_at(x, z);
+        let base_surface = self.base_surface_from_biome_sample(x, z, &sample);
         TerrainColumnSample {
             base_surface,
-            surface_y: floor_to_world_y(base_surface),
+            surface_y: self.effective_surface_y(x, z, base_surface, &sample),
         }
     }
 
@@ -339,19 +415,99 @@ impl TerrainField {
     fn density_at(&self, x: i32, y: i32, z: i32) -> f32 {
         let sample = self.biomes.queries().surface_biome_at(x, z);
         let base_surface = self.base_surface_from_biome_sample(x, z, &sample);
-        self.density_from_column(x, y, z, base_surface)
+        self.density_from_column(x, y, z, base_surface, &sample)
     }
 
-    fn density_from_column(&self, x: i32, y: i32, z: i32, base_surface: f32) -> f32 {
+    fn density_from_column(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+        base_surface: f32,
+        sample: &BiomeSample,
+    ) -> f32 {
         let base_density = base_surface - y as f32;
+        let mut solid_density = base_density;
+
+        for influence in sample.influences() {
+            let rule = self.rules.get(influence.biome().as_str()).unwrap_or_else(|| {
+                panic!(
+                    "surface biome {} has no terrain rule",
+                    influence.biome().as_str()
+                )
+            });
+            if let Some(floating) = &rule.floating {
+                solid_density = solid_density.max(floating.density(
+                    self.entropy,
+                    x,
+                    y,
+                    z,
+                    influence.weight(),
+                ));
+            }
+        }
+
         let cave_void = self
             .caves
             .void_density(self.entropy, x, y, z, base_surface);
         if cave_void > 0.0 {
-            base_density.min(-cave_void)
+            solid_density.min(-cave_void)
         } else {
-            base_density
+            solid_density
         }
+    }
+
+    fn effective_surface_y(
+        &self,
+        x: i32,
+        z: i32,
+        base_surface: f32,
+        sample: &BiomeSample,
+    ) -> i32 {
+        let base_surface_y = floor_to_world_y(base_surface);
+        let Some((candidate_min, candidate_max)) = self.additive_candidate_bounds(sample) else {
+            return base_surface_y;
+        };
+        if candidate_max <= base_surface_y {
+            return base_surface_y;
+        }
+
+        let search_min = candidate_min.max(base_surface_y.saturating_add(1));
+        if search_min > candidate_max {
+            return base_surface_y;
+        }
+        for y in (search_min..=candidate_max).rev() {
+            if self.density_from_column(x, y, z, base_surface, sample) >= 0.0 {
+                return y;
+            }
+        }
+        base_surface_y
+    }
+
+    fn additive_candidate_bounds(&self, sample: &BiomeSample) -> Option<(i32, i32)> {
+        let mut bounds: Option<(i32, i32)> = None;
+        for influence in sample.influences() {
+            if influence.weight() <= 0.0 {
+                continue;
+            }
+            let rule = self.rules.get(influence.biome().as_str()).unwrap_or_else(|| {
+                panic!(
+                    "surface biome {} has no terrain rule",
+                    influence.biome().as_str()
+                )
+            });
+            let Some(floating) = &rule.floating else {
+                continue;
+            };
+            let (min_y, max_y) = floating.vertical_bounds();
+            bounds = Some(match bounds {
+                Some((current_min, current_max)) => {
+                    (current_min.min(min_y), current_max.max(max_y))
+                }
+                None => (min_y, max_y),
+            });
+        }
+        bounds
     }
 
     fn sample_surface_grid(
@@ -386,7 +542,7 @@ impl TerrainField {
                 let base_surface = self.base_surface_from_biome_sample(x, z, biome_sample);
                 samples.push(TerrainColumnSample {
                     base_surface,
-                    surface_y: floor_to_world_y(base_surface),
+                    surface_y: self.effective_surface_y(x, z, base_surface, biome_sample),
                 });
             }
         }
@@ -447,7 +603,16 @@ impl TerrainField {
                     let x = grid_axis(origin_x, x_index, 1);
                     let column_index = z_index as usize * width_usize + x_index as usize;
                     let base_surface = base_surfaces[column_index];
-                    densities.push(self.density_from_column(x, y, z, base_surface));
+                    let biome_sample = biome_samples
+                        .sample_at(x_index, z_index)
+                        .expect("matching biome sample grid must contain every density column");
+                    densities.push(self.density_from_column(
+                        x,
+                        y,
+                        z,
+                        base_surface,
+                        biome_sample,
+                    ));
                 }
             }
         }
@@ -654,8 +819,19 @@ mod tests {
     use super::*;
     use crate::content::biome::BiomeDefinition;
 
-    fn test_field(seed: u64) -> TerrainField {
-        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+    fn field_from_definition(seed: u64, definition: BiomeDefinition) -> TerrainField {
+        let mut registry = BiomeRegistry::default();
+        registry.insert(definition);
+        let snapshot = GenerationSnapshot::new(
+            GenerationSeed::new(seed),
+            GenerationDimension::new("asteria:test", 64, 1.0),
+        );
+        let biomes = Arc::new(BiomeLayout::new(&snapshot, &registry));
+        TerrainField::new(&snapshot, &registry, biomes)
+    }
+
+    fn base_definition() -> BiomeDefinition {
+        serde_json::from_value(serde_json::json!({
             "id": "asteria:test/base",
             "name": {
                 "english": "Base",
@@ -671,22 +847,53 @@ mod tests {
                 "detailScale": 64
             }
         }))
-        .expect("test biome must deserialize");
-        let mut registry = BiomeRegistry::default();
-        registry.insert(definition);
-        let snapshot = GenerationSnapshot::new(
-            GenerationSeed::new(seed),
-            GenerationDimension::new("asteria:test", 64, 1.0),
-        );
-        let biomes = Arc::new(BiomeLayout::new(&snapshot, &registry));
-        TerrainField::new(&snapshot, &registry, biomes)
+        .expect("test biome must deserialize")
+    }
+
+    fn floating_definition() -> BiomeDefinition {
+        serde_json::from_value(serde_json::json!({
+            "id": "asteria:test/base",
+            "name": {
+                "english": "Base",
+                "portuguese_brazil": "Base",
+                "spanish": "Base"
+            },
+            "surfaceLayout": {},
+            "surfaceTerrain": {
+                "baseHeightOffset": 8.0,
+                "macroAmplitude": 12.0,
+                "macroScale": 256,
+                "detailAmplitude": 3.0,
+                "detailScale": 64
+            },
+            "terrain3d": {
+                "floatingFormation": {
+                    "minY": 120,
+                    "maxY": 152,
+                    "horizontalScale": 64,
+                    "detailScale": 24,
+                    "coverage": 1.0,
+                    "roughness": 0.0,
+                    "densityScale": 32.0
+                }
+            }
+        }))
+        .expect("floating test biome must deserialize")
+    }
+
+    fn test_field(seed: u64) -> TerrainField {
+        field_from_definition(seed, base_definition())
+    }
+
+    fn floating_field(seed: u64) -> TerrainField {
+        field_from_definition(seed, floating_definition())
     }
 
     #[test]
     fn density_volume_matches_scalar_queries() {
-        let field = test_field(71);
+        let field = floating_field(71);
         let queries = field.queries();
-        let volume = queries.sample_density_volume(-9, 20, 13, 11, 17, 7);
+        let volume = queries.sample_density_volume(-9, 110, 13, 11, 50, 7);
 
         for z_index in 0..volume.depth() {
             for y_index in 0..volume.height() {
@@ -704,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    fn caves_never_change_the_surface_crossing() {
+    fn caves_never_change_the_surface_crossing_without_additive_terrain() {
         let field = test_field(93);
         let queries = field.queries();
 
@@ -740,6 +947,52 @@ mod tests {
                     base_surface - y as f32,
                     "out-of-band cave field must leave base density untouched"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn floating_formation_extends_effective_surface_within_candidate_bounds() {
+        let field = floating_field(211);
+        let queries = field.queries();
+        let mut found_floating_surface = false;
+
+        for z in (-128..=128).step_by(16) {
+            for x in (-128..=128).step_by(16) {
+                let base_surface = queries.base_surface_at(x, z);
+                let base_y = floor_to_world_y(base_surface);
+                let surface_y = queries.surface_at(x, z);
+                assert!(surface_y <= 152);
+                if surface_y > base_y {
+                    found_floating_surface = true;
+                    assert!(surface_y >= 120);
+                    assert!(queries.density_at(x, surface_y, z) >= 0.0);
+                    assert_eq!(queries.base_surface_at(x, z), base_surface);
+                }
+            }
+        }
+
+        assert!(
+            found_floating_surface,
+            "authored floating terrain must produce at least one additive surface"
+        );
+    }
+
+    #[test]
+    fn effective_surface_grid_matches_scalar_queries() {
+        let field = floating_field(307);
+        let queries = field.queries();
+        let grid = queries.sample_surface_grid(-64, 48, 9, 7, 8);
+
+        for z_index in 0..grid.depth() {
+            for x_index in 0..grid.width() {
+                let x = grid.origin().0 + x_index as i32 * grid.step() as i32;
+                let z = grid.origin().1 + z_index as i32 * grid.step() as i32;
+                let sample = grid
+                    .sample_at(x_index, z_index)
+                    .expect("terrain grid must contain requested sample");
+                assert_eq!(sample.surface_y(), queries.surface_at(x, z));
+                assert_eq!(sample.base_surface(), queries.base_surface_at(x, z));
             }
         }
     }

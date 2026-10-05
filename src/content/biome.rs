@@ -16,6 +16,8 @@ const DEFAULT_TERRAIN_DETAIL_AMPLITUDE: f32 = 4.0;
 const DEFAULT_TERRAIN_DETAIL_SCALE: u32 = 96;
 const MAX_TERRAIN_SCALE: u32 = 16_384;
 const MAX_TERRAIN_AMPLITUDE: f32 = 512.0;
+const MAX_TERRAIN_3D_VERTICAL_SPAN: i64 = 512;
+const MAX_FLOATING_ROUGHNESS: f32 = 0.5;
 
 /// One biome identity in the shared biome universe.
 ///
@@ -32,6 +34,8 @@ pub struct BiomeDefinition {
     pub surface_layout: Option<SurfaceBiomeLayoutDefinition>,
     #[serde(default)]
     pub surface_terrain: Option<SurfaceTerrainDefinition>,
+    #[serde(default)]
+    pub terrain_3d: Option<Terrain3dDefinition>,
 }
 
 /// Authored inputs owned exclusively by the 2D surface biome layout.
@@ -103,6 +107,30 @@ impl Default for SurfaceTerrainDefinition {
     }
 }
 
+/// Optional true-3D terrain contributions authored by a biome.
+///
+/// These rules are consumed by the single terrain-density owner. They do not
+/// create a second terrain field or redefine biome ownership.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Terrain3dDefinition {
+    #[serde(default)]
+    pub floating_formation: Option<FloatingFormationDefinition>,
+}
+
+/// Bounded additive floating mass authored in absolute world Y.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FloatingFormationDefinition {
+    pub min_y: i32,
+    pub max_y: i32,
+    pub horizontal_scale: u32,
+    pub detail_scale: u32,
+    pub coverage: f32,
+    pub roughness: f32,
+    pub density_scale: f32,
+}
+
 impl BiomeDefinition {
     pub fn belongs_to_dimension(&self, dimension_id: &str) -> bool {
         biome_dimension_components(&self.id).is_some_and(|(namespace, dimension)| {
@@ -152,6 +180,10 @@ impl BiomeDefinition {
         self.surface_terrain.unwrap_or_default()
     }
 
+    pub(crate) const fn terrain_3d_profile(&self) -> Option<Terrain3dDefinition> {
+        self.terrain_3d
+    }
+
     fn validate(&self) {
         assert_valid_biome_id(&self.id);
         self.name.validate(&format!("biome {} name", self.id));
@@ -160,6 +192,9 @@ impl BiomeDefinition {
         }
         if let Some(terrain) = self.surface_terrain {
             terrain.validate(&self.id);
+        }
+        if let Some(terrain_3d) = self.terrain_3d {
+            terrain_3d.validate(&self.id);
         }
     }
 }
@@ -215,6 +250,55 @@ impl SurfaceTerrainDefinition {
         assert!(
             self.detail_scale <= self.macro_scale,
             "biome {biome_id} surfaceTerrain.detailScale must not exceed macroScale"
+        );
+    }
+}
+
+impl Terrain3dDefinition {
+    fn validate(self, biome_id: &str) {
+        if let Some(floating) = self.floating_formation {
+            floating.validate(biome_id);
+        }
+    }
+}
+
+impl FloatingFormationDefinition {
+    fn validate(self, biome_id: &str) {
+        assert!(
+            self.max_y > self.min_y,
+            "biome {biome_id} terrain3d.floatingFormation.maxY must be greater than minY"
+        );
+        let vertical_span = i64::from(self.max_y) - i64::from(self.min_y);
+        assert!(
+            vertical_span <= MAX_TERRAIN_3D_VERTICAL_SPAN,
+            "biome {biome_id} terrain3d.floatingFormation vertical span must not exceed {MAX_TERRAIN_3D_VERTICAL_SPAN} blocks"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.horizontal_scale),
+            "biome {biome_id} terrain3d.floatingFormation.horizontalScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.detail_scale),
+            "biome {biome_id} terrain3d.floatingFormation.detailScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            self.detail_scale <= self.horizontal_scale,
+            "biome {biome_id} terrain3d.floatingFormation.detailScale must not exceed horizontalScale"
+        );
+        assert!(
+            self.coverage.is_finite() && self.coverage > 0.0 && self.coverage <= 1.0,
+            "biome {biome_id} terrain3d.floatingFormation.coverage must be finite and within (0, 1]"
+        );
+        assert!(
+            self.roughness.is_finite()
+                && (0.0..=MAX_FLOATING_ROUGHNESS).contains(&self.roughness),
+            "biome {biome_id} terrain3d.floatingFormation.roughness must be finite and within 0..={MAX_FLOATING_ROUGHNESS}"
+        );
+        assert!(
+            self.density_scale.is_finite()
+                && self.density_scale > 0.0
+                && self.density_scale <= MAX_TERRAIN_AMPLITUDE,
+            "biome {biome_id} terrain3d.floatingFormation.densityScale must be finite and within (0, {MAX_TERRAIN_AMPLITUDE}]"
         );
     }
 }
@@ -333,8 +417,42 @@ mod tests {
             definition.surface_terrain_profile(),
             SurfaceTerrainDefinition::default()
         );
+        assert!(definition.terrain_3d_profile().is_none());
         assert!(definition.belongs_to_dimension("asteria:overworld"));
         assert!(!definition.belongs_to_dimension("asteria:umbral"));
+    }
+
+    #[test]
+    fn terrain_3d_floating_formation_is_explicit() {
+        let definition: BiomeDefinition = serde_json::from_value(serde_json::json!({
+            "id": "asteria:overworld/floating_islands",
+            "name": {
+                "english": "Floating Islands",
+                "portuguese_brazil": "Ilhas Flutuantes",
+                "spanish": "Islas Flotantes"
+            },
+            "surfaceLayout": {},
+            "terrain3d": {
+                "floatingFormation": {
+                    "minY": 200,
+                    "maxY": 280,
+                    "horizontalScale": 112,
+                    "detailScale": 40,
+                    "coverage": 0.55,
+                    "roughness": 0.18,
+                    "densityScale": 28.0
+                }
+            }
+        }))
+        .expect("floating terrain definition must deserialize");
+        let terrain_3d = definition
+            .terrain_3d_profile()
+            .expect("terrain3d must be authored");
+        let floating = terrain_3d
+            .floating_formation
+            .expect("floating formation must be authored");
+        assert_eq!(floating.min_y, 200);
+        assert_eq!(floating.max_y, 280);
     }
 
     #[test]
