@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/mountains",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 64.0,
+    "macroAmplitude": 54.0,
+    "macroScale": 896,
+    "detailAmplitude": 12.0,
+    "detailScale": 128
+  }
 }

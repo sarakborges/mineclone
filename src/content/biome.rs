@@ -9,6 +9,13 @@ const DEFAULT_BIOME_WEIGHT: f32 = 1.0;
 const DEFAULT_REGION_MIN: u32 = 384;
 const DEFAULT_REGION_MAX: u32 = 768;
 const MAX_REGION_SPAN: u32 = 16_384;
+const DEFAULT_TERRAIN_BASE_HEIGHT_OFFSET: f32 = 8.0;
+const DEFAULT_TERRAIN_MACRO_AMPLITUDE: f32 = 18.0;
+const DEFAULT_TERRAIN_MACRO_SCALE: u32 = 640;
+const DEFAULT_TERRAIN_DETAIL_AMPLITUDE: f32 = 4.0;
+const DEFAULT_TERRAIN_DETAIL_SCALE: u32 = 96;
+const MAX_TERRAIN_SCALE: u32 = 16_384;
+const MAX_TERRAIN_AMPLITUDE: f32 = 512.0;
 
 /// One biome identity in the shared biome universe.
 ///
@@ -23,6 +30,8 @@ pub struct BiomeDefinition {
     pub name: LocalizedText,
     #[serde(default)]
     pub surface_layout: Option<SurfaceBiomeLayoutDefinition>,
+    #[serde(default)]
+    pub surface_terrain: Option<SurfaceTerrainDefinition>,
 }
 
 /// Authored inputs owned exclusively by the 2D surface biome layout.
@@ -59,6 +68,37 @@ impl Default for BiomeRegionSize {
         Self {
             min: DEFAULT_REGION_MIN,
             max: DEFAULT_REGION_MAX,
+        }
+    }
+}
+
+/// Authored continuous base-surface profile for one surface biome.
+///
+/// The profile is interpreted by the terrain owner. It does not own biome
+/// placement, chunk generation, materials, caves, or 3D feature placement.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceTerrainDefinition {
+    #[serde(default = "default_terrain_base_height_offset")]
+    pub base_height_offset: f32,
+    #[serde(default = "default_terrain_macro_amplitude")]
+    pub macro_amplitude: f32,
+    #[serde(default = "default_terrain_macro_scale")]
+    pub macro_scale: u32,
+    #[serde(default = "default_terrain_detail_amplitude")]
+    pub detail_amplitude: f32,
+    #[serde(default = "default_terrain_detail_scale")]
+    pub detail_scale: u32,
+}
+
+impl Default for SurfaceTerrainDefinition {
+    fn default() -> Self {
+        Self {
+            base_height_offset: default_terrain_base_height_offset(),
+            macro_amplitude: default_terrain_macro_amplitude(),
+            macro_scale: default_terrain_macro_scale(),
+            detail_amplitude: default_terrain_detail_amplitude(),
+            detail_scale: default_terrain_detail_scale(),
         }
     }
 }
@@ -108,11 +148,18 @@ impl BiomeDefinition {
         }
     }
 
+    pub(crate) fn surface_terrain_profile(&self) -> SurfaceTerrainDefinition {
+        self.surface_terrain.unwrap_or_default()
+    }
+
     fn validate(&self) {
         assert_valid_biome_id(&self.id);
         self.name.validate(&format!("biome {} name", self.id));
         if let Some(surface) = &self.surface_layout {
             surface.validate(&self.id);
+        }
+        if let Some(terrain) = self.surface_terrain {
+            terrain.validate(&self.id);
         }
     }
 }
@@ -138,6 +185,37 @@ impl SurfaceBiomeLayoutDefinition {
         for forbidden in &self.cannot_border {
             assert_valid_biome_id(forbidden);
         }
+    }
+}
+
+impl SurfaceTerrainDefinition {
+    fn validate(self, biome_id: &str) {
+        assert!(
+            self.base_height_offset.is_finite(),
+            "biome {biome_id} surfaceTerrain.baseHeightOffset must be finite"
+        );
+        assert!(
+            self.macro_amplitude.is_finite()
+                && (0.0..=MAX_TERRAIN_AMPLITUDE).contains(&self.macro_amplitude),
+            "biome {biome_id} surfaceTerrain.macroAmplitude must be finite and within 0..={MAX_TERRAIN_AMPLITUDE}"
+        );
+        assert!(
+            self.detail_amplitude.is_finite()
+                && (0.0..=MAX_TERRAIN_AMPLITUDE).contains(&self.detail_amplitude),
+            "biome {biome_id} surfaceTerrain.detailAmplitude must be finite and within 0..={MAX_TERRAIN_AMPLITUDE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.macro_scale),
+            "biome {biome_id} surfaceTerrain.macroScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            (2..=MAX_TERRAIN_SCALE).contains(&self.detail_scale),
+            "biome {biome_id} surfaceTerrain.detailScale must be within 2..={MAX_TERRAIN_SCALE}"
+        );
+        assert!(
+            self.detail_scale <= self.macro_scale,
+            "biome {biome_id} surfaceTerrain.detailScale must not exceed macroScale"
+        );
     }
 }
 
@@ -172,6 +250,26 @@ impl BiomeRegistry {
 
 fn default_biome_weight() -> f32 {
     DEFAULT_BIOME_WEIGHT
+}
+
+fn default_terrain_base_height_offset() -> f32 {
+    DEFAULT_TERRAIN_BASE_HEIGHT_OFFSET
+}
+
+fn default_terrain_macro_amplitude() -> f32 {
+    DEFAULT_TERRAIN_MACRO_AMPLITUDE
+}
+
+fn default_terrain_macro_scale() -> u32 {
+    DEFAULT_TERRAIN_MACRO_SCALE
+}
+
+fn default_terrain_detail_amplitude() -> f32 {
+    DEFAULT_TERRAIN_DETAIL_AMPLITUDE
+}
+
+fn default_terrain_detail_scale() -> u32 {
+    DEFAULT_TERRAIN_DETAIL_SCALE
 }
 
 fn assert_valid_biome_id(id: &str) {
@@ -231,6 +329,10 @@ mod tests {
         assert_eq!(surface.weight, 1.0);
         assert_eq!(surface.region_size, BiomeRegionSize::default());
         assert!(surface.cannot_border.is_empty());
+        assert_eq!(
+            definition.surface_terrain_profile(),
+            SurfaceTerrainDefinition::default()
+        );
         assert!(definition.belongs_to_dimension("asteria:overworld"));
         assert!(!definition.belongs_to_dimension("asteria:umbral"));
     }

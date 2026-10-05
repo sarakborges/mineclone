@@ -1,6 +1,7 @@
 mod biome;
 mod biome_map;
 mod foundation;
+mod terrain;
 
 use std::sync::Arc;
 
@@ -11,6 +12,8 @@ pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
 use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, GenerationSnapshot};
+pub(crate) use terrain::TerrainQueries;
+use terrain::TerrainField;
 
 /// Immutable entry point for deterministic generated-world queries.
 ///
@@ -21,6 +24,7 @@ use foundation::{GenerationDimension, GenerationEntropy, GenerationSeed, Generat
 pub(crate) struct WorldGenerator {
     snapshot: Arc<GenerationSnapshot>,
     biomes: Arc<BiomeLayout>,
+    terrain: Arc<TerrainField>,
 }
 
 impl WorldGenerator {
@@ -37,15 +41,25 @@ impl WorldGenerator {
     }
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
-        let biomes = BiomeLayout::new(&snapshot, biome_registry);
+        let biomes = Arc::new(BiomeLayout::new(&snapshot, biome_registry));
+        let terrain = Arc::new(TerrainField::new(
+            &snapshot,
+            biome_registry,
+            Arc::clone(&biomes),
+        ));
         Self {
             snapshot: Arc::new(snapshot),
-            biomes: Arc::new(biomes),
+            biomes,
+            terrain,
         }
     }
 
     pub(crate) fn biomes(&self) -> BiomeQueries<'_> {
         self.biomes.queries()
+    }
+
+    pub(crate) fn terrain(&self) -> TerrainQueries<'_> {
+        self.terrain.queries()
     }
 
     /// Internal-only generated-world read boundary.
@@ -102,7 +116,9 @@ mod tests {
                 "english": "Base",
                 "portuguese_brazil": "Base",
                 "spanish": "Base"
-            }
+            },
+            "surfaceLayout": {},
+            "surfaceTerrain": {}
         }))
         .expect("test biome definition must deserialize");
         let mut registry = BiomeRegistry::default();
@@ -148,6 +164,10 @@ mod tests {
         assert_eq!(
             generator.biomes().surface_biome_at(12, -34),
             clone.biomes().surface_biome_at(12, -34)
+        );
+        assert_eq!(
+            generator.terrain().surface_at(12, -34),
+            clone.terrain().surface_at(12, -34)
         );
     }
 

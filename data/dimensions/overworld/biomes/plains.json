@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/plains",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 8.0,
+    "macroAmplitude": 10.0,
+    "macroScale": 768,
+    "detailAmplitude": 2.5,
+    "detailScale": 128
+  }
 }

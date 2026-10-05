@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/ocean",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": -30.0,
+    "macroAmplitude": 9.0,
+    "macroScale": 1024,
+    "detailAmplitude": 3.0,
+    "detailScale": 160
+  }
 }

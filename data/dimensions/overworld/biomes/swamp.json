@@ -1,4 +1,11 @@
 {
   "id": "asteria:overworld/swamp",
-  "surfaceLayout": {}
+  "surfaceLayout": {},
+  "surfaceTerrain": {
+    "baseHeightOffset": 2.0,
+    "macroAmplitude": 4.0,
+    "macroScale": 896,
+    "detailAmplitude": 1.5,
+    "detailScale": 160
+  }
 }
