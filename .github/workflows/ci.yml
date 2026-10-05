@@ -82,7 +82,9 @@ jobs:
         timeout-minutes: 2
         run: |
           mkdir -p target/biome-maps
-          export LD_LIBRARY_PATH="$PWD/target/debug/deps${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          RUST_HOST="$(rustc -vV | sed -n 's/^host: //p')"
+          RUST_RUNTIME="$(rustc --print sysroot)/lib/rustlib/$RUST_HOST/lib"
+          export LD_LIBRARY_PATH="$PWD/target/debug/deps:$RUST_RUNTIME${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           /usr/bin/time -f 'overworld seed 0: %e s' target/debug/asteria --biome-map --seed 0 --dimension asteria:overworld --output target/biome-maps/overworld-seed-0.png --scale 8 --width 256 --height 256
           /usr/bin/time -f 'overworld seed 1337: %e s' target/debug/asteria --biome-map --seed 1337 --dimension asteria:overworld --output target/biome-maps/overworld-seed-1337.png --scale 8 --width 256 --height 256
           /usr/bin/time -f 'umbral seed 0: %e s' target/debug/asteria --biome-map --seed 0 --dimension asteria:umbral --output target/biome-maps/umbral-seed-0.png --scale 8 --width 256 --height 256
