@@ -30,8 +30,8 @@ use crate::{
     content::player::PlayerDefinition,
     entity::EntityHealth,
     rendering::camera_stack::WORLD_CAMERA_ORDER,
-    voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
-    world::generator::WorldGenerator,
+    voxel::world::VoxelWorld,
+    world::{destination::find_generated_surface_destination, generator::WorldGenerator},
 };
 use camera::{GameplayCamera, GameplayWorldCamera};
 use game_mode::GameMode;
@@ -133,33 +133,19 @@ pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) ->
 pub(crate) fn find_safe_spawn_position(
     generator: &WorldGenerator,
     preferred_column: IVec2,
-    mut accepts_column: impl FnMut(IVec2) -> bool,
+    accepts_column: impl FnMut(IVec2) -> bool,
 ) -> Option<Vec3> {
-    let (origin_x, width) = spawn_search_axis_bounds(preferred_column.x);
-    let (origin_z, depth) = spawn_search_axis_bounds(preferred_column.y);
-    let structure_bounds = generator
-        .structures()
-        .placements_intersecting(origin_x, origin_z, width, depth)
-        .into_iter()
-        .map(|placement| placement.horizontal_bounds())
-        .collect::<Vec<_>>();
-
-    find_map_square_rings(preferred_column, SPAWN_SEARCH_RADIUS_BLOCKS, 1, |column| {
-        if !accepts_column(column)
-            || structure_bounds
-                .iter()
-                .any(|(minimum, maximum)| column_inside_bounds(column, *minimum, *maximum))
-        {
-            return None;
-        }
-
-        let feet_y = safe_generated_surface_feet_y(generator, column)?;
-        Some(Vec3::new(
-            column.x as f32 + 0.5,
-            feet_y as f32 + PLAYER_EYE_HEIGHT,
-            column.y as f32 + 0.5,
-        ))
-    })
+    let feet = find_generated_surface_destination(
+        generator,
+        preferred_column,
+        SPAWN_SEARCH_RADIUS_BLOCKS,
+        accepts_column,
+    )?;
+    Some(Vec3::new(
+        feet.x as f32 + 0.5,
+        feet.y as f32 + PLAYER_EYE_HEIGHT,
+        feet.z as f32 + 0.5,
+    ))
 }
 
 #[allow(dead_code)]
@@ -170,49 +156,4 @@ pub(crate) fn safe_spawn_position(generator: &WorldGenerator, preferred_column: 
             SPAWN_SEARCH_RADIUS_BLOCKS, preferred_column
         )
     })
-}
-
-#[allow(dead_code)]
-fn safe_generated_surface_feet_y(generator: &WorldGenerator, column: IVec2) -> Option<i32> {
-    let surface_y = generator.terrain().surface_at(column.x, column.y);
-    if surface_y < 0 {
-        return None;
-    }
-
-    let feet_y = surface_y.checked_add(1)?;
-    let head_y = feet_y.checked_add(1)?;
-    let materials = generator.materials();
-    if materials
-        .solid_block_at(column.x, surface_y, column.y)
-        .is_none()
-    {
-        return None;
-    }
-
-    for y in [feet_y, head_y] {
-        if materials.solid_block_at(column.x, y, column.y).is_some()
-            || materials
-                .generated_fluid_at(column.x, y, column.y)
-                .is_some()
-        {
-            return None;
-        }
-    }
-
-    Some(feet_y)
-}
-
-fn spawn_search_axis_bounds(center: i32) -> (i32, u32) {
-    let minimum = center.saturating_sub(SPAWN_SEARCH_RADIUS_BLOCKS);
-    let maximum = center.saturating_add(SPAWN_SEARCH_RADIUS_BLOCKS);
-    let width = u32::try_from(i64::from(maximum) - i64::from(minimum) + 1)
-        .expect("spawn search width must fit u32");
-    (minimum, width)
-}
-
-fn column_inside_bounds(column: IVec2, minimum: IVec2, maximum: IVec2) -> bool {
-    column.x >= minimum.x
-        && column.x <= maximum.x
-        && column.y >= minimum.y
-        && column.y <= maximum.y
 }
