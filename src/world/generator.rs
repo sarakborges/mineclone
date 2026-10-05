@@ -9,7 +9,10 @@ use std::sync::Arc;
 
 use bevy::prelude::Resource;
 
-use crate::content::{biome::BiomeRegistry, dimension::DimensionDefinition};
+use crate::content::{
+    biome::BiomeRegistry,
+    dimension::{DimensionDefinition, GeneratedOceanDefinition},
+};
 pub(crate) use biome::BiomeQueries;
 use biome::BiomeLayout;
 pub(crate) use biome_map::{BiomeMapConfig, render_biome_map};
@@ -43,10 +46,22 @@ impl WorldGenerator {
             GenerationSeed::new(seed),
             GenerationDimension::from_definition(dimension),
         );
-        Self::from_snapshot(snapshot, biome_registry)
+        Self::from_snapshot_with_generated_ocean(
+            snapshot,
+            biome_registry,
+            dimension.generated_ocean.as_ref(),
+        )
     }
 
     fn from_snapshot(snapshot: GenerationSnapshot, biome_registry: &BiomeRegistry) -> Self {
+        Self::from_snapshot_with_generated_ocean(snapshot, biome_registry, None)
+    }
+
+    fn from_snapshot_with_generated_ocean(
+        snapshot: GenerationSnapshot,
+        biome_registry: &BiomeRegistry,
+        generated_ocean: Option<&GeneratedOceanDefinition>,
+    ) -> Self {
         let biomes = Arc::new(BiomeLayout::new(&snapshot, biome_registry));
         let terrain = Arc::new(TerrainField::new(
             &snapshot,
@@ -58,6 +73,7 @@ impl WorldGenerator {
             biome_registry,
             Arc::clone(&biomes),
             Arc::clone(&terrain),
+            generated_ocean,
         ));
         Self {
             snapshot: Arc::new(snapshot),

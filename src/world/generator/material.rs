@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::content::biome::{BiomeRegistry, SurfaceLayerDefinition, SurfacePatchDefinition};
+use crate::content::{
+    biome::{BiomeRegistry, SurfaceLayerDefinition, SurfacePatchDefinition},
+    dimension::GeneratedOceanDefinition,
+};
 
 use super::{
     biome::{BiomeLayout, BiomeSample},
@@ -17,6 +20,19 @@ const PATCH_BLOCK_DOMAIN_PREFIX: &str = "material/surface-patch/block/v1/";
 pub(crate) struct GeneratedBlockId(Arc<str>);
 
 impl GeneratedBlockId {
+    fn new(value: &str) -> Self {
+        Self(Arc::from(value))
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct GeneratedFluidId(Arc<str>);
+
+impl GeneratedFluidId {
     fn new(value: &str) -> Self {
         Self(Arc::from(value))
     }
@@ -71,6 +87,51 @@ impl MaterialVolumeSample {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GeneratedFluidVolumeSample {
+    origin_x: i32,
+    origin_y: i32,
+    origin_z: i32,
+    width: u32,
+    height: u32,
+    depth: u32,
+    fluids: Vec<Option<GeneratedFluidId>>,
+}
+
+impl GeneratedFluidVolumeSample {
+    pub(crate) const fn origin(&self) -> (i32, i32, i32) {
+        (self.origin_x, self.origin_y, self.origin_z)
+    }
+
+    pub(crate) const fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub(crate) const fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub(crate) const fn depth(&self) -> u32 {
+        self.depth
+    }
+
+    pub(crate) fn generated_fluid_at(
+        &self,
+        x_index: u32,
+        y_index: u32,
+        z_index: u32,
+    ) -> Option<&GeneratedFluidId> {
+        if x_index >= self.width || y_index >= self.height || z_index >= self.depth {
+            return None;
+        }
+        let width = self.width as usize;
+        let height = self.height as usize;
+        self.fluids
+            .get((z_index as usize * height + y_index as usize) * width + x_index as usize)
+            .and_then(Option::as_ref)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct MaterialQueries<'a> {
     materials: &'a MaterialField,
@@ -80,10 +141,17 @@ impl MaterialQueries<'_> {
     /// Generated solid block material at one world-space voxel.
     ///
     /// `None` means the authoritative terrain field is empty at the position.
-    /// Generated fluids are composed by the same Phase 5 owner in a later slice
-    /// and are intentionally not represented by this solid-only query yet.
     pub(crate) fn solid_block_at(&self, x: i32, y: i32, z: i32) -> Option<GeneratedBlockId> {
         self.materials.solid_block_at(x, y, z)
+    }
+
+    /// Initial generated fluid at one world-space voxel.
+    ///
+    /// This is world-formation state only. Runtime fluid scheduling consumes
+    /// generated-fluid frontiers later and must not bulk-schedule every filled
+    /// voxel returned by this capability.
+    pub(crate) fn generated_fluid_at(&self, x: i32, y: i32, z: i32) -> Option<GeneratedFluidId> {
+        self.materials.generated_fluid_at(x, y, z)
     }
 
     /// Dense unit-step solid-material sampling for later chunk synthesis.
@@ -99,6 +167,21 @@ impl MaterialQueries<'_> {
         self.materials
             .sample_solid_volume(origin_x, origin_y, origin_z, width, height, depth)
     }
+
+    /// Dense unit-step generated-fluid sampling for later chunk synthesis.
+    pub(crate) fn sample_generated_fluid_volume(
+        &self,
+        origin_x: i32,
+        origin_y: i32,
+        origin_z: i32,
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> GeneratedFluidVolumeSample {
+        self.materials.sample_generated_fluid_volume(
+            origin_x, origin_y, origin_z, width, height, depth,
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +190,7 @@ pub(super) struct MaterialField {
     biomes: Arc<BiomeLayout>,
     terrain: Arc<TerrainField>,
     rules: HashMap<String, MaterialRule>,
+    ocean: Option<GeneratedOceanRule>,
 }
 
 #[derive(Clone, Copy)]
@@ -143,6 +227,13 @@ struct MaterialPatchRule {
     jitter_x_domain: GenerationDomain,
     jitter_z_domain: GenerationDomain,
     block_domain: GenerationDomain,
+}
+
+#[derive(Clone, Debug)]
+struct GeneratedOceanRule {
+    biome: Arc<str>,
+    fluid: GeneratedFluidId,
+    sea_level: i32,
 }
 
 impl MaterialRule {
@@ -296,6 +387,7 @@ impl MaterialField {
         registry: &BiomeRegistry,
         biomes: Arc<BiomeLayout>,
         terrain: Arc<TerrainField>,
+        generated_ocean: Option<&GeneratedOceanDefinition>,
     ) -> Self {
         let dimension_id = snapshot.dimension().id();
         let rules = registry
@@ -317,12 +409,25 @@ impl MaterialField {
             !rules.is_empty(),
             "dimension {dimension_id} has no authored surface materials"
         );
+        let ocean = generated_ocean.map(|definition| {
+            assert!(
+                rules.contains_key(&definition.biome),
+                "dimension {dimension_id} generatedOcean.biome {} is not an authored surface biome in this dimension",
+                definition.biome
+            );
+            GeneratedOceanRule {
+                biome: Arc::from(definition.biome.as_str()),
+                fluid: GeneratedFluidId::new(&definition.fluid),
+                sea_level: snapshot.dimension().sea_level(),
+            }
+        });
 
         Self {
             entropy: GenerationEntropy::new(snapshot),
             biomes,
             terrain,
             rules,
+            ocean,
         }
     }
 
@@ -348,6 +453,18 @@ impl MaterialField {
             rule.block_at_depth(self.entropy, x, z, material_depth)
                 .clone(),
         )
+    }
+
+    fn generated_fluid_at(&self, x: i32, y: i32, z: i32) -> Option<GeneratedFluidId> {
+        let ocean = self.ocean.as_ref()?;
+        let terrain = self.terrain.queries();
+        let density = terrain.density_at(x, y, z);
+        if density >= 0.0 {
+            return None;
+        }
+        let biome_sample = self.biomes.queries().surface_biome_at(x, z);
+        let base_surface = terrain.base_surface_at(x, z);
+        generated_ocean_fluid(ocean, density, y, base_surface, &biome_sample)
     }
 
     fn sample_solid_volume(
@@ -429,6 +546,60 @@ impl MaterialField {
         }
     }
 
+    fn sample_generated_fluid_volume(
+        &self,
+        origin_x: i32,
+        origin_y: i32,
+        origin_z: i32,
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> GeneratedFluidVolumeSample {
+        let terrain_queries = self.terrain.queries();
+        let terrain_volume = terrain_queries.sample_density_volume(
+            origin_x, origin_y, origin_z, width, height, depth,
+        );
+        let terrain_columns = terrain_queries.sample_surface_area(origin_x, origin_z, width, depth);
+        let biome_samples = self
+            .biomes
+            .queries()
+            .sample_surface_area(origin_x, origin_z, width, depth);
+        let sample_count = checked_sample_count([width, height, depth]);
+        let mut fluids = Vec::with_capacity(sample_count);
+
+        for z_index in 0..depth {
+            for y_index in 0..height {
+                let y = unit_axis(origin_y, y_index);
+                for x_index in 0..width {
+                    let density = terrain_volume
+                        .density_at(x_index, y_index, z_index)
+                        .expect("matching terrain density volume must contain every fluid voxel");
+                    let fluid = self.ocean.as_ref().and_then(|ocean| {
+                        let biome_sample = biome_samples
+                            .sample_at(x_index, z_index)
+                            .expect("matching biome sample area must contain every fluid column");
+                        let base_surface = terrain_columns
+                            .sample_at(x_index, z_index)
+                            .expect("matching terrain sample area must contain every fluid column")
+                            .base_surface();
+                        generated_ocean_fluid(ocean, density, y, base_surface, biome_sample)
+                    });
+                    fluids.push(fluid);
+                }
+            }
+        }
+
+        GeneratedFluidVolumeSample {
+            origin_x,
+            origin_y,
+            origin_z,
+            width,
+            height,
+            depth,
+            fluids,
+        }
+    }
+
     fn rule_for(&self, sample: &BiomeSample) -> &MaterialRule {
         self.rules
             .get(sample.primary().as_str())
@@ -481,6 +652,23 @@ impl MaterialField {
         }
         finite_depth
     }
+}
+
+fn generated_ocean_fluid(
+    ocean: &GeneratedOceanRule,
+    density: f32,
+    y: i32,
+    base_surface: f32,
+    biome_sample: &BiomeSample,
+) -> Option<GeneratedFluidId> {
+    if density >= 0.0
+        || y > ocean.sea_level
+        || biome_sample.primary().as_str() != ocean.biome.as_ref()
+    {
+        return None;
+    }
+    let floor_y = floor_to_world_y(base_surface);
+    (y > floor_y).then(|| ocean.fluid.clone())
 }
 
 fn unit_probability(value: u64) -> f64 {

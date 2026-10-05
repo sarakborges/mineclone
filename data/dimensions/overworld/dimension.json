@@ -4,5 +4,9 @@
   "sky": "asteria:overworld/sky",
   "seaLevel": 90,
   "gravityStrength": 18.0,
-  "maxEntities": 128
+  "maxEntities": 128,
+  "generatedOcean": {
+    "biome": "asteria:overworld/ocean",
+    "fluid": "asteria:water"
+  }
 }

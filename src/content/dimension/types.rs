@@ -5,6 +5,13 @@ use crate::localization::LocalizedText;
 
 use crate::content::registry::DefinitionMap;
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedOceanDefinition {
+    pub biome: String,
+    pub fluid: String,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
@@ -16,6 +23,8 @@ pub struct DimensionDefinition {
     pub gravity_strength: f32,
     #[serde(default = "default_max_entities")]
     pub max_entities: usize,
+    #[serde(default)]
+    pub generated_ocean: Option<GeneratedOceanDefinition>,
 }
 
 fn default_max_entities() -> usize {
@@ -53,6 +62,18 @@ impl DimensionRegistry {
             "dimension {} maxEntities must be positive",
             definition.id
         );
+        if let Some(ocean) = &definition.generated_ocean {
+            assert_namespaced_id(
+                &definition.id,
+                "generatedOcean.biome",
+                &ocean.biome,
+            );
+            assert_namespaced_id(
+                &definition.id,
+                "generatedOcean.fluid",
+                &ocean.fluid,
+            );
+        }
         self.definitions.insert(definition.id.clone(), definition);
     }
 
@@ -63,4 +84,15 @@ impl DimensionRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &DimensionDefinition> {
         self.definitions.values()
     }
+}
+
+fn assert_namespaced_id(dimension_id: &str, field: &str, value: &str) {
+    let trimmed = value.trim();
+    let valid = trimmed.split_once(':').is_some_and(|(namespace, local)| {
+        !namespace.is_empty() && !local.is_empty() && !local.contains(':')
+    });
+    assert!(
+        valid && trimmed == value,
+        "dimension {dimension_id} {field} must be a trimmed namespaced id"
+    );
 }
