@@ -43,6 +43,10 @@ impl InMemoryWorldSave {
         self.dimension_id = Some(dimension_id.to_owned());
     }
 
+    pub(crate) fn player(&self, player_id: PlayerId) -> Option<PlayerSaveData> {
+        self.players.get(&player_id).copied()
+    }
+
     pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
         if self.has_world() {
             self.game_rules = game_rules;
