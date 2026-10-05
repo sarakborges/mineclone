@@ -70,3 +70,15 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      - name: Validate Structure query seams
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set +e
+          cargo run --locked -- --structure-debug --seed 0 --search-radius 8192 --window-size 512 --output structure-debug.json
+          status=$?
+          if [[ -f structure-debug.json ]]; then
+            cat structure-debug.json
+          fi
+          exit "$status"
