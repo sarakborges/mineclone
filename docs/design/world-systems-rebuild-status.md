@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `4dc729be0dffbed013fc66b40564c44e6948df72` (`Author connected surface water roots`), including biome-margin roots from `6231b58e91d62df290a392de89e87bdd760b6f54` (`Add biome-margin Structure roots`), connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e` (`Add deterministic connector graph expansion`), and the complete simple-root migration at `c3c07e0604d08514e6b881a62b772d1f9d152d05` (`Migrate remaining surface structure roots`). Rust validation run `37312044331` completed successfully for this baseline. Terrain visual/invariant validation remains available through the on-demand terrain debug path.
+Code baseline recorded here: `4a68344adb7f46ec06bacc322b5048d55c4c4f2d` (`Run lightweight Structure query audit`), including connected surface-water roots from `4dc729be0dffbed013fc66b40564c44e6948df72`, biome-margin roots from `6231b58e91d62df290a392de89e87bdd760b6f54`, connector graph integration rooted at `86143c68910c16e8479f13020933c2348c82576e`, and the complete simple-root migration at `c3c07e0604d08514e6b881a62b772d1f9d152d05`. Rust validation run `37318696976` completed successfully for this baseline, including the lightweight Structure query contract audit. Terrain/Structure debug capabilities remain available on demand and are not permanent full-binary CI probes.
 
 ## Validation policy
 
@@ -12,6 +12,7 @@ Repository validation follows root `AGENTS.md`.
 
 - Do not run or add `cargo test` unless the user explicitly requests that command for the current task.
 - Default Rust validation is Clippy with `-D warnings`, `cargo check --locked`, and applicable content/localization/GLB audits.
+- `tools/check_structure_query_contract.py` is the lightweight CI gate for Structure bounded-query/order invariants; it reads the authoritative owner shape, verifies current authored probe families, and exercises overlap/order/nearest contracts without linking or running the game binary.
 - Visual/debug validation is an on-demand consumer capability, not a permanent CI fixture-rendering loop.
 - A milestone is not complete while the exact delivered SHA has pending, failed, or unobservable CI.
 
@@ -25,7 +26,7 @@ Repository validation follows root `AGENTS.md`.
 | 3 — Biome Layout | Complete for current authored content | Authoritative surface layout, influences, search, `regionSize`, `cannotBorder`, and biome-map rendering are implemented. No volume-biome content is currently authored. |
 | 4 — Terrain | Complete for current authored content | Authoritative continuous base surface, final 3D density, caves, floating masses, bounded effective surfaces, scalar/batch queries, and terrain debug validation are implemented. |
 | 5 — Surface/materials/generated fluids | Complete for current authored content | Solid layers, deterministic material patches, Ocean water, swamp puddles, volcano lava pools, scalar/batch fluid queries, and the generated-fluid runtime-frontier boundary are implemented. |
-| 6 — Structures/features | In progress | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, all current simple surface roots, biome-margin roots, and current lake/waterfall connected roots. Final placement-graph seam/order validation remains before Phase 6 can close for current authored content. |
+| 6 — Structures/features | Complete for current authored content | `StructureField` owns deterministic root placement/query, conflict arbitration, multi-piece `StructureSet` expansion, connector-chain expansion, all current simple surface roots, biome-margin roots, lake/waterfall connected roots, and a lightweight CI seam/order/nearest contract gate. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals, and streaming still need reconnection to the new generator capabilities. |
 | 9 — Persistence | Pending | New all-materialized-chunks persistence contract is documented but not implemented. |
@@ -104,7 +105,7 @@ Current contract:
 - generated fluid is initial world formation and filled voxels are never bulk-scheduled into the runtime solver;
 - `enqueue_generated_fluid_frontier(...)` is the explicit future Phase 7 handoff for exposed runtime continuation targets only.
 
-## Phase 6 — Structures/features in progress
+## Phase 6 — Structures/features complete for current authored content
 
 Authoritative generation-side implementation:
 
@@ -116,6 +117,7 @@ Authoritative generation-side implementation:
 - preserved composition definitions in `src/content/structure_set.rs`
 - `src/content/dimension/types.rs` `generatedSurfaceStructures`
 - `data/dimensions/overworld/dimension.json`
+- `tools/check_structure_query_contract.py` for the lightweight CI request-window/order contract gate
 
 ### Implemented Structure graph foundation
 
@@ -164,32 +166,32 @@ Implemented now:
 - Mountains now authors `asteria:mountain_waterfall` with `spacing = 192`, `chance = 0.45`, `jitter = 48`; Alps uses `spacing = 224`, `chance = 0.4`, `jitter = 56`; Mountain Belt uses `spacing = 224`, `chance = 0.32`, `jitter = 56`;
 - mountain-waterfall roots use their existing `minSlope = 3` / `maxSlope = 8` terrain restriction rather than a feature-specific slope locator; their existing connector creates `asteria:mountain_pond`, whose existing output connector then expands ordinary `asteria:river_segment` pieces;
 - no independent root is authored for `mountain_pond`, `river_segment`, or `river_lake`; these remain connector content rather than becoming parallel world-feature planners;
-- the preserved historical Caverns authoring used `asteria:cavern_entrance_start` only through volume placement (`chance = 0.25`). The rebuild currently authors no volume-biome field (`data/dimensions/overworld/biomes/caverns.json` is intentionally empty beyond its id), so cavern entrances/tunnels are not misrepresented as surface roots. They remain preserved Structure/connector content until volume-biome authoring/capability is intentionally introduced.
+- the preserved historical Caverns authoring used `asteria:cavern_entrance_start` only through volume placement (`chance = 0.25`). The rebuild currently authors no volume-biome field (`data/dimensions/overworld/biomes/caverns.json` is intentionally empty beyond its id), so cavern entrances/tunnels are not misrepresented as surface roots. They remain preserved Structure/connector content until volume-biome authoring/capability is intentionally introduced;
+- the lightweight CI contract audit verifies that bounded requests still collect world-space candidates, arbitrate complete logical placements before request filtering, use complete logical bounds, sort output deterministically, and keep `StructureField` free of interior mutable query state;
+- the same audit verifies current authoring still contains the ordinary-root, StructureSet, biome-margin river-mouth, lake, and mountain-waterfall probe families, then exercises overlapping A→B→B→A request windows across representative ordinary root, multi-piece Set, mouth→river, lake→river, and waterfall→pond→river graphs;
+- the audit also guards `find_nearest(...)` source shape and validates nearest selection by logical root anchor with deterministic equal-distance tie-breaking rather than representative/connector-piece origin.
 
 Rivers still have no dedicated source graph, downstream rasterizer, or hydrology owner. Ocean mouths, Plains lakes, and mountain waterfall/pond graphs are ordinary Structure roots/connectors, and every resulting connected piece remains part of the same `StructureField` logical graph.
 
-### What is intentionally incomplete in Phase 6
+### Phase 6 validation boundary
 
-For the currently authored surface world, root migration/authoring is complete. Phase 6 still needs:
-
-- final deterministic scalar/bounded-query seam and query-order validation for complete planned Structure graphs, including ordinary roots, StructureSets, connector chains, biome-margin river mouths, Plains lake graphs, and mountain waterfall/pond graphs;
-- exposing the finalized same placements to Phase 7 materialization and Phase 8 `/locate structure` after the validation gate closes.
+For the currently authored surface world, root migration/authoring and the deterministic bounded-query/order contract gate are complete. The full `--structure-debug` seed/content probe remains available for manual/on-demand diagnosis, but it is intentionally not executed in normal CI because linking/running the full game binary made CI stall without adding a distinct authoritative owner.
 
 Cavern entrance/tunnel Structures are preserved but are not a current Phase 6 surface-root requirement. If volume-biome authoring returns later, their historical volume-root semantics must be implemented against the authoritative volume-biome capability rather than approximated with a surface lattice.
 
-Structure planning must remain independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
+Structure planning remains independent of chunk materialization. A requesting chunk may ask which planned pieces intersect it, but chunk boundaries must never become Structure boundaries or planning inputs.
 
 ## Next concrete work
 
-Continue **Phase 6 — Structures/features**, not chunk synthesis.
+Begin **Phase 7 — Chunk synthesis**.
 
 Required direction:
 
-1. add deterministic seam/order validation for `StructureQueries::placements_intersecting(...)` across overlapping bounded requests so the same logical root/Set/connector graph is observed regardless of request origin or request order;
-2. cover biome-interior roots, a multi-piece `StructureSet`, biome-margin river mouths, Plains lake -> river connector graphs, and mountain waterfall -> pond -> river graphs with the same validation mechanism;
-3. verify `find_nearest(...)` returns the same accepted logical placements independently of prior bounded queries and measures the logical root anchor rather than a connector child;
-4. fix the authoritative `StructureField` if any validation exposes request-boundary/order dependence; do not patch a debug/validation consumer;
-5. once this gate is green, mark Phase 6 complete for current authored content and proceed to Phase 7 `VoxelChunk` synthesis.
+1. introduce one authoritative materialization path that asks `WorldGenerator` capabilities for terrain/material/generated-fluid/Structure facts covering one `VoxelChunk` volume; do not move semantic generation ownership into `VoxelChunk`;
+2. compose base solid/material results first, then generated fluids, then already-planned Structure pieces that intersect the chunk, respecting authored Structure payload semantics and allowing one logical graph to span multiple chunks without replanning;
+3. surface only generated-fluid frontier targets from newly materialized content to the existing runtime-fluid handoff; never bulk-schedule all generated fluid voxels;
+4. keep materialization deterministic and independent of chunk request order, neighboring chunk residency, streaming order, or prior materialization;
+5. validate adjacent synthesized chunks against scalar generator queries and Structure crossings before reconnecting streaming/consumers in Phase 8.
 
 ## Important non-regression rules
 
