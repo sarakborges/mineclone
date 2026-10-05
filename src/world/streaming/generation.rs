@@ -30,7 +30,7 @@ const FRONTIER_SOURCE_NEIGHBORS: [IVec3; 5] =
     [IVec3::Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
 
 #[derive(Resource)]
-pub(super) struct ChunkMaterializationTasks {
+pub(crate) struct ChunkMaterializationTasks {
     revision: TaskInputRevision,
     tasks: ChunkTaskQueue<MaterializedChunk>,
 }
@@ -68,7 +68,8 @@ impl ChunkMaterializationTasks {
         }
 
         let generator = generator.clone();
-        let task = AsyncComputeTaskPool::get().spawn(async move { generator.materialize_chunk(coord) });
+        let task =
+            AsyncComputeTaskPool::get().spawn(async move { generator.materialize_chunk(coord) });
         self.tasks.insert(
             ChunkCoord::from_ivec3(coord),
             self.revision,
