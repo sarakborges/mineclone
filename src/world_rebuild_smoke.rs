@@ -29,7 +29,7 @@ mod world_objects;
 )]
 use bevy_dylib;
 
-use std::{collections::HashMap, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 
 use bevy::{
     asset::{AssetApp, AssetPlugin},
@@ -40,8 +40,8 @@ use bevy::{
 
 use app::{game_state::GameState, runtime_paths::prepare_runtime_directory};
 use content::{
+    LoadedContent,
     builtin_ids::{OVERWORLD_DIMENSION_ID, UMBRAL_DIMENSION_ID},
-    loader::LoadedContent,
 };
 use creatures::PendingCreatureRestores;
 use gameplay::storage_box::StorageBoxStorage;
@@ -52,7 +52,6 @@ use player::{
     player_id::LOCAL_PLAYER_ID,
 };
 use rendering::terrain_material::TerrainMaterial;
-use voxel::world::VoxelWorld;
 use world::{
     InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldPlugin, WorldSeed,
     destination::find_generated_surface_destination,
@@ -62,7 +61,7 @@ use world::{
     game_rules::GameRules,
     generator::WorldGenerator,
     render_distance::RenderDistanceSettings,
-    save_catalog::{SaveRegistries, WorldDirectoryLock, delete_world, load_world},
+    save_catalog::{SaveRegistries, delete_world, load_world},
     save_session::{WorldSaveContext, WorldSession},
     warp::{PendingWarp, WarpOutcome},
 };
