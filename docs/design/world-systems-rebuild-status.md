@@ -4,7 +4,7 @@ This document tracks the current implementation state of the world-systems rebui
 
 Implementation branch: `world-systems-rebuild`
 
-Code baseline recorded here: `61ec05c6d4de1f075155300fcd4b2c16e3a8f706` (`Add authoritative solid material composition`). Rust validation run `37257235275` completed successfully for that baseline. Terrain invariant validation remains available through the on-demand terrain debug path introduced before Phase 5.
+Code baseline recorded here: `0ed27995976409789c4fa11f914151886386ce94` (`Add deterministic swamp material patches`). Rust validation run `37257926230` completed successfully for that baseline. Terrain invariant validation remains available through the on-demand terrain debug path introduced before Phase 5.
 
 ## Validation policy
 
@@ -24,7 +24,7 @@ Repository validation follows root `AGENTS.md`.
 | 2 — Generation foundation | Complete | New generation foundation owns world-space coordinates, deterministic entropy/domains, immutable dimension snapshot state, direct far-coordinate queries, and scalar/batch primitives. |
 | 3 — Biome Layout | Complete for current authored content | New surface layout, biome queries, influences, search, `regionSize`, `cannotBorder`, and authoritative biome-map rendering exist. No volume-biome content is currently authored, so the volume query returns no override and effective biome falls back to surface ownership. |
 | 4 — Terrain | Complete for current authored content | Continuous 2D base terrain, authoritative final 3D density, bounded caves, authored floating masses, bounded effective-surface resolution, scalar/batch queries, and the terrain debug renderer with built-in seam/query validation are implemented. No currently authored terrain requires another true-3D form. |
-| 5 — Surface/materials/generated fluids | In progress | One authoritative solid `MaterialField`/`MaterialQueries` now composes biome-authored surface/subsurface/core layers from `TerrainField` solidity. Scalar and dense XYZ solid-material queries exist for every current surface biome. Surface patch variants and generated natural fluids/Ocean fill are still pending. |
+| 5 — Surface/materials/generated fluids | In progress | One authoritative `MaterialField`/`MaterialQueries` composes biome-authored solid layers and deterministic world-space surface patches. Swamp grass/dirt/mud patching is implemented. Generated natural fluids, including Ocean fill and swamp water, are still pending. |
 | 6 — Structures/features | Pending | Generic Structure primitives are preserved, but the new generation-side integration is not implemented yet. |
 | 7 — Chunk synthesis | Pending | No authoritative new-generator-to-`VoxelChunk` materialization path yet. |
 | 8 — Consumer integration | Pending | `/locate`, warp, spawn, portals and streaming still need reconnection to the new generator capabilities. |
@@ -182,7 +182,7 @@ Any such extension must compose into the same `TerrainField`, expose bounded can
 Authoritative implementation currently being built:
 
 - `src/world/generator/material.rs`
-- `src/content/biome.rs` `surfaceLayers`
+- `src/content/biome.rs` `surfaceLayers` and `surfaceLayers.patch`
 - the current surface-biome JSON definitions under `data/dimensions/*/biomes/`
 
 Current solid-material contract:
@@ -196,7 +196,11 @@ Current solid-material contract:
 - additive terrain above the base surface, including floating formations, resolves its local exposed top with a bounded upward final-density scan capped by the authored finite material-layer depth, then applies the same surface/subsurface/core profile;
 - deep cave walls/floors therefore remain core material rather than incorrectly becoming surface soil merely because a cave exposes them;
 - batch composition reuses one terrain density volume, one terrain column area, and one biome area for the bounded request, preserving the scalar/batch ownership model;
-- every currently authored surface biome in Overworld and Umbral has an explicit solid `surfaceLayers` profile; `MaterialField` refuses to construct a dimension whose participating surface biome lacks one.
+- every currently authored surface biome in Overworld and Umbral has an explicit solid `surfaceLayers` profile; `MaterialField` refuses to construct a dimension whose participating surface biome lacks one;
+- finite material layers may optionally author deterministic world-space patch replacements;
+- patch placement uses seed/domain-addressed world-space lattice cells with deterministic presence, jitter, circular extent, stable overlap tie-breaking, and alternate-block selection;
+- scalar and bounded material queries call the same patch resolver, so chunk/request origin cannot change the selected material;
+- swamp topsoil now interleaves `grass_block`, `dirt`, and `mud`, while its finite dirt subsurface may transition into deterministic mud patches; water is deliberately excluded from the solid patch rule and remains generated-fluid work.
 
 Current solid layer authoring shape:
 
@@ -205,7 +209,17 @@ Current solid layer authoring shape:
   "surfaceLayers": [
     {
       "block": "asteria:grass_block",
-      "depth": 1
+      "depth": 1,
+      "patch": {
+        "spacing": 14,
+        "radius": 6,
+        "jitter": 2,
+        "chance": 0.9,
+        "blocks": [
+          "asteria:dirt",
+          "asteria:mud"
+        ]
+      }
     },
     {
       "block": "asteria:dirt",
@@ -218,13 +232,12 @@ Current solid layer authoring shape:
 }
 ```
 
-Finite entries require a positive `depth`. The final entry is the depthless core layer. The total finite authored depth is bounded. Wasteland is explicitly dirt/gravel/stone, mountain/gorge profiles remain stone-dominant, Ocean floor uses sand/gravel/stone, and the Umbral profiles preserve their authored solid identities.
+Finite entries require a positive `depth`. The final entry is the depthless core layer. The total finite authored depth is bounded. Patches are optional and may only replace finite layers; they remain deterministic spatial material variation rather than a second terrain or biome field. Wasteland is explicitly dirt/gravel/stone, mountain/gorge profiles remain stone-dominant, Ocean floor uses sand/gravel/stone, and the Umbral profiles preserve their authored solid identities.
 
 ### What is not implemented yet in Phase 5
 
-The solid base profile is only the first Phase 5 slice. Remaining work includes:
+Solid layers and deterministic solid surface patches are implemented. Remaining work includes:
 
-- deterministic surface-patch/alternate material rules, including the swamp grass/dirt/mud pattern;
 - generated swamp surface water/puddles;
 - authoritative generated Ocean water fill between the Ocean floor and dimension `seaLevel`;
 - local generated fluids such as volcano crater lava where authored;
@@ -238,9 +251,9 @@ Continue **Phase 5**, not chunk synthesis.
 
 Required direction:
 
-1. add deterministic authored surface-patch rules for discrete top-layer variants, starting with swamp grass/dirt/mud while reusing the same biome/material owner;
-2. add generated-fluid composition to the same Phase 5 owner, starting with Ocean exposed fill from its floor to dimension `seaLevel` only where primary surface ownership is Ocean;
-3. keep subterranean cave/overhang voids below the Ocean floor dry unless an explicit local generated-fluid feature owns them;
+1. add generated-fluid composition to the same Phase 5 owner, starting with Ocean exposed fill from its generated floor to dimension `seaLevel` only where primary surface ownership is Ocean;
+2. keep subterranean cave/overhang voids below the Ocean floor dry unless an explicit local generated-fluid feature owns them;
+3. keep scalar and dense bounded generated-fluid queries deterministic and world-coordinate anchored, reusing authoritative biome/terrain results rather than introducing another resolver;
 4. add local generated fluids such as swamp puddles and volcano crater lava through explicit authored rules, without introducing hydrology ownership;
 5. define the generated-fluid-to-runtime-fluid frontier boundary so initial generation does not bulk-schedule every generated fluid voxel;
 6. preserve scalar/batch/world-coordinate equivalence and remain pre-`VoxelChunk` until Phase 7.
