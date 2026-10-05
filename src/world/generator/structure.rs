@@ -1,3 +1,5 @@
+mod connector;
+
 use std::{
     cmp::Ordering,
     collections::HashSet,
@@ -17,6 +19,7 @@ use crate::content::{
     structure_set::StructureSetRegistry,
 };
 
+use self::connector::ConnectorGraph;
 use super::{
     biome::BiomeLayout,
     foundation::{GenerationDomain, GenerationEntropy, GenerationPoint2, GenerationSnapshot},
@@ -46,8 +49,8 @@ impl StructurePlacement {
     }
 
     /// Logical root anchor shared by every piece of one placement. For a
-    /// single Structure this is the Structure anchor; for a StructureSet it is
-    /// the set anchor, not the individual piece origin.
+    /// single Structure, StructureSet, or connector-expanded graph this remains
+    /// the root placement anchor rather than an individual piece origin.
     pub(crate) const fn placement_anchor(&self) -> IVec2 {
         self.placement_anchor
     }
@@ -119,8 +122,8 @@ pub(crate) struct StructureQueries<'a> {
 
 impl StructureQueries<'_> {
     /// Returns authoritative Structure pieces whose horizontal bounds intersect
-    /// the requested world-space rectangle. Multi-piece StructureSet planning
-    /// and conflict resolution happen before this request-level intersection,
+    /// the requested world-space rectangle. StructureSet and connector graph
+    /// planning plus conflict resolution happen before request-level filtering,
     /// so chunk/request boundaries never become logical placement boundaries.
     pub(crate) fn placements_intersecting(
         &self,
@@ -136,7 +139,7 @@ impl StructureQueries<'_> {
     /// Finds the nearest authoritative logical root for an authored root
     /// reference. The returned representative piece carries the root reference
     /// and logical `placement_anchor`; callers must not treat its piece origin
-    /// as the logical anchor for a StructureSet.
+    /// as the logical anchor for a multi-piece graph.
     pub(crate) fn find_nearest(
         &self,
         reference: &str,
@@ -155,6 +158,7 @@ pub(super) struct StructureField {
     biomes: Arc<BiomeLayout>,
     terrain: Arc<TerrainField>,
     materials: Arc<MaterialField>,
+    connectors: Arc<ConnectorGraph>,
     rules: Arc<[RootStructureRule]>,
 }
 
@@ -198,6 +202,7 @@ impl StructureField {
         materials: Arc<MaterialField>,
     ) -> Self {
         let dimension_id = snapshot.dimension().id();
+        let connectors = Arc::new(ConnectorGraph::new(authoring.structures));
         let rules = authoring
             .roots
             .iter()
@@ -217,6 +222,7 @@ impl StructureField {
                     definition,
                     authoring.structures,
                     authoring.structure_sets,
+                    &connectors,
                 )
             })
             .collect::<Vec<_>>()
@@ -227,6 +233,7 @@ impl StructureField {
             biomes,
             terrain,
             materials,
+            connectors,
             rules,
         }
     }
@@ -553,6 +560,21 @@ impl StructureField {
             }
         };
 
+        let pieces = self.connectors.expand(
+            self.entropy,
+            pieces,
+            |structure, rotation, geometric_origin| {
+                let origin = if structure.requires_ground_fit_when_connected() {
+                    let origin_y = self.fit_origin_y(structure, rotation, geometric_origin.xz())?;
+                    IVec3::new(geometric_origin.x, origin_y, geometric_origin.z)
+                } else {
+                    geometric_origin
+                };
+                self.satisfies_restrictions(rule, structure, rotation, origin.xz(), origin.y)
+                    .then_some(origin)
+            },
+        );
+
         let (horizontal_minimum, horizontal_maximum, minimum_y, maximum_y) =
             placement_bounds(&pieces)?;
 
@@ -796,14 +818,21 @@ impl RootStructureRule {
         definition: &GeneratedSurfaceStructureDefinition,
         structures: &StructureRegistry,
         structure_sets: &StructureSetRegistry,
+        connectors: &ConnectorGraph,
     ) -> Self {
         let suffix = format!("{}/{}", definition.biome, definition.structure);
         let (source, maximum_horizontal_extent) =
             if let Some(set) = structure_sets.get(&definition.structure) {
+                let connected_bounds = set
+                    .horizontal_bounds_with(|reference| {
+                        connectors.connected_horizontal_bounds_for_reference(reference)
+                    })
+                    .expect("validated StructureSet references must have connector-expanded bounds");
                 let compiled = CompiledStructureSet::new(set, structures, &suffix);
-                let maximum_horizontal_extent =
-                    maximum_extent_from_bounds(compiled.horizontal_bounds());
-                (RootStructureSource::Set(compiled), maximum_horizontal_extent)
+                (
+                    RootStructureSource::Set(compiled),
+                    maximum_extent_from_bounds(connected_bounds),
+                )
             } else {
                 let variants = structures
                     .reference_members(&definition.structure)
@@ -821,7 +850,9 @@ impl RootStructureRule {
                     "generated surface structure reference {} must resolve at least one Structure",
                     definition.structure
                 );
-                let maximum_horizontal_extent = maximum_extent_for_variants(&variants);
+                let connected_bounds = connectors
+                    .connected_horizontal_bounds_for_reference(&definition.structure)
+                    .expect("validated Structure reference must have connector-expanded bounds");
                 (
                     RootStructureSource::Direct {
                         variants: variants.into(),
@@ -832,7 +863,7 @@ impl RootStructureRule {
                             "{ROTATION_DOMAIN_PREFIX}{suffix}"
                         )),
                     },
-                    maximum_horizontal_extent,
+                    maximum_extent_from_bounds(connected_bounds),
                 )
             };
 
@@ -850,18 +881,6 @@ impl RootStructureRule {
             jitter_z_domain: GenerationDomain::named(&format!("{JITTER_Z_DOMAIN_PREFIX}{suffix}")),
         }
     }
-}
-
-fn maximum_extent_for_variants(variants: &[Arc<StructureDefinition>]) -> i32 {
-    variants
-        .iter()
-        .flat_map(|structure| {
-            structure.supported_rotations().iter().map(|rotation| {
-                maximum_extent_from_bounds(structure.horizontal_bounds_for_rotation(*rotation))
-            })
-        })
-        .max()
-        .unwrap_or(0)
 }
 
 fn maximum_extent_from_bounds((minimum, maximum): (IVec2, IVec2)) -> i32 {
