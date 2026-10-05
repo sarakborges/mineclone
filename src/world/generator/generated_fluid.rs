@@ -129,14 +129,12 @@ impl GeneratedFluidField {
 
         let primary = sample.primary().as_str();
         let base_y = floor_to_world_y(base_surface);
-        if surface_cut_depth > 0 {
-            if let Some(rule) = self.surface.get(primary) {
-                let cut_depth = i32::try_from(surface_cut_depth)
-                    .expect("validated generated surface fluid depth must fit i32");
-                let cut_floor = base_y.saturating_sub(cut_depth);
-                if y > cut_floor && y <= base_y {
-                    return Some(rule.fluid.clone());
-                }
+        if surface_cut_depth > 0 && let Some(rule) = self.surface.get(primary) {
+            let cut_depth = i32::try_from(surface_cut_depth)
+                .expect("validated generated surface fluid depth must fit i32");
+            let cut_floor = base_y.saturating_sub(cut_depth);
+            if y > cut_floor && y <= base_y {
+                return Some(rule.fluid.clone());
             }
         }
 
